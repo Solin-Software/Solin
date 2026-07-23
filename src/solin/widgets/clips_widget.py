@@ -16,6 +16,8 @@ class ClipsWidget(MediaLibraryWidget):
         jw_cache_dir,
         clip_fetch_thread_factory: ClipFetchThreadFactory,
         media_ctrl=None,
+        *,
+        defer_qml: bool = False,
         parent=None,
     ):
         super().__init__(
@@ -25,5 +27,6 @@ class ClipsWidget(MediaLibraryWidget):
             media_ctrl,
             clip_fetch_thread_factory=clip_fetch_thread_factory,
             jw_cache_dir=jw_cache_dir,
+            defer_qml=defer_qml,
             parent=parent,
         )

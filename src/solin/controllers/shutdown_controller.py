@@ -15,8 +15,8 @@ log = logging.getLogger(__name__)
 class ShutdownServices:
     """Long-lived services stopped by the main-window shutdown boundary."""
 
-    remote_control: Any | None
-    remote_services: Any | None
+    remote_control: Callable[[], Any | None]
+    remote_services: Callable[[], Any | None]
     download_notifications: Any | None
     playback_notifications: Any | None
     notifications: Any | None
@@ -29,7 +29,7 @@ class ShutdownServices:
     camera: Any
     obs: Any
     zoom: Any
-    ipc: Any | None
+    ipc: Callable[[], Any | None]
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,6 +45,7 @@ class ShutdownDependencies:
     queue_pending_deletion: Callable[[str], None]
     save_window_state: Callable[[], None]
     cleanup_lazy_pages: Callable[[], None] | None
+    cancel_ui_preparation: Callable[[], None] | None = None
 
 
 class ShutdownController:
@@ -54,6 +55,7 @@ class ShutdownController:
         self._dependencies = dependencies
 
     def shutdown(self) -> None:
+        self.cancel_ui_preparation()
         self.stop_remote_control()
         self.stop_scheduled_automation()
         self.close_projection_targets()
@@ -72,7 +74,7 @@ class ShutdownController:
         self._dependencies.services.media_countdown_automation.shutdown()
 
     def stop_remote_control(self) -> None:
-        remote_control = self._dependencies.services.remote_control
+        remote_control = self._dependencies.services.remote_control()
         if remote_control is not None:
             remote_control.stop()
 
@@ -87,7 +89,7 @@ class ShutdownController:
             dependencies.timer_output.close_all()
 
     def stop_remote_services(self) -> None:
-        remote_services = self._dependencies.services.remote_services
+        remote_services = self._dependencies.services.remote_services()
         if remote_services is not None:
             remote_services.stop()
 
@@ -123,7 +125,7 @@ class ShutdownController:
         self._dependencies.conversion_threads.stop_all(logger=log)
 
     def close_ipc(self) -> None:
-        ipc = self._dependencies.services.ipc
+        ipc = self._dependencies.services.ipc()
         if ipc is not None:
             ipc.close()
 
@@ -142,6 +144,11 @@ class ShutdownController:
             cleanup()
         except Exception:  # noqa: BLE001 - application shutdown cleanup boundary
             log.warning("Failed to cleanup lazy browser page during shutdown", exc_info=True)
+
+    def cancel_ui_preparation(self) -> None:
+        cancel = self._dependencies.cancel_ui_preparation
+        if cancel is not None:
+            cancel()
 
     @staticmethod
     def _cleanup_widget(widget) -> None:

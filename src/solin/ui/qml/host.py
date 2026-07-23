@@ -9,7 +9,7 @@ from PySide6.QtQuickControls2 import QQuickStyle
 from PySide6.QtQuickWidgets import QQuickWidget
 
 from solin.styles.theme import PALETTE, QML_THEME
-from solin.ui.qml.loader import load_qml_type
+from solin.ui.qml.loader import QmlLoadHandle
 
 _QML_CONTROLS_STYLE = "Basic"
 
@@ -51,7 +51,8 @@ def configure_qml_host(
     accept_drops: bool | None = None,
     resize_to_root: bool = True,
     alpha_buffer_size: int = 8,
-) -> None:
+    defer_load: bool = False,
+) -> QmlLoadHandle:
     configure_qml_controls_style()
     surface_format = QSurfaceFormat()
     surface_format.setAlphaBufferSize(alpha_buffer_size)
@@ -73,4 +74,7 @@ def configure_qml_host(
 
     if resize_to_root:
         widget.setResizeMode(QQuickWidget.ResizeMode.SizeRootObjectToView)
-    load_qml_type(widget, type_name)
+    handle = QmlLoadHandle(widget, type_name, asynchronous=defer_load)
+    if not defer_load:
+        handle.start()
+    return handle

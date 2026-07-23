@@ -1,10 +1,18 @@
 import json
 import inspect
 from pathlib import Path
+import threading
+import time
+
+import pytest
 
 from solin.core.playlists import cleanup as playlist_cleanup
 from solin.core.playlists import storage as playlist_storage
-from solin.core.playlists.cleanup import PlaylistCleanupQueue
+from solin.core.playlists.cleanup import (
+    PlaylistCleanupQueue,
+    ProfileMaintenanceCancelled,
+    ProfileMaintenanceService,
+)
 from solin.core.foundation.runtime_paths import ProfilePaths
 from solin.core.meetings.tree_store import MeetingTreeStore
 from solin.core.media.thumbnail_store import ThumbnailStore
@@ -14,6 +22,9 @@ from solin.core.playlists.storage import (
     PlaylistRepository,
     PlaylistStoragePaths,
 )
+from solin.core.foundation.resource_keys import ResourceClaim, file_resource_key
+from solin.core.foundation.resource_lanes import ResourceLaneRegistry
+from solin.core.foundation.thread_workers import CancellationFlag
 
 
 def test_playlist_storage_roundtrips_playlists(tmp_path):
@@ -64,6 +75,215 @@ def test_playlist_storage_roundtrips_pending_deletions(tmp_path):
     repository.save(["locked.mp4"])
 
     assert repository.load() == ["locked.mp4"]
+
+
+def test_bound_repositories_serialize_all_writers_with_maintenance_claim(tmp_path):
+    lanes = ResourceLaneRegistry()
+    storage_paths = PlaylistStoragePaths(
+        playlists_file=tmp_path / "playlists.json",
+        pending_deletions_file=tmp_path / "pending.json",
+    )
+    playlist_repository = PlaylistRepository.from_paths(
+        storage_paths,
+        resource_lanes=lanes,
+    )
+    meeting_store = MeetingTreeStore(
+        tmp_path / "meeting_trees.json",
+        resource_lanes=lanes,
+    )
+    pending_repository = PendingDeletionRepository.from_paths(
+        storage_paths,
+        resource_lanes=lanes,
+    )
+    claim = ResourceClaim(
+        exclusive_key=file_resource_key(storage_paths.pending_deletions_file),
+        shared_keys=(
+            file_resource_key(storage_paths.playlists_file),
+            file_resource_key(meeting_store.path),
+        ),
+    )
+    claim_acquired = threading.Event()
+    release_claim = threading.Event()
+
+    def hold_maintenance_claim() -> None:
+        lanes.run(
+            claim,
+            lambda: (claim_acquired.set(), release_claim.wait(timeout=2.0)),
+        )
+
+    maintenance = threading.Thread(target=hold_maintenance_claim)
+    maintenance.start()
+    assert claim_acquired.wait(timeout=1.0)
+
+    completed: list[str] = []
+    writer_started = [threading.Event() for _ in range(3)]
+
+    def write(index: int, label: str, action) -> None:
+        writer_started[index].set()
+        action()
+        completed.append(label)
+
+    writers = (
+        threading.Thread(
+            target=write,
+            args=(0, "playlist", lambda: playlist_repository.save_strict([])),
+        ),
+        threading.Thread(
+            target=write,
+            args=(
+                1,
+                "meeting",
+                lambda: meeting_store.save(
+                    "mwb:2026-07-20:T:20260700",
+                    [],
+                    "hash",
+                ),
+            )
+        ),
+        threading.Thread(
+            target=write,
+            args=(2, "pending", lambda: pending_repository.save_strict([])),
+        ),
+    )
+    for writer in writers:
+        writer.start()
+    assert all(started.wait(timeout=1.0) for started in writer_started)
+    time.sleep(0.05)
+    assert completed == []
+
+    release_claim.set()
+    maintenance.join(timeout=2.0)
+    for writer in writers:
+        writer.join(timeout=2.0)
+
+    assert sorted(completed) == ["meeting", "pending", "playlist"]
+
+
+def test_profile_maintenance_only_deletes_files_from_pre_ui_inventory(tmp_path):
+    paths = ProfilePaths.from_roots(
+        data_dir=tmp_path / "data",
+        cache_dir=tmp_path / "cache",
+        profile_id="profile-1",
+    )
+    paths.ensure_dirs()
+    orphan = paths.images_dir / "old-orphan.jpg"
+    orphan.write_bytes(b"old")
+    storage_paths = PlaylistStoragePaths(
+        playlists_file=paths.playlists_file,
+        pending_deletions_file=paths.pending_deletions_file,
+    )
+    lanes = ResourceLaneRegistry()
+    playlists = PlaylistRepository.from_paths(storage_paths, resource_lanes=lanes)
+    meetings = MeetingTreeStore(paths.meeting_trees_file, resource_lanes=lanes)
+    service = ProfileMaintenanceService(
+        storage_paths=storage_paths,
+        playlist_repository=playlists,
+        meeting_tree_store=meetings,
+        profile_paths=paths,
+        resource_lanes=lanes,
+    )
+    materialized_after_startup = paths.embedded_dir / "importing-video.mp4"
+    materialized_after_startup.write_bytes(b"new import")
+
+    service.run()
+
+    assert not orphan.exists()
+    assert materialized_after_startup.read_bytes() == b"new import"
+
+
+def test_profile_maintenance_preserves_inventory_path_replaced_by_live_work(tmp_path):
+    paths = ProfilePaths.from_roots(
+        data_dir=tmp_path / "data",
+        cache_dir=tmp_path / "cache",
+        profile_id="profile-1",
+    )
+    paths.ensure_dirs()
+    replaced = paths.embedded_dir / "asset.mp4"
+    replaced.write_bytes(b"stale")
+    storage_paths = PlaylistStoragePaths(
+        playlists_file=paths.playlists_file,
+        pending_deletions_file=paths.pending_deletions_file,
+    )
+    lanes = ResourceLaneRegistry()
+    playlists = PlaylistRepository.from_paths(storage_paths, resource_lanes=lanes)
+    meetings = MeetingTreeStore(paths.meeting_trees_file, resource_lanes=lanes)
+    service = ProfileMaintenanceService(
+        storage_paths=storage_paths,
+        playlist_repository=playlists,
+        meeting_tree_store=meetings,
+        profile_paths=paths,
+        resource_lanes=lanes,
+    )
+    replaced.write_bytes(b"replacement with a distinct generation")
+
+    service.run()
+
+    assert replaced.read_bytes() == b"replacement with a distinct generation"
+
+
+def test_profile_maintenance_cancellation_prevents_any_orphan_delete(tmp_path):
+    paths = ProfilePaths.from_roots(
+        data_dir=tmp_path / "data",
+        cache_dir=tmp_path / "cache",
+        profile_id="profile-1",
+    )
+    paths.ensure_dirs()
+    orphan = paths.embedded_dir / "orphan.mp4"
+    orphan.write_bytes(b"must survive cancellation")
+    storage_paths = PlaylistStoragePaths(
+        playlists_file=paths.playlists_file,
+        pending_deletions_file=paths.pending_deletions_file,
+    )
+    lanes = ResourceLaneRegistry()
+    service = ProfileMaintenanceService(
+        storage_paths=storage_paths,
+        playlist_repository=PlaylistRepository.from_paths(
+            storage_paths,
+            resource_lanes=lanes,
+        ),
+        meeting_tree_store=MeetingTreeStore(
+            paths.meeting_trees_file,
+            resource_lanes=lanes,
+        ),
+        profile_paths=paths,
+        resource_lanes=lanes,
+    )
+    cancellation = CancellationFlag()
+    cancellation.set()
+
+    with pytest.raises(ProfileMaintenanceCancelled):
+        service.run(cancellation)
+
+    assert orphan.read_bytes() == b"must survive cancellation"
+
+
+def test_cancellation_waits_for_active_side_effect_and_closes_the_gate():
+    cancellation = CancellationFlag()
+    action_started = threading.Event()
+    release_action = threading.Event()
+    cancel_finished = threading.Event()
+
+    def blocking_action() -> None:
+        action_started.set()
+        release_action.wait(timeout=2)
+
+    action_thread = threading.Thread(
+        target=lambda: cancellation.run_if_active(blocking_action)
+    )
+    action_thread.start()
+    assert action_started.wait(timeout=1)
+    cancel_thread = threading.Thread(
+        target=lambda: (cancellation.set(), cancel_finished.set())
+    )
+    cancel_thread.start()
+
+    assert not cancel_finished.wait(timeout=0.05)
+    release_action.set()
+    action_thread.join(timeout=2)
+    cancel_thread.join(timeout=2)
+
+    assert cancel_finished.is_set()
+    assert cancellation.run_if_active(lambda: None) is False
 
 
 def test_try_remove_file_queues_after_retries(monkeypatch, tmp_path):

@@ -10,12 +10,11 @@ import os
 from pathlib import Path
 import threading
 import time
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
-from PySide6.QtCore import QObject, QTimer, Signal, Slot
+from PySide6.QtCore import QObject, Qt, QTimer, Signal, Slot
 from PySide6.QtMultimedia import QMediaPlayer
 
-from ..core.foundation.resources import application_resource_path
 from ..core.i18n.meeting_sections import display_meeting_section_title
 from ..core.i18n.remote_control import remote_control_localization
 from ..core.media.formats import MediaKind
@@ -29,11 +28,6 @@ from ..core.remote_control.catalog import (
     RemoteCatalog,
     ResolvedMeetingPlay,
     ResolvedPlaylistPlay,
-)
-from ..core.remote_control.certificates import (
-    TLSCertificateStore,
-    TLSIdentity,
-    verification_code,
 )
 from ..core.remote_control.contracts import (
     CatalogKind,
@@ -65,11 +59,6 @@ from ..core.remote_control.network import (
 )
 from ..core.remote_control.sanitization import public_reason, public_title
 from ..core.remote_control.security import InMemorySessionStore, LoginRateLimiter
-from ..core.remote_control.server import (
-    RemoteControlServer,
-    RemoteControlServerBinding,
-    RemoteControlServerDependencies,
-)
 from ..core.remote_control.settings import (
     REMOTE_CONTROL_PORT,
     NetworkInterfaceSelection,
@@ -87,6 +76,10 @@ from ..core.remote_control.thumbnails import (
 
 
 log = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from ..core.remote_control.certificates import TLSIdentity
+    from ..core.remote_control.server import RemoteControlServer
 
 _FALLBACK_THUMBNAIL_TTL_SECONDS = 15 * 60
 _MAX_FALLBACK_THUMBNAILS = 256
@@ -188,9 +181,7 @@ class RemoteControlController(QObject):
         )
         self._sessions = InMemorySessionStore()
         self._rate_limiter = LoginRateLimiter()
-        self._tls_store = TLSCertificateStore(
-            Path(self._dependencies.runtime_paths.data_dir) / "remote_control" / "tls"
-        )
+        self._tls_store: Any | None = None
         self._server: RemoteControlServer | None = None
         self._tls_identity: TLSIdentity | None = None
         self._next_tls_renewal_attempt_at = 0.0
@@ -223,11 +214,18 @@ class RemoteControlController(QObject):
         self._catalog_refresh_inflight: tuple[int, Future[Any]] | None = None
         self._catalog_refresh_pending = False
         self._catalog_refresh_shutdown = False
+        self._catalog_ready = False
+        self._catalog_dirty = True
+        self._runtime_waiting_for_catalog = False
+        self._started = False
         self._catalog_refresh_timer = QTimer(self)
         self._catalog_refresh_timer.setSingleShot(True)
         self._catalog_refresh_timer.setInterval(750)
         self._catalog_refresh_timer.timeout.connect(self._start_catalog_refresh)
-        self._catalog_build_completed.connect(self._on_catalog_build_completed)
+        self._catalog_build_completed.connect(
+            self._on_catalog_build_completed,
+            Qt.ConnectionType.QueuedConnection,
+        )
         self._playback_timer = QTimer(self)
         self._playback_timer.setSingleShot(True)
         self._playback_timer.setInterval(160)
@@ -249,7 +247,9 @@ class RemoteControlController(QObject):
         return self._server is not None and self._server.is_running
 
     def start(self) -> None:
-        self._refresh_catalog()
+        if self._started:
+            return
+        self._started = True
         self._refresh_playback()
         self.reconfigure()
         self._runtime_timer.start()
@@ -315,8 +315,18 @@ class RemoteControlController(QObject):
             )
             return
 
+        if not self._catalog_ready or self._catalog_dirty:
+            self._runtime_waiting_for_catalog = True
+            self._ensure_initial_catalog_refresh()
+            self._show_runtime_status(
+                running=False,
+                message=self.tr("Remote control is preparing the media catalog."),
+                status="pending",
+            )
+            return
+
         try:
-            identity = self._tls_store.load_or_create(interface.ipv4_address)
+            identity = self._tls_certificate_store().load_or_create(interface.ipv4_address)
             server = self._start_server(identity)
         except Exception:  # noqa: BLE001 - service lifecycle boundary
             log.exception("Could not start local remote control")
@@ -334,6 +344,13 @@ class RemoteControlController(QObject):
         )
 
     def _start_server(self, identity: TLSIdentity) -> RemoteControlServer:
+        from ..core.foundation.resources import application_resource_path
+        from ..core.remote_control.server import (
+            RemoteControlServer,
+            RemoteControlServerBinding,
+            RemoteControlServerDependencies,
+        )
+
         self._state.rotate_server_instance()
         server = RemoteControlServer(
             RemoteControlServerDependencies(
@@ -367,7 +384,7 @@ class RemoteControlController(QObject):
         if previous is None or server is None:
             return
         try:
-            renewed = self._tls_store.load_or_create(previous.ipv4_address)
+            renewed = self._tls_certificate_store().load_or_create(previous.ipv4_address)
             if renewed.leaf_fingerprint_sha256 == previous.leaf_fingerprint_sha256:
                 self._next_tls_renewal_attempt_at = 0.0
                 return
@@ -396,7 +413,9 @@ class RemoteControlController(QObject):
             "tls": {
                 "installationId": identity.installation_id,
                 "authoritySha256": identity.trust_anchor_fingerprint_sha256,
-                "verificationCode": verification_code(identity.trust_anchor_fingerprint_sha256),
+                "verificationCode": self._verification_code(
+                    identity.trust_anchor_fingerprint_sha256
+                ),
                 "authorityCertificateUrl": "/remote/trust-certificate.cer",
                 "authorityNotValidAfter": identity.root_not_valid_after.isoformat(),
             },
@@ -421,7 +440,7 @@ class RemoteControlController(QObject):
             and self.is_running
             and self._tls_identity is not None
             and time.monotonic() >= self._next_tls_renewal_attempt_at
-            and self._tls_store.renewal_due(self._tls_identity)
+            and self._tls_certificate_store().renewal_due(self._tls_identity)
         ):
             self._renew_tls()
 
@@ -522,6 +541,7 @@ class RemoteControlController(QObject):
         """Synchronously refresh for startup and explicit local operations."""
 
         self._catalog_refresh_generation += 1
+        self._catalog_dirty = True
         self._catalog_refresh_pending = False
         self._catalog_refresh_timer.stop()
         try:
@@ -538,11 +558,18 @@ class RemoteControlController(QObject):
         if self._catalog_refresh_shutdown:
             return
         self._catalog_refresh_generation += 1
+        self._catalog_dirty = True
+        if not self._dependencies.settings.enabled():
+            return
         self._catalog_refresh_timer.start()
 
     @Slot()
     def _start_catalog_refresh(self) -> None:
-        if self._catalog_refresh_shutdown:
+        if (
+            self._catalog_refresh_shutdown
+            or not self._dependencies.settings.enabled()
+        ):
+            self._catalog_refresh_pending = False
             return
         if self._catalog_refresh_inflight is not None:
             self._catalog_refresh_pending = True
@@ -604,6 +631,8 @@ class RemoteControlController(QObject):
 
         if self._catalog_refresh_pending or stale:
             self._catalog_refresh_pending = False
+            if not self._dependencies.settings.enabled():
+                return
             if self._catalog_refresh_timer.isActive():
                 return
             QTimer.singleShot(0, self._start_catalog_refresh)
@@ -625,6 +654,11 @@ class RemoteControlController(QObject):
                 raise RuntimeError("Public and private catalog snapshots diverged")
         if published.catalog_revision != previous_revision:
             self._publish_snapshot()
+        self._catalog_ready = True
+        self._catalog_dirty = False
+        if self._runtime_waiting_for_catalog:
+            self._runtime_waiting_for_catalog = False
+            self.reconfigure()
 
     @Slot(str)
     def on_language_changed(self, locale_code: str) -> None:
@@ -633,7 +667,7 @@ class RemoteControlController(QObject):
         self._localization = remote_control_localization(locale_code)
         if self._server is not None:
             self._server.publish_profile()
-        self._refresh_catalog()
+        self._schedule_catalog_refresh()
 
     def _localization_payload(self) -> JsonObject:
         messages = self._localization.get("messages")
@@ -1242,7 +1276,7 @@ class RemoteControlController(QObject):
             message,
         )
         identity = self._tls_identity
-        binding = self._server.binding if self._server is not None else None
+        binding = getattr(self._server, "binding", None)
         access_url = binding.url if binding is not None and running else ""
         self._dependencies.settings_widget.set_remote_control_runtime_status(
             running=running,
@@ -1251,11 +1285,35 @@ class RemoteControlController(QObject):
             access_url=access_url,
             setup_url=f"{access_url}?setup=1" if access_url else "",
             verification_code=(
-                verification_code(identity.trust_anchor_fingerprint_sha256) if identity else ""
+                self._verification_code(identity.trust_anchor_fingerprint_sha256)
+                if identity
+                else ""
             ),
             certificate_der=(identity.trust_certificate_der() if identity and running else b""),
             status=status,
         )
+
+    def _ensure_initial_catalog_refresh(self) -> None:
+        if self._catalog_refresh_shutdown or self._catalog_refresh_inflight is not None:
+            return
+        self._catalog_refresh_generation += 1
+        self._catalog_refresh_timer.stop()
+        self._start_catalog_refresh()
+
+    def _tls_certificate_store(self):
+        if self._tls_store is None:
+            from ..core.remote_control.certificates import TLSCertificateStore
+
+            self._tls_store = TLSCertificateStore(
+                Path(self._dependencies.runtime_paths.data_dir) / "remote_control" / "tls"
+            )
+        return self._tls_store
+
+    @staticmethod
+    def _verification_code(fingerprint: str) -> str:
+        from ..core.remote_control.certificates import verification_code
+
+        return verification_code(fingerprint)
 
     def _publish_snapshot(self) -> None:
         if self._server is not None:

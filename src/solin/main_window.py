@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from contextlib import ExitStack
+import logging
 from typing import Any, TYPE_CHECKING
 
-from PySide6.QtWidgets import QApplication, QMainWindow, QWidget
-from PySide6.QtCore import QObject, QTimer, Signal, QEvent
+from PySide6.QtWidgets import QApplication, QVBoxLayout, QWidget
+from PySide6.QtCore import QObject, QTimer, Signal, QEvent, Qt
 
 from .controllers.auto_key_projection_controller import AutoKeyProjectionController
 from .controllers.language_controller import LanguageContext, LanguageController
@@ -72,13 +74,6 @@ from .controllers.projection_window_controller import (
     ProjectionWindowContext,
     ProjectionWindowController,
 )
-from .controllers.remote_control_controller import (
-    RemoteControlController,
-    RemoteControlDependencies,
-)
-from .controllers.remote_media_thumbnail_extractor import (
-    RemoteMediaThumbnailExtractor,
-)
 from .controllers.shutdown_controller import (
     ShutdownController,
     ShutdownDependencies,
@@ -128,13 +123,19 @@ from .core.foundation.runtime_paths import ProfilePaths, RuntimePaths
 from .core.foundation.qt_threads import OwnedQThreadRegistry
 from .core.playlists.storage import PlaylistRepository, PlaylistStoragePaths
 from .core.meetings.tree_store import MeetingTreeStore
+from .core.foundation.resource_lanes import ResourceLaneRegistry
 from .core.meetings.jwpub_cache import JwpubChecksumStore
 from .core.profiles.models import ProfileInfo
 from .widgets.projection.monitor_manager import MonitorManagerPopup
 from .ui.qml.timer_bridge import TimerBridge
 from .ui.window_focus import raise_projection_window
 
+
+_STARTUP_SCREEN_SETTLE_MS = 900
+log = logging.getLogger(__name__)
+
 if TYPE_CHECKING:
+    from .bootstrap.application_window import ApplicationWindow
     from .core.ingest.watched_folder import WatchedFolderWatcher
     from .core.ingest.watched_folder_files import WatchedFolderFileStore
     from .core.ingest.watched_folder_playlists import WatchedFolderPlaylistStore
@@ -155,7 +156,9 @@ if TYPE_CHECKING:
 # ── MainWindow ────────────────────────────────────────────────────────────────
 
 
-class MainWindow(QMainWindow):
+class MainWindow(QWidget):
+    first_frame_presented = Signal()
+    _benchmark_close_requested = Signal()
     _auto_share_finished = Signal(int, bool, bool)
     _auto_share_mouse_interference_warning = Signal()
     proj_bar: Any
@@ -185,6 +188,7 @@ class MainWindow(QMainWindow):
         playlist_repository: PlaylistRepository,
         queue_pending_deletion: Callable[[str], None],
         meeting_tree_store: MeetingTreeStore,
+        resource_lanes: ResourceLaneRegistry,
         meeting_linked_folder_sync: MeetingLinkedFolderSync,
         profile_media_store: ProfileMediaStore,
         jwpub_import_thread_factory: JwpubImportThreadFactory,
@@ -201,8 +205,26 @@ class MainWindow(QMainWindow):
         playlist_cleanup_queue_factory: Callable[..., PlaylistCleanupQueue],
         timer_session: TimerSession,
         active_profile: ProfileInfo,
+        *,
+        window_host: ApplicationWindow,
     ):
-        super().__init__()
+        super().__init__(window_host.content_parent())
+        from .bootstrap.startup_timeline import startup_timeline
+
+        startup = startup_timeline()
+        startup.mark("main_window_constructor_started")
+        self._window_host = window_host
+        self._benchmark_close_requested.connect(
+            window_host.close,
+            Qt.ConnectionType.QueuedConnection,
+        )
+        self._content_layout = QVBoxLayout(self)
+        self._content_layout.setContentsMargins(0, 0, 0, 0)
+        self._content_layout.setSpacing(0)
+        self._construction_cleanup = ExitStack()
+        self._construction_cleanup.callback(self._abort_partial_resources)
+        self._construction_finalized = False
+        window_host.register_runtime_candidate(self)
         self.lang = lang_manager
         self.runtime_paths = runtime_paths
         self.profile_paths = profile_paths
@@ -210,6 +232,7 @@ class MainWindow(QMainWindow):
         self.media_cache_manager = media_cache_manager
         self.media_tree_runtime = MediaTreeRuntime(
             media_cache_manager.media_cache_dir,
+            resource_lanes=resource_lanes,
             parent=self,
         )
         watched_folder_playlist_store.bind_resource_lanes(
@@ -257,6 +280,12 @@ class MainWindow(QMainWindow):
         self._monitor_popup = None
         self._ipc_controller = None
         self._remote_services = None
+        self._remote_control = None
+        self._remote_media_thumbnail_extractor = None
+        self._media_info_queue_factory = media_info_queue_factory
+        self._first_frame_presented = False
+        self._deferred_startup_started = False
+        self._application_maintenance = service_factories.application_maintenance
         self._jwl_tmp_files: set[str] = set()
         self._conversion_threads = OwnedQThreadRegistry()
         self._shutdown_controller = None
@@ -317,6 +346,11 @@ class MainWindow(QMainWindow):
             timer_session,
             self._monitor_allocation,
         )
+        self._timer_output_startup_timer = QTimer(self)
+        self._timer_output_startup_timer.setSingleShot(True)
+        self._timer_output_startup_timer.timeout.connect(
+            self._reconcile_timer_output_after_startup
+        )
         self.timer_monitors = TimerMonitorController(
             screen_manager=self.screen_mgr,
             allocation=self._monitor_allocation,
@@ -356,30 +390,26 @@ class MainWindow(QMainWindow):
             self,
         )
 
-        self.setWindowTitle(self.tr("Solin"))
-        self.setMinimumSize(635, 600)
+        self._window_host.setWindowTitle(self.tr("Solin"))
         self._window_state = WindowStateController(
             WindowStateContext(
-                minimum_width=self.minimumWidth,
-                minimum_height=self.minimumHeight,
-                resize=self.resize,
-                width=self.width,
-                height=self.height,
-                set_window_icon=self.setWindowIcon,
-                move=self.move,
-                is_minimized=self.isMinimized,
-                show_normal=self.showNormal,
-                is_visible=self.isVisible,
-                show=self.show,
-                raise_window=self.raise_,
-                activate_window=self.activateWindow,
-                win_id=self.winId,
-                titlebar_window=self,
+                minimum_width=self._window_host.minimumWidth,
+                minimum_height=self._window_host.minimumHeight,
+                resize=self._window_host.resize,
+                width=self._window_host.width,
+                height=self._window_host.height,
+                move=self._window_host.move,
+                is_minimized=self._window_host.isMinimized,
+                show_normal=self._window_host.showNormal,
+                is_visible=self._window_host.isVisible,
+                show=self._window_host.show,
+                raise_window=self._window_host.raise_,
+                activate_window=self._window_host.activateWindow,
+                win_id=self._window_host.winId,
+                titlebar_window=self._window_host,
             ),
             profile_settings_bundle.window_geometry,
         )
-        self._window_state.restore_size()
-        self._window_state.apply_icon()
 
         self._auto_share_mouse_interference_warning.connect(
             self._notify_auto_share_mouse_interference
@@ -396,7 +426,7 @@ class MainWindow(QMainWindow):
             MainWindowUiContext(
                 parent=self,
                 event_filter=self,
-                set_central_widget=self.setCentralWidget,
+                set_central_widget=self._set_content_widget,
                 active_profile_id=active_profile.id,
                 active_profile_name=active_profile.name,
                 translate=self.tr,
@@ -528,6 +558,7 @@ class MainWindow(QMainWindow):
             browser_image_fetch_service_factory=browser_image_fetch_service_factory,
         )
         self._build_ui()
+        startup.mark("main_window_tree_built")
         self._playlist_imports = PlaylistImportController(
             PlaylistImportContext(
                 dialog_parent=self,
@@ -601,6 +632,7 @@ class MainWindow(QMainWindow):
                 import_native_playlists=self._import_native_playlists_from_shell,
             ),
         )
+        startup.mark("media_routing_controllers_ready")
         self._auto_key_projection = AutoKeyProjectionController(self._auto_keys, self.proj_bar)
         self._projection_integrations = ProjectionIntegrationController(
             ProjectionIntegrationContext(
@@ -632,9 +664,7 @@ class MainWindow(QMainWindow):
                 camera_service=self._camera_service,
                 projection_windows=self.projection_session.all_windows,
                 playlist_edit_is_temp=lambda: getattr(
-                    self.playlist_widget._edit_view,
-                    "_is_temp",
-                    False,
+                    self.playlist_widget, "is_temporary_edit", False
                 ),
                 meeting_service=lambda: self.meetings_widget.get_service(),
                 dialog_parent=self,
@@ -728,7 +758,7 @@ class MainWindow(QMainWindow):
         )
         self._language_controller = LanguageController(
             LanguageContext(
-                set_window_title=self.setWindowTitle,
+                set_window_title=self._window_host.setWindowTitle,
                 sidebar_title_label=self._sidebar_title_lbl,
                 sidebar_subtitle_label=self._sidebar_subtitle_lbl,
                 nav_buttons=self._nav_buttons_by_name,
@@ -774,53 +804,12 @@ class MainWindow(QMainWindow):
                 open_meeting_schedule_settings=self._open_meeting_schedule_settings,
             ),
         )
+        startup.mark("projection_controllers_ready")
         self._signal_connections.connect_signals()
-
-        self._remote_media_thumbnail_extractor = RemoteMediaThumbnailExtractor(
-            media_info_queue_factory,
-            self,
+        self.settings_widget.remote_control_settings_changed.connect(
+            self._ensure_remote_control_started
         )
-        self._remote_control = RemoteControlController(
-            RemoteControlDependencies(
-                runtime_paths=self.runtime_paths,
-                active_profile_id=self.active_profile.id,
-                active_profile_name=self.active_profile.name,
-                active_profile_locale=lambda: self.lang.current_code,
-                settings=self._remote_control_settings,
-                credentials=self._remote_control_credentials,
-                playlist_repository=self.playlist_repository,
-                meeting_tree_store=self.meeting_tree_store,
-                watched_folder_settings=self._watched_folder_settings,
-                watched_folder_playlist_store=self._watched_folder_playlist_store,
-                playlist_thumbnail_store=self._playlist_thumbnail_store,
-                meeting_thumbnail_store=self._meeting_thumbnail_store,
-                media_thumbnail_extractor=self._remote_media_thumbnail_extractor,
-                projection_session=self.projection_session,
-                projection_bar=self.proj_bar,
-                media_controller=self.media_ctrl,
-                media_projection=self._media_projection,
-                projection_stop=self._projection_stop,
-                playback_protection=self.playback_protection,
-                settings_widget=self.settings_widget,
-            ),
-            self,
-        )
-        self._remote_control.runtime_status_reported.connect(
-            self._quick_toolbar.set_remote_control_status
-        )
-        self._remote_control.session_inventory_reported.connect(
-            self._quick_toolbar.set_remote_sessions
-        )
-        self._remote_control.session_revocation_reported.connect(
-            self._quick_toolbar.set_remote_session_revocation_result
-        )
-        self._quick_toolbar.remote_session_disconnect_requested.connect(
-            self._remote_control.revoke_session
-        )
-        self._quick_toolbar.remote_sessions_disconnect_all_requested.connect(
-            self._remote_control.revoke_sessions
-        )
-        self.lang.language_changed.connect(self._remote_control.on_language_changed)
+        startup.mark("main_window_signals_connected")
 
         self._bootstrap_controller = MainWindowBootstrapController(
             MainWindowStartupDependencies(
@@ -841,21 +830,18 @@ class MainWindow(QMainWindow):
                     open_media_files=self.open_media_files,
                 ),
                 remote_services_factory=lambda: service_factories.remote_services(self),
-                apply_stylesheet=self._apply_global_stylesheet,
             )
         )
-        startup_resources = self._bootstrap_controller.finish_startup()
+        startup_resources = self._bootstrap_controller.prepare_before_show()
         self._monitor_popup = startup_resources.monitor_popup
         self._ipc_controller = startup_resources.ipc_controller
-        self._remote_services = startup_resources.remote_services
-        self._remote_control.start()
         self._shutdown_controller = ShutdownController(
             ShutdownDependencies(
                 projection_session=self.projection_session,
                 timer_output=self.timer_output,
                 services=ShutdownServices(
-                    remote_control=self._remote_control,
-                    remote_services=self._remote_services,
+                    remote_control=lambda: self._remote_control,
+                    remote_services=lambda: self._remote_services,
                     download_notifications=self._media_download_notifications,
                     playback_notifications=self._media_playback_notifications,
                     notifications=self.notifications,
@@ -868,7 +854,7 @@ class MainWindow(QMainWindow):
                     camera=self._camera_service,
                     obs=self._obs_service,
                     zoom=self._zoom_service,
-                    ipc=self._ipc_controller,
+                    ipc=lambda: self._ipc_controller,
                 ),
                 widget_providers=(
                     lambda: self.meetings_widget,
@@ -882,12 +868,128 @@ class MainWindow(QMainWindow):
                 queue_pending_deletion=queue_pending_deletion,
                 save_window_state=self._window_state.save_size,
                 cleanup_lazy_pages=self._lazy_pages.cleanup_browser,
+                cancel_ui_preparation=self._ui_preparation.cancel,
             )
         )
+        startup.mark("main_window_constructor_ready")
 
-        # Show the clock window on any monitor reserved for the timer once the
-        # screens have settled (mirrors the media projection startup timing).
-        QTimer.singleShot(900, self.timer_output.reconcile)
+    def _start_deferred_startup(self) -> None:
+        if self._deferred_startup_started or getattr(self, "_closing", False):
+            return
+        self._deferred_startup_started = True
+        resources = self._bootstrap_controller.start_after_first_frame()
+        self._remote_services = resources.remote_services
+        self._application_maintenance()
+        self.settings_widget.start_deferred_services()
+        self._ui_preparation.start()
+        self._ensure_remote_control_started()
+        self._timer_output_startup_timer.start(_STARTUP_SCREEN_SETTLE_MS)
+
+        from .bootstrap.startup_timeline import startup_timeline
+
+        startup_timeline().mark("deferred_startup_started")
+
+    def complete_startup_handoff(self) -> None:
+        """Release deferred services only after the visible window handoff."""
+
+        self._start_deferred_startup()
+
+    def _reconcile_timer_output_after_startup(self) -> None:
+        if not getattr(self, "_closing", False):
+            self.timer_output.reconcile()
+
+    def _on_ui_preparation_completed(self) -> None:
+        if getattr(self, "_closing", False):
+            return
+        from .bootstrap.startup_timeline import (
+            startup_benchmark_exit_requested,
+            startup_timeline,
+        )
+
+        timeline = startup_timeline()
+        timeline.record_measurements(
+            "ui_preparation_dispatch",
+            self._ui_preparation.dispatch_durations_ms,
+        )
+        timeline.record_measurements(
+            "ui_preparation_units",
+            self._ui_preparation.unit_durations_ms,
+        )
+        for task_index, durations in self._ui_preparation.unit_durations_by_task.items():
+            timeline.record_measurements(
+                f"ui_preparation_task_{task_index}",
+                durations,
+            )
+        timeline.mark("deferred_startup_complete")
+        timeline.emit_json()
+        if startup_benchmark_exit_requested():
+            # Leave the current cooperative-dispatch event before closing the
+            # native window; Windows COM rejects teardown from an input-sync
+            # callback with RPC_E_CANTCALLOUT_ININPUTSYNCCALL.
+            self._benchmark_close_requested.emit()
+
+    def _ensure_remote_control_started(self) -> None:
+        if self._remote_control is not None or not self._remote_control_settings.enabled():
+            return
+        self._remote_control = self._create_remote_control()
+        self._remote_control.start()
+
+    def _create_remote_control(self):
+        from .controllers.remote_control_controller import (
+            RemoteControlController,
+            RemoteControlDependencies,
+        )
+        from .controllers.remote_media_thumbnail_extractor import (
+            RemoteMediaThumbnailExtractor,
+        )
+
+        extractor = RemoteMediaThumbnailExtractor(
+            self._media_info_queue_factory,
+            self,
+        )
+        self._remote_media_thumbnail_extractor = extractor
+        controller = RemoteControlController(
+            RemoteControlDependencies(
+                runtime_paths=self.runtime_paths,
+                active_profile_id=self.active_profile.id,
+                active_profile_name=self.active_profile.name,
+                active_profile_locale=lambda: self.lang.current_code,
+                settings=self._remote_control_settings,
+                credentials=self._remote_control_credentials,
+                playlist_repository=self.playlist_repository,
+                meeting_tree_store=self.meeting_tree_store,
+                watched_folder_settings=self._watched_folder_settings,
+                watched_folder_playlist_store=self._watched_folder_playlist_store,
+                playlist_thumbnail_store=self._playlist_thumbnail_store,
+                meeting_thumbnail_store=self._meeting_thumbnail_store,
+                media_thumbnail_extractor=extractor,
+                projection_session=self.projection_session,
+                projection_bar=self.proj_bar,
+                media_controller=self.media_ctrl,
+                media_projection=self._media_projection,
+                projection_stop=self._projection_stop,
+                playback_protection=self.playback_protection,
+                settings_widget=self.settings_widget,
+            ),
+            self,
+        )
+        controller.runtime_status_reported.connect(
+            self._quick_toolbar.set_remote_control_status
+        )
+        controller.session_inventory_reported.connect(
+            self._quick_toolbar.set_remote_sessions
+        )
+        controller.session_revocation_reported.connect(
+            self._quick_toolbar.set_remote_session_revocation_result
+        )
+        self._quick_toolbar.remote_session_disconnect_requested.connect(
+            controller.revoke_session
+        )
+        self._quick_toolbar.remote_sessions_disconnect_all_requested.connect(
+            controller.revoke_sessions
+        )
+        self.lang.language_changed.connect(controller.on_language_changed)
+        return controller
 
     def _route_browser_destination(
         self,
@@ -979,10 +1081,17 @@ class MainWindow(QMainWindow):
     def _build_ui(self):
         self._install_ui_resources(self._ui_controller.build_ui())
 
+    def _set_content_widget(self, widget: QWidget) -> None:
+        if self._content_layout.count():
+            raise RuntimeError("Main window content can only be installed once.")
+        self._content_layout.addWidget(widget)
+
     def _install_ui_resources(self, resources: MainWindowUiResources) -> None:
         self.stack = resources.stack
         self._lazy_pages = resources.lazy_pages
         self._navigation = resources.navigation
+        self._ui_preparation = resources.preparation
+        self._ui_preparation.completed.connect(self._on_ui_preparation_completed)
         self.right_col = resources.right_col
         self.proj_bar = resources.projection_bar
         self.songs_widget = resources.songs_widget
@@ -1007,7 +1116,7 @@ class MainWindow(QMainWindow):
         if app is not None:
             apply_application_palette(app)
             app.setStyleSheet(stylesheet)
-        self.setStyleSheet(stylesheet)
+        self._window_host.setStyleSheet(stylesheet)
 
     def _apply_theme(self, theme_id: str) -> None:
         theme = activate_theme(theme_id)
@@ -1137,20 +1246,208 @@ class MainWindow(QMainWindow):
             playback_order=playback_order,
         )
 
-    def showEvent(self, event):
-        super().showEvent(event)
-        self._window_state.center_on_primary_screen()
-        # Apply custom titlebar color once the native window handle exists.
-        # Using a zero-delay singleShot ensures the OS has fully created the
-        # window before we touch DWM / NSWindow.
-        QTimer.singleShot(0, self._window_state.apply_titlebar_color)
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        if self._first_frame_presented:
+            return
+        self._first_frame_presented = True
 
-    def closeEvent(self, event):
+        from .bootstrap.startup_timeline import startup_timeline
+
+        startup_timeline().mark("first_paint")
+        self.first_frame_presented.emit()
+
+    def shutdown(self) -> None:
         if getattr(self, "_closing", False):
-            super().closeEvent(event)
             return
         self._closing = True
 
         if self._shutdown_controller is not None:
             self._shutdown_controller.shutdown()
+
+    def commit_construction(self) -> None:
+        if self._construction_finalized:
+            return
+        self._construction_cleanup.pop_all()
+        self._construction_finalized = True
+
+    def abort_construction(self) -> None:
+        if self._construction_finalized:
+            return
+        self._construction_cleanup.close()
+        self._construction_finalized = True
+
+    def _abort_partial_resources(self) -> None:
+        shutdown_controller = getattr(self, "_shutdown_controller", None)
+        if shutdown_controller is not None:
+            self._partial_cleanup_call(
+                "completed shutdown controller",
+                shutdown_controller.shutdown,
+            )
+            return
+
+        ui_preparation = getattr(self, "_ui_preparation", None)
+        self._partial_cleanup_method("UI preparation", ui_preparation, "cancel")
+        self._partial_cleanup_method(
+            "remote control",
+            getattr(self, "_remote_control", None),
+            "stop",
+        )
+        self._partial_cleanup_method(
+            "remote services",
+            getattr(self, "_remote_services", None),
+            "stop",
+        )
+        self._partial_cleanup_method(
+            "media countdown automation",
+            getattr(self, "_media_countdown_automation", None),
+            "shutdown",
+        )
+
+        projection_session = getattr(self, "projection_session", None)
+        if projection_session is not None:
+            projection_windows = getattr(projection_session, "projection_windows", ())
+            for projection_window in tuple(projection_windows):
+                self._partial_cleanup_method(
+                    "projection window",
+                    projection_window,
+                    "close",
+                )
+            self._partial_cleanup_method(
+                "projection window registry",
+                projection_windows,
+                "clear",
+            )
+            self._partial_cleanup_method(
+                "floating projection preview",
+                projection_session,
+                "close_floating_preview",
+            )
+        self._partial_cleanup_method(
+            "timer output",
+            getattr(self, "timer_output", None),
+            "close_all",
+        )
+
+        for attribute, label in (
+            ("_media_download_notifications", "download notifications"),
+            ("_media_playback_notifications", "playback notifications"),
+        ):
+            self._partial_cleanup_method(
+                label,
+                getattr(self, attribute, None),
+                "stop",
+            )
+        self._partial_cleanup_method(
+            "notification center",
+            getattr(self, "notifications", None),
+            "shutdown",
+        )
+
+        for attribute in (
+            "meetings_widget",
+            "playlist_widget",
+            "timer_widget",
+        ):
+            self._partial_cleanup_method(
+                attribute,
+                getattr(self, attribute, None),
+                "cleanup",
+            )
+        lazy_pages = getattr(self, "_lazy_pages", None)
+        self._partial_cleanup_method("lazy browser", lazy_pages, "cleanup_browser")
+
+        self._partial_cleanup_method(
+            "media tree runtime",
+            getattr(self, "media_tree_runtime", None),
+            "shutdown",
+        )
+        self._partial_cleanup_method(
+            "projection integrations",
+            getattr(self, "_projection_integrations", None),
+            "cleanup",
+        )
+        self._partial_cleanup_method(
+            "background song",
+            getattr(self, "_background_song_service", None),
+            "shutdown",
+        )
+        self._partial_cleanup_method(
+            "foreground media controller",
+            getattr(self, "media_ctrl", None),
+            "stop",
+        )
+        self._partial_cleanup_method(
+            "background media controller",
+            getattr(self, "_background_media_controller", None),
+            "stop",
+        )
+        self._partial_cleanup_method(
+            "NDI receiver",
+            getattr(self, "_ndi_service", None),
+            "stop",
+            wait=True,
+        )
+        self._partial_cleanup_method(
+            "camera service",
+            getattr(self, "_camera_service", None),
+            "stop",
+        )
+        self._partial_cleanup_method(
+            "OBS service",
+            getattr(self, "_obs_service", None),
+            "stop",
+            wait=True,
+        )
+        self._partial_cleanup_method(
+            "Zoom service",
+            getattr(self, "_zoom_service", None),
+            "stop",
+            wait=True,
+        )
+        conversion_threads = getattr(self, "_conversion_threads", None)
+        if conversion_threads is not None:
+            self._partial_cleanup_call(
+                "conversion threads",
+                conversion_threads.stop_all,
+                logger=log,
+            )
+        self._partial_cleanup_method(
+            "IPC controller",
+            getattr(self, "_ipc_controller", None),
+            "close",
+        )
+
+    @staticmethod
+    def _partial_cleanup_method(
+        label: str,
+        owner: Any,
+        method_name: str,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        if owner is None:
+            return
+        method = getattr(owner, method_name, None)
+        if callable(method):
+            MainWindow._partial_cleanup_call(label, method, *args, **kwargs)
+
+    @staticmethod
+    def _partial_cleanup_call(
+        label: str,
+        callback: Callable[..., Any],
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        try:
+            callback(*args, **kwargs)
+        except Exception:  # noqa: BLE001 - fail-safe partial startup teardown
+            log.warning(
+                "Could not clean up %s after startup failure",
+                label,
+                exc_info=True,
+            )
+
+    def closeEvent(self, event):
+        self.shutdown()
         super().closeEvent(event)

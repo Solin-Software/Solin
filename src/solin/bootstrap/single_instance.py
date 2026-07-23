@@ -29,10 +29,18 @@ class SingleInstanceServer:
     instance guarantee is active while the profile selector/onboarding is open.
     """
 
-    def __init__(self, app: QApplication, window_ref: list, pending_files: list[str]):
+    def __init__(
+        self,
+        app: QApplication,
+        window_ref: list,
+        pending_files: list[str],
+        *,
+        server_name: str = IPC_SERVER_NAME,
+    ):
         self._app = app
         self._window_ref = window_ref
         self._pending_files = pending_files
+        self._server_name = server_name
         self._server: QLocalServer | None = None
 
     def start(self) -> bool:
@@ -42,9 +50,9 @@ class SingleInstanceServer:
         server = QLocalServer(self._app)
         server.newConnection.connect(self._on_connection)
 
-        if not server.listen(IPC_SERVER_NAME):
-            QLocalServer.removeServer(IPC_SERVER_NAME)
-            if not server.listen(IPC_SERVER_NAME):
+        if not server.listen(self._server_name):
+            QLocalServer.removeServer(self._server_name)
+            if not server.listen(self._server_name):
                 return False
 
         self._server = server
@@ -59,7 +67,7 @@ class SingleInstanceServer:
                 self._server.close()
         except Exception:  # noqa: BLE001 - Qt IPC cleanup boundary
             _log_ignored_exception("Could not close single-instance IPC server", warning=True)
-        QLocalServer.removeServer(IPC_SERVER_NAME)
+        QLocalServer.removeServer(self._server_name)
         app_dynamic: Any = self._app
         app_dynamic._solin_app_ipc_server_active = False
 
@@ -146,9 +154,13 @@ def grant_focus_to_first_instance() -> None:
             _log_ignored_exception("Could not grant foreground permission to first instance")
 
 
-def try_forward_to_running(paths: list[str]) -> bool:
+def try_forward_to_running(
+    paths: list[str],
+    *,
+    server_name: str = IPC_SERVER_NAME,
+) -> bool:
     socket = QLocalSocket()
-    socket.connectToServer(IPC_SERVER_NAME)
+    socket.connectToServer(server_name)
     if not socket.waitForConnected(IPC_TIMEOUT_MS):
         return False
     grant_focus_to_first_instance()

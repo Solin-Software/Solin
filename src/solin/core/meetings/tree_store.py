@@ -17,6 +17,8 @@ from pathlib import Path, PureWindowsPath
 from typing import Any
 
 from solin.core.storage.json_repository import JsonFileRepository
+from solin.core.foundation.resource_keys import ResourceClaim, file_resource_key
+from solin.core.foundation.resource_lanes import ResourceLaneRegistry
 
 from .canonical_restore import canonical_source_keys
 from .thumbnails import meeting_thumb_cache_key, meeting_thumb_dir
@@ -108,8 +110,11 @@ class MeetingTreeStore:
     def __init__(
         self,
         path: str | Path,
+        *,
+        resource_lanes: ResourceLaneRegistry | None = None,
     ) -> None:
         self._json = JsonFileRepository(path)
+        self._resource_lanes = resource_lanes
         self._lock = threading.RLock()
         self._data: dict[str, Any] | None = None
         self._listeners: set[Callable[[], None]] = set()
@@ -160,12 +165,20 @@ class MeetingTreeStore:
 
     def load_all_strict(self) -> dict[str, Any]:
         """Load meeting trees while preserving read/parse failures for destructive callers."""
-        if not self._json.exists():
-            return self._empty()
-        data = self._json.read()
-        if not isinstance(data, dict):
-            raise ValueError("Meeting tree storage root must be an object")
-        return self._normalize(data)
+        def load() -> dict[str, Any]:
+            if not self._json.exists():
+                return self._empty()
+            data = self._json.read()
+            if not isinstance(data, dict):
+                raise ValueError("Meeting tree storage root must be an object")
+            return self._normalize(data)
+
+        if self._resource_lanes is None:
+            return load()
+        return self._resource_lanes.run(
+            ResourceClaim(shared_keys=(file_resource_key(self.path),)),
+            load,
+        )
 
     def snapshots_for_week(
         self,
@@ -591,7 +604,15 @@ class MeetingTreeStore:
 
     def _write(self, data: dict[str, Any]) -> None:
         normalized = self._normalize(data)
-        self._json.write(data, sort_keys=True, trailing_newline=True)
+        action = lambda: self._json.write(
+            data,
+            sort_keys=True,
+            trailing_newline=True,
+        )
+        if self._resource_lanes is None:
+            action()
+        else:
+            self._resource_lanes.run(file_resource_key(self.path), action)
         self._data = copy.deepcopy(normalized)
 
     def subscribe(self, listener: Callable[[], None]) -> Callable[[], None]:

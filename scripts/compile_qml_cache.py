@@ -29,6 +29,7 @@ def find_qmlcachegen() -> str:
 
 
 QML_MODULE_URI = "Solin"
+QML_CACHE_MANIFEST = "qml-manifest.json"
 DEFAULT_QT_QML_MODULES = [
     "QtQml",
     "QtQuick",
@@ -107,6 +108,22 @@ def compile_qml_cache(source_dir: Path, output_dir: Path) -> list[Path]:
     qmldir.write_text(
         f"module {QML_MODULE_URI}\n"
         + "\n".join(f"{type_name} 1.0 {staged_name}" for type_name, staged_name in qml_map.items())
+        + "\n",
+        encoding="utf-8",
+    )
+    (output_dir / QML_CACHE_MANIFEST).write_text(
+        json.dumps(
+            {
+                "schema": 1,
+                "sources": {
+                    qml_file.name: hashlib.sha256(qml_file.read_bytes()).hexdigest()
+                    for qml_file in qml_files
+                },
+            },
+            ensure_ascii=True,
+            indent=2,
+            sort_keys=True,
+        )
         + "\n",
         encoding="utf-8",
     )

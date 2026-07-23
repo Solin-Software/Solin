@@ -52,6 +52,59 @@ from solin.widgets.meetings.tree_controller import (
 )
 
 
+def test_memorial_service_stays_alive_until_slow_thread_finishes() -> None:
+    callbacks = []
+
+    class _FinishedSignal:
+        def connect(self, callback) -> None:
+            callbacks.append(callback)
+
+    class _Thread:
+        finished = _FinishedSignal()
+
+        @staticmethod
+        def isRunning() -> bool:
+            return True
+
+        @staticmethod
+        def quit() -> None:
+            pass
+
+        @staticmethod
+        def wait(_wait_ms: int) -> None:
+            pass
+
+    class _Service:
+        _thread = _Thread()
+
+        def __init__(self) -> None:
+            self.parent = object()
+            self.deleted = False
+
+        def setParent(self, parent) -> None:
+            self.parent = parent
+
+        def deleteLater(self) -> None:
+            self.deleted = True
+
+    service = _Service()
+
+    memorial_module.MemorialService.shutdown(
+        service,
+        wait_ms=1,
+        delete_when_stopped=True,
+    )
+
+    assert service in memorial_module._STOPPING_MEMORIAL_SERVICES
+    assert service.parent is None
+    assert service.deleted is False
+
+    callbacks[0]()
+
+    assert service not in memorial_module._STOPPING_MEMORIAL_SERVICES
+    assert service.deleted is True
+
+
 def test_media_info_request_replaces_pending_work_when_source_changes() -> None:
     class _Queue:
         def __init__(self) -> None:

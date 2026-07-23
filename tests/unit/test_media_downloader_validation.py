@@ -187,6 +187,7 @@ def test_persistent_commit_publishes_exact_marker_and_no_staging_file(tmp_path):
     assert completed_cached_path(url, tmp_path) == target.final_path
     assert not Path(target.write_path).exists()
     assert list(tmp_path.glob(".*.tmp")) == []
+    assert list(tmp_path.glob("*.lock")) == []
 
 
 def test_failed_marker_commit_never_exposes_entry_as_complete(monkeypatch, tmp_path):
@@ -253,6 +254,23 @@ def test_cleanup_incomplete_cache_removes_only_unfinished_downloads(tmp_path):
     assert marker.exists()
     assert not incomplete.exists()
     assert not staging.exists()
+
+
+def test_cleanup_incomplete_cache_preserves_active_download(tmp_path):
+    target = prepare_download_target(
+        "https://example.test/media/active.mp4",
+        tmp_path,
+        persist=True,
+    )
+    staging = Path(target.write_path)
+    staging.write_bytes(b"partial")
+
+    removed = cleanup_incomplete_cache(tmp_path)
+
+    assert removed == 0
+    assert staging.exists()
+    assert Path(f"{staging}.lock").exists()
+    safe_remove(staging)
 
 
 def test_completed_cached_path_ignores_local_sources(tmp_path):

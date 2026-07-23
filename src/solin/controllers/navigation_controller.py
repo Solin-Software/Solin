@@ -19,14 +19,18 @@ class NavigationController:
         nav_buttons: Callable[[], Sequence[Any]],
         projection_bar: Callable[[], Any | None],
         quick_toolbar: Callable[[], Any | None],
+        prepare_page: Callable[[int], None] | None = None,
     ) -> None:
         self._stack = stack
         self._lazy_pages = lazy_pages
         self._nav_buttons = nav_buttons
         self._projection_bar = projection_bar
         self._quick_toolbar = quick_toolbar
+        self._prepare_page = prepare_page
 
     def switch_page(self, index: int) -> None:
+        if self._prepare_page is not None:
+            self._prepare_page(index)
         self._lazy_pages.ensure_page(index)
         self._stack.setCurrentIndex(index)
         for button_index, button in enumerate(self._nav_buttons()):

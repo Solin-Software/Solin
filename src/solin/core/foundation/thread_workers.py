@@ -12,12 +12,23 @@ class CancellationFlag:
 
     def __init__(self) -> None:
         self._event = threading.Event()
+        self._gate = threading.RLock()
 
     def is_set(self) -> bool:
         return self._event.is_set()
 
     def set(self) -> None:
-        self._event.set()
+        with self._gate:
+            self._event.set()
+
+    def run_if_active(self, action: Callable[[], None]) -> bool:
+        """Run one atomic side effect unless cancellation already won the gate."""
+
+        with self._gate:
+            if self._event.is_set():
+                return False
+            action()
+            return True
 
 
 class WorkerHandle(Protocol):

@@ -33,6 +33,7 @@ from .memorial_calendar import memorial_date_for_year, monday_of
 from .memorial_worker import MemorialWorker
 
 log = logging.getLogger(__name__)
+_STOPPING_MEMORIAL_SERVICES: set[object] = set()
 
 
 # ── MemorialService — vive na main thread ────────────────────────────────────
@@ -103,7 +104,13 @@ class MemorialService(QObject):
                 return
             if still_running and delete_when_stopped:
                 self.setParent(None)
-                thread.finished.connect(self.deleteLater)
+                _STOPPING_MEMORIAL_SERVICES.add(self)
+
+                def release_service() -> None:
+                    _STOPPING_MEMORIAL_SERVICES.discard(self)
+                    self.deleteLater()
+
+                thread.finished.connect(release_service)
 
     def __del__(self):
         try:

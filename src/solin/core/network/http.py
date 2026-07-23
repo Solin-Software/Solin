@@ -7,9 +7,6 @@ from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
-import certifi
-import requests
-
 DEFAULT_TIMEOUT = 15.0
 DEFAULT_CHUNK_SIZE = 131_072
 
@@ -157,6 +154,8 @@ class _RequestsByteStream:
             return 0
 
     def iter_bytes(self, chunk_size: int = DEFAULT_CHUNK_SIZE) -> Iterator[bytes]:
+        import requests
+
         try:
             for chunk in self._response.iter_content(chunk_size=chunk_size):
                 if chunk:
@@ -205,7 +204,7 @@ class RequestsHttpTransport:
     """Configured production HTTP adapter backed by requests and certifi."""
 
     def __init__(self, *, verify_tls: str | bool | None = None) -> None:
-        self._verify_tls = certifi.where() if verify_tls is None else verify_tls
+        self._verify_tls = verify_tls
 
     def get(self, request: HttpRequest) -> HttpResponse:
         response = self._send(request, stream=False)
@@ -221,6 +220,10 @@ class RequestsHttpTransport:
         return _RequestsByteStream(response, request.url)
 
     def _send(self, request: HttpRequest, *, stream: bool) -> Any:
+        import certifi
+        import requests
+
+        verify_tls = certifi.where() if self._verify_tls is None else self._verify_tls
         try:
             response = requests.get(
                 request.url,
@@ -228,7 +231,7 @@ class RequestsHttpTransport:
                 params=request.params,
                 timeout=request.timeout,
                 stream=stream,
-                verify=self._verify_tls,
+                verify=verify_tls,
             )
         except requests.Timeout as exc:
             raise HttpTimeoutError(f"GET {request.url} timed out: {exc}") from exc

@@ -25,6 +25,7 @@ from .downloads import BrowserDownloadsMixin
 from .navigation import BrowserNavigationMixin
 from .tab import BrowserTab
 from .ui import BrowserUiMixin
+from ...ui.incremental_load import IncrementalLoadHandle
 
 log = logging.getLogger(__name__)
 
@@ -764,6 +765,7 @@ class BrowserWidget(
         parent=None,
         projection_fps: int | None = None,
         aspect_ratio_provider: Callable[[], ProjectionAspectRatio] | None = None,
+        defer_initial_tabs: bool = False,
     ):
         super().__init__(parent)
         self.lang = lang_manager
@@ -811,11 +813,16 @@ class BrowserWidget(
         self._spotlight_drag_timer.setInterval(16)   # ~60 fps
         self._spotlight_drag_timer.timeout.connect(self._sync_spotlight_drag_pos)
 
-        # Primeira abertura: WOL (foco) + jw.org (segunda aba)
-        self._new_tab(url=self.lang.wol_url, focus=True)
-        self._new_tab(url="https://www.jw.org", focus=False)
-        self._tab_bar.setCurrentIndex(0)
-        self._update_nav_buttons()
+        self.initial_tabs_preparation = IncrementalLoadHandle(
+            (
+                lambda: self._new_tab(url=self.lang.wol_url, focus=True),
+                lambda: self._new_tab(url="https://www.jw.org", focus=False),
+                self._finish_initial_tabs,
+            ),
+            self,
+        )
+        if not defer_initial_tabs:
+            self.initial_tabs_preparation.complete_now()
 
         # ── Keyboard shortcuts ────────────────────────────────────────────────
         # QShortcut with WidgetWithChildrenShortcut fires even when Chromium has
@@ -828,6 +835,10 @@ class BrowserWidget(
         sc_ctrlf5 = QShortcut(QKeySequence("Ctrl+F5"), self)
         sc_ctrlf5.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         sc_ctrlf5.activated.connect(self._clear_cookies_and_reload)
+
+    def _finish_initial_tabs(self) -> None:
+        self._tab_bar.setCurrentIndex(0)
+        self._update_nav_buttons()
 
     # ── Projeção ────────────────────────────────────────────────────────────────
 

@@ -30,6 +30,7 @@ from solin.styles.icons import (
 )
 from solin.styles.theme import PALETTE, qss_rgba
 from solin.widgets.common.themed_slider import ThemedHorizontalSlider
+from solin.ui.incremental_load import IncrementalLoadHandle
 
 
 class _PaletteToken:
@@ -59,7 +60,13 @@ class BackgroundSongPopup(QWidget):
     # Width available to the song title once card padding is removed.
     _SONG_W = _POP_W - 36
 
-    def __init__(self, service: BackgroundSongService, parent=None) -> None:
+    def __init__(
+        self,
+        service: BackgroundSongService,
+        parent=None,
+        *,
+        defer_build: bool = False,
+    ) -> None:
         super().__init__(parent, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
         self._service = service
         self._playing = service.is_playing
@@ -72,34 +79,61 @@ class BackgroundSongPopup(QWidget):
         self._fade = QPropertyAnimation(self._opacity_eff, b"opacity")
         self._fade.setDuration(180)
         self._fade.setEasingCurve(QEasingCurve.Type.OutCubic)
-
-        self._build_ui()
-        self._connect_service()
-        self._sync_all()
+        self._ui_ready = False
+        self.preparation_handle = IncrementalLoadHandle(
+            (
+                self._begin_ui,
+                self._build_header_unit,
+                self._build_now_playing_unit,
+                self._build_controls_unit,
+                self._build_volume_unit,
+                self._build_timing_unit,
+                self._finish_ui,
+            ),
+            self,
+        )
+        if not defer_build:
+            self.preparation_handle.complete_now()
 
     # ── Construction ──────────────────────────────────────────────────────────
     def _build_ui(self) -> None:
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(0)
+        self.preparation_handle.complete_now()
+
+    def _begin_ui(self) -> None:
+        self._root_layout = QVBoxLayout(self)
+        self._root_layout.setContentsMargins(0, 0, 0, 0)
+        self._root_layout.setSpacing(0)
 
         self._card = QFrame()
         self._card.setObjectName("BackgroundSongCard")
-        layout = QVBoxLayout(self._card)
-        layout.setContentsMargins(18, 16, 18, 18)
-        layout.setSpacing(16)
+        self._card_layout = QVBoxLayout(self._card)
+        self._card_layout.setContentsMargins(18, 16, 18, 18)
+        self._card_layout.setSpacing(16)
 
-        layout.addLayout(self._build_header())
-        layout.addLayout(self._build_now_playing())
-        layout.addLayout(self._build_controls())
-        layout.addLayout(self._build_volume())
+    def _build_header_unit(self) -> None:
+        self._card_layout.addLayout(self._build_header())
+
+    def _build_now_playing_unit(self) -> None:
+        self._card_layout.addLayout(self._build_now_playing())
+
+    def _build_controls_unit(self) -> None:
+        self._card_layout.addLayout(self._build_controls())
+
+    def _build_volume_unit(self) -> None:
+        self._card_layout.addLayout(self._build_volume())
+
+    def _build_timing_unit(self) -> None:
         self._divider_frame = self._divider()
-        layout.addWidget(self._divider_frame)
-        layout.addLayout(self._build_timing())
+        self._card_layout.addWidget(self._divider_frame)
+        self._card_layout.addLayout(self._build_timing())
 
-        root.addWidget(self._card)
+    def _finish_ui(self) -> None:
+        self._root_layout.addWidget(self._card)
         self.setFixedWidth(self._POP_W)
+        self._connect_service()
+        self._ui_ready = True
         self.apply_theme()
+        self._sync_all()
 
     def _build_header(self) -> QHBoxLayout:
         header = QHBoxLayout()
@@ -301,6 +335,8 @@ class BackgroundSongPopup(QWidget):
         self._volume_icon.setPixmap(make_icon(glyph, 15, color).pixmap(15, 15))
 
     def apply_theme(self) -> None:
+        if not self._ui_ready:
+            return
         self._card.setStyleSheet(
             "QFrame#BackgroundSongCard {"
             f" background: {_SURF};"
@@ -340,6 +376,7 @@ class BackgroundSongPopup(QWidget):
 
     # ── Placement / animation ─────────────────────────────────────────────────
     def show_above(self, anchor: QWidget) -> None:
+        self.preparation_handle.complete_now()
         self._sync_all()
         self.adjustSize()
         global_pos = anchor.mapToGlobal(anchor.rect().topLeft())
@@ -366,7 +403,7 @@ class BackgroundSongPopup(QWidget):
         self._fade.start()
 
     def changeEvent(self, event: QEvent) -> None:
-        if event.type() == QEvent.Type.LanguageChange:
+        if event.type() == QEvent.Type.LanguageChange and self._ui_ready:
             self._title_lbl.setText(self.tr("Background Song"))
             self._next_btn.setToolTip(self.tr("Next song"))
             self._timing_title_lbl.setText(self.tr("Meeting timing"))

@@ -36,11 +36,13 @@ class TimerWidget(QWidget):
         lang: "LanguageManager | None" = None,
         *,
         bridge: TimerBridge,
+        defer_qml: bool = False,
         parent=None,
     ):
         super().__init__(parent)
         self.lang = lang
         self.bridge = bridge
+        self._defer_qml = defer_qml
         self._qml_pointer_depth = 0
         self._build_ui()
 
@@ -56,9 +58,9 @@ class TimerWidget(QWidget):
         )
         self.bridge.pointerEntered.connect(self.begin_qml_pointer_cursor)
         self.bridge.pointerExited.connect(self.end_qml_pointer_cursor)
-        self._qml = QQuickWidget()
+        self._qml = QQuickWidget(self)
         self._qml.installEventFilter(self)
-        configure_qml_host(
+        self.qml_load_handle = configure_qml_host(
             self._qml,
             type_name="TimerView",
             clear_color=PALETTE.bg0,
@@ -68,6 +70,7 @@ class TimerWidget(QWidget):
                 "timer": self.bridge,
             },
             mouse_tracking=True,
+            defer_load=self._defer_qml,
         )
         layout.addWidget(self._qml)
 
@@ -125,6 +128,7 @@ class TimerWidget(QWidget):
         teardown is clean. Invoked by ShutdownController.cleanup_widgets().
         """
         self._reset_qml_pointer_cursor()
+        self.qml_load_handle.cancel()
         try:
             self._qml.setSource(QUrl())
         except Exception:  # noqa: BLE001 - QML engine lifecycle boundary

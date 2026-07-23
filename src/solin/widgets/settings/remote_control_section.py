@@ -358,7 +358,6 @@ class RemoteControlSectionMixin:
         self._remote_runtime_status_known = True
         self._remote_runtime_message = message
         self._remote_runtime_status_kind = resolved_status
-        self._set_remote_status(message, resolved_status)
         presentation = RemoteControlSetupPresentation(
             access_url=access_url,
             setup_url=setup_url,
@@ -367,6 +366,9 @@ class RemoteControlSectionMixin:
             certificate_der=certificate_der,
         )
         self._remote_setup_presentation = presentation if presentation.ready else None
+        if not getattr(self, "_ui_ready", True):
+            return
+        self._set_remote_status(message, resolved_status)
         self._remote_setup_btn.setEnabled(running and presentation.ready)
         if running and presentation.ready and self._remote_setup_pending_auto_open:
             self._remote_setup_pending_auto_open = False

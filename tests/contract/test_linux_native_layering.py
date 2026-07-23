@@ -24,7 +24,8 @@ def test_linux_browser_promotes_only_the_toolbar_to_a_transient_window():
     corner_source = inspect.getsource(QuickAccessToolbar.set_browser_rect_mode)
     browser_ui_source = inspect.getsource(BrowserUiMixin._build_ui)
 
-    assert "self.setParent(parent)" in setup_source
+    assert "super().__init__(parent)" in setup_source
+    assert "self.setParent(parent)" not in setup_source
     assert "WindowType.Tool" in surface_source
     assert "FramelessWindowHint" in surface_source
     assert "NoDropShadowWindowHint" in surface_source

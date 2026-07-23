@@ -11,6 +11,7 @@ import re
 import tempfile
 import threading
 import time
+import uuid
 from urllib.parse import urlsplit
 
 from solin.core.foundation.constants import TEMP_STREAM_PREFIX
@@ -21,6 +22,7 @@ PROGRESS_EMIT_MIN_BYTES = 512 * 1024
 log = logging.getLogger(__name__)
 
 _CACHE_COMMIT_LOCK = threading.RLock()
+_LOCK_SESSION_TOKEN = f"{os.getpid()}:{uuid.uuid4().hex}"
 _SAFE_EXTENSION_RE = re.compile(r"^\.[A-Za-z0-9]{1,10}$")
 
 
@@ -121,40 +123,46 @@ def prepare_download_target(
     *,
     persist: bool,
 ) -> DownloadTarget:
-    if persist:
-        final_path = cached_path_for(url, media_cache_dir)
-        completed_path = completed_cached_path(url, media_cache_dir)
-        if completed_path is not None:
+    with _CACHE_COMMIT_LOCK:
+        if persist:
+            final_path = cached_path_for(url, media_cache_dir)
+            completed_path = completed_cached_path(url, media_cache_dir)
+            if completed_path is not None:
+                return DownloadTarget(
+                    final_path=completed_path,
+                    write_path=completed_path,
+                    persist=True,
+                    cached_size=os.path.getsize(completed_path),
+                )
+            write_path = make_persistent_temp_path(final_path)
+            acquire_temp_lock(write_path)
             return DownloadTarget(
-                final_path=completed_path,
-                write_path=completed_path,
+                final_path=final_path,
+                write_path=write_path,
                 persist=True,
-                cached_size=os.path.getsize(completed_path),
             )
-        return DownloadTarget(
-            final_path=final_path,
-            write_path=make_persistent_temp_path(final_path),
-            persist=True,
-        )
 
-    write_path = make_stream_temp_path(url)
-    acquire_temp_lock(write_path)
-    return DownloadTarget(
-        final_path=write_path,
-        write_path=write_path,
-        persist=False,
-    )
+        write_path = make_stream_temp_path(url)
+        acquire_temp_lock(write_path)
+        return DownloadTarget(
+            final_path=write_path,
+            write_path=write_path,
+            persist=False,
+        )
 
 
 def commit_persistent_download(target: DownloadTarget, url: str) -> None:
     if not target.persist:
         return
-    with _CACHE_COMMIT_LOCK:
-        marker_path = target.final_path + ".done"
-        _remove_file_if_exists(marker_path)
-        _sync_file(target.write_path)
-        os.replace(target.write_path, target.final_path)
-        _write_marker_atomically(marker_path, url)
+    try:
+        with _CACHE_COMMIT_LOCK:
+            marker_path = target.final_path + ".done"
+            _remove_file_if_exists(marker_path)
+            _sync_file(target.write_path)
+            os.replace(target.write_path, target.final_path)
+            _write_marker_atomically(marker_path, url)
+    finally:
+        release_temp_lock(target.write_path)
 
 
 def _safe_extension(url: str) -> str:
@@ -289,7 +297,7 @@ def lock_path(temp_path: str | os.PathLike[str]) -> str:
 def acquire_temp_lock(temp_path: str | os.PathLike[str]) -> None:
     try:
         with open(lock_path(temp_path), "w", encoding="utf-8") as handle:
-            handle.write(str(os.getpid()))
+            handle.write(_LOCK_SESSION_TOKEN)
     except OSError:
         pass
 
@@ -318,25 +326,28 @@ def cleanup_orphan_temps() -> int:
     tmp_dir = tempfile.gettempdir()
     removed = 0
 
-    try:
-        entries = os.listdir(tmp_dir)
-    except OSError:
-        return 0
-
-    for name in entries:
-        if not (name.startswith(TEMP_STREAM_PREFIX) and name.endswith(".lock")):
-            continue
-
-        found_lock_path = os.path.join(tmp_dir, name)
-        temp_path = found_lock_path[: -len(".lock")]
-
+    with _CACHE_COMMIT_LOCK:
         try:
-            if os.path.isfile(temp_path):
-                os.remove(temp_path)
-                removed += 1
-            os.remove(found_lock_path)
+            entries = os.listdir(tmp_dir)
         except OSError:
-            pass
+            return 0
+
+        for name in entries:
+            if not (name.startswith(TEMP_STREAM_PREFIX) and name.endswith(".lock")):
+                continue
+
+            found_lock_path = os.path.join(tmp_dir, name)
+            if _lock_is_active(found_lock_path):
+                continue
+            temp_path = found_lock_path[: -len(".lock")]
+
+            try:
+                if os.path.isfile(temp_path):
+                    os.remove(temp_path)
+                    removed += 1
+                os.remove(found_lock_path)
+            except OSError:
+                pass
 
     if removed:
         log.info("Removed %d orphan stream tempfile(s).", removed)
@@ -351,26 +362,77 @@ def cleanup_incomplete_cache(
         return 0
 
     removed = 0
-    try:
-        entries = os.listdir(cache_dir)
-    except OSError:
-        return 0
+    with _CACHE_COMMIT_LOCK:
+        try:
+            entries = os.listdir(cache_dir)
+        except OSError:
+            return 0
 
-    for name in entries:
-        if name.endswith(".done"):
-            continue
+        for name in entries:
+            if name.endswith((".done", ".lock")):
+                continue
 
-        path = os.path.join(cache_dir, name)
-        if not os.path.isfile(path):
-            continue
+            path = os.path.join(cache_dir, name)
+            if not os.path.isfile(path):
+                continue
+            active_lock = path + ".lock"
+            if os.path.isfile(active_lock) and _lock_is_active(active_lock):
+                continue
 
-        if name.endswith(".tmp") or not os.path.isfile(path + ".done"):
+            if name.endswith(".tmp") or not os.path.isfile(path + ".done"):
+                try:
+                    os.remove(path)
+                    removed += 1
+                except OSError:
+                    continue
+                release_temp_lock(path)
+
+        for name in entries:
+            if not name.endswith(".lock"):
+                continue
+            found_lock_path = os.path.join(cache_dir, name)
+            if _lock_is_active(found_lock_path):
+                continue
             try:
-                os.remove(path)
-                removed += 1
+                os.remove(found_lock_path)
             except OSError:
                 pass
 
     if removed:
         log.info("Removed %d incomplete media cache download(s).", removed)
     return removed
+
+
+def _lock_is_active(path: str | os.PathLike[str]) -> bool:
+    try:
+        with open(path, encoding="utf-8") as handle:
+            token = handle.read().strip()
+    except (OSError, UnicodeError):
+        return False
+    if token == _LOCK_SESSION_TOKEN:
+        return True
+    try:
+        owner_pid = int(token.partition(":")[0])
+    except ValueError:
+        return False
+    if owner_pid <= 0 or owner_pid == os.getpid():
+        return False
+    return _process_is_running(owner_pid)
+
+
+def _process_is_running(pid: int) -> bool:
+    if os.name == "nt":
+        import ctypes
+
+        process = ctypes.windll.kernel32.OpenProcess(0x1000, False, pid)
+        if not process:
+            return False
+        ctypes.windll.kernel32.CloseHandle(process)
+        return True
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True

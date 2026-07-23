@@ -1,4 +1,5 @@
 import os
+import logging
 import sys
 
 _QT_LOGGING_RULES = (
@@ -25,8 +26,8 @@ from solin.bootstrap.config import default_app_config
 from solin.bootstrap.container import initialize_application_container
 from solin.bootstrap.file_open import (
     ApplicationFileOpenRouter,
-    dispatch_pending_files,
 )
+log = logging.getLogger(__name__)
 from solin.core.foundation.resources import application_asset_path
 from solin.bootstrap.profile_flow import wire_profile_switch
 from solin.bootstrap.runtime_args import parse_runtime_args
@@ -34,7 +35,9 @@ from solin.bootstrap.single_instance import (
     SingleInstanceServer,
     try_forward_to_running,
 )
+from solin.core.foundation.constants import IPC_SERVER_NAME
 from solin.core.profiles.application import ProfileRegistryLoadError
+from solin.bootstrap.startup_timeline import startup_timeline
 
 
 def _build_main_window_profile_settings(profile_settings):
@@ -109,24 +112,71 @@ def _meeting_weekday_resolver(schedule_settings):
     return weekday_for_pub_type
 
 
+def _import_main_window_class():
+    timeline = startup_timeline()
+    timeline.mark("main_window_import_started")
+    from solin.main_window import MainWindow
+
+    timeline.mark("main_window_imported")
+    return MainWindow
+
+
+def _prepare_profile_main_window(profile_paths, cancellation=None):
+    """Prepare code and fail-closed housekeeping before profile UI is mutable."""
+
+    main_window_class = _import_main_window_class()
+    from solin.core.playlists.cleanup import (
+        ProfileMaintenanceCancelled,
+        ProfileMaintenanceService,
+    )
+
+    try:
+        from solin.core.foundation.resource_lanes import ResourceLaneRegistry
+        from solin.core.meetings.tree_store import MeetingTreeStore
+        from solin.core.playlists.storage import PlaylistRepository, PlaylistStoragePaths
+
+        storage_paths = PlaylistStoragePaths(
+            playlists_file=profile_paths.playlists_file,
+            pending_deletions_file=profile_paths.pending_deletions_file,
+        )
+        lanes = ResourceLaneRegistry()
+        maintenance = ProfileMaintenanceService(
+            storage_paths=storage_paths,
+            playlist_repository=PlaylistRepository.from_paths(
+                storage_paths,
+                resource_lanes=lanes,
+            ),
+            meeting_tree_store=MeetingTreeStore(
+                profile_paths.meeting_trees_file,
+                resource_lanes=lanes,
+            ),
+            profile_paths=profile_paths,
+            resource_lanes=lanes,
+        )
+        lanes.run(
+            maintenance.resource_claim,
+            lambda: maintenance.run(cancellation),
+        )
+    except ProfileMaintenanceCancelled:
+        pass
+    except Exception:  # noqa: BLE001 - fail-closed maintenance boundary
+        from solin.core.foundation.exception_logging import log_ignored_exception
+
+        log_ignored_exception(__name__, "Pre-UI profile maintenance failed")
+    return main_window_class
+
+
 def _build_main_window_service_factories(
     lang_manager,
     runtime_paths,
     profile_settings,
     jwpub_checksum_store,
     installation_settings,
+    application_maintenance,
 ):
-    from typing import cast
-
-    from PySide6.QtWidgets import QWidget
+    startup_timeline().mark("service_factories_started")
     from solin.controllers.main_window_service_factories import (
         MainWindowServiceFactories,
-    )
-    from solin.controllers.remote_services_controller import (
-        RemoteNotificationQueue as RemoteNotificationQueuePort,
-        RemoteNotificationService,
-        RemoteServicesController,
-        RemoteUpdateService,
     )
     from solin.core.foundation.identity import get_install_id
     from solin.core.foundation.thread_workers import ThreadedWorkerPool
@@ -139,41 +189,30 @@ def _build_main_window_service_factories(
     from solin.core.jw.yeartext import YeartextService
     from solin.core.meetings.memorial import MemorialService
     from solin.core.meetings.publications import JwpubService
-    from solin.core.remote.notifications import NotificationService
-    from solin.core.remote.patch_installer import (
-        PatchDownloadWorker,
-        launch_patch_installer,
-        save_pending_patch_cleanup,
-    )
-    from solin.core.remote.update_policy import UpdateInfo
-    from solin.core.remote.updates import UpdateService
-    from solin.ui.dialogs.notifications import RemoteNotificationQueue
-    from solin.ui.dialogs.update import UpdateDialog
-
     install_id_provider = lambda: get_install_id(installation_settings)
 
-    return MainWindowServiceFactories(
-        auto_key_dispatcher=AutoKeyDispatcher,
-        obs_websocket=OBSWebSocketService,
-        ndi_receiver=NDIReceiverService,
-        camera=CameraService,
-        zoom=ZoomService,
-        background_song=BackgroundSongService,
-        yeartext=lambda parent: YeartextService(
-            cache_file=runtime_paths.cache_dir / "yeartext_cache.json",
-            parent=parent,
-        ),
-        jwpub=lambda parent: JwpubService(
-            runtime_paths.jwpub_cache_dir,
-            jwpub_checksum_store,
-            parent,
-        ),
-        memorial=lambda parent: MemorialService(
-            runtime_paths.jwpub_cache_dir,
-            jwpub_checksum_store,
-            parent,
-        ),
-        remote_services=lambda parent: RemoteServicesController(
+    def create_remote_services(parent):
+        from typing import cast
+
+        from PySide6.QtWidgets import QWidget
+        from solin.controllers.remote_services_controller import (
+            RemoteNotificationQueue as RemoteNotificationQueuePort,
+            RemoteNotificationService,
+            RemoteServicesController,
+            RemoteUpdateService,
+        )
+        from solin.core.remote.notifications import NotificationService
+        from solin.core.remote.patch_installer import (
+            PatchDownloadWorker,
+            launch_patch_installer,
+            save_pending_patch_cleanup,
+        )
+        from solin.core.remote.update_policy import UpdateInfo
+        from solin.core.remote.updates import UpdateService
+        from solin.ui.dialogs.notifications import RemoteNotificationQueue
+        from solin.ui.dialogs.update import UpdateDialog
+
+        return RemoteServicesController(
             cast(QWidget, parent),
             notification_service=cast(
                 RemoteNotificationService,
@@ -206,15 +245,39 @@ def _build_main_window_service_factories(
                 ),
                 launch_patch=launch_patch_installer,
             ),
+        )
+
+    factories = MainWindowServiceFactories(
+        auto_key_dispatcher=AutoKeyDispatcher,
+        obs_websocket=OBSWebSocketService,
+        ndi_receiver=NDIReceiverService,
+        camera=CameraService,
+        zoom=ZoomService,
+        background_song=BackgroundSongService,
+        yeartext=lambda parent: YeartextService(
+            cache_file=runtime_paths.cache_dir / "yeartext_cache.json",
+            parent=parent,
         ),
+        jwpub=lambda parent: JwpubService(
+            runtime_paths.jwpub_cache_dir,
+            jwpub_checksum_store,
+            parent,
+        ),
+        memorial=lambda parent: MemorialService(
+            runtime_paths.jwpub_cache_dir,
+            jwpub_checksum_store,
+            parent,
+        ),
+        remote_services=create_remote_services,
         auto_share_workers=ThreadedWorkerPool,
+        application_maintenance=application_maintenance,
     )
+    startup_timeline().mark("service_factories_ready")
+    return factories
 
 
-def _launch_main_window(
-    app,
+def _build_main_window_runtime(
     lang_manager,
-    file_args,
     runtime_paths,
     profile_paths,
     profile_settings,
@@ -224,14 +287,16 @@ def _launch_main_window(
     jw_songs_store,
     jwpub_checksum_store,
     installation_settings,
+    application_maintenance,
     timer_session,
     active_profile,
+    *,
+    window_host,
+    main_window_class=None,
 ):
-    """
-    Cria e exibe o MainWindow para o perfil já ativo.
-    Retorna a instância do MainWindow.
-    """
-    from solin.main_window import MainWindow
+    """Build application content for an already visible native window host."""
+    timeline = startup_timeline()
+    MainWindow = main_window_class or _import_main_window_class()
     from solin.core.meetings.tree_store import MeetingTreeStore
     from solin.core.meetings.linked_folder_sync import MeetingLinkedFolderSync
     from solin.core.media.profile_store import ProfileMediaStore
@@ -253,15 +318,21 @@ def _launch_main_window(
         PlaylistRepository,
         PlaylistStoragePaths,
     )
-    from solin.styles.theme import PALETTE
-    from solin.ui.titlebar import apply_titlebar_color
+    from solin.core.foundation.resource_lanes import ResourceLaneRegistry
 
     playlist_storage_paths = PlaylistStoragePaths(
         playlists_file=profile_paths.playlists_file,
         pending_deletions_file=profile_paths.pending_deletions_file,
     )
-    playlist_repository = PlaylistRepository.from_paths(playlist_storage_paths)
-    pending_deletion_repository = PendingDeletionRepository.from_paths(playlist_storage_paths)
+    resource_lanes = ResourceLaneRegistry()
+    playlist_repository = PlaylistRepository.from_paths(
+        playlist_storage_paths,
+        resource_lanes=resource_lanes,
+    )
+    pending_deletion_repository = PendingDeletionRepository.from_paths(
+        playlist_storage_paths,
+        resource_lanes=resource_lanes,
+    )
 
     def queue_pending_deletion(path: str) -> None:
         try:
@@ -275,7 +346,10 @@ def _launch_main_window(
             pending.append(path)
             pending_deletion_repository.save(pending)
 
-    meeting_tree_store = MeetingTreeStore(profile_paths.meeting_trees_file)
+    meeting_tree_store = MeetingTreeStore(
+        profile_paths.meeting_trees_file,
+        resource_lanes=resource_lanes,
+    )
     profile_media_store = ProfileMediaStore(
         profile_paths.embedded_dir,
         profile_paths.images_dir,
@@ -314,61 +388,74 @@ def _launch_main_window(
         main_window_profile_settings,
         jwpub_checksum_store,
         installation_settings,
+        application_maintenance,
     )
     media_controller = media.create_playback(main_window_profile_settings.media)
     background_media_controller = media.create_playback(main_window_profile_settings.media)
-    window = MainWindow(
-        lang_manager,
-        runtime_paths,
-        profile_paths,
-        main_window_profile_settings,
-        main_window_service_factories,
-        media.cache_manager,
-        media_controller,
-        background_media_controller,
-        media.create_info_queue,
-        media.create_info_service,
-        media.create_browser_download_service,
-        media.create_browser_image_fetch_service,
-        font_manager,
-        jw_catalog_service_factory,
-        jw_catalog_thumbnail_session_factory,
-        jw_songs_store,
-        jwpub_checksum_store,
-        playlist_storage_paths,
-        playlist_repository,
-        queue_pending_deletion,
-        meeting_tree_store,
-        meeting_linked_folder_sync,
-        profile_media_store,
-        jwpub_import_thread_factory,
-        document_conversion_service,
-        clip_fetch_thread_factory,
-        cache_scan_session_factory,
-        qr_generation_session_factory,
-        playlist_thumbnail_store,
-        meeting_thumbnail_store,
-        watched_folder_file_store,
-        watched_folder_playlist_store,
-        lambda parent: WifiReceiveServer(
-            embedded_dir=profile_paths.embedded_dir,
-            parent=parent,
-        ),
-        WatchedFolderWatcher,
-        PlaylistCleanupQueue,
-        timer_session,
-        active_profile,
-    )
-    media_controller.setParent(window)
-    background_media_controller.setParent(window)
-    window.show()
-
-    apply_titlebar_color(window, PALETTE.titlebar)
-
-    if file_args:
-        QTimer.singleShot(200, lambda: dispatch_pending_files(window, file_args))
-
-    return window
+    timeline.mark("critical_ui_started")
+    try:
+        runtime = MainWindow(
+            lang_manager,
+            runtime_paths,
+            profile_paths,
+            main_window_profile_settings,
+            main_window_service_factories,
+            media.cache_manager,
+            media_controller,
+            background_media_controller,
+            media.create_info_queue,
+            media.create_info_service,
+            media.create_browser_download_service,
+            media.create_browser_image_fetch_service,
+            font_manager,
+            jw_catalog_service_factory,
+            jw_catalog_thumbnail_session_factory,
+            jw_songs_store,
+            jwpub_checksum_store,
+            playlist_storage_paths,
+            playlist_repository,
+            queue_pending_deletion,
+            meeting_tree_store,
+            resource_lanes,
+            meeting_linked_folder_sync,
+            profile_media_store,
+            jwpub_import_thread_factory,
+            document_conversion_service,
+            clip_fetch_thread_factory,
+            cache_scan_session_factory,
+            qr_generation_session_factory,
+            playlist_thumbnail_store,
+            meeting_thumbnail_store,
+            watched_folder_file_store,
+            watched_folder_playlist_store,
+            lambda parent: WifiReceiveServer(
+                embedded_dir=profile_paths.embedded_dir,
+                parent=parent,
+            ),
+            WatchedFolderWatcher,
+            PlaylistCleanupQueue,
+            timer_session,
+            active_profile,
+            window_host=window_host,
+        )
+    except Exception:  # noqa: BLE001 - transactional startup rollback boundary
+        window_host.abort_runtime_construction()
+        for controller in (media_controller, background_media_controller):
+            stop = getattr(controller, "stop", None)
+            if not callable(stop):
+                continue
+            try:
+                stop()
+            except Exception:  # noqa: BLE001 - startup rollback must preserve root error
+                log.warning(
+                    "Could not stop media controller after startup failure",
+                    exc_info=True,
+                )
+        raise
+    media_controller.setParent(runtime)
+    background_media_controller.setParent(runtime)
+    timeline.mark("critical_ui_ready")
+    return runtime
 
 
 def _launch_zoom_poll_window(filepath: str, lang_manager):
@@ -404,11 +491,17 @@ def _create_profile_screen(container, lang_manager):
     )
 
 
-def _launch_profile_window(container, lang_manager, file_args, profile_id: str):
-    from solin.core.meetings.meeting_weeks import current_monday
-    from solin.core.timer.application import TimerSession
-    from solin.core.timer.infrastructure import QSettingsTimerRepository
-    from solin.styles.theme import activate_theme
+def _launch_profile_window(
+    container,
+    lang_manager,
+    file_args,
+    profile_id: str,
+):
+    from solin.styles.theme import (
+        activate_theme,
+        app_stylesheet,
+        apply_application_palette,
+    )
 
     profile_context = container.profile_runtime.create(profile_id)
     active_profile = container.profile_service.get_profile(profile_id)
@@ -416,32 +509,108 @@ def _launch_profile_window(container, lang_manager, file_args, profile_id: str):
         raise RuntimeError(f"Profile disappeared during startup: {profile_id}")
 
     lang_manager.activate_profile(profile_context.settings)
-    activate_theme(profile_context.settings.app_settings().app_theme_id())
-    window = _launch_main_window(
-        container.app,
-        lang_manager,
-        file_args,
-        container.runtime_paths,
-        profile_context.paths,
-        profile_context.settings,
-        container.media,
-        container.font_manager,
-        container.jw_catalog_cache_paths,
-        container.jw_songs_store,
-        container.jwpub_checksum_store,
-        container.installation_settings,
-        TimerSession(
-            QSettingsTimerRepository.for_profile_settings(profile_context.settings),
-            current_week_monday=current_monday(),
-        ),
-        active_profile,
+    theme = activate_theme(profile_context.settings.app_settings().app_theme_id())
+    apply_application_palette(container.app, theme)
+    container.app.setStyleSheet(app_stylesheet(theme))
+    startup_timeline().mark("profile_ready")
+
+    from solin.core.windowing.settings import WindowGeometrySettingsStore
+    from solin.bootstrap.application_window import ApplicationWindow
+
+    geometry_settings = WindowGeometrySettingsStore.for_profile_settings(
+        profile_context.settings
+    )
+    width, height = geometry_settings.size(1200, 760)
+    window = ApplicationWindow(
+        width=width,
+        height=height,
+        pending_files=file_args,
     )
     container.window_ref[0] = window
-    wire_profile_switch(
-        container.app,
-        container.window_ref,
-        container.profile_service,
+
+    def build_main_window(main_window_class=None):
+        from solin.core.meetings.meeting_weeks import current_monday
+        from solin.core.timer.application import TimerSession
+        from solin.core.timer.infrastructure import QSettingsTimerRepository
+
+        timer_session = TimerSession(
+            QSettingsTimerRepository.for_profile_settings(profile_context.settings),
+            current_week_monday=current_monday(),
+        )
+        runtime = _build_main_window_runtime(
+            lang_manager,
+            container.runtime_paths,
+            profile_context.paths,
+            profile_context.settings,
+            container.media,
+            container.font_manager,
+            container.jw_catalog_cache_paths,
+            container.jw_songs_store,
+            container.jwpub_checksum_store,
+            container.installation_settings,
+            container.deferred_maintenance.start,
+            timer_session,
+            active_profile,
+            window_host=window,
+            main_window_class=main_window_class,
+        )
+        window.install_runtime(runtime)
+        wire_profile_switch(
+            container.app,
+            container.window_ref,
+            container.profile_service,
+        )
+        return runtime
+
+    def install_main_window(main_window_class) -> None:
+        if not window.begin_hydration():
+            return
+        build_main_window(main_window_class)
+
+    def finish_startup_handoff() -> None:
+        window.complete_startup_handoff()
+
+    window.application_frame_presented.connect(
+        finish_startup_handoff,
+        Qt.ConnectionType.QueuedConnection,
     )
+
+    def start_runtime_preparation() -> None:
+        from solin.bootstrap.application_window import ApplicationWindowState
+        from solin.core.foundation.thread_workers import CancellationFlag
+        from solin.ui.async_load import AsyncLoadHandle
+
+        if window.state is not ApplicationWindowState.LOADING:
+            return
+        startup_cancellation = CancellationFlag()
+        load_handle = AsyncLoadHandle(
+            lambda: _prepare_profile_main_window(
+                profile_context.paths,
+                startup_cancellation,
+            ),
+            install_main_window,
+            window,
+            thread_name_prefix="solin-startup-import",
+            cancel_load=startup_cancellation.set,
+        )
+        window.set_load_handle(load_handle)
+
+        def show_startup_error(message: str) -> None:
+            from PySide6.QtWidgets import QMessageBox
+
+            QMessageBox.critical(window, "Solin", message)
+            window.set_load_handle(None)
+            window.close()
+
+        load_handle.failed.connect(show_startup_error)
+        load_handle.start()
+
+    window.loading_frame_presented.connect(
+        start_runtime_preparation,
+        Qt.ConnectionType.QueuedConnection,
+    )
+    window.show()
+    startup_timeline().mark("show_returned")
     return window
 
 
@@ -457,6 +626,7 @@ def main():
 
     config = default_app_config()
     app = QApplication(sys.argv)
+    startup_timeline().mark("qt_application_created")
     config.apply_to(app)
     try:
         container = initialize_application_container(app, config)
@@ -471,6 +641,7 @@ def main():
             f"{exc}",
         )
         return
+    startup_timeline().mark("container_ready")
     profile_service = container.profile_service
 
     # ── Imports dependentes de caminhos ───────────────────────────────────────
@@ -508,24 +679,25 @@ def main():
         sys.exit(_run_zoom_poll_standalone(app, csv_args[0], lang_manager))
 
     # ── Single-instance ───────────────────────────────────────────────────────
-    if try_forward_to_running(file_args):
+    ipc_server_name = (
+        os.environ.get("SOLIN_IPC_SERVER_NAME", "").strip() or IPC_SERVER_NAME
+    )
+    if try_forward_to_running(file_args, server_name=ipc_server_name):
         sys.exit(0)
-    single_instance = SingleInstanceServer(app, _main_window_ref, file_args)
+    single_instance = SingleInstanceServer(
+        app,
+        _main_window_ref,
+        file_args,
+        server_name=ipc_server_name,
+    )
     single_instance_started = single_instance.start()
-    if not single_instance_started and try_forward_to_running(file_args):
+    if not single_instance_started and try_forward_to_running(
+        file_args,
+        server_name=ipc_server_name,
+    ):
         sys.exit(0)
     if single_instance_started:
         container.lifecycle.register_single_instance(single_instance)
-
-    # ── Primeira instância — limpezas ─────────────────────────────────────────
-    from solin.core.remote.patch_installer import cleanup_pending_patch
-
-    cleanup_pending_patch(container.installation_settings)
-
-    from solin.core.media.download_storage import cleanup_orphan_temps, cleanup_incomplete_cache
-
-    cleanup_orphan_temps()
-    cleanup_incomplete_cache(container.runtime_paths.media_cache_dir)
 
     # ── Decisão: perfil direto ou tela de seleção ─────────────────────────────
     #

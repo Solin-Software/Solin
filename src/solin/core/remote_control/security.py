@@ -169,7 +169,19 @@ class ScryptPasswordHasher:
     ) -> None:
         self._parameters = parameters
         self._salt_factory = salt_factory
-        self._dummy_envelope = self.hash_password(secrets.token_urlsafe(24))
+        dummy_salt = self._salt_factory(parameters.salt_length)
+        if len(dummy_salt) != parameters.salt_length:
+            raise ValueError("Salt factory returned an unexpected number of bytes")
+        self._dummy_envelope = PasswordEnvelope(
+            version=_PASSWORD_ENVELOPE_VERSION,
+            algorithm="scrypt",
+            n=parameters.n,
+            r=parameters.r,
+            p=parameters.p,
+            length=parameters.length,
+            salt=dummy_salt,
+            digest=secrets.token_bytes(parameters.length),
+        )
 
     @property
     def parameters(self) -> ScryptParameters:

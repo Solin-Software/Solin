@@ -40,6 +40,7 @@ class ProjectionPlaylistMixin:
         playback_order: str | None = None,
         from_saved_playlist: bool = False,
     ):
+        self._ensure_overlay_ready()
         self._playlist = list(items)
         self._playlist_index = 0
         self._played_indices = {0}

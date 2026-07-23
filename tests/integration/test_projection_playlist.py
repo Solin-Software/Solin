@@ -10,6 +10,26 @@ class _Signal:
         self.emissions.append(args)
 
 
+class _Panel:
+    def is_open(self):
+        return False
+
+
+class _Timer:
+    def stop(self):
+        pass
+
+
+class _ThumbnailQueue:
+    def clear(self):
+        pass
+
+
+class _PlaybackSettings:
+    def playback_order(self):
+        return "off"
+
+
 def test_projection_bar_uses_playlist_mixin():
     assert projection_bar.ProjectionPlaylistMixin is ProjectionPlaylistMixin
     assert issubclass(projection_bar.ProjectionBar, ProjectionPlaylistMixin)
@@ -22,6 +42,21 @@ def test_projection_bar_uses_playlist_mixin():
         projection_bar.ProjectionBar._resolve_idle_path
         is ProjectionPlaylistMixin._resolve_idle_path
     )
+
+
+def test_set_playlist_materializes_overlay_before_using_playlist_controls():
+    calls = []
+    host = type("ProjectionHost", (), {})()
+    host._ensure_overlay_ready = lambda: calls.append("ready")
+    host._playback_settings = _PlaybackSettings()
+    host._live_thumb_timer = _Timer()
+    host._thumb_queue = _ThumbnailQueue()
+    host.playlist_panel = _Panel()
+    host._update_nav_buttons = lambda: calls.append("navigation")
+
+    ProjectionPlaylistMixin.set_playlist(host, [{"url": "video.mp4"}])
+
+    assert calls == ["ready", "navigation"]
 
 
 def test_source_duration_is_published_without_reaching_into_playlist_widgets():

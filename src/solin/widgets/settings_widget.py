@@ -40,6 +40,7 @@ from ..core.remote_control.settings import RemoteControlSettingsStore
 from ..core.foundation.settings_store import ProfileAppSettingsStore
 from ..styles.theme import available_themes, current_theme, normalize_theme_id
 from ..ui.controls import NoScrollComboBox
+from ..ui.loading_placeholder import DeferredLoadingPlaceholder
 from .settings.about_section import AboutSectionMixin
 from .settings.auto_keys_section import AutoKeysSectionMixin
 from .settings.auto_share_section import AutoShareSectionMixin
@@ -120,6 +121,7 @@ class SettingsWidget(
         qr_generation_session_factory: QrGenerationSessionFactory,
         yeartext_service_factory: Callable[[QObject], YeartextService],
         auto_share_accessibility_trusted: Callable[[], bool],
+        defer_build: bool = False,
         parent=None,
     ):
         super().__init__(parent)
@@ -151,15 +153,38 @@ class SettingsWidget(
         self._remote_runtime_status_kind = "pending"
         self._auto_share_accessibility_trusted = auto_share_accessibility_trusted
         self._theme_persistent_connections: set[str] = set()
+        self._deferred_services_requested = False
+        self._deferred_services_started = False
+        self._ui_ready = False
+        self._pending_meeting_schedule_focus = False
         self._init_yearly_text_section()
-        self._build_ui()
+        self._mark_startup("settings_service_initialized")
+        if defer_build:
+            self._prepare_incremental_ui()
+        else:
+            self.preparation_handle = None
+            self._build_ui()
+            self._ui_ready = True
         screen_manager.screens_changed.connect(self._refresh_screens)
         lang_manager.language_changed.connect(self._on_language_switched)
         lang_manager.jw_lang_service.media_language_changed.connect(self._on_language_switched)
+
+    def start_deferred_services(self) -> None:
+        """Start non-critical settings services once the first frame is visible."""
+        self._deferred_services_requested = True
+        if self._deferred_services_started or not self._ui_ready:
+            return
+        self._deferred_services_started = True
+        self.lang.jw_lang_service.fetch_if_needed()
         self._check_and_fetch_yeartext()
 
     def showEvent(self, event):
         super().showEvent(event)
+        if self.preparation_handle is not None:
+            self.preparation_handle.start()
+        self.start_deferred_services()
+        if not getattr(self, "_ui_ready", True):
+            return
         self._refresh_autoshare_accessibility_status()
         self._populate_remote_interfaces()
         self._refresh_remote_configuration_status()
@@ -185,11 +210,39 @@ class SettingsWidget(
         self._populate_theme_selector()
         self._theme_combo.currentIndexChanged.connect(self._on_theme_selected)
 
-    def _build_ui(self):
+    def _build_ui(self) -> None:
+        self._begin_ui_build(self)
+        for unit in self._settings_build_units():
+            unit()
+
+    def _prepare_incremental_ui(self) -> None:
+        from ..ui.incremental_load import IncrementalLoadHandle
+
+        self._mark_startup("settings_placeholder_constructed")
+        self._loading_placeholder = DeferredLoadingPlaceholder(
+            self.tr("Loading…"),
+            self,
+        )
+        self._mark_startup("settings_stack_constructed")
+        self._apply_loading_placeholder_theme()
+        self._mark_startup("settings_placeholder_styled")
+        self.preparation_handle = IncrementalLoadHandle(
+            (self._begin_incremental_ui_build, *self._settings_build_units()),
+            self,
+        )
+        self._mark_startup("settings_preparation_created")
+
+    def _begin_incremental_ui_build(self) -> None:
+        self._settings_page = QWidget(self)
+        self._settings_page.hide()
+        self._begin_ui_build(self._settings_page)
+        self._mark_startup("settings_shell_constructed")
+
+    def _begin_ui_build(self, page: QWidget) -> None:
         self._reset_theme_bindings()
-        outer = self.layout()
+        outer = page.layout()
         if outer is None:
-            outer = QVBoxLayout(self)
+            outer = QVBoxLayout(page)
         else:
             self._clear_layout(outer)
         outer.setContentsMargins(24, 24, 24, 24)
@@ -211,88 +264,158 @@ class SettingsWidget(
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         content = QWidget()
-        lay = QVBoxLayout(content)
-        lay.setSpacing(0)
-        lay.setContentsMargins(0, 0, 4, 0)
-
-        # Language
-        lay.addWidget(self._section_title(self.tr("Language"), "_lang_section_title"))
-        lay.addSpacing(8)
-        lay.addWidget(self._build_lang_card())
-        lay.addSpacing(20)
-
-        # Media
-        lay.addWidget(self._section_title(self.tr("Media"), "_media_section_title"))
-        lay.addSpacing(8)
-        lay.addWidget(self._build_media_card())
-        lay.addSpacing(20)
-
-        # Meetings
-        lay.addWidget(self._section_title(self.tr("Meetings"), "_meetings_section_title"))
-        lay.addSpacing(8)
-        lay.addWidget(self._build_meeting_schedule_card())
-        lay.addSpacing(20)
-
-        # Folders
-        lay.addWidget(self._section_title(self.tr("Folders"), "_folders_section_title"))
-        lay.addSpacing(8)
-        lay.addWidget(self._build_watched_folder_card())
-        lay.addSpacing(20)
-
-        # Remote control
-        lay.addWidget(
-            self._section_title(
-                self.tr("Remote access"),
-                "_remote_control_section_title",
-            )
-        )
-        lay.addSpacing(8)
-        lay.addWidget(self._build_remote_control_card())
-        lay.addSpacing(20)
-
-        # Integrations
-        lay.addWidget(self._section_title(self.tr("Integrations"), "_integrations_section_title"))
-        lay.addSpacing(8)
-        lay.addWidget(self._build_obs_card())
-        lay.addSpacing(16)
-        lay.addWidget(self._build_camera_card())
-
-        if sys.platform == "win32":
-            lay.addSpacing(16)
-            lay.addWidget(self._build_zoom_card())
-
-        lay.addSpacing(16)
-        lay.addWidget(self._build_auto_share_card())
-        lay.addSpacing(16)
-        lay.addWidget(self._build_auto_keys_card())
-
-        lay.addSpacing(20)
-
-        # Annual Text
-        lay.addWidget(self._section_title(self.tr("Annual Text"), "_yearly_section_title"))
-        lay.addSpacing(8)
-        lay.addWidget(self._build_yearly_text_card())
-        lay.addSpacing(20)
-
-        # Screens
-        lay.addWidget(self._section_title(self.tr("Screens"), "_screens_section_title"))
-        lay.addSpacing(8)
-        self._screens_card, self._screens_card_lay = self._card()
-        self._populate_screens()
-        lay.addWidget(self._screens_card)
-        lay.addSpacing(20)
-
-        # About
-        lay.addWidget(self._section_title(self.tr("About"), "_about_section_title"))
-        lay.addSpacing(8)
-        lay.addWidget(self._build_about_card())
-        lay.addStretch()
-
-        scroll.setWidget(content)
+        sections = QVBoxLayout(content)
+        sections.setSpacing(0)
+        sections.setContentsMargins(0, 0, 4, 0)
+        self._settings_outer_layout = outer
         self._settings_scroll = scroll
+        self._settings_content = content
+        self._settings_sections_layout = sections
+        scroll.setWidget(content)
         outer.addWidget(scroll)
 
+    def _settings_build_units(self) -> tuple[Callable[[], None], ...]:
+        return (
+            self._build_language_settings_unit,
+            self._build_media_settings_unit,
+            self._build_meeting_settings_unit,
+            self._build_folder_settings_unit,
+            self._build_remote_settings_unit,
+            self._build_obs_settings_unit,
+            self._build_camera_settings_unit,
+            self._build_zoom_settings_unit,
+            self._build_auto_share_settings_unit,
+            self._build_auto_keys_settings_unit,
+            self._build_yeartext_settings_unit,
+            self._build_screens_settings_unit,
+            self._build_about_settings_unit,
+            self._finish_ui_build,
+        )
+
+    def _add_settings_section(self, title: str, attr: str, card: QWidget) -> None:
+        layout = self._settings_sections_layout
+        layout.addWidget(self._section_title(self.tr(title), attr))
+        layout.addSpacing(8)
+        layout.addWidget(card)
+        layout.addSpacing(20)
+
+    def _build_language_settings_unit(self) -> None:
+        self._add_settings_section("Language", "_lang_section_title", self._build_lang_card())
+        self._mark_startup("settings_language_constructed")
+
+    def _build_media_settings_unit(self) -> None:
+        self._add_settings_section("Media", "_media_section_title", self._build_media_card())
+        self._mark_startup("settings_media_constructed")
+
+    def _build_meeting_settings_unit(self) -> None:
+        self._add_settings_section(
+            "Meetings",
+            "_meetings_section_title",
+            self._build_meeting_schedule_card(),
+        )
+        self._mark_startup("settings_meetings_constructed")
+
+    def _build_folder_settings_unit(self) -> None:
+        self._add_settings_section(
+            "Folders",
+            "_folders_section_title",
+            self._build_watched_folder_card(),
+        )
+        self._mark_startup("settings_folders_constructed")
+
+    def _build_remote_settings_unit(self) -> None:
+        self._add_settings_section(
+            "Remote access",
+            "_remote_control_section_title",
+            self._build_remote_control_card(),
+        )
+        self._mark_startup("settings_remote_constructed")
+
+    def _build_obs_settings_unit(self) -> None:
+        layout = self._settings_sections_layout
+        layout.addWidget(
+            self._section_title(self.tr("Integrations"), "_integrations_section_title")
+        )
+        layout.addSpacing(8)
+        layout.addWidget(self._build_obs_card())
+
+    def _build_camera_settings_unit(self) -> None:
+        self._settings_sections_layout.addSpacing(16)
+        self._settings_sections_layout.addWidget(self._build_camera_card())
+
+    def _build_zoom_settings_unit(self) -> None:
+        if sys.platform != "win32":
+            return
+        self._settings_sections_layout.addSpacing(16)
+        self._settings_sections_layout.addWidget(self._build_zoom_card())
+
+    def _build_auto_share_settings_unit(self) -> None:
+        self._settings_sections_layout.addSpacing(16)
+        self._settings_sections_layout.addWidget(self._build_auto_share_card())
+
+    def _build_auto_keys_settings_unit(self) -> None:
+        self._settings_sections_layout.addSpacing(16)
+        self._settings_sections_layout.addWidget(self._build_auto_keys_card())
+        self._settings_sections_layout.addSpacing(20)
+        self._mark_startup("settings_integrations_constructed")
+
+    def _build_yeartext_settings_unit(self) -> None:
+        self._add_settings_section(
+            "Annual Text",
+            "_yearly_section_title",
+            self._build_yearly_text_card(),
+        )
+        self._mark_startup("settings_yeartext_constructed")
+
+    def _build_screens_settings_unit(self) -> None:
+        self._screens_card, self._screens_card_lay = self._card()
+        self._populate_screens()
+        self._add_settings_section("Screens", "_screens_section_title", self._screens_card)
+        self._mark_startup("settings_screens_constructed")
+
+    def _build_about_settings_unit(self) -> None:
+        layout = self._settings_sections_layout
+        layout.addWidget(self._section_title(self.tr("About"), "_about_section_title"))
+        layout.addSpacing(8)
+        layout.addWidget(self._build_about_card())
+        layout.addStretch()
+        self._mark_startup("settings_about_constructed")
+
+    def _finish_ui_build(self) -> None:
+        self._ui_ready = True
+        self._loading_placeholder.finish()
+        settings_page = getattr(self, "_settings_page", None)
+        if settings_page is not None and settings_page is not self:
+            settings_page.setGeometry(self.rect())
+            settings_page.show()
+        self._refresh_remote_configuration_status()
+        if self._deferred_services_requested:
+            self.start_deferred_services()
+        if self._pending_meeting_schedule_focus:
+            self._pending_meeting_schedule_focus = False
+            self.focus_meeting_schedule()
+
+    def _apply_loading_placeholder_theme(self) -> None:
+        placeholder = getattr(self, "_loading_placeholder", None)
+        if placeholder is not None:
+            placeholder.refresh_theme()
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        settings_page = getattr(self, "_settings_page", None)
+        if settings_page is not None and settings_page is not self:
+            settings_page.setGeometry(self.rect())
+
+    @staticmethod
+    def _mark_startup(name: str) -> None:
+        from ..bootstrap.startup_timeline import startup_timeline
+
+        startup_timeline().mark(name)
+
     def apply_theme(self) -> None:
+        if not getattr(self, "_ui_ready", True):
+            self._apply_loading_placeholder_theme()
+            return
         self._apply_settings_theme_bindings()
         for section_refresh in (
             "_apply_yearly_text_theme",
@@ -315,6 +438,12 @@ class SettingsWidget(
 
     def focus_meeting_schedule(self) -> None:
         """Reveal the canonical meeting schedule card after contextual navigation."""
+
+        if not self._ui_ready:
+            self._pending_meeting_schedule_focus = True
+            if self.preparation_handle is not None:
+                self.preparation_handle.start()
+            return
 
         card = getattr(self, "_meeting_schedule_card", None)
         if card is None:
@@ -366,10 +495,14 @@ class SettingsWidget(
 
     def changeEvent(self, event):
         if event.type() == QEvent.Type.LanguageChange:
+            if not self._ui_ready:
+                self._loading_placeholder.set_text(self.tr("Loading…"))
             self.retranslateUi()
         super().changeEvent(event)
 
     def retranslateUi(self):
+        if not self._ui_ready:
+            return
         self._main_title.setText(self.tr("Settings"))
         self._populate_theme_selector()
         self._lang_section_title.setText(self.tr("Language").upper())

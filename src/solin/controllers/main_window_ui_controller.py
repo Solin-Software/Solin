@@ -16,16 +16,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..core.meetings.tree_store import flush_meeting_thumbs_dir
 from ..core.meetings.preparation import MeetingPreparationService
-from ..core.playlists.cleanup import (
-    flush_embedded_dir,
-    flush_images_dir,
-    flush_pdf_pages,
-    flush_pending_deletions,
-    flush_pptx_pages,
-    flush_thumbs_dir,
-)
 from ..styles.icons import (
     ICON_MENU,
     ICON_NAV_BROWSER,
@@ -54,7 +45,7 @@ from ..widgets.meetings.widget import MeetingsWidget
 from ..widgets.playlist.widget import PlaylistWidget
 from ..widgets.projection.bar import ProjectionBar
 from ..widgets.quick_access_toolbar import QuickAccessToolbar
-from ..widgets.sermon_theme_widget import SermonThemeWidget
+from ..widgets.deferred_sermon_theme_widget import DeferredSermonThemeWidget
 from ..widgets.settings_widget import SettingsWidget
 from ..widgets.songs_widget import SongsWidget
 from ..widgets.timer_widget import TimerWidget
@@ -72,6 +63,9 @@ from .main_window_nav import (
     SWITCH_PROFILE_SOURCE,
 )
 from .navigation_controller import NavigationController
+from .ui_preparation_coordinator import UiPreparationCoordinator
+from ..ui.async_load import AsyncLoadHandle
+from .lazy_page_controller import load_browser_widget_type
 
 if TYPE_CHECKING:
     from ..core.media.browser_downloads import BrowserDownloadService
@@ -172,13 +166,14 @@ class MainWindowUiResources:
     stack: QStackedWidget
     lazy_pages: LazyPageController
     navigation: NavigationController
+    preparation: UiPreparationCoordinator
     right_col: QWidget
     projection_bar: ProjectionBar
     songs_widget: SongsWidget
     settings_widget: SettingsWidget
     timer_widget: TimerWidget
     clips_widget: ClipsWidget
-    sermon_theme_widget: SermonThemeWidget
+    sermon_theme_widget: DeferredSermonThemeWidget
     playlist_widget: PlaylistWidget
     meetings_widget: MeetingsWidget
     quick_toolbar: QuickAccessToolbar
@@ -196,7 +191,7 @@ class _PageResources:
     settings_widget: SettingsWidget
     timer_widget: TimerWidget
     clips_widget: ClipsWidget
-    sermon_theme_widget: SermonThemeWidget
+    sermon_theme_widget: DeferredSermonThemeWidget
     playlist_widget: PlaylistWidget
     meetings_widget: MeetingsWidget
 
@@ -281,20 +276,29 @@ class MainWindowUiController:
         stack = QStackedWidget()
         stack.setObjectName("ContentArea")
         lazy_pages = self._build_lazy_pages(stack)
-
         nav_buttons: list[SidebarButton] = []
         projection_bar_ref: dict[str, ProjectionBar | None] = {"value": None}
         quick_toolbar_ref: dict[str, QuickAccessToolbar | None] = {"value": None}
+        preparation_ref: dict[str, UiPreparationCoordinator | None] = {"value": None}
         navigation = NavigationController(
             stack,
             lazy_pages,
             nav_buttons=lambda: nav_buttons,
             projection_bar=lambda: projection_bar_ref["value"],
             quick_toolbar=lambda: quick_toolbar_ref["value"],
+            prepare_page=lambda index: (
+                preparation_ref["value"].prioritize(index)
+                if preparation_ref["value"] is not None
+                else None
+            ),
+        )
+        lazy_pages.set_browser_installed_callback(
+            navigation.update_quick_toolbar_browser_style
         )
 
         pages = self._build_pages(stack, lazy_pages)
         sidebar = self._build_sidebar(navigation, nav_buttons)
+        self._mark_startup("main_sidebar_constructed")
         root.addWidget(sidebar.frame)
 
         right_col = QWidget()
@@ -303,8 +307,10 @@ class MainWindowUiController:
         right_layout.setContentsMargins(0, 0, 0, 0)
         right_layout.setSpacing(0)
         right_layout.addWidget(stack, stretch=1)
+        self._mark_startup("main_stack_installed")
 
         bottom_bar, projection_bar = self._build_bottom_bar(right_col)
+        self._mark_startup("projection_bar_constructed")
         projection_bar_ref["value"] = projection_bar
         projection_bar.expanded_changed.connect(lazy_pages.set_browser_native_views_occluded)
         right_layout.addWidget(bottom_bar)
@@ -316,15 +322,46 @@ class MainWindowUiController:
             navigation,
             pages.settings_widget,
         )
+        self._mark_startup("quick_toolbar_constructed")
         quick_toolbar_ref["value"] = quick_toolbar
         projection_bar.expanded_changed.connect(quick_toolbar.set_projection_overlay_active)
+        # The native ancestor contract must be established before the main
+        # window handoff. Doing it later causes a visible one-frame stall when
+        # Chromium creates its first child surface.
         self._prime_native_cursor_hosts(right_col, stack)
+        browser_preparation = AsyncLoadHandle(
+            load_browser_widget_type,
+            lazy_pages.set_browser_widget_type,
+            context.parent,
+            thread_name_prefix="solin-browser-import",
+        )
+        lazy_pages.set_browser_preparation(browser_preparation)
+        preparation = UiPreparationCoordinator(
+            {
+                -4: quick_toolbar.qml_load_handle,
+                1: pages.meetings_widget.preparation_handle,
+                2: browser_preparation,
+            },
+            context.parent,
+            on_demand_tasks={
+                -1: projection_bar.overlay_preparation_handle,
+                -2: quick_toolbar.preparation_handle,
+                0: pages.songs_widget.qml_load_handle,
+                3: pages.clips_widget.qml_load_handle,
+                4: pages.timer_widget.qml_load_handle,
+                5: pages.sermon_theme_widget.preparation_handle,
+                6: pages.settings_widget.preparation_handle,
+                7: pages.playlist_widget.preparation_handle,
+            },
+        )
+        preparation_ref["value"] = preparation
         right_col.installEventFilter(context.event_filter)
 
         return MainWindowUiResources(
             stack=stack,
             lazy_pages=lazy_pages,
             navigation=navigation,
+            preparation=preparation,
             right_col=right_col,
             projection_bar=projection_bar,
             songs_widget=pages.songs_widget,
@@ -342,6 +379,12 @@ class MainWindowUiController:
             nav_buttons=nav_buttons,
             nav_buttons_by_name=sidebar.nav_buttons_by_name,
         )
+
+    @staticmethod
+    def _mark_startup(name: str) -> None:
+        from ..bootstrap.startup_timeline import startup_timeline
+
+        startup_timeline().mark(name)
 
     def _build_lazy_pages(self, stack: QStackedWidget) -> LazyPageController:
         context = self._context
@@ -386,6 +429,9 @@ class MainWindowUiController:
         stack: QStackedWidget,
         lazy_pages: LazyPageController,
     ) -> _PageResources:
+        from ..bootstrap.startup_timeline import startup_timeline
+
+        timeline = startup_timeline()
         context = self._context
         songs_widget = SongsWidget(
             context.lang_manager,
@@ -393,8 +439,10 @@ class MainWindowUiController:
             context.jw_songs_store,
             context.runtime_paths.cache_dir,
             context.media_controller,
+            defer_qml=True,
             parent=context.parent,
         )
+        timeline.mark("page_songs_constructed")
         settings_widget = SettingsWidget(
             context.lang_manager,
             context.screen_manager,
@@ -417,25 +465,32 @@ class MainWindowUiController:
             yeartext_service_factory=context.yeartext_service_factory,
             auto_share_accessibility_trusted=context.auto_share_accessibility_trusted,
             background_song_settings=context.background_song_settings,
+            defer_build=True,
             parent=context.parent,
         )
+        timeline.mark("page_settings_constructed")
         timer_widget = TimerWidget(
             context.lang_manager,
             bridge=context.timer_bridge,
+            defer_qml=True,
             parent=context.parent,
         )
+        timeline.mark("page_timer_constructed")
         clips_widget = ClipsWidget(
             context.lang_manager,
             context.media_cache_manager,
             context.runtime_paths.cache_dir,
             context.clip_fetch_thread_factory,
             context.media_controller,
+            defer_qml=True,
             parent=context.parent,
         )
-        sermon_theme_widget = SermonThemeWidget(
+        timeline.mark("page_clips_constructed")
+        sermon_theme_widget = DeferredSermonThemeWidget(
             context.lang_manager,
             parent=context.parent,
         )
+        timeline.mark("page_theme_constructed")
         watched_folder = settings_widget.get_watched_folder()
         playlist_widget = PlaylistWidget(
             context.lang_manager,
@@ -461,8 +516,11 @@ class MainWindowUiController:
             jw_songs_store=context.jw_songs_store,
             media_info_queue_factory=self._media_info_queue_factory,
             projection_aspect_ratio_provider=(context.projection_aspect_ratio_provider),
+            defer_editor_qml=True,
+            defer_build=True,
             parent=context.parent,
         )
+        timeline.mark("page_playlist_constructed")
         meeting_publication_service = context.jwpub_service_factory(context.parent)
         meeting_preparation_service = MeetingPreparationService(
             meeting_publication_service,
@@ -497,12 +555,11 @@ class MainWindowUiController:
             projection_aspect_ratio_provider=(context.projection_aspect_ratio_provider),
             parent=context.parent,
         )
+        timeline.mark("page_meetings_constructed")
         meetings_widget.set_watched_folder(watched_folder)
         settings_widget.meetings_auto_download_toggled.connect(
             meetings_widget.set_automatic_download_enabled
         )
-
-        self._flush_orphaned_media_files()
 
         stack.addWidget(songs_widget)
         stack.addWidget(meetings_widget)
@@ -742,24 +799,3 @@ class MainWindowUiController:
         sep.setFrameShadow(QFrame.Shadow.Plain)
         sep.setFixedHeight(1)
         return sep
-
-    def _flush_orphaned_media_files(self) -> None:
-        context = self._context
-        storage_paths = context.playlist_storage_paths
-        meeting_tree_store = context.meeting_tree_store
-        profile_paths = context.profile_paths
-        flush_pending_deletions(storage_paths, meeting_tree_store)
-        flush_images_dir(storage_paths, meeting_tree_store, profile_paths)
-        flush_thumbs_dir(storage_paths, profile_paths.thumb_cache_dir)
-        flush_meeting_thumbs_dir(
-            store=meeting_tree_store,
-            thumb_dir=profile_paths.meeting_thumb_cache_dir,
-        )
-        flush_embedded_dir(storage_paths, meeting_tree_store, profile_paths)
-        flush_pdf_pages(storage_paths, meeting_tree_store, profile_paths.pdf_pages_dir)
-        flush_pptx_pages(
-            storage_paths,
-            meeting_tree_store,
-            profile_paths.pptx_pages_dir,
-            profile_paths.docx_pages_dir,
-        )

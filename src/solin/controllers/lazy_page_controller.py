@@ -7,6 +7,12 @@ from typing import Any, TYPE_CHECKING
 from PySide6.QtCore import QObject
 from PySide6.QtWidgets import QStackedWidget, QWidget
 
+
+def load_browser_widget_type():
+    from ..widgets.browser.widget import BrowserWidget
+
+    return BrowserWidget
+
 if TYPE_CHECKING:
     from solin.core.foundation.runtime_paths import ProfilePaths
     from solin.ui.qr_generation import QrGenerationSessionFactory
@@ -79,6 +85,10 @@ class LazyPageController:
         self._browser_widget = None
         self._cache_manager_widget = None
         self._wifi_receive_widget = None
+        self._browser_preparation = None
+        self._browser_widget_type = None
+        self._browser_installed: Callable[[], None] = lambda: None
+        self._browser_requested = False
         self._browser_signals_connected = False
         self._cache_signals_connected = False
         self._wifi_signals_connected = False
@@ -102,11 +112,36 @@ class LazyPageController:
 
     def ensure_page(self, index: int) -> None:
         if index == self.BROWSER_INDEX:
-            self.ensure_browser_widget()
+            self._request_browser_widget()
         elif index == self.CACHE_INDEX:
             self.ensure_cache_manager_widget()
         elif index == self.WIFI_INDEX:
             self.ensure_wifi_receive_widget()
+
+    def set_browser_preparation(self, preparation) -> None:
+        self._browser_preparation = preparation
+        preparation.completed.connect(self._materialize_requested_browser)
+        preparation.failed.connect(
+            lambda _message: self._materialize_requested_browser()
+        )
+
+    def set_browser_widget_type(self, widget_type) -> None:
+        self._browser_widget_type = widget_type
+
+    def set_browser_installed_callback(self, callback: Callable[[], None]) -> None:
+        self._browser_installed = callback
+
+    def _request_browser_widget(self) -> None:
+        preparation = self._browser_preparation
+        if preparation is None or preparation.is_terminal:
+            self.ensure_browser_widget()
+            return
+        self._browser_requested = True
+        preparation.start()
+
+    def _materialize_requested_browser(self) -> None:
+        if self._browser_requested:
+            self.ensure_browser_widget()
 
     def apply_theme(self) -> None:
         """Refresh already-materialized lazy pages without creating new ones."""
@@ -127,10 +162,11 @@ class LazyPageController:
         if self._browser_widget is not None:
             return self._browser_widget
 
-        from ..widgets.browser.widget import BrowserWidget
-
         context = self._context
-        self._browser_widget = BrowserWidget(
+        widget_type = self._browser_widget_type
+        if widget_type is None:
+            widget_type = load_browser_widget_type()
+        self._browser_widget = widget_type(
             context.lang_manager,
             profile_paths=context.profile_paths,
             zoom_settings=context.browser_settings,
@@ -138,10 +174,22 @@ class LazyPageController:
             image_fetch_service=context.browser_image_fetch_service_factory(),
             aspect_ratio_provider=context.projection_aspect_ratio_provider,
             playback_protection=context.playback_protection,
+            defer_initial_tabs=True,
+            parent=context.parent,
         )
-        self._replace_stack_widget(self.BROWSER_INDEX, self._browser_widget)
         self._connect_browser_signals()
+        self._browser_widget.initial_tabs_preparation.completed.connect(
+            self._install_browser_widget
+        )
+        self._browser_widget.initial_tabs_preparation.start()
         return self._browser_widget
+
+    def _install_browser_widget(self) -> None:
+        browser = self._browser_widget
+        if browser is None or self._context.stack.indexOf(browser) >= 0:
+            return
+        self._replace_stack_widget(self.BROWSER_INDEX, browser)
+        self._browser_installed()
 
     def ensure_cache_manager_widget(self):
         if self._cache_manager_widget is not None:
@@ -198,7 +246,10 @@ class LazyPageController:
     def _replace_stack_widget(self, index: int, widget: QWidget) -> None:
         stack = self._context.stack
         old = stack.widget(index)
+        was_current = old is not None and stack.currentWidget() is old
         stack.insertWidget(index, widget)
+        if was_current:
+            stack.setCurrentWidget(widget)
         if old is not None:
             stack.removeWidget(old)
             old.deleteLater()
