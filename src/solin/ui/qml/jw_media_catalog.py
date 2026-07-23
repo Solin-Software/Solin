@@ -27,7 +27,6 @@ from PySide6.QtCore import (
     QModelIndex,
     QObject,
     Qt,
-    QTimer,
     QUrl,
     Property,
     Signal,
@@ -127,8 +126,6 @@ class JWMediaCatalogModel(QAbstractListModel):
         DurationSecondsRole: "duration_seconds",
         DurationTicksRole:   "duration_ticks",
     }
-    _SIGNATURE_KEYS: tuple[str, ...] = tuple(_ROLE_KEY.values())
-
     def __init__(self, parent: Optional[QObject] = None) -> None:
         super().__init__(parent)
         self._items: list[dict[str, Any]] = []
@@ -155,41 +152,90 @@ class JWMediaCatalogModel(QAbstractListModel):
 
     # ── Mutation helpers ──────────────────────────────────────────────────
 
-    def set_items(self, items: list[dict[str, Any]]) -> None:
-        """Replace all items with a full reset."""
-        self.beginResetModel()
-        self._items = [self._enrich(item) for item in items]
-        self.endResetModel()
+    def reconcile_items(self, items: list[dict[str, Any]]) -> bool:
+        """Reconcile a page by stable media identity without resetting delegates."""
+        desired = [self._enrich(item) for item in items]
+        desired_ids = [self._identity(item) for item in desired]
+        if not self._has_unique_identities(desired_ids):
+            log.warning(
+                "[CatalogModel] Replacing page with invalid or duplicate identities"
+            )
+            return self._replace_rows(desired)
+        if not desired:
+            changed = bool(self._items)
+            self.clear()
+            return changed
+        if not self._items:
+            self.beginInsertRows(QModelIndex(), 0, len(desired) - 1)
+            self._items.extend(desired)
+            self.endInsertRows()
+            return True
 
-    def set_items_if_changed(self, items: list[dict[str, Any]]) -> bool:
-        """Replace items only when visible role data actually changed."""
-        enriched = [self._enrich(item) for item in items]
-        if self._items_match(enriched):
-            return False
-        self.beginResetModel()
-        self._items = enriched
-        self.endResetModel()
-        return True
+        changed = False
+        desired_id_set = set(desired_ids)
+        for row in range(len(self._items) - 1, -1, -1):
+            if self._identity(self._items[row]) in desired_id_set:
+                continue
+            self.beginRemoveRows(QModelIndex(), row, row)
+            self._items.pop(row)
+            self.endRemoveRows()
+            changed = True
 
-    def append_items(self, items: list[dict[str, Any]]) -> None:
-        """Append *items* to the end of the model."""
-        if not items:
-            return
-        first = len(self._items)
-        last = first + len(items) - 1
-        self.beginInsertRows(QModelIndex(), first, last)
-        self._items.extend(self._enrich(item) for item in items)
-        self.endInsertRows()
+        for target_row, desired_item in enumerate(desired):
+            desired_id = desired_ids[target_row]
+            current_row = self._find_row(desired_id, start=target_row)
+            if current_row is None:
+                self.beginInsertRows(QModelIndex(), target_row, target_row)
+                self._items.insert(target_row, desired_item)
+                self.endInsertRows()
+                changed = True
+                continue
 
-    def update_thumbnail(self, item_id: str, local_path: str) -> None:
-        """Update thumbnail fields for a single item and emit ``dataChanged``."""
+            if current_row != target_row:
+                self.beginMoveRows(
+                    QModelIndex(),
+                    current_row,
+                    current_row,
+                    QModelIndex(),
+                    target_row,
+                )
+                current_item = self._items.pop(current_row)
+                self._items.insert(target_row, current_item)
+                self.endMoveRows()
+                changed = True
+
+            changed = self._update_row(target_row, desired_item) or changed
+
+        while len(self._items) > len(desired):
+            row = len(self._items) - 1
+            self.beginRemoveRows(QModelIndex(), row, row)
+            self._items.pop()
+            self.endRemoveRows()
+            changed = True
+
+        return changed
+
+    def update_thumbnail(
+        self,
+        item_id: str,
+        thumbnail_url: str,
+        local_path: str,
+    ) -> None:
+        """Update one matching thumbnail without accepting a stale URL result."""
         for i, item in enumerate(self._items):
-            if item.get("id") == item_id:
-                item["thumbnail_path"] = local_path
-                item["_thumb_source"] = _file_url(local_path) if local_path else ""
-                idx = self.index(i)
-                self.dataChanged.emit(idx, idx, [self.ThumbnailSourceRole])
+            if (
+                item.get("id") != item_id
+                or item.get("thumbnail_url") != thumbnail_url
+            ):
+                continue
+            thumb_source = _file_url(local_path) if local_path else ""
+            if item.get("_thumb_source") == thumb_source:
                 return
+            item["thumbnail_path"] = local_path
+            item["_thumb_source"] = thumb_source
+            idx = self.index(i)
+            self.dataChanged.emit(idx, idx, [self.ThumbnailSourceRole])
+            return
 
     def item_at(self, index: int) -> dict[str, Any] | None:
         """Return the raw item dict at *index*, or ``None``."""
@@ -199,9 +245,11 @@ class JWMediaCatalogModel(QAbstractListModel):
 
     def clear(self) -> None:
         """Remove all items."""
-        self.beginResetModel()
+        if not self._items:
+            return
+        self.beginRemoveRows(QModelIndex(), 0, len(self._items) - 1)
         self._items.clear()
-        self.endResetModel()
+        self.endRemoveRows()
 
     # ── Internal ──────────────────────────────────────────────────────────
 
@@ -216,20 +264,51 @@ class JWMediaCatalogModel(QAbstractListModel):
         )
         return enriched
 
-    def _items_match(self, items: list[dict[str, Any]]) -> bool:
-        if len(items) != len(self._items):
+    @staticmethod
+    def _identity(item: dict[str, Any]) -> str:
+        return str(item.get("id", "") or "")
+
+    @staticmethod
+    def _has_unique_identities(identities: list[str]) -> bool:
+        if not identities:
+            return True
+        return all(identities) and len(identities) == len(set(identities))
+
+    def _find_row(self, item_id: str, *, start: int) -> int | None:
+        for row in range(start, len(self._items)):
+            if self._identity(self._items[row]) == item_id:
+                return row
+        return None
+
+    def _replace_rows(self, items: list[dict[str, Any]]) -> bool:
+        if self._items_match(items):
             return False
-        return all(
-            self._item_signature(left) == self._item_signature(right)
-            for left, right in zip(self._items, items, strict=False)
+        self.clear()
+        if items:
+            self.beginInsertRows(QModelIndex(), 0, len(items) - 1)
+            self._items.extend(items)
+            self.endInsertRows()
+        return True
+
+    def _update_row(self, row: int, item: dict[str, Any]) -> bool:
+        current = self._items[row]
+        if current == item:
+            return False
+        changed_roles = [
+            role
+            for role, key in self._ROLE_KEY.items()
+            if current.get(key) != item.get(key)
+        ]
+        self._items[row] = item
+        if changed_roles:
+            index = self.index(row)
+            self.dataChanged.emit(index, index, changed_roles)
+        return True
+
+    def _items_match(self, items: list[dict[str, Any]]) -> bool:
+        return len(items) == len(self._items) and all(
+            left == right for left, right in zip(self._items, items, strict=True)
         )
-
-    @classmethod
-    def _item_signature(cls, item: dict[str, Any]) -> tuple[Any, ...]:
-        return tuple(item.get(key) for key in cls._SIGNATURE_KEYS)
-
-
-_PROGRESS_UI_UPDATE_INTERVAL_MS = 160
 
 
 # ── Main bridge ──────────────────────────────────────────────────────────────
@@ -256,8 +335,6 @@ class JWMediaCatalogBridge(QObject):
     pageCountChanged       = Signal()
     loadProgressChanged    = Signal()
     includeAudioDescriptionChanged = Signal()
-    catalogPageRefreshAboutToStart = Signal()
-    catalogPageRefreshFinished = Signal()
     showPlacementChanged   = Signal()
     placementOptionsChanged = Signal()
     pendingItemChanged     = Signal()
@@ -308,10 +385,7 @@ class JWMediaCatalogBridge(QObject):
         self._include_audio_description: bool = False
         self._active_catalog_request_id: str = ""
         self._catalog_fetched_at: float = 0.0
-        self._pending_progress: tuple[str, list[dict[str, Any]], int, int] | None = None
-        self._progress_apply_timer = QTimer(self)
-        self._progress_apply_timer.setSingleShot(True)
-        self._progress_apply_timer.timeout.connect(self._flush_pending_progress)
+        self._resolved_thumbnails: dict[tuple[str, str], str] = {}
 
         # Pending item / placement
         self._pending_item: dict[str, Any] | None = None
@@ -444,8 +518,7 @@ class JWMediaCatalogBridge(QObject):
         self._model.clear()
         self._catalog_complete = False
         self._catalog_fetched_at = 0.0
-        self._progress_apply_timer.stop()
-        self._pending_progress = None
+        self._resolved_thumbnails.clear()
         self._load_completed = 0
         self._load_total = 0
         self.resultCountChanged.emit()
@@ -481,6 +554,7 @@ class JWMediaCatalogBridge(QObject):
             return
         self._current_page = target
         self.pageChanged.emit()
+        self.hasMoreChanged.emit()
         self._update_page()
 
     @Slot(bool)
@@ -576,6 +650,7 @@ class JWMediaCatalogBridge(QObject):
         if self._current_page != 1:
             self._current_page = 1
             self.pageChanged.emit()
+            self.hasMoreChanged.emit()
             page_changed = True
 
         if filter_changed:
@@ -597,8 +672,6 @@ class JWMediaCatalogBridge(QObject):
     def reset(self) -> None:
         """Full reset of all internal state."""
         self._catalog_service.cancel_all()
-        self._progress_apply_timer.stop()
-        self._pending_progress = None
         self._all_items.clear()
         self._filtered_items.clear()
         self._current_page = 1
@@ -616,6 +689,7 @@ class JWMediaCatalogBridge(QObject):
         self._placement_options = []
         self._show_placement = False
         self._thumbnail_session.reset()
+        self._resolved_thumbnails.clear()
         self._model.clear()
 
         self.searchQueryChanged.emit()
@@ -636,8 +710,6 @@ class JWMediaCatalogBridge(QObject):
         """Stop background work owned by this bridge before teardown."""
         self._catalog_service.cancel_all(wait_ms=-1)
         self._active_catalog_request_id = ""
-        self._progress_apply_timer.stop()
-        self._pending_progress = None
         self._thumbnail_session.close()
 
     # ── Python-facing setters (called by host view) ───────────────────────
@@ -662,27 +734,12 @@ class JWMediaCatalogBridge(QObject):
         """Handle partial catalog progress from the service."""
         if request_id != self._active_catalog_request_id:
             return
-        self._pending_progress = (request_id, items, completed, total)
-        if not self._model.rowCount() or bool(total and completed >= total):
-            self._flush_pending_progress()
-            return
-        if not self._progress_apply_timer.isActive():
-            self._progress_apply_timer.start(_PROGRESS_UI_UPDATE_INTERVAL_MS)
-
-    def _flush_pending_progress(self) -> None:
-        pending = self._pending_progress
-        self._pending_progress = None
-        if pending is None:
-            return
-        request_id, items, completed, total = pending
-        if request_id != self._active_catalog_request_id:
-            return
-        self._all_items = list(items)
+        self._all_items = self._merge_thumbnail_state(items)
         self._load_completed = completed
         self._load_total = total
         self._catalog_complete = bool(total and completed >= total)
         self._apply_filter(keep_page=True)
-        self._update_page(preserve_viewport=True)
+        self._update_page()
         self.loadProgressChanged.emit()
         if self._filtered_items:
             self._set_loading(True)
@@ -700,14 +757,12 @@ class JWMediaCatalogBridge(QObject):
         if request_id != self._active_catalog_request_id:
             return
         self._active_catalog_request_id = ""
-        self._progress_apply_timer.stop()
-        self._pending_progress = None
-        self._all_items = list(items)
+        self._all_items = self._merge_thumbnail_state(items)
         self._catalog_fetched_at = float(fetched_at or 0.0)
         self._catalog_complete = True
         self._load_completed = self._load_total or self._load_completed
         self._apply_filter(keep_page=True)
-        self._update_page(preserve_viewport=True)
+        self._update_page()
         self.loadProgressChanged.emit()
         self._set_loading(False)
 
@@ -716,8 +771,6 @@ class JWMediaCatalogBridge(QObject):
         if self._active_catalog_request_id and request_id != self._active_catalog_request_id:
             return
         self._active_catalog_request_id = ""
-        self._progress_apply_timer.stop()
-        self._pending_progress = None
         log.warning("[CatalogBridge] Fetch failed (rid=%s): %s", request_id, error)
         if self._all_items:
             # A refresh failure must not replace a usable cached catalog with an
@@ -732,6 +785,10 @@ class JWMediaCatalogBridge(QObject):
 
     def _apply_filter(self, *, keep_page: bool = False) -> None:
         """Filter ``_all_items`` by ``_search_query`` → ``_filtered_items``."""
+        previous_result_count = len(self._filtered_items)
+        previous_page_count = self._page_count()
+        previous_has_more = self._current_page < previous_page_count
+        previous_page = self._current_page
         query = self._search_query.strip().lower()
         source_items = [
             item for item in self._all_items
@@ -748,32 +805,28 @@ class JWMediaCatalogBridge(QObject):
             self._filtered_items = list(source_items)
         if not keep_page:
             self._current_page = 1
-            self.pageChanged.emit()
         elif self._current_page > self._page_count():
             self._current_page = max(1, self._page_count())
+        if self._current_page != previous_page:
             self.pageChanged.emit()
-        self.resultCountChanged.emit()
-        self.pageCountChanged.emit()
-        self.hasMoreChanged.emit()
+        current_page_count = self._page_count()
+        if len(self._filtered_items) != previous_result_count:
+            self.resultCountChanged.emit()
+        if current_page_count != previous_page_count:
+            self.pageCountChanged.emit()
+        if (self._current_page < current_page_count) != previous_has_more:
+            self.hasMoreChanged.emit()
 
-    def _update_page(self, *, preserve_viewport: bool = False) -> None:
-        """Rebuild model with the current page of ``_filtered_items``."""
-        if preserve_viewport:
-            self.catalogPageRefreshAboutToStart.emit()
+    def _update_page(self) -> None:
+        """Reconcile the current page without destroying stable QML delegates."""
         if not self._filtered_items:
             self._model.clear()
-            self.hasMoreChanged.emit()
-            if preserve_viewport:
-                self.catalogPageRefreshFinished.emit()
             return
         start = (self._current_page - 1) * self._page_size
         end = start + self._page_size
         page_items = self._filtered_items[start:end]
-        self._model.set_items_if_changed(page_items)
+        self._model.reconcile_items(page_items)
         self._queue_thumbnails(page_items)
-        self.hasMoreChanged.emit()
-        if preserve_viewport:
-            self.catalogPageRefreshFinished.emit()
 
     def _page_count(self) -> int:
         if not self._filtered_items:
@@ -782,26 +835,58 @@ class JWMediaCatalogBridge(QObject):
 
     # ── Thumbnail queue ───────────────────────────────────────────────────
 
+    def _merge_thumbnail_state(
+        self,
+        items: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Merge immutable catalog metadata with resolved presentation state."""
+        merged: list[dict[str, Any]] = []
+        for source_item in items:
+            item_id = str(source_item.get("id", "") or "")
+            thumbnail_url = str(source_item.get("thumbnail_url", "") or "")
+            thumbnail_path = str(source_item.get("thumbnail_path", "") or "")
+            item = source_item
+            if item_id and thumbnail_url:
+                key = (item_id, thumbnail_url)
+                if thumbnail_path:
+                    self._resolved_thumbnails[key] = thumbnail_path
+                else:
+                    resolved_path = self._resolved_thumbnails.get(key, "")
+                    if resolved_path:
+                        item = dict(source_item)
+                        item["thumbnail_path"] = resolved_path
+            merged.append(item)
+        return merged
+
     def _queue_thumbnails(self, items: list[dict[str, Any]]) -> None:
         """Enqueue thumbnail downloads for *items* missing a local path."""
         for item in items:
-            item_id = item.get("id", "")
-            thumb_url = item.get("thumbnail_url", "")
+            item_id = str(item.get("id", "") or "")
+            thumb_url = str(item.get("thumbnail_url", "") or "")
             thumb_path = item.get("thumbnail_path", "")
             if not thumb_url or thumb_path:
                 continue
             self._thumbnail_session.enqueue(item_id, thumb_url)
 
-    def _on_thumb_ready(self, item_id: str, local_path: str) -> None:
+    def _on_thumb_ready(
+        self,
+        item_id: str,
+        thumbnail_url: str,
+        local_path: str,
+    ) -> None:
         """Handle a completed thumbnail download."""
-        if local_path:
-            # Update master list so re-filtering preserves the path.
-            for item in self._all_items:
-                if item.get("id") == item_id:
-                    item["thumbnail_path"] = local_path
-                    break
-
-            self._model.update_thumbnail(item_id, local_path)
+        if not local_path:
+            return
+        for item in self._all_items:
+            if (
+                item.get("id") != item_id
+                or item.get("thumbnail_url") != thumbnail_url
+            ):
+                continue
+            item["thumbnail_path"] = local_path
+            self._resolved_thumbnails[(item_id, thumbnail_url)] = local_path
+            self._model.update_thumbnail(item_id, thumbnail_url, local_path)
+            return
 
     # ── Placement logic ───────────────────────────────────────────────────
 
@@ -826,8 +911,6 @@ class JWMediaCatalogBridge(QObject):
         if self._error_message:
             self._error_message = ""
             self.errorMessageChanged.emit()
-        self._progress_apply_timer.stop()
-        self._pending_progress = None
         self._load_completed = 0
         self._load_total = 0
         self.loadProgressChanged.emit()

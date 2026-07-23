@@ -15,7 +15,12 @@ _DEFAULT_MAX_CONCURRENCY = 4
 
 
 class _ThumbnailFetchSignals(QObject):
-    finished = Signal(int, str, str)  # generation, item_id, local_path
+    finished = Signal(
+        int,
+        str,
+        str,
+        str,
+    )  # generation, item_id, thumbnail_url, local_path
 
 
 class _ThumbnailFetchWorker(QRunnable):
@@ -50,6 +55,7 @@ class _ThumbnailFetchWorker(QRunnable):
         self.signals.finished.emit(
             self._generation,
             self._item_id,
+            self._thumbnail_url,
             local_path,
         )
 
@@ -57,7 +63,7 @@ class _ThumbnailFetchWorker(QRunnable):
 class JWCatalogThumbnailSession(QObject):
     """Own a bounded thumbnail queue and fence stale results after reset."""
 
-    ready = Signal(str, str)  # item_id, local_path
+    ready = Signal(str, str, str)  # item_id, thumbnail_url, local_path
 
     def __init__(
         self,
@@ -72,7 +78,7 @@ class JWCatalogThumbnailSession(QObject):
         self._pool = QThreadPool(self)
         self._pool.setMaxThreadCount(self._max_concurrency)
         self._queue: deque[tuple[int, str, str]] = deque()
-        self._pending: set[str] = set()
+        self._pending: set[tuple[str, str]] = set()
         self._active_count = 0
         self._generation = 0
         self._closed = False
@@ -80,9 +86,15 @@ class JWCatalogThumbnailSession(QObject):
     def enqueue(self, item_id: str, thumbnail_url: str) -> bool:
         item_id = str(item_id or "")
         thumbnail_url = str(thumbnail_url or "")
-        if self._closed or not item_id or not thumbnail_url or item_id in self._pending:
+        request_key = (item_id, thumbnail_url)
+        if (
+            self._closed
+            or not item_id
+            or not thumbnail_url
+            or request_key in self._pending
+        ):
             return False
-        self._pending.add(item_id)
+        self._pending.add(request_key)
         self._queue.append((self._generation, item_id, thumbnail_url))
         self._pump()
         return True
@@ -126,12 +138,13 @@ class JWCatalogThumbnailSession(QObject):
         self,
         generation: int,
         item_id: str,
+        thumbnail_url: str,
         local_path: str,
     ) -> None:
         self._active_count = max(0, self._active_count - 1)
         if not self._closed and generation == self._generation:
-            self._pending.discard(item_id)
-            self.ready.emit(item_id, local_path)
+            self._pending.discard((item_id, thumbnail_url))
+            self.ready.emit(item_id, thumbnail_url, local_path)
         self._pump()
 
 

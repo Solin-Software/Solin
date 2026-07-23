@@ -31,7 +31,6 @@ Rectangle {
 
     // ── State ─────────────────────────────────────────────────────────────────
     property bool isOpen: false
-    property real preservedGridY: 0
 
     readonly property bool hasBridge: typeof catalogBridge !== "undefined" && catalogBridge !== null
 
@@ -138,16 +137,6 @@ Rectangle {
 
         function onModalShouldClose() {
             modalRoot.close()
-        }
-
-        function onCatalogPageRefreshAboutToStart() {
-            modalRoot.preservedGridY = videoGrid.contentY
-        }
-
-        function onCatalogPageRefreshFinished() {
-            Qt.callLater(function() {
-                videoGrid.contentY = videoGrid.clampContentY(modalRoot.preservedGridY)
-            })
         }
     }
 

@@ -57,7 +57,9 @@ def test_thumbnail_session_bounds_concurrency_and_deduplicates(monkeypatch):
     )
     session, pool, cache_paths = _session(monkeypatch, max_concurrency=2)
     ready = []
-    session.ready.connect(lambda item_id, path: ready.append((item_id, path)))
+    session.ready.connect(
+        lambda item_id, url, path: ready.append((item_id, url, path))
+    )
 
     assert session.enqueue("a", "https://cdn.example/a.jpg") is True
     assert session.enqueue("b", "https://cdn.example/b.jpg") is True
@@ -71,9 +73,9 @@ def test_thumbnail_session_bounds_concurrency_and_deduplicates(monkeypatch):
     pool.started[2].run()
 
     assert ready == [
-        ("a", "cached/a.jpg"),
-        ("b", "cached/b.jpg"),
-        ("c", "cached/c.jpg"),
+        ("a", "https://cdn.example/a.jpg", "cached/a.jpg"),
+        ("b", "https://cdn.example/b.jpg", "cached/b.jpg"),
+        ("c", "https://cdn.example/c.jpg", "cached/c.jpg"),
     ]
     assert downloaded == [
         ("https://cdn.example/a.jpg", cache_paths),
@@ -90,7 +92,9 @@ def test_thumbnail_session_fences_stale_results_after_reset(monkeypatch):
     )
     session, pool, _cache_paths = _session(monkeypatch, max_concurrency=1)
     ready = []
-    session.ready.connect(lambda item_id, path: ready.append((item_id, path)))
+    session.ready.connect(
+        lambda item_id, url, path: ready.append((item_id, url, path))
+    )
 
     session.enqueue("old", "https://cdn.example/old.jpg")
     session.reset()
@@ -103,7 +107,33 @@ def test_thumbnail_session_fences_stale_results_after_reset(monkeypatch):
     assert len(pool.started) == 2
 
     pool.started[1].run()
-    assert ready == [("new", "cached/new.jpg")]
+    assert ready == [
+        ("new", "https://cdn.example/new.jpg", "cached/new.jpg")
+    ]
+
+
+def test_thumbnail_session_allows_new_url_for_same_item(monkeypatch):
+    monkeypatch.setattr(
+        thumbnail_fetch,
+        "ensure_thumbnail_cached",
+        lambda url, *, cache_paths: f"cached/{Path(url).name}",
+    )
+    session, pool, _cache_paths = _session(monkeypatch, max_concurrency=1)
+    ready = []
+    session.ready.connect(
+        lambda item_id, url, path: ready.append((item_id, url, path))
+    )
+
+    assert session.enqueue("same", "https://cdn.example/old.jpg") is True
+    assert session.enqueue("same", "https://cdn.example/new.jpg") is True
+
+    pool.started[0].run()
+    pool.started[1].run()
+
+    assert ready == [
+        ("same", "https://cdn.example/old.jpg", "cached/old.jpg"),
+        ("same", "https://cdn.example/new.jpg", "cached/new.jpg"),
+    ]
 
 
 def test_thumbnail_session_normalizes_failures_and_closes_once(monkeypatch):
@@ -113,14 +143,16 @@ def test_thumbnail_session_normalizes_failures_and_closes_once(monkeypatch):
     monkeypatch.setattr(thumbnail_fetch, "ensure_thumbnail_cached", _fail)
     session, pool, _cache_paths = _session(monkeypatch, max_concurrency=1)
     ready = []
-    session.ready.connect(lambda item_id, path: ready.append((item_id, path)))
+    session.ready.connect(
+        lambda item_id, url, path: ready.append((item_id, url, path))
+    )
 
     session.enqueue("a", "https://cdn.example/a.jpg")
     pool.started[0].run()
     session.close()
     session.close()
 
-    assert ready == [("a", "")]
+    assert ready == [("a", "https://cdn.example/a.jpg", "")]
     assert pool.clear_count == 1
     assert pool.wait_calls == [()]
     assert session.enqueue("b", "https://cdn.example/b.jpg") is False

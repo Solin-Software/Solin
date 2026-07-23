@@ -90,16 +90,68 @@ class JWMediaCatalogModelTests(unittest.TestCase):
     def setUpClass(cls):
         cls._app = QCoreApplication.instance() or QCoreApplication([])
 
-    def test_set_items_if_changed_skips_identical_page_reset(self):
+    def test_reconcile_items_preserves_stable_rows_without_model_reset(self):
         model = JWMediaCatalogModel()
         resets: list[None] = []
+        insertions: list[tuple[int, int]] = []
+        removals: list[tuple[int, int]] = []
+        moves: list[tuple[int, int]] = []
+        updates: list[tuple[int, tuple[int, ...]]] = []
         model.modelReset.connect(lambda: resets.append(None))
+        model.rowsInserted.connect(
+            lambda _parent, first, last: insertions.append((first, last))
+        )
+        model.rowsRemoved.connect(
+            lambda _parent, first, last: removals.append((first, last))
+        )
+        model.rowsMoved.connect(
+            lambda _source_parent, source, _source_last, _dest_parent, dest: (
+                moves.append((source, dest))
+            )
+        )
+        model.dataChanged.connect(
+            lambda top, _bottom, roles: updates.append(
+                (top.row(), tuple(int(role) for role in roles))
+            )
+        )
 
-        self.assertTrue(model.set_items_if_changed([item("a"), item("b")]))
-        self.assertFalse(model.set_items_if_changed([item("a"), item("b")]))
-        self.assertTrue(model.set_items_if_changed([item("b"), item("a")]))
+        self.assertTrue(
+            model.reconcile_items([item("a"), item("b"), item("c")])
+        )
+        self.assertFalse(
+            model.reconcile_items([item("a"), item("b"), item("c")])
+        )
+        changed_title = item("a")
+        changed_title["title"] = "Updated title"
+        self.assertTrue(
+            model.reconcile_items([item("c"), changed_title, item("d")])
+        )
 
-        self.assertEqual(len(resets), 2)
+        self.assertEqual(resets, [])
+        self.assertEqual(insertions[0], (0, 2))
+        self.assertIn((1, 1), removals)
+        self.assertIn((1, 0), moves)
+        self.assertTrue(updates)
+        self.assertEqual(
+            [model.item_at(index)["id"] for index in range(model.rowCount())],
+            ["id-c", "id-a", "id-d"],
+        )
+
+    def test_reconcile_items_uses_remove_rows_when_cleared(self):
+        model = JWMediaCatalogModel()
+        resets: list[None] = []
+        removals: list[tuple[int, int]] = []
+        model.modelReset.connect(lambda: resets.append(None))
+        model.rowsRemoved.connect(
+            lambda _parent, first, last: removals.append((first, last))
+        )
+        model.reconcile_items([item("a"), item("b")])
+
+        self.assertTrue(model.reconcile_items([]))
+
+        self.assertEqual(resets, [])
+        self.assertEqual(removals, [(0, 1)])
+        self.assertEqual(model.rowCount(), 0)
 
 
 class JWMediaPlacementOptionsTests(unittest.TestCase):
@@ -183,21 +235,17 @@ class JWMediaCatalogBridgeProgressTests(unittest.TestCase):
         self.assertEqual(self.bridge._load_completed, 1)
         self.assertEqual([entry["id"] for entry in self.bridge._all_items], ["id-a"])
 
-    def test_progress_is_coalesced_when_page_is_already_visible(self):
+    def test_progress_reconciles_immediately_when_page_is_already_visible(self):
         self.bridge = JWMediaCatalogBridge(
             self._catalog_service,
             self.thumbnail_factory,
             insertion_handler=self._insert,
         )
         self.bridge._active_catalog_request_id = "request"
-        self.bridge._model.set_items([item("visible")])
+        self.bridge._model.reconcile_items([item("visible")])
 
         self.bridge._on_videos_progress("request", [item("old")], 1, 5)
         self.bridge._on_videos_progress("request", [item("new")], 2, 5)
-
-        self.assertEqual(self.bridge._all_items, [])
-
-        self.bridge._flush_pending_progress()
 
         self.assertEqual(self.bridge._load_completed, 2)
         self.assertEqual([entry["id"] for entry in self.bridge._all_items], ["id-new"])
@@ -219,6 +267,97 @@ class JWMediaCatalogBridgeProgressTests(unittest.TestCase):
             ],
         )
         self.assertEqual(self.thumbnail_factory.parents, [self.bridge])
+
+    def test_resolved_thumbnail_does_not_regress_on_later_metadata_snapshot(self):
+        self.bridge = JWMediaCatalogBridge(
+            self._catalog_service,
+            self.thumbnail_factory,
+            insertion_handler=self._insert,
+        )
+        self.bridge._active_catalog_request_id = "request"
+        media = item("stable")
+        resets: list[None] = []
+        self.bridge._model.modelReset.connect(lambda: resets.append(None))
+
+        self.bridge._on_videos_progress("request", [media], 1, 5)
+        self.bridge._on_thumb_ready(
+            media["id"],
+            media["thumbnail_url"],
+            "cached/stable.jpg",
+        )
+        self.bridge._on_videos_progress("request", [item("stable")], 2, 5)
+
+        self.assertEqual(
+            self.bridge._all_items[0]["thumbnail_path"],
+            "cached/stable.jpg",
+        )
+        self.assertEqual(
+            self.bridge._model.item_at(0)["thumbnail_path"],
+            "cached/stable.jpg",
+        )
+        self.assertEqual(resets, [])
+
+    def test_stale_thumbnail_result_is_ignored_after_url_changes(self):
+        self.bridge = JWMediaCatalogBridge(
+            self._catalog_service,
+            self.thumbnail_factory,
+            insertion_handler=self._insert,
+        )
+        self.bridge._active_catalog_request_id = "request"
+        old = item("changing")
+        self.bridge._on_videos_progress("request", [old], 1, 5)
+
+        updated = item("changing")
+        updated["thumbnail_url"] = "https://cdn.example/changing-v2.jpg"
+        self.bridge._on_videos_progress("request", [updated], 2, 5)
+        self.bridge._on_thumb_ready(
+            old["id"],
+            old["thumbnail_url"],
+            "cached/stale.jpg",
+        )
+
+        self.assertEqual(self.bridge._all_items[0]["thumbnail_path"], "")
+        self.assertEqual(self.bridge._model.item_at(0)["thumbnail_path"], "")
+
+        self.bridge._on_thumb_ready(
+            updated["id"],
+            updated["thumbnail_url"],
+            "cached/current.jpg",
+        )
+
+        self.assertEqual(
+            self.bridge._model.item_at(0)["thumbnail_path"],
+            "cached/current.jpg",
+        )
+
+    def test_large_progress_sequence_never_resets_visible_page(self):
+        self.bridge = JWMediaCatalogBridge(
+            self._catalog_service,
+            self.thumbnail_factory,
+            insertion_handler=self._insert,
+        )
+        self.bridge._active_catalog_request_id = "request"
+        catalog = [item(f"catalog-{index}") for index in range(3_938)]
+        accumulated = list(catalog[:3_763])
+        resets: list[None] = []
+        self.bridge._model.modelReset.connect(lambda: resets.append(None))
+
+        for completed, new_item in enumerate(catalog[3_763:], start=1):
+            accumulated.insert(0, new_item)
+            self.bridge._on_videos_progress(
+                "request",
+                accumulated,
+                completed,
+                175,
+            )
+
+        self.assertEqual(resets, [])
+        self.assertEqual(self.bridge.resultCount, 3_938)
+        self.assertEqual(self.bridge._model.rowCount(), 24)
+        self.assertEqual(
+            self.bridge._model.item_at(0)["id"],
+            catalog[-1]["id"],
+        )
 
     def test_reset_and_cleanup_delegate_thumbnail_lifecycle(self):
         self.bridge = JWMediaCatalogBridge(
@@ -242,7 +381,7 @@ class JWMediaCatalogBridgeProgressTests(unittest.TestCase):
         catalog_items = [item("a"), item("b")]
         self.bridge._all_items = catalog_items
         self.bridge._filtered_items = list(catalog_items)
-        self.bridge._model.set_items(catalog_items)
+        self.bridge._model.reconcile_items(catalog_items)
         self.bridge._search_query = "video"
         self.bridge._current_page = 2
         self.bridge._include_audio_description = True
@@ -288,7 +427,7 @@ class JWMediaCatalogBridgeProgressTests(unittest.TestCase):
         cached = item("cached")
         self.bridge._all_items = [cached]
         self.bridge._filtered_items = [cached]
-        self.bridge._model.set_items([cached])
+        self.bridge._model.reconcile_items([cached])
         self.bridge._catalog_fetched_at = 1.0
 
         fetch_calls: list[str] = []
@@ -312,7 +451,7 @@ class JWMediaCatalogBridgeProgressTests(unittest.TestCase):
         cached = item("cached")
         self.bridge._all_items = [cached]
         self.bridge._filtered_items = [cached]
-        self.bridge._model.set_items([cached])
+        self.bridge._model.reconcile_items([cached])
         self.bridge._is_loading = True
         self.bridge._active_catalog_request_id = "refresh"
 
@@ -330,7 +469,7 @@ class JWMediaCatalogBridgeProgressTests(unittest.TestCase):
             insertion_handler=lambda *args: insertions.append(args),
         )
         candidate = item("duplicate")
-        self.bridge._model.set_items([candidate])
+        self.bridge._model.reconcile_items([candidate])
         self.bridge.set_playlist_ref(
             {"items": [{"url": candidate["download_url"]}], "sections": []}
         )
