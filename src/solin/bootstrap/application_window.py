@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from enum import Enum
 import logging
+import os
 from typing import Any
 
 from PySide6.QtCore import QEvent, Qt, Signal
-from PySide6.QtGui import QColor
-from PySide6.QtQuickWidgets import QQuickWidget
+from PySide6.QtGui import QSurface
+from PySide6.QtQuick import QQuickWindow, QSGRendererInterface
 from PySide6.QtWidgets import (
     QApplication,
     QLabel,
@@ -21,6 +22,43 @@ from solin.styles.theme import PALETTE
 
 
 log = logging.getLogger(__name__)
+
+
+_GRAPHICS_API_SURFACE_TYPES = {
+    QSGRendererInterface.GraphicsApi.Software: QSurface.SurfaceType.RasterSurface,
+    QSGRendererInterface.GraphicsApi.OpenVG: QSurface.SurfaceType.OpenVGSurface,
+    QSGRendererInterface.GraphicsApi.OpenGL: QSurface.SurfaceType.OpenGLSurface,
+    QSGRendererInterface.GraphicsApi.Direct3D11: QSurface.SurfaceType.Direct3DSurface,
+    QSGRendererInterface.GraphicsApi.Vulkan: QSurface.SurfaceType.VulkanSurface,
+    QSGRendererInterface.GraphicsApi.Metal: QSurface.SurfaceType.MetalSurface,
+    QSGRendererInterface.GraphicsApi.Null: QSurface.SurfaceType.RasterSurface,
+    QSGRendererInterface.GraphicsApi.Direct3D12: QSurface.SurfaceType.Direct3DSurface,
+}
+
+_RHI_BACKEND_SURFACE_TYPES = {
+    "software": QSurface.SurfaceType.RasterSurface,
+    "opengl": QSurface.SurfaceType.OpenGLSurface,
+    "vulkan": QSurface.SurfaceType.VulkanSurface,
+    "metal": QSurface.SurfaceType.MetalSurface,
+    "d3d11": QSurface.SurfaceType.Direct3DSurface,
+    "d3d12": QSurface.SurfaceType.Direct3DSurface,
+    "null": QSurface.SurfaceType.RasterSurface,
+}
+
+
+def _quick_surface_type() -> QSurface.SurfaceType:
+    quick_backend = os.environ.get("QT_QUICK_BACKEND", "").strip().casefold()
+    if quick_backend == "software":
+        return QSurface.SurfaceType.RasterSurface
+    backend_override = os.environ.get("QSG_RHI_BACKEND", "").strip().casefold()
+    if backend_override:
+        surface_type = _RHI_BACKEND_SURFACE_TYPES.get(backend_override)
+        if surface_type is not None:
+            return surface_type
+    return _GRAPHICS_API_SURFACE_TYPES.get(
+        QQuickWindow.graphicsApi(),
+        QSurface.SurfaceType.RasterSurface,
+    )
 
 
 class ApplicationWindowState(str, Enum):
@@ -99,17 +137,6 @@ class ApplicationWindow(QMainWindow):
         self.resize(max(635, width), max(600, height))
 
         self._content_host = QWidget(self)
-        # The first QQuickWidget changes the native surface requirements of its
-        # top-level window. If it is created after show(), Qt must recreate the
-        # visible HWND on Windows. A source-less 1×1 child lets Qt select and
-        # own the correct RHI surface before the first native frame, without
-        # manual backend assumptions or a full-size extra render target.
-        self._quick_surface_anchor = QQuickWidget(self._content_host)
-        self._quick_surface_anchor.setClearColor(QColor(PALETTE.bg0))
-        self._quick_surface_anchor.setFixedSize(1, 1)
-        self._quick_surface_anchor.setAttribute(
-            Qt.WidgetAttribute.WA_TransparentForMouseEvents,
-        )
         self._content_stack = QStackedLayout(self._content_host)
         self._content_stack.setContentsMargins(0, 0, 0, 0)
         self._content_stack.setStackingMode(QStackedLayout.StackingMode.StackAll)
@@ -118,6 +145,7 @@ class ApplicationWindow(QMainWindow):
         self._content_stack.setCurrentWidget(self._loading_canvas)
         self.setCentralWidget(self._content_host)
         self._center_on_primary_screen()
+        self._prepare_native_surface_for_quick()
         self.loading_frame_presented.connect(
             self._apply_titlebar_color,
             Qt.ConnectionType.QueuedConnection,
@@ -135,6 +163,16 @@ class ApplicationWindow(QMainWindow):
         """Return the stable parent used while constructing application content."""
 
         return self._content_host
+
+    def _prepare_native_surface_for_quick(self) -> None:
+        surface_type = _quick_surface_type()
+        if surface_type == QSurface.SurfaceType.RasterSurface:
+            return
+        self.setAttribute(Qt.WidgetAttribute.WA_NativeWindow)
+        window_handle = self.windowHandle()
+        if window_handle is None:
+            raise RuntimeError("Could not prepare the application window for Qt Quick.")
+        window_handle.setSurfaceType(surface_type)
 
     def set_load_handle(self, handle: Any) -> None:
         self._load_handle = handle
