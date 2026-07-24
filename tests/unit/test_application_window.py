@@ -7,11 +7,13 @@ import subprocess
 import sys
 
 from PySide6.QtCore import Signal
-from PySide6.QtGui import QCloseEvent
-from PySide6.QtQuickWidgets import QQuickWidget
+from PySide6.QtGui import QCloseEvent, QSurface
+from PySide6.QtQuick import QSGRendererInterface
 from PySide6.QtWidgets import QApplication, QWidget
 
 from solin.bootstrap.application_window import (
+    _GRAPHICS_API_SURFACE_TYPES,
+    _quick_surface_type,
     ApplicationWindow,
     ApplicationWindowState,
 )
@@ -64,6 +66,7 @@ def test_application_window_keeps_one_native_window_through_hydration() -> None:
 import json
 import time
 from PySide6.QtCore import Signal
+from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtWidgets import QApplication, QWidget
 from solin.bootstrap.application_window import ApplicationWindow
 
@@ -72,6 +75,8 @@ class Runtime(QWidget):
     switch_profile_requested = Signal()
     def __init__(self, parent):
         super().__init__(parent)
+        self.quick_surface = QQuickWidget(self)
+        self.quick_surface.setFixedSize(1, 1)
         self._painted = False
     def abort_construction(self): pass
     def commit_construction(self): pass
@@ -149,13 +154,35 @@ window.close()
     }
 
 
-def test_application_window_primes_quick_surface_before_first_show() -> None:
+def test_application_window_starts_with_loading_canvas() -> None:
     window = ApplicationWindow(width=900, height=700, pending_files=[])
 
-    assert isinstance(window._quick_surface_anchor, QQuickWidget)
-    assert window._quick_surface_anchor.parentWidget() is window.content_parent()
-    assert window._quick_surface_anchor.size().toTuple() == (1, 1)
     assert window._content_stack.currentWidget() is window._loading_canvas
+    assert window.internalWinId() == 0
+    surface_type = _quick_surface_type()
+    if surface_type != QSurface.SurfaceType.RasterSurface:
+        assert window.windowHandle() is not None
+        assert window.windowHandle().surfaceType() == surface_type
+
+
+def test_quick_graphics_apis_map_to_compatible_native_surfaces() -> None:
+    assert _GRAPHICS_API_SURFACE_TYPES == {
+        QSGRendererInterface.GraphicsApi.Software: QSurface.SurfaceType.RasterSurface,
+        QSGRendererInterface.GraphicsApi.OpenVG: QSurface.SurfaceType.OpenVGSurface,
+        QSGRendererInterface.GraphicsApi.OpenGL: QSurface.SurfaceType.OpenGLSurface,
+        QSGRendererInterface.GraphicsApi.Direct3D11: QSurface.SurfaceType.Direct3DSurface,
+        QSGRendererInterface.GraphicsApi.Vulkan: QSurface.SurfaceType.VulkanSurface,
+        QSGRendererInterface.GraphicsApi.Metal: QSurface.SurfaceType.MetalSurface,
+        QSGRendererInterface.GraphicsApi.Null: QSurface.SurfaceType.RasterSurface,
+        QSGRendererInterface.GraphicsApi.Direct3D12: QSurface.SurfaceType.Direct3DSurface,
+    }
+
+
+def test_quick_surface_type_honors_software_adaptation(monkeypatch) -> None:
+    monkeypatch.delenv("QSG_RHI_BACKEND", raising=False)
+    monkeypatch.setenv("QT_QUICK_BACKEND", "software")
+
+    assert _quick_surface_type() == QSurface.SurfaceType.RasterSurface
 
 
 def test_application_window_queues_files_until_runtime_is_ready() -> None:
