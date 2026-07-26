@@ -21,6 +21,7 @@ dependencies = [
     "pywinauto==0.6.9; sys_platform == 'win32'",
     "qrcode==8.2",
     "requests==2.32.5",
+    "sideview==0.4.0",
     "websocket-client==1.9.0",
 ]
 
@@ -51,7 +52,6 @@ solin = [
     "resources/translations/*.qm",
     "resources/translations/locales/*.json",
 ]
-native_webview_widget = ["*.dll", "*.dylib", "libnative_webview_widget.so"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -102,7 +102,6 @@ include = [
     "src/solin/core/remote_control",
     "src/solin/core/timer",
     "src/solin/core/windowing",
-    "src/native_webview_widget",
 ]
 exclude = [
     "**/__pycache__",

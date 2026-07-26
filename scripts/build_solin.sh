@@ -17,7 +17,6 @@ QML_QT_DIR="${QML_CACHE_ROOT}/PySide6/qml"
 QT_LIBRARY_DIR="${QML_CACHE_ROOT}/qt-libs"
 DIST_DIR="${WORK_ROOT}/main.dist"
 FINAL_DIST_DIR="${OUTPUT_ROOT}/main.dist"
-NATIVE_WEBVIEW="${PROJECT_ROOT}/src/native_webview_widget/libnative_webview_widget.so"
 
 fail() {
     printf 'error: %s\n' "$*" >&2
@@ -84,15 +83,21 @@ XDOTOOL_SOURCE="$(command -v xdotool || true)"
 [[ -n "${XDOTOOL_SOURCE}" ]] || fail \
     "xdotool is required for packaging. On Ubuntu run: sudo apt install xdotool"
 
-"${PYTHON}" -c "import nuitka, PySide6" >/dev/null 2>&1 || fail \
-    "Nuitka and PySide6 are required. Install requirements and run: python -m pip install nuitka ordered-set zstandard"
+"${PYTHON}" -c "import nuitka, PySide6, sideview" >/dev/null 2>&1 || fail \
+    "Nuitka, PySide6 and SideView are required. Install requirements and run: python -m pip install nuitka ordered-set zstandard"
 
-[[ -f "${NATIVE_WEBVIEW}" ]] || fail "Missing Linux sideview artifact: ${NATIVE_WEBVIEW}"
-"${PYTHON}" scripts/validate_native_webview.py --require-linux
+SIDEVIEW_PACKAGE_DIR="$(
+    "${PYTHON}" -c \
+        'from pathlib import Path; import sideview; print(Path(sideview.__file__).resolve().parent)'
+)"
+SIDEVIEW_NATIVE="${SIDEVIEW_PACKAGE_DIR}/libsideview_native.so"
+[[ -f "${SIDEVIEW_NATIVE}" ]] || fail \
+    "The installed SideView package is missing its Linux native backend: ${SIDEVIEW_NATIVE}"
+"${PYTHON}" -c "from sideview._backend import NativeBackend; NativeBackend()"
 
-if ldd "${NATIVE_WEBVIEW}" | grep -q 'not found'; then
-    ldd "${NATIVE_WEBVIEW}" >&2
-    fail "The Linux sideview artifact has unresolved shared-library dependencies."
+if ldd "${SIDEVIEW_NATIVE}" | grep -q 'not found'; then
+    ldd "${SIDEVIEW_NATIVE}" >&2
+    fail "The installed SideView backend has unresolved shared-library dependencies."
 fi
 
 rm -rf "${QML_CACHE_ROOT}" "${DIST_DIR}" "${WORK_ROOT}/main.build"
@@ -128,7 +133,7 @@ fi
     --include-package=solin.core \
     --include-package=solin.styles \
     --include-package=solin.widgets \
-    --include-package=native_webview_widget \
+    --include-package=sideview \
     --include-module=websocket \
     --include-module=websocket._core \
     --include-module=websocket._app \
@@ -141,13 +146,14 @@ fi
     --include-data-dir="${QML_QT_DIR}=PySide6/qml" \
     "${qml_binary_args[@]}" \
     --include-data-files="src/solin/resources/translations/*.qm=solin/resources/translations/" \
+    --include-data-files="${SIDEVIEW_NATIVE}=sideview/libsideview_native.so" \
     --enable-plugin=pyside6 \
     --include-qt-plugins=platforms,platformthemes,imageformats,multimedia,position,xcbglintegrations \
     main.py
 
 [[ -x "${DIST_DIR}/Solin.bin" ]] || fail "Nuitka did not produce ${DIST_DIR}/Solin.bin."
-[[ -f "${DIST_DIR}/native_webview_widget/libnative_webview_widget.so" ]] || fail \
-    "The Linux sideview artifact was not packaged."
+[[ -f "${DIST_DIR}/sideview/libsideview_native.so" ]] || fail \
+    "The SideView Linux backend was not packaged."
 [[ -f "${DIST_DIR}/solin/qml/Solin/qmldir" ]] || fail \
     "Compiled app QML metadata was not packaged."
 find "${DIST_DIR}/solin/qml/Solin" -maxdepth 1 -name '*.qmlc' -print -quit | grep -q . || fail \
@@ -260,9 +266,9 @@ exec "$APP_DIR/Solin.bin" "$@"
 LAUNCHER
 chmod 755 "${DIST_DIR}/run-solin"
 
-if ldd "${DIST_DIR}/native_webview_widget/libnative_webview_widget.so" | grep -q 'not found'; then
-    ldd "${DIST_DIR}/native_webview_widget/libnative_webview_widget.so" >&2
-    fail "Packaged sideview artifact has unresolved shared-library dependencies."
+if ldd "${DIST_DIR}/sideview/libsideview_native.so" | grep -q 'not found'; then
+    ldd "${DIST_DIR}/sideview/libsideview_native.so" >&2
+    fail "The packaged SideView backend has unresolved shared-library dependencies."
 fi
 
 if [[ "${WORK_ROOT}" != "${OUTPUT_ROOT}" ]]; then
