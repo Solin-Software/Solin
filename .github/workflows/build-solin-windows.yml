@@ -115,11 +115,6 @@ jobs:
             "src\solin\qml",
             "src\solin\resources\translations\locales",
             "src\solin\resources\translations",
-            "src\native_webview_widget\__init__.py",
-            "src\native_webview_widget\abi.py",
-            "src\native_webview_widget\_backend.py",
-            "src\native_webview_widget\widget.py",
-            "src\native_webview_widget\native_webview_widget.dll",
             "packaging\windows\installer\setup.iss"
           )
 
@@ -144,6 +139,12 @@ jobs:
       - name: Build standalone app with Nuitka
         shell: pwsh
         run: |
+          $sideviewDir = python -c "from pathlib import Path; import sideview; print(Path(sideview.__file__).resolve().parent)"
+          $sideviewDll = Join-Path $sideviewDir "sideview_native.dll"
+          if (-not (Test-Path -LiteralPath $sideviewDll)) {
+            throw "The installed SideView package is missing its Windows native backend: $sideviewDll"
+          }
+
           python -m nuitka `
             --standalone `
             --output-dir="$env:BUILD_DIR" `
@@ -167,7 +168,7 @@ jobs:
             --include-package=solin.core `
             --include-package=solin.styles `
             --include-package=solin.widgets `
-            --include-package=native_webview_widget `
+            --include-package=sideview `
             --include-module=websocket `
             --include-module=websocket._core `
             --include-module=websocket._app `
@@ -183,7 +184,7 @@ jobs:
             --include-data-files="$env:BUILD_DIR\qmlcache\PySide6\qml=PySide6/qml/=**/*.dll" `
             --include-data-files="$env:BUILD_DIR\qmlcache\qt-libs\*.dll=./" `
             --include-data-files="src\solin\resources\translations\*.qm=solin/resources/translations/" `
-            --include-data-files="src\native_webview_widget\native_webview_widget.dll=native_webview_widget/native_webview_widget.dll" `
+            --include-data-files="$sideviewDll=sideview/sideview_native.dll" `
             --enable-plugin=pyside6 `
             --include-qt-plugins=platforms,styles,imageformats,multimedia,position `
             main.py
@@ -194,6 +195,9 @@ jobs:
           $dist = Join-Path $env:BUILD_DIR "main.dist"
           if (-not (Test-Path "$dist\Solin.exe")) {
             throw "Solin.exe was not produced at $dist"
+          }
+          if (-not (Test-Path "$dist\sideview\sideview_native.dll")) {
+            throw "The SideView Windows backend was not packaged."
           }
 
           $remove = @(

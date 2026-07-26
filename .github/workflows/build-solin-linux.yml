@@ -44,6 +44,7 @@ jobs:
             binutils \
             build-essential \
             ccache \
+            cmake \
             desktop-file-utils \
             shared-mime-info \
             patchelf \
@@ -53,8 +54,8 @@ jobs:
             xdotool \
             xauth \
             xvfb \
-            libgtk-3-0 \
-            libwebkit2gtk-4.1-0 \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
             libsoup-3.0-0 \
             libjavascriptcoregtk-4.1-0 \
             libva2 \
@@ -68,7 +69,8 @@ jobs:
             libxcb-render-util0 \
             libxcb-shape0 \
             libxcb-xinerama0 \
-            libxkbcommon-x11-0
+            libxkbcommon-x11-0 \
+            pkg-config
 
       - name: Set up Python ${{ env.PYTHON_VERSION }}
         uses: actions/setup-python@v5
@@ -116,7 +118,6 @@ jobs:
           python -m ruff check .
           python -m pyright --pythonpath "$(command -v python)"
           python -m pytest
-          python scripts/validate_native_webview.py --require-linux
 
       - name: Read app version
         id: version

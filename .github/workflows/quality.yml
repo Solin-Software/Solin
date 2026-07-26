@@ -111,10 +111,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Qt runtime libraries
+      - name: Install Qt and SideView build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y \
+            cmake \
             libegl1 \
             libgl1 \
             libgtk-3-dev \
@@ -122,7 +123,8 @@ jobs:
             libpulse0 \
             libwebkit2gtk-4.1-dev \
             libxcb-cursor0 \
-            libxkbcommon-x11-0
+            libxkbcommon-x11-0 \
+            pkg-config
 
       - name: Set up Python ${{ env.PYTHON_VERSION }}
         uses: actions/setup-python@v5

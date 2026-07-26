@@ -19,6 +19,19 @@ set QML_CACHE_DIR=%QML_MODULE_ROOT%\Solin
 set QT_QML_CACHE_DIR=%PROJECT_ROOT%build\qmlcache\PySide6\qml
 set QT_LIBRARY_CACHE_DIR=%PROJECT_ROOT%build\qmlcache\qt-libs
 
+for /f "delims=" %%I in ('call "%PYTHON%" -c "from pathlib import Path; import sideview; print(Path(sideview.__file__).resolve().parent)"') do set "SIDEVIEW_PACKAGE_DIR=%%I"
+if not defined SIDEVIEW_PACKAGE_DIR (
+    echo  [ERRO] O pacote SideView nao esta instalado no ambiente Python.
+    pause
+    exit /b 1
+)
+set "SIDEVIEW_NATIVE_DLL=%SIDEVIEW_PACKAGE_DIR%\sideview_native.dll"
+if not exist "%SIDEVIEW_NATIVE_DLL%" (
+    echo  [ERRO] O backend nativo do SideView nao foi encontrado em %SIDEVIEW_NATIVE_DLL%.
+    pause
+    exit /b 1
+)
+
 rmdir /s /q "%PROJECT_ROOT%.venv\Lib\site-packages\win32com\gen_py" 2>nul
 rmdir /s /q "%LOCALAPPDATA%\Temp\gen_py" 2>nul
 rmdir /s /q "%LOCALAPPDATA%\comtypes\Cache" 2>nul
@@ -86,7 +99,7 @@ if %ERRORLEVEL% NEQ 0 (
     --include-package=solin.core ^
     --include-package=solin.styles ^
     --include-package=solin.widgets ^
-    --include-package=native_webview_widget ^
+    --include-package=sideview ^
 	--include-module=websocket ^
 	--include-module=websocket._core ^
 	--include-module=websocket._app ^
@@ -102,7 +115,7 @@ if %ERRORLEVEL% NEQ 0 (
     --include-data-files="%QT_QML_CACHE_DIR%=PySide6/qml/=**/*.dll" ^
     --include-data-files="%QT_LIBRARY_CACHE_DIR%\*.dll=./" ^
     --include-data-files="%PROJECT_ROOT%src\solin\resources\translations\*.qm=solin/resources/translations/" ^
-    --include-data-files="%PROJECT_ROOT%src\native_webview_widget\native_webview_widget.dll=native_webview_widget/native_webview_widget.dll" ^
+    --include-data-files="%SIDEVIEW_NATIVE_DLL%=sideview/sideview_native.dll" ^
     --enable-plugin=pyside6 ^
     --include-qt-plugins=platforms,styles,imageformats,multimedia,position ^
     "%MAIN_SCRIPT%"
@@ -119,6 +132,12 @@ echo.
 echo  Removendo arquivos desnecessarios...
  
 set DIST=%OUTPUT_DIR%\main.dist
+
+if not exist "%DIST%\sideview\sideview_native.dll" (
+    echo  [ERRO] O backend nativo do SideView nao foi empacotado.
+    pause
+    exit /b 1
+)
  
 :: _avif nao usado
 if exist "%DIST%\PIL\_avif.pyd" (

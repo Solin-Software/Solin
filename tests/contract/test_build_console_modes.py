@@ -29,15 +29,14 @@ def test_macos_bundle_keeps_finder_launch_gui_only():
     assert "--macos-app-console-mode=force" not in text
 
 
-def test_macos_build_does_not_discover_foreign_webview_as_extension_module():
+def test_macos_build_packages_installed_sideview_dependency():
     workflow = _read(".github/workflows/build-solin-macos.yml")
     browser_tab = _read("src/solin/widgets/browser/tab.py")
 
-    assert "--include-package=native_webview_widget" not in workflow
-    assert 'native_webview_widget/*.so' not in workflow
-    assert 'native_webview_widget/*.dll' not in workflow
-    assert "from native_webview_widget import" in browser_tab
-    assert '--include-data-files="${NATIVE_WEBVIEW_DYLIB}' in workflow
+    assert "--include-package=sideview" in workflow
+    assert "src/native_webview_widget" not in workflow
+    assert "from sideview import" in browser_tab
+    assert '--include-data-files="${SIDEVIEW_DYLIB}=sideview/libsideview_native.dylib"' in workflow
 
 
 def test_macos_build_persists_nuitka_and_c_compilation_cache():
@@ -54,8 +53,9 @@ def test_linux_build_uses_shared_script_and_xcb_launcher():
     script = _read("scripts/build_solin.sh")
     workflow = _read(".github/workflows/build-solin-linux.yml")
 
-    assert "libnative_webview_widget.so" in script
-    assert "scripts/validate_native_webview.py --require-linux" in script
+    assert "libsideview_native.so" in script
+    assert "--include-package=sideview" in script
+    assert "src/native_webview_widget" not in script
     assert "QT_QPA_PLATFORM=${QT_QPA_PLATFORM:-xcb}" in script
     assert "WEBKIT_DISABLE_DMABUF_RENDERER" not in script
     assert 'rm -f "${DIST_DIR}/PySide6/qt-plugins/imageformats/libqtiff.so"' in script

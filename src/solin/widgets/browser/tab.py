@@ -6,7 +6,7 @@ from pathlib import Path
 
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QVBoxLayout, QWidget
-from native_webview_widget import NativeWebView, NativeWebViewError
+from sideview import NativeWebView, NativeWebViewError
 
 from .aspect_frame import AspectRatioViewFrame
 from solin.ui.browser.native_adapters import (

@@ -3,7 +3,7 @@ set -eu
 
 APPDIR=${APPDIR:-$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)}
 PAYLOAD_DIR="$APPDIR/usr/lib/solin"
-NATIVE_WEBVIEW="$PAYLOAD_DIR/native_webview_widget/libnative_webview_widget.so"
+NATIVE_WEBVIEW="$PAYLOAD_DIR/sideview/libsideview_native.so"
 
 export PATH="$APPDIR/usr/bin${PATH:+:$PATH}"
 export XDG_DATA_DIRS="$APPDIR/usr/share${XDG_DATA_DIRS:+:$XDG_DATA_DIRS}"

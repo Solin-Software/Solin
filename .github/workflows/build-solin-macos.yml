@@ -96,19 +96,6 @@ jobs:
           test -d src/solin/qml
           test -d src/solin/resources/translations/locales
           test -d src/solin/resources/translations
-          test -f src/native_webview_widget/__init__.py
-          test -f src/native_webview_widget/abi.py
-          test -f src/native_webview_widget/_backend.py
-          test -f src/native_webview_widget/widget.py
-
-          if [ -f src/native_webview_widget/libnative_webview_widget.dylib ]; then
-            echo "NATIVE_WEBVIEW_DYLIB=src/native_webview_widget/libnative_webview_widget.dylib" >> "$GITHUB_ENV"
-          elif [ -f src/native_webview_widget/native_webview_widget.dylib ]; then
-            echo "NATIVE_WEBVIEW_DYLIB=src/native_webview_widget/native_webview_widget.dylib" >> "$GITHUB_ENV"
-          else
-            echo "::error::Missing macOS native webview dylib. Build or vendor libnative_webview_widget.dylib into src/native_webview_widget/ before running this workflow."
-            exit 1
-          fi
 
       - name: Install Python dependencies
         shell: bash
@@ -158,6 +145,12 @@ jobs:
       - name: Build app bundle with Nuitka
         shell: bash
         run: |
+          SIDEVIEW_DYLIB="$(
+            python -c \
+              'from pathlib import Path; import sideview; print(Path(sideview.__file__).resolve().parent / "libsideview_native.dylib")'
+          )"
+          test -f "${SIDEVIEW_DYLIB}"
+
           qml_binary_args=()
           if find "${BUILD_DIR}/qmlcache/PySide6/qml" -name "*.dylib" -print -quit | grep -q .; then
             qml_binary_args+=("--include-data-files=${BUILD_DIR}/qmlcache/PySide6/qml=PySide6/qml/=**/*.dylib")
@@ -185,6 +178,7 @@ jobs:
             --include-package=solin.core \
             --include-package=solin.styles \
             --include-package=solin.widgets \
+            --include-package=sideview \
             --include-module=websocket \
             --include-module=websocket._core \
             --include-module=websocket._app \
@@ -197,7 +191,7 @@ jobs:
             --include-data-dir="${BUILD_DIR}/qmlcache/PySide6/qml=PySide6/qml" \
             "${qml_binary_args[@]}" \
             --include-data-files="src/solin/resources/translations/*.qm=solin/resources/translations/" \
-            --include-data-files="${NATIVE_WEBVIEW_DYLIB}=native_webview_widget/$(basename "${NATIVE_WEBVIEW_DYLIB}")" \
+            --include-data-files="${SIDEVIEW_DYLIB}=sideview/libsideview_native.dylib" \
             --enable-plugin=pyside6 \
             --include-qt-plugins=platforms,styles,imageformats,multimedia,position \
             main.py
@@ -451,8 +445,8 @@ jobs:
           echo "=== Top-level bundle layout ==="
           find "$BUNDLE/Contents" -maxdepth 2 -type d | sort
           echo ""
-          echo "=== Native webview dylibs ==="
-          find "$BUNDLE" -iname "*native_webview*.dylib" -o -iname "native_webview_widget.dll" | sort
+          echo "=== SideView native libraries ==="
+          find "$BUNDLE" -iname "*sideview_native*.dylib" -o -iname "sideview_native.dll" | sort
           echo ""
           echo "=== Bundle size ==="
           du -sh "$BUNDLE"

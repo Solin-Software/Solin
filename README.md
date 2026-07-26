@@ -93,17 +93,8 @@ updates do not require a manual hard refresh.
 ### Linux native webview
 
 Solin's embedded browser uses WebKitGTK 4.1 with GTK 3 and libsoup 3 on Linux.
-Place the sideview artifact at:
-
-```text
-src/native_webview_widget/libnative_webview_widget.so
-```
-
-After copying it, validate the vendored artifact and ABI with:
-
-```bash
-python scripts/validate_native_webview.py --require-linux
-```
+The `sideview` package and its native backend are installed from PyPI through
+`requirements.txt`; no SideView source or binary is vendored in this repository.
 
 The native view is embedded through X11/XCB. On a Wayland desktop, start Solin
 through XWayland:
@@ -224,7 +215,6 @@ and uploads the versioned AppImage with its SHA-256 checksum.
 .\.venv\Scripts\python.exe -m ruff check .
 .\.venv\Scripts\python.exe -m pyright --pythonpath .\.venv\Scripts\python.exe
 .\.venv\Scripts\python.exe scripts\check_locales.py
-.\.venv\Scripts\python.exe scripts\validate_native_webview.py
 ```
 
 `pyproject.toml` centralizes pytest, Ruff, and Pyright configuration. Ruff
