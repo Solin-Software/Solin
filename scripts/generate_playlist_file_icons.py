@@ -83,8 +83,7 @@ def _dib_icon_frame(image: Image.Image) -> bytes:
     return header + xor_bitmap + and_mask
 
 
-def _ico_bytes(svg: bytes) -> bytes:
-    source = _render_svg(svg, 512)
+def _ico_bytes(source: Image.Image) -> bytes:
     frames = [
         _dib_icon_frame(source.resize((size, size), Image.Resampling.LANCZOS))
         for size in ICON_SIZES
@@ -120,6 +119,24 @@ def _check_file(path: Path, expected: bytes) -> bool:
     return False
 
 
+def _check_png(path: Path, expected: Image.Image) -> bool:
+    try:
+        with Image.open(path) as actual:
+            valid = (
+                actual.format == "PNG"
+                and actual.mode == expected.mode
+                and actual.size == expected.size
+                and actual.tobytes() == expected.tobytes()
+            )
+    except OSError:
+        valid = False
+
+    if valid:
+        return True
+    print(f"out of date: {path.relative_to(PROJECT_ROOT)}")
+    return False
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Generate native Solin playlist file icons.")
     parser.add_argument(
@@ -130,21 +147,19 @@ def main() -> int:
     args = parser.parse_args()
 
     svg = SOURCE.read_bytes()
-    ico = _ico_bytes(svg)
-    png = _png_bytes(_render_svg(svg, 512))
-    png_2x = _png_bytes(_render_svg(svg, 1024))
+    source = _render_svg(svg, 512)
+    ico = _ico_bytes(source)
+    source_2x = _render_svg(svg, 1024)
 
     if args.check:
-        valid = (
-            _check_file(ICO_OUTPUT, ico)
-            and _check_file(PNG_OUTPUT, png)
-            and _check_file(PNG_2X_OUTPUT, png_2x)
-        )
+        valid = _check_file(ICO_OUTPUT, ico)
+        valid = _check_png(PNG_OUTPUT, source) and valid
+        valid = _check_png(PNG_2X_OUTPUT, source_2x) and valid
         return 0 if valid else 1
 
     ICO_OUTPUT.write_bytes(ico)
-    PNG_OUTPUT.write_bytes(png)
-    PNG_2X_OUTPUT.write_bytes(png_2x)
+    PNG_OUTPUT.write_bytes(_png_bytes(source))
+    PNG_2X_OUTPUT.write_bytes(_png_bytes(source_2x))
     print(f"generated: {ICO_OUTPUT.relative_to(PROJECT_ROOT)}")
     print(f"generated: {PNG_OUTPUT.relative_to(PROJECT_ROOT)}")
     print(f"generated: {PNG_2X_OUTPUT.relative_to(PROJECT_ROOT)}")

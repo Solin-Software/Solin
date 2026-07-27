@@ -15,7 +15,8 @@ concurrency:
 
 env:
   PYTHON_VERSION: "3.13.12"
-  QT_QPA_PLATFORM: offscreen
+  QT_QPA_PLATFORM: xcb
+  QT_QUICK_BACKEND: software
 
 jobs:
   quality:
@@ -75,7 +76,9 @@ jobs:
             libwebkit2gtk-4.1-dev \
             libxcb-cursor0 \
             libxkbcommon-x11-0 \
-            pkg-config
+            pkg-config \
+            xauth \
+            xvfb
 
       - name: Set up Python ${{ env.PYTHON_VERSION }}
         if: ${{ steps.filter.outputs.run_quality == 'true' }}
@@ -106,4 +109,4 @@ jobs:
 
       - name: Pytest
         if: ${{ steps.filter.outputs.run_quality == 'true' }}
-        run: python -m pytest
+        run: xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" python -m pytest
