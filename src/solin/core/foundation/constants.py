@@ -47,7 +47,7 @@ QSETTINGS_PROFILE_SCOPED_APPS: tuple[str, ...] = (
 )
 
 # ── Versão do aplicativo ────────────────────────────────────────────────────────
-# Formato: MAJOR.MINOR.PATCH.BUILD.
+# Formato: YY.RELEASE.PATCH.REVISION.
 APP_VERSION: str = VERSION
 
 # Identificador estável enviado às APIs do Solin. Não use sys.platform cru no

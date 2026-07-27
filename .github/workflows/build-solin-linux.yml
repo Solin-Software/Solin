@@ -116,7 +116,7 @@ jobs:
         shell: bash
         run: |
           python -m ruff check .
-          python -m pyright --pythonpath "$(command -v python)"
+          python scripts/typecheck.py
           python -m pytest
 
       - name: Read app version

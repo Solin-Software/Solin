@@ -738,7 +738,7 @@ class MeetingLinkedFolderSyncTests(unittest.TestCase):
                 linked_folder_files={
                     str(cached_page): "page",
                     str(stale_profile_page): "page",
-                    r"C:\Users\Someone\AppData\Local\Solin\cache\page_001.jpg": "page",
+                    r"C:\Users\TestUser\AppData\Local\Solin\cache\page_001.jpg": "page",
                 },
                 meeting_folder_imports={},
                 expected_revision=0,

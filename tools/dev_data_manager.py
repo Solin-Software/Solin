@@ -220,11 +220,11 @@ def _write_legacy_files() -> list[str]:
     images_dir.mkdir(parents=True, exist_ok=True)
     embedded_dir.mkdir(parents=True, exist_ok=True)
     (images_dir / "legacy_migration_marker.txt").write_text(
-        "Legacy image folder marker created by qsettings_inspector.py\n",
+        "Legacy image folder marker created by dev_data_manager.py\n",
         encoding="utf-8",
     )
     (embedded_dir / "legacy_migration_marker.txt").write_text(
-        "Legacy embedded folder marker created by qsettings_inspector.py\n",
+        "Legacy embedded folder marker created by dev_data_manager.py\n",
         encoding="utf-8",
     )
 

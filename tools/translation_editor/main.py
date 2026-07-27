@@ -35,9 +35,6 @@ import subprocess
 import sys
 from typing import Optional
 
-from dotenv import load_dotenv
-load_dotenv(override=True)
-
 log = logging.getLogger(__name__)
 
 from PySide6.QtCore import (
@@ -57,7 +54,13 @@ import xml.etree.ElementTree as ET
 # ── Paths ──────────────────────────────────────────────────────────────────────
 _HERE         = os.path.dirname(os.path.abspath(__file__))
 _PROJECT_ROOT = os.path.abspath(os.path.join(_HERE, os.pardir, os.pardir))
-_TRANS_DIR    = os.path.join(_PROJECT_ROOT, "translations")
+_TRANS_DIR    = os.path.join(
+    _PROJECT_ROOT,
+    "src",
+    "solin",
+    "resources",
+    "translations",
+)
 _LANG_DIR     = os.path.join(_TRANS_DIR, "locales")
 
 # ── Source language — never needs .ts/.qm ─────────────────────────────────────

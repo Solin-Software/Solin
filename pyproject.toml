@@ -25,6 +25,11 @@ dependencies = [
     "websocket-client==1.9.0",
 ]
 
+[project.optional-dependencies]
+translation = [
+    "google-genai==2.14.0",
+]
+
 [project.gui-scripts]
 solin = "solin.bootstrap.entrypoint:run"
 
@@ -86,8 +91,6 @@ line-ending = "auto"
 
 [tool.pyright]
 pythonVersion = "3.13"
-venvPath = "."
-venv = ".venv"
 typeCheckingMode = "basic"
 include = [
     "src/solin/bootstrap",

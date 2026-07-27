@@ -1042,7 +1042,7 @@ def test_playback_snapshot_sanitizes_private_titles_queue_and_errors(
     session.state_type = "video"
     session.state = {
         "type": "video",
-        "title": r"C:\Users\Alex\private\meeting.mp4",
+        "title": r"C:\Users\TestUser\private\meeting.mp4",
     }
     session.session_id = 4
     media.session_id = 8
@@ -1053,7 +1053,7 @@ def test_playback_snapshot_sanitizes_private_titles_queue_and_errors(
             "type": "video",
         }
     ]
-    controller._on_media_error(r"Could not open C:\Users\Alex\secret.mp4")
+    controller._on_media_error(r"Could not open C:\Users\TestUser\secret.mp4")
     playback = controller.state.playback
     encoded = json.dumps(playback.to_dict())
 
