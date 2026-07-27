@@ -622,6 +622,7 @@ def test_win32_target_probe_requires_the_exact_detected_root_window(monkeypatch)
         screen_share.ctypes,
         "WinDLL",
         lambda _name, use_last_error=True: user32,
+        raising=False,
     )
     dialog = _window("111", x=100, y=100, width=801, height=601)
 
