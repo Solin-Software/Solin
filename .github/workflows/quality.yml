@@ -75,6 +75,15 @@ jobs:
             libpulse0 \
             libwebkit2gtk-4.1-dev \
             libxcb-cursor0 \
+            libxcb-icccm4 \
+            libxcb-image0 \
+            libxcb-keysyms1 \
+            libxcb-randr0 \
+            libxcb-render-util0 \
+            libxcb-shape0 \
+            libxcb-util1 \
+            libxcb-xfixes0 \
+            libxcb-xkb1 \
             libxkbcommon-x11-0 \
             pkg-config \
             xauth \
@@ -106,6 +115,12 @@ jobs:
       - name: Pyright typecheck
         if: ${{ steps.filter.outputs.run_quality == 'true' }}
         run: python scripts/typecheck.py
+
+      - name: Verify Qt X11 runtime
+        if: ${{ steps.filter.outputs.run_quality == 'true' }}
+        run: |
+          xvfb-run --auto-servernum python -c \
+            "from PySide6.QtWidgets import QApplication; app = QApplication([]); app.quit()"
 
       - name: Pytest
         if: ${{ steps.filter.outputs.run_quality == 'true' }}
