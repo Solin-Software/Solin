@@ -7,9 +7,13 @@ import pytest
 
 from solin.core.jw import jwpub_import, jwpub_import_thread
 from solin.core.jw.publication_links import PubMediaFile
-from tests._paths import FIXTURES_DIR
+from tests._jwpub_fixture import build_synthetic_jwpub
 
-_FIXTURE = FIXTURES_DIR / "synthetic_meeting_workbook.jwpub"
+
+@pytest.fixture(scope="module")
+def synthetic_jwpub_fixture(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    fixture_dir = tmp_path_factory.mktemp("synthetic-jwpub")
+    return build_synthetic_jwpub(fixture_dir / "synthetic_meeting_workbook.jwpub")
 
 
 def _track_extraction_dirs(monkeypatch: pytest.MonkeyPatch) -> list[Path]:
@@ -32,13 +36,14 @@ def _track_extraction_dirs(monkeypatch: pytest.MonkeyPatch) -> list[Path]:
 def test_jwpub_reader_persists_images_and_removes_extraction_dir(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    synthetic_jwpub_fixture: Path,
 ):
     extraction_dirs = _track_extraction_dirs(monkeypatch)
     destination = tmp_path / "images"
 
     items, _stem = jwpub_import.JwpubPlaylistImportService().read(
         jwpub_import.JwpubImportRequest(
-            jwpub_path=str(_FIXTURE),
+            jwpub_path=str(synthetic_jwpub_fixture),
             dest_images_dir=str(destination),
             resolve_urls=False,
         )
@@ -54,6 +59,7 @@ def test_jwpub_reader_persists_images_and_removes_extraction_dir(
 def test_jwpub_reader_removes_extraction_dir_when_image_copy_fails(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    synthetic_jwpub_fixture: Path,
 ):
     extraction_dirs = _track_extraction_dirs(monkeypatch)
 
@@ -65,7 +71,7 @@ def test_jwpub_reader_removes_extraction_dir_when_image_copy_fails(
     with pytest.raises(PermissionError):
         jwpub_import.JwpubPlaylistImportService().read(
             jwpub_import.JwpubImportRequest(
-                jwpub_path=str(_FIXTURE),
+                jwpub_path=str(synthetic_jwpub_fixture),
                 dest_images_dir=str(tmp_path / "images"),
                 resolve_urls=False,
             )
@@ -75,7 +81,10 @@ def test_jwpub_reader_removes_extraction_dir_when_image_copy_fails(
     assert all(not path.exists() for path in extraction_dirs)
 
 
-def test_jwpub_import_service_uses_injected_media_resolver(tmp_path: Path):
+def test_jwpub_import_service_uses_injected_media_resolver(
+    tmp_path: Path,
+    synthetic_jwpub_fixture: Path,
+):
     calls = []
 
     def resolve_media(key_symbol, track, issue_tag, meps_doc_id, language):
@@ -89,7 +98,7 @@ def test_jwpub_import_service_uses_injected_media_resolver(tmp_path: Path):
 
     items, _stem = service.read(
         jwpub_import.JwpubImportRequest(
-            jwpub_path=str(_FIXTURE),
+            jwpub_path=str(synthetic_jwpub_fixture),
             language="T",
             dest_images_dir=str(tmp_path / "images"),
             resolve_urls=True,

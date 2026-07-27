@@ -810,9 +810,6 @@ def introspect_jwlplaylist(path: str | Path) -> None:
     reader = JWLPlaylistReader(path)
     reader.print_schema()
 
-# introspect_jwlplaylist("C:/Users/TestUser/Downloads/teste.jwlplaylist")
-
-
 # ── Resolução de URL JW.org ───────────────────────────────────────────────────
 
 def resolve_jworg_url(

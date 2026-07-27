@@ -11,4 +11,3 @@ def _repo_root() -> Path:
 
 
 REPO_ROOT = _repo_root()
-FIXTURES_DIR = REPO_ROOT / "tests" / "fixtures"

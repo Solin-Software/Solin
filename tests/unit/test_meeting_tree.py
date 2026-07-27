@@ -46,7 +46,7 @@ from solin.core.meetings.tree_types import iter_nodes
 from solin.core.i18n.meeting_sections import display_meeting_section_title
 from solin.ui.qml.media_tree.media_presenter import MediaRoleInput, media_roles
 from solin.ui.qml.media_tree.state import MediaAvailability, MediaPresentationState
-from tests._paths import FIXTURES_DIR
+from tests._jwpub_fixture import build_synthetic_jwpub
 from solin.widgets.meetings.tree_controller import (
     MeetingTreeController,
 )
@@ -541,7 +541,7 @@ class MeetingTreeBuilderTests(unittest.TestCase):
         ext = next(node for node in tgw["children"] if node["type"] == "subsection")
         self.assertEqual(ext["title"], "Synthetic Reference Manual (cl)")
         self.assertTrue(ext["collapsed"])
-        self.assertIn("bondade", ext["children"][0]["text"])
+        self.assertIn("Synthetic reference topic", ext["children"][0]["text"])
         lac = tree[2]
         placeholder = next(
             node for node in lac["children"]
@@ -635,8 +635,28 @@ class MeetingTreeBuilderTests(unittest.TestCase):
         conn.executemany(
             "INSERT INTO RefPublication VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             [
-                (1, "studyguide", 0, "Book", "Synthetic Study Guide", None, None, None, None),
-                (2, "postfinal", 0, "Book", "Post-song reference", None, None, None, None),
+                (
+                    1,
+                    "studyguide",
+                    0,
+                    "Book",
+                    "Synthetic Study Guide",
+                    None,
+                    None,
+                    None,
+                    None,
+                ),
+                (
+                    2,
+                    "postfinal",
+                    0,
+                    "Book",
+                    "Post-song reference",
+                    None,
+                    None,
+                    None,
+                    None,
+                ),
             ],
         )
         conn.executemany(
@@ -2090,10 +2110,10 @@ class MeetingTreeStoreTests(unittest.TestCase):
             self.assertTrue(stale.exists())
 
     def test_synthetic_jwpub_fixture_identifies_study_references(self):
-        fixture = FIXTURES_DIR / "synthetic_meeting_workbook.jwpub"
-        if not fixture.exists():
-            self.skipTest("synthetic jwpub fixture not present")
         with tempfile.TemporaryDirectory() as tmp:
+            fixture = build_synthetic_jwpub(
+                Path(tmp) / "synthetic_meeting_workbook.jwpub"
+            )
             outer = Path(tmp) / "outer"
             inner = Path(tmp) / "inner"
             outer.mkdir()
@@ -2111,18 +2131,17 @@ class MeetingTreeStoreTests(unittest.TestCase):
             refs = get_mwb_publication_refs(conn, doc_id, cbs_ref)
             conn.close()
         self.assertEqual(cbs_ref["pub"], "studyguide")
-        self.assertEqual(cbs_ref.get("publication_title", ""), "Synthetic Study Guide")
+        self.assertEqual(cbs_ref["publication_title"], "Synthetic Study Guide")
         self.assertTrue(any(ref.pub == "reference" for ref in refs))
-        self.assertTrue(
-            any("Synthetic Reference Manual" in ref.publication_title for ref in refs)
-        )
         cbs_refs = [ref for ref in refs if ref.is_cbs]
         self.assertTrue(cbs_refs)
         self.assertTrue(all(ref.pub == "studyguide" for ref in cbs_refs))
         self.assertFalse(any(ref.pub == "th" for ref in refs))
         titles = list(cbs_ref.get("doc_titles", {}).values())
-        self.assertTrue(any("Synthetic study - Part 1" in title for title in titles))
-        self.assertTrue(any("Synthetic study - Part 2" in title for title in titles))
+        self.assertEqual(
+            titles,
+            ["Synthetic study - Part 1", "Synthetic study - Part 2"],
+        )
 
 
 class JwpubImportFactoryWiringTests(unittest.TestCase):
