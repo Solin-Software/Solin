@@ -48,6 +48,11 @@ def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def _svg_digest(svg: bytes) -> str:
+    normalized = svg.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    return _sha256(normalized)
+
+
 def _pixel_digest(image: Image.Image) -> str:
     return _sha256(image.tobytes())
 
@@ -168,7 +173,7 @@ def main() -> int:
     args = parser.parse_args()
 
     svg = SOURCE.read_bytes()
-    source_digest = _sha256(svg)
+    source_digest = _svg_digest(svg)
 
     if args.check:
         source = _check_png(PNG_OUTPUT, (512, 512), source_digest)
