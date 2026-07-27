@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import io
 import os
 import struct
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, PngImagePlugin
 from PySide6.QtCore import QByteArray, QBuffer, QIODevice, QSize
 from PySide6.QtGui import QGuiApplication, QImage, QPainter
 from PySide6.QtSvg import QSvgRenderer
@@ -18,6 +19,8 @@ ICO_OUTPUT = PROJECT_ROOT / "src" / "solin" / "resources" / "assets" / "playlist
 PNG_OUTPUT = PROJECT_ROOT / "src" / "solin" / "resources" / "assets" / "playlist-512.png"
 PNG_2X_OUTPUT = PROJECT_ROOT / "src" / "solin" / "resources" / "assets" / "playlist-1024.png"
 ICON_SIZES = (16, 24, 32, 48, 64, 96, 128, 256)
+PNG_SOURCE_DIGEST_KEY = "solin.source.sha256"
+PNG_PIXEL_DIGEST_KEY = "solin.pixels.sha256"
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -41,9 +44,20 @@ def _render_svg(svg: bytes, size: int) -> Image.Image:
     return Image.open(io.BytesIO(bytes(png_data))).convert("RGBA")
 
 
-def _png_bytes(image: Image.Image) -> bytes:
+def _sha256(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def _pixel_digest(image: Image.Image) -> str:
+    return _sha256(image.tobytes())
+
+
+def _png_bytes(image: Image.Image, source_digest: str) -> bytes:
+    metadata = PngImagePlugin.PngInfo()
+    metadata.add_text(PNG_SOURCE_DIGEST_KEY, source_digest)
+    metadata.add_text(PNG_PIXEL_DIGEST_KEY, _pixel_digest(image))
     output = io.BytesIO()
-    image.save(output, format="PNG", optimize=True)
+    image.save(output, format="PNG", optimize=True, pnginfo=metadata)
     return output.getvalue()
 
 
@@ -119,22 +133,29 @@ def _check_file(path: Path, expected: bytes) -> bool:
     return False
 
 
-def _check_png(path: Path, expected: Image.Image) -> bool:
+def _check_png(
+    path: Path,
+    expected_size: tuple[int, int],
+    source_digest: str,
+) -> Image.Image | None:
     try:
         with Image.open(path) as actual:
+            actual.load()
             valid = (
                 actual.format == "PNG"
-                and actual.mode == expected.mode
-                and actual.size == expected.size
-                and actual.tobytes() == expected.tobytes()
+                and actual.mode == "RGBA"
+                and actual.size == expected_size
+                and actual.info.get(PNG_SOURCE_DIGEST_KEY) == source_digest
+                and actual.info.get(PNG_PIXEL_DIGEST_KEY) == _pixel_digest(actual)
             )
+            canonical = actual.copy() if valid else None
     except OSError:
-        valid = False
+        canonical = None
 
-    if valid:
-        return True
+    if canonical is not None:
+        return canonical
     print(f"out of date: {path.relative_to(PROJECT_ROOT)}")
-    return False
+    return None
 
 
 def main() -> int:
@@ -147,25 +168,29 @@ def main() -> int:
     args = parser.parse_args()
 
     svg = SOURCE.read_bytes()
+    source_digest = _sha256(svg)
+
+    if args.check:
+        source = _check_png(PNG_OUTPUT, (512, 512), source_digest)
+        source_2x = _check_png(PNG_2X_OUTPUT, (1024, 1024), source_digest)
+        valid = source is not None and source_2x is not None
+        if source is not None:
+            valid = _check_file(ICO_OUTPUT, _ico_bytes(source)) and valid
+        return 0 if valid else 1
+
+    application = QGuiApplication.instance() or QGuiApplication([])
     source = _render_svg(svg, 512)
     ico = _ico_bytes(source)
     source_2x = _render_svg(svg, 1024)
-
-    if args.check:
-        valid = _check_file(ICO_OUTPUT, ico)
-        valid = _check_png(PNG_OUTPUT, source) and valid
-        valid = _check_png(PNG_2X_OUTPUT, source_2x) and valid
-        return 0 if valid else 1
-
     ICO_OUTPUT.write_bytes(ico)
-    PNG_OUTPUT.write_bytes(_png_bytes(source))
-    PNG_2X_OUTPUT.write_bytes(_png_bytes(source_2x))
+    PNG_OUTPUT.write_bytes(_png_bytes(source, source_digest))
+    PNG_2X_OUTPUT.write_bytes(_png_bytes(source_2x, source_digest))
     print(f"generated: {ICO_OUTPUT.relative_to(PROJECT_ROOT)}")
     print(f"generated: {PNG_OUTPUT.relative_to(PROJECT_ROOT)}")
     print(f"generated: {PNG_2X_OUTPUT.relative_to(PROJECT_ROOT)}")
+    application.quit()
     return 0
 
 
 if __name__ == "__main__":
-    application = QGuiApplication([])
     raise SystemExit(main())
