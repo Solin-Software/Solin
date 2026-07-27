@@ -112,10 +112,17 @@ def test_threaded_build_returns_to_the_coordinators_qt_thread() -> None:
     assert coordinator.request(
         SnapshotBuildRequest(1, 1, "playlist:test", build)
     )
-    QTimer.singleShot(2_000, loop.quit)
-    if not callback_threads:
-        loop.exec()
-    workers.shutdown()
+    timeout = QTimer(loop)
+    timeout.setSingleShot(True)
+    timeout.setInterval(2_000)
+    timeout.timeout.connect(loop.quit)
+    timeout.start()
+    try:
+        if not callback_threads:
+            loop.exec()
+    finally:
+        timeout.stop()
+        workers.shutdown()
 
     assert build_threads and build_threads[0] != threading.get_ident()
     assert callback_threads == [coordinator.thread()]

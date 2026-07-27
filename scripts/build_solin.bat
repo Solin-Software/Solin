@@ -12,12 +12,31 @@ set MAIN_SCRIPT=%PROJECT_ROOT%main.py
 set OUTPUT_DIR=%PROJECT_ROOT%build
 set APP_NAME=Solin
 set ICON=%PROJECT_ROOT%src\solin\resources\assets\icon.ico
-set PYTHON=%PROJECT_ROOT%.venv\Scripts\python.exe
+set "PYTHON="
+if defined SOLIN_PYTHON set "PYTHON=%SOLIN_PYTHON%"
+if not defined PYTHON if exist "%PROJECT_ROOT%.venv\Scripts\python.exe" (
+    set "PYTHON=%PROJECT_ROOT%.venv\Scripts\python.exe"
+)
+if not defined PYTHON (
+    where python.exe >nul 2>nul
+    if errorlevel 1 (
+        echo  [ERRO] Python 3.13 ou superior nao foi encontrado.
+        echo  Defina SOLIN_PYTHON ou disponibilize python no PATH.
+        exit /b 1
+    )
+    set "PYTHON=python"
+)
 set QML_SOURCE_DIR=%PROJECT_ROOT%src\solin\qml
 set QML_MODULE_ROOT=%PROJECT_ROOT%build\qmlcache\solin\qml
 set QML_CACHE_DIR=%QML_MODULE_ROOT%\Solin
 set QT_QML_CACHE_DIR=%PROJECT_ROOT%build\qmlcache\PySide6\qml
 set QT_LIBRARY_CACHE_DIR=%PROJECT_ROOT%build\qmlcache\qt-libs
+
+"%PYTHON%" -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 13) else 1)" >nul 2>nul
+if errorlevel 1 (
+    echo  [ERRO] Solin requer Python 3.13 ou superior.
+    exit /b 1
+)
 
 for /f "delims=" %%I in ('call "%PYTHON%" -c "from pathlib import Path; import sideview; print(Path(sideview.__file__).resolve().parent)"') do set "SIDEVIEW_PACKAGE_DIR=%%I"
 if not defined SIDEVIEW_PACKAGE_DIR (

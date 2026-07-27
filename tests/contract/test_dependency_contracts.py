@@ -6,14 +6,43 @@ from importlib.metadata import version
 from pathlib import Path
 
 import sideview
+from packaging.requirements import Requirement
+from packaging.utils import canonicalize_name
 
 from tests._paths import REPO_ROOT
 
 SIDEVIEW_REQUIREMENT = "sideview==0.4.0"
 
 
+def _project_metadata() -> dict:
+    return tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+
+
+def _locked_requirements() -> dict[str, Requirement]:
+    requirements: dict[str, Requirement] = {}
+    for line in (REPO_ROOT / "requirements.txt").read_text(encoding="utf-8").splitlines():
+        candidate = line.strip()
+        if not candidate or candidate.startswith(("#", "-")):
+            continue
+        requirement = Requirement(candidate)
+        requirements[canonicalize_name(requirement.name)] = requirement
+    return requirements
+
+
+def test_locked_requirements_cover_every_direct_runtime_dependency() -> None:
+    locked = _locked_requirements()
+
+    for dependency in _project_metadata()["project"]["dependencies"]:
+        expected = Requirement(dependency)
+        actual = locked.get(canonicalize_name(expected.name))
+
+        assert actual is not None, f"{expected.name} is missing from requirements.txt"
+        assert actual.specifier == expected.specifier
+        assert str(actual.marker) == str(expected.marker)
+
+
 def test_sideview_is_a_pinned_runtime_dependency():
-    pyproject = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    pyproject = _project_metadata()
     locked_requirements = (REPO_ROOT / "requirements.txt").read_text(encoding="utf-8").splitlines()
 
     assert SIDEVIEW_REQUIREMENT in pyproject["project"]["dependencies"]
@@ -21,7 +50,7 @@ def test_sideview_is_a_pinned_runtime_dependency():
 
 
 def test_sideview_is_not_vendored_in_the_solin_source_tree():
-    pyproject = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    pyproject = _project_metadata()
     package_data = pyproject["tool"]["setuptools"]["package-data"]
 
     assert not (REPO_ROOT / "src" / "native_webview_widget").exists()

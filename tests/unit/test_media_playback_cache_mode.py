@@ -360,10 +360,17 @@ def test_trimmed_request_fails_closed_when_source_is_not_seekable(
     assert controller.current_url == ""
 
 
-def test_custom_end_emits_once_and_replay_returns_to_custom_start(tmp_path):
+def test_custom_end_emits_once_and_replay_returns_to_custom_start(
+    tmp_path,
+    monkeypatch,
+):
     controller, _downloader, _played = _controller_with_downloader(
         tmp_path,
         auto_download=False,
+    )
+    monkeypatch.setattr(
+        "solin.core.media.playback.QTimer.singleShot",
+        lambda _delay, callback: callback(),
     )
     player = _TrimPlayer()
     controller.player = player

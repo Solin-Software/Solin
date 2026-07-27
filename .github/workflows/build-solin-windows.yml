@@ -14,10 +14,9 @@ on:
         type: boolean
         default: true
       previous_windows_installer_url:
-        description: Previous production installer used for upgrade smoke
-        required: true
+        description: Previously distributed installer used for upgrade smoke
+        required: false
         type: string
-        default: "https://github.com/Solin-Software/solin-releases/releases/download/26.17.1/Solin_Setup_26.17.1.exe"
 
 permissions:
   contents: read
@@ -81,8 +80,7 @@ jobs:
         shell: pwsh
         run: |
           python -m ruff check .
-          $pythonPath = (Get-Command python).Source
-          python -m pyright --pythonpath $pythonPath
+          python scripts/typecheck.py
           python -m pytest
 
       - name: Install Inno Setup
@@ -100,7 +98,7 @@ jobs:
           }
           $version = $Matches[1]
           if ($version -notmatch '^\d+\.\d+\.\d+\.\d+$') {
-            throw "Version must use MAJOR.MINOR.PATCH.BUILD format. Got: $version"
+            throw "Version must use YY.RELEASE.PATCH.REVISION format. Got: $version"
           }
           "APP_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "app_version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8

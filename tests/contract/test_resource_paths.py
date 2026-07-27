@@ -1,4 +1,5 @@
 from pathlib import Path
+import runpy
 import tomllib
 
 from solin.core.foundation.resources import (
@@ -23,6 +24,20 @@ def test_application_translation_root_resolves_packaged_resources() -> None:
 
     assert (translation_root / "locales" / "pt_BR.json").is_file()
     assert translation_root.parts[-3:] == ("solin", "resources", "translations")
+
+
+def test_translation_editor_targets_source_translation_catalogs() -> None:
+    editor = runpy.run_path(
+        str(REPO_ROOT / "tools" / "translation_editor" / "main.py"),
+        run_name="solin_translation_editor_contract",
+    )
+
+    assert Path(editor["_TRANS_DIR"]).resolve() == (
+        REPO_ROOT / "src" / "solin" / "resources" / "translations"
+    ).resolve()
+    assert Path(editor["_LANG_DIR"]).resolve() == (
+        REPO_ROOT / "src" / "solin" / "resources" / "translations" / "locales"
+    ).resolve()
 
 
 def test_application_resources_are_resolved_strictly_from_package_root() -> None:

@@ -14,10 +14,9 @@ on:
         type: boolean
         default: true
       previous_macos_dmg_url:
-        description: Previous production DMG used for app replacement smoke
-        required: true
+        description: Previously distributed DMG used for app replacement smoke
+        required: false
         type: string
-        default: "https://github.com/Solin-Software/solin-releases/releases/download/26.17.0/Solin-26.17.0-macOS.dmg"
 
 permissions:
   contents: read
@@ -81,7 +80,10 @@ jobs:
           internal_version = namespace["__version__"]
           parts = internal_version.split(".")
           if len(parts) != 4 or not all(part.isdigit() for part in parts):
-              raise SystemExit(f"Version must use MAJOR.MINOR.PATCH.BUILD format. Got: {internal_version}")
+              raise SystemExit(
+                  "Version must use YY.RELEASE.PATCH.REVISION format. "
+                  f"Got: {internal_version}"
+              )
           macos_version = ".".join(parts[:3])
           print(f"APP_VERSION={macos_version}")
           print(f"app_version={macos_version}")
@@ -123,7 +125,7 @@ jobs:
         shell: bash
         run: |
           python -m ruff check .
-          python -m pyright --pythonpath "$(command -v python)"
+          python scripts/typecheck.py
           python -m pytest
 
       - name: Generate compiled QML cache
