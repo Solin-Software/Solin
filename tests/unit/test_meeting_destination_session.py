@@ -1,4 +1,5 @@
-from PySide6.QtCore import QObject
+from PySide6.QtCore import QCoreApplication, QEvent, QObject
+from shiboken6 import isValid
 
 from solin.core.media.insertion import MediaInsertResult
 from solin.widgets.meetings.destinations import MeetingDestinationSession
@@ -86,5 +87,8 @@ def test_owned_session_cleans_up_headless_controller_once() -> None:
 
     session.close()
     session.close()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
     assert controller.cleaned is True
+    assert not isValid(controller)
+    assert not isValid(session)
