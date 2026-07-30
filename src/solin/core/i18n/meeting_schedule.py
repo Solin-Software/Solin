@@ -9,19 +9,19 @@ from solin.core.meetings.schedule import MIDWEEK, WEEKEND
 _CONTEXT = "_MeetingSchedule"
 
 _WEEKDAY_SOURCES = (
-    QT_TRANSLATE_NOOP(_CONTEXT, "Monday"),
-    QT_TRANSLATE_NOOP(_CONTEXT, "Tuesday"),
-    QT_TRANSLATE_NOOP(_CONTEXT, "Wednesday"),
-    QT_TRANSLATE_NOOP(_CONTEXT, "Thursday"),
-    QT_TRANSLATE_NOOP(_CONTEXT, "Friday"),
-    QT_TRANSLATE_NOOP(_CONTEXT, "Saturday"),
-    QT_TRANSLATE_NOOP(_CONTEXT, "Sunday"),
+    QT_TRANSLATE_NOOP("_MeetingSchedule", "Monday"),
+    QT_TRANSLATE_NOOP("_MeetingSchedule", "Tuesday"),
+    QT_TRANSLATE_NOOP("_MeetingSchedule", "Wednesday"),
+    QT_TRANSLATE_NOOP("_MeetingSchedule", "Thursday"),
+    QT_TRANSLATE_NOOP("_MeetingSchedule", "Friday"),
+    QT_TRANSLATE_NOOP("_MeetingSchedule", "Saturday"),
+    QT_TRANSLATE_NOOP("_MeetingSchedule", "Sunday"),
 )
 _KIND_SOURCES = {
-    MIDWEEK: QT_TRANSLATE_NOOP(_CONTEXT, "Midweek meeting"),
-    WEEKEND: QT_TRANSLATE_NOOP(_CONTEXT, "Weekend meeting"),
+    MIDWEEK: QT_TRANSLATE_NOOP("_MeetingSchedule", "Midweek meeting"),
+    WEEKEND: QT_TRANSLATE_NOOP("_MeetingSchedule", "Weekend meeting"),
 }
-_NOT_CONFIGURED_SOURCE = QT_TRANSLATE_NOOP(_CONTEXT, "Not configured")
+_NOT_CONFIGURED_SOURCE = QT_TRANSLATE_NOOP("_MeetingSchedule", "Not configured")
 
 
 def meeting_weekday_names() -> tuple[str, ...]:

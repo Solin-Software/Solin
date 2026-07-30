@@ -88,10 +88,10 @@ from .controllers.timer_engine import TimerEngine
 from .controllers.timer_monitor_controller import TimerMonitorController
 from .controllers.timer_output_controller import TimerOutputController
 from .controllers.timer_pdf_export_controller import TimerPdfExportController
-from .controllers.timer_theme_controller import (
-    TimerThemeContext,
-    TimerThemeController,
-    TimerThemeHandlers,
+from .controllers.timer_projection_controller import (
+    TimerProjectionContext,
+    TimerProjectionController,
+    TimerProjectionHandlers,
 )
 from .controllers.wifi_media_controller import (
     WifiMediaContext,
@@ -206,6 +206,7 @@ class MainWindow(QWidget):
         timer_session: TimerSession,
         active_profile: ProfileInfo,
         *,
+        talk_theme_output_settings: Any,
         window_host: ApplicationWindow,
     ):
         super().__init__(window_host.content_parent())
@@ -433,6 +434,7 @@ class MainWindow(QWidget):
                 lang_manager=self.lang,
                 notifications=self.notifications,
                 profile_paths=self.profile_paths,
+                projection_session=self.projection_session,
                 runtime_paths=self.runtime_paths,
                 media_cache_manager=self.media_cache_manager,
                 media_tree_runtime=self.media_tree_runtime,
@@ -462,6 +464,8 @@ class MainWindow(QWidget):
                 auto_share_accessibility_trusted=lambda: bool(macos_accessibility_trusted()),
                 background_song_settings=self._background_song_settings,
                 projection_playback_settings=self._projection_playback_settings,
+                talk_theme_settings=profile_settings_bundle.talk_theme,
+                talk_theme_output_settings=talk_theme_output_settings,
                 window_geometry_settings=profile_settings_bundle.window_geometry,
                 projection_aspect_ratio_provider=(
                     lambda: projection_aspect_ratio_from_windows(
@@ -740,8 +744,8 @@ class MainWindow(QWidget):
                 update_projection_status=(self._projection_integrations.update_status),
             ),
         )
-        self._timer_theme_controller = TimerThemeController(
-            TimerThemeContext(
+        self._timer_projection_controller = TimerProjectionController(
+            TimerProjectionContext(
                 projection_session=self.projection_session,
                 projection_bar=self.proj_bar,
                 media_controller=self.media_ctrl,
@@ -751,7 +755,7 @@ class MainWindow(QWidget):
                 translate=self.tr,
                 playback_protection=self.playback_protection,
             ),
-            TimerThemeHandlers(
+            TimerProjectionHandlers(
                 stop_browser_tab_projection=(self._navigation.stop_browser_tab_projection),
                 update_projection_status=(self._projection_integrations.update_status),
             ),
@@ -772,7 +776,7 @@ class MainWindow(QWidget):
                 meetings_widget=self.meetings_widget,
                 clips_widget=self.clips_widget,
                 timer_widget=self.timer_widget,
-                sermon_theme_widget=self.sermon_theme_widget,
+                talk_theme_widget=self.talk_theme_widget,
                 playlist_widget=self.playlist_widget,
                 projection_bar=self.proj_bar,
                 media_controller=self.media_ctrl,
@@ -788,7 +792,7 @@ class MainWindow(QWidget):
             ),
             MainWindowSignalHandlers(
                 media_projection=self._media_projection,
-                timer_theme=self._timer_theme_controller,
+                timer_projection=self._timer_projection_controller,
                 playlist_imports=self._playlist_imports,
                 media_destinations=self._media_destinations,
                 auto_key_projection=self._auto_key_projection,
@@ -1098,7 +1102,7 @@ class MainWindow(QWidget):
         self.settings_widget = resources.settings_widget
         self.timer_widget = resources.timer_widget
         self.clips_widget = resources.clips_widget
-        self.sermon_theme_widget = resources.sermon_theme_widget
+        self.talk_theme_widget = resources.talk_theme_widget
         self.playlist_widget = resources.playlist_widget
         self.meetings_widget = resources.meetings_widget
         self._quick_toolbar = resources.quick_toolbar
@@ -1134,7 +1138,7 @@ class MainWindow(QWidget):
             getattr(self, "clips_widget", None),
             getattr(self, "settings_widget", None),
             getattr(self, "timer_widget", None),
-            getattr(self, "sermon_theme_widget", None),
+            getattr(self, "talk_theme_widget", None),
             getattr(self, "playlist_widget", None),
             getattr(self, "meetings_widget", None),
             getattr(self, "_lazy_pages", None),
@@ -1449,5 +1453,13 @@ class MainWindow(QWidget):
             )
 
     def closeEvent(self, event):
+        if not self.confirm_close():
+            event.ignore()
+            return
         self.shutdown()
         super().closeEvent(event)
+
+    def confirm_close(self) -> bool:
+        widget = getattr(self, "talk_theme_widget", None)
+        callback = getattr(widget, "confirm_close", None)
+        return bool(callback()) if callable(callback) else True

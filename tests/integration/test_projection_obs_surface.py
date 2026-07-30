@@ -4,9 +4,9 @@ These compose the real projection page stack (BaseProjectionView) with a stub
 FontManager, a mocked libobs Display and a fake projection-program driver, then
 verify how the always-on native program surface and the Qt page stack are gated:
 
-* media, idle yeartext, still images, sermon slide and the countdown are libobs
-  scenes the program crossfades — the native surface is shown and the driver is
-  invoked;
+* media, idle yeartext, still images (including talk themes) and the countdown
+  are libobs scenes the program crossfades — the native surface is shown and
+  the driver is invoked;
 * content that still streams through Qt (a live browser tab, a custom idle
   video) hides the surface so its Qt page shows through.
 """
@@ -44,7 +44,6 @@ class _FakeDriver:
         self.yeartext_calls = 0
         self.image_calls = 0
         self.black_calls = 0
-        self.sermon_calls: list[tuple[str, str]] = []
         self.set_yeartext_calls: list[tuple[str, str, str]] = []
         self.timer_calls: list = []
         self.timer_updates: list = []
@@ -103,10 +102,6 @@ class _FakeDriver:
         self.camera_calls.append((device_path, device_name))
         self.current_key = "camera"
         return True
-
-    def show_sermon(self, text: str, subtitle: str = "") -> None:
-        self.sermon_calls.append((text, subtitle))
-        self.current_key = "sermon"
 
     def set_yeartext(self, quote: str, reference: str, api_code: str = "") -> None:
         self.set_yeartext_calls.append((quote, reference, api_code))
@@ -267,15 +262,6 @@ def test_streaming_frame_hides_surface(monkeypatch, tmp_path):
 
     assert harness._obs_surface.isHidden()
     assert harness._test_driver.image_calls == 0
-
-
-def test_show_sermon_shows_surface_and_crossfades(monkeypatch, tmp_path):
-    harness = _harness(monkeypatch, tmp_path)
-
-    harness.show_sermon_theme("Theme", "subtitle")
-
-    assert not harness._obs_surface.isHidden()
-    assert harness._test_driver.sermon_calls == [("Theme", "subtitle")]
 
 
 def test_show_timer_shows_surface_and_crossfades(monkeypatch, tmp_path):

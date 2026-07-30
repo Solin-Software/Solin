@@ -100,6 +100,7 @@ def test_profile_paths_snapshot_is_immutable_and_creates_profile_cache_dirs(
             profile_paths.profile_dir,
             profile_paths.images_dir,
             profile_paths.embedded_dir,
+            profile_paths.talk_theme_assets_dir,
             profile_paths.profile_cache_dir,
             profile_paths.thumb_cache_dir,
             profile_paths.meeting_thumb_cache_dir,
@@ -280,6 +281,7 @@ def test_application_container_initializes_runtime_services(
     assert container.profile_runtime is not None
     assert container.onboarding_service is not None
     assert container.global_settings is not None
+    assert container.talk_theme_output_settings is not None
     assert container.media.cache_manager.parent() is app
     assert not hasattr(container, "media_cache_manager")
     assert container.jwpub_checksum_store is not None

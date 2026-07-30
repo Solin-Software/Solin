@@ -4217,47 +4217,6 @@ Tätä toimintoa ei voi peruuttaa.</translation>
     </message>
   </context>
   <context>
-    <name>SermonThemeWidget</name>
-    <message>
-      <location filename="../../widgets/sermon_theme_widget.py" line="+383" />
-      <location line="+16" />
-      <location line="+91" />
-      <source>PUBLIC TALK</source>
-      <translation>JULKINEN PUHE</translation>
-    </message>
-    <message>
-      <location line="-7" />
-      <location line="+3" />
-      <source>Talk theme</source>
-      <translation>Puheen teema</translation>
-    </message>
-    <message>
-      <location line="-2" />
-      <source>Project the talk title on the secondary screen</source>
-      <translation>Heijasta puheen otsikko toissijaiselle näytölle</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>PREVIEW</source>
-      <translation>ESIKATSELU</translation>
-    </message>
-    <message>
-      <location line="+2" />
-      <source>E.g.: Imitate Jehovah's mercy</source>
-      <translation>Esim.: Jäljittele Jehovan armoa</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>Subtitle:</source>
-      <translation>Alaotsikko:</translation>
-    </message>
-    <message>
-      <location line="+12" />
-      <source>Project Theme</source>
-      <translation>Heijasta teema</translation>
-    </message>
-  </context>
-  <context>
     <name>SetAsIdleConfirmDialog</name>
     <message>
       <location filename="../../widgets/projection/idle_dialog.py" line="+81" />
@@ -7040,6 +6999,767 @@ Käytä toistopainiketta esittämiseen · Muuta järjestystä vetämällä kahva
       <source>Not configured</source>
       <translation>Ei määritetty</translation>
 
+    </message>
+  </context>
+  <context>
+    <name>DeferredTalkThemeWidget</name>
+    <message>
+      <location filename="../../widgets/deferred_talk_theme_widget.py" line="+36" />
+      <location line="+49" />
+      <source>Loading…</source>
+      <translation>Ladataan…</translation>
+    </message>
+  </context>
+  <context>
+    <name>MeetingSections</name>
+    <message>
+      <location filename="../../ui/qml/talk_theme.py" line="+876" />
+      <source>PUBLIC TALK</source>
+      <translation>JULKINEN PUHE</translation>
+    </message>
+  </context>
+  <context>
+    <name>TalkThemeBridge</name>
+    <message>
+      <location filename="../../ui/qml/talk_theme.py" line="-424" />
+      <source>Style applied</source>
+      <translation>Tyyli otettu käyttöön</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Enter a name for the preset.</source>
+      <translation>Anna esiasetukselle nimi.</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>A preset with this name already exists.</source>
+      <translation>Samanniminen esiasetus on jo olemassa.</translation>
+    </message>
+    <message>
+      <location line="+14" />
+      <source>Preset saved</source>
+      <translation>Esiasetus tallennettu</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Preset deleted</source>
+      <translation>Esiasetus poistettu</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Choose image</source>
+      <translation>Valitse kuva</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Images (*.png *.jpg *.jpeg *.webp)</source>
+      <translation>Kuvat (*.png *.jpg *.jpeg *.webp)</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Importing image…</source>
+      <translation>Kuvaa tuodaan…</translation>
+    </message>
+    <message>
+      <location line="+21" />
+      <source>Text color</source>
+      <translation>Tekstin väri</translation>
+    </message>
+    <message>
+      <location line="+93" />
+      <source>Enter the talk title before projecting.</source>
+      <translation>Anna puheen otsikko ennen heijastamista.</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Preparing image…</source>
+      <translation>Kuvaa valmistellaan…</translation>
+    </message>
+    <message>
+      <location line="+18" />
+      <source>The talk-theme draft could not be saved.</source>
+      <translation>Puheen teeman luonnosta ei voitu tallentaa.</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Talk theme projected</source>
+      <translation>Puheen teema heijastettu</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Projection is currently protected.</source>
+      <translation>Heijastus on tällä hetkellä suojattu.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>The talk theme could not be projected.</source>
+      <translation>Puheen teemaa ei voitu heijastaa.</translation>
+    </message>
+    <message>
+      <location line="+29" />
+      <source>Image added</source>
+      <translation>Kuva lisätty</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>This image format is not supported.</source>
+      <translation>Tätä kuvamuotoa ei tueta.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Animated images are not supported.</source>
+      <translation>Animoituja kuvia ei tueta.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>The selected image could not be opened.</source>
+      <translation>Valittua kuvaa ei voitu avata.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>The selected image has invalid dimensions.</source>
+      <translation>Valitun kuvan mitat eivät kelpaa.</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>The selected image could not be imported.</source>
+      <translation>Valittua kuvaa ei voitu tuoda.</translation>
+    </message>
+    <message>
+      <source>Talk theme</source>
+      <translation>Puheen teema</translation>
+    </message>
+    <message>
+      <source>The maximum number of text layers has been reached.</source>
+      <translation>Tekstitasojen enimmäismäärä on saavutettu.</translation>
+    </message>
+    <message>
+      <source>The maximum number of presets has been reached.</source>
+      <translation>Esiasetusten enimmäismäärä on saavutettu.</translation>
+    </message>
+    <message>
+      <source>Text %1</source>
+      <translation>Teksti %1</translation>
+    </message>
+    <message>
+      <source>The preset could not be saved.</source>
+      <translation>Esiasetusta ei voitu tallentaa.</translation>
+    </message>
+    <message>
+      <source>Botanical</source>
+      <translation>Kasviaiheinen</translation>
+    </message>
+    <message>
+      <source>Classic blue</source>
+      <translation>Klassinen sininen</translation>
+    </message>
+    <message>
+      <source>Soft photographic</source>
+      <translation>Pehmeä valokuva</translation>
+    </message>
+    <message>
+      <source>Center</source>
+      <translation>Keskikohta</translation>
+    </message>
+    <message>
+      <source>Third</source>
+      <translation>Kolmannes</translation>
+    </message>
+    <message>
+      <source>Safe margin</source>
+      <translation>Turvamarginaali</translation>
+    </message>
+  </context>
+  <context>
+    <name>TalkThemeEditorView</name>
+    <message>
+      <location filename="../../qml/TalkThemeEditorView.qml" line="+28" />
+      <source>Botanical</source>
+      <translation>Kasviaiheinen</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Classic blue</source>
+      <translation>Klassinen sininen</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Soft photographic</source>
+      <translation>Pehmeä valokuva</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Safe margin</source>
+      <translation>Turvamarginaali</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Third</source>
+      <translation>Kolmannes</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Center</source>
+      <translation>Keskikohta</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Other text</source>
+      <translation>Muu teksti</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <location line="+736" />
+      <source>Label</source>
+      <translation>Tunniste</translation>
+    </message>
+    <message>
+      <location line="-734" />
+      <location line="+346" />
+      <location line="+394" />
+      <source>Talk title</source>
+      <translation>Puheen otsikko</translation>
+    </message>
+    <message>
+      <location line="-738" />
+      <location line="+745" />
+      <source>Speaker</source>
+      <translation>Puhuja</translation>
+    </message>
+    <message>
+      <location line="-743" />
+      <location line="+749" />
+      <source>Congregation</source>
+      <translation>Seurakunta</translation>
+    </message>
+    <message>
+      <location line="-561" />
+      <source>Talk theme</source>
+      <translation>Puheen teema</translation>
+    </message>
+    <message>
+      <location line="+28" />
+      <source>On screen</source>
+      <translation>Näytöllä</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Changes not yet projected</source>
+      <translation>Muutoksia ei ole vielä heijastettu</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Saving…</source>
+      <translation>Tallennetaan…</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Draft saved</source>
+      <translation>Luonnos tallennettu</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Edit</source>
+      <translation>Muokkaa</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Canvas</source>
+      <translation>Työalue</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Undo</source>
+      <translation>Kumoa</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Redo</source>
+      <translation>Tee uudelleen</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <location line="+722" />
+      <source>Save preset</source>
+      <translation>Tallenna esiasetus</translation>
+    </message>
+    <message>
+      <location line="-716" />
+      <source>Preparing…</source>
+      <translation>Valmistellaan…</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Update projection</source>
+      <translation>Päivitä heijastus</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>▶  Project</source>
+      <translation>▶  Heijasta</translation>
+    </message>
+    <message>
+      <location line="+31" />
+      <source>Styles</source>
+      <translation>Tyylit</translation>
+    </message>
+    <message>
+      <location line="+78" />
+      <source>Delete preset</source>
+      <translation>Poista esiasetus</translation>
+    </message>
+    <message>
+      <location line="+34" />
+      <location line="+493" />
+      <source>Background</source>
+      <translation>Tausta</translation>
+    </message>
+    <message>
+      <location line="-490" />
+      <source>Importing…</source>
+      <translation>Tuodaan…</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>▧  Choose image</source>
+      <translation>▧  Valitse kuva</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>PNG, JPG or WebP · up to 4096 px</source>
+      <translation>PNG, JPG tai WebP · enintään 4096 px</translation>
+    </message>
+    <message>
+      <location line="+75" />
+      <source>Optional text</source>
+      <translation>Valinnainen teksti</translation>
+    </message>
+    <message>
+      <location line="+187" />
+      <source>Drag text · use arrow keys to fine-tune</source>
+      <translation>Vedä tekstejä · hienosäädä nuolinäppäimillä</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Finish adjusting</source>
+      <translation>Lopeta säätö</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Adjust image</source>
+      <translation>Säädä kuvaa</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Auto</source>
+      <translation>Auto</translation>
+    </message>
+    <message>
+      <location line="+37" />
+      <source>Content</source>
+      <translation>Sisältö</translation>
+    </message>
+    <message>
+      <location line="+16" />
+      <source>Enter the title</source>
+      <translation>Kirjoita otsikko</translation>
+    </message>
+    <message>
+      <location line="+19" />
+      <source>Selected text</source>
+      <translation>Valittu teksti</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <source>Font</source>
+      <translation>Fontti</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Weight</source>
+      <translation>Vahvuus</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Normal</source>
+      <translation>Normaali</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Medium</source>
+      <translation>Keskivahva</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Semibold</source>
+      <translation>Puolilihavoitu</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Bold</source>
+      <translation>Lihavoitu</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Size</source>
+      <translation>Koko</translation>
+    </message>
+    <message>
+      <location line="+23" />
+      <source>Fewer options  ⌃</source>
+      <translation>Vähemmän asetuksia  ⌃</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>More options  ⌄</source>
+      <translation>Lisää asetuksia  ⌄</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Text block width</source>
+      <translation>Tekstilohkon leveys</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Letter spacing</source>
+      <translation>Merkkiväli</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <source>Text color</source>
+      <translation>Tekstin väri</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Choose text color</source>
+      <translation>Valitse tekstin väri</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Show this text</source>
+      <translation>Näytä tämä teksti</translation>
+    </message>
+    <message>
+      <location line="+14" />
+      <source>Alignment</source>
+      <translation>Tasaus</translation>
+    </message>
+    <message>
+      <location line="+29" />
+      <source>Darken image</source>
+      <translation>Tummenna kuvaa</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Blur image</source>
+      <translation>Sumenna kuva</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Image fit</source>
+      <translation>Kuvan sovitus</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Fill</source>
+      <translation>Täytä</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Fit</source>
+      <translation>Sovita</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Image zoom</source>
+      <translation>Kuvan zoomaus</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>The image for this style could not be found.</source>
+      <translation>Tämän tyylin kuvaa ei löytynyt.</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Choose image</source>
+      <translation>Valitse kuva</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Reset</source>
+      <translation>Palauta</translation>
+    </message>
+    <message>
+      <location line="+21" />
+      <source>Ready to project</source>
+      <translation>Valmis heijastettavaksi</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Enter a title</source>
+      <translation>Kirjoita otsikko</translation>
+    </message>
+    <message>
+      <location line="+22" />
+      <source>Name</source>
+      <translation>Nimi</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>For example: Special evening</source>
+      <translation>Esimerkiksi: Erikoisilta</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Delete preset?</source>
+      <translation>Poistetaanko esiasetus?</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>This preset will be permanently removed.</source>
+      <translation>Tämä esiasetus poistetaan pysyvästi.</translation>
+    </message>
+    <message>
+      <source>Text</source>
+      <translation>Teksti</translation>
+    </message>
+    <message>
+      <source>Select a text</source>
+      <translation>Valitse teksti</translation>
+    </message>
+    <message>
+      <source>Click a text on the canvas or choose a layer to edit it.</source>
+      <translation>Napsauta tekstiä kankaalla tai valitse muokattava taso.</translation>
+    </message>
+    <message>
+      <source>Add text</source>
+      <translation>Lisää teksti</translation>
+    </message>
+    <message>
+      <source>Write something…</source>
+      <translation>Kirjoita jotain…</translation>
+    </message>
+    <message>
+      <source>Fewer options</source>
+      <translation>Vähemmän asetuksia</translation>
+    </message>
+    <message>
+      <source>More options</source>
+      <translation>Lisää asetuksia</translation>
+    </message>
+    <message>
+      <source>Line height</source>
+      <translation>Rivikorkeus</translation>
+    </message>
+    <message>
+      <source>No image</source>
+      <translation>Ei kuvaa</translation>
+    </message>
+    <message>
+      <source>Adjust image position</source>
+      <translation>Säädä kuvan sijaintia</translation>
+    </message>
+    <message>
+      <source>The image for this preset could not be found.</source>
+      <translation>Tämän esiasetuksen kuvaa ei löytynyt.</translation>
+    </message>
+    <message>
+      <source>Front</source>
+      <translation>Etuala</translation>
+    </message>
+    <message>
+      <source>%1 layers</source>
+      <translation>%1 tasoa</translation>
+    </message>
+    <message>
+      <source>Hide layer</source>
+      <translation>Piilota taso</translation>
+    </message>
+    <message>
+      <source>Show layer</source>
+      <translation>Näytä taso</translation>
+    </message>
+    <message>
+      <source>Delete layer</source>
+      <translation>Poista taso</translation>
+    </message>
+    <message>
+      <source>No text layers yet
+Add one when you are ready.</source>
+      <translation>Ei vielä tekstitasoja
+Lisää taso, kun olet valmis.</translation>
+    </message>
+    <message>
+      <source>Drag layers to change which text appears in front.</source>
+      <translation>Muuta tekstien päällekkäisjärjestystä vetämällä tasoja.</translation>
+    </message>
+    <message>
+      <source>Included styles</source>
+      <translation>Sisältyvät tyylit</translation>
+    </message>
+    <message>
+      <source>My presets</source>
+      <translation>Omat esiasetukset</translation>
+    </message>
+    <message>
+      <source>Your saved styles will appear here</source>
+      <translation>Tallennetut tyylisi näkyvät tässä</translation>
+    </message>
+    <message>
+      <source>Customize a theme and save it as a preset.</source>
+      <translation>Mukauta teemaa ja tallenna se esiasetukseksi.</translation>
+    </message>
+    <message>
+      <source>Layers</source>
+      <translation>Tasot</translation>
+    </message>
+    <message>
+      <source>Styles and layers</source>
+      <translation>Tyylit ja tasot</translation>
+    </message>
+    <message>
+      <source>Unsaved changes</source>
+      <translation>Tallentamattomat muutokset</translation>
+    </message>
+    <message>
+      <source>Save</source>
+      <translation>Tallenna</translation>
+    </message>
+    <message>
+      <source>Save as preset</source>
+      <translation>Tallenna esiasetukseksi</translation>
+    </message>
+    <message>
+      <source>More save options</source>
+      <translation>Lisää tallennusvaihtoehtoja</translation>
+    </message>
+    <message>
+      <source>Save as new preset…</source>
+      <translation>Tallenna uutena esiasetuksena…</translation>
+    </message>
+    <message>
+      <source>Project</source>
+      <translation>Esitä</translation>
+    </message>
+    <message>
+      <source>Export image</source>
+      <translation>Vie kuva</translation>
+    </message>
+    <message>
+      <source>Drag the image to reposition it</source>
+      <translation>Sijoita kuva uudelleen vetämällä</translation>
+    </message>
+    <message>
+      <source>Drag text · double-click to edit</source>
+      <translation>Siirrä tekstiä vetämällä · muokkaa kaksoisnapsauttamalla</translation>
+    </message>
+    <message>
+      <source>Auto format</source>
+      <translation>Automaattinen muoto</translation>
+    </message>
+    <message>
+      <source>Match the projection screen format</source>
+      <translation>Sovita esitysnäytön muotoon</translation>
+    </message>
+    <message>
+      <source>Save the complete composition so you can use it again later.</source>
+      <translation>Tallenna koko sommittelu, jotta voit käyttää sitä myöhemmin uudelleen.</translation>
+    </message>
+    <message>
+      <source>Preset name</source>
+      <translation>Esiasetuksen nimi</translation>
+    </message>
+    <message>
+      <source>Cancel</source>
+      <translation>Peruuta</translation>
+    </message>
+    <message>
+      <source>“%1” will be permanently removed.</source>
+      <translation>”%1” poistetaan pysyvästi.</translation>
+    </message>
+    <message>
+      <source>Delete</source>
+      <translation>Poista</translation>
+    </message>
+    <message>
+      <source>Would you like to save your changes before switching presets?</source>
+      <translation>Haluatko tallentaa muutokset ennen esiasetuksen vaihtamista?</translation>
+    </message>
+    <message>
+      <source>Discard</source>
+      <translation>Hylkää</translation>
+    </message>
+  </context>
+  <context>
+    <name>TalkThemeEditorWidget</name>
+    <message>
+      <location filename="../../ui/qml/talk_theme.py" line="+253" />
+      <source>Projection is not ready yet.</source>
+      <translation>Heijastus ei ole vielä valmis.</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>The talk-theme canvas could not be loaded.</source>
+      <translation>Puheen teeman työaluetta ei voitu ladata.</translation>
+    </message>
+    <message>
+      <location line="+26" />
+      <source>The background image took too long to load.</source>
+      <translation>Taustakuvan lataaminen kesti liian kauan.</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <location line="+4" />
+      <source>The talk-theme image could not be prepared.</source>
+      <translation>Puheen teeman kuvaa ei voitu valmistella.</translation>
+    </message>
+    <message>
+      <location line="+22" />
+      <source>The final talk-theme image is incomplete.</source>
+      <translation>Puheen teeman lopullinen kuva on puutteellinen.</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>The talk-theme image could not be encoded.</source>
+      <translation>Puheen teeman kuvaa ei voitu koodata.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Talk theme</source>
+      <translation>Puheen teema</translation>
+    </message>
+    <message>
+      <location line="+21" />
+      <source>Preparing the image timed out.</source>
+      <translation>Kuvan valmistelu aikakatkaistiin.</translation>
+    </message>
+    <message>
+      <source>Export image</source>
+      <translation>Vie kuva</translation>
+    </message>
+    <message>
+      <source>PNG image (*.png)</source>
+      <translation>PNG-kuva (*.png)</translation>
+    </message>
+    <message>
+      <source>The image could not be exported.</source>
+      <translation>Kuvaa ei voitu viedä.</translation>
+    </message>
+    <message>
+      <source>Unsaved changes</source>
+      <translation>Tallentamattomat muutokset</translation>
+    </message>
+    <message>
+      <source>Save the changes to this talk theme?</source>
+      <translation>Tallennetaanko tämän puheteeman muutokset?</translation>
+    </message>
+    <message>
+      <source>Save as preset</source>
+      <translation>Tallenna esiasetukseksi</translation>
+    </message>
+    <message>
+      <source>Name</source>
+      <translation>Nimi</translation>
     </message>
   </context>
 </TS>

@@ -45,7 +45,7 @@ from ..widgets.meetings.widget import MeetingsWidget
 from ..widgets.playlist.widget import PlaylistWidget
 from ..widgets.projection.bar import ProjectionBar
 from ..widgets.quick_access_toolbar import QuickAccessToolbar
-from ..widgets.deferred_sermon_theme_widget import DeferredSermonThemeWidget
+from ..widgets.deferred_talk_theme_widget import DeferredTalkThemeWidget
 from ..widgets.settings_widget import SettingsWidget
 from ..widgets.songs_widget import SongsWidget
 from ..widgets.timer_widget import TimerWidget
@@ -83,6 +83,7 @@ class MainWindowUiContext:
     lang_manager: Any
     notifications: Any
     profile_paths: Any
+    projection_session: Any
     runtime_paths: Any
     media_cache_manager: Any
     media_tree_runtime: Any
@@ -112,6 +113,8 @@ class MainWindowUiContext:
     auto_share_accessibility_trusted: Callable[[], bool]
     background_song_settings: Any
     projection_playback_settings: Any
+    talk_theme_settings: Any
+    talk_theme_output_settings: Any
     window_geometry_settings: Any
     projection_aspect_ratio_provider: Callable[[], Any]
     background_song_service: Any
@@ -173,7 +176,7 @@ class MainWindowUiResources:
     settings_widget: SettingsWidget
     timer_widget: TimerWidget
     clips_widget: ClipsWidget
-    sermon_theme_widget: DeferredSermonThemeWidget
+    talk_theme_widget: DeferredTalkThemeWidget
     playlist_widget: PlaylistWidget
     meetings_widget: MeetingsWidget
     quick_toolbar: QuickAccessToolbar
@@ -191,7 +194,7 @@ class _PageResources:
     settings_widget: SettingsWidget
     timer_widget: TimerWidget
     clips_widget: ClipsWidget
-    sermon_theme_widget: DeferredSermonThemeWidget
+    talk_theme_widget: DeferredTalkThemeWidget
     playlist_widget: PlaylistWidget
     meetings_widget: MeetingsWidget
 
@@ -349,7 +352,7 @@ class MainWindowUiController:
                 0: pages.songs_widget.qml_load_handle,
                 3: pages.clips_widget.qml_load_handle,
                 4: pages.timer_widget.qml_load_handle,
-                5: pages.sermon_theme_widget.preparation_handle,
+                5: pages.talk_theme_widget.preparation_handle,
                 6: pages.settings_widget.preparation_handle,
                 7: pages.playlist_widget.preparation_handle,
             },
@@ -368,7 +371,7 @@ class MainWindowUiController:
             settings_widget=pages.settings_widget,
             timer_widget=pages.timer_widget,
             clips_widget=pages.clips_widget,
-            sermon_theme_widget=pages.sermon_theme_widget,
+            talk_theme_widget=pages.talk_theme_widget,
             playlist_widget=pages.playlist_widget,
             meetings_widget=pages.meetings_widget,
             quick_toolbar=quick_toolbar,
@@ -486,8 +489,13 @@ class MainWindowUiController:
             parent=context.parent,
         )
         timeline.mark("page_clips_constructed")
-        sermon_theme_widget = DeferredSermonThemeWidget(
+        talk_theme_widget = DeferredTalkThemeWidget(
             context.lang_manager,
+            profile_paths=context.profile_paths,
+            notifications=context.notifications,
+            projection_session=context.projection_session,
+            settings=context.talk_theme_settings,
+            output_settings=context.talk_theme_output_settings,
             parent=context.parent,
         )
         timeline.mark("page_theme_constructed")
@@ -566,7 +574,7 @@ class MainWindowUiController:
         stack.addWidget(lazy_pages.placeholder())
         stack.addWidget(clips_widget)
         stack.addWidget(timer_widget)
-        stack.addWidget(sermon_theme_widget)
+        stack.addWidget(talk_theme_widget)
         stack.addWidget(settings_widget)
         stack.addWidget(playlist_widget)
         stack.addWidget(lazy_pages.placeholder())
@@ -577,7 +585,7 @@ class MainWindowUiController:
             settings_widget=settings_widget,
             timer_widget=timer_widget,
             clips_widget=clips_widget,
-            sermon_theme_widget=sermon_theme_widget,
+            talk_theme_widget=talk_theme_widget,
             playlist_widget=playlist_widget,
             meetings_widget=meetings_widget,
         )

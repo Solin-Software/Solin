@@ -37,7 +37,6 @@ class ProjectionStopController:
     _VISUAL_PROJECTION_TYPES = {
         "image",
         "timer",
-        "sermon_theme",
         "obs_stream",
         "camera_stream",
     }

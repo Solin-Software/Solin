@@ -118,6 +118,7 @@ def _build_main_window_profile_settings(profile_settings):
     from solin.core.remote.notification_settings import NotificationSettingsStore
     from solin.core.remote_control.security import RemoteControlCredentialsStore
     from solin.core.remote_control.settings import RemoteControlSettingsStore
+    from solin.core.talk_theme.settings import TalkThemeSettingsStore
     from solin.core.windowing.settings import WindowGeometrySettingsStore
 
     return MainWindowProfileSettings(
@@ -140,6 +141,7 @@ def _build_main_window_profile_settings(profile_settings):
         monitor_allocation=MonitorAllocationStore.for_profile_settings(profile_settings),
         window_geometry=WindowGeometrySettingsStore.for_profile_settings(profile_settings),
         notification=NotificationSettingsStore.for_profile_settings(profile_settings),
+        talk_theme=TalkThemeSettingsStore.for_profile_settings(profile_settings),
         remote_control=RemoteControlSettingsStore.create(profile_settings.app_settings()),
         remote_control_credentials=RemoteControlCredentialsStore.create(
             profile_settings.app_settings()
@@ -354,6 +356,7 @@ def _build_main_window_runtime(
     timer_session,
     active_profile,
     *,
+    talk_theme_output_settings,
     window_host,
     main_window_class=None,
 ):
@@ -501,6 +504,7 @@ def _build_main_window_runtime(
             PlaylistCleanupQueue,
             timer_session,
             active_profile,
+            talk_theme_output_settings=talk_theme_output_settings,
             window_host=window_host,
         )
     except Exception:  # noqa: BLE001 - transactional startup rollback boundary
@@ -616,6 +620,7 @@ def _launch_profile_window(
             container.deferred_maintenance.start,
             timer_session,
             active_profile,
+            talk_theme_output_settings=container.talk_theme_output_settings,
             window_host=window,
             main_window_class=main_window_class,
         )

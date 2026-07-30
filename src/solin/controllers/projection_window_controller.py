@@ -109,7 +109,7 @@ class ProjectionWindowController:
 
         Applies the *complete* current projection state to one window — yearly
         text, custom idle media, and the active projection (video/image/timer/
-        sermon).  Every window-creation path funnels through here so a freshly
+        talk).  Every window-creation path funnels through here so a freshly
         created or hot-plugged monitor always matches the windows that were
         already open, instead of each call site re-deriving a partial subset of
         the state (which is exactly how the idle-media-on-reconnect bug crept
@@ -471,9 +471,6 @@ class ProjectionWindowController:
                     or IDENTITY_IMAGE_TRANSFORM
                 ),
             )
-        elif kind == "sermon_theme":
-            win.show_sermon_theme(state["text"], state["subtitle"])
-            self._replay_transform(win, state)
         elif kind == "timer":
             now = QDateTime.currentDateTime()
             remaining = now.secsTo(state["target_dt"])
@@ -482,17 +479,6 @@ class ProjectionWindowController:
                 presentation = MediaCountdownPresentation(state["presentation"])
                 win.show_timer(remaining, total, presentation)
 
-    @staticmethod
-    def _replay_transform(win, state) -> None:
-        """Re-apply a persisted zoom/pan onto a freshly created surface.
-
-        Snapped (no animation) so the new surface matches the others instantly.
-        Shared by the image and sermon-theme branches — both render through a
-        zoom/pan-capable widget and store the transform identically.
-        """
-        transform = state.get("transform")
-        if transform and tuple(transform) != (1.0, 0.0, 0.0):
-            win.set_image_transform(*transform, animate=False)
 
     def _yearly_text(self) -> tuple[str, str, str]:
         return self._context.yearly_text()

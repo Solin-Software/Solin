@@ -29,8 +29,6 @@ SHARED_METHODS = [
     "_cancel_pending_timer_exit",
     "_start_yearly_fade",
     "_on_yearly_animation_finished",
-    "show_sermon_theme",
-    "update_sermon_theme",
     "set_image_transform",
     "reset_image_transform_instant",
     "clear",
@@ -88,5 +86,4 @@ def test_page_indices_are_shared_constants():
     assert BaseProjectionView._PAGE_MEDIA == 0
     assert BaseProjectionView._PAGE_TIMER == 1
     assert BaseProjectionView._PAGE_YEARLY == 2
-    assert BaseProjectionView._PAGE_THEME == 3
-    assert BaseProjectionView._PAGE_IDLE_MEDIA == 4
+    assert BaseProjectionView._PAGE_IDLE_MEDIA == 3

@@ -35,6 +35,7 @@ DEFAULT_QT_QML_MODULES = [
     "QtQuick",
     "QtQuick/Controls",
     "QtQuick/Controls/Basic",
+    "QtQuick/Effects",
     "QtQuick/Layouts",
     "QtQuick/Templates",
     "QtMultimedia",
@@ -56,6 +57,7 @@ MACOS_QT_RUNTIME_FRAMEWORKS = [
     "QtQuickControls2Basic.framework",
     "QtQuickControls2BasicStyleImpl.framework",
     "QtQuickControls2Impl.framework",
+    "QtQuickEffects.framework",
     "QtQuickLayouts.framework",
     "QtQuickTemplates2.framework",
     "QtShaderTools.framework",
@@ -341,6 +343,7 @@ def stage_windows_qt_quick_libraries(output_dir: Path) -> list[Path]:
         "Qt6Multimedia.dll",
         "Qt6MultimediaQuick.dll",
         "Qt6QuickControls2*.dll",
+        "Qt6QuickEffects.dll",
         "Qt6QuickLayouts.dll",
         "Qt6QuickTemplates2.dll",
     ]

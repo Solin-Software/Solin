@@ -39,7 +39,6 @@ from ..core.projection.transform_animation import ProjectionTransformAnimation
 from ..core.rendering.fonts import FontManager
 from ..core.timer.models import MediaCountdownPresentation
 from ..widgets.circular_timer import CircularTimerWidget
-from .sermon_theme import SermonThemeProjectionWidget
 from .yearly_text import YearlyTextWidget
 
 
@@ -572,9 +571,9 @@ class BaseProjectionView(QWidget):
     Shared content surface for both the on-monitor :class:`ProjectionWindow`
     and the on-screen :class:`FloatingPreviewWindow`.
 
-    This base owns the 5-page ``QStackedWidget`` and **all** content
-    behaviour — media/video, circular timer, yearly text, sermon theme and
-    custom idle media — together with the fade animations that transition
+    This base owns the 4-page ``QStackedWidget`` and **all** content
+    behaviour — media/video, circular timer, yearly text and custom idle
+    media — together with the fade animations that transition
     between them.  Subclasses are responsible only for *window-level* chrome
     (fullscreen placement vs. resizable 16:9 floating frame) and must call
     :meth:`_build_projection_stack` exactly once from their ``__init__``.
@@ -585,16 +584,14 @@ class BaseProjectionView(QWidget):
         0  media / image     (:class:`VideoDisplayWidget`)
         1  circular timer
         2  yearly text       (default idle screen)
-        3  sermon theme
-        4  custom idle media (image or looping video)
+        3  custom idle media (image or looping video)
     """
 
     # Named page indices so call sites read intent instead of magic numbers.
     _PAGE_MEDIA      = 0
     _PAGE_TIMER      = 1
     _PAGE_YEARLY     = 2
-    _PAGE_THEME      = 3
-    _PAGE_IDLE_MEDIA = 4
+    _PAGE_IDLE_MEDIA = 3
 
     _MEDIA_FADE_DURATION_MS = 200
     _YEARLY_FADE_IN_DURATION_MS = 500
@@ -650,20 +647,9 @@ class BaseProjectionView(QWidget):
         self._yearly_timer_exit_pending = False
         self._yearly_anim.finished.connect(self._on_yearly_animation_finished)
 
-        # Page 3 — sermon theme slide
-        self._theme_widget = SermonThemeProjectionWidget()
-        self._stack.addWidget(self._theme_widget)   # index 3
-
-        self._theme_opacity = QGraphicsOpacityEffect(self._theme_widget)
-        self._theme_opacity.setOpacity(1.0)
-        self._theme_widget.setGraphicsEffect(self._theme_opacity)
-        self._theme_anim = QPropertyAnimation(self._theme_opacity, b"opacity")
-        self._theme_anim.setDuration(400)
-        self._theme_anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
-
-        # Page 4 — custom idle media (image or looping video)
+        # Page 3 — custom idle media (image or looping video)
         self._idle_media_widget = IdleMediaWidget()
-        self._stack.addWidget(self._idle_media_widget)  # index 4
+        self._stack.addWidget(self._idle_media_widget)  # index 3
 
         self._idle_media_opacity = QGraphicsOpacityEffect(self._idle_media_widget)
         self._idle_media_opacity.setOpacity(1.0)
@@ -685,8 +671,8 @@ class BaseProjectionView(QWidget):
 
         # Guard: only True while a *video* (not audio) is expected.
         # Set to True only by begin_video() / update_frame() explicitly called
-        # for video content.  Set to False by clear(), show_image*, show_timer,
-        # show_sermon_theme.  Prevents residual pipeline frames from a just-
+        # for video content.  Set to False by clear(), show_image* and show_timer.
+        # Prevents residual pipeline frames from a just-
         # stopped video from being painted after clear() is called.
         self._accept_video_frames: bool = False
         self._current_pixmap: QPixmap | None = None
@@ -697,7 +683,7 @@ class BaseProjectionView(QWidget):
         # The second monitor is composited entirely inside libobs: the native
         # surface is *always on* and renders channel 0 (a fade transition), and
         # every kind of projected content — idle yeartext, media, still images,
-        # sermon slide, countdown — is a libobs scene the program crossfades
+        # generated talk themes and countdowns — is a libobs scene the program crossfades
         # between (see solin.core.media.obs_program / .program_driver). The
         # surface is hidden only for the two things that still stream through Qt:
         # a live browser tab and a custom idle video (re-encoding an image_source
@@ -853,39 +839,6 @@ class BaseProjectionView(QWidget):
             self._obs_surface.release()
         super().closeEvent(event)
 
-    # ── Sermon theme API ──────────────────────────────────────────────────
-
-    def show_sermon_theme(self, text: str, subtitle: str = "") -> None:
-        """Switch to sermon-theme slide with a fade-in."""
-        self._cancel_pending_timer_exit()
-        self._stop_all_anims()
-        self._clear_timer_presentation()
-        self._accept_video_frames = False
-        self._is_showing_media = False
-        if self._obs_mode:
-            # Render the sermon slide to a canvas scene and crossfade to it.
-            self._obs_cancel_idle()
-            self._theme_widget.set_theme(text, subtitle)
-            self._program_driver().show_sermon(text, subtitle)
-            self._obs_show_surface()
-            return
-        self._theme_widget.set_theme(text, subtitle)
-        self._theme_opacity.setOpacity(0.0)
-        self._stack.setCurrentIndex(self._PAGE_THEME)
-        self._theme_anim.setStartValue(0.0)
-        self._theme_anim.setEndValue(1.0)
-        self._theme_anim.start()
-
-    def update_sermon_theme(self, text: str, subtitle: str = "") -> None:
-        """Update text live while theme slide is already shown."""
-        if self._obs_mode:
-            if self._program_driver().current_key == "sermon":
-                self._theme_widget.set_theme(text, subtitle)
-                self._program_driver().show_sermon(text, subtitle)
-            return
-        if self._stack.currentIndex() == self._PAGE_THEME:
-            self._theme_widget.set_theme(text, subtitle)
-
     # ── Yearly text API ───────────────────────────────────────────────────
 
     def set_yearly_text(self, quote: str, reference: str, api_code: str = "") -> None:
@@ -988,7 +941,7 @@ class BaseProjectionView(QWidget):
         Must be called once per video playback session, *after* clear() and
         *before* the first frame arrives from the media pipeline.  This is the
         single authoritative place that re-enables update_frame(); every other
-        path (clear, show_image*, show_timer, show_sermon_theme) disables it.
+        path (clear, show_image* or show_timer) disables it.
         """
         self._cancel_pending_timer_exit()
         self._clear_timer_presentation()
@@ -1184,34 +1137,27 @@ class BaseProjectionView(QWidget):
         onto a newly created surface so it matches the others immediately.
         """
         if self._obs_mode:
-            # The image/sermon is a libobs scene item; zoom/pan it there. (Media,
-            # timer and idle carry no transform, so the driver no-ops on them.)
-            if self._program_driver().current_key in ("image", "sermon"):
+            # Static images, including rendered talk themes, are libobs scene
+            # items. Other program content carries no transform.
+            if self._program_driver().current_key == "image":
                 self._program_driver().set_image_transform(
                     zoom, norm_x, norm_y, animate=animate
                 )
             return
-        idx = self._stack.currentIndex()
-        if idx == self._PAGE_MEDIA:
+        if self._stack.currentIndex() == self._PAGE_MEDIA:
             self.display_label.set_image_transform(zoom, norm_x, norm_y, animate=animate)
-        elif idx == self._PAGE_THEME:
-            self._theme_widget.set_image_transform(zoom, norm_x, norm_y, animate=animate)
 
     def reset_image_transform_instant(self) -> None:
-        """Snap both VideoDisplayWidget and SermonThemeProjectionWidget to identity
-        with zero animation.  Called on every image switch so the old zoom/pan
-        never bleeds through to the new projection.
-        """
+        """Snap the image display to identity before loading a new projection."""
         if self._obs_mode:
             self._program_driver().reset_transform()
         self.display_label.reset_transform_instant()
-        self._theme_widget.reset_transform_instant()
 
     # ── Idle / clear transitions ──────────────────────────────────────────
 
     def clear(self) -> None:
         """Return to idle screen: fade out media (if active), then fade in the
-        active idle page (custom media page 4 if set, else yeartext page 2)."""
+        active idle page (custom media page 3 if set, else yeartext page 2)."""
         # Immediately stop accepting video frames — this is the earliest possible
         # point to cut off the pipeline, before any async frames already queued
         # in the Qt event loop can reach update_frame().
@@ -1256,7 +1202,7 @@ class BaseProjectionView(QWidget):
             self._media_fade_out_connected = True
             self._media_anim.start()
         else:
-            # Coming from timer or theme slide — switch to idle with fade-in
+            # Coming from timer — switch to idle with fade-in
             self._switch_to_idle_with_fade()
 
     def _cancel_pending_timer_exit(self) -> None:
@@ -1289,7 +1235,7 @@ class BaseProjectionView(QWidget):
         self._switch_to_idle_with_fade()
 
     def _switch_to_idle_with_fade(self) -> None:
-        """Switch to the idle screen (custom media page 4 if set, else yeartext page 2)."""
+        """Switch to the idle screen (custom media page 3 if set, else yeartext page 2)."""
         if self._has_idle_media:
             self._idle_media_opacity.setOpacity(0.0)
             self._stack.setCurrentIndex(self._PAGE_IDLE_MEDIA)
@@ -1307,8 +1253,12 @@ class BaseProjectionView(QWidget):
 
     def _stop_all_anims(self) -> None:
         """Stop all animations and disconnect callbacks safely."""
-        for anim in (self._media_anim, self._yearly_anim, self._timer_anim,
-                     self._theme_anim, self._idle_media_anim):
+        for anim in (
+            self._media_anim,
+            self._yearly_anim,
+            self._timer_anim,
+            self._idle_media_anim,
+        ):
             anim.stop()
         if self._media_fade_out_connected:
             self._media_anim.finished.disconnect(self._on_media_fade_out_done)
@@ -1318,7 +1268,7 @@ class BaseProjectionView(QWidget):
 
     #: Program keys the custom idle background may safely replace — the plain
     #: yeartext idle, an idle-media scene already showing, black, or nothing yet.
-    #: Anything else (media/image/sermon/timer/browser/camera) is live projected
+    #: Anything else (media/image/timer/browser/camera) is live projected
     #: content the idle must not override; it shows when that content clears.
     _OBS_IDLE_REPLACEABLE = frozenset(
         {"idle", "idle_video", "idle_image", "__black__", None}

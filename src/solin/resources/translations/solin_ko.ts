@@ -4213,47 +4213,6 @@ This action cannot be undone.</source>
     </message>
   </context>
   <context>
-    <name>SermonThemeWidget</name>
-    <message>
-      <location filename="../../widgets/sermon_theme_widget.py" line="+383" />
-      <location line="+16" />
-      <location line="+91" />
-      <source>PUBLIC TALK</source>
-      <translation>공개 강연</translation>
-    </message>
-    <message>
-      <location line="-7" />
-      <location line="+3" />
-      <source>Talk theme</source>
-      <translation>강연 주제</translation>
-    </message>
-    <message>
-      <location line="-2" />
-      <source>Project the talk title on the secondary screen</source>
-      <translation>연설 제목을 보조 화면에 프로젝션</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>PREVIEW</source>
-      <translation>미리보기</translation>
-    </message>
-    <message>
-      <location line="+2" />
-      <source>E.g.: Imitate Jehovah's mercy</source>
-      <translation>예: 여호와의 자비를 본받으세요</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>Subtitle:</source>
-      <translation>자막:</translation>
-    </message>
-    <message>
-      <location line="+12" />
-      <source>Project Theme</source>
-      <translation>주제 프로젝션</translation>
-    </message>
-  </context>
-  <context>
     <name>SetAsIdleConfirmDialog</name>
     <message>
       <location filename="../../widgets/projection/idle_dialog.py" line="+81" />
@@ -7035,6 +6994,767 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
       <source>Not configured</source>
       <translation>구성되지 않음</translation>
 
+    </message>
+  </context>
+  <context>
+    <name>DeferredTalkThemeWidget</name>
+    <message>
+      <location filename="../../widgets/deferred_talk_theme_widget.py" line="+36" />
+      <location line="+49" />
+      <source>Loading…</source>
+      <translation>로드 중…</translation>
+    </message>
+  </context>
+  <context>
+    <name>MeetingSections</name>
+    <message>
+      <location filename="../../ui/qml/talk_theme.py" line="+876" />
+      <source>PUBLIC TALK</source>
+      <translation>공개 강연</translation>
+    </message>
+  </context>
+  <context>
+    <name>TalkThemeBridge</name>
+    <message>
+      <location filename="../../ui/qml/talk_theme.py" line="-424" />
+      <source>Style applied</source>
+      <translation>스타일 적용됨</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Enter a name for the preset.</source>
+      <translation>프리셋 이름을 입력하세요.</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>A preset with this name already exists.</source>
+      <translation>같은 이름의 프리셋이 이미 있습니다.</translation>
+    </message>
+    <message>
+      <location line="+14" />
+      <source>Preset saved</source>
+      <translation>프리셋 저장됨</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Preset deleted</source>
+      <translation>프리셋 삭제됨</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Choose image</source>
+      <translation>이미지 선택</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Images (*.png *.jpg *.jpeg *.webp)</source>
+      <translation>이미지 (*.png *.jpg *.jpeg *.webp)</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Importing image…</source>
+      <translation>이미지 가져오는 중…</translation>
+    </message>
+    <message>
+      <location line="+21" />
+      <source>Text color</source>
+      <translation>텍스트 색상</translation>
+    </message>
+    <message>
+      <location line="+93" />
+      <source>Enter the talk title before projecting.</source>
+      <translation>프로젝션하기 전에 강연 제목을 입력하세요.</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Preparing image…</source>
+      <translation>이미지 준비 중…</translation>
+    </message>
+    <message>
+      <location line="+18" />
+      <source>The talk-theme draft could not be saved.</source>
+      <translation>강연 테마 초안을 저장할 수 없습니다.</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Talk theme projected</source>
+      <translation>강연 테마가 프로젝션됨</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Projection is currently protected.</source>
+      <translation>현재 프로젝션이 보호되어 있습니다.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>The talk theme could not be projected.</source>
+      <translation>강연 테마를 프로젝션할 수 없습니다.</translation>
+    </message>
+    <message>
+      <location line="+29" />
+      <source>Image added</source>
+      <translation>이미지 추가됨</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>This image format is not supported.</source>
+      <translation>이 이미지 형식은 지원되지 않습니다.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Animated images are not supported.</source>
+      <translation>애니메이션 이미지는 지원되지 않습니다.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>The selected image could not be opened.</source>
+      <translation>선택한 이미지를 열 수 없습니다.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>The selected image has invalid dimensions.</source>
+      <translation>선택한 이미지의 크기가 올바르지 않습니다.</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>The selected image could not be imported.</source>
+      <translation>선택한 이미지를 가져올 수 없습니다.</translation>
+    </message>
+    <message>
+      <source>Talk theme</source>
+      <translation>강연 주제</translation>
+    </message>
+    <message>
+      <source>The maximum number of text layers has been reached.</source>
+      <translation>텍스트 레이어의 최대 개수에 도달했습니다.</translation>
+    </message>
+    <message>
+      <source>The maximum number of presets has been reached.</source>
+      <translation>프리셋의 최대 개수에 도달했습니다.</translation>
+    </message>
+    <message>
+      <source>Text %1</source>
+      <translation>텍스트 %1</translation>
+    </message>
+    <message>
+      <source>The preset could not be saved.</source>
+      <translation>프리셋을 저장할 수 없습니다.</translation>
+    </message>
+    <message>
+      <source>Botanical</source>
+      <translation>보태니컬</translation>
+    </message>
+    <message>
+      <source>Classic blue</source>
+      <translation>클래식 블루</translation>
+    </message>
+    <message>
+      <source>Soft photographic</source>
+      <translation>소프트 포토</translation>
+    </message>
+    <message>
+      <source>Center</source>
+      <translation>가운데</translation>
+    </message>
+    <message>
+      <source>Third</source>
+      <translation>3분할선</translation>
+    </message>
+    <message>
+      <source>Safe margin</source>
+      <translation>안전 여백</translation>
+    </message>
+  </context>
+  <context>
+    <name>TalkThemeEditorView</name>
+    <message>
+      <location filename="../../qml/TalkThemeEditorView.qml" line="+28" />
+      <source>Botanical</source>
+      <translation>보태니컬</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Classic blue</source>
+      <translation>클래식 블루</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Soft photographic</source>
+      <translation>소프트 포토</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Safe margin</source>
+      <translation>안전 여백</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Third</source>
+      <translation>3분할선</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Center</source>
+      <translation>가운데</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Other text</source>
+      <translation>다른 텍스트</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <location line="+736" />
+      <source>Label</source>
+      <translation>레이블</translation>
+    </message>
+    <message>
+      <location line="-734" />
+      <location line="+346" />
+      <location line="+394" />
+      <source>Talk title</source>
+      <translation>강연 제목</translation>
+    </message>
+    <message>
+      <location line="-738" />
+      <location line="+745" />
+      <source>Speaker</source>
+      <translation>연사</translation>
+    </message>
+    <message>
+      <location line="-743" />
+      <location line="+749" />
+      <source>Congregation</source>
+      <translation>회중</translation>
+    </message>
+    <message>
+      <location line="-561" />
+      <source>Talk theme</source>
+      <translation>강연 주제</translation>
+    </message>
+    <message>
+      <location line="+28" />
+      <source>On screen</source>
+      <translation>화면에 표시 중</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Changes not yet projected</source>
+      <translation>변경 사항이 아직 프로젝션되지 않음</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Saving…</source>
+      <translation>저장 중…</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Draft saved</source>
+      <translation>초안 저장됨</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Edit</source>
+      <translation>편집</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Canvas</source>
+      <translation>캔버스</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Undo</source>
+      <translation>실행 취소</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Redo</source>
+      <translation>다시 실행</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <location line="+722" />
+      <source>Save preset</source>
+      <translation>프리셋 저장</translation>
+    </message>
+    <message>
+      <location line="-716" />
+      <source>Preparing…</source>
+      <translation>준비 중…</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Update projection</source>
+      <translation>프로젝션 업데이트</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>▶  Project</source>
+      <translation>▶  프로젝션</translation>
+    </message>
+    <message>
+      <location line="+31" />
+      <source>Styles</source>
+      <translation>스타일</translation>
+    </message>
+    <message>
+      <location line="+78" />
+      <source>Delete preset</source>
+      <translation>프리셋 삭제</translation>
+    </message>
+    <message>
+      <location line="+34" />
+      <location line="+493" />
+      <source>Background</source>
+      <translation>배경</translation>
+    </message>
+    <message>
+      <location line="-490" />
+      <source>Importing…</source>
+      <translation>가져오는 중…</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>▧  Choose image</source>
+      <translation>▧  이미지 선택</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>PNG, JPG or WebP · up to 4096 px</source>
+      <translation>PNG, JPG 또는 WebP · 최대 4096px</translation>
+    </message>
+    <message>
+      <location line="+75" />
+      <source>Optional text</source>
+      <translation>선택적 텍스트</translation>
+    </message>
+    <message>
+      <location line="+187" />
+      <source>Drag text · use arrow keys to fine-tune</source>
+      <translation>텍스트 드래그 · 화살표 키로 미세 조정</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Finish adjusting</source>
+      <translation>조정 완료</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Adjust image</source>
+      <translation>이미지 조정</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Auto</source>
+      <translation>자동</translation>
+    </message>
+    <message>
+      <location line="+37" />
+      <source>Content</source>
+      <translation>콘텐츠</translation>
+    </message>
+    <message>
+      <location line="+16" />
+      <source>Enter the title</source>
+      <translation>제목 입력</translation>
+    </message>
+    <message>
+      <location line="+19" />
+      <source>Selected text</source>
+      <translation>선택한 텍스트</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <source>Font</source>
+      <translation>글꼴</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Weight</source>
+      <translation>굵기</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Normal</source>
+      <translation>보통</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Medium</source>
+      <translation>중간</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Semibold</source>
+      <translation>약간 굵게</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Bold</source>
+      <translation>굵게</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Size</source>
+      <translation>크기</translation>
+    </message>
+    <message>
+      <location line="+23" />
+      <source>Fewer options  ⌃</source>
+      <translation>옵션 줄이기  ⌃</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>More options  ⌄</source>
+      <translation>옵션 더보기  ⌄</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Text block width</source>
+      <translation>텍스트 블록 너비</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Letter spacing</source>
+      <translation>자간</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <source>Text color</source>
+      <translation>텍스트 색상</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Choose text color</source>
+      <translation>텍스트 색상 선택</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Show this text</source>
+      <translation>이 텍스트 표시</translation>
+    </message>
+    <message>
+      <location line="+14" />
+      <source>Alignment</source>
+      <translation>정렬</translation>
+    </message>
+    <message>
+      <location line="+29" />
+      <source>Darken image</source>
+      <translation>이미지 어둡게</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Blur image</source>
+      <translation>이미지 흐리게</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Image fit</source>
+      <translation>이미지 맞춤</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Fill</source>
+      <translation>채우기</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Fit</source>
+      <translation>맞춤</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Image zoom</source>
+      <translation>이미지 확대/축소</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>The image for this style could not be found.</source>
+      <translation>이 스타일의 이미지를 찾을 수 없습니다.</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Choose image</source>
+      <translation>이미지 선택</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Reset</source>
+      <translation>재설정</translation>
+    </message>
+    <message>
+      <location line="+21" />
+      <source>Ready to project</source>
+      <translation>프로젝션 준비됨</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Enter a title</source>
+      <translation>제목을 입력하세요</translation>
+    </message>
+    <message>
+      <location line="+22" />
+      <source>Name</source>
+      <translation>이름</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>For example: Special evening</source>
+      <translation>예: 특별한 저녁</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Delete preset?</source>
+      <translation>프리셋을 삭제할까요?</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>This preset will be permanently removed.</source>
+      <translation>이 프리셋은 영구적으로 삭제됩니다.</translation>
+    </message>
+    <message>
+      <source>Text</source>
+      <translation>텍스트</translation>
+    </message>
+    <message>
+      <source>Select a text</source>
+      <translation>텍스트 선택</translation>
+    </message>
+    <message>
+      <source>Click a text on the canvas or choose a layer to edit it.</source>
+      <translation>캔버스의 텍스트를 클릭하거나 편집할 레이어를 선택하세요.</translation>
+    </message>
+    <message>
+      <source>Add text</source>
+      <translation>텍스트 추가</translation>
+    </message>
+    <message>
+      <source>Write something…</source>
+      <translation>텍스트를 입력하세요…</translation>
+    </message>
+    <message>
+      <source>Fewer options</source>
+      <translation>옵션 간단히</translation>
+    </message>
+    <message>
+      <source>More options</source>
+      <translation>옵션 더보기</translation>
+    </message>
+    <message>
+      <source>Line height</source>
+      <translation>줄 높이</translation>
+    </message>
+    <message>
+      <source>No image</source>
+      <translation>이미지 없음</translation>
+    </message>
+    <message>
+      <source>Adjust image position</source>
+      <translation>이미지 위치 조정</translation>
+    </message>
+    <message>
+      <source>The image for this preset could not be found.</source>
+      <translation>이 프리셋의 이미지를 찾을 수 없습니다.</translation>
+    </message>
+    <message>
+      <source>Front</source>
+      <translation>맨 앞</translation>
+    </message>
+    <message>
+      <source>%1 layers</source>
+      <translation>%1개 레이어</translation>
+    </message>
+    <message>
+      <source>Hide layer</source>
+      <translation>레이어 숨기기</translation>
+    </message>
+    <message>
+      <source>Show layer</source>
+      <translation>레이어 표시</translation>
+    </message>
+    <message>
+      <source>Delete layer</source>
+      <translation>레이어 삭제</translation>
+    </message>
+    <message>
+      <source>No text layers yet
+Add one when you are ready.</source>
+      <translation>아직 텍스트 레이어가 없습니다
+준비되면 하나 추가하세요.</translation>
+    </message>
+    <message>
+      <source>Drag layers to change which text appears in front.</source>
+      <translation>레이어를 드래그하여 앞에 표시할 텍스트 순서를 변경하세요.</translation>
+    </message>
+    <message>
+      <source>Included styles</source>
+      <translation>기본 제공 스타일</translation>
+    </message>
+    <message>
+      <source>My presets</source>
+      <translation>내 프리셋</translation>
+    </message>
+    <message>
+      <source>Your saved styles will appear here</source>
+      <translation>저장한 스타일이 여기에 표시됩니다</translation>
+    </message>
+    <message>
+      <source>Customize a theme and save it as a preset.</source>
+      <translation>테마를 사용자 지정하고 프리셋으로 저장하세요.</translation>
+    </message>
+    <message>
+      <source>Layers</source>
+      <translation>레이어</translation>
+    </message>
+    <message>
+      <source>Styles and layers</source>
+      <translation>스타일 및 레이어</translation>
+    </message>
+    <message>
+      <source>Unsaved changes</source>
+      <translation>저장하지 않은 변경 사항</translation>
+    </message>
+    <message>
+      <source>Save</source>
+      <translation>저장</translation>
+    </message>
+    <message>
+      <source>Save as preset</source>
+      <translation>프리셋으로 저장</translation>
+    </message>
+    <message>
+      <source>More save options</source>
+      <translation>저장 옵션 더보기</translation>
+    </message>
+    <message>
+      <source>Save as new preset…</source>
+      <translation>새 프리셋으로 저장…</translation>
+    </message>
+    <message>
+      <source>Project</source>
+      <translation>프로젝션</translation>
+    </message>
+    <message>
+      <source>Export image</source>
+      <translation>이미지 내보내기</translation>
+    </message>
+    <message>
+      <source>Drag the image to reposition it</source>
+      <translation>이미지를 드래그하여 위치를 조정하세요</translation>
+    </message>
+    <message>
+      <source>Drag text · double-click to edit</source>
+      <translation>텍스트 드래그 · 두 번 클릭하여 편집</translation>
+    </message>
+    <message>
+      <source>Auto format</source>
+      <translation>자동 형식</translation>
+    </message>
+    <message>
+      <source>Match the projection screen format</source>
+      <translation>프로젝션 화면 형식에 맞추기</translation>
+    </message>
+    <message>
+      <source>Save the complete composition so you can use it again later.</source>
+      <translation>전체 구성을 저장하여 나중에 다시 사용하세요.</translation>
+    </message>
+    <message>
+      <source>Preset name</source>
+      <translation>프리셋 이름</translation>
+    </message>
+    <message>
+      <source>Cancel</source>
+      <translation>취소</translation>
+    </message>
+    <message>
+      <source>“%1” will be permanently removed.</source>
+      <translation>“%1”이(가) 영구적으로 삭제됩니다.</translation>
+    </message>
+    <message>
+      <source>Delete</source>
+      <translation>삭제</translation>
+    </message>
+    <message>
+      <source>Would you like to save your changes before switching presets?</source>
+      <translation>프리셋을 전환하기 전에 변경 사항을 저장하시겠습니까?</translation>
+    </message>
+    <message>
+      <source>Discard</source>
+      <translation>버리기</translation>
+    </message>
+  </context>
+  <context>
+    <name>TalkThemeEditorWidget</name>
+    <message>
+      <location filename="../../ui/qml/talk_theme.py" line="+253" />
+      <source>Projection is not ready yet.</source>
+      <translation>아직 프로젝션할 준비가 되지 않았습니다.</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>The talk-theme canvas could not be loaded.</source>
+      <translation>강연 테마 캔버스를 불러올 수 없습니다.</translation>
+    </message>
+    <message>
+      <location line="+26" />
+      <source>The background image took too long to load.</source>
+      <translation>배경 이미지를 불러오는 데 너무 오래 걸립니다.</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <location line="+4" />
+      <source>The talk-theme image could not be prepared.</source>
+      <translation>강연 테마 이미지를 준비할 수 없습니다.</translation>
+    </message>
+    <message>
+      <location line="+22" />
+      <source>The final talk-theme image is incomplete.</source>
+      <translation>최종 강연 테마 이미지가 완전하지 않습니다.</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>The talk-theme image could not be encoded.</source>
+      <translation>강연 테마 이미지를 인코딩할 수 없습니다.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Talk theme</source>
+      <translation>강연 주제</translation>
+    </message>
+    <message>
+      <location line="+21" />
+      <source>Preparing the image timed out.</source>
+      <translation>이미지 준비 시간이 초과되었습니다.</translation>
+    </message>
+    <message>
+      <source>Export image</source>
+      <translation>이미지 내보내기</translation>
+    </message>
+    <message>
+      <source>PNG image (*.png)</source>
+      <translation>PNG 이미지 (*.png)</translation>
+    </message>
+    <message>
+      <source>The image could not be exported.</source>
+      <translation>이미지를 내보낼 수 없습니다.</translation>
+    </message>
+    <message>
+      <source>Unsaved changes</source>
+      <translation>저장하지 않은 변경 사항</translation>
+    </message>
+    <message>
+      <source>Save the changes to this talk theme?</source>
+      <translation>이 강연 테마의 변경 사항을 저장하시겠습니까?</translation>
+    </message>
+    <message>
+      <source>Save as preset</source>
+      <translation>프리셋으로 저장</translation>
+    </message>
+    <message>
+      <source>Name</source>
+      <translation>이름</translation>
     </message>
   </context>
 </TS>

@@ -43,7 +43,10 @@ class _WindowStub:
             "project_timer_signal",
             "meeting_schedule_requested",
         )
-        self.sermon_theme_widget = _signal_namespace("theme", "project_theme_signal")
+        self.talk_theme_projection_handler = None
+        self.talk_theme_widget = SimpleNamespace(
+            set_projection_handler=self._set_talk_theme_projection_handler
+        )
         self.playlist_widget = _signal_namespace(
             "playlist",
             "project_video_signal",
@@ -170,6 +173,7 @@ class _WindowStub:
             on_song_project=_slot("on_song_project"),
             on_playlist_project=_slot("on_playlist_project"),
             project_image_bytes=_slot("project_image_bytes"),
+            project_generated_image=_slot("project_generated_image"),
             distribute_frame=_slot("distribute_frame"),
             on_title_from_metadata=_slot("title_from_metadata"),
             project_next_auto=_slot("project_next"),
@@ -178,14 +182,16 @@ class _WindowStub:
             on_image_apply_transform_instant=_slot("image_apply_instant"),
             on_image_reset_transform=_slot("image_reset"),
         )
-        self._timer_theme = SimpleNamespace(
+        self._timer_projection = SimpleNamespace(
             start_timer=_slot("start_timer"),
             start_automatic_timer=_slot("start_automatic_timer"),
-            project_sermon_theme=_slot("project_sermon_theme"),
             on_timer_update_proj=_slot("timer_update"),
             on_timer_blink_proj=_slot("timer_blink"),
         )
         self._projection_stop = SimpleNamespace(stop_any=_slot("stop_any"))
+
+    def _set_talk_theme_projection_handler(self, handler):
+        self.talk_theme_projection_handler = handler
 
 
 def _sources(window):
@@ -194,7 +200,7 @@ def _sources(window):
         meetings_widget=window.meetings_widget,
         clips_widget=window.clips_widget,
         timer_widget=window.timer_widget,
-        sermon_theme_widget=window.sermon_theme_widget,
+        talk_theme_widget=window.talk_theme_widget,
         playlist_widget=window.playlist_widget,
         projection_bar=window.proj_bar,
         media_controller=window.media_ctrl,
@@ -213,7 +219,7 @@ def _sources(window):
 def _handlers(window, *, timer_output=None, timer_bridge=None):
     return MainWindowSignalHandlers(
         media_projection=window._media_projection,
-        timer_theme=window._timer_theme,
+        timer_projection=window._timer_projection,
         playlist_imports=window._playlist_imports,
         media_destinations=window._media_destinations,
         auto_key_projection=window._auto_key_projection,
@@ -237,7 +243,7 @@ def test_connect_signals_wires_expected_signal_graph():
     controller.connect_signals()
 
     total_connections = sum(len(signal.connected) for signal in _Signal.registry)
-    assert total_connections == 54
+    assert total_connections == 53
     assert window.songs_widget.project_video_signal.connected == [
         window._media_projection.on_sjjm_project
     ]
@@ -269,8 +275,12 @@ def test_connect_signals_wires_expected_signal_graph():
         controller._handlers.open_meeting_schedule_settings
     ]
     assert window._media_countdown_automation.countdown_requested.connected == [
-        window._timer_theme.start_automatic_timer
+        window._timer_projection.start_automatic_timer
     ]
+    assert (
+        window.talk_theme_projection_handler
+        is window._media_projection.project_generated_image
+    )
     assert window._media_countdown_automation.automatic_stop_requested.connected == [
         window._projection_stop.stop_any
     ]

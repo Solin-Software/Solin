@@ -4213,47 +4213,6 @@ This action cannot be undone.</source>
     </message>
   </context>
   <context>
-    <name>SermonThemeWidget</name>
-    <message>
-      <location filename="../../widgets/sermon_theme_widget.py" line="+383" />
-      <location line="+16" />
-      <location line="+91" />
-      <source>PUBLIC TALK</source>
-      <translation>公众演讲</translation>
-    </message>
-    <message>
-      <location line="-7" />
-      <location line="+3" />
-      <source>Talk theme</source>
-      <translation>演讲主题</translation>
-    </message>
-    <message>
-      <location line="-2" />
-      <source>Project the talk title on the secondary screen</source>
-      <translation>在副屏幕上显示演讲的主题</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>PREVIEW</source>
-      <translation>预览</translation>
-    </message>
-    <message>
-      <location line="+2" />
-      <source>E.g.: Imitate Jehovah's mercy</source>
-      <translation>例如：效仿耶和华的慈悲</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>Subtitle:</source>
-      <translation>副标题：</translation>
-    </message>
-    <message>
-      <location line="+12" />
-      <source>Project Theme</source>
-      <translation>投影主题</translation>
-    </message>
-  </context>
-  <context>
     <name>SetAsIdleConfirmDialog</name>
     <message>
       <location filename="../../widgets/projection/idle_dialog.py" line="+81" />
@@ -7035,6 +6994,767 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
       <source>Not configured</source>
       <translation>未配置</translation>
 
+    </message>
+  </context>
+  <context>
+    <name>DeferredTalkThemeWidget</name>
+    <message>
+      <location filename="../../widgets/deferred_talk_theme_widget.py" line="+36" />
+      <location line="+49" />
+      <source>Loading…</source>
+      <translation>正在加载……</translation>
+    </message>
+  </context>
+  <context>
+    <name>MeetingSections</name>
+    <message>
+      <location filename="../../ui/qml/talk_theme.py" line="+876" />
+      <source>PUBLIC TALK</source>
+      <translation>公众演讲</translation>
+    </message>
+  </context>
+  <context>
+    <name>TalkThemeBridge</name>
+    <message>
+      <location filename="../../ui/qml/talk_theme.py" line="-424" />
+      <source>Style applied</source>
+      <translation>已应用样式</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Enter a name for the preset.</source>
+      <translation>请输入预设名称。</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>A preset with this name already exists.</source>
+      <translation>已存在同名预设。</translation>
+    </message>
+    <message>
+      <location line="+14" />
+      <source>Preset saved</source>
+      <translation>预设已保存</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Preset deleted</source>
+      <translation>预设已删除</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Choose image</source>
+      <translation>选择图片</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Images (*.png *.jpg *.jpeg *.webp)</source>
+      <translation>图片 (*.png *.jpg *.jpeg *.webp)</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Importing image…</source>
+      <translation>正在导入图片…</translation>
+    </message>
+    <message>
+      <location line="+21" />
+      <source>Text color</source>
+      <translation>文本颜色</translation>
+    </message>
+    <message>
+      <location line="+93" />
+      <source>Enter the talk title before projecting.</source>
+      <translation>请先输入演讲标题再投影。</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Preparing image…</source>
+      <translation>正在准备图片…</translation>
+    </message>
+    <message>
+      <location line="+18" />
+      <source>The talk-theme draft could not be saved.</source>
+      <translation>无法保存演讲主题草稿。</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Talk theme projected</source>
+      <translation>演讲主题已投影</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Projection is currently protected.</source>
+      <translation>当前投影受保护。</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>The talk theme could not be projected.</source>
+      <translation>无法投影演讲主题。</translation>
+    </message>
+    <message>
+      <location line="+29" />
+      <source>Image added</source>
+      <translation>图片已添加</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>This image format is not supported.</source>
+      <translation>不支持此图片格式。</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Animated images are not supported.</source>
+      <translation>不支持动画图片。</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>The selected image could not be opened.</source>
+      <translation>无法打开所选图片。</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>The selected image has invalid dimensions.</source>
+      <translation>所选图片的尺寸无效。</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>The selected image could not be imported.</source>
+      <translation>无法导入所选图片。</translation>
+    </message>
+    <message>
+      <source>Talk theme</source>
+      <translation>演讲主题</translation>
+    </message>
+    <message>
+      <source>The maximum number of text layers has been reached.</source>
+      <translation>已达到文本图层数量上限。</translation>
+    </message>
+    <message>
+      <source>The maximum number of presets has been reached.</source>
+      <translation>已达到预设数量上限。</translation>
+    </message>
+    <message>
+      <source>Text %1</source>
+      <translation>文本 %1</translation>
+    </message>
+    <message>
+      <source>The preset could not be saved.</source>
+      <translation>无法保存预设。</translation>
+    </message>
+    <message>
+      <source>Botanical</source>
+      <translation>植物</translation>
+    </message>
+    <message>
+      <source>Classic blue</source>
+      <translation>经典蓝</translation>
+    </message>
+    <message>
+      <source>Soft photographic</source>
+      <translation>柔和照片</translation>
+    </message>
+    <message>
+      <source>Center</source>
+      <translation>居中</translation>
+    </message>
+    <message>
+      <source>Third</source>
+      <translation>三分之一</translation>
+    </message>
+    <message>
+      <source>Safe margin</source>
+      <translation>安全边距</translation>
+    </message>
+  </context>
+  <context>
+    <name>TalkThemeEditorView</name>
+    <message>
+      <location filename="../../qml/TalkThemeEditorView.qml" line="+28" />
+      <source>Botanical</source>
+      <translation>植物</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Classic blue</source>
+      <translation>经典蓝</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Soft photographic</source>
+      <translation>柔和照片</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Safe margin</source>
+      <translation>安全边距</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Third</source>
+      <translation>三分之一</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Center</source>
+      <translation>居中</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Other text</source>
+      <translation>其他文本</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <location line="+736" />
+      <source>Label</source>
+      <translation>标签</translation>
+    </message>
+    <message>
+      <location line="-734" />
+      <location line="+346" />
+      <location line="+394" />
+      <source>Talk title</source>
+      <translation>演讲标题</translation>
+    </message>
+    <message>
+      <location line="-738" />
+      <location line="+745" />
+      <source>Speaker</source>
+      <translation>演讲者</translation>
+    </message>
+    <message>
+      <location line="-743" />
+      <location line="+749" />
+      <source>Congregation</source>
+      <translation>会众</translation>
+    </message>
+    <message>
+      <location line="-561" />
+      <source>Talk theme</source>
+      <translation>演讲主题</translation>
+    </message>
+    <message>
+      <location line="+28" />
+      <source>On screen</source>
+      <translation>已显示</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Changes not yet projected</source>
+      <translation>更改尚未投影</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Saving…</source>
+      <translation>正在保存…</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Draft saved</source>
+      <translation>草稿已保存</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Edit</source>
+      <translation>编辑</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Canvas</source>
+      <translation>画布</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Undo</source>
+      <translation>撤销</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Redo</source>
+      <translation>重做</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <location line="+722" />
+      <source>Save preset</source>
+      <translation>保存预设</translation>
+    </message>
+    <message>
+      <location line="-716" />
+      <source>Preparing…</source>
+      <translation>正在准备…</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Update projection</source>
+      <translation>更新投影</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>▶  Project</source>
+      <translation>▶  投影</translation>
+    </message>
+    <message>
+      <location line="+31" />
+      <source>Styles</source>
+      <translation>样式</translation>
+    </message>
+    <message>
+      <location line="+78" />
+      <source>Delete preset</source>
+      <translation>删除预设</translation>
+    </message>
+    <message>
+      <location line="+34" />
+      <location line="+493" />
+      <source>Background</source>
+      <translation>背景</translation>
+    </message>
+    <message>
+      <location line="-490" />
+      <source>Importing…</source>
+      <translation>正在导入…</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>▧  Choose image</source>
+      <translation>▧  选择图片</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>PNG, JPG or WebP · up to 4096 px</source>
+      <translation>PNG、JPG 或 WebP · 最大 4096 像素</translation>
+    </message>
+    <message>
+      <location line="+75" />
+      <source>Optional text</source>
+      <translation>可选文本</translation>
+    </message>
+    <message>
+      <location line="+187" />
+      <source>Drag text · use arrow keys to fine-tune</source>
+      <translation>拖动文本 · 使用方向键微调</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Finish adjusting</source>
+      <translation>完成调整</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Adjust image</source>
+      <translation>调整图片</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Auto</source>
+      <translation>自动</translation>
+    </message>
+    <message>
+      <location line="+37" />
+      <source>Content</source>
+      <translation>内容</translation>
+    </message>
+    <message>
+      <location line="+16" />
+      <source>Enter the title</source>
+      <translation>输入标题</translation>
+    </message>
+    <message>
+      <location line="+19" />
+      <source>Selected text</source>
+      <translation>选中的文本</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <source>Font</source>
+      <translation>字体</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Weight</source>
+      <translation>字重</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Normal</source>
+      <translation>常规</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Medium</source>
+      <translation>中等</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Semibold</source>
+      <translation>半粗体</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Bold</source>
+      <translation>粗体</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Size</source>
+      <translation>大小</translation>
+    </message>
+    <message>
+      <location line="+23" />
+      <source>Fewer options  ⌃</source>
+      <translation>减少选项  ⌃</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>More options  ⌄</source>
+      <translation>更多选项  ⌄</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Text block width</source>
+      <translation>文本框宽度</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Letter spacing</source>
+      <translation>字间距</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <source>Text color</source>
+      <translation>文本颜色</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Choose text color</source>
+      <translation>选择文本颜色</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Show this text</source>
+      <translation>显示此文本</translation>
+    </message>
+    <message>
+      <location line="+14" />
+      <source>Alignment</source>
+      <translation>对齐</translation>
+    </message>
+    <message>
+      <location line="+29" />
+      <source>Darken image</source>
+      <translation>调暗图片</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Blur image</source>
+      <translation>模糊图片</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Image fit</source>
+      <translation>图片适应方式</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Fill</source>
+      <translation>填充</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Fit</source>
+      <translation>适应</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Image zoom</source>
+      <translation>图片缩放</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>The image for this style could not be found.</source>
+      <translation>找不到此样式的图片。</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Choose image</source>
+      <translation>选择图片</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Reset</source>
+      <translation>重置</translation>
+    </message>
+    <message>
+      <location line="+21" />
+      <source>Ready to project</source>
+      <translation>可以投影</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Enter a title</source>
+      <translation>输入标题</translation>
+    </message>
+    <message>
+      <location line="+22" />
+      <source>Name</source>
+      <translation>名称</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>For example: Special evening</source>
+      <translation>示例：特别晚会</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Delete preset?</source>
+      <translation>删除预设？</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>This preset will be permanently removed.</source>
+      <translation>此预设将被永久删除。</translation>
+    </message>
+    <message>
+      <source>Text</source>
+      <translation>文本</translation>
+    </message>
+    <message>
+      <source>Select a text</source>
+      <translation>选择文本</translation>
+    </message>
+    <message>
+      <source>Click a text on the canvas or choose a layer to edit it.</source>
+      <translation>单击画布上的文本或选择一个图层进行编辑。</translation>
+    </message>
+    <message>
+      <source>Add text</source>
+      <translation>添加文本</translation>
+    </message>
+    <message>
+      <source>Write something…</source>
+      <translation>输入内容…</translation>
+    </message>
+    <message>
+      <source>Fewer options</source>
+      <translation>收起选项</translation>
+    </message>
+    <message>
+      <source>More options</source>
+      <translation>更多选项</translation>
+    </message>
+    <message>
+      <source>Line height</source>
+      <translation>行高</translation>
+    </message>
+    <message>
+      <source>No image</source>
+      <translation>无图片</translation>
+    </message>
+    <message>
+      <source>Adjust image position</source>
+      <translation>调整图片位置</translation>
+    </message>
+    <message>
+      <source>The image for this preset could not be found.</source>
+      <translation>找不到此预设的图片。</translation>
+    </message>
+    <message>
+      <source>Front</source>
+      <translation>最前面</translation>
+    </message>
+    <message>
+      <source>%1 layers</source>
+      <translation>%1 个图层</translation>
+    </message>
+    <message>
+      <source>Hide layer</source>
+      <translation>隐藏图层</translation>
+    </message>
+    <message>
+      <source>Show layer</source>
+      <translation>显示图层</translation>
+    </message>
+    <message>
+      <source>Delete layer</source>
+      <translation>删除图层</translation>
+    </message>
+    <message>
+      <source>No text layers yet
+Add one when you are ready.</source>
+      <translation>尚无文本图层
+准备好后即可添加。</translation>
+    </message>
+    <message>
+      <source>Drag layers to change which text appears in front.</source>
+      <translation>拖动图层可更改文本的前后顺序。</translation>
+    </message>
+    <message>
+      <source>Included styles</source>
+      <translation>内置样式</translation>
+    </message>
+    <message>
+      <source>My presets</source>
+      <translation>我的预设</translation>
+    </message>
+    <message>
+      <source>Your saved styles will appear here</source>
+      <translation>您保存的样式将显示在这里</translation>
+    </message>
+    <message>
+      <source>Customize a theme and save it as a preset.</source>
+      <translation>自定义主题并将其保存为预设。</translation>
+    </message>
+    <message>
+      <source>Layers</source>
+      <translation>图层</translation>
+    </message>
+    <message>
+      <source>Styles and layers</source>
+      <translation>样式和图层</translation>
+    </message>
+    <message>
+      <source>Unsaved changes</source>
+      <translation>未保存的更改</translation>
+    </message>
+    <message>
+      <source>Save</source>
+      <translation>保存</translation>
+    </message>
+    <message>
+      <source>Save as preset</source>
+      <translation>另存为预设</translation>
+    </message>
+    <message>
+      <source>More save options</source>
+      <translation>更多保存选项</translation>
+    </message>
+    <message>
+      <source>Save as new preset…</source>
+      <translation>另存为新预设…</translation>
+    </message>
+    <message>
+      <source>Project</source>
+      <translation>投影</translation>
+    </message>
+    <message>
+      <source>Export image</source>
+      <translation>导出图片</translation>
+    </message>
+    <message>
+      <source>Drag the image to reposition it</source>
+      <translation>拖动图片可调整位置</translation>
+    </message>
+    <message>
+      <source>Drag text · double-click to edit</source>
+      <translation>拖动文本 · 双击进行编辑</translation>
+    </message>
+    <message>
+      <source>Auto format</source>
+      <translation>自动格式</translation>
+    </message>
+    <message>
+      <source>Match the projection screen format</source>
+      <translation>匹配投影屏幕格式</translation>
+    </message>
+    <message>
+      <source>Save the complete composition so you can use it again later.</source>
+      <translation>保存完整构图，以便日后再次使用。</translation>
+    </message>
+    <message>
+      <source>Preset name</source>
+      <translation>预设名称</translation>
+    </message>
+    <message>
+      <source>Cancel</source>
+      <translation>取消</translation>
+    </message>
+    <message>
+      <source>“%1” will be permanently removed.</source>
+      <translation>“%1”将被永久删除。</translation>
+    </message>
+    <message>
+      <source>Delete</source>
+      <translation>删除</translation>
+    </message>
+    <message>
+      <source>Would you like to save your changes before switching presets?</source>
+      <translation>切换预设前要保存更改吗？</translation>
+    </message>
+    <message>
+      <source>Discard</source>
+      <translation>放弃</translation>
+    </message>
+  </context>
+  <context>
+    <name>TalkThemeEditorWidget</name>
+    <message>
+      <location filename="../../ui/qml/talk_theme.py" line="+253" />
+      <source>Projection is not ready yet.</source>
+      <translation>投影尚未准备好。</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>The talk-theme canvas could not be loaded.</source>
+      <translation>无法加载演讲主题画布。</translation>
+    </message>
+    <message>
+      <location line="+26" />
+      <source>The background image took too long to load.</source>
+      <translation>背景图片加载时间过长。</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <location line="+4" />
+      <source>The talk-theme image could not be prepared.</source>
+      <translation>无法准备演讲主题图片。</translation>
+    </message>
+    <message>
+      <location line="+22" />
+      <source>The final talk-theme image is incomplete.</source>
+      <translation>最终演讲主题图片不完整。</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>The talk-theme image could not be encoded.</source>
+      <translation>无法编码演讲主题图片。</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Talk theme</source>
+      <translation>演讲主题</translation>
+    </message>
+    <message>
+      <location line="+21" />
+      <source>Preparing the image timed out.</source>
+      <translation>图片准备超时。</translation>
+    </message>
+    <message>
+      <source>Export image</source>
+      <translation>导出图片</translation>
+    </message>
+    <message>
+      <source>PNG image (*.png)</source>
+      <translation>PNG 图片 (*.png)</translation>
+    </message>
+    <message>
+      <source>The image could not be exported.</source>
+      <translation>无法导出图片。</translation>
+    </message>
+    <message>
+      <source>Unsaved changes</source>
+      <translation>未保存的更改</translation>
+    </message>
+    <message>
+      <source>Save the changes to this talk theme?</source>
+      <translation>要保存对此演讲主题的更改吗？</translation>
+    </message>
+    <message>
+      <source>Save as preset</source>
+      <translation>另存为预设</translation>
+    </message>
+    <message>
+      <source>Name</source>
+      <translation>姓名</translation>
     </message>
   </context>
 </TS>

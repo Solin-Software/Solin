@@ -906,11 +906,12 @@ class RemoteControlController(QObject):
     ) -> RemoteMediaKind:
         if state_type == "video":
             return RemoteMediaKind.AUDIO if state.get("is_audio") else RemoteMediaKind.VIDEO
+        if state_type == "image" and state.get("generated_kind") == "talk_theme":
+            return RemoteMediaKind.SCREEN
         return {
             "image": RemoteMediaKind.IMAGE,
             "browser": RemoteMediaKind.BROWSER,
             "timer": RemoteMediaKind.SCREEN,
-            "sermon_theme": RemoteMediaKind.SCREEN,
             "obs_stream": RemoteMediaKind.SCREEN,
             "camera_stream": RemoteMediaKind.SCREEN,
         }.get(state_type, RemoteMediaKind.UNKNOWN)

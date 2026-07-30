@@ -12,7 +12,7 @@ class MainWindowSignalSources:
     meetings_widget: Any
     clips_widget: Any
     timer_widget: Any
-    sermon_theme_widget: Any
+    talk_theme_widget: Any
     playlist_widget: Any
     projection_bar: Any
     media_controller: Any
@@ -32,7 +32,7 @@ class MainWindowSignalHandlers:
     """Explicit destinations for signals published by the main-window shell."""
 
     media_projection: Any
-    timer_theme: Any
+    timer_projection: Any
     playlist_imports: Any
     media_destinations: Any
     auto_key_projection: Any
@@ -68,7 +68,7 @@ class SignalConnectionController:
         sources = self._sources
         handlers = self._handlers
         media_projection = handlers.media_projection
-        timer_theme = handlers.timer_theme
+        timer_projection = handlers.timer_projection
         projection_bar = sources.projection_bar
         media_controller = sources.media_controller
         live_integrations = handlers.live_integrations
@@ -82,18 +82,18 @@ class SignalConnectionController:
         sources.clips_widget.project_video_signal.connect(
             media_projection.on_song_project
         )
-        sources.timer_widget.project_timer_signal.connect(timer_theme.start_timer)
+        sources.timer_widget.project_timer_signal.connect(timer_projection.start_timer)
         sources.timer_widget.meeting_schedule_requested.connect(
             handlers.open_meeting_schedule_settings
         )
         sources.media_countdown_automation.countdown_requested.connect(
-            timer_theme.start_automatic_timer
+            timer_projection.start_automatic_timer
         )
         sources.media_countdown_automation.automatic_stop_requested.connect(
             handlers.projection_stop.stop_any
         )
-        sources.sermon_theme_widget.project_theme_signal.connect(
-            timer_theme.project_sermon_theme
+        sources.talk_theme_widget.set_projection_handler(
+            media_projection.project_generated_image
         )
 
         sources.playlist_widget.project_video_signal.connect(
@@ -126,8 +126,8 @@ class SignalConnectionController:
         projection_bar.seek_requested.connect(sources.playback_protection.request_seek)
         projection_bar.toggle_requested.connect(media_controller.toggle_play_pause)
         projection_bar.volume_changed.connect(media_controller.set_volume)
-        projection_bar.timer_updated.connect(timer_theme.on_timer_update_proj)
-        projection_bar.timer_blink.connect(timer_theme.on_timer_blink_proj)
+        projection_bar.timer_updated.connect(timer_projection.on_timer_update_proj)
+        projection_bar.timer_blink.connect(timer_projection.on_timer_blink_proj)
         projection_bar.play_next_requested.connect(media_projection.project_next_auto)
         projection_bar.playlist_navigate.connect(media_projection.on_playlist_navigate)
         projection_bar.image_apply_transform.connect(

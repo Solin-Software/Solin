@@ -117,7 +117,6 @@ class _ProjectionWindowStub:
         self.video_started = False
         self.images = []
         self.image_initial_transforms = []
-        self.sermon_themes = []
         self.timers = []
         self.yearly = []
         self.refit_to = []
@@ -161,9 +160,6 @@ class _ProjectionWindowStub:
     def show_image_from_url_data(self, data, *, initial_transform=None):
         self.images.append(data)
         self.image_initial_transforms.append(initial_transform)
-
-    def show_sermon_theme(self, text, subtitle):
-        self.sermon_themes.append((text, subtitle))
 
     def show_timer(self, remaining, total, presentation):
         self.timers.append((remaining, total, presentation))
@@ -427,23 +423,6 @@ def test_identity_image_transform_is_not_replayed():
     assert win.transforms == []
 
 
-def test_sermon_theme_transform_replayed_to_new_surface_instantly():
-    window = _WindowStub()
-    window.projection_session.set_state({
-        "type": "sermon_theme",
-        "text": "Theme",
-        "subtitle": "Sub",
-        "transform": (1.3, -0.1, 0.05),
-    })
-    controller = ProjectionWindowController(_projection_context(window))
-    win = _ProjectionWindowStub()
-
-    controller.apply_full_state_to_window(win)
-
-    assert win.sermon_themes == [("Theme", "Sub")]
-    assert win.transforms == [(1.3, -0.1, 0.05, False)]
-
-
 def test_restore_state_to_window_applies_visual_states():
     window = _WindowStub()
     controller = ProjectionWindowController(_projection_context(window))
@@ -452,10 +431,6 @@ def test_restore_state_to_window_applies_visual_states():
     window.projection_session.set_state({"type": "video", "is_audio": False})
     controller.restore_state_to_window(win)
     window.projection_session.set_state({"type": "image", "data": b"image"})
-    controller.restore_state_to_window(win)
-    window.projection_session.set_state(
-        {"type": "sermon_theme", "text": "Theme", "subtitle": "Sub"}
-    )
     controller.restore_state_to_window(win)
     window.projection_session.set_state({
         "type": "timer",
@@ -467,7 +442,6 @@ def test_restore_state_to_window_applies_visual_states():
 
     assert win.video_started is True
     assert win.images == [b"image"]
-    assert win.sermon_themes == [("Theme", "Sub")]
     assert win.timers and win.timers[0][1:] == (
         120,
         MediaCountdownPresentation.YEARLY_TEXT,

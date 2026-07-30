@@ -1057,6 +1057,10 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         image_data: bytes = b"",
         keep_expanded: bool = False,
         initial_transform: ImageTransform | None = None,
+        *,
+        persist_operator_copy: bool = True,
+        allow_add_to_destination: bool = True,
+        allow_set_as_idle: bool = True,
     ):
         self._ensure_overlay_ready()
         self._enter_mode("image")
@@ -1074,11 +1078,14 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.preview_content.set_image_mode(True)
 
         if image_data:
-            try:
-                self._image_file_path = (
-                    self._profile_media_store.save_projected_image(image_data)
-                )
-            except OSError:
+            if persist_operator_copy:
+                try:
+                    self._image_file_path = (
+                        self._profile_media_store.save_projected_image(image_data)
+                    )
+                except OSError:
+                    self._image_file_path = ""
+            else:
                 self._image_file_path = ""
 
             pixmap = QPixmap()
@@ -1135,10 +1142,10 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._update_nav_buttons()
 
         # Mostra botão de adicionar à playlist no overlay (imagem)
-        self.ov_add_destination_btn.setVisible(True)
+        self.ov_add_destination_btn.setVisible(allow_add_to_destination)
         # Mostra botão de idle screen para imagens (exceto aba ao vivo — tratado em set_live_tab_mode)
         self._is_live_tab = False
-        self.ov_set_idle_btn.setVisible(True)
+        self.ov_set_idle_btn.setVisible(allow_set_as_idle)
 
     def set_projected_image_transform(
         self,
@@ -1973,4 +1980,3 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
     def _fmt(ms: int) -> str:
         s = ms // 1000
         return f"{s // 60}:{s % 60:02d}"
-
