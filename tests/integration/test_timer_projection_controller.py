@@ -1,9 +1,9 @@
 from PySide6.QtCore import QDateTime
 
-from solin.controllers.timer_theme_controller import (
-    TimerThemeContext,
-    TimerThemeController,
-    TimerThemeHandlers,
+from solin.controllers.timer_projection_controller import (
+    TimerProjectionContext,
+    TimerProjectionController,
+    TimerProjectionHandlers,
 )
 from solin.core.projection.application import ProjectionSession
 from solin.core.timer.models import MediaCountdownPresentation
@@ -29,17 +29,12 @@ class _ProjectionBarStub:
     def __init__(self):
         self.playlists = []
         self.timers = []
-        self.images = []
 
     def set_playlist(self, playlist):
         self.playlists.append(playlist)
 
     def activate_timer(self, target_dt, presentation):
         self.timers.append((target_dt, presentation))
-
-    def activate_image(self, title, image_data=None):
-        self.images.append((title, image_data))
-
 
 class _ProjectionIntegrationsStub:
     def __init__(self):
@@ -54,7 +49,6 @@ class _ProjectionWindowStub:
         self.timers = []
         self.timer_updates = []
         self.blinks = []
-        self.themes = []
 
     def show_timer(self, remaining, total, presentation):
         self.timers.append((remaining, total, presentation))
@@ -64,10 +58,6 @@ class _ProjectionWindowStub:
 
     def set_timer_blink(self, on):
         self.blinks.append(on)
-
-    def show_sermon_theme(self, text, subtitle):
-        self.themes.append((text, subtitle))
-
 
 class _ProtectionStub:
     def __init__(self):
@@ -104,8 +94,8 @@ class _WindowStub:
 
 
 def _controller(window):
-    return TimerThemeController(
-        TimerThemeContext(
+    return TimerProjectionController(
+        TimerProjectionContext(
             projection_session=window.projection_session,
             projection_bar=window.proj_bar,
             media_controller=window.media_ctrl,
@@ -115,7 +105,7 @@ def _controller(window):
             translate=window.tr,
             playback_protection=window.playback_protection,
         ),
-        TimerThemeHandlers(
+        TimerProjectionHandlers(
             stop_browser_tab_projection=(
                 window._navigation.stop_browser_tab_projection
             ),
@@ -284,34 +274,7 @@ def test_timer_update_and_blink_are_broadcast_to_all_projection_windows():
     }
 
 
-def test_project_sermon_theme_renders_preview_and_updates_projection_state():
-    window = _WindowStub()
-    controller = _controller(window)
-    controller._render_sermon_theme_preview = lambda text, subtitle: b"preview"
-    text = "A theme long enough to be shortened in the projection bar"
-
-    controller.project_sermon_theme(text)
-
-    assert window.projection_session.tab_projection_active is False
-    assert window.proj_bar.playlists == [[]]
-    assert [projection_window.themes for projection_window in window.windows] == [
-        [(text, "PUBLIC TALK")],
-        [(text, "PUBLIC TALK")],
-    ]
-    assert window.proj_bar.images == [(text[:28] + "…", b"preview")]
-    assert window.projection_session.state == {
-        "type": "sermon_theme",
-        "title": text[:28] + "…",
-        "text": text,
-        "subtitle": "PUBLIC TALK",
-        "transform": (1.0, 0.0, 0.0),
-    }
-    args, kwargs = window._projection_integrations.statuses[0]
-    assert args == (True, text[:28] + "…")
-    assert kwargs == {"auto_keys_media": False}
-
-
-def test_timer_theme_controller_uses_explicit_dependencies():
+def test_timer_projection_controller_uses_explicit_dependencies():
     controller = _controller(_WindowStub())
 
     assert not hasattr(controller, "_window")

@@ -784,7 +784,7 @@ def test_shell_composition_controllers_do_not_store_main_window():
         "remote_services_controller.py",
         "shutdown_controller.py",
         "signal_connection_controller.py",
-        "timer_theme_controller.py",
+        "timer_projection_controller.py",
         "wifi_media_controller.py",
         "window_state_controller.py",
     )

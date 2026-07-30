@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from solin.core.profiles.infrastructure import ProfileRuntimeContextFactory
     from solin.core.profiles.settings import ProfileSettings
     from solin.core.rendering.fonts import FontManager
+    from solin.core.talk_theme.settings import TalkThemeOutputSettingsStore
 
 log = logging.getLogger(__name__)
 
@@ -36,6 +37,7 @@ class ApplicationContainer:
     config: AppConfig
     runtime_paths: RuntimePaths
     global_settings: GlobalSettingsStore
+    talk_theme_output_settings: TalkThemeOutputSettingsStore
     installation_settings: InstallationSettingsStore
     media: MediaComposition
     font_manager: FontManager
@@ -74,6 +76,7 @@ def initialize_application_container(app, config: AppConfig) -> ApplicationConta
     from solin.core.profiles.infrastructure import ProfileRuntimeContextFactory
     from solin.core.profiles.settings import ProfileSettings
     from solin.core.rendering.fonts import FontManager
+    from solin.core.talk_theme.settings import TalkThemeOutputSettingsStore
 
     runtime_paths = RuntimePaths.from_standard_locations()
     runtime_paths.ensure_dirs()
@@ -82,6 +85,7 @@ def initialize_application_container(app, config: AppConfig) -> ApplicationConta
     log.info("Starting %s %s", config.display_name, config.version)
 
     global_settings = GlobalSettingsStore.create()
+    talk_theme_output_settings = TalkThemeOutputSettingsStore(global_settings.settings)
     installation_settings = InstallationSettingsStore.create()
     profile_runtime = ProfileRuntimeContextFactory(
         runtime_paths.data_dir,
@@ -145,6 +149,7 @@ def initialize_application_container(app, config: AppConfig) -> ApplicationConta
         config=config,
         runtime_paths=runtime_paths,
         global_settings=global_settings,
+        talk_theme_output_settings=talk_theme_output_settings,
         installation_settings=installation_settings,
         media=media,
         font_manager=font_manager,

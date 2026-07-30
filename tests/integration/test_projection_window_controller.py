@@ -108,6 +108,7 @@ class _ProjectionWindowStub:
         self.index = index
         self.idle_active = 0
         self.cleared_idle = 0
+        self.obs_idle_calls = []
         self.idle_images = []
         self.idle_visible_flag = False
         self.visibility_slot = None
@@ -116,7 +117,6 @@ class _ProjectionWindowStub:
         self.video_started = False
         self.images = []
         self.image_initial_transforms = []
-        self.sermon_themes = []
         self.timers = []
         self.yearly = []
         self.refit_to = []
@@ -129,6 +129,9 @@ class _ProjectionWindowStub:
 
     def set_idle_active(self):
         self.idle_active += 1
+
+    def show_obs_idle_media(self, path, media_type):
+        self.obs_idle_calls.append((path, media_type))
 
     def clear_idle(self):
         self.cleared_idle += 1
@@ -157,9 +160,6 @@ class _ProjectionWindowStub:
     def show_image_from_url_data(self, data, *, initial_transform=None):
         self.images.append(data)
         self.image_initial_transforms.append(initial_transform)
-
-    def show_sermon_theme(self, text, subtitle):
-        self.sermon_themes.append((text, subtitle))
 
     def show_timer(self, remaining, total, presentation):
         self.timers.append((remaining, total, presentation))
@@ -263,6 +263,32 @@ def test_on_idle_media_changed_activates_source_and_windows(tmp_path):
     assert src.cleared == 1
     assert win.cleared_idle == 1
     assert window._monitor_popup.idle_paths == [str(img), ""]
+
+
+def test_on_idle_media_changed_composites_in_libobs_in_obs_mode(tmp_path, monkeypatch):
+    # In obs mode the idle background composites inside libobs (no Qt decoder):
+    # the controller routes the file straight to the surface, never touching the
+    # shared IdleMediaSource.
+    monkeypatch.setattr(
+        projection_controller, "obs_media_engine_active", lambda: True
+    )
+    vid = tmp_path / "idle.mp4"
+    vid.write_bytes(b"fake")
+    src = _StubIdleSource()
+    window = _WindowStub()
+    win = _ProjectionWindowStub()
+    window.projection_session.projection_windows = [win]
+    controller = ProjectionWindowController(
+        _projection_context(window),
+        idle_source_factory=lambda: src,
+    )
+
+    controller.on_idle_media_changed(str(vid))
+
+    assert win.obs_idle_calls == [(str(vid), "video")]
+    assert win.idle_active == 0          # Qt idle-media mode not used
+    assert src.media_set == []           # shared Qt decoder never created/loaded
+    assert controller._idle_source is None
 
 
 def test_on_idle_media_changed_rejects_missing_file():
@@ -397,23 +423,6 @@ def test_identity_image_transform_is_not_replayed():
     assert win.transforms == []
 
 
-def test_sermon_theme_transform_replayed_to_new_surface_instantly():
-    window = _WindowStub()
-    window.projection_session.set_state({
-        "type": "sermon_theme",
-        "text": "Theme",
-        "subtitle": "Sub",
-        "transform": (1.3, -0.1, 0.05),
-    })
-    controller = ProjectionWindowController(_projection_context(window))
-    win = _ProjectionWindowStub()
-
-    controller.apply_full_state_to_window(win)
-
-    assert win.sermon_themes == [("Theme", "Sub")]
-    assert win.transforms == [(1.3, -0.1, 0.05, False)]
-
-
 def test_restore_state_to_window_applies_visual_states():
     window = _WindowStub()
     controller = ProjectionWindowController(_projection_context(window))
@@ -422,10 +431,6 @@ def test_restore_state_to_window_applies_visual_states():
     window.projection_session.set_state({"type": "video", "is_audio": False})
     controller.restore_state_to_window(win)
     window.projection_session.set_state({"type": "image", "data": b"image"})
-    controller.restore_state_to_window(win)
-    window.projection_session.set_state(
-        {"type": "sermon_theme", "text": "Theme", "subtitle": "Sub"}
-    )
     controller.restore_state_to_window(win)
     window.projection_session.set_state({
         "type": "timer",
@@ -437,7 +442,6 @@ def test_restore_state_to_window_applies_visual_states():
 
     assert win.video_started is True
     assert win.images == [b"image"]
-    assert win.sermon_themes == [("Theme", "Sub")]
     assert win.timers and win.timers[0][1:] == (
         120,
         MediaCountdownPresentation.YEARLY_TEXT,

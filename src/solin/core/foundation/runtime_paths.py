@@ -86,6 +86,14 @@ class ProfilePaths:
     def native_webview_data_root(self) -> Path:
         return self.native_webview_data_dir.parent.parent
 
+    @property
+    def talk_theme_file(self) -> Path:
+        return self.profile_dir / "talk_theme.json"
+
+    @property
+    def talk_theme_assets_dir(self) -> Path:
+        return self.profile_dir / "talk_theme_assets"
+
     @classmethod
     def from_roots(
         cls,
@@ -130,6 +138,7 @@ class ProfilePaths:
             self.profile_dir,
             self.images_dir,
             self.embedded_dir,
+            self.talk_theme_assets_dir,
             self.profile_cache_dir,
             self.thumb_cache_dir,
             self.meeting_thumb_cache_dir,

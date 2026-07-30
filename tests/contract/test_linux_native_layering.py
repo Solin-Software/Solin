@@ -45,6 +45,35 @@ def test_linux_browser_promotes_only_the_toolbar_to_a_transient_window():
     assert "root.setContentsMargins(0, 0, 0, 0)" in browser_ui_source
 
 
+def test_software_backend_routes_toolbar_through_the_wm_composited_surface():
+    # Under the software Qt Quick backend (obs media engine) an embedded
+    # QQuickWidget cannot composite a translucent pill, so the toolbar must live
+    # on the top-level WM-composited surface on EVERY panel — not just above the
+    # browser — to keep smooth, anti-aliased rounded corners.
+    overlay_source = inspect.getsource(QuickAccessToolbar.set_browser_overlay_mode)
+    show_source = inspect.getsource(QuickAccessToolbar.show)
+    hide_source = inspect.getsource(QuickAccessToolbar.hide)
+    reposition_source = inspect.getsource(QuickAccessToolbar._reposition)
+
+    # Overlay mode is forced on under the software backend.
+    assert "_software_qml_backend()" in overlay_source
+    assert "enabled = True" in overlay_source
+
+    # show()/hide() are routed to the top-level surface under that backend.
+    assert "_software_qml_backend()" in show_source
+    assert "self._browser_surface.show()" in show_source
+    assert "self.set_browser_overlay_mode(True)" in show_source
+    assert "_software_qml_backend()" in hide_source
+    assert "self._browser_surface.hide()" in hide_source
+
+    # The mask stays a plain rectangle: the QML + WM compositor draw the smooth
+    # transparent corners, so a 1-bit rounded QRegion (which would re-alias them)
+    # must NOT be reintroduced.
+    assert "QRegion(" in reposition_source
+    assert "QPainterPath" not in reposition_source
+    assert "addRoundedRect" not in reposition_source
+
+
 def test_projection_overlay_occludes_only_the_foreign_browser_surface():
     setup_source = inspect.getsource(ProjectionBar._build_overlay)
     geometry_source = inspect.getsource(ProjectionBar._update_overlay_geometry)

@@ -4217,47 +4217,6 @@ Hindi na ito maibabalik.</translation>
     </message>
   </context>
   <context>
-    <name>SermonThemeWidget</name>
-    <message>
-      <location filename="../../widgets/sermon_theme_widget.py" line="+383" />
-      <location line="+16" />
-      <location line="+91" />
-      <source>PUBLIC TALK</source>
-      <translation>PAHAYAG PANGMADLA</translation>
-    </message>
-    <message>
-      <location line="-7" />
-      <location line="+3" />
-      <source>Talk theme</source>
-      <translation>Tema ng pahayag</translation>
-    </message>
-    <message>
-      <location line="-2" />
-      <source>Project the talk title on the secondary screen</source>
-      <translation>I-project ang pamagat ng pahayag sa secondary screen</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>PREVIEW</source>
-      <translation>PREVIEW</translation>
-    </message>
-    <message>
-      <location line="+2" />
-      <source>E.g.: Imitate Jehovah's mercy</source>
-      <translation>Hal.: Tularan ang Awa ni Jehova</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>Subtitle:</source>
-      <translation>Subtitle:</translation>
-    </message>
-    <message>
-      <location line="+12" />
-      <source>Project Theme</source>
-      <translation>I-project ang Tema</translation>
-    </message>
-  </context>
-  <context>
     <name>SetAsIdleConfirmDialog</name>
     <message>
       <location filename="../../widgets/projection/idle_dialog.py" line="+81" />
@@ -7040,6 +6999,767 @@ Gamitin ang play button para mag-project · I-drag ang grip ⠿ para ayusin ang 
       <source>Not configured</source>
       <translation>Hindi naka-configure</translation>
 
+    </message>
+  </context>
+  <context>
+    <name>DeferredTalkThemeWidget</name>
+    <message>
+      <location filename="../../widgets/deferred_talk_theme_widget.py" line="+36" />
+      <location line="+49" />
+      <source>Loading…</source>
+      <translation>Nilu-load…</translation>
+    </message>
+  </context>
+  <context>
+    <name>MeetingSections</name>
+    <message>
+      <location filename="../../ui/qml/talk_theme.py" line="+876" />
+      <source>PUBLIC TALK</source>
+      <translation>PAHAYAG PANGMADLA</translation>
+    </message>
+  </context>
+  <context>
+    <name>TalkThemeBridge</name>
+    <message>
+      <location filename="../../ui/qml/talk_theme.py" line="-424" />
+      <source>Style applied</source>
+      <translation>Nailapat ang istilo</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Enter a name for the preset.</source>
+      <translation>Maglagay ng pangalan para sa preset.</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>A preset with this name already exists.</source>
+      <translation>May preset na ganito ang pangalan.</translation>
+    </message>
+    <message>
+      <location line="+14" />
+      <source>Preset saved</source>
+      <translation>Na-save ang preset</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Preset deleted</source>
+      <translation>Na-delete ang preset</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Choose image</source>
+      <translation>Pumili ng larawan</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Images (*.png *.jpg *.jpeg *.webp)</source>
+      <translation>Mga larawan (*.png *.jpg *.jpeg *.webp)</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Importing image…</source>
+      <translation>Ini-import ang larawan…</translation>
+    </message>
+    <message>
+      <location line="+21" />
+      <source>Text color</source>
+      <translation>Kulay ng teksto</translation>
+    </message>
+    <message>
+      <location line="+93" />
+      <source>Enter the talk title before projecting.</source>
+      <translation>Ilagay ang pamagat ng pahayag bago mag-project.</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Preparing image…</source>
+      <translation>Inihahanda ang larawan…</translation>
+    </message>
+    <message>
+      <location line="+18" />
+      <source>The talk-theme draft could not be saved.</source>
+      <translation>Hindi ma-save ang draft ng tema ng pahayag.</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Talk theme projected</source>
+      <translation>Na-project ang tema ng pahayag</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Projection is currently protected.</source>
+      <translation>Protektado ang projection ngayon.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>The talk theme could not be projected.</source>
+      <translation>Hindi ma-project ang tema ng pahayag.</translation>
+    </message>
+    <message>
+      <location line="+29" />
+      <source>Image added</source>
+      <translation>Naidagdag ang larawan</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>This image format is not supported.</source>
+      <translation>Hindi sinusuportahan ang format ng larawang ito.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Animated images are not supported.</source>
+      <translation>Hindi sinusuportahan ang mga animated na larawan.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>The selected image could not be opened.</source>
+      <translation>Hindi mabuksan ang napiling larawan.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>The selected image has invalid dimensions.</source>
+      <translation>Hindi wasto ang sukat ng napiling larawan.</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>The selected image could not be imported.</source>
+      <translation>Hindi ma-import ang napiling larawan.</translation>
+    </message>
+    <message>
+      <source>Talk theme</source>
+      <translation>Tema ng pahayag</translation>
+    </message>
+    <message>
+      <source>The maximum number of text layers has been reached.</source>
+      <translation>Naabot na ang maximum na bilang ng mga text layer.</translation>
+    </message>
+    <message>
+      <source>The maximum number of presets has been reached.</source>
+      <translation>Naabot na ang maximum na bilang ng mga preset.</translation>
+    </message>
+    <message>
+      <source>Text %1</source>
+      <translation>Teksto %1</translation>
+    </message>
+    <message>
+      <source>The preset could not be saved.</source>
+      <translation>Hindi ma-save ang preset.</translation>
+    </message>
+    <message>
+      <source>Botanical</source>
+      <translation>Botanikal</translation>
+    </message>
+    <message>
+      <source>Classic blue</source>
+      <translation>Klasikong asul</translation>
+    </message>
+    <message>
+      <source>Soft photographic</source>
+      <translation>Banayad na larawan</translation>
+    </message>
+    <message>
+      <source>Center</source>
+      <translation>Gitna</translation>
+    </message>
+    <message>
+      <source>Third</source>
+      <translation>Ikatlo</translation>
+    </message>
+    <message>
+      <source>Safe margin</source>
+      <translation>Ligtas na margin</translation>
+    </message>
+  </context>
+  <context>
+    <name>TalkThemeEditorView</name>
+    <message>
+      <location filename="../../qml/TalkThemeEditorView.qml" line="+28" />
+      <source>Botanical</source>
+      <translation>Botanikal</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Classic blue</source>
+      <translation>Klasikong asul</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Soft photographic</source>
+      <translation>Banayad na larawan</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Safe margin</source>
+      <translation>Ligtas na margin</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Third</source>
+      <translation>Ikatlo</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Center</source>
+      <translation>Gitna</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Other text</source>
+      <translation>Ibang teksto</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <location line="+736" />
+      <source>Label</source>
+      <translation>Label</translation>
+    </message>
+    <message>
+      <location line="-734" />
+      <location line="+346" />
+      <location line="+394" />
+      <source>Talk title</source>
+      <translation>Pamagat ng pahayag</translation>
+    </message>
+    <message>
+      <location line="-738" />
+      <location line="+745" />
+      <source>Speaker</source>
+      <translation>Tagapagsalita</translation>
+    </message>
+    <message>
+      <location line="-743" />
+      <location line="+749" />
+      <source>Congregation</source>
+      <translation>Kongregasyon</translation>
+    </message>
+    <message>
+      <location line="-561" />
+      <source>Talk theme</source>
+      <translation>Tema ng pahayag</translation>
+    </message>
+    <message>
+      <location line="+28" />
+      <source>On screen</source>
+      <translation>Nasa screen</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Changes not yet projected</source>
+      <translation>Hindi pa naka-project ang mga pagbabago</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Saving…</source>
+      <translation>Sine-save…</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Draft saved</source>
+      <translation>Na-save ang draft</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Edit</source>
+      <translation>I-edit</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Canvas</source>
+      <translation>Canvas</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Undo</source>
+      <translation>I-undo</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Redo</source>
+      <translation>I-redo</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <location line="+722" />
+      <source>Save preset</source>
+      <translation>I-save ang preset</translation>
+    </message>
+    <message>
+      <location line="-716" />
+      <source>Preparing…</source>
+      <translation>Inihahanda…</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Update projection</source>
+      <translation>I-update ang projection</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>▶  Project</source>
+      <translation>▶  I-project</translation>
+    </message>
+    <message>
+      <location line="+31" />
+      <source>Styles</source>
+      <translation>Mga istilo</translation>
+    </message>
+    <message>
+      <location line="+78" />
+      <source>Delete preset</source>
+      <translation>I-delete ang preset</translation>
+    </message>
+    <message>
+      <location line="+34" />
+      <location line="+493" />
+      <source>Background</source>
+      <translation>Background</translation>
+    </message>
+    <message>
+      <location line="-490" />
+      <source>Importing…</source>
+      <translation>Ini-import…</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>▧  Choose image</source>
+      <translation>▧  Pumili ng larawan</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>PNG, JPG or WebP · up to 4096 px</source>
+      <translation>PNG, JPG, o WebP · hanggang 4096 px</translation>
+    </message>
+    <message>
+      <location line="+75" />
+      <source>Optional text</source>
+      <translation>Opsyonal na teksto</translation>
+    </message>
+    <message>
+      <location line="+187" />
+      <source>Drag text · use arrow keys to fine-tune</source>
+      <translation>I-drag ang teksto · gamitin ang mga arrow key para i-fine-tune</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Finish adjusting</source>
+      <translation>Tapusin ang pag-adjust</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Adjust image</source>
+      <translation>I-adjust ang larawan</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Auto</source>
+      <translation>Awtomatiko</translation>
+    </message>
+    <message>
+      <location line="+37" />
+      <source>Content</source>
+      <translation>Nilalaman</translation>
+    </message>
+    <message>
+      <location line="+16" />
+      <source>Enter the title</source>
+      <translation>Ilagay ang pamagat</translation>
+    </message>
+    <message>
+      <location line="+19" />
+      <source>Selected text</source>
+      <translation>Napiling teksto</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <source>Font</source>
+      <translation>Font</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Weight</source>
+      <translation>Kapal</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Normal</source>
+      <translation>Normal</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Medium</source>
+      <translation>Katamtaman</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Semibold</source>
+      <translation>Bahagyang makapal</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Bold</source>
+      <translation>Bold</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Size</source>
+      <translation>Laki</translation>
+    </message>
+    <message>
+      <location line="+23" />
+      <source>Fewer options  ⌃</source>
+      <translation>Mas kaunting opsyon  ⌃</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>More options  ⌄</source>
+      <translation>Mas maraming opsyon  ⌄</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Text block width</source>
+      <translation>Lapad ng text block</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Letter spacing</source>
+      <translation>Agwat ng mga letra</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <source>Text color</source>
+      <translation>Kulay ng teksto</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Choose text color</source>
+      <translation>Pumili ng kulay ng teksto</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Show this text</source>
+      <translation>Ipakita ang tekstong ito</translation>
+    </message>
+    <message>
+      <location line="+14" />
+      <source>Alignment</source>
+      <translation>Pag-align</translation>
+    </message>
+    <message>
+      <location line="+29" />
+      <source>Darken image</source>
+      <translation>Padilimin ang larawan</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Blur image</source>
+      <translation>I-blur ang larawan</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Image fit</source>
+      <translation>Pag-fit ng larawan</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Fill</source>
+      <translation>Punuin</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Fit</source>
+      <translation>I-fit</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Image zoom</source>
+      <translation>I-zoom ang larawan</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>The image for this style could not be found.</source>
+      <translation>Hindi makita ang larawan ng istilong ito.</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Choose image</source>
+      <translation>Pumili ng larawan</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Reset</source>
+      <translation>I-reset</translation>
+    </message>
+    <message>
+      <location line="+21" />
+      <source>Ready to project</source>
+      <translation>Handa nang i-project</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Enter a title</source>
+      <translation>Maglagay ng pamagat</translation>
+    </message>
+    <message>
+      <location line="+22" />
+      <source>Name</source>
+      <translation>Pangalan</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>For example: Special evening</source>
+      <translation>Hal.: Espesyal na gabi</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Delete preset?</source>
+      <translation>I-delete ang preset?</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>This preset will be permanently removed.</source>
+      <translation>Permanenteng ide-delete ang preset na ito.</translation>
+    </message>
+    <message>
+      <source>Text</source>
+      <translation>Teksto</translation>
+    </message>
+    <message>
+      <source>Select a text</source>
+      <translation>Pumili ng teksto</translation>
+    </message>
+    <message>
+      <source>Click a text on the canvas or choose a layer to edit it.</source>
+      <translation>I-click ang teksto sa canvas o pumili ng layer para i-edit ito.</translation>
+    </message>
+    <message>
+      <source>Add text</source>
+      <translation>Magdagdag ng teksto</translation>
+    </message>
+    <message>
+      <source>Write something…</source>
+      <translation>Magsulat ng anuman…</translation>
+    </message>
+    <message>
+      <source>Fewer options</source>
+      <translation>Mas kaunting opsyon</translation>
+    </message>
+    <message>
+      <source>More options</source>
+      <translation>Mas maraming opsyon</translation>
+    </message>
+    <message>
+      <source>Line height</source>
+      <translation>Taas ng linya</translation>
+    </message>
+    <message>
+      <source>No image</source>
+      <translation>Walang larawan</translation>
+    </message>
+    <message>
+      <source>Adjust image position</source>
+      <translation>I-adjust ang posisyon ng larawan</translation>
+    </message>
+    <message>
+      <source>The image for this preset could not be found.</source>
+      <translation>Hindi makita ang larawan para sa preset na ito.</translation>
+    </message>
+    <message>
+      <source>Front</source>
+      <translation>Nasa harap</translation>
+    </message>
+    <message>
+      <source>%1 layers</source>
+      <translation>%1 layer</translation>
+    </message>
+    <message>
+      <source>Hide layer</source>
+      <translation>Itago ang layer</translation>
+    </message>
+    <message>
+      <source>Show layer</source>
+      <translation>Ipakita ang layer</translation>
+    </message>
+    <message>
+      <source>Delete layer</source>
+      <translation>I-delete ang layer</translation>
+    </message>
+    <message>
+      <source>No text layers yet
+Add one when you are ready.</source>
+      <translation>Wala pang mga text layer
+Magdagdag kapag handa ka na.</translation>
+    </message>
+    <message>
+      <source>Drag layers to change which text appears in front.</source>
+      <translation>I-drag ang mga layer para baguhin kung aling teksto ang nasa harap.</translation>
+    </message>
+    <message>
+      <source>Included styles</source>
+      <translation>Mga kasamang istilo</translation>
+    </message>
+    <message>
+      <source>My presets</source>
+      <translation>Mga preset ko</translation>
+    </message>
+    <message>
+      <source>Your saved styles will appear here</source>
+      <translation>Dito lalabas ang mga na-save mong istilo</translation>
+    </message>
+    <message>
+      <source>Customize a theme and save it as a preset.</source>
+      <translation>I-customize ang tema at i-save ito bilang preset.</translation>
+    </message>
+    <message>
+      <source>Layers</source>
+      <translation>Mga layer</translation>
+    </message>
+    <message>
+      <source>Styles and layers</source>
+      <translation>Mga istilo at layer</translation>
+    </message>
+    <message>
+      <source>Unsaved changes</source>
+      <translation>Mga hindi na-save na pagbabago</translation>
+    </message>
+    <message>
+      <source>Save</source>
+      <translation>I-save</translation>
+    </message>
+    <message>
+      <source>Save as preset</source>
+      <translation>I-save bilang preset</translation>
+    </message>
+    <message>
+      <source>More save options</source>
+      <translation>Higit pang opsyon sa pag-save</translation>
+    </message>
+    <message>
+      <source>Save as new preset…</source>
+      <translation>I-save bilang bagong preset…</translation>
+    </message>
+    <message>
+      <source>Project</source>
+      <translation>I-project</translation>
+    </message>
+    <message>
+      <source>Export image</source>
+      <translation>I-export ang larawan</translation>
+    </message>
+    <message>
+      <source>Drag the image to reposition it</source>
+      <translation>I-drag ang larawan para baguhin ang posisyon nito</translation>
+    </message>
+    <message>
+      <source>Drag text · double-click to edit</source>
+      <translation>I-drag ang teksto · i-double-click para i-edit</translation>
+    </message>
+    <message>
+      <source>Auto format</source>
+      <translation>Awtomatikong format</translation>
+    </message>
+    <message>
+      <source>Match the projection screen format</source>
+      <translation>Itugma sa format ng projection screen</translation>
+    </message>
+    <message>
+      <source>Save the complete composition so you can use it again later.</source>
+      <translation>I-save ang buong komposisyon para magamit mo ulit sa susunod.</translation>
+    </message>
+    <message>
+      <source>Preset name</source>
+      <translation>Pangalan ng preset</translation>
+    </message>
+    <message>
+      <source>Cancel</source>
+      <translation>Kanselahin</translation>
+    </message>
+    <message>
+      <source>“%1” will be permanently removed.</source>
+      <translation>Permanenteng ide-delete ang “%1”.</translation>
+    </message>
+    <message>
+      <source>Delete</source>
+      <translation>Burahin</translation>
+    </message>
+    <message>
+      <source>Would you like to save your changes before switching presets?</source>
+      <translation>Gusto mo bang i-save ang mga pagbabago bago lumipat ng preset?</translation>
+    </message>
+    <message>
+      <source>Discard</source>
+      <translation>Huwag i-save</translation>
+    </message>
+  </context>
+  <context>
+    <name>TalkThemeEditorWidget</name>
+    <message>
+      <location filename="../../ui/qml/talk_theme.py" line="+253" />
+      <source>Projection is not ready yet.</source>
+      <translation>Hindi pa handa ang projection.</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>The talk-theme canvas could not be loaded.</source>
+      <translation>Hindi ma-load ang canvas ng tema ng pahayag.</translation>
+    </message>
+    <message>
+      <location line="+26" />
+      <source>The background image took too long to load.</source>
+      <translation>Masyadong matagal na-load ang larawan sa background.</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <location line="+4" />
+      <source>The talk-theme image could not be prepared.</source>
+      <translation>Hindi maihanda ang larawan ng tema ng pahayag.</translation>
+    </message>
+    <message>
+      <location line="+22" />
+      <source>The final talk-theme image is incomplete.</source>
+      <translation>Hindi kumpleto ang final na larawan ng tema ng pahayag.</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>The talk-theme image could not be encoded.</source>
+      <translation>Hindi ma-encode ang larawan ng tema ng pahayag.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Talk theme</source>
+      <translation>Tema ng pahayag</translation>
+    </message>
+    <message>
+      <location line="+21" />
+      <source>Preparing the image timed out.</source>
+      <translation>Nag-timeout ang paghahanda ng larawan.</translation>
+    </message>
+    <message>
+      <source>Export image</source>
+      <translation>I-export ang larawan</translation>
+    </message>
+    <message>
+      <source>PNG image (*.png)</source>
+      <translation>Larawang PNG (*.png)</translation>
+    </message>
+    <message>
+      <source>The image could not be exported.</source>
+      <translation>Hindi ma-export ang larawan.</translation>
+    </message>
+    <message>
+      <source>Unsaved changes</source>
+      <translation>Mga hindi na-save na pagbabago</translation>
+    </message>
+    <message>
+      <source>Save the changes to this talk theme?</source>
+      <translation>I-save ang mga pagbabago sa temang ito ng pahayag?</translation>
+    </message>
+    <message>
+      <source>Save as preset</source>
+      <translation>I-save bilang preset</translation>
+    </message>
+    <message>
+      <source>Name</source>
+      <translation>Pangalan</translation>
     </message>
   </context>
 </TS>

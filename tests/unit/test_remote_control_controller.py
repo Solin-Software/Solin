@@ -899,6 +899,17 @@ def test_playback_snapshot_mirrors_desktop_queue_capabilities_and_position(
     controller.stop()
 
 
+def test_generated_talk_theme_is_exposed_as_screen_media() -> None:
+    assert RemoteControlController._media_kind_for_state(
+        "image",
+        {"generated_kind": "talk_theme"},
+    ) is RemoteMediaKind.SCREEN
+    assert RemoteControlController._media_kind_for_state(
+        "image",
+        {},
+    ) is RemoteMediaKind.IMAGE
+
+
 def test_persisted_meeting_cover_is_exposed_as_normalized_collection_thumbnail(
     tmp_path: Path,
 ) -> None:

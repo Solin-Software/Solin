@@ -159,11 +159,19 @@ _ICON_NAMES = frozenset(
         "ICON_TRASH",
         "ICON_EDIT",
         "ICON_GRIP",
+        "ICON_EYE",
+        "ICON_EYE_OFF",
+        "ICON_ALIGN_LEFT",
+        "ICON_ALIGN_CENTER",
+        "ICON_ALIGN_RIGHT",
+        "ICON_UNDO",
+        "ICON_REDO",
         "ICON_REPEAT",
         "ICON_REFRESH",
         "ICON_SHUFFLE",
         "ICON_SKIP_NEXT",
         "ICON_SKIP_PREV",
+        "ICON_PANEL_LEFT",
         "ICON_PANEL_RIGHT",
         "ICON_SCREEN",
         "ICON_PLAY_ALL",
@@ -438,6 +446,59 @@ def _build_icon_svg(name: str) -> str:
             '<circle cx="9"  cy="19" r="1.8"/><circle cx="15" cy="19" r="1.8"/>'
             "</svg>"
         )
+    elif name == "ICON_EYE":
+        return (
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
+            ' stroke="currentColor" stroke-width="2" stroke-linecap="round"'
+            ' stroke-linejoin="round">'
+            '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/>'
+            '<circle cx="12" cy="12" r="3"/>'
+            "</svg>"
+        )
+    elif name == "ICON_EYE_OFF":
+        return (
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
+            ' stroke="currentColor" stroke-width="2" stroke-linecap="round"'
+            ' stroke-linejoin="round">'
+            '<path d="M3 3l18 18"/><path d="M10.6 5.2A10.7 10.7 0 0 1 12 5c6.5 0 10 7 10 7a18 18 0 0 1-2.3 3.2"/>'
+            '<path d="M6.6 6.6C3.6 8.6 2 12 2 12s3.5 7 10 7c1.7 0 3.2-.5 4.5-1.2"/>'
+            '<path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>'
+            "</svg>"
+        )
+    elif name in {"ICON_ALIGN_LEFT", "ICON_ALIGN_CENTER", "ICON_ALIGN_RIGHT"}:
+        starts = {
+            "ICON_ALIGN_LEFT": (4, 4, 4, 4),
+            "ICON_ALIGN_CENTER": (4, 7, 4, 6),
+            "ICON_ALIGN_RIGHT": (4, 9, 4, 8),
+        }[name]
+        ends = {
+            "ICON_ALIGN_LEFT": (20, 15, 20, 17),
+            "ICON_ALIGN_CENTER": (20, 17, 20, 18),
+            "ICON_ALIGN_RIGHT": (20, 20, 20, 20),
+        }[name]
+        lines = "".join(
+            f'<line x1="{start}" y1="{y}" x2="{end}" y2="{y}"/>'
+            for start, end, y in zip(starts, ends, (6, 10, 14, 18), strict=True)
+        )
+        return (
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
+            ' stroke="currentColor" stroke-width="2" stroke-linecap="round">'
+            f"{lines}</svg>"
+        )
+    elif name == "ICON_UNDO":
+        return (
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
+            ' stroke="currentColor" stroke-width="2" stroke-linecap="round"'
+            ' stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/>'
+            '<path d="M20 20v-4a7 7 0 0 0-7-7H4"/></svg>'
+        )
+    elif name == "ICON_REDO":
+        return (
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
+            ' stroke="currentColor" stroke-width="2" stroke-linecap="round"'
+            ' stroke-linejoin="round"><polyline points="15 14 20 9 15 4"/>'
+            '<path d="M4 20v-4a7 7 0 0 1 7-7h9"/></svg>'
+        )
     elif name == "ICON_REPEAT":
         return (
             '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
@@ -471,6 +532,14 @@ def _build_icon_svg(name: str) -> str:
             ' stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
             '<polygon points="19,4 9,12 19,20"/>'
             '<line x1="5" y1="5" x2="5" y2="19"/>'
+            "</svg>"
+        )
+    elif name == "ICON_PANEL_LEFT":
+        return (
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
+            ' stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+            '<rect x="3" y="3" width="18" height="18" rx="2"/>'
+            '<line x1="9" y1="3" x2="9" y2="21"/>'
             "</svg>"
         )
     elif name == "ICON_PANEL_RIGHT":

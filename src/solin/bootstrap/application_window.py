@@ -337,6 +337,10 @@ class ApplicationWindow(QMainWindow):
         if self._state is ApplicationWindowState.CLOSING:
             super().closeEvent(event)
             return
+        confirm_close = getattr(self._runtime, "confirm_close", None)
+        if callable(confirm_close) and not confirm_close():
+            event.ignore()
+            return
         self._state = ApplicationWindowState.CLOSING
         self._save_geometry(self.saveGeometry())
         if self._load_handle is not None:

@@ -4213,47 +4213,6 @@ Tindakan ini tidak dapat dibatalkan.</translation>
     </message>
   </context>
   <context>
-    <name>SermonThemeWidget</name>
-    <message>
-      <location filename="../../widgets/sermon_theme_widget.py" line="+383" />
-      <location line="+16" />
-      <location line="+91" />
-      <source>PUBLIC TALK</source>
-      <translation>KHOTBAH UMUM</translation>
-    </message>
-    <message>
-      <location line="-7" />
-      <location line="+3" />
-      <source>Talk theme</source>
-      <translation>Tema khotbah</translation>
-    </message>
-    <message>
-      <location line="-2" />
-      <source>Project the talk title on the secondary screen</source>
-      <translation>Proyeksikan judul khotbah di layar sekunder</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>PREVIEW</source>
-      <translation>PRATINJAU</translation>
-    </message>
-    <message>
-      <location line="+2" />
-      <source>E.g.: Imitate Jehovah's mercy</source>
-      <translation>Cth.: Tirulah Belas Kasihan Yehuwa</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>Subtitle:</source>
-      <translation>Subjudul:</translation>
-    </message>
-    <message>
-      <location line="+12" />
-      <source>Project Theme</source>
-      <translation>Proyeksikan Tema</translation>
-    </message>
-  </context>
-  <context>
     <name>SetAsIdleConfirmDialog</name>
     <message>
       <location filename="../../widgets/projection/idle_dialog.py" line="+81" />
@@ -7035,6 +6994,767 @@ Gunakan tombol putar untuk memproyeksikan · Seret pegangan ⠿ untuk mengubah u
       <source>Not configured</source>
       <translation>Belum dikonfigurasi</translation>
 
+    </message>
+  </context>
+  <context>
+    <name>DeferredTalkThemeWidget</name>
+    <message>
+      <location filename="../../widgets/deferred_talk_theme_widget.py" line="+36" />
+      <location line="+49" />
+      <source>Loading…</source>
+      <translation>Memuat…</translation>
+    </message>
+  </context>
+  <context>
+    <name>MeetingSections</name>
+    <message>
+      <location filename="../../ui/qml/talk_theme.py" line="+876" />
+      <source>PUBLIC TALK</source>
+      <translation>KHOTBAH UMUM</translation>
+    </message>
+  </context>
+  <context>
+    <name>TalkThemeBridge</name>
+    <message>
+      <location filename="../../ui/qml/talk_theme.py" line="-424" />
+      <source>Style applied</source>
+      <translation>Gaya diterapkan</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Enter a name for the preset.</source>
+      <translation>Masukkan nama preset.</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>A preset with this name already exists.</source>
+      <translation>Preset dengan nama ini sudah ada.</translation>
+    </message>
+    <message>
+      <location line="+14" />
+      <source>Preset saved</source>
+      <translation>Preset disimpan</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Preset deleted</source>
+      <translation>Preset dihapus</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Choose image</source>
+      <translation>Pilih gambar</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Images (*.png *.jpg *.jpeg *.webp)</source>
+      <translation>Gambar (*.png *.jpg *.jpeg *.webp)</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Importing image…</source>
+      <translation>Mengimpor gambar…</translation>
+    </message>
+    <message>
+      <location line="+21" />
+      <source>Text color</source>
+      <translation>Warna teks</translation>
+    </message>
+    <message>
+      <location line="+93" />
+      <source>Enter the talk title before projecting.</source>
+      <translation>Masukkan judul khotbah sebelum memproyeksikan.</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Preparing image…</source>
+      <translation>Menyiapkan gambar…</translation>
+    </message>
+    <message>
+      <location line="+18" />
+      <source>The talk-theme draft could not be saved.</source>
+      <translation>Draf tema khotbah tidak dapat disimpan.</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Talk theme projected</source>
+      <translation>Tema khotbah diproyeksikan</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Projection is currently protected.</source>
+      <translation>Proyeksi sedang dilindungi.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>The talk theme could not be projected.</source>
+      <translation>Tema khotbah tidak dapat diproyeksikan.</translation>
+    </message>
+    <message>
+      <location line="+29" />
+      <source>Image added</source>
+      <translation>Gambar ditambahkan</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>This image format is not supported.</source>
+      <translation>Format gambar ini tidak didukung.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Animated images are not supported.</source>
+      <translation>Gambar animasi tidak didukung.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>The selected image could not be opened.</source>
+      <translation>Gambar yang dipilih tidak dapat dibuka.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>The selected image has invalid dimensions.</source>
+      <translation>Gambar yang dipilih memiliki dimensi yang tidak valid.</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>The selected image could not be imported.</source>
+      <translation>Gambar yang dipilih tidak dapat diimpor.</translation>
+    </message>
+    <message>
+      <source>Talk theme</source>
+      <translation>Tema khotbah</translation>
+    </message>
+    <message>
+      <source>The maximum number of text layers has been reached.</source>
+      <translation>Jumlah maksimum lapisan teks telah tercapai.</translation>
+    </message>
+    <message>
+      <source>The maximum number of presets has been reached.</source>
+      <translation>Jumlah maksimum preset telah tercapai.</translation>
+    </message>
+    <message>
+      <source>Text %1</source>
+      <translation>Teks %1</translation>
+    </message>
+    <message>
+      <source>The preset could not be saved.</source>
+      <translation>Preset tidak dapat disimpan.</translation>
+    </message>
+    <message>
+      <source>Botanical</source>
+      <translation>Botani</translation>
+    </message>
+    <message>
+      <source>Classic blue</source>
+      <translation>Biru klasik</translation>
+    </message>
+    <message>
+      <source>Soft photographic</source>
+      <translation>Foto lembut</translation>
+    </message>
+    <message>
+      <source>Center</source>
+      <translation>Tengah</translation>
+    </message>
+    <message>
+      <source>Third</source>
+      <translation>Sepertiga</translation>
+    </message>
+    <message>
+      <source>Safe margin</source>
+      <translation>Margin aman</translation>
+    </message>
+  </context>
+  <context>
+    <name>TalkThemeEditorView</name>
+    <message>
+      <location filename="../../qml/TalkThemeEditorView.qml" line="+28" />
+      <source>Botanical</source>
+      <translation>Botani</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Classic blue</source>
+      <translation>Biru klasik</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Soft photographic</source>
+      <translation>Foto lembut</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Safe margin</source>
+      <translation>Margin aman</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Third</source>
+      <translation>Sepertiga</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Center</source>
+      <translation>Tengah</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Other text</source>
+      <translation>Teks lain</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <location line="+736" />
+      <source>Label</source>
+      <translation>Label</translation>
+    </message>
+    <message>
+      <location line="-734" />
+      <location line="+346" />
+      <location line="+394" />
+      <source>Talk title</source>
+      <translation>Judul khotbah</translation>
+    </message>
+    <message>
+      <location line="-738" />
+      <location line="+745" />
+      <source>Speaker</source>
+      <translation>Pembicara</translation>
+    </message>
+    <message>
+      <location line="-743" />
+      <location line="+749" />
+      <source>Congregation</source>
+      <translation>Sidang</translation>
+    </message>
+    <message>
+      <location line="-561" />
+      <source>Talk theme</source>
+      <translation>Tema khotbah</translation>
+    </message>
+    <message>
+      <location line="+28" />
+      <source>On screen</source>
+      <translation>Di layar</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Changes not yet projected</source>
+      <translation>Perubahan belum diproyeksikan</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Saving…</source>
+      <translation>Menyimpan…</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Draft saved</source>
+      <translation>Draf tersimpan</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Edit</source>
+      <translation>Edit</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Canvas</source>
+      <translation>Kanvas</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Undo</source>
+      <translation>Urungkan</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Redo</source>
+      <translation>Ulangi</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <location line="+722" />
+      <source>Save preset</source>
+      <translation>Simpan preset</translation>
+    </message>
+    <message>
+      <location line="-716" />
+      <source>Preparing…</source>
+      <translation>Menyiapkan…</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Update projection</source>
+      <translation>Perbarui proyeksi</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>▶  Project</source>
+      <translation>▶  Proyeksikan</translation>
+    </message>
+    <message>
+      <location line="+31" />
+      <source>Styles</source>
+      <translation>Gaya</translation>
+    </message>
+    <message>
+      <location line="+78" />
+      <source>Delete preset</source>
+      <translation>Hapus preset</translation>
+    </message>
+    <message>
+      <location line="+34" />
+      <location line="+493" />
+      <source>Background</source>
+      <translation>Latar belakang</translation>
+    </message>
+    <message>
+      <location line="-490" />
+      <source>Importing…</source>
+      <translation>Mengimpor…</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>▧  Choose image</source>
+      <translation>▧  Pilih gambar</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>PNG, JPG or WebP · up to 4096 px</source>
+      <translation>PNG, JPG, atau WebP · hingga 4096 px</translation>
+    </message>
+    <message>
+      <location line="+75" />
+      <source>Optional text</source>
+      <translation>Teks opsional</translation>
+    </message>
+    <message>
+      <location line="+187" />
+      <source>Drag text · use arrow keys to fine-tune</source>
+      <translation>Seret teks · gunakan tombol panah untuk menyesuaikan</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Finish adjusting</source>
+      <translation>Selesai menyesuaikan</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Adjust image</source>
+      <translation>Sesuaikan gambar</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Auto</source>
+      <translation>Otomatis</translation>
+    </message>
+    <message>
+      <location line="+37" />
+      <source>Content</source>
+      <translation>Konten</translation>
+    </message>
+    <message>
+      <location line="+16" />
+      <source>Enter the title</source>
+      <translation>Masukkan judul</translation>
+    </message>
+    <message>
+      <location line="+19" />
+      <source>Selected text</source>
+      <translation>Teks terpilih</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <source>Font</source>
+      <translation>Font</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Weight</source>
+      <translation>Ketebalan</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Normal</source>
+      <translation>Normal</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Medium</source>
+      <translation>Sedang</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Semibold</source>
+      <translation>Semi tebal</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Bold</source>
+      <translation>Tebal</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Size</source>
+      <translation>Ukuran</translation>
+    </message>
+    <message>
+      <location line="+23" />
+      <source>Fewer options  ⌃</source>
+      <translation>Lebih sedikit opsi  ⌃</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>More options  ⌄</source>
+      <translation>Opsi lainnya  ⌄</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Text block width</source>
+      <translation>Lebar blok teks</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Letter spacing</source>
+      <translation>Jarak huruf</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <source>Text color</source>
+      <translation>Warna teks</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Choose text color</source>
+      <translation>Pilih warna teks</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Show this text</source>
+      <translation>Tampilkan teks ini</translation>
+    </message>
+    <message>
+      <location line="+14" />
+      <source>Alignment</source>
+      <translation>Perataan</translation>
+    </message>
+    <message>
+      <location line="+29" />
+      <source>Darken image</source>
+      <translation>Gelapkan gambar</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Blur image</source>
+      <translation>Buramkan gambar</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Image fit</source>
+      <translation>Penyesuaian gambar</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Fill</source>
+      <translation>Isi</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Fit</source>
+      <translation>Sesuaikan</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Image zoom</source>
+      <translation>Zoom gambar</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>The image for this style could not be found.</source>
+      <translation>Gambar gaya ini tidak ditemukan.</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Choose image</source>
+      <translation>Pilih gambar</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Reset</source>
+      <translation>Atur ulang</translation>
+    </message>
+    <message>
+      <location line="+21" />
+      <source>Ready to project</source>
+      <translation>Siap diproyeksikan</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Enter a title</source>
+      <translation>Masukkan judul</translation>
+    </message>
+    <message>
+      <location line="+22" />
+      <source>Name</source>
+      <translation>Nama</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>For example: Special evening</source>
+      <translation>Contoh: Malam istimewa</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Delete preset?</source>
+      <translation>Hapus preset?</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>This preset will be permanently removed.</source>
+      <translation>Preset ini akan dihapus secara permanen.</translation>
+    </message>
+    <message>
+      <source>Text</source>
+      <translation>Teks</translation>
+    </message>
+    <message>
+      <source>Select a text</source>
+      <translation>Pilih teks</translation>
+    </message>
+    <message>
+      <source>Click a text on the canvas or choose a layer to edit it.</source>
+      <translation>Klik teks di kanvas atau pilih lapisan untuk mengeditnya.</translation>
+    </message>
+    <message>
+      <source>Add text</source>
+      <translation>Tambah teks</translation>
+    </message>
+    <message>
+      <source>Write something…</source>
+      <translation>Tulis sesuatu…</translation>
+    </message>
+    <message>
+      <source>Fewer options</source>
+      <translation>Lebih sedikit opsi</translation>
+    </message>
+    <message>
+      <source>More options</source>
+      <translation>Lebih banyak opsi</translation>
+    </message>
+    <message>
+      <source>Line height</source>
+      <translation>Tinggi baris</translation>
+    </message>
+    <message>
+      <source>No image</source>
+      <translation>Tanpa gambar</translation>
+    </message>
+    <message>
+      <source>Adjust image position</source>
+      <translation>Sesuaikan posisi gambar</translation>
+    </message>
+    <message>
+      <source>The image for this preset could not be found.</source>
+      <translation>Gambar untuk preset ini tidak ditemukan.</translation>
+    </message>
+    <message>
+      <source>Front</source>
+      <translation>Terdepan</translation>
+    </message>
+    <message>
+      <source>%1 layers</source>
+      <translation>%1 lapisan</translation>
+    </message>
+    <message>
+      <source>Hide layer</source>
+      <translation>Sembunyikan lapisan</translation>
+    </message>
+    <message>
+      <source>Show layer</source>
+      <translation>Tampilkan lapisan</translation>
+    </message>
+    <message>
+      <source>Delete layer</source>
+      <translation>Hapus lapisan</translation>
+    </message>
+    <message>
+      <source>No text layers yet
+Add one when you are ready.</source>
+      <translation>Belum ada lapisan teks
+Tambahkan saat Anda siap.</translation>
+    </message>
+    <message>
+      <source>Drag layers to change which text appears in front.</source>
+      <translation>Seret lapisan untuk mengubah teks mana yang tampil di depan.</translation>
+    </message>
+    <message>
+      <source>Included styles</source>
+      <translation>Gaya bawaan</translation>
+    </message>
+    <message>
+      <source>My presets</source>
+      <translation>Preset saya</translation>
+    </message>
+    <message>
+      <source>Your saved styles will appear here</source>
+      <translation>Gaya tersimpan Anda akan muncul di sini</translation>
+    </message>
+    <message>
+      <source>Customize a theme and save it as a preset.</source>
+      <translation>Sesuaikan tema dan simpan sebagai preset.</translation>
+    </message>
+    <message>
+      <source>Layers</source>
+      <translation>Lapisan</translation>
+    </message>
+    <message>
+      <source>Styles and layers</source>
+      <translation>Gaya dan lapisan</translation>
+    </message>
+    <message>
+      <source>Unsaved changes</source>
+      <translation>Perubahan belum disimpan</translation>
+    </message>
+    <message>
+      <source>Save</source>
+      <translation>Simpan</translation>
+    </message>
+    <message>
+      <source>Save as preset</source>
+      <translation>Simpan sebagai preset</translation>
+    </message>
+    <message>
+      <source>More save options</source>
+      <translation>Opsi penyimpanan lainnya</translation>
+    </message>
+    <message>
+      <source>Save as new preset…</source>
+      <translation>Simpan sebagai preset baru…</translation>
+    </message>
+    <message>
+      <source>Project</source>
+      <translation>Proyeksikan</translation>
+    </message>
+    <message>
+      <source>Export image</source>
+      <translation>Ekspor gambar</translation>
+    </message>
+    <message>
+      <source>Drag the image to reposition it</source>
+      <translation>Seret gambar untuk mengubah posisinya</translation>
+    </message>
+    <message>
+      <source>Drag text · double-click to edit</source>
+      <translation>Seret teks · klik dua kali untuk mengedit</translation>
+    </message>
+    <message>
+      <source>Auto format</source>
+      <translation>Format otomatis</translation>
+    </message>
+    <message>
+      <source>Match the projection screen format</source>
+      <translation>Samakan dengan format layar proyeksi</translation>
+    </message>
+    <message>
+      <source>Save the complete composition so you can use it again later.</source>
+      <translation>Simpan komposisi lengkap agar dapat digunakan lagi nanti.</translation>
+    </message>
+    <message>
+      <source>Preset name</source>
+      <translation>Nama preset</translation>
+    </message>
+    <message>
+      <source>Cancel</source>
+      <translation>Batal</translation>
+    </message>
+    <message>
+      <source>“%1” will be permanently removed.</source>
+      <translation>“%1” akan dihapus secara permanen.</translation>
+    </message>
+    <message>
+      <source>Delete</source>
+      <translation>Hapus</translation>
+    </message>
+    <message>
+      <source>Would you like to save your changes before switching presets?</source>
+      <translation>Apakah Anda ingin menyimpan perubahan sebelum beralih preset?</translation>
+    </message>
+    <message>
+      <source>Discard</source>
+      <translation>Buang</translation>
+    </message>
+  </context>
+  <context>
+    <name>TalkThemeEditorWidget</name>
+    <message>
+      <location filename="../../ui/qml/talk_theme.py" line="+253" />
+      <source>Projection is not ready yet.</source>
+      <translation>Proyeksi belum siap.</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>The talk-theme canvas could not be loaded.</source>
+      <translation>Kanvas tema khotbah tidak dapat dimuat.</translation>
+    </message>
+    <message>
+      <location line="+26" />
+      <source>The background image took too long to load.</source>
+      <translation>Gambar latar belakang terlalu lama dimuat.</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <location line="+4" />
+      <source>The talk-theme image could not be prepared.</source>
+      <translation>Gambar tema khotbah tidak dapat disiapkan.</translation>
+    </message>
+    <message>
+      <location line="+22" />
+      <source>The final talk-theme image is incomplete.</source>
+      <translation>Gambar akhir tema khotbah tidak lengkap.</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>The talk-theme image could not be encoded.</source>
+      <translation>Gambar tema khotbah tidak dapat dikodekan.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Talk theme</source>
+      <translation>Tema khotbah</translation>
+    </message>
+    <message>
+      <location line="+21" />
+      <source>Preparing the image timed out.</source>
+      <translation>Waktu menyiapkan gambar habis.</translation>
+    </message>
+    <message>
+      <source>Export image</source>
+      <translation>Ekspor gambar</translation>
+    </message>
+    <message>
+      <source>PNG image (*.png)</source>
+      <translation>Gambar PNG (*.png)</translation>
+    </message>
+    <message>
+      <source>The image could not be exported.</source>
+      <translation>Gambar tidak dapat diekspor.</translation>
+    </message>
+    <message>
+      <source>Unsaved changes</source>
+      <translation>Perubahan belum disimpan</translation>
+    </message>
+    <message>
+      <source>Save the changes to this talk theme?</source>
+      <translation>Simpan perubahan pada tema khotbah ini?</translation>
+    </message>
+    <message>
+      <source>Save as preset</source>
+      <translation>Simpan sebagai preset</translation>
+    </message>
+    <message>
+      <source>Name</source>
+      <translation>Nama</translation>
     </message>
   </context>
 </TS>

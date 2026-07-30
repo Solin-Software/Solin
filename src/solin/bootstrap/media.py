@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -48,7 +49,32 @@ class MediaComposition:
         self,
         settings: MediaPlaybackSettings,
         parent: QObject | None = None,
-    ) -> MediaController:
+        *,
+        projection: bool = True,
+    ):
+        """Build a playback controller.
+
+        The engine is selected by ``SOLIN_MEDIA_ENGINE``: ``obs`` uses the
+        libobs-backed :class:`ObsMediaController`; anything else (default) uses
+        the Qt :class:`MediaController`. Both expose the same public surface.
+
+        ``projection`` selects how an ``obs`` engine emits video: the default
+        routes the source through the projection program (channel-0 crossfade);
+        ``projection=False`` keeps it on a private audio-only channel (for the
+        background song player, which is never shown).
+        """
+        engine = os.environ.get("SOLIN_MEDIA_ENGINE", "").strip().lower()
+        if engine == "obs":
+            from solin.core.media.obs_playback import ObsMediaController
+
+            log.info("Using libobs media engine (SOLIN_MEDIA_ENGINE=obs)")
+            return ObsMediaController(
+                settings,
+                self.cache_manager,
+                downloader_factory=self.create_downloader,
+                projection=projection,
+                parent=parent,
+            )
         return MediaController(
             settings,
             self.cache_manager,
@@ -88,3 +114,13 @@ class MediaComposition:
         alive = self._media_info_workers.shutdown()
         if alive:
             log.warning("Media info workers still alive after shutdown: %s", alive)
+        # obs engine: tear the native runtime down deterministically on app exit
+        # (projection program → channels → OBS context, in that order). No-op for
+        # the default Qt engine, or if the libobs runtime never started.
+        if os.environ.get("SOLIN_MEDIA_ENGINE", "").strip().lower() == "obs":
+            try:
+                from solin.core.media.obs_runtime import obs_runtime
+
+                obs_runtime().shutdown()
+            except Exception:  # noqa: BLE001 - shutdown must not raise
+                log.warning("libobs runtime shutdown errored", exc_info=True)

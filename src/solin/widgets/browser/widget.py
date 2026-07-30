@@ -29,6 +29,10 @@ from ...ui.incremental_load import IncrementalLoadHandle
 
 log = logging.getLogger(__name__)
 
+#: JPEG quality for the live-tab frame stream (sideview streams JPEG only). Near
+#: lossless so the projected page stays clean; the stream is one tab at ~30fps.
+_TAB_PROJECTION_JPEG_QUALITY = 95
+
 if TYPE_CHECKING:
     from ...core.media.browser_downloads import BrowserDownloadService
     from ...core.network.browser_images import BrowserImageFetchService
@@ -992,7 +996,11 @@ class BrowserWidget(
         every_nth_frame = self._native_stream_every_nth_frame()
         try:
             started = tab.view.start_frame_stream(
-                quality=75,
+                # The stream is JPEG-encoded (sideview has no lossless stream); at
+                # q75 the compression is visible when the frame is projected full
+                # screen. Use near-lossless quality — the projected page must look
+                # clean; the extra bandwidth is fine for a single tab at ~30fps.
+                quality=_TAB_PROJECTION_JPEG_QUALITY,
                 max_width=max(0, tab.view.width()),
                 max_height=max(0, tab.view.height()),
                 every_nth_frame=every_nth_frame,

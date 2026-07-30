@@ -4216,47 +4216,6 @@ Den här åtgärden kan inte ångras.</translation>
     </message>
   </context>
   <context>
-    <name>SermonThemeWidget</name>
-    <message>
-      <location filename="../../widgets/sermon_theme_widget.py" line="+383" />
-      <location line="+16" />
-      <location line="+91" />
-      <source>PUBLIC TALK</source>
-      <translation>OFFENTLIGT TAL</translation>
-    </message>
-    <message>
-      <location line="-7" />
-      <location line="+3" />
-      <source>Talk theme</source>
-      <translation>Taltema</translation>
-    </message>
-    <message>
-      <location line="-2" />
-      <source>Project the talk title on the secondary screen</source>
-      <translation>Projicera talens titel på sekundär skärm</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>PREVIEW</source>
-      <translation>FÖRHANDSGRANSKNING</translation>
-    </message>
-    <message>
-      <location line="+2" />
-      <source>E.g.: Imitate Jehovah's mercy</source>
-      <translation>Ex: Efterlikna Guds barmhärtighet</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>Subtitle:</source>
-      <translation>Undertitel:</translation>
-    </message>
-    <message>
-      <location line="+12" />
-      <source>Project Theme</source>
-      <translation>Projicera tema</translation>
-    </message>
-  </context>
-  <context>
     <name>SetAsIdleConfirmDialog</name>
     <message>
       <location filename="../../widgets/projection/idle_dialog.py" line="+81" />
@@ -7039,6 +6998,767 @@ Använd uppspelningsknappen för att projicera · Dra handtaget ⠿ för att än
       <source>Not configured</source>
       <translation>Inte konfigurerad</translation>
 
+    </message>
+  </context>
+  <context>
+    <name>DeferredTalkThemeWidget</name>
+    <message>
+      <location filename="../../widgets/deferred_talk_theme_widget.py" line="+36" />
+      <location line="+49" />
+      <source>Loading…</source>
+      <translation>Laddar…</translation>
+    </message>
+  </context>
+  <context>
+    <name>MeetingSections</name>
+    <message>
+      <location filename="../../ui/qml/talk_theme.py" line="+876" />
+      <source>PUBLIC TALK</source>
+      <translation>OFFENTLIGT TAL</translation>
+    </message>
+  </context>
+  <context>
+    <name>TalkThemeBridge</name>
+    <message>
+      <location filename="../../ui/qml/talk_theme.py" line="-424" />
+      <source>Style applied</source>
+      <translation>Stilen har tillämpats</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Enter a name for the preset.</source>
+      <translation>Ange ett namn för förinställningen.</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>A preset with this name already exists.</source>
+      <translation>Det finns redan en förinställning med det namnet.</translation>
+    </message>
+    <message>
+      <location line="+14" />
+      <source>Preset saved</source>
+      <translation>Förinställningen har sparats</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Preset deleted</source>
+      <translation>Förinställningen har tagits bort</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Choose image</source>
+      <translation>Välj bild</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Images (*.png *.jpg *.jpeg *.webp)</source>
+      <translation>Bilder (*.png *.jpg *.jpeg *.webp)</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Importing image…</source>
+      <translation>Importerar bild…</translation>
+    </message>
+    <message>
+      <location line="+21" />
+      <source>Text color</source>
+      <translation>Textfärg</translation>
+    </message>
+    <message>
+      <location line="+93" />
+      <source>Enter the talk title before projecting.</source>
+      <translation>Ange talets rubrik innan projicering.</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Preparing image…</source>
+      <translation>Förbereder bild…</translation>
+    </message>
+    <message>
+      <location line="+18" />
+      <source>The talk-theme draft could not be saved.</source>
+      <translation>Utkastet till taltemat kunde inte sparas.</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Talk theme projected</source>
+      <translation>Taltemat har projicerats</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Projection is currently protected.</source>
+      <translation>Projiceringen är skyddad just nu.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>The talk theme could not be projected.</source>
+      <translation>Taltemat kunde inte projiceras.</translation>
+    </message>
+    <message>
+      <location line="+29" />
+      <source>Image added</source>
+      <translation>Bild tillagd</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>This image format is not supported.</source>
+      <translation>Det här bildformatet stöds inte.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Animated images are not supported.</source>
+      <translation>Animerade bilder stöds inte.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>The selected image could not be opened.</source>
+      <translation>Den valda bilden kunde inte öppnas.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>The selected image has invalid dimensions.</source>
+      <translation>Den valda bilden har ogiltiga mått.</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>The selected image could not be imported.</source>
+      <translation>Den valda bilden kunde inte importeras.</translation>
+    </message>
+    <message>
+      <source>Talk theme</source>
+      <translation>Taltema</translation>
+    </message>
+    <message>
+      <source>The maximum number of text layers has been reached.</source>
+      <translation>Det maximala antalet textlager har uppnåtts.</translation>
+    </message>
+    <message>
+      <source>The maximum number of presets has been reached.</source>
+      <translation>Det maximala antalet förinställningar har uppnåtts.</translation>
+    </message>
+    <message>
+      <source>Text %1</source>
+      <translation>Text %1</translation>
+    </message>
+    <message>
+      <source>The preset could not be saved.</source>
+      <translation>Förinställningen kunde inte sparas.</translation>
+    </message>
+    <message>
+      <source>Botanical</source>
+      <translation>Botanisk</translation>
+    </message>
+    <message>
+      <source>Classic blue</source>
+      <translation>Klassisk blå</translation>
+    </message>
+    <message>
+      <source>Soft photographic</source>
+      <translation>Mjukt foto</translation>
+    </message>
+    <message>
+      <source>Center</source>
+      <translation>Mitten</translation>
+    </message>
+    <message>
+      <source>Third</source>
+      <translation>Tredjedel</translation>
+    </message>
+    <message>
+      <source>Safe margin</source>
+      <translation>Säkerhetsmarginal</translation>
+    </message>
+  </context>
+  <context>
+    <name>TalkThemeEditorView</name>
+    <message>
+      <location filename="../../qml/TalkThemeEditorView.qml" line="+28" />
+      <source>Botanical</source>
+      <translation>Botanisk</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Classic blue</source>
+      <translation>Klassisk blå</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Soft photographic</source>
+      <translation>Mjukt foto</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Safe margin</source>
+      <translation>Säkerhetsmarginal</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Third</source>
+      <translation>Tredjedel</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Center</source>
+      <translation>Mitten</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Other text</source>
+      <translation>Annan text</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <location line="+736" />
+      <source>Label</source>
+      <translation>Etikett</translation>
+    </message>
+    <message>
+      <location line="-734" />
+      <location line="+346" />
+      <location line="+394" />
+      <source>Talk title</source>
+      <translation>Talets rubrik</translation>
+    </message>
+    <message>
+      <location line="-738" />
+      <location line="+745" />
+      <source>Speaker</source>
+      <translation>Talare</translation>
+    </message>
+    <message>
+      <location line="-743" />
+      <location line="+749" />
+      <source>Congregation</source>
+      <translation>Församling</translation>
+    </message>
+    <message>
+      <location line="-561" />
+      <source>Talk theme</source>
+      <translation>Taltema</translation>
+    </message>
+    <message>
+      <location line="+28" />
+      <source>On screen</source>
+      <translation>På skärmen</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Changes not yet projected</source>
+      <translation>Ändringar har ännu inte projicerats</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Saving…</source>
+      <translation>Sparar…</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Draft saved</source>
+      <translation>Utkast sparat</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Edit</source>
+      <translation>Redigera</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Canvas</source>
+      <translation>Arbetsyta</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Undo</source>
+      <translation>Ångra</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Redo</source>
+      <translation>Gör om</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <location line="+722" />
+      <source>Save preset</source>
+      <translation>Spara förinställning</translation>
+    </message>
+    <message>
+      <location line="-716" />
+      <source>Preparing…</source>
+      <translation>Förbereder…</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Update projection</source>
+      <translation>Uppdatera projicering</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>▶  Project</source>
+      <translation>▶  Projicera</translation>
+    </message>
+    <message>
+      <location line="+31" />
+      <source>Styles</source>
+      <translation>Stilar</translation>
+    </message>
+    <message>
+      <location line="+78" />
+      <source>Delete preset</source>
+      <translation>Ta bort förinställning</translation>
+    </message>
+    <message>
+      <location line="+34" />
+      <location line="+493" />
+      <source>Background</source>
+      <translation>Bakgrund</translation>
+    </message>
+    <message>
+      <location line="-490" />
+      <source>Importing…</source>
+      <translation>Importerar…</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>▧  Choose image</source>
+      <translation>▧  Välj bild</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>PNG, JPG or WebP · up to 4096 px</source>
+      <translation>PNG, JPG eller WebP · upp till 4096 px</translation>
+    </message>
+    <message>
+      <location line="+75" />
+      <source>Optional text</source>
+      <translation>Valfri text</translation>
+    </message>
+    <message>
+      <location line="+187" />
+      <source>Drag text · use arrow keys to fine-tune</source>
+      <translation>Dra texter · finjustera med piltangenter</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Finish adjusting</source>
+      <translation>Slutför justering</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Adjust image</source>
+      <translation>Justera bild</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Auto</source>
+      <translation>Auto</translation>
+    </message>
+    <message>
+      <location line="+37" />
+      <source>Content</source>
+      <translation>Innehåll</translation>
+    </message>
+    <message>
+      <location line="+16" />
+      <source>Enter the title</source>
+      <translation>Ange rubriken</translation>
+    </message>
+    <message>
+      <location line="+19" />
+      <source>Selected text</source>
+      <translation>Markerad text</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <source>Font</source>
+      <translation>Teckensnitt</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Weight</source>
+      <translation>Vikt</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Normal</source>
+      <translation>Normal</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Medium</source>
+      <translation>Medium</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Semibold</source>
+      <translation>Halvfet</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Bold</source>
+      <translation>Fet</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Size</source>
+      <translation>Storlek</translation>
+    </message>
+    <message>
+      <location line="+23" />
+      <source>Fewer options  ⌃</source>
+      <translation>Färre alternativ  ⌃</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>More options  ⌄</source>
+      <translation>Fler alternativ  ⌄</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Text block width</source>
+      <translation>Textblockets bredd</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Letter spacing</source>
+      <translation>Teckenavstånd</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <source>Text color</source>
+      <translation>Textfärg</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Choose text color</source>
+      <translation>Välj textfärg</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Show this text</source>
+      <translation>Visa den här texten</translation>
+    </message>
+    <message>
+      <location line="+14" />
+      <source>Alignment</source>
+      <translation>Justering</translation>
+    </message>
+    <message>
+      <location line="+29" />
+      <source>Darken image</source>
+      <translation>Gör bilden mörkare</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Blur image</source>
+      <translation>Gör bilden suddig</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Image fit</source>
+      <translation>Bildanpassning</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Fill</source>
+      <translation>Fyll</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Fit</source>
+      <translation>Anpassa</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Image zoom</source>
+      <translation>Bildzoom</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>The image for this style could not be found.</source>
+      <translation>Bilden för den här stilen kunde inte hittas.</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Choose image</source>
+      <translation>Välj bild</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Reset</source>
+      <translation>Återställa</translation>
+    </message>
+    <message>
+      <location line="+21" />
+      <source>Ready to project</source>
+      <translation>Klar för projicering</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Enter a title</source>
+      <translation>Ange en rubrik</translation>
+    </message>
+    <message>
+      <location line="+22" />
+      <source>Name</source>
+      <translation>Namn</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>For example: Special evening</source>
+      <translation>Till exempel: Speciell kväll</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Delete preset?</source>
+      <translation>Ta bort förinställningen?</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>This preset will be permanently removed.</source>
+      <translation>Den här förinställningen tas bort permanent.</translation>
+    </message>
+    <message>
+      <source>Text</source>
+      <translation>Text</translation>
+    </message>
+    <message>
+      <source>Select a text</source>
+      <translation>Välj en text</translation>
+    </message>
+    <message>
+      <source>Click a text on the canvas or choose a layer to edit it.</source>
+      <translation>Klicka på en text på arbetsytan eller välj ett lager för att redigera den.</translation>
+    </message>
+    <message>
+      <source>Add text</source>
+      <translation>Lägg till text</translation>
+    </message>
+    <message>
+      <source>Write something…</source>
+      <translation>Skriv något…</translation>
+    </message>
+    <message>
+      <source>Fewer options</source>
+      <translation>Färre alternativ</translation>
+    </message>
+    <message>
+      <source>More options</source>
+      <translation>Fler alternativ</translation>
+    </message>
+    <message>
+      <source>Line height</source>
+      <translation>Radavstånd</translation>
+    </message>
+    <message>
+      <source>No image</source>
+      <translation>Ingen bild</translation>
+    </message>
+    <message>
+      <source>Adjust image position</source>
+      <translation>Justera bildens position</translation>
+    </message>
+    <message>
+      <source>The image for this preset could not be found.</source>
+      <translation>Bilden för den här förinställningen kunde inte hittas.</translation>
+    </message>
+    <message>
+      <source>Front</source>
+      <translation>Längst fram</translation>
+    </message>
+    <message>
+      <source>%1 layers</source>
+      <translation>%1 lager</translation>
+    </message>
+    <message>
+      <source>Hide layer</source>
+      <translation>Dölj lager</translation>
+    </message>
+    <message>
+      <source>Show layer</source>
+      <translation>Visa lager</translation>
+    </message>
+    <message>
+      <source>Delete layer</source>
+      <translation>Ta bort lager</translation>
+    </message>
+    <message>
+      <source>No text layers yet
+Add one when you are ready.</source>
+      <translation>Inga textlager än
+Lägg till ett när du är redo.</translation>
+    </message>
+    <message>
+      <source>Drag layers to change which text appears in front.</source>
+      <translation>Dra lagren för att ändra vilken text som visas längst fram.</translation>
+    </message>
+    <message>
+      <source>Included styles</source>
+      <translation>Inkluderade stilar</translation>
+    </message>
+    <message>
+      <source>My presets</source>
+      <translation>Mina förinställningar</translation>
+    </message>
+    <message>
+      <source>Your saved styles will appear here</source>
+      <translation>Dina sparade stilar visas här</translation>
+    </message>
+    <message>
+      <source>Customize a theme and save it as a preset.</source>
+      <translation>Anpassa ett tema och spara det som en förinställning.</translation>
+    </message>
+    <message>
+      <source>Layers</source>
+      <translation>Lager</translation>
+    </message>
+    <message>
+      <source>Styles and layers</source>
+      <translation>Stilar och lager</translation>
+    </message>
+    <message>
+      <source>Unsaved changes</source>
+      <translation>Osparade ändringar</translation>
+    </message>
+    <message>
+      <source>Save</source>
+      <translation>Spara</translation>
+    </message>
+    <message>
+      <source>Save as preset</source>
+      <translation>Spara som förinställning</translation>
+    </message>
+    <message>
+      <source>More save options</source>
+      <translation>Fler sparalternativ</translation>
+    </message>
+    <message>
+      <source>Save as new preset…</source>
+      <translation>Spara som ny förinställning…</translation>
+    </message>
+    <message>
+      <source>Project</source>
+      <translation>Projicera</translation>
+    </message>
+    <message>
+      <source>Export image</source>
+      <translation>Exportera bild</translation>
+    </message>
+    <message>
+      <source>Drag the image to reposition it</source>
+      <translation>Dra bilden för att flytta den</translation>
+    </message>
+    <message>
+      <source>Drag text · double-click to edit</source>
+      <translation>Dra texten · dubbelklicka för att redigera</translation>
+    </message>
+    <message>
+      <source>Auto format</source>
+      <translation>Automatiskt format</translation>
+    </message>
+    <message>
+      <source>Match the projection screen format</source>
+      <translation>Anpassa till projektionsskärmens format</translation>
+    </message>
+    <message>
+      <source>Save the complete composition so you can use it again later.</source>
+      <translation>Spara hela kompositionen så att du kan använda den igen senare.</translation>
+    </message>
+    <message>
+      <source>Preset name</source>
+      <translation>Förinställningens namn</translation>
+    </message>
+    <message>
+      <source>Cancel</source>
+      <translation>Avbryt</translation>
+    </message>
+    <message>
+      <source>“%1” will be permanently removed.</source>
+      <translation>”%1” tas bort permanent.</translation>
+    </message>
+    <message>
+      <source>Delete</source>
+      <translation>Ta bort</translation>
+    </message>
+    <message>
+      <source>Would you like to save your changes before switching presets?</source>
+      <translation>Vill du spara ändringarna innan du byter förinställning?</translation>
+    </message>
+    <message>
+      <source>Discard</source>
+      <translation>Ignorera</translation>
+    </message>
+  </context>
+  <context>
+    <name>TalkThemeEditorWidget</name>
+    <message>
+      <location filename="../../ui/qml/talk_theme.py" line="+253" />
+      <source>Projection is not ready yet.</source>
+      <translation>Projiceringen är inte klar än.</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>The talk-theme canvas could not be loaded.</source>
+      <translation>Taltemats arbetsyta kunde inte läsas in.</translation>
+    </message>
+    <message>
+      <location line="+26" />
+      <source>The background image took too long to load.</source>
+      <translation>Det tog för lång tid att läsa in bakgrundsbilden.</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <location line="+4" />
+      <source>The talk-theme image could not be prepared.</source>
+      <translation>Bilden för taltemat kunde inte förberedas.</translation>
+    </message>
+    <message>
+      <location line="+22" />
+      <source>The final talk-theme image is incomplete.</source>
+      <translation>Den slutliga bilden för taltemat är ofullständig.</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>The talk-theme image could not be encoded.</source>
+      <translation>Bilden för taltemat kunde inte kodas.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Talk theme</source>
+      <translation>Taltema</translation>
+    </message>
+    <message>
+      <location line="+21" />
+      <source>Preparing the image timed out.</source>
+      <translation>Tidsgränsen för bildförberedelsen överskreds.</translation>
+    </message>
+    <message>
+      <source>Export image</source>
+      <translation>Exportera bild</translation>
+    </message>
+    <message>
+      <source>PNG image (*.png)</source>
+      <translation>PNG-bild (*.png)</translation>
+    </message>
+    <message>
+      <source>The image could not be exported.</source>
+      <translation>Bilden kunde inte exporteras.</translation>
+    </message>
+    <message>
+      <source>Unsaved changes</source>
+      <translation>Osparade ändringar</translation>
+    </message>
+    <message>
+      <source>Save the changes to this talk theme?</source>
+      <translation>Spara ändringarna i det här taltemat?</translation>
+    </message>
+    <message>
+      <source>Save as preset</source>
+      <translation>Spara som förinställning</translation>
+    </message>
+    <message>
+      <source>Name</source>
+      <translation>Namn</translation>
     </message>
   </context>
 </TS>

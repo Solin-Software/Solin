@@ -1,3 +1,4 @@
+from PySide6.QtCore import QByteArray, QBuffer, QIODevice
 from PySide6.QtGui import QColor, QImage
 
 from solin.controllers.media_projection_controller import (
@@ -8,6 +9,7 @@ from solin.controllers.media_projection_controller import (
 from solin.core.meetings.models import MeetingMedia
 from solin.core.projection.application import ProjectionSession
 from solin.core.projection.image_framing import ImageTransform
+from solin.core.projection.result import ProjectionResultStatus
 
 
 class _UncomparableBytes(bytes):
@@ -103,6 +105,7 @@ class _ProjectionBarStub:
         self.tab_previews = []
         self.initial_transforms = []
         self.projected_image_transforms = []
+        self.image_activation_options = []
         self.preview_content = _PreviewContentStub()
         self._playlist_items = []
 
@@ -128,9 +131,11 @@ class _ProjectionBarStub:
         image_data=None,
         keep_expanded=False,
         initial_transform=None,
+        **options,
     ):
         self.images.append((title, image_data, keep_expanded))
         self.initial_transforms.append(initial_transform)
+        self.image_activation_options.append(options)
         self.video_mode = False
         self.audio_mode = False
 
@@ -309,6 +314,79 @@ def _controller(window):
             ),
         ),
     )
+
+
+def _png_bytes(width=64, height=36):
+    image = QImage(width, height, QImage.Format.Format_ARGB32)
+    image.fill(QColor("#334466"))
+    payload = QByteArray()
+    buffer = QBuffer(payload)
+    assert buffer.open(QIODevice.OpenModeFlag.WriteOnly)
+    assert image.save(buffer, "PNG")
+    return bytes(payload)
+
+
+def _write_png(path):
+    path.write_bytes(_png_bytes())
+
+
+def test_generated_theme_image_uses_non_persistent_image_pipeline() -> None:
+    window = _WindowStub()
+    controller = _controller(window)
+    data = _png_bytes(192, 108)
+
+    result = controller.project_generated_image(
+        "Talk theme",
+        data,
+        {"generated_kind": "talk_theme", "fingerprint": "scene-123"},
+    )
+
+    assert result.status is ProjectionResultStatus.ACCEPTED
+    assert window.projection_session.state == {
+        "type": "image",
+        "title": "Talk theme",
+        "origin": None,
+        "data": data,
+        "transform": (1.0, 0.0, 0.0),
+        "generated_kind": "talk_theme",
+        "fingerprint": "scene-123",
+    }
+    assert window.proj_bar.image_activation_options == [
+        {
+            "persist_operator_copy": False,
+            "allow_add_to_destination": False,
+            "allow_set_as_idle": False,
+        }
+    ]
+    assert [projection_window.images for projection_window in window.windows] == [
+        [data],
+        [data],
+    ]
+    assert window._projection_integrations.statuses[-1][1] == {"auto_keys_media": False}
+
+
+def test_invalid_generated_image_has_no_projection_side_effects() -> None:
+    window = _WindowStub()
+    controller = _controller(window)
+
+    result = controller.project_generated_image("Broken", b"not-an-image")
+
+    assert result.status is ProjectionResultStatus.INVALID
+    assert window.events == []
+    assert window.proj_bar.images == []
+    assert all(projection_window.images == [] for projection_window in window.windows)
+
+
+def test_generated_image_checks_playback_protection_at_commit() -> None:
+    window = _WindowStub()
+    window.playback_protection.locked = True
+    controller = _controller(window)
+
+    result = controller.project_generated_image("Protected", _png_bytes())
+
+    assert result.status is ProjectionResultStatus.BLOCKED
+    assert window.playback_protection.blocked == 1
+    assert window.events == []
 
 
 def test_project_video_classifies_audio_and_updates_status():
@@ -562,22 +640,22 @@ def test_on_playlist_project_image_keeps_playlist_and_saved_source(tmp_path):
     window.proj_bar.expanded = True
     controller = _controller(window)
     image_path = tmp_path / "slide.png"
-    image_path.write_bytes(b"image-data")
+    _write_png(image_path)
     playlist = [{"url": str(image_path), "title": "Slide", "type": "image"}]
 
     controller.on_playlist_project(str(image_path), "Slide", playlist, "random")
 
     assert window.proj_bar.playlists == [(playlist, "random", True)]
-    assert window.proj_bar.images == [("Slide", b"image-data", True)]
+    assert window.proj_bar.images == [("Slide", image_path.read_bytes(), True)]
     assert [projection_window.images for projection_window in window.windows] == [
-        [b"image-data"],
-        [b"image-data"],
+        [image_path.read_bytes()],
+        [image_path.read_bytes()],
     ]
     assert window.projection_session.state == {
         "type": "image",
         "title": "Slide",
         "origin": None,
-        "data": b"image-data",
+        "data": image_path.read_bytes(),
         "transform": (1.0, 0.0, 0.0),
     }
 
@@ -837,6 +915,58 @@ def test_project_tab_frame_initializes_live_tab_once():
     ]
 
 
+def test_project_tab_frame_uses_channel0_preview_tap_when_libobs_composites(monkeypatch):
+    """When the browser is composited by libobs, the operator preview taps the
+    channel-0 output (crossfades/overlays) instead of the raw pre-composite
+    frame — mirroring the camera preview."""
+    from PySide6.QtGui import QImage
+
+    import solin.projection.program_preview as preview_mod
+
+    class _FakeSignal:
+        def __init__(self):
+            self.slots = []
+
+        def connect(self, fn):
+            self.slots.append(fn)
+
+    class _FakeTap:
+        def __init__(self):
+            self.frame_ready = _FakeSignal()
+            self.enabled = []
+
+        def set_enabled(self, on):
+            self.enabled.append(on)
+
+    fake_tap = _FakeTap()
+    monkeypatch.setattr(preview_mod, "program_preview_tap", lambda: fake_tap)
+
+    window = _WindowStub()
+    window.projection_session.set_tab_projection_active(False)
+    controller = _controller(window)
+    for projection_window in window.windows:
+        projection_window.show_browser_frame = lambda _img: True  # libobs composites it
+
+    img = QImage(4, 4, QImage.Format.Format_RGB32)
+    img.fill(0)
+    controller.project_tab_frame(img)
+
+    # Tap started + connected; the raw frame is NOT pushed to the preview.
+    assert fake_tap.enabled == [True]
+    assert len(fake_tap.frame_ready.slots) == 1
+    assert window.proj_bar.tab_previews == []
+
+    # A tapped channel-0 frame reaches the preview while the browser is active…
+    tapped = QImage(2, 2, QImage.Format.Format_RGB32)
+    fake_tap.frame_ready.slots[0](tapped)
+    assert window.proj_bar.tab_previews == [tapped]
+
+    # …and the tap self-disarms once the browser is no longer projected.
+    window.projection_session.set_state({"type": "video", "title": "x"})
+    fake_tap.frame_ready.slots[0](QImage(2, 2, QImage.Format.Format_RGB32))
+    assert fake_tap.enabled == [True, False]
+
+
 def test_frame_and_image_transform_helpers_respect_projection_modes():
     window = _WindowStub()
     controller = _controller(window)
@@ -888,23 +1018,6 @@ def test_instant_image_transform_is_persisted_without_animation():
     ]
 
 
-def test_sermon_theme_transform_is_persisted_in_projection_state():
-    window = _WindowStub()
-    controller = _controller(window)
-    window.projection_session.set_state(
-        {
-            "type": "sermon_theme",
-            "text": "t",
-            "subtitle": "s",
-            "transform": (1.0, 0.0, 0.0),
-        }
-    )
-
-    controller.on_image_apply_transform(1.4, 0.0, 0.1)
-
-    assert window.projection_session.state["transform"] == (1.4, 0.0, 0.1)
-
-
 def test_image_transform_not_persisted_when_state_is_not_image():
     window = _WindowStub()
     controller = _controller(window)
@@ -930,7 +1043,7 @@ def test_project_media_at_index_sets_playlist_index_for_images(tmp_path):
     window = _WindowStub()
     controller = _controller(window)
     image_path = tmp_path / "second.png"
-    image_path.write_bytes(b"second")
+    _write_png(image_path)
     playlist = [
         {"url": "video.mp4", "title": "Video", "type": "video"},
         {"url": str(image_path), "title": "Second", "type": "image"},
@@ -940,7 +1053,7 @@ def test_project_media_at_index_sets_playlist_index_for_images(tmp_path):
 
     assert window.proj_bar.playlists == [(playlist, None, False)]
     assert window.proj_bar.playlist_indices == [1]
-    assert window.proj_bar.images == [("Second", b"second", True)]
+    assert window.proj_bar.images == [("Second", image_path.read_bytes(), True)]
 
 
 def test_media_projection_controller_uses_explicit_dependencies():

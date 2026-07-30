@@ -4217,47 +4217,6 @@ L'azione è irreversibile.</translation>
     </message>
   </context>
   <context>
-    <name>SermonThemeWidget</name>
-    <message>
-      <location filename="../../widgets/sermon_theme_widget.py" line="+383" />
-      <location line="+16" />
-      <location line="+91" />
-      <source>PUBLIC TALK</source>
-      <translation>DISCORSO PUBBLICO</translation>
-    </message>
-    <message>
-      <location line="-7" />
-      <location line="+3" />
-      <source>Talk theme</source>
-      <translation>Tema del discorso</translation>
-    </message>
-    <message>
-      <location line="-2" />
-      <source>Project the talk title on the secondary screen</source>
-      <translation>Mostrare il tema del discorso sullo schermo secondario</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>PREVIEW</source>
-      <translation>ANTEPRIMA</translation>
-    </message>
-    <message>
-      <location line="+2" />
-      <source>E.g.: Imitate Jehovah's mercy</source>
-      <translation>Es.: Imitate la misericordia di Geova</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>Subtitle:</source>
-      <translation>Sottotitolo:</translation>
-    </message>
-    <message>
-      <location line="+12" />
-      <source>Project Theme</source>
-      <translation>Proietta il tema</translation>
-    </message>
-  </context>
-  <context>
     <name>SetAsIdleConfirmDialog</name>
     <message>
       <location filename="../../widgets/projection/idle_dialog.py" line="+81" />
@@ -7040,6 +6999,767 @@ Usa il pulsante di riproduzione per proiettare · Trascina la maniglia ⠿ per r
       <source>Not configured</source>
       <translation>Non configurato</translation>
 
+    </message>
+  </context>
+  <context>
+    <name>DeferredTalkThemeWidget</name>
+    <message>
+      <location filename="../../widgets/deferred_talk_theme_widget.py" line="+36" />
+      <location line="+49" />
+      <source>Loading…</source>
+      <translation>Caricamento in corso…</translation>
+    </message>
+  </context>
+  <context>
+    <name>MeetingSections</name>
+    <message>
+      <location filename="../../ui/qml/talk_theme.py" line="+876" />
+      <source>PUBLIC TALK</source>
+      <translation>DISCORSO PUBBLICO</translation>
+    </message>
+  </context>
+  <context>
+    <name>TalkThemeBridge</name>
+    <message>
+      <location filename="../../ui/qml/talk_theme.py" line="-424" />
+      <source>Style applied</source>
+      <translation>Stile applicato</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Enter a name for the preset.</source>
+      <translation>Inserisci un nome per la preimpostazione.</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>A preset with this name already exists.</source>
+      <translation>Esiste già una preimpostazione con questo nome.</translation>
+    </message>
+    <message>
+      <location line="+14" />
+      <source>Preset saved</source>
+      <translation>Preimpostazione salvata</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Preset deleted</source>
+      <translation>Preimpostazione eliminata</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Choose image</source>
+      <translation>Scegli immagine</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Images (*.png *.jpg *.jpeg *.webp)</source>
+      <translation>Immagini (*.png *.jpg *.jpeg *.webp)</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Importing image…</source>
+      <translation>Importazione immagine…</translation>
+    </message>
+    <message>
+      <location line="+21" />
+      <source>Text color</source>
+      <translation>Colore testo</translation>
+    </message>
+    <message>
+      <location line="+93" />
+      <source>Enter the talk title before projecting.</source>
+      <translation>Inserisci il titolo del discorso prima di proiettare.</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Preparing image…</source>
+      <translation>Preparazione immagine…</translation>
+    </message>
+    <message>
+      <location line="+18" />
+      <source>The talk-theme draft could not be saved.</source>
+      <translation>Impossibile salvare la bozza del tema del discorso.</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Talk theme projected</source>
+      <translation>Tema del discorso proiettato</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Projection is currently protected.</source>
+      <translation>La proiezione è attualmente protetta.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>The talk theme could not be projected.</source>
+      <translation>Impossibile proiettare il tema del discorso.</translation>
+    </message>
+    <message>
+      <location line="+29" />
+      <source>Image added</source>
+      <translation>Immagine aggiunta</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>This image format is not supported.</source>
+      <translation>Questo formato immagine non è supportato.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Animated images are not supported.</source>
+      <translation>Le immagini animate non sono supportate.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>The selected image could not be opened.</source>
+      <translation>Impossibile aprire l’immagine selezionata.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>The selected image has invalid dimensions.</source>
+      <translation>L’immagine selezionata ha dimensioni non valide.</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>The selected image could not be imported.</source>
+      <translation>Impossibile importare l’immagine selezionata.</translation>
+    </message>
+    <message>
+      <source>Talk theme</source>
+      <translation>Tema del discorso</translation>
+    </message>
+    <message>
+      <source>The maximum number of text layers has been reached.</source>
+      <translation>È stato raggiunto il numero massimo di livelli di testo.</translation>
+    </message>
+    <message>
+      <source>The maximum number of presets has been reached.</source>
+      <translation>È stato raggiunto il numero massimo di preimpostazioni.</translation>
+    </message>
+    <message>
+      <source>Text %1</source>
+      <translation>Testo %1</translation>
+    </message>
+    <message>
+      <source>The preset could not be saved.</source>
+      <translation>Impossibile salvare la preimpostazione.</translation>
+    </message>
+    <message>
+      <source>Botanical</source>
+      <translation>Botanico</translation>
+    </message>
+    <message>
+      <source>Classic blue</source>
+      <translation>Blu classico</translation>
+    </message>
+    <message>
+      <source>Soft photographic</source>
+      <translation>Foto delicata</translation>
+    </message>
+    <message>
+      <source>Center</source>
+      <translation>Centro</translation>
+    </message>
+    <message>
+      <source>Third</source>
+      <translation>Terzo</translation>
+    </message>
+    <message>
+      <source>Safe margin</source>
+      <translation>Margine di sicurezza</translation>
+    </message>
+  </context>
+  <context>
+    <name>TalkThemeEditorView</name>
+    <message>
+      <location filename="../../qml/TalkThemeEditorView.qml" line="+28" />
+      <source>Botanical</source>
+      <translation>Botanico</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Classic blue</source>
+      <translation>Blu classico</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Soft photographic</source>
+      <translation>Foto delicata</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Safe margin</source>
+      <translation>Margine di sicurezza</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Third</source>
+      <translation>Terzo</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Center</source>
+      <translation>Centro</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Other text</source>
+      <translation>Altro testo</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <location line="+736" />
+      <source>Label</source>
+      <translation>Etichetta</translation>
+    </message>
+    <message>
+      <location line="-734" />
+      <location line="+346" />
+      <location line="+394" />
+      <source>Talk title</source>
+      <translation>Titolo del discorso</translation>
+    </message>
+    <message>
+      <location line="-738" />
+      <location line="+745" />
+      <source>Speaker</source>
+      <translation>Oratore</translation>
+    </message>
+    <message>
+      <location line="-743" />
+      <location line="+749" />
+      <source>Congregation</source>
+      <translation>Congregazione</translation>
+    </message>
+    <message>
+      <location line="-561" />
+      <source>Talk theme</source>
+      <translation>Tema del discorso</translation>
+    </message>
+    <message>
+      <location line="+28" />
+      <source>On screen</source>
+      <translation>Sullo schermo</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Changes not yet projected</source>
+      <translation>Modifiche non ancora proiettate</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Saving…</source>
+      <translation>Salvataggio…</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Draft saved</source>
+      <translation>Bozza salvata</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Edit</source>
+      <translation>Modifica</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Canvas</source>
+      <translation>Area di lavoro</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Undo</source>
+      <translation>Annulla</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Redo</source>
+      <translation>Ripeti</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <location line="+722" />
+      <source>Save preset</source>
+      <translation>Salva preimpostazione</translation>
+    </message>
+    <message>
+      <location line="-716" />
+      <source>Preparing…</source>
+      <translation>Preparazione…</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Update projection</source>
+      <translation>Aggiorna proiezione</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>▶  Project</source>
+      <translation>▶  Proietta</translation>
+    </message>
+    <message>
+      <location line="+31" />
+      <source>Styles</source>
+      <translation>Stili</translation>
+    </message>
+    <message>
+      <location line="+78" />
+      <source>Delete preset</source>
+      <translation>Elimina preimpostazione</translation>
+    </message>
+    <message>
+      <location line="+34" />
+      <location line="+493" />
+      <source>Background</source>
+      <translation>Sfondo</translation>
+    </message>
+    <message>
+      <location line="-490" />
+      <source>Importing…</source>
+      <translation>Importazione…</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>▧  Choose image</source>
+      <translation>▧  Scegli immagine</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>PNG, JPG or WebP · up to 4096 px</source>
+      <translation>PNG, JPG o WebP · fino a 4096 px</translation>
+    </message>
+    <message>
+      <location line="+75" />
+      <source>Optional text</source>
+      <translation>Testo facoltativo</translation>
+    </message>
+    <message>
+      <location line="+187" />
+      <source>Drag text · use arrow keys to fine-tune</source>
+      <translation>Trascina i testi · regolali con le frecce</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Finish adjusting</source>
+      <translation>Termina regolazione</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Adjust image</source>
+      <translation>Regola immagine</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Auto</source>
+      <translation>Auto</translation>
+    </message>
+    <message>
+      <location line="+37" />
+      <source>Content</source>
+      <translation>Contenuto</translation>
+    </message>
+    <message>
+      <location line="+16" />
+      <source>Enter the title</source>
+      <translation>Inserisci il titolo</translation>
+    </message>
+    <message>
+      <location line="+19" />
+      <source>Selected text</source>
+      <translation>Testo selezionato</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <source>Font</source>
+      <translation>Carattere</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Weight</source>
+      <translation>Spessore</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Normal</source>
+      <translation>Normale</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Medium</source>
+      <translation>Medio</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Semibold</source>
+      <translation>Semigrassetto</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Bold</source>
+      <translation>Grassetto</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Size</source>
+      <translation>Dimensione</translation>
+    </message>
+    <message>
+      <location line="+23" />
+      <source>Fewer options  ⌃</source>
+      <translation>Meno opzioni  ⌃</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>More options  ⌄</source>
+      <translation>Più opzioni  ⌄</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Text block width</source>
+      <translation>Larghezza blocco di testo</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Letter spacing</source>
+      <translation>Spaziatura lettere</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <source>Text color</source>
+      <translation>Colore testo</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Choose text color</source>
+      <translation>Scegli colore testo</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Show this text</source>
+      <translation>Mostra questo testo</translation>
+    </message>
+    <message>
+      <location line="+14" />
+      <source>Alignment</source>
+      <translation>Allineamento</translation>
+    </message>
+    <message>
+      <location line="+29" />
+      <source>Darken image</source>
+      <translation>Scurisci immagine</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Blur image</source>
+      <translation>Sfoca immagine</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Image fit</source>
+      <translation>Adattamento immagine</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Fill</source>
+      <translation>Riempi</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Fit</source>
+      <translation>Adatta</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Image zoom</source>
+      <translation>Zoom immagine</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>The image for this style could not be found.</source>
+      <translation>Impossibile trovare l’immagine di questo stile.</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Choose image</source>
+      <translation>Scegli immagine</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Reset</source>
+      <translation>Reimposta</translation>
+    </message>
+    <message>
+      <location line="+21" />
+      <source>Ready to project</source>
+      <translation>Pronto per la proiezione</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Enter a title</source>
+      <translation>Inserisci un titolo</translation>
+    </message>
+    <message>
+      <location line="+22" />
+      <source>Name</source>
+      <translation>Nome</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>For example: Special evening</source>
+      <translation>Ad esempio: Serata speciale</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Delete preset?</source>
+      <translation>Eliminare la preimpostazione?</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>This preset will be permanently removed.</source>
+      <translation>Questa preimpostazione verrà eliminata definitivamente.</translation>
+    </message>
+    <message>
+      <source>Text</source>
+      <translation>Testo</translation>
+    </message>
+    <message>
+      <source>Select a text</source>
+      <translation>Seleziona un testo</translation>
+    </message>
+    <message>
+      <source>Click a text on the canvas or choose a layer to edit it.</source>
+      <translation>Fai clic su un testo nell’area di lavoro o scegli un livello per modificarlo.</translation>
+    </message>
+    <message>
+      <source>Add text</source>
+      <translation>Aggiungi testo</translation>
+    </message>
+    <message>
+      <source>Write something…</source>
+      <translation>Scrivi qualcosa…</translation>
+    </message>
+    <message>
+      <source>Fewer options</source>
+      <translation>Meno opzioni</translation>
+    </message>
+    <message>
+      <source>More options</source>
+      <translation>Più opzioni</translation>
+    </message>
+    <message>
+      <source>Line height</source>
+      <translation>Interlinea</translation>
+    </message>
+    <message>
+      <source>No image</source>
+      <translation>Nessuna immagine</translation>
+    </message>
+    <message>
+      <source>Adjust image position</source>
+      <translation>Regola la posizione dell’immagine</translation>
+    </message>
+    <message>
+      <source>The image for this preset could not be found.</source>
+      <translation>L’immagine di questa preimpostazione non è stata trovata.</translation>
+    </message>
+    <message>
+      <source>Front</source>
+      <translation>In primo piano</translation>
+    </message>
+    <message>
+      <source>%1 layers</source>
+      <translation>%1 livelli</translation>
+    </message>
+    <message>
+      <source>Hide layer</source>
+      <translation>Nascondi livello</translation>
+    </message>
+    <message>
+      <source>Show layer</source>
+      <translation>Mostra livello</translation>
+    </message>
+    <message>
+      <source>Delete layer</source>
+      <translation>Elimina livello</translation>
+    </message>
+    <message>
+      <source>No text layers yet
+Add one when you are ready.</source>
+      <translation>Non ci sono ancora livelli di testo
+Aggiungine uno quando vuoi.</translation>
+    </message>
+    <message>
+      <source>Drag layers to change which text appears in front.</source>
+      <translation>Trascina i livelli per scegliere quale testo appare in primo piano.</translation>
+    </message>
+    <message>
+      <source>Included styles</source>
+      <translation>Stili inclusi</translation>
+    </message>
+    <message>
+      <source>My presets</source>
+      <translation>Le mie preimpostazioni</translation>
+    </message>
+    <message>
+      <source>Your saved styles will appear here</source>
+      <translation>Gli stili salvati appariranno qui</translation>
+    </message>
+    <message>
+      <source>Customize a theme and save it as a preset.</source>
+      <translation>Personalizza un tema e salvalo come preimpostazione.</translation>
+    </message>
+    <message>
+      <source>Layers</source>
+      <translation>Livelli</translation>
+    </message>
+    <message>
+      <source>Styles and layers</source>
+      <translation>Stili e livelli</translation>
+    </message>
+    <message>
+      <source>Unsaved changes</source>
+      <translation>Modifiche non salvate</translation>
+    </message>
+    <message>
+      <source>Save</source>
+      <translation>Salva</translation>
+    </message>
+    <message>
+      <source>Save as preset</source>
+      <translation>Salva come preimpostazione</translation>
+    </message>
+    <message>
+      <source>More save options</source>
+      <translation>Altre opzioni di salvataggio</translation>
+    </message>
+    <message>
+      <source>Save as new preset…</source>
+      <translation>Salva come nuova preimpostazione…</translation>
+    </message>
+    <message>
+      <source>Project</source>
+      <translation>Proietta</translation>
+    </message>
+    <message>
+      <source>Export image</source>
+      <translation>Esporta immagine</translation>
+    </message>
+    <message>
+      <source>Drag the image to reposition it</source>
+      <translation>Trascina l’immagine per riposizionarla</translation>
+    </message>
+    <message>
+      <source>Drag text · double-click to edit</source>
+      <translation>Trascina il testo · fai doppio clic per modificarlo</translation>
+    </message>
+    <message>
+      <source>Auto format</source>
+      <translation>Formato automatico</translation>
+    </message>
+    <message>
+      <source>Match the projection screen format</source>
+      <translation>Adatta al formato dello schermo di proiezione</translation>
+    </message>
+    <message>
+      <source>Save the complete composition so you can use it again later.</source>
+      <translation>Salva la composizione completa per poterla riutilizzare in seguito.</translation>
+    </message>
+    <message>
+      <source>Preset name</source>
+      <translation>Nome preimpostazione</translation>
+    </message>
+    <message>
+      <source>Cancel</source>
+      <translation>Annulla</translation>
+    </message>
+    <message>
+      <source>“%1” will be permanently removed.</source>
+      <translation>“%1” verrà rimosso definitivamente.</translation>
+    </message>
+    <message>
+      <source>Delete</source>
+      <translation>Elimina</translation>
+    </message>
+    <message>
+      <source>Would you like to save your changes before switching presets?</source>
+      <translation>Vuoi salvare le modifiche prima di cambiare preimpostazione?</translation>
+    </message>
+    <message>
+      <source>Discard</source>
+      <translation>Scarta</translation>
+    </message>
+  </context>
+  <context>
+    <name>TalkThemeEditorWidget</name>
+    <message>
+      <location filename="../../ui/qml/talk_theme.py" line="+253" />
+      <source>Projection is not ready yet.</source>
+      <translation>La proiezione non è ancora pronta.</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>The talk-theme canvas could not be loaded.</source>
+      <translation>Impossibile caricare l’area di lavoro del tema del discorso.</translation>
+    </message>
+    <message>
+      <location line="+26" />
+      <source>The background image took too long to load.</source>
+      <translation>Il caricamento dell’immagine di sfondo ha impiegato troppo tempo.</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <location line="+4" />
+      <source>The talk-theme image could not be prepared.</source>
+      <translation>Impossibile preparare l’immagine del tema del discorso.</translation>
+    </message>
+    <message>
+      <location line="+22" />
+      <source>The final talk-theme image is incomplete.</source>
+      <translation>L’immagine finale del tema del discorso è incompleta.</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>The talk-theme image could not be encoded.</source>
+      <translation>Impossibile codificare l’immagine del tema del discorso.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Talk theme</source>
+      <translation>Tema del discorso</translation>
+    </message>
+    <message>
+      <location line="+21" />
+      <source>Preparing the image timed out.</source>
+      <translation>Tempo scaduto durante la preparazione dell’immagine.</translation>
+    </message>
+    <message>
+      <source>Export image</source>
+      <translation>Esporta immagine</translation>
+    </message>
+    <message>
+      <source>PNG image (*.png)</source>
+      <translation>Immagine PNG (*.png)</translation>
+    </message>
+    <message>
+      <source>The image could not be exported.</source>
+      <translation>Impossibile esportare l’immagine.</translation>
+    </message>
+    <message>
+      <source>Unsaved changes</source>
+      <translation>Modifiche non salvate</translation>
+    </message>
+    <message>
+      <source>Save the changes to this talk theme?</source>
+      <translation>Salvare le modifiche a questo tema del discorso?</translation>
+    </message>
+    <message>
+      <source>Save as preset</source>
+      <translation>Salva come preimpostazione</translation>
+    </message>
+    <message>
+      <source>Name</source>
+      <translation>Nome</translation>
     </message>
   </context>
 </TS>

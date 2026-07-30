@@ -4220,47 +4220,6 @@ This action cannot be undone.</source>
     </message>
   </context>
   <context>
-    <name>SermonThemeWidget</name>
-    <message>
-      <location filename="../../widgets/sermon_theme_widget.py" line="+383" />
-      <location line="+16" />
-      <location line="+91" />
-      <source>PUBLIC TALK</source>
-      <translation>ПУБЛИЧНАЯ РЕЧЬ</translation>
-    </message>
-    <message>
-      <location line="-7" />
-      <location line="+3" />
-      <source>Talk theme</source>
-      <translation>Тема речи</translation>
-    </message>
-    <message>
-      <location line="-2" />
-      <source>Project the talk title on the secondary screen</source>
-      <translation>Проецируйте название выступления на вторичный экран</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>PREVIEW</source>
-      <translation>ПРЕДПРОСМОТР</translation>
-    </message>
-    <message>
-      <location line="+2" />
-      <source>E.g.: Imitate Jehovah's mercy</source>
-      <translation>Например: Подражайте милосердию Иеговы</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>Subtitle:</source>
-      <translation>Субтитр:</translation>
-    </message>
-    <message>
-      <location line="+12" />
-      <source>Project Theme</source>
-      <translation>Проецировать тему</translation>
-    </message>
-  </context>
-  <context>
     <name>SetAsIdleConfirmDialog</name>
     <message>
       <location filename="../../widgets/projection/idle_dialog.py" line="+81" />
@@ -7044,6 +7003,767 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
       <source>Not configured</source>
       <translation>Не настроено</translation>
 
+    </message>
+  </context>
+  <context>
+    <name>DeferredTalkThemeWidget</name>
+    <message>
+      <location filename="../../widgets/deferred_talk_theme_widget.py" line="+36" />
+      <location line="+49" />
+      <source>Loading…</source>
+      <translation>Загрузка…</translation>
+    </message>
+  </context>
+  <context>
+    <name>MeetingSections</name>
+    <message>
+      <location filename="../../ui/qml/talk_theme.py" line="+876" />
+      <source>PUBLIC TALK</source>
+      <translation>ПУБЛИЧНАЯ РЕЧЬ</translation>
+    </message>
+  </context>
+  <context>
+    <name>TalkThemeBridge</name>
+    <message>
+      <location filename="../../ui/qml/talk_theme.py" line="-424" />
+      <source>Style applied</source>
+      <translation>Стиль применён</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Enter a name for the preset.</source>
+      <translation>Введите название предустановки.</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>A preset with this name already exists.</source>
+      <translation>Предустановка с таким названием уже существует.</translation>
+    </message>
+    <message>
+      <location line="+14" />
+      <source>Preset saved</source>
+      <translation>Предустановка сохранена</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Preset deleted</source>
+      <translation>Предустановка удалена</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Choose image</source>
+      <translation>Выбрать изображение</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Images (*.png *.jpg *.jpeg *.webp)</source>
+      <translation>Изображения (*.png *.jpg *.jpeg *.webp)</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Importing image…</source>
+      <translation>Импорт изображения…</translation>
+    </message>
+    <message>
+      <location line="+21" />
+      <source>Text color</source>
+      <translation>Цвет текста</translation>
+    </message>
+    <message>
+      <location line="+93" />
+      <source>Enter the talk title before projecting.</source>
+      <translation>Перед проецированием введите название речи.</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Preparing image…</source>
+      <translation>Подготовка изображения…</translation>
+    </message>
+    <message>
+      <location line="+18" />
+      <source>The talk-theme draft could not be saved.</source>
+      <translation>Не удалось сохранить черновик темы речи.</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Talk theme projected</source>
+      <translation>Тема речи спроецирована</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Projection is currently protected.</source>
+      <translation>Сейчас проекция защищена.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>The talk theme could not be projected.</source>
+      <translation>Не удалось спроецировать тему речи.</translation>
+    </message>
+    <message>
+      <location line="+29" />
+      <source>Image added</source>
+      <translation>Изображение добавлено</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>This image format is not supported.</source>
+      <translation>Этот формат изображения не поддерживается.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Animated images are not supported.</source>
+      <translation>Анимированные изображения не поддерживаются.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>The selected image could not be opened.</source>
+      <translation>Не удалось открыть выбранное изображение.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>The selected image has invalid dimensions.</source>
+      <translation>Выбранное изображение имеет недопустимые размеры.</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>The selected image could not be imported.</source>
+      <translation>Не удалось импортировать выбранное изображение.</translation>
+    </message>
+    <message>
+      <source>Talk theme</source>
+      <translation>Тема речи</translation>
+    </message>
+    <message>
+      <source>The maximum number of text layers has been reached.</source>
+      <translation>Достигнуто максимальное количество текстовых слоёв.</translation>
+    </message>
+    <message>
+      <source>The maximum number of presets has been reached.</source>
+      <translation>Достигнуто максимальное количество предустановок.</translation>
+    </message>
+    <message>
+      <source>Text %1</source>
+      <translation>Текст %1</translation>
+    </message>
+    <message>
+      <source>The preset could not be saved.</source>
+      <translation>Не удалось сохранить предустановку.</translation>
+    </message>
+    <message>
+      <source>Botanical</source>
+      <translation>Ботанический</translation>
+    </message>
+    <message>
+      <source>Classic blue</source>
+      <translation>Классический синий</translation>
+    </message>
+    <message>
+      <source>Soft photographic</source>
+      <translation>Мягкое фото</translation>
+    </message>
+    <message>
+      <source>Center</source>
+      <translation>Центр</translation>
+    </message>
+    <message>
+      <source>Third</source>
+      <translation>Треть</translation>
+    </message>
+    <message>
+      <source>Safe margin</source>
+      <translation>Безопасное поле</translation>
+    </message>
+  </context>
+  <context>
+    <name>TalkThemeEditorView</name>
+    <message>
+      <location filename="../../qml/TalkThemeEditorView.qml" line="+28" />
+      <source>Botanical</source>
+      <translation>Ботанический</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Classic blue</source>
+      <translation>Классический синий</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Soft photographic</source>
+      <translation>Мягкое фото</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Safe margin</source>
+      <translation>Безопасное поле</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Third</source>
+      <translation>Треть</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Center</source>
+      <translation>Центр</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Other text</source>
+      <translation>Другой текст</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <location line="+736" />
+      <source>Label</source>
+      <translation>Метка</translation>
+    </message>
+    <message>
+      <location line="-734" />
+      <location line="+346" />
+      <location line="+394" />
+      <source>Talk title</source>
+      <translation>Название речи</translation>
+    </message>
+    <message>
+      <location line="-738" />
+      <location line="+745" />
+      <source>Speaker</source>
+      <translation>Докладчик</translation>
+    </message>
+    <message>
+      <location line="-743" />
+      <location line="+749" />
+      <source>Congregation</source>
+      <translation>Собрание</translation>
+    </message>
+    <message>
+      <location line="-561" />
+      <source>Talk theme</source>
+      <translation>Тема речи</translation>
+    </message>
+    <message>
+      <location line="+28" />
+      <source>On screen</source>
+      <translation>На экране</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Changes not yet projected</source>
+      <translation>Изменения ещё не спроецированы</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Saving…</source>
+      <translation>Сохранение…</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Draft saved</source>
+      <translation>Черновик сохранён</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Edit</source>
+      <translation>Изменить</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Canvas</source>
+      <translation>Холст</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Undo</source>
+      <translation>Отменить</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Redo</source>
+      <translation>Повторить</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <location line="+722" />
+      <source>Save preset</source>
+      <translation>Сохранить предустановку</translation>
+    </message>
+    <message>
+      <location line="-716" />
+      <source>Preparing…</source>
+      <translation>Подготовка…</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Update projection</source>
+      <translation>Обновить проекцию</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>▶  Project</source>
+      <translation>▶  Проецировать</translation>
+    </message>
+    <message>
+      <location line="+31" />
+      <source>Styles</source>
+      <translation>Стили</translation>
+    </message>
+    <message>
+      <location line="+78" />
+      <source>Delete preset</source>
+      <translation>Удалить предустановку</translation>
+    </message>
+    <message>
+      <location line="+34" />
+      <location line="+493" />
+      <source>Background</source>
+      <translation>Фон</translation>
+    </message>
+    <message>
+      <location line="-490" />
+      <source>Importing…</source>
+      <translation>Импорт…</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>▧  Choose image</source>
+      <translation>▧  Выбрать изображение</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>PNG, JPG or WebP · up to 4096 px</source>
+      <translation>PNG, JPG или WebP · до 4096 пкс.</translation>
+    </message>
+    <message>
+      <location line="+75" />
+      <source>Optional text</source>
+      <translation>Необязательный текст</translation>
+    </message>
+    <message>
+      <location line="+187" />
+      <source>Drag text · use arrow keys to fine-tune</source>
+      <translation>Перетащите текст · стрелки для точной настройки</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Finish adjusting</source>
+      <translation>Завершить настройку</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Adjust image</source>
+      <translation>Настроить изображение</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Auto</source>
+      <translation>Авто</translation>
+    </message>
+    <message>
+      <location line="+37" />
+      <source>Content</source>
+      <translation>Содержимое</translation>
+    </message>
+    <message>
+      <location line="+16" />
+      <source>Enter the title</source>
+      <translation>Введите название</translation>
+    </message>
+    <message>
+      <location line="+19" />
+      <source>Selected text</source>
+      <translation>Выбранный текст</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <source>Font</source>
+      <translation>Шрифт</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Weight</source>
+      <translation>Начертание</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Normal</source>
+      <translation>Обычный</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Medium</source>
+      <translation>Средний</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Semibold</source>
+      <translation>Полужирный</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Bold</source>
+      <translation>Жирный</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Size</source>
+      <translation>Размер</translation>
+    </message>
+    <message>
+      <location line="+23" />
+      <source>Fewer options  ⌃</source>
+      <translation>Меньше параметров  ⌃</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>More options  ⌄</source>
+      <translation>Больше параметров  ⌄</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Text block width</source>
+      <translation>Ширина текстового блока</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Letter spacing</source>
+      <translation>Межбуквенный интервал</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <source>Text color</source>
+      <translation>Цвет текста</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Choose text color</source>
+      <translation>Выбрать цвет текста</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Show this text</source>
+      <translation>Показывать этот текст</translation>
+    </message>
+    <message>
+      <location line="+14" />
+      <source>Alignment</source>
+      <translation>Выравнивание</translation>
+    </message>
+    <message>
+      <location line="+29" />
+      <source>Darken image</source>
+      <translation>Затемнить изображение</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Blur image</source>
+      <translation>Размыть изображение</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Image fit</source>
+      <translation>Вписывание изображения</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Fill</source>
+      <translation>Заполнить</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Fit</source>
+      <translation>Вместить</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Image zoom</source>
+      <translation>Масштаб изображения</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>The image for this style could not be found.</source>
+      <translation>Не удалось найти изображение этого стиля.</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Choose image</source>
+      <translation>Выбрать изображение</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Reset</source>
+      <translation>Сброс</translation>
+    </message>
+    <message>
+      <location line="+21" />
+      <source>Ready to project</source>
+      <translation>Готово к проецированию</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Enter a title</source>
+      <translation>Введите название</translation>
+    </message>
+    <message>
+      <location line="+22" />
+      <source>Name</source>
+      <translation>Название</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>For example: Special evening</source>
+      <translation>Например: Особый вечер</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Delete preset?</source>
+      <translation>Удалить предустановку?</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>This preset will be permanently removed.</source>
+      <translation>Эта предустановка будет удалена без возможности восстановления.</translation>
+    </message>
+    <message>
+      <source>Text</source>
+      <translation>Текст</translation>
+    </message>
+    <message>
+      <source>Select a text</source>
+      <translation>Выберите текст</translation>
+    </message>
+    <message>
+      <source>Click a text on the canvas or choose a layer to edit it.</source>
+      <translation>Нажмите на текст на холсте или выберите слой, чтобы отредактировать его.</translation>
+    </message>
+    <message>
+      <source>Add text</source>
+      <translation>Добавить текст</translation>
+    </message>
+    <message>
+      <source>Write something…</source>
+      <translation>Введите текст…</translation>
+    </message>
+    <message>
+      <source>Fewer options</source>
+      <translation>Меньше параметров</translation>
+    </message>
+    <message>
+      <source>More options</source>
+      <translation>Больше параметров</translation>
+    </message>
+    <message>
+      <source>Line height</source>
+      <translation>Межстрочный интервал</translation>
+    </message>
+    <message>
+      <source>No image</source>
+      <translation>Нет изображения</translation>
+    </message>
+    <message>
+      <source>Adjust image position</source>
+      <translation>Настроить положение изображения</translation>
+    </message>
+    <message>
+      <source>The image for this preset could not be found.</source>
+      <translation>Не удалось найти изображение для этой предустановки.</translation>
+    </message>
+    <message>
+      <source>Front</source>
+      <translation>На переднем плане</translation>
+    </message>
+    <message>
+      <source>%1 layers</source>
+      <translation>Слоёв: %1</translation>
+    </message>
+    <message>
+      <source>Hide layer</source>
+      <translation>Скрыть слой</translation>
+    </message>
+    <message>
+      <source>Show layer</source>
+      <translation>Показать слой</translation>
+    </message>
+    <message>
+      <source>Delete layer</source>
+      <translation>Удалить слой</translation>
+    </message>
+    <message>
+      <source>No text layers yet
+Add one when you are ready.</source>
+      <translation>Текстовых слоёв пока нет
+Добавьте слой, когда будете готовы.</translation>
+    </message>
+    <message>
+      <source>Drag layers to change which text appears in front.</source>
+      <translation>Перетаскивайте слои, чтобы менять порядок наложения текста.</translation>
+    </message>
+    <message>
+      <source>Included styles</source>
+      <translation>Встроенные стили</translation>
+    </message>
+    <message>
+      <source>My presets</source>
+      <translation>Мои предустановки</translation>
+    </message>
+    <message>
+      <source>Your saved styles will appear here</source>
+      <translation>Здесь появятся сохранённые стили</translation>
+    </message>
+    <message>
+      <source>Customize a theme and save it as a preset.</source>
+      <translation>Настройте тему и сохраните её как предустановку.</translation>
+    </message>
+    <message>
+      <source>Layers</source>
+      <translation>Слои</translation>
+    </message>
+    <message>
+      <source>Styles and layers</source>
+      <translation>Стили и слои</translation>
+    </message>
+    <message>
+      <source>Unsaved changes</source>
+      <translation>Несохранённые изменения</translation>
+    </message>
+    <message>
+      <source>Save</source>
+      <translation>Сохранить</translation>
+    </message>
+    <message>
+      <source>Save as preset</source>
+      <translation>Сохранить как предустановку</translation>
+    </message>
+    <message>
+      <source>More save options</source>
+      <translation>Дополнительные варианты сохранения</translation>
+    </message>
+    <message>
+      <source>Save as new preset…</source>
+      <translation>Сохранить как новую предустановку…</translation>
+    </message>
+    <message>
+      <source>Project</source>
+      <translation>Проецировать</translation>
+    </message>
+    <message>
+      <source>Export image</source>
+      <translation>Экспортировать изображение</translation>
+    </message>
+    <message>
+      <source>Drag the image to reposition it</source>
+      <translation>Перетащите изображение, чтобы изменить его положение</translation>
+    </message>
+    <message>
+      <source>Drag text · double-click to edit</source>
+      <translation>Перетаскивайте текст · двойной щелчок для редактирования</translation>
+    </message>
+    <message>
+      <source>Auto format</source>
+      <translation>Автоматический формат</translation>
+    </message>
+    <message>
+      <source>Match the projection screen format</source>
+      <translation>Подогнать под формат экрана проекции</translation>
+    </message>
+    <message>
+      <source>Save the complete composition so you can use it again later.</source>
+      <translation>Сохраните всю композицию, чтобы использовать её снова.</translation>
+    </message>
+    <message>
+      <source>Preset name</source>
+      <translation>Название предустановки</translation>
+    </message>
+    <message>
+      <source>Cancel</source>
+      <translation>Отмена</translation>
+    </message>
+    <message>
+      <source>“%1” will be permanently removed.</source>
+      <translation>«%1» будет удалена без возможности восстановления.</translation>
+    </message>
+    <message>
+      <source>Delete</source>
+      <translation>Удалить</translation>
+    </message>
+    <message>
+      <source>Would you like to save your changes before switching presets?</source>
+      <translation>Сохранить изменения перед переключением предустановки?</translation>
+    </message>
+    <message>
+      <source>Discard</source>
+      <translation>Не сохранять</translation>
+    </message>
+  </context>
+  <context>
+    <name>TalkThemeEditorWidget</name>
+    <message>
+      <location filename="../../ui/qml/talk_theme.py" line="+253" />
+      <source>Projection is not ready yet.</source>
+      <translation>Проекция ещё не готова.</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>The talk-theme canvas could not be loaded.</source>
+      <translation>Не удалось загрузить холст темы речи.</translation>
+    </message>
+    <message>
+      <location line="+26" />
+      <source>The background image took too long to load.</source>
+      <translation>Загрузка фонового изображения заняла слишком много времени.</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <location line="+4" />
+      <source>The talk-theme image could not be prepared.</source>
+      <translation>Не удалось подготовить изображение темы речи.</translation>
+    </message>
+    <message>
+      <location line="+22" />
+      <source>The final talk-theme image is incomplete.</source>
+      <translation>Итоговое изображение темы речи неполное.</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>The talk-theme image could not be encoded.</source>
+      <translation>Не удалось закодировать изображение темы речи.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Talk theme</source>
+      <translation>Тема речи</translation>
+    </message>
+    <message>
+      <location line="+21" />
+      <source>Preparing the image timed out.</source>
+      <translation>Истекло время подготовки изображения.</translation>
+    </message>
+    <message>
+      <source>Export image</source>
+      <translation>Экспортировать изображение</translation>
+    </message>
+    <message>
+      <source>PNG image (*.png)</source>
+      <translation>PNG-изображение (*.png)</translation>
+    </message>
+    <message>
+      <source>The image could not be exported.</source>
+      <translation>Не удалось экспортировать изображение.</translation>
+    </message>
+    <message>
+      <source>Unsaved changes</source>
+      <translation>Несохранённые изменения</translation>
+    </message>
+    <message>
+      <source>Save the changes to this talk theme?</source>
+      <translation>Сохранить изменения в этой теме речи?</translation>
+    </message>
+    <message>
+      <source>Save as preset</source>
+      <translation>Сохранить как предустановку</translation>
+    </message>
+    <message>
+      <source>Name</source>
+      <translation>Название</translation>
     </message>
   </context>
 </TS>

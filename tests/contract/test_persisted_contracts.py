@@ -72,6 +72,9 @@ EXPECTED_SETTINGS_KEYS = {
     "SJJM_ANNOUNCE_MODE": "sjjm_announce_mode",
     "START_VIDEOS_PAUSED": "start_videos_paused",
     "PLAYBACK_PROTECTION_ENABLED": "playback_protection_enabled",
+    "TALK_THEME_CUSTOM_COLORS": "talk_theme/custom_colors",
+    "TALK_THEME_FOLLOW_OUTPUT_ASPECT": "talk_theme/follow_output_aspect",
+    "LEGACY_TALK_THEME_CUSTOM_TEXT_COLORS": "talk_theme/custom_text_colors",
     "WATCHED_FOLDER_PATH": "watched_folder/path",
     "YEARLY_QUOTE": "yearly_quote",
     "YEARLY_REFERENCE": "yearly_ref",
@@ -227,6 +230,12 @@ def test_profile_registry_and_directory_layout_are_stable(
     assert "pending_del_file" not in runtime_paths_module.RuntimePaths.__dataclass_fields__
     assert runtime.paths.images_dir == tmp_path / "profiles" / "main_hall" / "images"
     assert runtime.paths.embedded_dir == tmp_path / "profiles" / "main_hall" / "embedded"
+    assert runtime.paths.talk_theme_file == (
+        tmp_path / "profiles" / "main_hall" / "talk_theme.json"
+    )
+    assert runtime.paths.talk_theme_assets_dir == (
+        tmp_path / "profiles" / "main_hall" / "talk_theme_assets"
+    )
     assert runtime.paths.profile_cache_dir == cache_dir / "profiles" / "main_hall"
     assert runtime.paths.thumb_cache_dir == (cache_dir / "profiles" / "main_hall" / "thumbs")
     assert runtime.paths.meeting_thumb_cache_dir == (

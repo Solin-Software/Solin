@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import re
 from collections.abc import Callable
@@ -27,12 +28,13 @@ from ..core.projection.image_framing import (
     image_transform_from_values,
     image_transforms_equal,
 )
+from ..core.projection.result import ProjectionResult, ProjectionResultStatus
 
-#: Projection states that carry a zoom/pan transform (so it is persisted in the
-#: projection session and replayed onto surfaces created later).  Both render
-#: through a zoom/pan-capable widget: image -> VideoDisplayWidget, sermon theme
-#: -> the talk theme slide.
-_TRANSFORMABLE_STATES = frozenset({"image", "sermon_theme"})
+log = logging.getLogger(__name__)
+
+#: Projection states that carry a zoom/pan transform so newly created surfaces
+#: can restore exactly the same framing.
+_TRANSFORMABLE_STATES = frozenset({"image"})
 
 #: Identity transform (no zoom, no pan).
 _IDENTITY_TRANSFORM = (1.0, 0.0, 0.0)
@@ -84,6 +86,7 @@ class MediaProjectionController:
         self._handlers = handlers
         self._session = context.projection_session
         self._next_is_sjjm = False
+        self._browser_tap_connected = False
 
     def on_song_project(
         self,
@@ -384,6 +387,38 @@ class MediaProjectionController:
         title = self._context.translate("Showing image")
         self._project_image_data(title, data, playlist=[])
 
+    def project_generated_image(
+        self,
+        title: str,
+        data: bytes,
+        metadata: dict[str, str] | None = None,
+    ) -> ProjectionResult:
+        """Project an app-generated PNG without persisting it as operator media."""
+
+        image = QImage()
+        if not data.startswith(b"\x89PNG\r\n\x1a\n") or not image.loadFromData(data, "PNG"):
+            return ProjectionResult(ProjectionResultStatus.INVALID)
+        if image.width() <= 0 or image.height() <= 0:
+            return ProjectionResult(ProjectionResultStatus.INVALID)
+        if not self._allow_manual_projection_change():
+            return ProjectionResult(ProjectionResultStatus.BLOCKED)
+
+        details = metadata or {}
+        accepted = self._project_image_data(
+            title,
+            data,
+            playlist=[],
+            user_initiated=False,
+            generated_kind=str(details.get("generated_kind") or "generated"),
+            fingerprint=str(details.get("fingerprint") or ""),
+            persist_operator_copy=False,
+            allow_image_actions=False,
+            auto_keys_media=False,
+        )
+        if not accepted:
+            return ProjectionResult(ProjectionResultStatus.FAILED)
+        return ProjectionResult(ProjectionResultStatus.ACCEPTED)
+
     def project_tab_frame(self, frame) -> None:
         context = self._context
         if not self._session.tab_projection_active:
@@ -409,12 +444,54 @@ class MediaProjectionController:
                 auto_keys_media=False,
             )
 
+        obs_composited = False
         for projection_window in context.projection_windows():
+            # Under the obs engine, push the browser frame into a libobs async
+            # source (composited + crossfaded on channel 0) instead of painting a
+            # QImage per frame on the Qt page. The frame stream keeps producing
+            # frames while the browser page is hidden, so this stays live across
+            # panel switches. Falls back to the Qt path when unavailable.
+            if isinstance(frame, QImage) and hasattr(projection_window, "show_browser_frame"):
+                try:
+                    if projection_window.show_browser_frame(frame):
+                        obs_composited = True
+                        continue
+                except Exception:  # noqa: BLE001 - libobs/render boundary
+                    log.debug("libobs browser frame failed; using Qt frames", exc_info=True)
             if isinstance(frame, QImage) and hasattr(projection_window, "show_image_from_qimage"):
                 projection_window.show_image_from_qimage(frame, cache_pixmap=False)
             else:
                 projection_window.show_image_from_pixmap(frame)
-        context.projection_bar.update_tab_live_preview(frame)
+        if obs_composited:
+            # Operator preview reflects the *composited* channel-0 output (with
+            # crossfades/overlays), tapped from libobs — not the raw pre-composite
+            # browser frame — mirroring the camera preview.
+            self._start_browser_preview_tap()
+        else:
+            context.projection_bar.update_tab_live_preview(frame)
+
+    def _start_browser_preview_tap(self) -> None:
+        from ..projection.program_preview import program_preview_tap
+
+        tap = program_preview_tap()
+        if not self._browser_tap_connected:
+            tap.frame_ready.connect(self._on_browser_preview_frame)
+            self._browser_tap_connected = True
+        tap.set_enabled(True)
+
+    def _stop_browser_preview_tap(self) -> None:
+        from ..projection.program_preview import program_preview_tap
+
+        program_preview_tap().set_enabled(False)
+
+    def _on_browser_preview_frame(self, image) -> None:
+        # The tap is a shared channel-0 grab; forward only while the browser is the
+        # projected content, and self-disarm once it isn't (so no teardown hook is
+        # needed in every stop path).
+        if self._session.state_type == "browser":
+            self._context.projection_bar.update_tab_live_preview(image)
+        else:
+            self._stop_browser_preview_tap()
 
     def on_image_apply_transform(self, zoom: float, norm_x: float, norm_y: float) -> None:
         self._apply_image_transform(zoom, norm_x, norm_y, animate=True)
@@ -439,7 +516,7 @@ class MediaProjectionController:
         # Persist the transform as part of the projection state so a surface
         # created later (hot-plugged monitor / respawned preview) is replayed
         # with the same framing instead of showing it untransformed.  Applies to
-        # both projected images and the sermon-theme slide.
+        # projected images.
         state = self._session.state
         if state.get("type") in _TRANSFORMABLE_STATES:
             self._session.update_state(transform=(zoom, norm_x, norm_y))
@@ -695,13 +772,21 @@ class MediaProjectionController:
         keep_expanded: bool = False,
         image_framing: object = None,
         user_initiated: bool = True,
-    ) -> None:
+        generated_kind: str = "",
+        fingerprint: str = "",
+        persist_operator_copy: bool = True,
+        allow_image_actions: bool = True,
+        auto_keys_media: bool = True,
+    ) -> bool:
         if user_initiated and not self._allow_manual_projection_change():
-            return
+            return False
+        image = QImage()
+        if not data or not image.loadFromData(data) or image.width() <= 0 or image.height() <= 0:
+            return False
         context = self._context
         initial_transform = self._prepared_image_transform(data, image_framing)
         if self._update_active_image_framing(data, initial_transform):
-            return
+            return True
 
         self._session.set_tab_projection_active(False)
         self._handlers.stop_browser_tab_projection()
@@ -731,32 +816,42 @@ class MediaProjectionController:
                 initial_transform=initial_transform,
             )
 
-        self._session.set_state(
-            {
-                "type": "image",
-                "title": title,
-                "origin": self._projection_origin(
-                    playlist[index or 0] if playlist and 0 <= (index or 0) < len(playlist) else None
-                ),
-                "data": data,
-                "transform": (
-                    initial_transform.zoom,
-                    initial_transform.norm_x,
-                    initial_transform.norm_y,
-                ),
-            }
-        )
-        context.projection_bar.activate_image(
-            title,
-            image_data=data,
-            keep_expanded=keep_expanded,
-            initial_transform=initial_transform,
-        )
+        state = {
+            "type": "image",
+            "title": title,
+            "origin": self._projection_origin(
+                playlist[index or 0] if playlist and 0 <= (index or 0) < len(playlist) else None
+            ),
+            "data": data,
+            "transform": (
+                initial_transform.zoom,
+                initial_transform.norm_x,
+                initial_transform.norm_y,
+            ),
+        }
+        if generated_kind:
+            state["generated_kind"] = generated_kind
+        if fingerprint:
+            state["fingerprint"] = fingerprint
+        self._session.set_state(state)
+        activate_options: dict[str, Any] = {
+            "image_data": data,
+            "keep_expanded": keep_expanded,
+            "initial_transform": initial_transform,
+        }
+        if not persist_operator_copy or not allow_image_actions:
+            activate_options.update(
+                persist_operator_copy=persist_operator_copy,
+                allow_add_to_destination=allow_image_actions,
+                allow_set_as_idle=allow_image_actions,
+            )
+        context.projection_bar.activate_image(title, **activate_options)
         self._handlers.update_projection_status(
             True,
             title,
-            auto_keys_media=True,
+            auto_keys_media=auto_keys_media,
         )
+        return True
 
     def _allow_manual_projection_change(self, *, notify: bool = True) -> bool:
         return self._context.playback_protection.allow_manual_projection_change(notify=notify)

@@ -4221,47 +4221,6 @@ This action cannot be undone.</source>
     </message>
   </context>
   <context>
-    <name>SermonThemeWidget</name>
-    <message>
-      <location filename="../../widgets/sermon_theme_widget.py" line="+383" />
-      <location line="+16" />
-      <location line="+91" />
-      <source>PUBLIC TALK</source>
-      <translation>ПУБЛІЧНА ПРОМОВА</translation>
-    </message>
-    <message>
-      <location line="-7" />
-      <location line="+3" />
-      <source>Talk theme</source>
-      <translation>Тема промови</translation>
-    </message>
-    <message>
-      <location line="-2" />
-      <source>Project the talk title on the secondary screen</source>
-      <translation>Проектувати тему промови на додатковий екран</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>PREVIEW</source>
-      <translation>ПОПЕРЕДНІЙ ПЕРЕГЛЯД</translation>
-    </message>
-    <message>
-      <location line="+2" />
-      <source>E.g.: Imitate Jehovah's mercy</source>
-      <translation>Напр.: Наслідуйте милосердя Єгови</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>Subtitle:</source>
-      <translation>Підзаголовок:</translation>
-    </message>
-    <message>
-      <location line="+12" />
-      <source>Project Theme</source>
-      <translation>Проектувати тему</translation>
-    </message>
-  </context>
-  <context>
     <name>SetAsIdleConfirmDialog</name>
     <message>
       <location filename="../../widgets/projection/idle_dialog.py" line="+81" />
@@ -7045,6 +7004,767 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
       <source>Not configured</source>
       <translation>Не налаштовано</translation>
 
+    </message>
+  </context>
+  <context>
+    <name>DeferredTalkThemeWidget</name>
+    <message>
+      <location filename="../../widgets/deferred_talk_theme_widget.py" line="+36" />
+      <location line="+49" />
+      <source>Loading…</source>
+      <translation>Завантаження…</translation>
+    </message>
+  </context>
+  <context>
+    <name>MeetingSections</name>
+    <message>
+      <location filename="../../ui/qml/talk_theme.py" line="+876" />
+      <source>PUBLIC TALK</source>
+      <translation>ПУБЛІЧНА ПРОМОВА</translation>
+    </message>
+  </context>
+  <context>
+    <name>TalkThemeBridge</name>
+    <message>
+      <location filename="../../ui/qml/talk_theme.py" line="-424" />
+      <source>Style applied</source>
+      <translation>Стиль застосовано</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Enter a name for the preset.</source>
+      <translation>Введіть назву пресету.</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>A preset with this name already exists.</source>
+      <translation>Пресет із такою назвою вже існує.</translation>
+    </message>
+    <message>
+      <location line="+14" />
+      <source>Preset saved</source>
+      <translation>Пресет збережено</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Preset deleted</source>
+      <translation>Пресет видалено</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Choose image</source>
+      <translation>Вибрати зображення</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Images (*.png *.jpg *.jpeg *.webp)</source>
+      <translation>Зображення (*.png *.jpg *.jpeg *.webp)</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Importing image…</source>
+      <translation>Імпортування зображення…</translation>
+    </message>
+    <message>
+      <location line="+21" />
+      <source>Text color</source>
+      <translation>Колір тексту</translation>
+    </message>
+    <message>
+      <location line="+93" />
+      <source>Enter the talk title before projecting.</source>
+      <translation>Перед проєктуванням введіть назву промови.</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Preparing image…</source>
+      <translation>Підготовка зображення…</translation>
+    </message>
+    <message>
+      <location line="+18" />
+      <source>The talk-theme draft could not be saved.</source>
+      <translation>Не вдалося зберегти чернетку теми промови.</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Talk theme projected</source>
+      <translation>Тему промови спроєктовано</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Projection is currently protected.</source>
+      <translation>Наразі проєкцію захищено.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>The talk theme could not be projected.</source>
+      <translation>Не вдалося спроєктувати тему промови.</translation>
+    </message>
+    <message>
+      <location line="+29" />
+      <source>Image added</source>
+      <translation>Зображення додано</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>This image format is not supported.</source>
+      <translation>Цей формат зображення не підтримується.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Animated images are not supported.</source>
+      <translation>Анімовані зображення не підтримуються.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>The selected image could not be opened.</source>
+      <translation>Не вдалося відкрити вибране зображення.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>The selected image has invalid dimensions.</source>
+      <translation>Вибране зображення має неприпустимі розміри.</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>The selected image could not be imported.</source>
+      <translation>Не вдалося імпортувати вибране зображення.</translation>
+    </message>
+    <message>
+      <source>Talk theme</source>
+      <translation>Тема промови</translation>
+    </message>
+    <message>
+      <source>The maximum number of text layers has been reached.</source>
+      <translation>Досягнуто максимальної кількості текстових шарів.</translation>
+    </message>
+    <message>
+      <source>The maximum number of presets has been reached.</source>
+      <translation>Досягнуто максимальної кількості пресетів.</translation>
+    </message>
+    <message>
+      <source>Text %1</source>
+      <translation>Текст %1</translation>
+    </message>
+    <message>
+      <source>The preset could not be saved.</source>
+      <translation>Не вдалося зберегти пресет.</translation>
+    </message>
+    <message>
+      <source>Botanical</source>
+      <translation>Ботанічний</translation>
+    </message>
+    <message>
+      <source>Classic blue</source>
+      <translation>Класичний синій</translation>
+    </message>
+    <message>
+      <source>Soft photographic</source>
+      <translation>М’яке фото</translation>
+    </message>
+    <message>
+      <source>Center</source>
+      <translation>Центр</translation>
+    </message>
+    <message>
+      <source>Third</source>
+      <translation>Третина</translation>
+    </message>
+    <message>
+      <source>Safe margin</source>
+      <translation>Безпечне поле</translation>
+    </message>
+  </context>
+  <context>
+    <name>TalkThemeEditorView</name>
+    <message>
+      <location filename="../../qml/TalkThemeEditorView.qml" line="+28" />
+      <source>Botanical</source>
+      <translation>Ботанічний</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Classic blue</source>
+      <translation>Класичний синій</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Soft photographic</source>
+      <translation>М’яке фото</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Safe margin</source>
+      <translation>Безпечне поле</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Third</source>
+      <translation>Третина</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Center</source>
+      <translation>Центр</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Other text</source>
+      <translation>Інший текст</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <location line="+736" />
+      <source>Label</source>
+      <translation>Мітка</translation>
+    </message>
+    <message>
+      <location line="-734" />
+      <location line="+346" />
+      <location line="+394" />
+      <source>Talk title</source>
+      <translation>Назва промови</translation>
+    </message>
+    <message>
+      <location line="-738" />
+      <location line="+745" />
+      <source>Speaker</source>
+      <translation>Промовець</translation>
+    </message>
+    <message>
+      <location line="-743" />
+      <location line="+749" />
+      <source>Congregation</source>
+      <translation>Збір</translation>
+    </message>
+    <message>
+      <location line="-561" />
+      <source>Talk theme</source>
+      <translation>Тема промови</translation>
+    </message>
+    <message>
+      <location line="+28" />
+      <source>On screen</source>
+      <translation>На екрані</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Changes not yet projected</source>
+      <translation>Зміни ще не спроєктовано</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Saving…</source>
+      <translation>Збереження…</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Draft saved</source>
+      <translation>Чернетку збережено</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Edit</source>
+      <translation>Редагувати</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Canvas</source>
+      <translation>Полотно</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Undo</source>
+      <translation>Скасувати</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Redo</source>
+      <translation>Повторити</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <location line="+722" />
+      <source>Save preset</source>
+      <translation>Зберегти пресет</translation>
+    </message>
+    <message>
+      <location line="-716" />
+      <source>Preparing…</source>
+      <translation>Підготовка…</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Update projection</source>
+      <translation>Оновити проєкцію</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>▶  Project</source>
+      <translation>▶  Проєктувати</translation>
+    </message>
+    <message>
+      <location line="+31" />
+      <source>Styles</source>
+      <translation>Стилі</translation>
+    </message>
+    <message>
+      <location line="+78" />
+      <source>Delete preset</source>
+      <translation>Видалити пресет</translation>
+    </message>
+    <message>
+      <location line="+34" />
+      <location line="+493" />
+      <source>Background</source>
+      <translation>Тло</translation>
+    </message>
+    <message>
+      <location line="-490" />
+      <source>Importing…</source>
+      <translation>Імпортування…</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>▧  Choose image</source>
+      <translation>▧  Вибрати зображення</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>PNG, JPG or WebP · up to 4096 px</source>
+      <translation>PNG, JPG або WebP · до 4096 пкс.</translation>
+    </message>
+    <message>
+      <location line="+75" />
+      <source>Optional text</source>
+      <translation>Необов’язковий текст</translation>
+    </message>
+    <message>
+      <location line="+187" />
+      <source>Drag text · use arrow keys to fine-tune</source>
+      <translation>Перетягніть текст · стрілки для точного налаштування</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Finish adjusting</source>
+      <translation>Завершити налаштування</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Adjust image</source>
+      <translation>Налаштувати зображення</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Auto</source>
+      <translation>Авто</translation>
+    </message>
+    <message>
+      <location line="+37" />
+      <source>Content</source>
+      <translation>Вміст</translation>
+    </message>
+    <message>
+      <location line="+16" />
+      <source>Enter the title</source>
+      <translation>Введіть назву</translation>
+    </message>
+    <message>
+      <location line="+19" />
+      <source>Selected text</source>
+      <translation>Вибраний текст</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <source>Font</source>
+      <translation>Шрифт</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Weight</source>
+      <translation>Накреслення</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Normal</source>
+      <translation>Звичайний</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Medium</source>
+      <translation>Середній</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Semibold</source>
+      <translation>Напівжирний</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Bold</source>
+      <translation>Жирний</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Size</source>
+      <translation>Розмір</translation>
+    </message>
+    <message>
+      <location line="+23" />
+      <source>Fewer options  ⌃</source>
+      <translation>Менше параметрів  ⌃</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>More options  ⌄</source>
+      <translation>Більше параметрів  ⌄</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Text block width</source>
+      <translation>Ширина текстового блока</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Letter spacing</source>
+      <translation>Міжлітерний інтервал</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <source>Text color</source>
+      <translation>Колір тексту</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Choose text color</source>
+      <translation>Вибрати колір тексту</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Show this text</source>
+      <translation>Показувати цей текст</translation>
+    </message>
+    <message>
+      <location line="+14" />
+      <source>Alignment</source>
+      <translation>Вирівнювання</translation>
+    </message>
+    <message>
+      <location line="+29" />
+      <source>Darken image</source>
+      <translation>Затемнити зображення</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Blur image</source>
+      <translation>Розмити зображення</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Image fit</source>
+      <translation>Вписування зображення</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Fill</source>
+      <translation>Заповнити</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Fit</source>
+      <translation>Вмістити</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Image zoom</source>
+      <translation>Масштаб зображення</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>The image for this style could not be found.</source>
+      <translation>Не вдалося знайти зображення цього стилю.</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Choose image</source>
+      <translation>Вибрати зображення</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Reset</source>
+      <translation>Скинути</translation>
+    </message>
+    <message>
+      <location line="+21" />
+      <source>Ready to project</source>
+      <translation>Готово до проєктування</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Enter a title</source>
+      <translation>Введіть назву</translation>
+    </message>
+    <message>
+      <location line="+22" />
+      <source>Name</source>
+      <translation>Назва</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>For example: Special evening</source>
+      <translation>Наприклад: Особливий вечір</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Delete preset?</source>
+      <translation>Видалити пресет?</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>This preset will be permanently removed.</source>
+      <translation>Цей пресет буде видалено назавжди.</translation>
+    </message>
+    <message>
+      <source>Text</source>
+      <translation>Текст</translation>
+    </message>
+    <message>
+      <source>Select a text</source>
+      <translation>Виберіть текст</translation>
+    </message>
+    <message>
+      <source>Click a text on the canvas or choose a layer to edit it.</source>
+      <translation>Клацніть текст на полотні або виберіть шар, щоб відредагувати його.</translation>
+    </message>
+    <message>
+      <source>Add text</source>
+      <translation>Додати текст</translation>
+    </message>
+    <message>
+      <source>Write something…</source>
+      <translation>Введіть текст…</translation>
+    </message>
+    <message>
+      <source>Fewer options</source>
+      <translation>Менше параметрів</translation>
+    </message>
+    <message>
+      <source>More options</source>
+      <translation>Більше параметрів</translation>
+    </message>
+    <message>
+      <source>Line height</source>
+      <translation>Міжрядковий інтервал</translation>
+    </message>
+    <message>
+      <source>No image</source>
+      <translation>Немає зображення</translation>
+    </message>
+    <message>
+      <source>Adjust image position</source>
+      <translation>Налаштувати положення зображення</translation>
+    </message>
+    <message>
+      <source>The image for this preset could not be found.</source>
+      <translation>Не вдалося знайти зображення для цього пресету.</translation>
+    </message>
+    <message>
+      <source>Front</source>
+      <translation>На передньому плані</translation>
+    </message>
+    <message>
+      <source>%1 layers</source>
+      <translation>Шарів: %1</translation>
+    </message>
+    <message>
+      <source>Hide layer</source>
+      <translation>Приховати шар</translation>
+    </message>
+    <message>
+      <source>Show layer</source>
+      <translation>Показати шар</translation>
+    </message>
+    <message>
+      <source>Delete layer</source>
+      <translation>Видалити шар</translation>
+    </message>
+    <message>
+      <source>No text layers yet
+Add one when you are ready.</source>
+      <translation>Текстових шарів ще немає
+Додайте шар, коли будете готові.</translation>
+    </message>
+    <message>
+      <source>Drag layers to change which text appears in front.</source>
+      <translation>Перетягуйте шари, щоб змінити порядок накладання тексту.</translation>
+    </message>
+    <message>
+      <source>Included styles</source>
+      <translation>Вбудовані стилі</translation>
+    </message>
+    <message>
+      <source>My presets</source>
+      <translation>Мої пресети</translation>
+    </message>
+    <message>
+      <source>Your saved styles will appear here</source>
+      <translation>Тут з’являться збережені стилі</translation>
+    </message>
+    <message>
+      <source>Customize a theme and save it as a preset.</source>
+      <translation>Налаштуйте тему та збережіть її як пресет.</translation>
+    </message>
+    <message>
+      <source>Layers</source>
+      <translation>Шари</translation>
+    </message>
+    <message>
+      <source>Styles and layers</source>
+      <translation>Стилі та шари</translation>
+    </message>
+    <message>
+      <source>Unsaved changes</source>
+      <translation>Незбережені зміни</translation>
+    </message>
+    <message>
+      <source>Save</source>
+      <translation>Зберегти</translation>
+    </message>
+    <message>
+      <source>Save as preset</source>
+      <translation>Зберегти як пресет</translation>
+    </message>
+    <message>
+      <source>More save options</source>
+      <translation>Додаткові варіанти збереження</translation>
+    </message>
+    <message>
+      <source>Save as new preset…</source>
+      <translation>Зберегти як новий пресет…</translation>
+    </message>
+    <message>
+      <source>Project</source>
+      <translation>Проєктувати</translation>
+    </message>
+    <message>
+      <source>Export image</source>
+      <translation>Експортувати зображення</translation>
+    </message>
+    <message>
+      <source>Drag the image to reposition it</source>
+      <translation>Перетягніть зображення, щоб змінити його положення</translation>
+    </message>
+    <message>
+      <source>Drag text · double-click to edit</source>
+      <translation>Перетягуйте текст · двічі клацніть, щоб редагувати</translation>
+    </message>
+    <message>
+      <source>Auto format</source>
+      <translation>Автоматичний формат</translation>
+    </message>
+    <message>
+      <source>Match the projection screen format</source>
+      <translation>Підігнати до формату екрана проєкції</translation>
+    </message>
+    <message>
+      <source>Save the complete composition so you can use it again later.</source>
+      <translation>Збережіть повну композицію, щоб скористатися нею знову.</translation>
+    </message>
+    <message>
+      <source>Preset name</source>
+      <translation>Назва пресету</translation>
+    </message>
+    <message>
+      <source>Cancel</source>
+      <translation>Скасувати</translation>
+    </message>
+    <message>
+      <source>“%1” will be permanently removed.</source>
+      <translation>«%1» буде видалено назавжди.</translation>
+    </message>
+    <message>
+      <source>Delete</source>
+      <translation>Видалити</translation>
+    </message>
+    <message>
+      <source>Would you like to save your changes before switching presets?</source>
+      <translation>Бажаєте зберегти зміни перед перемиканням пресету?</translation>
+    </message>
+    <message>
+      <source>Discard</source>
+      <translation>Не зберігати</translation>
+    </message>
+  </context>
+  <context>
+    <name>TalkThemeEditorWidget</name>
+    <message>
+      <location filename="../../ui/qml/talk_theme.py" line="+253" />
+      <source>Projection is not ready yet.</source>
+      <translation>Проєкція ще не готова.</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>The talk-theme canvas could not be loaded.</source>
+      <translation>Не вдалося завантажити полотно теми промови.</translation>
+    </message>
+    <message>
+      <location line="+26" />
+      <source>The background image took too long to load.</source>
+      <translation>Завантаження фонового зображення тривало надто довго.</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <location line="+4" />
+      <source>The talk-theme image could not be prepared.</source>
+      <translation>Не вдалося підготувати зображення теми промови.</translation>
+    </message>
+    <message>
+      <location line="+22" />
+      <source>The final talk-theme image is incomplete.</source>
+      <translation>Кінцеве зображення теми промови неповне.</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>The talk-theme image could not be encoded.</source>
+      <translation>Не вдалося закодувати зображення теми промови.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Talk theme</source>
+      <translation>Тема промови</translation>
+    </message>
+    <message>
+      <location line="+21" />
+      <source>Preparing the image timed out.</source>
+      <translation>Час підготовки зображення вичерпано.</translation>
+    </message>
+    <message>
+      <source>Export image</source>
+      <translation>Експортувати зображення</translation>
+    </message>
+    <message>
+      <source>PNG image (*.png)</source>
+      <translation>PNG-зображення (*.png)</translation>
+    </message>
+    <message>
+      <source>The image could not be exported.</source>
+      <translation>Не вдалося експортувати зображення.</translation>
+    </message>
+    <message>
+      <source>Unsaved changes</source>
+      <translation>Незбережені зміни</translation>
+    </message>
+    <message>
+      <source>Save the changes to this talk theme?</source>
+      <translation>Зберегти зміни в цій темі промови?</translation>
+    </message>
+    <message>
+      <source>Save as preset</source>
+      <translation>Зберегти як пресет</translation>
+    </message>
+    <message>
+      <source>Name</source>
+      <translation>Назва</translation>
     </message>
   </context>
 </TS>
