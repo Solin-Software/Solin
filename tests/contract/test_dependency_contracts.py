@@ -11,7 +11,7 @@ from packaging.utils import canonicalize_name
 
 from tests._paths import REPO_ROOT
 
-SIDEVIEW_REQUIREMENT = "sideview==0.4.0"
+SIDEVIEW_REQUIREMENT = "sideview==0.4.1"
 
 
 def _project_metadata() -> dict:
@@ -69,6 +69,6 @@ def test_installed_sideview_distribution_provides_the_native_backend():
 
     package_dir = Path(sideview.__file__).resolve().parent
 
-    assert sideview.__version__ == "0.4.0"
-    assert version("sideview") == "0.4.0"
+    assert sideview.__version__ == "0.4.1"
+    assert version("sideview") == "0.4.1"
     assert (package_dir / native_name).is_file()

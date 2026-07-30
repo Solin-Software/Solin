@@ -28,7 +28,7 @@ qrcode==8.2
 requests==2.32.5
 setuptools==80.10.2
 shiboken6==6.11.1
-sideview==0.4.0
+sideview==0.4.1
 typing-extensions==4.15.0
 urllib3==2.6.3
 websocket-client==1.9.0
