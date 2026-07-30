@@ -425,7 +425,7 @@ def test_graphics_module_path_is_none_or_absolute_opengl():
 
 def test_graphics_module_path_returns_bundled_absolute_path(monkeypatch, tmp_path):
     """When a co-located graphics module exists, an absolute path to it is returned."""
-    import pylibobs
+    pylibobs = pytest.importorskip("pylibobs")  # needs the real package; skip in CI
 
     pkg_dir = tmp_path / "pylibobs"
     lib_dir = pkg_dir / "_libs" / "linux" / "x86_64"

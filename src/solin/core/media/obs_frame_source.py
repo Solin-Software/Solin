@@ -20,7 +20,9 @@ from typing import Any
 from cffi import FFI
 from PySide6.QtGui import QImage
 
-from pylibobs._ffi import ffi, get_lib, is_alive  # type: ignore[import-not-found]
+# NOTE: pylibobs is imported LAZILY inside the functions below (as in obs_runtime)
+# so this module — and the tests/tooling that import it — stay importable on
+# machines/CI without pylibobs installed (its use is mocked or guarded there).
 
 log = logging.getLogger(__name__)
 
@@ -70,6 +72,8 @@ def create_frame_source(runtime, name: str = "solin-frame-source"):
         return None
     if source is None:
         return None
+    from pylibobs._ffi import get_lib  # type: ignore[import-not-found]
+
     # Show pushed frames immediately (low latency); we feed real-time frames.
     try:
         get_lib().obs_source_set_async_unbuffered(source._ptr, True)
@@ -92,7 +96,11 @@ class ObsFrameSource:
         """Output one BGRA frame. Copies synchronously inside libobs, so the
         temporary buffer only needs to outlive the call."""
         source = self._source
-        if source is None or image is None or image.isNull() or not is_alive():
+        if source is None or image is None or image.isNull():
+            return
+        from pylibobs._ffi import ffi, get_lib, is_alive  # type: ignore[import-not-found]
+
+        if not is_alive():
             return
         # Qt Format_ARGB32 is 0xAARRGGBB → little-endian bytes B,G,R,A == BGRA.
         if image.format() != QImage.Format.Format_ARGB32:
