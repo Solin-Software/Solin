@@ -13,9 +13,14 @@ from ..core.projection.image_framing import (
     IDENTITY_IMAGE_TRANSFORM,
     image_transform_from_values,
 )
+from ..core.media.formats import media_type_from_path
 from ..core.timer.models import MediaCountdownPresentation
 from ..projection.idle_source import IdleMediaSource
-from ..projection.window import FloatingPreviewWindow, ProjectionWindow
+from ..projection.window import (
+    FloatingPreviewWindow,
+    ProjectionWindow,
+    obs_media_engine_active,
+)
 
 
 def _no_object() -> Any | None:
@@ -118,12 +123,20 @@ class ProjectionWindowController:
         quote, ref, api_code = self._yearly_text()
         win.set_yearly_text(quote, ref, api_code)
         if self._session.idle_media_path:
-            win.set_idle_active()
-            # Paint the most recent decoded frame right away so a hot-plugged or
-            # respawned surface is in sync from its very first frame instead of
-            # flashing black until the next frame arrives.
-            if self._idle_source is not None and self._idle_source.current_image is not None:
-                win.update_idle_image(self._idle_source.current_image)
+            if obs_media_engine_active():
+                # libobs composites the idle background itself (video → looping
+                # ffmpeg_source, image → image_source); no Qt decoder involved.
+                win.show_obs_idle_media(
+                    self._session.idle_media_path,
+                    media_type_from_path(self._session.idle_media_path),
+                )
+            else:
+                win.set_idle_active()
+                # Paint the most recent decoded frame right away so a hot-plugged
+                # or respawned surface is in sync from its very first frame instead
+                # of flashing black until the next frame arrives.
+                if self._idle_source is not None and self._idle_source.current_image is not None:
+                    win.update_idle_image(self._idle_source.current_image)
         else:
             win.clear_idle()
         self.restore_state_to_window(win)
@@ -246,17 +259,23 @@ class ProjectionWindowController:
         self._session.set_idle_media_path(path)
 
         if path:
-            # Activate surfaces *before* loading: a static image emits its single
-            # frame synchronously inside set_media(), so the surfaces must already
-            # be in idle-media mode to accept it.  Decode happens once on the
-            # shared source; every surface paints the frames it fans out (see
-            # _distribute_idle_frame).
-            for win in self.all_windows():
-                win.set_idle_active()
-            self._ensure_idle_source().set_media(path)
-            # Start the video decoder only if the idle screen is actually visible
-            # right now (it is not while a clip/image/timer is being projected).
-            self._sync_idle_playback()
+            if obs_media_engine_active():
+                # libobs decodes/composites the idle file itself — no Qt decoder.
+                mtype = media_type_from_path(path)
+                for win in self.all_windows():
+                    win.show_obs_idle_media(path, mtype)
+            else:
+                # Activate surfaces *before* loading: a static image emits its
+                # single frame synchronously inside set_media(), so the surfaces
+                # must already be in idle-media mode to accept it. Decode happens
+                # once on the shared source; every surface paints the frames it
+                # fans out (see _distribute_idle_frame).
+                for win in self.all_windows():
+                    win.set_idle_active()
+                self._ensure_idle_source().set_media(path)
+                # Start the video decoder only if the idle screen is actually
+                # visible right now (not while a clip/image/timer is projected).
+                self._sync_idle_playback()
         else:
             if self._idle_source is not None:
                 self._idle_source.clear()

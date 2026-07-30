@@ -18,6 +18,13 @@ def test_projectable_webview_disables_hover_overlays_while_projecting():
         def _push_overlay_enabled_state(self):
             ProjectableWebView._push_overlay_enabled_state(self)
 
+        # Capture keep-alive is orthogonal to the overlay behavior under test.
+        def _unpark_native_surface(self):
+            pass
+
+        def _teardown_keepalive_host(self):
+            pass
+
         def run_javascript(self, script: str):
             scripts.append(script)
 

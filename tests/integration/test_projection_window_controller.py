@@ -108,6 +108,7 @@ class _ProjectionWindowStub:
         self.index = index
         self.idle_active = 0
         self.cleared_idle = 0
+        self.obs_idle_calls = []
         self.idle_images = []
         self.idle_visible_flag = False
         self.visibility_slot = None
@@ -129,6 +130,9 @@ class _ProjectionWindowStub:
 
     def set_idle_active(self):
         self.idle_active += 1
+
+    def show_obs_idle_media(self, path, media_type):
+        self.obs_idle_calls.append((path, media_type))
 
     def clear_idle(self):
         self.cleared_idle += 1
@@ -263,6 +267,32 @@ def test_on_idle_media_changed_activates_source_and_windows(tmp_path):
     assert src.cleared == 1
     assert win.cleared_idle == 1
     assert window._monitor_popup.idle_paths == [str(img), ""]
+
+
+def test_on_idle_media_changed_composites_in_libobs_in_obs_mode(tmp_path, monkeypatch):
+    # In obs mode the idle background composites inside libobs (no Qt decoder):
+    # the controller routes the file straight to the surface, never touching the
+    # shared IdleMediaSource.
+    monkeypatch.setattr(
+        projection_controller, "obs_media_engine_active", lambda: True
+    )
+    vid = tmp_path / "idle.mp4"
+    vid.write_bytes(b"fake")
+    src = _StubIdleSource()
+    window = _WindowStub()
+    win = _ProjectionWindowStub()
+    window.projection_session.projection_windows = [win]
+    controller = ProjectionWindowController(
+        _projection_context(window),
+        idle_source_factory=lambda: src,
+    )
+
+    controller.on_idle_media_changed(str(vid))
+
+    assert win.obs_idle_calls == [(str(vid), "video")]
+    assert win.idle_active == 0          # Qt idle-media mode not used
+    assert src.media_set == []           # shared Qt decoder never created/loaded
+    assert controller._idle_source is None
 
 
 def test_on_idle_media_changed_rejects_missing_file():
