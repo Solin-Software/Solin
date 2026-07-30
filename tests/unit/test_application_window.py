@@ -295,7 +295,14 @@ def test_closing_application_window_cancels_load_and_shuts_down_runtime() -> Non
 
 
 def test_application_close_can_be_cancelled_before_shutdown() -> None:
-    window = ApplicationWindow(width=900, height=700, pending_files=[])
+    saved_geometry = []
+    window = ApplicationWindow(
+        width=900,
+        height=700,
+        geometry=QByteArray(),
+        save_geometry=saved_geometry.append,
+        pending_files=[],
+    )
     assert window.begin_hydration() is True
     runtime = _Runtime(window.content_parent())
     runtime.confirm_close = lambda: False
@@ -308,6 +315,7 @@ def test_application_close_can_be_cancelled_before_shutdown() -> None:
     assert event.isAccepted() is False
     assert window.state is ApplicationWindowState.HYDRATING
     assert runtime.shutdown_called is False
+    assert saved_geometry == []
 
 
 def test_closing_during_runtime_construction_aborts_partial_resources() -> None:
