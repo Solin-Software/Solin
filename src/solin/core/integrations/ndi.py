@@ -111,7 +111,7 @@ class _NDILib:
 
     @staticmethod
     def _candidate_paths() -> list[str]:
-        return candidate_ndi_library_paths(os.environ)
+        return candidate_ndi_library_paths(os.environ, sys.platform)
 
     @classmethod
     def _load_library(cls):

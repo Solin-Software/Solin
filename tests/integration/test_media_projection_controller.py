@@ -837,6 +837,58 @@ def test_project_tab_frame_initializes_live_tab_once():
     ]
 
 
+def test_project_tab_frame_uses_channel0_preview_tap_when_libobs_composites(monkeypatch):
+    """When the browser is composited by libobs, the operator preview taps the
+    channel-0 output (crossfades/overlays) instead of the raw pre-composite
+    frame — mirroring the camera preview."""
+    from PySide6.QtGui import QImage
+
+    import solin.projection.program_preview as preview_mod
+
+    class _FakeSignal:
+        def __init__(self):
+            self.slots = []
+
+        def connect(self, fn):
+            self.slots.append(fn)
+
+    class _FakeTap:
+        def __init__(self):
+            self.frame_ready = _FakeSignal()
+            self.enabled = []
+
+        def set_enabled(self, on):
+            self.enabled.append(on)
+
+    fake_tap = _FakeTap()
+    monkeypatch.setattr(preview_mod, "program_preview_tap", lambda: fake_tap)
+
+    window = _WindowStub()
+    window.projection_session.set_tab_projection_active(False)
+    controller = _controller(window)
+    for projection_window in window.windows:
+        projection_window.show_browser_frame = lambda _img: True  # libobs composites it
+
+    img = QImage(4, 4, QImage.Format.Format_RGB32)
+    img.fill(0)
+    controller.project_tab_frame(img)
+
+    # Tap started + connected; the raw frame is NOT pushed to the preview.
+    assert fake_tap.enabled == [True]
+    assert len(fake_tap.frame_ready.slots) == 1
+    assert window.proj_bar.tab_previews == []
+
+    # A tapped channel-0 frame reaches the preview while the browser is active…
+    tapped = QImage(2, 2, QImage.Format.Format_RGB32)
+    fake_tap.frame_ready.slots[0](tapped)
+    assert window.proj_bar.tab_previews == [tapped]
+
+    # …and the tap self-disarms once the browser is no longer projected.
+    window.projection_session.set_state({"type": "video", "title": "x"})
+    fake_tap.frame_ready.slots[0](QImage(2, 2, QImage.Format.Format_RGB32))
+    assert fake_tap.enabled == [True, False]
+
+
 def test_frame_and_image_transform_helpers_respect_projection_modes():
     window = _WindowStub()
     controller = _controller(window)

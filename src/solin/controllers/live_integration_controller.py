@@ -57,6 +57,7 @@ class LiveIntegrationController:
         self._context = context
         self._handlers = handlers
         self._session = context.projection_session
+        self._camera_tap_connected = False  # program-preview tap wiring (obs camera)
 
     @Slot(bool)
     def on_zoom_settings_enabled_toggled(self, enabled: bool) -> None:
@@ -174,6 +175,10 @@ class LiveIntegrationController:
         toolbar = self._context.quick_toolbar()
         if toolbar is not None:
             toolbar.set_camera_stream_active(active)
+        if not active:
+            # Stop feeding the operator preview once the camera stream ends (the
+            # v4l2 source is released by the program's crossfade-away).
+            self._stop_camera_preview_tap()
 
     def on_camera_settings_enabled_toggled(self, enabled: bool) -> None:
         toolbar = self._context.quick_toolbar()
@@ -286,7 +291,47 @@ class LiveIntegrationController:
             sync_obs=False,
         )
         self.set_camera_stream_active(True)
+
+        # Native libobs camera: a v4l2_input source libobs owns, decodes and
+        # crossfades — no QImage round-trip, no Qt QCamera on the device. The
+        # operator preview is fed from a channel-0 tap (libobs holds the device,
+        # so the Qt camera service can't). Falls back to the Qt camera path if the
+        # source can't be created (non-obs engine, or no v4l2 device path).
+        from ..projection.window import obs_media_engine_active
+
+        if obs_media_engine_active() and option.device_path:
+            shown = False
+            for win in context.projection_windows():
+                if hasattr(win, "show_camera") and win.show_camera(
+                    option.device_path, option.name
+                ):
+                    shown = True
+            if shown:
+                self._start_camera_preview_tap()
+                return
+
         context.camera_service.start(option)
+
+    def _start_camera_preview_tap(self) -> None:
+        from ..projection.program_preview import program_preview_tap
+
+        tap = program_preview_tap()
+        if not self._camera_tap_connected:
+            tap.frame_ready.connect(self._on_camera_preview_frame)
+            self._camera_tap_connected = True
+        tap.set_enabled(True)
+
+    def _stop_camera_preview_tap(self) -> None:
+        from ..projection.program_preview import program_preview_tap
+
+        program_preview_tap().set_enabled(False)
+
+    def _on_camera_preview_frame(self, image) -> None:
+        # Only feed the preview while the camera is the projected content (the tap
+        # is a shared channel-0 grab; state gates it so it never fights another
+        # source's preview).
+        if self._session.state_type == "camera_stream":
+            self._context.projection_bar.update_tab_live_preview(image)
 
     @Slot(QImage)
     def on_camera_frame(self, frame: QImage) -> None:
@@ -317,8 +362,20 @@ class LiveIntegrationController:
             return
         context = self._context
         for win in context.projection_windows():
+            # Push the ctypes-decoded NDI frame into a libobs async source so the
+            # program composites + crossfades it (vcam/recording-capturable),
+            # instead of painting the QImage on the Qt page with the surface
+            # hidden. Falls back to the Qt per-frame path when unavailable.
+            if hasattr(win, "show_ndi_frame"):
+                try:
+                    if win.show_ndi_frame(frame):
+                        continue
+                except Exception:  # noqa: BLE001 - libobs/render boundary
+                    log.debug("libobs NDI frame failed; using Qt frames", exc_info=True)
             if hasattr(win, "show_image_from_qimage"):
                 win.show_image_from_qimage(frame, cache_pixmap=False)
+        # The operator preview keeps the raw frame (already available in Python;
+        # no device-exclusivity constraint like the camera).
         context.projection_bar.update_tab_live_preview(frame)
 
     def on_obs_ndi_error(self, message: str) -> None:

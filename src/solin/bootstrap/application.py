@@ -18,8 +18,61 @@ def _configure_qt_logging_rules() -> None:
 
 _configure_qt_logging_rules()
 
+
+def _configure_qt_gl_integration() -> None:
+    """Prepare Qt to coexist with libobs' OpenGL when the libobs engine is on.
+
+    Two settings, Linux/X11 only, applied before QApplication is constructed:
+
+    * ``QT_XCB_GL_INTEGRATION=xcb_egl`` — libobs' OpenGL backend uses EGL. If Qt
+      uses GLX (the xcb default), the two can't share a context and the libobs
+      projection display fails with EGL_BAD_ACCESS. Selecting ``xcb_egl`` makes
+      Qt use EGL so — with ``obs_set_nix_platform_display`` sharing Qt's X
+      connection — both live on a single EGLDisplay.
+    * ``QT_QUICK_BACKEND=software`` — but with ``xcb_egl`` active, Qt Quick's
+      OpenGL RHI cannot make a context current on some Intel GPUs (``QRhiGles2:
+      Failed to make context current`` / ``eglMakeCurrent failed: 3009``), so the
+      QML operator UI never leaves the splash. Rendering Qt Quick in *software*
+      sidesteps that entirely and leaves the GPU to libobs (fine for the
+      operator UI — it is not GPU-bound).
+    """
+    if os.environ.get("SOLIN_MEDIA_ENGINE", "").strip().lower() != "obs":
+        return
+    if sys.platform.startswith("linux"):
+        if not os.environ.get("QT_XCB_GL_INTEGRATION"):
+            os.environ["QT_XCB_GL_INTEGRATION"] = "xcb_egl"
+        os.environ.setdefault("QT_QUICK_BACKEND", "software")
+
+
+_configure_qt_gl_integration()
+
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import Qt, QCoreApplication, QTimer
+
+
+def _install_qt_message_filter() -> None:
+    """Drop the high-volume, benign ``QQuickWidget cannot be used as a native
+    child widget`` warning.
+
+    It fires because the app's native host windows (the single native top-level,
+    the native cursor hosts) sit above QML content — the message is harmless, but
+    it is emitted in a tight loop, and writing that flood to an *interactive
+    terminal* back-pressures the GUI thread enough to wedge startup on the splash
+    (redirected output is unaffected — which is why it "only hangs in a
+    terminal"). Every other Qt message passes straight through to stderr.
+    """
+    from PySide6.QtCore import qInstallMessageHandler
+
+    def _handler(_mode, _context, message: str) -> None:
+        if "cannot be used as a native child widget" in message:
+            return
+        if sys.stderr is not None:  # packaged/windowed apps may have no stderr
+            sys.stderr.write(message + "\n")
+
+    qInstallMessageHandler(_handler)
+
+
+_install_qt_message_filter()
 
 # Apenas constantes puras — sem dependência de caminhos ou QApplication.
 from solin.bootstrap.config import default_app_config
@@ -401,7 +454,9 @@ def _build_main_window_runtime(
         application_maintenance,
     )
     media_controller = media.create_playback(main_window_profile_settings.media)
-    background_media_controller = media.create_playback(main_window_profile_settings.media)
+    background_media_controller = media.create_playback(
+        main_window_profile_settings.media, projection=False
+    )
     timeline.mark("critical_ui_started")
     try:
         runtime = MainWindow(

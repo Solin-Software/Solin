@@ -71,6 +71,10 @@ class _ProjectionBarStub:
         self.obs_btn_available = None
         self.obs_scene_states = []
         self._obs_scene_is_media = False
+        self.tab_previews = []
+
+    def update_tab_live_preview(self, frame):
+        self.tab_previews.append(frame)
 
     def set_obs_btn_available(self, available):
         self.obs_btn_available = available
@@ -193,7 +197,8 @@ class _WindowStub:
         return text
 
 
-def _controller(window):
+def _controller(window, projection_windows=None):
+    windows = list(projection_windows) if projection_windows is not None else []
     return LiveIntegrationController(
         LiveIntegrationContext(
             projection_session=window.projection_session,
@@ -208,7 +213,7 @@ def _controller(window):
             projection_bar=window.proj_bar,
             media_controller=window.media_ctrl,
             quick_toolbar=lambda: window._quick_toolbar,
-            projection_windows=lambda: [],
+            projection_windows=lambda: windows,
             translate=window.tr,
             playback_protection=window.playback_protection,
         ),
@@ -247,6 +252,50 @@ def test_live_stream_replacements_are_rejected_before_side_effects_when_locked()
     assert window.browser_projection_stops == 0
     assert window.projection_session.state == {"type": "idle"}
     assert window.stopped_projection is False
+
+
+class _NdiProjectionWindowStub:
+    def __init__(self, *, ndi_ok: bool) -> None:
+        self._ndi_ok = ndi_ok
+        self.ndi_frames: list = []
+        self.qt_frames: list = []
+
+    def show_ndi_frame(self, image) -> bool:
+        self.ndi_frames.append(image)
+        return self._ndi_ok
+
+    def show_image_from_qimage(self, image, cache_pixmap: bool = True) -> None:
+        self.qt_frames.append((image, cache_pixmap))
+
+
+def test_on_obs_ndi_frame_composites_in_libobs():
+    from PySide6.QtGui import QImage
+
+    window = _WindowStub()
+    window.projection_session.set_state({"type": "obs_stream"})
+    win = _NdiProjectionWindowStub(ndi_ok=True)
+    controller = _controller(window, projection_windows=[win])
+    frame = QImage(2, 2, QImage.Format.Format_RGB32)
+
+    controller.on_obs_ndi_frame(frame)
+
+    assert win.ndi_frames == [frame]     # pushed into the libobs frame source
+    assert win.qt_frames == []           # no Qt fallback needed
+
+
+def test_on_obs_ndi_frame_falls_back_to_qt_when_libobs_unavailable():
+    from PySide6.QtGui import QImage
+
+    window = _WindowStub()
+    window.projection_session.set_state({"type": "obs_stream"})
+    win = _NdiProjectionWindowStub(ndi_ok=False)
+    controller = _controller(window, projection_windows=[win])
+    frame = QImage(2, 2, QImage.Format.Format_RGB32)
+
+    controller.on_obs_ndi_frame(frame)
+
+    assert win.ndi_frames == [frame]                 # tried libobs first
+    assert win.qt_frames == [(frame, False)]         # then the Qt per-frame path
 
 
 def test_refresh_obs_stream_availability_updates_stream_and_camera_availability():

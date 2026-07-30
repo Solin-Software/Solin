@@ -698,6 +698,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._ensure_overlay_ready()
         self._expanded = True
         self.expanded_changed.emit(True)
+        self._sync_frame_output()
         self._update_overlay_geometry()
         self.overlay.raise_()
         self.overlay.setVisible(True)
@@ -713,6 +714,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.overlay.setVisible(False)
         self._stop_wave_animation()
         self.expanded_changed.emit(False)
+        self._sync_frame_output()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -739,6 +741,19 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
             return
         pixmap = QPixmap.fromImage(img)
         self.preview_content.setPixmap(pixmap)
+
+    def _sync_frame_output(self) -> None:
+        """Enable preview-frame emission only while an operator is watching.
+
+        The libobs engine only pays for frame copies when the preview is
+        expanded or the fullscreen overlay is active (and the media is video).
+        No-op on the Qt engine, which streams frames unconditionally.
+        """
+        setter = getattr(self.media, "set_frame_output_enabled", None)
+        if setter is None:
+            return
+        watching = self._expanded or self.app_fullscreen_active()
+        setter(watching and self._mode == "video" and not self._is_audio)
 
     # ── Conexões com MediaController ─────────────────────────────────────
 
@@ -834,11 +849,13 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         overlay = self._ensure_fullscreen_overlay()
         self._hydrate_fullscreen_overlay(overlay)
         overlay.show_fullscreen()
+        self._sync_frame_output()
 
     def exit_app_fullscreen(self) -> None:
         overlay = getattr(self, "_fullscreen_overlay", None)
         if overlay is not None:
             overlay.hide_fullscreen()
+        self._sync_frame_output()
 
     def _is_app_fullscreen_available(self) -> bool:
         return self._mode == "video" and not self._is_audio
@@ -962,6 +979,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._cancel_announcement_mode()
         self._enter_mode("video")
         self._is_audio = is_audio
+        self._sync_frame_output()
         self._image_pixmap = None
         self._stop_wave_animation()   # para animação da faixa anterior (se houver)
         self._last_buffer_progress = (0, 0)

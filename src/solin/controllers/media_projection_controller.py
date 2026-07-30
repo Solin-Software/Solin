@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import re
 from collections.abc import Callable
@@ -27,6 +28,8 @@ from ..core.projection.image_framing import (
     image_transform_from_values,
     image_transforms_equal,
 )
+
+log = logging.getLogger(__name__)
 
 #: Projection states that carry a zoom/pan transform (so it is persisted in the
 #: projection session and replayed onto surfaces created later).  Both render
@@ -84,6 +87,7 @@ class MediaProjectionController:
         self._handlers = handlers
         self._session = context.projection_session
         self._next_is_sjjm = False
+        self._browser_tap_connected = False
 
     def on_song_project(
         self,
@@ -409,12 +413,54 @@ class MediaProjectionController:
                 auto_keys_media=False,
             )
 
+        obs_composited = False
         for projection_window in context.projection_windows():
+            # Under the obs engine, push the browser frame into a libobs async
+            # source (composited + crossfaded on channel 0) instead of painting a
+            # QImage per frame on the Qt page. The frame stream keeps producing
+            # frames while the browser page is hidden, so this stays live across
+            # panel switches. Falls back to the Qt path when unavailable.
+            if isinstance(frame, QImage) and hasattr(projection_window, "show_browser_frame"):
+                try:
+                    if projection_window.show_browser_frame(frame):
+                        obs_composited = True
+                        continue
+                except Exception:  # noqa: BLE001 - libobs/render boundary
+                    log.debug("libobs browser frame failed; using Qt frames", exc_info=True)
             if isinstance(frame, QImage) and hasattr(projection_window, "show_image_from_qimage"):
                 projection_window.show_image_from_qimage(frame, cache_pixmap=False)
             else:
                 projection_window.show_image_from_pixmap(frame)
-        context.projection_bar.update_tab_live_preview(frame)
+        if obs_composited:
+            # Operator preview reflects the *composited* channel-0 output (with
+            # crossfades/overlays), tapped from libobs — not the raw pre-composite
+            # browser frame — mirroring the camera preview.
+            self._start_browser_preview_tap()
+        else:
+            context.projection_bar.update_tab_live_preview(frame)
+
+    def _start_browser_preview_tap(self) -> None:
+        from ..projection.program_preview import program_preview_tap
+
+        tap = program_preview_tap()
+        if not self._browser_tap_connected:
+            tap.frame_ready.connect(self._on_browser_preview_frame)
+            self._browser_tap_connected = True
+        tap.set_enabled(True)
+
+    def _stop_browser_preview_tap(self) -> None:
+        from ..projection.program_preview import program_preview_tap
+
+        program_preview_tap().set_enabled(False)
+
+    def _on_browser_preview_frame(self, image) -> None:
+        # The tap is a shared channel-0 grab; forward only while the browser is the
+        # projected content, and self-disarm once it isn't (so no teardown hook is
+        # needed in every stop path).
+        if self._session.state_type == "browser":
+            self._context.projection_bar.update_tab_live_preview(image)
+        else:
+            self._stop_browser_preview_tap()
 
     def on_image_apply_transform(self, zoom: float, norm_x: float, norm_y: float) -> None:
         self._apply_image_transform(zoom, norm_x, norm_y, animate=True)

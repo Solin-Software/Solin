@@ -82,7 +82,7 @@ def test_build_main_window_runtime_wires_services_to_stable_window_host(monkeypa
     pending_media_controllers = list(created_media_controllers)
     media = SimpleNamespace(
         cache_manager=media_cache_manager,
-        create_playback=lambda settings: (
+        create_playback=lambda settings, projection=True: (
             pending_media_controllers.pop(0)
             if settings is media_settings
             else None
@@ -369,7 +369,7 @@ def test_build_main_window_runtime_does_not_mutate_native_window_lifecycle(monke
 
     media = SimpleNamespace(
         cache_manager=media_cache_manager,
-        create_playback=lambda _settings: _MediaController(),
+        create_playback=lambda _settings, projection=True: _MediaController(),
         create_info_queue=object(),
         create_info_service=object(),
         create_browser_download_service=object(),

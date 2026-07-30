@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 
 from PySide6.QtCore import (
@@ -70,18 +71,41 @@ def _icon_hex(color: str) -> str:
     return color.lstrip("#")
 
 
+def _software_qml_backend() -> bool:
+    """True when Qt Quick renders in software (obs mode sets QT_QUICK_BACKEND)."""
+    return os.environ.get("QT_QUICK_BACKEND", "").strip().lower() == "software"
+
+
+def _toolbar_surface_opaque(*, top_level: bool) -> bool:
+    """An *embedded* child QQuickWidget can't composite a translucent background
+    under the software scene-graph backend (obs mode) — the pill renders as an
+    opaque WHITE box. Under that backend the toolbar therefore always lives on
+    the *top-level* WM-composited surface (see show()/set_browser_overlay_mode),
+    which keeps true, anti-aliased transparency and a rounded pill. The embedded
+    surface is only a fallback if that surface can't be built; make it genuinely
+    OPAQUE there (clear to the dark app bg) so it blends into the dark panels
+    instead of flashing white."""
+    return _software_qml_backend() and not top_level
+
+
+def _toolbar_clear_color(*, top_level: bool):
+    return QColor(PALETTE.bg0) if _toolbar_surface_opaque(top_level=top_level) else QColor(0, 0, 0, 0)
+
+
 def _configure_toolbar_surface(
     surface: QQuickWidget,
     bridge: QuickToolbarBridge,
     *,
     defer_load: bool = False,
+    top_level: bool = False,
 ):
     """Configure one rendering surface for the shared toolbar state."""
-    surface.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+    opaque = _toolbar_surface_opaque(top_level=top_level)
+    surface.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, not opaque)
     surface.setAttribute(Qt.WidgetAttribute.WA_AlwaysStackOnTop, True)
-    surface.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, False)
-    surface.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
-    surface.setStyleSheet("background: transparent;")
+    surface.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, opaque)
+    surface.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, not opaque)
+    surface.setStyleSheet(f"background: {PALETTE.bg0};" if opaque else "background: transparent;")
     if _MAC:
         surface.resize(_QAT_MAX_W, _QAT_H)
     else:
@@ -90,7 +114,7 @@ def _configure_toolbar_surface(
     return configure_qml_host(
         surface,
         type_name="QuickAccessToolbar",
-        clear_color=QColor(0, 0, 0, 0),
+        clear_color=_toolbar_clear_color(top_level=top_level),
         image_providers={
             "icons": SvgIconProvider(
                 QUICK_TOOLBAR_ICON_SVGS,
@@ -116,7 +140,7 @@ class _LinuxBrowserToolbarSurface(QQuickWidget):
         )
         self.setParent(parent_window, flags)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
-        _configure_toolbar_surface(self, bridge)
+        _configure_toolbar_surface(self, bridge, top_level=True)
         self.hide()
 
 
@@ -339,6 +363,31 @@ class QuickAccessToolbar(QQuickWidget):
         ):
             self._schedule_reposition()
         return super().eventFilter(obj, event)
+
+    def show(self) -> None:
+        # Under the software backend the toolbar always lives on the WM-composited
+        # top-level surface (set_browser_overlay_mode forces it), so its own pill
+        # gets true anti-aliased transparency. Route show() there and keep the
+        # embedded widget hidden — otherwise the opaque embedded pill would flash.
+        if _software_qml_backend():
+            if not self._browser_overlay_mode:
+                self.set_browser_overlay_mode(True)  # lazily builds the surface
+            if self._browser_surface is not None:
+                self._browser_surface_should_be_visible = True
+                if not self._projection_overlay_active:
+                    self._ensure_transient_parent()
+                    self._browser_surface.show()
+                    self._ensure_transient_parent()
+                    self._schedule_reposition()
+                return
+        super().show()
+
+    def hide(self) -> None:
+        if _software_qml_backend() and self._browser_overlay_mode and self._browser_surface is not None:
+            self._browser_surface_should_be_visible = False
+            self._browser_surface.hide()
+            return
+        super().hide()
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
@@ -712,11 +761,11 @@ class QuickAccessToolbar(QQuickWidget):
 
     def apply_theme(self) -> None:
         hide_themed_tooltip()
-        apply_qml_theme(self, clear_color=QColor(0, 0, 0, 0))
+        apply_qml_theme(self, clear_color=_toolbar_clear_color(top_level=False))
         if self._browser_surface is not None:
             apply_qml_theme(
                 self._browser_surface,
-                clear_color=QColor(0, 0, 0, 0),
+                clear_color=_toolbar_clear_color(top_level=True),
             )
         self.set_screen_count(self._screen_count)
         if self._obs_connected:
@@ -758,6 +807,12 @@ class QuickAccessToolbar(QQuickWidget):
         """Use a transient native toolbar only above WebKitGTK on Linux."""
         if not _LINUX:
             return
+        # Under the software Qt Quick backend (obs mode) an embedded QQuickWidget
+        # can't render a translucent pill (white/opaque box). Only the top-level
+        # surface is WM-composited with true, anti-aliased transparency — so use
+        # it on EVERY panel, not just over the browser.
+        if _software_qml_backend():
+            enabled = True
         overlay_mode = bool(enabled)
         if overlay_mode == self._browser_overlay_mode:
             self._schedule_reposition()
