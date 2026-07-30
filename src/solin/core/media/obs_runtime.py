@@ -345,13 +345,50 @@ class ObsRuntime:
             return
         if not devices:
             return
-        device = devices[0]
+        device = self._preferred_monitoring_device(devices)
         try:
             if ob.set_audio_monitoring_device(device.name, device.id):
                 self._monitoring_device = (device.name, device.id)
                 log.info("libobs audio monitoring device: %s", device.name)
         except Exception:  # noqa: BLE001 - device selection boundary
             log.warning("Could not select audio monitoring device", exc_info=True)
+
+    def _preferred_monitoring_device(self, devices):
+        """Pick the OS default output device; fall back to the first enumerated.
+
+        Selecting ``devices[0]`` blindly can route audio to the wrong output (e.g.
+        headphones when the speakers are the system default). Prefer an explicit
+        "default" entry if the platform exposes one, else match the OS default
+        output by name, else fall back to the first device.
+        """
+        for device in devices:  # explicit platform "default" entry
+            ident = str(getattr(device, "id", "")).strip().lower()
+            name = str(getattr(device, "name", "")).strip().lower()
+            if ident == "default" or name in ("default", "default device"):
+                return device
+        default_name = self._os_default_output_name().strip().lower()
+        if default_name:
+            for device in devices:  # exact name match
+                if str(device.name).strip().lower() == default_name:
+                    return device
+            for device in devices:  # looser substring match either way
+                name = str(device.name).strip().lower()
+                if name and (name in default_name or default_name in name):
+                    return device
+        return devices[0]
+
+    @staticmethod
+    def _os_default_output_name() -> str:
+        """The OS default audio-output device description (empty if unavailable)."""
+        try:
+            from PySide6.QtMultimedia import QMediaDevices
+
+            device = QMediaDevices.defaultAudioOutput()
+            if device is not None and not device.isNull():
+                return device.description() or ""
+        except Exception:  # noqa: BLE001 - Qt audio enumeration boundary
+            return ""
+        return ""
 
     @property
     def monitoring_device(self) -> tuple[str, str] | None:

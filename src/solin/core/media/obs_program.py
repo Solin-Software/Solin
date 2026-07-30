@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
 import sys
 import tempfile
 import threading
@@ -178,6 +179,11 @@ class ProjectionProgram:
             for entry in list(self._entries.values()):
                 self._release_entry(entry)
             self._entries.clear()
+            # Remove the temp dir holding the per-scene PNGs (idle/sermon/timer
+            # renders); nothing references them once the scenes are released.
+            if self._image_dir is not None:
+                shutil.rmtree(self._image_dir, ignore_errors=True)
+                self._image_dir = None
 
     # ── content ───────────────────────────────────────────────────────────
 

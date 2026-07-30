@@ -114,3 +114,13 @@ class MediaComposition:
         alive = self._media_info_workers.shutdown()
         if alive:
             log.warning("Media info workers still alive after shutdown: %s", alive)
+        # obs engine: tear the native runtime down deterministically on app exit
+        # (projection program → channels → OBS context, in that order). No-op for
+        # the default Qt engine, or if the libobs runtime never started.
+        if os.environ.get("SOLIN_MEDIA_ENGINE", "").strip().lower() == "obs":
+            try:
+                from solin.core.media.obs_runtime import obs_runtime
+
+                obs_runtime().shutdown()
+            except Exception:  # noqa: BLE001 - shutdown must not raise
+                log.warning("libobs runtime shutdown errored", exc_info=True)

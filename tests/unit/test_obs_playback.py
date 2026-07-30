@@ -1037,34 +1037,56 @@ def test_extract_cover_bytes_across_tag_formats():
     assert _extract_cover_bytes(None) is None
 
 
-def test_read_media_tags_reads_title_via_mutagen(monkeypatch):
-    """The mutagen-backed reader recovers the title with no Qt QMediaPlayer."""
+def test_read_media_tag_bytes_reads_title_and_id3_cover(monkeypatch):
+    """The mutagen-backed reader recovers the title + cover BYTES, no Qt."""
     from solin.core.media import obs_playback as mod
+
+    class _APIC:
+        def __init__(self, data):
+            self.data = data
+
+    class _Id3Tags:
+        def getall(self, key):
+            return [_APIC(b"cover-bytes")] if key == "APIC" else []
+
+        def get(self, key, default=None):
+            return default
 
     fake = types.ModuleType("mutagen")
 
     def _file(path, easy=False):
         if easy:
             return {"title": ["  Kingdom Song 5  "]}
-        return types.SimpleNamespace(pictures=None, tags=None)  # no cover art
+        return types.SimpleNamespace(pictures=None, tags=_Id3Tags())
 
     fake.File = _file
     monkeypatch.setitem(sys.modules, "mutagen", fake)
 
-    title, cover = mod._read_media_tags("song.mp3")
+    title, cover_bytes = mod._read_media_tag_bytes("song.mp3")
 
     assert title == "Kingdom Song 5"  # trimmed
-    assert cover is None
+    assert cover_bytes == b"cover-bytes"
 
 
-def test_metadata_probe_emits_local_title_and_cover(monkeypatch, tmp_path):
+def _drain_probe():
+    from PySide6.QtCore import QThreadPool
+    from PySide6.QtWidgets import QApplication
+
+    QThreadPool.globalInstance().waitForDone(3000)  # finish the worker read
+    QApplication.processEvents()  # deliver the queued cross-thread result
+
+
+def test_metadata_probe_delivers_title_off_thread(monkeypatch, tmp_path):
     from solin.core.media import obs_playback as mod
     from solin.core.media.obs_playback import _MetadataProbe
 
     local = tmp_path / "song.mp3"
     local.write_bytes(b"x")
-    cover = object()  # the probe just forwards whatever the reader returns
-    monkeypatch.setattr(mod, "_read_media_tags", lambda _p: ("Kingdom Song 5", cover))
+    # The reader runs on a worker thread and returns title + cover BYTES; the
+    # result is marshalled back to the GUI thread (cover bytes → QPixmap there).
+    monkeypatch.setattr(
+        mod, "_read_media_tag_bytes", lambda _p: ("Kingdom Song 5", None)
+    )
 
     probe = _MetadataProbe()
     titles: list[str] = []
@@ -1073,10 +1095,32 @@ def test_metadata_probe_emits_local_title_and_cover(monkeypatch, tmp_path):
     probe.cover_found.connect(covers.append)
 
     probe.probe(str(local))
+    _drain_probe()
 
-    assert titles == ["Kingdom Song 5"]
-    assert covers == [cover]
+    assert titles == ["Kingdom Song 5"]  # delivered after the off-thread read
+    assert covers == [None]
     assert probe._last_title == "Kingdom Song 5"  # surfaced via the .player shim
+
+
+def test_metadata_probe_discards_superseded_result(monkeypatch, tmp_path):
+    from solin.core.media import obs_playback as mod
+    from solin.core.media.obs_playback import _MetadataProbe
+
+    local = tmp_path / "song.mp3"
+    local.write_bytes(b"x")
+    monkeypatch.setattr(
+        mod, "_read_media_tag_bytes", lambda _p: ("Stale Title", None)
+    )
+
+    probe = _MetadataProbe()
+    titles: list[str] = []
+    probe.title_found.connect(titles.append)
+
+    probe.probe(str(local))
+    probe.stop()  # supersede the in-flight read before it is delivered
+    _drain_probe()
+
+    assert titles == []  # the stale worker result is discarded by the token
 
 
 def test_metadata_probe_clears_cover_for_remote_source():

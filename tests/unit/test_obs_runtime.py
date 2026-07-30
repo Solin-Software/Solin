@@ -243,6 +243,44 @@ def test_monitoring_skipped_when_no_devices(monkeypatch):
     assert rt.monitoring_device is None
 
 
+def test_monitoring_prefers_os_default_output(monkeypatch):
+    ob = _FakeOb(
+        _FakeContext(),
+        devices=[_Device("Headphones", "dev0"), _Device("Speakers", "dev1")],
+    )
+    rt = _prime(monkeypatch, ob=ob)
+    monkeypatch.setattr(rt, "_os_default_output_name", lambda: "Speakers")
+
+    rt.ensure_started()
+
+    assert rt.monitoring_device == ("Speakers", "dev1")  # OS default, not devices[0]
+
+
+def test_monitoring_prefers_explicit_default_entry(monkeypatch):
+    ob = _FakeOb(
+        _FakeContext(),
+        devices=[_Device("Default", "default"), _Device("Speakers", "dev1")],
+    )
+    rt = _prime(monkeypatch, ob=ob)
+
+    rt.ensure_started()
+
+    assert rt.monitoring_device == ("Default", "default")
+
+
+def test_monitoring_falls_back_to_first_device_without_os_default(monkeypatch):
+    ob = _FakeOb(
+        _FakeContext(),
+        devices=[_Device("Headphones", "dev0"), _Device("Speakers", "dev1")],
+    )
+    rt = _prime(monkeypatch, ob=ob)
+    monkeypatch.setattr(rt, "_os_default_output_name", lambda: "")
+
+    rt.ensure_started()
+
+    assert rt.monitoring_device == ("Headphones", "dev0")  # first enumerated
+
+
 # ── channel bookkeeping ──────────────────────────────────────────────────────
 
 

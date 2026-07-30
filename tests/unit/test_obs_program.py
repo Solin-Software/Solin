@@ -444,6 +444,21 @@ def test_leaving_capture_scene_releases_it_after_the_fade():
     assert scene.released == 1 and src.released == 1  # stops capturing after fade
 
 
+def test_shutdown_removes_temp_image_dir():
+    import os
+
+    prog, rt = _program()
+    prog.ensure()
+    prog.show_image("idle", _img(QColor(1, 2, 3)))  # writes a PNG under a temp dir
+    image_dir = prog._image_dir
+    assert image_dir is not None and os.path.isdir(image_dir)
+
+    prog.shutdown()
+
+    assert prog._image_dir is None
+    assert not os.path.exists(image_dir)  # temp PNGs cleaned up deterministically
+
+
 def test_leaving_idle_video_releases_its_ffmpeg_source_after_the_fade():
     # The custom idle background video is an owned ffmpeg_source treated as a
     # capture key, so crossfading away releases it → libobs stops decoding while

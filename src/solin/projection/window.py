@@ -120,7 +120,12 @@ class ObsProjectionSurface(QWidget):
             canvas = runtime.video
             handle = int(self.winId())
             display = ob.Display.from_window(
-                handle, max(1, self.width()), max(1, self.height())
+                handle,
+                max(1, self.width()),
+                max(1, self.height()),
+                # Black letterbox bars, consistent with the projection background
+                # (the default 0xFF1A1A1A would show grey bars around the content).
+                background_color=0xFF000000,
             )
 
             def _draw(cx: int, cy: int) -> None:
@@ -988,9 +993,13 @@ class BaseProjectionView(QWidget):
         self._cancel_pending_timer_exit()
         self._clear_timer_presentation()
         self._accept_video_frames = True
-        # Media arrives from the engine as an ffmpeg_source the program
-        # crossfades in; just bring the always-on program surface up.
-        self._enter_obs_video()
+        if self._obs_mode:
+            # Media arrives from the engine as an ffmpeg_source the program
+            # crossfades in; bring the always-on program surface up.
+            self._enter_obs_video()
+        # Qt engine: leave _is_showing_media False so the first update_frame()
+        # switches the page stack to _PAGE_MEDIA (setting it True here would keep
+        # the projection stuck on the idle page and the video invisible).
 
     @Slot(QVideoFrame)
     def update_frame(self, frame: QVideoFrame) -> None:

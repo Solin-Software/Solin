@@ -171,6 +171,27 @@ def test_surface_created_only_when_obs_engine_active(monkeypatch, tmp_path):
     assert _harness(monkeypatch, tmp_path, obs_on=False)._obs_surface is None
 
 
+def test_begin_video_qt_engine_shows_media_page_on_first_frame(monkeypatch, tmp_path):
+    """Regression: in the DEFAULT Qt engine, begin_video() must not pre-set
+    _is_showing_media — otherwise update_frame() never switches the page stack to
+    the media page and the video stays invisible on the projection windows."""
+    from PySide6.QtMultimedia import QVideoFrame
+
+    harness = _harness(monkeypatch, tmp_path, obs_on=False)
+    assert harness._obs_surface is None
+
+    harness.begin_video()
+    assert harness._is_showing_media is False  # not shown until the first frame
+
+    image = QImage(8, 8, QImage.Format.Format_RGB32)
+    image.fill(0)
+    frame = QVideoFrame(image)  # pyright: ignore[reportCallIssue, reportArgumentType]
+    harness.update_frame(frame)
+
+    assert harness._is_showing_media is True
+    assert harness._stack.currentIndex() == harness._PAGE_MEDIA
+
+
 def test_begin_video_shows_surface(monkeypatch, tmp_path):
     harness = _harness(monkeypatch, tmp_path)
     assert harness._obs_surface.isHidden()
@@ -565,9 +586,10 @@ def test_ensure_display_wires_libobs_display(monkeypatch):
 
     class _FakeDisplayFactory:
         @staticmethod
-        def from_window(handle, width, height):
+        def from_window(handle, width, height, background_color=0xFF1A1A1A):
             created["handle"] = handle
             created["size"] = (width, height)
+            created["background_color"] = background_color
             display = _FakeDisplay()
             created["display"] = display
             return display
@@ -598,6 +620,7 @@ def test_ensure_display_wires_libobs_display(monkeypatch):
 
     assert ok is True
     assert created["size"] == (640, 360)
+    assert created["background_color"] == 0xFF000000  # black letterbox bars
     assert created["handle"] == int(surface.winId())
     assert len(created["display"].callbacks) == 1
 

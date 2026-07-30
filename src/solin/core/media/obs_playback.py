@@ -30,7 +30,7 @@ import logging
 import threading
 from typing import Any
 
-from PySide6.QtCore import QObject, QTimer, Signal
+from PySide6.QtCore import QObject, QRunnable, QThreadPool, QTimer, Signal
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtMultimedia import QMediaPlayer, QVideoFrame
 
@@ -132,12 +132,13 @@ class _ObsPlayerShim:
         return md
 
 
-def _read_media_tags(path: str) -> tuple[str | None, object]:
-    """Read a local media file's title + embedded cover art with mutagen.
+def _read_media_tag_bytes(path: str) -> tuple[str | None, bytes | None]:
+    """Read a local media file's title + embedded cover-art BYTES with mutagen.
 
-    Pure-Python and cross-platform (no Qt, no ffprobe binary). Returns
-    ``(title, cover)`` where ``cover`` is a ``QPixmap`` or ``None``. Any failure
-    (missing mutagen, unsupported/corrupt file, no tags) degrades to ``None``.
+    Pure-Python, no Qt — safe to call off the GUI thread. Returns
+    ``(title, cover_bytes)`` (cover bytes decoded to a QPixmap on the GUI thread).
+    Any failure (missing mutagen, unsupported/corrupt file, no tags) degrades to
+    ``None`` for that field.
     """
     try:
         import mutagen
@@ -158,17 +159,12 @@ def _read_media_tags(path: str) -> tuple[str | None, object]:
     except Exception:  # noqa: BLE001 - tag-read boundary
         title = None
 
-    cover: object = None
+    cover_bytes: bytes | None = None
     try:
-        raw = mut.File(path)
-        data = _extract_cover_bytes(raw)
-        if data:
-            image = QImage.fromData(data)
-            if not image.isNull():
-                cover = QPixmap.fromImage(image)
+        cover_bytes = _extract_cover_bytes(mut.File(path))
     except Exception:  # noqa: BLE001 - tag-read boundary
-        cover = None
-    return title, cover
+        cover_bytes = None
+    return title, cover_bytes
 
 
 def _extract_cover_bytes(media: Any) -> bytes | None:
@@ -201,14 +197,36 @@ def _extract_cover_bytes(media: Any) -> bytes | None:
     return None
 
 
+class _TagReadSink(QObject):
+    """GUI-thread signal sink for a background tag read (cross-thread → queued)."""
+
+    done = Signal(int, str, object)  # token, title, cover_bytes | None
+
+
+class _TagReadWorker(QRunnable):
+    """Reads media tags off the GUI thread; posts the result back via the sink."""
+
+    def __init__(self, path: str, token: int, sink: "_TagReadSink") -> None:
+        super().__init__()
+        self._path = path
+        self._token = token
+        self._sink = sink
+
+    def run(self) -> None:  # runs on a QThreadPool worker thread
+        title, cover_bytes = _read_media_tag_bytes(self._path)
+        self._sink.done.emit(self._token, title or "", cover_bytes)
+
+
 class _MetadataProbe(QObject):
     """Recovers a media file's title + cover art for the operator UI — with
-    mutagen, not Qt.
+    mutagen, not Qt, and OFF the GUI thread.
 
     libobs' ``ffmpeg_source`` exposes no media tags, and the obs engine keeps no
     ``QMediaPlayer``, so this reads the file's tags directly. LOCAL files only
     (mutagen can't open a remote URL); remote media is re-probed once cached, and
-    until then the cover is cleared so no stale art lingers.
+    until then the cover is cleared so no stale art lingers. The blocking file
+    read runs on a QThreadPool; the QPixmap is built on the GUI thread, and a
+    token discards results from a superseded probe.
     """
 
     title_found = Signal(str)
@@ -217,19 +235,34 @@ class _MetadataProbe(QObject):
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
         self._last_title = ""  # exposed via the .player metaData() shim
+        self._token = 0
+        self._pool = QThreadPool.globalInstance()
+        self._sink = _TagReadSink(self)
+        self._sink.done.connect(self._on_tags_read)
 
     def probe(self, source: str) -> None:
+        self._token += 1
         if not source or MediaCacheManager.is_remote(source):
             self._last_title = ""
             self.cover_found.emit(None)  # clear stale art; re-probed once cached
             return
-        title, cover = _read_media_tags(source)
+        self._pool.start(_TagReadWorker(source, self._token, self._sink))
+
+    def _on_tags_read(self, token: int, title: str, cover_bytes: bytes | None) -> None:
+        if token != self._token:
+            return  # a newer probe (or stop) superseded this read
         self._last_title = title or ""
         if title:
             self.title_found.emit(title)
+        cover = None
+        if cover_bytes:
+            image = QImage.fromData(cover_bytes)  # GUI thread → QPixmap is safe
+            if not image.isNull():
+                cover = QPixmap.fromImage(image)
         self.cover_found.emit(cover)
 
     def stop(self) -> None:
+        self._token += 1  # invalidate any in-flight read
         self._last_title = ""
 
 
