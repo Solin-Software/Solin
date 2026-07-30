@@ -70,6 +70,7 @@ def test_stage_qt_qml_runtime_copies_selected_modules_without_unused_submodules(
         "QtQuick/Controls": ["qmldir", "libqtquickcontrols2plugin.dylib"],
         "QtQuick/Controls/Basic": ["qmldir", "libqtquickcontrols2basicstyleplugin.dylib"],
         "QtQuick/Controls/Material": ["qmldir", "libqtquickcontrols2materialstyleplugin.dylib"],
+        "QtQuick/Effects": ["qmldir", "libeffectsplugin.dylib"],
         "QtQuick/Layouts": ["qmldir", "libqquicklayoutsplugin.dylib"],
         "QtQuick/Templates": ["qmldir", "libqtquicktemplates2plugin.dylib"],
         "QtMultimedia": ["qmldir", "libquickmultimediaplugin.dylib"],
@@ -100,6 +101,7 @@ def test_stage_qt_qml_runtime_copies_selected_modules_without_unused_submodules(
         / "Basic"
         / "libqtquickcontrols2basicstyleplugin.dylib"
     ).exists()
+    assert (output_root / "QtQuick" / "Effects" / "libeffectsplugin.dylib").exists()
     assert (output_root / "QtQuick" / "Layouts" / "libqquicklayoutsplugin.dylib").exists()
     assert (output_root / "QtQuick" / "Templates" / "libqtquicktemplates2plugin.dylib").exists()
     assert (output_root / "QtMultimedia" / "libquickmultimediaplugin.dylib").exists()
@@ -149,7 +151,7 @@ def test_stage_macos_qt_quick_frameworks_reports_missing_required_dependency(tmp
         compile_qml_cache.stage_macos_qt_quick_frameworks(tmp_path / "out")
 
 
-def test_stage_windows_qt_quick_libraries_includes_multimedia_runtime(
+def test_stage_windows_qt_quick_libraries_includes_required_runtime(
     tmp_path,
     monkeypatch,
 ):
@@ -158,6 +160,7 @@ def test_stage_windows_qt_quick_libraries_includes_multimedia_runtime(
     for name in (
         "Qt6Multimedia.dll",
         "Qt6MultimediaQuick.dll",
+        "Qt6QuickEffects.dll",
         "Qt6QuickLayouts.dll",
     ):
         (source_root / name).write_text(name, encoding="utf-8")
@@ -168,6 +171,7 @@ def test_stage_windows_qt_quick_libraries_includes_multimedia_runtime(
     assert {path.name for path in staged} == {
         "Qt6Multimedia.dll",
         "Qt6MultimediaQuick.dll",
+        "Qt6QuickEffects.dll",
         "Qt6QuickLayouts.dll",
     }
 

@@ -2,12 +2,12 @@
 
 The second monitor is composed **entirely inside libobs**. Channel 0 holds a
 fade ``Transition``; each kind of projected content (idle yeartext, media, still
-image, sermon slide, black) is a libobs ``Scene`` scaled to fill the canvas.
+image, generated talk theme, black) is a libobs ``Scene`` scaled to fill the canvas.
 Switching content calls ``transition.start(scene)`` for a smooth cross-dissolve
 — exactly the pattern the ``pylibobs_studio`` example demonstrates
 (``obs_set_output_source(0, transition)`` + ``obs_transition_start``).
 
-Qt-rendered content (yeartext, sermon) is captured to a ``QImage`` by the caller
+Qt-rendered content (such as yeartext) is captured to a ``QImage`` by the caller
 and turned into an ``image_source`` scene here, reusing Solin's existing
 rendering rather than re-implementing it as native libobs text sources.
 
@@ -74,7 +74,7 @@ class _SceneEntry:
         self.scene = scene
         self.owned_sources = owned_sources  # sources the program created (to release)
         self.key = key
-        # For zoomable content (stills, sermon) the scene item is kept, along
+        # For zoomable static-image content the scene item is kept, along
         # with the source image's native pixel size, so a later zoom/pan can be
         # applied as a raw scale+pos transform (see set_image_transform).
         self.item = item
@@ -179,7 +179,7 @@ class ProjectionProgram:
             for entry in list(self._entries.values()):
                 self._release_entry(entry)
             self._entries.clear()
-            # Remove the temp dir holding the per-scene PNGs (idle/sermon/timer
+            # Remove the temp dir holding the per-scene PNGs (idle/image/timer
             # renders); nothing references them once the scenes are released.
             if self._image_dir is not None:
                 shutil.rmtree(self._image_dir, ignore_errors=True)
@@ -234,7 +234,7 @@ class ProjectionProgram:
     def show_image(self, key: str, image: QImage, *, zoomable: bool = False) -> None:
         """Crossfade to an ``image_source`` scene rendered from ``image``.
 
-        ``key`` names the content slot (e.g. ``"idle"``, ``"image"``, ``"sermon"``)
+        ``key`` names the content slot (for example ``"idle"`` or ``"image"``)
         so re-showing the same slot reuses/retires it cleanly. ``zoomable`` keeps
         the scene item on raw scale+pos (instead of a letterbox bounds fit) so a
         later :meth:`set_image_transform` can zoom/pan it.
@@ -248,7 +248,7 @@ class ProjectionProgram:
     def set_image_transform(self, zoom: float, norm_x: float, norm_y: float) -> None:
         """Zoom/pan the currently shown image scene in place (no crossfade).
 
-        No-op unless the current scene is a zoomable image/sermon item — media,
+        No-op unless the current scene is a zoomable static-image item — media,
         black and the letterboxed idle/timer scenes carry no ``image_size``.
         """
         with self._lock:

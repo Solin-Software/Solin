@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import Any
 
 from PySide6.QtCore import QDateTime
 
@@ -11,8 +11,8 @@ from ..core.timer.models import MediaCountdownPresentation
 
 
 @dataclass(frozen=True, slots=True)
-class TimerThemeContext:
-    """Dependencies for timer and sermon-theme projection workflows."""
+class TimerProjectionContext:
+    """Dependencies for countdown projection workflows."""
 
     projection_session: Any
     projection_bar: Any
@@ -25,20 +25,20 @@ class TimerThemeContext:
 
 
 @dataclass(frozen=True, slots=True)
-class TimerThemeHandlers:
-    """Shell actions invoked before and after timer/theme projection."""
+class TimerProjectionHandlers:
+    """Shell actions invoked before and after countdown projection."""
 
     stop_browser_tab_projection: Callable[[], None]
     update_projection_status: Callable[..., None]
 
 
-class TimerThemeController:
-    """Projects timer and sermon-theme visuals to projection windows."""
+class TimerProjectionController:
+    """Projects countdown visuals to the media projection windows."""
 
     def __init__(
         self,
-        context: TimerThemeContext,
-        handlers: TimerThemeHandlers,
+        context: TimerProjectionContext,
+        handlers: TimerProjectionHandlers,
     ) -> None:
         self._context = context
         self._handlers = handlers
@@ -119,34 +119,6 @@ class TimerThemeController:
         for projection_window in self._context.projection_windows():
             projection_window.set_timer_blink(on)
 
-    def project_sermon_theme(self, text: str, subtitle: str = "") -> None:
-        if not self._context.playback_protection.allow_manual_projection_change():
-            return
-        context = self._context
-        self._session.set_tab_projection_active(False)
-        self._stop_active_sources()
-        context.projection_bar.set_playlist([])
-
-        subtitle = subtitle or context.translate("PUBLIC TALK")
-        for projection_window in context.projection_windows():
-            projection_window.show_sermon_theme(text, subtitle)
-        short = (text[:28] + "…") if len(text) > 28 else text
-
-        image_bytes = self._render_sermon_theme_preview(text, subtitle)
-        context.projection_bar.activate_image(short, image_data=image_bytes)
-        self._handlers.update_projection_status(
-            True,
-            short,
-            auto_keys_media=False,
-        )
-        self._session.set_state({
-            "type": "sermon_theme",
-            "title": short,
-            "text": text,
-            "subtitle": subtitle,
-            "transform": (1.0, 0.0, 0.0),
-        })
-
     def _remaining_seconds(self, target_dt: QDateTime) -> int:
         return ceil_remaining_seconds(target_dt)
 
@@ -157,18 +129,9 @@ class TimerThemeController:
         context.ndi_service.stop()
         context.camera_service.stop()
 
-    def _render_sermon_theme_preview(self, text: str, subtitle: str) -> bytes:
-        from PySide6.QtCore import QBuffer, QIODevice
 
-        from ..projection.sermon_theme import SermonThemeProjectionWidget
-
-        preview = SermonThemeProjectionWidget()
-        preview.set_theme(text, subtitle)
-        preview.resize(1024, 576)
-        pixmap = preview.grab()
-        buffer = QBuffer()
-        buffer.open(QIODevice.OpenModeFlag.WriteOnly)
-        pixmap.save(buffer, "PNG")
-        image_bytes = bytes(cast(bytes, buffer.data()))
-        buffer.close()
-        return image_bytes
+__all__ = [
+    "TimerProjectionContext",
+    "TimerProjectionController",
+    "TimerProjectionHandlers",
+]

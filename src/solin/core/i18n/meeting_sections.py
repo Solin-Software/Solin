@@ -13,7 +13,7 @@ from ..meetings.section_meta import SECTION_META
 def translate_meeting_section_title(source: str) -> str:
     """Translate an official meeting section source using the active Qt catalog."""
 
-    context = "SermonThemeWidget" if source == "PUBLIC TALK" else "_Section"
+    context = "MeetingSections" if source == "PUBLIC TALK" else "_Section"
     return QCoreApplication.translate(context, source)
 
 

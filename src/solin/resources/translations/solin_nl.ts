@@ -4217,47 +4217,6 @@ Deze actie kan niet ongedaan worden gemaakt.</translation>
     </message>
   </context>
   <context>
-    <name>SermonThemeWidget</name>
-    <message>
-      <location filename="../../widgets/sermon_theme_widget.py" line="+383" />
-      <location line="+16" />
-      <location line="+91" />
-      <source>PUBLIC TALK</source>
-      <translation>OPENBARE LEZING</translation>
-    </message>
-    <message>
-      <location line="-7" />
-      <location line="+3" />
-      <source>Talk theme</source>
-      <translation>Thema van de lezing</translation>
-    </message>
-    <message>
-      <location line="-2" />
-      <source>Project the talk title on the secondary screen</source>
-      <translation>Projecteer het thema van de lezing op het tweede scherm</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>PREVIEW</source>
-      <translation>VOORBEELD</translation>
-    </message>
-    <message>
-      <location line="+2" />
-      <source>E.g.: Imitate Jehovah's mercy</source>
-      <translation>Bijv.: Volg Jehovah's barmhartigheid na</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>Subtitle:</source>
-      <translation>Ondertitel:</translation>
-    </message>
-    <message>
-      <location line="+12" />
-      <source>Project Theme</source>
-      <translation>Thema projecteren</translation>
-    </message>
-  </context>
-  <context>
     <name>SetAsIdleConfirmDialog</name>
     <message>
       <location filename="../../widgets/projection/idle_dialog.py" line="+81" />
@@ -7040,6 +6999,767 @@ Gebruik de afspeelknop om te projecteren · Sleep de greep ⠿ om de volgorde te
       <source>Not configured</source>
       <translation>Niet geconfigureerd</translation>
 
+    </message>
+  </context>
+  <context>
+    <name>DeferredTalkThemeWidget</name>
+    <message>
+      <location filename="../../widgets/deferred_talk_theme_widget.py" line="+36" />
+      <location line="+49" />
+      <source>Loading…</source>
+      <translation>Laden…</translation>
+    </message>
+  </context>
+  <context>
+    <name>MeetingSections</name>
+    <message>
+      <location filename="../../ui/qml/talk_theme.py" line="+876" />
+      <source>PUBLIC TALK</source>
+      <translation>OPENBARE LEZING</translation>
+    </message>
+  </context>
+  <context>
+    <name>TalkThemeBridge</name>
+    <message>
+      <location filename="../../ui/qml/talk_theme.py" line="-424" />
+      <source>Style applied</source>
+      <translation>Stijl toegepast</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Enter a name for the preset.</source>
+      <translation>Voer een naam in voor de voorinstelling.</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>A preset with this name already exists.</source>
+      <translation>Er bestaat al een voorinstelling met deze naam.</translation>
+    </message>
+    <message>
+      <location line="+14" />
+      <source>Preset saved</source>
+      <translation>Voorinstelling opgeslagen</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Preset deleted</source>
+      <translation>Voorinstelling verwijderd</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Choose image</source>
+      <translation>Afbeelding kiezen</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Images (*.png *.jpg *.jpeg *.webp)</source>
+      <translation>Afbeeldingen (*.png *.jpg *.jpeg *.webp)</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Importing image…</source>
+      <translation>Afbeelding importeren…</translation>
+    </message>
+    <message>
+      <location line="+21" />
+      <source>Text color</source>
+      <translation>Tekstkleur</translation>
+    </message>
+    <message>
+      <location line="+93" />
+      <source>Enter the talk title before projecting.</source>
+      <translation>Voer de titel van de lezing in voordat je projecteert.</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Preparing image…</source>
+      <translation>Afbeelding voorbereiden…</translation>
+    </message>
+    <message>
+      <location line="+18" />
+      <source>The talk-theme draft could not be saved.</source>
+      <translation>Het concept van het lezingsthema kon niet worden opgeslagen.</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Talk theme projected</source>
+      <translation>Lezingsthema geprojecteerd</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Projection is currently protected.</source>
+      <translation>De projectie is momenteel beveiligd.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>The talk theme could not be projected.</source>
+      <translation>Het lezingsthema kon niet worden geprojecteerd.</translation>
+    </message>
+    <message>
+      <location line="+29" />
+      <source>Image added</source>
+      <translation>Afbeelding toegevoegd</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>This image format is not supported.</source>
+      <translation>Deze afbeeldingsindeling wordt niet ondersteund.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Animated images are not supported.</source>
+      <translation>Geanimeerde afbeeldingen worden niet ondersteund.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>The selected image could not be opened.</source>
+      <translation>De geselecteerde afbeelding kon niet worden geopend.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>The selected image has invalid dimensions.</source>
+      <translation>De geselecteerde afbeelding heeft ongeldige afmetingen.</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>The selected image could not be imported.</source>
+      <translation>De geselecteerde afbeelding kon niet worden geïmporteerd.</translation>
+    </message>
+    <message>
+      <source>Talk theme</source>
+      <translation>Thema van de lezing</translation>
+    </message>
+    <message>
+      <source>The maximum number of text layers has been reached.</source>
+      <translation>Het maximumaantal tekstlagen is bereikt.</translation>
+    </message>
+    <message>
+      <source>The maximum number of presets has been reached.</source>
+      <translation>Het maximumaantal voorinstellingen is bereikt.</translation>
+    </message>
+    <message>
+      <source>Text %1</source>
+      <translation>Tekst %1</translation>
+    </message>
+    <message>
+      <source>The preset could not be saved.</source>
+      <translation>De voorinstelling kon niet worden opgeslagen.</translation>
+    </message>
+    <message>
+      <source>Botanical</source>
+      <translation>Botanisch</translation>
+    </message>
+    <message>
+      <source>Classic blue</source>
+      <translation>Klassiek blauw</translation>
+    </message>
+    <message>
+      <source>Soft photographic</source>
+      <translation>Zachte foto</translation>
+    </message>
+    <message>
+      <source>Center</source>
+      <translation>Midden</translation>
+    </message>
+    <message>
+      <source>Third</source>
+      <translation>Derde</translation>
+    </message>
+    <message>
+      <source>Safe margin</source>
+      <translation>Veilige marge</translation>
+    </message>
+  </context>
+  <context>
+    <name>TalkThemeEditorView</name>
+    <message>
+      <location filename="../../qml/TalkThemeEditorView.qml" line="+28" />
+      <source>Botanical</source>
+      <translation>Botanisch</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Classic blue</source>
+      <translation>Klassiek blauw</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Soft photographic</source>
+      <translation>Zachte foto</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Safe margin</source>
+      <translation>Veilige marge</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Third</source>
+      <translation>Derde</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Center</source>
+      <translation>Midden</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Other text</source>
+      <translation>Andere tekst</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <location line="+736" />
+      <source>Label</source>
+      <translation>Label</translation>
+    </message>
+    <message>
+      <location line="-734" />
+      <location line="+346" />
+      <location line="+394" />
+      <source>Talk title</source>
+      <translation>Titel van de lezing</translation>
+    </message>
+    <message>
+      <location line="-738" />
+      <location line="+745" />
+      <source>Speaker</source>
+      <translation>Spreker</translation>
+    </message>
+    <message>
+      <location line="-743" />
+      <location line="+749" />
+      <source>Congregation</source>
+      <translation>Gemeente</translation>
+    </message>
+    <message>
+      <location line="-561" />
+      <source>Talk theme</source>
+      <translation>Thema van de lezing</translation>
+    </message>
+    <message>
+      <location line="+28" />
+      <source>On screen</source>
+      <translation>Op het scherm</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Changes not yet projected</source>
+      <translation>Wijzigingen nog niet geprojecteerd</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Saving…</source>
+      <translation>Opslaan…</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Draft saved</source>
+      <translation>Concept opgeslagen</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Edit</source>
+      <translation>Bewerken</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Canvas</source>
+      <translation>Canvas</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Undo</source>
+      <translation>Ongedaan maken</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Redo</source>
+      <translation>Opnieuw</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <location line="+722" />
+      <source>Save preset</source>
+      <translation>Voorinstelling opslaan</translation>
+    </message>
+    <message>
+      <location line="-716" />
+      <source>Preparing…</source>
+      <translation>Voorbereiden…</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Update projection</source>
+      <translation>Projectie bijwerken</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>▶  Project</source>
+      <translation>▶  Projecteren</translation>
+    </message>
+    <message>
+      <location line="+31" />
+      <source>Styles</source>
+      <translation>Stijlen</translation>
+    </message>
+    <message>
+      <location line="+78" />
+      <source>Delete preset</source>
+      <translation>Voorinstelling verwijderen</translation>
+    </message>
+    <message>
+      <location line="+34" />
+      <location line="+493" />
+      <source>Background</source>
+      <translation>Achtergrond</translation>
+    </message>
+    <message>
+      <location line="-490" />
+      <source>Importing…</source>
+      <translation>Importeren…</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>▧  Choose image</source>
+      <translation>▧  Afbeelding kiezen</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>PNG, JPG or WebP · up to 4096 px</source>
+      <translation>PNG, JPG of WebP · tot 4096 px</translation>
+    </message>
+    <message>
+      <location line="+75" />
+      <source>Optional text</source>
+      <translation>Optionele tekst</translation>
+    </message>
+    <message>
+      <location line="+187" />
+      <source>Drag text · use arrow keys to fine-tune</source>
+      <translation>Sleep teksten · stel nauwkeurig af met pijltoetsen</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Finish adjusting</source>
+      <translation>Aanpassing voltooien</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Adjust image</source>
+      <translation>Afbeelding aanpassen</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Auto</source>
+      <translation>Auto</translation>
+    </message>
+    <message>
+      <location line="+37" />
+      <source>Content</source>
+      <translation>Inhoud</translation>
+    </message>
+    <message>
+      <location line="+16" />
+      <source>Enter the title</source>
+      <translation>Voer de titel in</translation>
+    </message>
+    <message>
+      <location line="+19" />
+      <source>Selected text</source>
+      <translation>Geselecteerde tekst</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <source>Font</source>
+      <translation>Lettertype</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Weight</source>
+      <translation>Dikte</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Normal</source>
+      <translation>Normaal</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Medium</source>
+      <translation>Middel</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Semibold</source>
+      <translation>Halfvet</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Bold</source>
+      <translation>Vet</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Size</source>
+      <translation>Grootte</translation>
+    </message>
+    <message>
+      <location line="+23" />
+      <source>Fewer options  ⌃</source>
+      <translation>Minder opties  ⌃</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>More options  ⌄</source>
+      <translation>Meer opties  ⌄</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Text block width</source>
+      <translation>Breedte tekstblok</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Letter spacing</source>
+      <translation>Letterafstand</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <source>Text color</source>
+      <translation>Tekstkleur</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Choose text color</source>
+      <translation>Tekstkleur kiezen</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Show this text</source>
+      <translation>Deze tekst tonen</translation>
+    </message>
+    <message>
+      <location line="+14" />
+      <source>Alignment</source>
+      <translation>Uitlijning</translation>
+    </message>
+    <message>
+      <location line="+29" />
+      <source>Darken image</source>
+      <translation>Afbeelding donkerder maken</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Blur image</source>
+      <translation>Afbeelding vervagen</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Image fit</source>
+      <translation>Afbeelding aanpassen</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Fill</source>
+      <translation>Vullen</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Fit</source>
+      <translation>Passend maken</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Image zoom</source>
+      <translation>Afbeelding zoomen</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>The image for this style could not be found.</source>
+      <translation>De afbeelding voor deze stijl is niet gevonden.</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Choose image</source>
+      <translation>Afbeelding kiezen</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Reset</source>
+      <translation>Resetten</translation>
+    </message>
+    <message>
+      <location line="+21" />
+      <source>Ready to project</source>
+      <translation>Klaar om te projecteren</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Enter a title</source>
+      <translation>Voer een titel in</translation>
+    </message>
+    <message>
+      <location line="+22" />
+      <source>Name</source>
+      <translation>Naam</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>For example: Special evening</source>
+      <translation>Bijvoorbeeld: Speciale avond</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Delete preset?</source>
+      <translation>Voorinstelling verwijderen?</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>This preset will be permanently removed.</source>
+      <translation>Deze voorinstelling wordt permanent verwijderd.</translation>
+    </message>
+    <message>
+      <source>Text</source>
+      <translation>Tekst</translation>
+    </message>
+    <message>
+      <source>Select a text</source>
+      <translation>Selecteer een tekst</translation>
+    </message>
+    <message>
+      <source>Click a text on the canvas or choose a layer to edit it.</source>
+      <translation>Klik op een tekst op het canvas of kies een laag om deze te bewerken.</translation>
+    </message>
+    <message>
+      <source>Add text</source>
+      <translation>Tekst toevoegen</translation>
+    </message>
+    <message>
+      <source>Write something…</source>
+      <translation>Schrijf iets…</translation>
+    </message>
+    <message>
+      <source>Fewer options</source>
+      <translation>Minder opties</translation>
+    </message>
+    <message>
+      <source>More options</source>
+      <translation>Meer opties</translation>
+    </message>
+    <message>
+      <source>Line height</source>
+      <translation>Regelhoogte</translation>
+    </message>
+    <message>
+      <source>No image</source>
+      <translation>Geen afbeelding</translation>
+    </message>
+    <message>
+      <source>Adjust image position</source>
+      <translation>Afbeeldingspositie aanpassen</translation>
+    </message>
+    <message>
+      <source>The image for this preset could not be found.</source>
+      <translation>De afbeelding voor deze voorinstelling is niet gevonden.</translation>
+    </message>
+    <message>
+      <source>Front</source>
+      <translation>Voorgrond</translation>
+    </message>
+    <message>
+      <source>%1 layers</source>
+      <translation>%1 lagen</translation>
+    </message>
+    <message>
+      <source>Hide layer</source>
+      <translation>Laag verbergen</translation>
+    </message>
+    <message>
+      <source>Show layer</source>
+      <translation>Laag tonen</translation>
+    </message>
+    <message>
+      <source>Delete layer</source>
+      <translation>Laag verwijderen</translation>
+    </message>
+    <message>
+      <source>No text layers yet
+Add one when you are ready.</source>
+      <translation>Nog geen tekstlagen
+Voeg er een toe wanneer u wilt.</translation>
+    </message>
+    <message>
+      <source>Drag layers to change which text appears in front.</source>
+      <translation>Sleep lagen om te bepalen welke tekst op de voorgrond verschijnt.</translation>
+    </message>
+    <message>
+      <source>Included styles</source>
+      <translation>Inbegrepen stijlen</translation>
+    </message>
+    <message>
+      <source>My presets</source>
+      <translation>Mijn voorinstellingen</translation>
+    </message>
+    <message>
+      <source>Your saved styles will appear here</source>
+      <translation>Uw opgeslagen stijlen verschijnen hier</translation>
+    </message>
+    <message>
+      <source>Customize a theme and save it as a preset.</source>
+      <translation>Pas een thema aan en sla het op als voorinstelling.</translation>
+    </message>
+    <message>
+      <source>Layers</source>
+      <translation>Lagen</translation>
+    </message>
+    <message>
+      <source>Styles and layers</source>
+      <translation>Stijlen en lagen</translation>
+    </message>
+    <message>
+      <source>Unsaved changes</source>
+      <translation>Niet-opgeslagen wijzigingen</translation>
+    </message>
+    <message>
+      <source>Save</source>
+      <translation>Opslaan</translation>
+    </message>
+    <message>
+      <source>Save as preset</source>
+      <translation>Opslaan als voorinstelling</translation>
+    </message>
+    <message>
+      <source>More save options</source>
+      <translation>Meer opslagopties</translation>
+    </message>
+    <message>
+      <source>Save as new preset…</source>
+      <translation>Opslaan als nieuwe voorinstelling…</translation>
+    </message>
+    <message>
+      <source>Project</source>
+      <translation>Projecteren</translation>
+    </message>
+    <message>
+      <source>Export image</source>
+      <translation>Afbeelding exporteren</translation>
+    </message>
+    <message>
+      <source>Drag the image to reposition it</source>
+      <translation>Sleep de afbeelding om deze opnieuw te positioneren</translation>
+    </message>
+    <message>
+      <source>Drag text · double-click to edit</source>
+      <translation>Sleep tekst · dubbelklik om te bewerken</translation>
+    </message>
+    <message>
+      <source>Auto format</source>
+      <translation>Automatische opmaak</translation>
+    </message>
+    <message>
+      <source>Match the projection screen format</source>
+      <translation>Aanpassen aan het formaat van het projectiescherm</translation>
+    </message>
+    <message>
+      <source>Save the complete composition so you can use it again later.</source>
+      <translation>Sla de volledige compositie op zodat u deze later opnieuw kunt gebruiken.</translation>
+    </message>
+    <message>
+      <source>Preset name</source>
+      <translation>Naam voorinstelling</translation>
+    </message>
+    <message>
+      <source>Cancel</source>
+      <translation>Annuleren</translation>
+    </message>
+    <message>
+      <source>“%1” will be permanently removed.</source>
+      <translation>“%1” wordt permanent verwijderd.</translation>
+    </message>
+    <message>
+      <source>Delete</source>
+      <translation>Verwijderen</translation>
+    </message>
+    <message>
+      <source>Would you like to save your changes before switching presets?</source>
+      <translation>Wilt u uw wijzigingen opslaan voordat u van voorinstelling wisselt?</translation>
+    </message>
+    <message>
+      <source>Discard</source>
+      <translation>Verwerpen</translation>
+    </message>
+  </context>
+  <context>
+    <name>TalkThemeEditorWidget</name>
+    <message>
+      <location filename="../../ui/qml/talk_theme.py" line="+253" />
+      <source>Projection is not ready yet.</source>
+      <translation>De projectie is nog niet klaar.</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>The talk-theme canvas could not be loaded.</source>
+      <translation>Het canvas van het lezingsthema kon niet worden geladen.</translation>
+    </message>
+    <message>
+      <location line="+26" />
+      <source>The background image took too long to load.</source>
+      <translation>Het laden van de achtergrondafbeelding duurde te lang.</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <location line="+4" />
+      <source>The talk-theme image could not be prepared.</source>
+      <translation>De afbeelding van het lezingsthema kon niet worden voorbereid.</translation>
+    </message>
+    <message>
+      <location line="+22" />
+      <source>The final talk-theme image is incomplete.</source>
+      <translation>De uiteindelijke afbeelding van het lezingsthema is onvolledig.</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>The talk-theme image could not be encoded.</source>
+      <translation>De afbeelding van het lezingsthema kon niet worden gecodeerd.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Talk theme</source>
+      <translation>Thema van de lezing</translation>
+    </message>
+    <message>
+      <location line="+21" />
+      <source>Preparing the image timed out.</source>
+      <translation>Time-out bij het voorbereiden van de afbeelding.</translation>
+    </message>
+    <message>
+      <source>Export image</source>
+      <translation>Afbeelding exporteren</translation>
+    </message>
+    <message>
+      <source>PNG image (*.png)</source>
+      <translation>PNG-afbeelding (*.png)</translation>
+    </message>
+    <message>
+      <source>The image could not be exported.</source>
+      <translation>De afbeelding kon niet worden geëxporteerd.</translation>
+    </message>
+    <message>
+      <source>Unsaved changes</source>
+      <translation>Niet-opgeslagen wijzigingen</translation>
+    </message>
+    <message>
+      <source>Save the changes to this talk theme?</source>
+      <translation>Wijzigingen in dit thema van de lezing opslaan?</translation>
+    </message>
+    <message>
+      <source>Save as preset</source>
+      <translation>Opslaan als voorinstelling</translation>
+    </message>
+    <message>
+      <source>Name</source>
+      <translation>Naam</translation>
     </message>
   </context>
 </TS>

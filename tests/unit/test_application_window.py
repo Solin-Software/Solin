@@ -142,11 +142,13 @@ window.close()
     assert json.loads(result.stdout) == {
         "loading": [True],
         "application": [True],
-        "runtime_paint_state": [{
-            "window_visible": True,
-            "loading_visible": True,
-            "same_native_id": True,
-        }],
+        "runtime_paint_state": [
+            {
+                "window_visible": True,
+                "loading_visible": True,
+                "same_native_id": True,
+            }
+        ],
         "same_native_id": True,
         "window_visible": True,
         "top_levels": 1,
@@ -225,6 +227,22 @@ def test_closing_application_window_cancels_load_and_shuts_down_runtime() -> Non
     assert window.state is ApplicationWindowState.CLOSING
     assert load.cancelled is True
     assert runtime.shutdown_called is True
+
+
+def test_application_close_can_be_cancelled_before_shutdown() -> None:
+    window = ApplicationWindow(width=900, height=700, pending_files=[])
+    assert window.begin_hydration() is True
+    runtime = _Runtime(window.content_parent())
+    runtime.confirm_close = lambda: False
+    window.register_runtime_candidate(runtime)
+    window.install_runtime(runtime)
+    event = QCloseEvent()
+
+    window.closeEvent(event)
+
+    assert event.isAccepted() is False
+    assert window.state is ApplicationWindowState.HYDRATING
+    assert runtime.shutdown_called is False
 
 
 def test_closing_during_runtime_construction_aborts_partial_resources() -> None:

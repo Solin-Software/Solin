@@ -4213,47 +4213,6 @@ This action cannot be undone.</source>
     </message>
   </context>
   <context>
-    <name>SermonThemeWidget</name>
-    <message>
-      <location filename="../../widgets/sermon_theme_widget.py" line="+383" />
-      <location line="+16" />
-      <location line="+91" />
-      <source>PUBLIC TALK</source>
-      <translation>公開講演</translation>
-    </message>
-    <message>
-      <location line="-7" />
-      <location line="+3" />
-      <source>Talk theme</source>
-      <translation>講演の主題</translation>
-    </message>
-    <message>
-      <location line="-2" />
-      <source>Project the talk title on the secondary screen</source>
-      <translation>講演テーマをサブスクリーンに投影する</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>PREVIEW</source>
-      <translation>プレビュー</translation>
-    </message>
-    <message>
-      <location line="+2" />
-      <source>E.g.: Imitate Jehovah's mercy</source>
-      <translation>例：エホバの慈しみを見習う</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>Subtitle:</source>
-      <translation>サブタイトル：</translation>
-    </message>
-    <message>
-      <location line="+12" />
-      <source>Project Theme</source>
-      <translation>テーマを投影</translation>
-    </message>
-  </context>
-  <context>
     <name>SetAsIdleConfirmDialog</name>
     <message>
       <location filename="../../widgets/projection/idle_dialog.py" line="+81" />
@@ -7035,6 +6994,767 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
       <source>Not configured</source>
       <translation>未設定</translation>
 
+    </message>
+  </context>
+  <context>
+    <name>DeferredTalkThemeWidget</name>
+    <message>
+      <location filename="../../widgets/deferred_talk_theme_widget.py" line="+36" />
+      <location line="+49" />
+      <source>Loading…</source>
+      <translation>読み込み中…</translation>
+    </message>
+  </context>
+  <context>
+    <name>MeetingSections</name>
+    <message>
+      <location filename="../../ui/qml/talk_theme.py" line="+876" />
+      <source>PUBLIC TALK</source>
+      <translation>公開講演</translation>
+    </message>
+  </context>
+  <context>
+    <name>TalkThemeBridge</name>
+    <message>
+      <location filename="../../ui/qml/talk_theme.py" line="-424" />
+      <source>Style applied</source>
+      <translation>スタイルを適用しました</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Enter a name for the preset.</source>
+      <translation>プリセット名を入力してください。</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>A preset with this name already exists.</source>
+      <translation>同じ名前のプリセットがすでにあります。</translation>
+    </message>
+    <message>
+      <location line="+14" />
+      <source>Preset saved</source>
+      <translation>プリセットを保存しました</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Preset deleted</source>
+      <translation>プリセットを削除しました</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Choose image</source>
+      <translation>画像を選択</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Images (*.png *.jpg *.jpeg *.webp)</source>
+      <translation>画像 (*.png *.jpg *.jpeg *.webp)</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Importing image…</source>
+      <translation>画像をインポート中…</translation>
+    </message>
+    <message>
+      <location line="+21" />
+      <source>Text color</source>
+      <translation>テキストの色</translation>
+    </message>
+    <message>
+      <location line="+93" />
+      <source>Enter the talk title before projecting.</source>
+      <translation>投影する前に講演の題を入力してください。</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Preparing image…</source>
+      <translation>画像を準備中…</translation>
+    </message>
+    <message>
+      <location line="+18" />
+      <source>The talk-theme draft could not be saved.</source>
+      <translation>講演テーマの下書きを保存できませんでした。</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Talk theme projected</source>
+      <translation>講演テーマを投影しました</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Projection is currently protected.</source>
+      <translation>現在、投影は保護されています。</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>The talk theme could not be projected.</source>
+      <translation>講演テーマを投影できませんでした。</translation>
+    </message>
+    <message>
+      <location line="+29" />
+      <source>Image added</source>
+      <translation>画像を追加しました</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>This image format is not supported.</source>
+      <translation>この画像形式には対応していません。</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Animated images are not supported.</source>
+      <translation>アニメーション画像には対応していません。</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>The selected image could not be opened.</source>
+      <translation>選択した画像を開けませんでした。</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>The selected image has invalid dimensions.</source>
+      <translation>選択した画像のサイズが無効です。</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>The selected image could not be imported.</source>
+      <translation>選択した画像をインポートできませんでした。</translation>
+    </message>
+    <message>
+      <source>Talk theme</source>
+      <translation>講演の主題</translation>
+    </message>
+    <message>
+      <source>The maximum number of text layers has been reached.</source>
+      <translation>テキストレイヤーの上限に達しました。</translation>
+    </message>
+    <message>
+      <source>The maximum number of presets has been reached.</source>
+      <translation>プリセットの上限に達しました。</translation>
+    </message>
+    <message>
+      <source>Text %1</source>
+      <translation>テキスト %1</translation>
+    </message>
+    <message>
+      <source>The preset could not be saved.</source>
+      <translation>プリセットを保存できませんでした。</translation>
+    </message>
+    <message>
+      <source>Botanical</source>
+      <translation>ボタニカル</translation>
+    </message>
+    <message>
+      <source>Classic blue</source>
+      <translation>クラシックブルー</translation>
+    </message>
+    <message>
+      <source>Soft photographic</source>
+      <translation>ソフトフォト</translation>
+    </message>
+    <message>
+      <source>Center</source>
+      <translation>中央</translation>
+    </message>
+    <message>
+      <source>Third</source>
+      <translation>3分の1</translation>
+    </message>
+    <message>
+      <source>Safe margin</source>
+      <translation>セーフマージン</translation>
+    </message>
+  </context>
+  <context>
+    <name>TalkThemeEditorView</name>
+    <message>
+      <location filename="../../qml/TalkThemeEditorView.qml" line="+28" />
+      <source>Botanical</source>
+      <translation>ボタニカル</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Classic blue</source>
+      <translation>クラシックブルー</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Soft photographic</source>
+      <translation>ソフトフォト</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Safe margin</source>
+      <translation>セーフマージン</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Third</source>
+      <translation>3分の1</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Center</source>
+      <translation>中央</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Other text</source>
+      <translation>他のテキスト</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <location line="+736" />
+      <source>Label</source>
+      <translation>ラベル</translation>
+    </message>
+    <message>
+      <location line="-734" />
+      <location line="+346" />
+      <location line="+394" />
+      <source>Talk title</source>
+      <translation>講演の題</translation>
+    </message>
+    <message>
+      <location line="-738" />
+      <location line="+745" />
+      <source>Speaker</source>
+      <translation>話し手</translation>
+    </message>
+    <message>
+      <location line="-743" />
+      <location line="+749" />
+      <source>Congregation</source>
+      <translation>会衆</translation>
+    </message>
+    <message>
+      <location line="-561" />
+      <source>Talk theme</source>
+      <translation>講演の主題</translation>
+    </message>
+    <message>
+      <location line="+28" />
+      <source>On screen</source>
+      <translation>画面に表示中</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Changes not yet projected</source>
+      <translation>変更はまだ投影されていません</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Saving…</source>
+      <translation>保存中…</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Draft saved</source>
+      <translation>下書きを保存しました</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Edit</source>
+      <translation>編集</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Canvas</source>
+      <translation>キャンバス</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Undo</source>
+      <translation>元に戻す</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Redo</source>
+      <translation>やり直す</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <location line="+722" />
+      <source>Save preset</source>
+      <translation>プリセットを保存</translation>
+    </message>
+    <message>
+      <location line="-716" />
+      <source>Preparing…</source>
+      <translation>準備中…</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Update projection</source>
+      <translation>投影を更新</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>▶  Project</source>
+      <translation>▶  投影</translation>
+    </message>
+    <message>
+      <location line="+31" />
+      <source>Styles</source>
+      <translation>スタイル</translation>
+    </message>
+    <message>
+      <location line="+78" />
+      <source>Delete preset</source>
+      <translation>プリセットを削除</translation>
+    </message>
+    <message>
+      <location line="+34" />
+      <location line="+493" />
+      <source>Background</source>
+      <translation>背景</translation>
+    </message>
+    <message>
+      <location line="-490" />
+      <source>Importing…</source>
+      <translation>インポート中…</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>▧  Choose image</source>
+      <translation>▧  画像を選択</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>PNG, JPG or WebP · up to 4096 px</source>
+      <translation>PNG、JPG、WebP · 最大4096 px</translation>
+    </message>
+    <message>
+      <location line="+75" />
+      <source>Optional text</source>
+      <translation>任意のテキスト</translation>
+    </message>
+    <message>
+      <location line="+187" />
+      <source>Drag text · use arrow keys to fine-tune</source>
+      <translation>テキストをドラッグ · 矢印キーで微調整</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Finish adjusting</source>
+      <translation>調整を完了</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Adjust image</source>
+      <translation>画像を調整</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Auto</source>
+      <translation>自動</translation>
+    </message>
+    <message>
+      <location line="+37" />
+      <source>Content</source>
+      <translation>内容</translation>
+    </message>
+    <message>
+      <location line="+16" />
+      <source>Enter the title</source>
+      <translation>題を入力</translation>
+    </message>
+    <message>
+      <location line="+19" />
+      <source>Selected text</source>
+      <translation>選択中のテキスト</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <source>Font</source>
+      <translation>フォント</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Weight</source>
+      <translation>太さ</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Normal</source>
+      <translation>標準</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Medium</source>
+      <translation>中</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Semibold</source>
+      <translation>中太</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Bold</source>
+      <translation>太字</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Size</source>
+      <translation>サイズ</translation>
+    </message>
+    <message>
+      <location line="+23" />
+      <source>Fewer options  ⌃</source>
+      <translation>オプションを減らす  ⌃</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>More options  ⌄</source>
+      <translation>その他のオプション  ⌄</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Text block width</source>
+      <translation>テキストブロック幅</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Letter spacing</source>
+      <translation>文字間隔</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <source>Text color</source>
+      <translation>テキストの色</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Choose text color</source>
+      <translation>テキストの色を選択</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Show this text</source>
+      <translation>このテキストを表示</translation>
+    </message>
+    <message>
+      <location line="+14" />
+      <source>Alignment</source>
+      <translation>配置</translation>
+    </message>
+    <message>
+      <location line="+29" />
+      <source>Darken image</source>
+      <translation>画像を暗くする</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Blur image</source>
+      <translation>画像をぼかす</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Image fit</source>
+      <translation>画像の表示方法</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Fill</source>
+      <translation>塗りつぶし</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Fit</source>
+      <translation>収める</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Image zoom</source>
+      <translation>画像のズーム</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>The image for this style could not be found.</source>
+      <translation>このスタイルの画像が見つかりません。</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Choose image</source>
+      <translation>画像を選択</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Reset</source>
+      <translation>リセット</translation>
+    </message>
+    <message>
+      <location line="+21" />
+      <source>Ready to project</source>
+      <translation>投影できます</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Enter a title</source>
+      <translation>題を入力</translation>
+    </message>
+    <message>
+      <location line="+22" />
+      <source>Name</source>
+      <translation>名前</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>For example: Special evening</source>
+      <translation>例: 特別な晩</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Delete preset?</source>
+      <translation>プリセットを削除しますか？</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>This preset will be permanently removed.</source>
+      <translation>このプリセットは完全に削除されます。</translation>
+    </message>
+    <message>
+      <source>Text</source>
+      <translation>テキスト</translation>
+    </message>
+    <message>
+      <source>Select a text</source>
+      <translation>テキストを選択</translation>
+    </message>
+    <message>
+      <source>Click a text on the canvas or choose a layer to edit it.</source>
+      <translation>キャンバス上のテキストをクリックするか、編集するレイヤーを選択してください。</translation>
+    </message>
+    <message>
+      <source>Add text</source>
+      <translation>テキストを追加</translation>
+    </message>
+    <message>
+      <source>Write something…</source>
+      <translation>テキストを入力…</translation>
+    </message>
+    <message>
+      <source>Fewer options</source>
+      <translation>オプションを減らす</translation>
+    </message>
+    <message>
+      <source>More options</source>
+      <translation>その他のオプション</translation>
+    </message>
+    <message>
+      <source>Line height</source>
+      <translation>行の高さ</translation>
+    </message>
+    <message>
+      <source>No image</source>
+      <translation>画像なし</translation>
+    </message>
+    <message>
+      <source>Adjust image position</source>
+      <translation>画像の位置を調整</translation>
+    </message>
+    <message>
+      <source>The image for this preset could not be found.</source>
+      <translation>このプリセットの画像が見つかりません。</translation>
+    </message>
+    <message>
+      <source>Front</source>
+      <translation>最前面</translation>
+    </message>
+    <message>
+      <source>%1 layers</source>
+      <translation>%1個のレイヤー</translation>
+    </message>
+    <message>
+      <source>Hide layer</source>
+      <translation>レイヤーを非表示</translation>
+    </message>
+    <message>
+      <source>Show layer</source>
+      <translation>レイヤーを表示</translation>
+    </message>
+    <message>
+      <source>Delete layer</source>
+      <translation>レイヤーを削除</translation>
+    </message>
+    <message>
+      <source>No text layers yet
+Add one when you are ready.</source>
+      <translation>テキストレイヤーはまだありません
+準備ができたら追加してください。</translation>
+    </message>
+    <message>
+      <source>Drag layers to change which text appears in front.</source>
+      <translation>レイヤーをドラッグして、前面に表示するテキストの順序を変更します。</translation>
+    </message>
+    <message>
+      <source>Included styles</source>
+      <translation>付属スタイル</translation>
+    </message>
+    <message>
+      <source>My presets</source>
+      <translation>マイプリセット</translation>
+    </message>
+    <message>
+      <source>Your saved styles will appear here</source>
+      <translation>保存したスタイルはここに表示されます</translation>
+    </message>
+    <message>
+      <source>Customize a theme and save it as a preset.</source>
+      <translation>テーマをカスタマイズしてプリセットとして保存します。</translation>
+    </message>
+    <message>
+      <source>Layers</source>
+      <translation>レイヤー</translation>
+    </message>
+    <message>
+      <source>Styles and layers</source>
+      <translation>スタイルとレイヤー</translation>
+    </message>
+    <message>
+      <source>Unsaved changes</source>
+      <translation>未保存の変更</translation>
+    </message>
+    <message>
+      <source>Save</source>
+      <translation>保存</translation>
+    </message>
+    <message>
+      <source>Save as preset</source>
+      <translation>プリセットとして保存</translation>
+    </message>
+    <message>
+      <source>More save options</source>
+      <translation>その他の保存オプション</translation>
+    </message>
+    <message>
+      <source>Save as new preset…</source>
+      <translation>新しいプリセットとして保存…</translation>
+    </message>
+    <message>
+      <source>Project</source>
+      <translation>投影</translation>
+    </message>
+    <message>
+      <source>Export image</source>
+      <translation>画像を書き出す</translation>
+    </message>
+    <message>
+      <source>Drag the image to reposition it</source>
+      <translation>画像をドラッグして位置を調整</translation>
+    </message>
+    <message>
+      <source>Drag text · double-click to edit</source>
+      <translation>テキストをドラッグ · ダブルクリックして編集</translation>
+    </message>
+    <message>
+      <source>Auto format</source>
+      <translation>自動フォーマット</translation>
+    </message>
+    <message>
+      <source>Match the projection screen format</source>
+      <translation>投影画面の形式に合わせる</translation>
+    </message>
+    <message>
+      <source>Save the complete composition so you can use it again later.</source>
+      <translation>完全な構成を保存して、後で再利用できます。</translation>
+    </message>
+    <message>
+      <source>Preset name</source>
+      <translation>プリセット名</translation>
+    </message>
+    <message>
+      <source>Cancel</source>
+      <translation>キャンセル</translation>
+    </message>
+    <message>
+      <source>“%1” will be permanently removed.</source>
+      <translation>「%1」は完全に削除されます。</translation>
+    </message>
+    <message>
+      <source>Delete</source>
+      <translation>削除</translation>
+    </message>
+    <message>
+      <source>Would you like to save your changes before switching presets?</source>
+      <translation>プリセットを切り替える前に変更を保存しますか？</translation>
+    </message>
+    <message>
+      <source>Discard</source>
+      <translation>破棄</translation>
+    </message>
+  </context>
+  <context>
+    <name>TalkThemeEditorWidget</name>
+    <message>
+      <location filename="../../ui/qml/talk_theme.py" line="+253" />
+      <source>Projection is not ready yet.</source>
+      <translation>投影の準備ができていません。</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>The talk-theme canvas could not be loaded.</source>
+      <translation>講演テーマのキャンバスを読み込めませんでした。</translation>
+    </message>
+    <message>
+      <location line="+26" />
+      <source>The background image took too long to load.</source>
+      <translation>背景画像の読み込みに時間がかかりすぎました。</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <location line="+4" />
+      <source>The talk-theme image could not be prepared.</source>
+      <translation>講演テーマの画像を準備できませんでした。</translation>
+    </message>
+    <message>
+      <location line="+22" />
+      <source>The final talk-theme image is incomplete.</source>
+      <translation>最終的な講演テーマ画像が不完全です。</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>The talk-theme image could not be encoded.</source>
+      <translation>講演テーマの画像をエンコードできませんでした。</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Talk theme</source>
+      <translation>講演の主題</translation>
+    </message>
+    <message>
+      <location line="+21" />
+      <source>Preparing the image timed out.</source>
+      <translation>画像の準備がタイムアウトしました。</translation>
+    </message>
+    <message>
+      <source>Export image</source>
+      <translation>画像を書き出す</translation>
+    </message>
+    <message>
+      <source>PNG image (*.png)</source>
+      <translation>PNG画像 (*.png)</translation>
+    </message>
+    <message>
+      <source>The image could not be exported.</source>
+      <translation>画像を書き出せませんでした。</translation>
+    </message>
+    <message>
+      <source>Unsaved changes</source>
+      <translation>未保存の変更</translation>
+    </message>
+    <message>
+      <source>Save the changes to this talk theme?</source>
+      <translation>この講演テーマへの変更を保存しますか？</translation>
+    </message>
+    <message>
+      <source>Save as preset</source>
+      <translation>プリセットとして保存</translation>
+    </message>
+    <message>
+      <source>Name</source>
+      <translation>氏名</translation>
     </message>
   </context>
 </TS>

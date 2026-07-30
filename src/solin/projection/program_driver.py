@@ -3,8 +3,8 @@
 The second monitor is composited entirely inside libobs (a fade transition on
 channel 0 crossfading content scenes — see ``solin.core.media.obs_program``).
 Media comes straight from the engine as an ``ffmpeg_source``; the remaining
-content is Qt-rendered. This driver renders those Qt widgets (idle yeartext,
-sermon slide, countdown timer) to a canvas-size ``QImage`` **once** — at full
+content is Qt-rendered. This driver renders those Qt widgets (idle yeartext and
+countdown timer) to a canvas-size ``QImage`` **once** — at full
 projection resolution, independent of any window's size — and hands it to the
 program as an image scene (crossfaded, or updated in place for the ticking
 timer). Still pictures are passed through directly.
@@ -31,7 +31,6 @@ from ..core.projection.transform_animation import ProjectionTransformAnimation
 from ..core.rendering.fonts import FontManager
 from ..core.timer.models import MediaCountdownPresentation
 from ..widgets.circular_timer import CircularTimerWidget
-from .sermon_theme import SermonThemeProjectionWidget
 from .yearly_text import YearlyTextWidget
 
 _TRANSFORM_TICK_MS = 16  # ~60 fps; libobs has no per-item tween, so the driver steps it
@@ -40,7 +39,6 @@ log = logging.getLogger(__name__)
 
 _KEY_IDLE = "idle"
 _KEY_IMAGE = "image"
-_KEY_SERMON = "sermon"
 _KEY_TIMER = "timer"
 _KEY_BROWSER = "browser"
 _KEY_CAMERA = "camera"
@@ -97,9 +95,8 @@ class ProjectionProgramDriver:
         # Offscreen render widgets, sized to the canvas on first use. Never shown;
         # ``render()`` drives their paintEvent into our image.
         self._yeartext = YearlyTextWidget(font_manager)
-        self._sermon = SermonThemeProjectionWidget()
         self._timer = CircularTimerWidget()
-        for widget in (self._yeartext, self._sermon, self._timer):
+        for widget in (self._yeartext, self._timer):
             widget.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
         font_manager.font_ready.connect(self._on_font_ready)
         self._sized = False
@@ -107,7 +104,7 @@ class ProjectionProgramDriver:
         self._countdown: tuple[int, int] | None = None
         self._timer_presentation: MediaCountdownPresentation | None = None
         self._sig: dict[str, object] = {}
-        # Zoom/pan of the current image/sermon scene. libobs has no per-item
+        # Zoom/pan of the current static-image scene. libobs has no per-item
         # tween, so the same eased animator the Qt path uses is stepped by a
         # timer that pushes each frame's transform onto the live scene item.
         self._transform_anim = ProjectionTransformAnimation()
@@ -140,7 +137,7 @@ class ProjectionProgramDriver:
         if self._sized:
             return
         width, height = self.canvas_size
-        for widget in (self._yeartext, self._sermon, self._timer):
+        for widget in (self._yeartext, self._timer):
             widget.resize(width, height)
         self._sized = True
 
@@ -175,17 +172,6 @@ class ProjectionProgramDriver:
         signature = (_KEY_IDLE, self._yeartext_data, None)
         self._crossfade(_KEY_IDLE, self._render(self._yeartext), signature)
 
-    # ── sermon ────────────────────────────────────────────────────────────
-
-    def show_sermon(self, text: str, subtitle: str = "") -> None:
-        self.ensure()
-        self._sermon.set_theme(text, subtitle)
-        self._crossfade(
-            _KEY_SERMON, self._render(self._sermon), (_KEY_SERMON, text, subtitle),
-            zoomable=True,
-        )
-        self._set_transform(IDENTITY_IMAGE_TRANSFORM, animate=False)
-
     # ── still image ───────────────────────────────────────────────────────
 
     def show_static_image(
@@ -206,7 +192,7 @@ class ProjectionProgramDriver:
     def set_image_transform(
         self, zoom: float, norm_x: float, norm_y: float, *, animate: bool = True
     ) -> None:
-        """Zoom/pan the live image or sermon scene (animated by default)."""
+        """Zoom or pan the live static-image scene (animated by default)."""
         self._set_transform(ImageTransform(zoom, norm_x, norm_y), animate=animate)
 
     def reset_transform(self) -> None:
