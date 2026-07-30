@@ -364,9 +364,9 @@ class ProjectionProgram:
         ob = self._runtime.ob
         canvas = self._runtime.video
         cw, ch = float(canvas.width), float(canvas.height)
-        iw = float(max(1, iw))
-        ih = float(max(1, ih))
-        fit = min(cw / iw, ch / ih)
+        iw_f = float(max(1, iw))
+        ih_f = float(max(1, ih))
+        fit = min(cw / iw_f, ch / ih_f)
         scale = fit * max(0.1, min(10.0, float(zoom)))
         item.defer_update_begin()
         try:

@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import logging
 import threading
+from typing import Any
 
 from PySide6.QtCore import QObject, QTimer, Signal
 from PySide6.QtGui import QImage, QPixmap
@@ -142,10 +143,13 @@ def _read_media_tags(path: str) -> tuple[str | None, object]:
         import mutagen
     except Exception:  # noqa: BLE001 - optional dependency / import boundary
         return None, None
+    # mutagen.File isn't re-exported in the stubs, and its return is loosely
+    # typed; go through an Any handle so the dynamic tag access type-checks.
+    mut: Any = mutagen
 
     title: str | None = None
     try:
-        easy = mutagen.File(path, easy=True)
+        easy = mut.File(path, easy=True)
         if easy is not None:
             values = easy.get("title") or easy.get("\xa9nam")
             if values:
@@ -156,7 +160,7 @@ def _read_media_tags(path: str) -> tuple[str | None, object]:
 
     cover: object = None
     try:
-        raw = mutagen.File(path)
+        raw = mut.File(path)
         data = _extract_cover_bytes(raw)
         if data:
             image = QImage.fromData(data)
@@ -167,7 +171,7 @@ def _read_media_tags(path: str) -> tuple[str | None, object]:
     return title, cover
 
 
-def _extract_cover_bytes(media) -> bytes | None:
+def _extract_cover_bytes(media: Any) -> bytes | None:
     """Pull the first embedded cover image's bytes from a mutagen file object,
     across the tag formats Solin's media use (FLAC/OGG pictures, ID3 APIC, MP4
     ``covr``)."""
@@ -181,10 +185,11 @@ def _extract_cover_bytes(media) -> bytes | None:
         return None
     getall = getattr(tags, "getall", None)
     if callable(getall):  # ID3 APIC frames
+        apics: Any = None
         try:
             apics = getall("APIC")
         except Exception:  # noqa: BLE001 - tag boundary
-            apics = []
+            apics = None
         if apics:
             return bytes(apics[0].data)
     try:

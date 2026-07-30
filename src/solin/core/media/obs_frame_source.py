@@ -15,11 +15,12 @@ from __future__ import annotations
 
 import logging
 import time
+from typing import Any
 
 from cffi import FFI
 from PySide6.QtGui import QImage
 
-from pylibobs._ffi import ffi, get_lib, is_alive
+from pylibobs._ffi import ffi, get_lib, is_alive  # type: ignore[import-not-found]
 
 log = logging.getLogger(__name__)
 
@@ -101,7 +102,8 @@ class ObsFrameSource:
             return
         stride = image.bytesPerLine()
         buf = bytes(image.constBits())  # own copy; must outlive obs_source_output_video
-        frame = _frame_ffi.new("struct obs_source_frame *")
+        # cffi CData: its struct fields are only known at runtime, so type it Any.
+        frame: Any = _frame_ffi.new("struct obs_source_frame *")
         frame.data[0] = _frame_ffi.cast("uint8_t *", _frame_ffi.from_buffer(buf))
         frame.linesize[0] = stride
         frame.width = width
