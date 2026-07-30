@@ -1,22 +1,14 @@
 import uuid
 
+from PySide6.QtCore import QByteArray
+
 from solin.controllers.window_state_controller import (
     WindowStateContext,
     WindowStateController,
 )
+from solin.core.foundation.settings_keys import SettingsKey
 from solin.core.profiles.settings import ProfileSettings
 from solin.core.windowing.settings import WindowGeometrySettingsStore
-
-
-class _GeometrySettingsStub:
-    def __init__(self):
-        self.saved = None
-
-    def size(self, _default_width, _default_height):
-        return 100, 200
-
-    def save_size(self, width, height):
-        self.saved = (width, height)
 
 
 class _WindowPortStub:
@@ -29,15 +21,6 @@ class _WindowPortStub:
         self.activated = 0
         self.minimized = False
         self.visible = True
-
-    def minimum_width(self):
-        return 900
-
-    def minimum_height(self):
-        return 600
-
-    def resize(self, width, height):
-        self.resized = (width, height)
 
     def width(self):
         return 1280
@@ -70,12 +53,9 @@ class _WindowPortStub:
         return 1
 
 
-def _controller(window_port, geometry_settings):
+def _controller(window_port):
     return WindowStateController(
         WindowStateContext(
-            minimum_width=window_port.minimum_width,
-            minimum_height=window_port.minimum_height,
-            resize=window_port.resize,
             width=window_port.width,
             height=window_port.height,
             move=window_port.move,
@@ -87,35 +67,14 @@ def _controller(window_port, geometry_settings):
             activate_window=window_port.activate_window,
             win_id=window_port.win_id,
             titlebar_window=window_port,
-        ),
-        geometry_settings,
+        )
     )
-
-
-def test_clamped_size_uses_minimums_for_invalid_saved_values():
-    assert WindowStateController._clamped_size("100", "200", 900, 600) == (900, 600)
-
-
-def test_clamped_size_preserves_values_above_minimums():
-    assert WindowStateController._clamped_size("1280", "720", 900, 600) == (1280, 720)
-
-
-def test_restore_and_save_size_use_explicit_window_port():
-    window = _WindowPortStub()
-    settings = _GeometrySettingsStub()
-    controller = _controller(window, settings)
-
-    controller.restore_size()
-    controller.save_size()
-
-    assert window.resized == (900, 600)
-    assert settings.saved == (1280, 720)
 
 
 def test_bring_to_front_uses_explicit_window_port():
     window = _WindowPortStub()
     window.visible = False
-    controller = _controller(window, _GeometrySettingsStub())
+    controller = _controller(window)
 
     controller.bring_to_front()
 
@@ -125,22 +84,41 @@ def test_bring_to_front_uses_explicit_window_port():
 
 
 def test_window_state_controller_uses_explicit_dependencies():
-    controller = _controller(_WindowPortStub(), _GeometrySettingsStub())
+    controller = _controller(_WindowPortStub())
 
     assert not hasattr(controller, "_window")
 
 
-def test_window_geometry_settings_store_roundtrips_size():
+def test_window_geometry_settings_store_roundtrips_geometry():
     store = WindowGeometrySettingsStore.for_profile_settings(
         ProfileSettings.for_profile_id(f"window_geometry_{uuid.uuid4().hex}")
     )
     store.settings.clear()
     try:
-        assert store.size(1200, 760) == (1200, 760)
+        assert store.geometry().isEmpty()
 
-        store.save_size(1440, 900)
+        store.save_geometry(QByteArray(b"window-geometry"))
 
-        assert store.size(1200, 760) == (1440, 900)
+        assert store.geometry() == QByteArray(b"window-geometry")
+    finally:
+        store.settings.clear()
+
+
+def test_window_geometry_settings_store_migrates_legacy_size() -> None:
+    store = WindowGeometrySettingsStore.for_profile_settings(
+        ProfileSettings.for_profile_id(f"window_geometry_{uuid.uuid4().hex}")
+    )
+    store.settings.clear()
+    try:
+        store.settings.set_value(SettingsKey.LEGACY_WINDOW_WIDTH, 1440, sync=False)
+        store.settings.set_value(SettingsKey.LEGACY_WINDOW_HEIGHT, 900)
+
+        assert store.initial_size(1200, 760) == (1440, 900)
+
+        store.save_geometry(QByteArray(b"window-geometry"))
+
+        assert SettingsKey.LEGACY_WINDOW_WIDTH not in store.settings.all_keys()
+        assert SettingsKey.LEGACY_WINDOW_HEIGHT not in store.settings.all_keys()
     finally:
         store.settings.clear()
 

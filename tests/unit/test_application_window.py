@@ -6,7 +6,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import QByteArray, Signal
 from PySide6.QtGui import QCloseEvent, QSurface
 from PySide6.QtQuick import QSGRendererInterface
 from PySide6.QtWidgets import QApplication, QWidget
@@ -20,6 +20,10 @@ from solin.bootstrap.application_window import (
 
 
 _APP = QApplication.instance() or QApplication([])
+
+
+def _ignore_geometry(_geometry: QByteArray) -> None:
+    pass
 
 
 class _CancellableLoad:
@@ -65,7 +69,7 @@ def test_application_window_keeps_one_native_window_through_hydration() -> None:
     script = """
 import json
 import time
-from PySide6.QtCore import Signal
+from PySide6.QtCore import QByteArray, Signal
 from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtWidgets import QApplication, QWidget
 from solin.bootstrap.application_window import ApplicationWindow
@@ -90,7 +94,13 @@ class Runtime(QWidget):
             self.first_frame_presented.emit()
 
 app = QApplication([])
-window = ApplicationWindow(width=900, height=700, pending_files=[])
+window = ApplicationWindow(
+    width=900,
+    height=700,
+    geometry=QByteArray(),
+    save_geometry=lambda _geometry: None,
+    pending_files=[],
+)
 loading_frames = []
 application_frames = []
 window.loading_frame_presented.connect(lambda: loading_frames.append(True))
@@ -157,7 +167,13 @@ window.close()
 
 
 def test_application_window_starts_with_loading_canvas() -> None:
-    window = ApplicationWindow(width=900, height=700, pending_files=[])
+    window = ApplicationWindow(
+        width=900,
+        height=700,
+        geometry=QByteArray(),
+        save_geometry=_ignore_geometry,
+        pending_files=[],
+    )
 
     assert window._content_stack.currentWidget() is window._loading_canvas
     assert window.internalWinId() == 0
@@ -165,6 +181,43 @@ def test_application_window_starts_with_loading_canvas() -> None:
     if surface_type != QSurface.SurfaceType.RasterSurface:
         assert window.windowHandle() is not None
         assert window.windowHandle().surfaceType() == surface_type
+
+
+def test_application_window_restores_maximized_state_and_normal_geometry() -> None:
+    saved_geometry = []
+    source = ApplicationWindow(
+        width=700,
+        height=650,
+        geometry=QByteArray(),
+        save_geometry=saved_geometry.append,
+        pending_files=[],
+    )
+    source.show()
+    _APP.processEvents()
+    expected_normal_size = source.normalGeometry().size()
+    source.showMaximized()
+    _APP.processEvents()
+    source.close()
+
+    assert len(saved_geometry) == 1
+
+    restored = ApplicationWindow(
+        width=900,
+        height=700,
+        geometry=saved_geometry[0],
+        save_geometry=_ignore_geometry,
+        pending_files=[],
+    )
+    restored.show()
+    _APP.processEvents()
+
+    assert restored.isMaximized()
+
+    restored.showNormal()
+    _APP.processEvents()
+
+    assert restored.size() == expected_normal_size
+    restored.close()
 
 
 def test_quick_graphics_apis_map_to_compatible_native_surfaces() -> None:
@@ -189,7 +242,13 @@ def test_quick_surface_type_honors_software_adaptation(monkeypatch) -> None:
 
 def test_application_window_queues_files_until_runtime_is_ready() -> None:
     pending = ["before.mp4"]
-    window = ApplicationWindow(width=900, height=700, pending_files=pending)
+    window = ApplicationWindow(
+        width=900,
+        height=700,
+        geometry=QByteArray(),
+        save_geometry=_ignore_geometry,
+        pending_files=pending,
+    )
     window.open_media_files(["during.mp4", "before.mp4"])
     assert pending == ["before.mp4", "during.mp4"]
 
@@ -214,7 +273,13 @@ def test_application_window_queues_files_until_runtime_is_ready() -> None:
 
 
 def test_closing_application_window_cancels_load_and_shuts_down_runtime() -> None:
-    window = ApplicationWindow(width=900, height=700, pending_files=[])
+    window = ApplicationWindow(
+        width=900,
+        height=700,
+        geometry=QByteArray(),
+        save_geometry=_ignore_geometry,
+        pending_files=[],
+    )
     load = _CancellableLoad()
     window.set_load_handle(load)
     assert window.begin_hydration() is True
@@ -230,7 +295,14 @@ def test_closing_application_window_cancels_load_and_shuts_down_runtime() -> Non
 
 
 def test_application_close_can_be_cancelled_before_shutdown() -> None:
-    window = ApplicationWindow(width=900, height=700, pending_files=[])
+    saved_geometry = []
+    window = ApplicationWindow(
+        width=900,
+        height=700,
+        geometry=QByteArray(),
+        save_geometry=saved_geometry.append,
+        pending_files=[],
+    )
     assert window.begin_hydration() is True
     runtime = _Runtime(window.content_parent())
     runtime.confirm_close = lambda: False
@@ -243,10 +315,17 @@ def test_application_close_can_be_cancelled_before_shutdown() -> None:
     assert event.isAccepted() is False
     assert window.state is ApplicationWindowState.HYDRATING
     assert runtime.shutdown_called is False
+    assert saved_geometry == []
 
 
 def test_closing_during_runtime_construction_aborts_partial_resources() -> None:
-    window = ApplicationWindow(width=900, height=700, pending_files=[])
+    window = ApplicationWindow(
+        width=900,
+        height=700,
+        geometry=QByteArray(),
+        save_geometry=_ignore_geometry,
+        pending_files=[],
+    )
     assert window.begin_hydration() is True
     runtime = _Runtime(window.content_parent())
     window.register_runtime_candidate(runtime)

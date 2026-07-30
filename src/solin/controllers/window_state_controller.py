@@ -10,7 +10,6 @@ from PySide6.QtGui import QGuiApplication
 
 from ..styles.theme import PALETTE
 from ..ui.titlebar import apply_titlebar_color
-from ..core.windowing.settings import WindowGeometrySettingsStore
 
 log = logging.getLogger(__name__)
 
@@ -19,9 +18,6 @@ log = logging.getLogger(__name__)
 class WindowStateContext:
     """Window operations required by persisted shell state management."""
 
-    minimum_width: Callable[[], int]
-    minimum_height: Callable[[], int]
-    resize: Callable[[int, int], None]
     width: Callable[[], int]
     height: Callable[[], int]
     move: Callable[[int, int], None]
@@ -36,36 +32,10 @@ class WindowStateContext:
 
 
 class WindowStateController:
-    """Owns persisted size, startup icon, centering, and titlebar styling."""
+    """Owns main-window positioning, foreground activation, and titlebar styling."""
 
-    _DEFAULT_WIDTH = 1200
-    _DEFAULT_HEIGHT = 760
-
-    def __init__(
-        self,
-        context: WindowStateContext,
-        geometry_settings: WindowGeometrySettingsStore,
-    ) -> None:
+    def __init__(self, context: WindowStateContext) -> None:
         self._context = context
-        self._geometry_settings = geometry_settings
-
-    def restore_size(self) -> None:
-        context = self._context
-        width, height = self._geometry_settings.size(
-            self._DEFAULT_WIDTH,
-            self._DEFAULT_HEIGHT,
-        )
-        width, height = self._clamped_size(
-            width,
-            height,
-            context.minimum_width(),
-            context.minimum_height(),
-        )
-        context.resize(width, height)
-
-    def save_size(self) -> None:
-        context = self._context
-        self._geometry_settings.save_size(context.width(), context.height())
 
     def center_on_primary_screen(self) -> None:
         primary = QGuiApplication.primaryScreen()
@@ -104,12 +74,3 @@ class WindowStateController:
                 ctypes.windll.user32.SetForegroundWindow(hwnd)
             except Exception:  # noqa: BLE001 - Win32 foreground API boundary
                 log.debug("Failed to force main window foreground on Windows", exc_info=True)
-
-    @staticmethod
-    def _clamped_size(
-        width,
-        height,
-        min_width: int,
-        min_height: int,
-    ) -> tuple[int, int]:
-        return max(min_width, int(width)), max(min_height, int(height))

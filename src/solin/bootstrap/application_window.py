@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from enum import Enum
 import logging
 import os
 from typing import Any
 
-from PySide6.QtCore import QEvent, Qt, Signal
+from PySide6.QtCore import QByteArray, QEvent, Qt, Signal
 from PySide6.QtGui import QSurface
 from PySide6.QtQuick import QQuickWindow, QSGRendererInterface
 from PySide6.QtWidgets import (
@@ -120,6 +121,8 @@ class ApplicationWindow(QMainWindow):
         *,
         width: int,
         height: int,
+        geometry: QByteArray,
+        save_geometry: Callable[[QByteArray], None],
         pending_files: list[str],
     ) -> None:
         super().__init__()
@@ -130,6 +133,7 @@ class ApplicationWindow(QMainWindow):
         self._load_handle: Any = None
         self._runtime: Any = None
         self._runtime_candidate: Any = None
+        self._save_geometry = save_geometry
         self._pending_files = pending_files
 
         self.setWindowTitle("Solin")
@@ -144,7 +148,8 @@ class ApplicationWindow(QMainWindow):
         self._content_stack.addWidget(self._loading_canvas)
         self._content_stack.setCurrentWidget(self._loading_canvas)
         self.setCentralWidget(self._content_host)
-        self._center_on_primary_screen()
+        if geometry.isEmpty() or not self.restoreGeometry(geometry):
+            self._center_on_primary_screen()
         self._prepare_native_surface_for_quick()
         self.loading_frame_presented.connect(
             self._apply_titlebar_color,
@@ -337,6 +342,7 @@ class ApplicationWindow(QMainWindow):
             event.ignore()
             return
         self._state = ApplicationWindowState.CLOSING
+        self._save_geometry(self.saveGeometry())
         if self._load_handle is not None:
             self._load_handle.cancel()
             self._load_handle = None
