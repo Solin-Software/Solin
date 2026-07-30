@@ -19,8 +19,9 @@ class SettingsKey:
     MEDIA_LANGUAGE_CODE: Final = "media_language_code"
     LEGACY_JW_LANGUAGE: Final = "jw_language"
 
-    WINDOW_WIDTH: Final = "size/width"
-    WINDOW_HEIGHT: Final = "size/height"
+    WINDOW_GEOMETRY: Final = "geometry"
+    LEGACY_WINDOW_WIDTH: Final = "size/width"
+    LEGACY_WINDOW_HEIGHT: Final = "size/height"
     SIDEBAR_COLLAPSED: Final = "sidebar/collapsed"
 
     PLAYBACK_LOOP: Final = "loop"

@@ -43,7 +43,6 @@ class ShutdownDependencies:
     conversion_threads: OwnedQThreadRegistry
     jwl_temp_files: set[str]
     queue_pending_deletion: Callable[[str], None]
-    save_window_state: Callable[[], None]
     cleanup_lazy_pages: Callable[[], None] | None
     cancel_ui_preparation: Callable[[], None] | None = None
 
@@ -67,7 +66,6 @@ class ShutdownController:
         self.stop_conversion_threads()
         self.close_ipc()
         self.cleanup_jwl_temp_files()
-        self.save_window_state()
         self.cleanup_lazy_pages()
 
     def stop_scheduled_automation(self) -> None:
@@ -132,9 +130,6 @@ class ShutdownController:
     def cleanup_jwl_temp_files(self) -> None:
         for tmp_path in self._dependencies.jwl_temp_files:
             self._remove_or_queue_tmp_file(tmp_path)
-
-    def save_window_state(self) -> None:
-        self._dependencies.save_window_state()
 
     def cleanup_lazy_pages(self) -> None:
         cleanup = self._dependencies.cleanup_lazy_pages

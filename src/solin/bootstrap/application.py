@@ -530,10 +530,12 @@ def _launch_profile_window(
     geometry_settings = WindowGeometrySettingsStore.for_profile_settings(
         profile_context.settings
     )
-    width, height = geometry_settings.size(1200, 760)
+    width, height = geometry_settings.initial_size(1200, 760)
     window = ApplicationWindow(
         width=width,
         height=height,
+        geometry=geometry_settings.geometry(),
+        save_geometry=geometry_settings.save_geometry,
         pending_files=file_args,
     )
     container.window_ref[0] = window

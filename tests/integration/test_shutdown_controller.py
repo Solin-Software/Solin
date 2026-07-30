@@ -105,7 +105,6 @@ def _dependencies(events=None):
         conversion_threads=registry,
         jwl_temp_files=set(),
         queue_pending_deletion=lambda path: events.append(("pending", path)),
-        save_window_state=lambda: events.append("window-state"),
         cleanup_lazy_pages=lambda: events.append("lazy-pages"),
     )
 
@@ -187,7 +186,6 @@ def test_shutdown_runs_owned_cleanup_boundaries_in_order():
         "obs.stop",
         "zoom.stop",
         "ipc.close",
-        "window-state",
         "lazy-pages",
     ]
     assert dependencies.projection_session.projection_windows == []
@@ -258,7 +256,6 @@ def test_shutdown_allows_deferred_resources_that_were_never_created():
         conversion_threads=dependencies.conversion_threads,
         jwl_temp_files=dependencies.jwl_temp_files,
         queue_pending_deletion=dependencies.queue_pending_deletion,
-        save_window_state=dependencies.save_window_state,
         cleanup_lazy_pages=dependencies.cleanup_lazy_pages,
     )
 

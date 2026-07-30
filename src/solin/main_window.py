@@ -393,9 +393,6 @@ class MainWindow(QWidget):
         self._window_host.setWindowTitle(self.tr("Solin"))
         self._window_state = WindowStateController(
             WindowStateContext(
-                minimum_width=self._window_host.minimumWidth,
-                minimum_height=self._window_host.minimumHeight,
-                resize=self._window_host.resize,
                 width=self._window_host.width,
                 height=self._window_host.height,
                 move=self._window_host.move,
@@ -407,8 +404,7 @@ class MainWindow(QWidget):
                 activate_window=self._window_host.activateWindow,
                 win_id=self._window_host.winId,
                 titlebar_window=self._window_host,
-            ),
-            profile_settings_bundle.window_geometry,
+            )
         )
 
         self._auto_share_mouse_interference_warning.connect(
@@ -866,7 +862,6 @@ class MainWindow(QWidget):
                 conversion_threads=self._conversion_threads,
                 jwl_temp_files=self._jwl_tmp_files,
                 queue_pending_deletion=queue_pending_deletion,
-                save_window_state=self._window_state.save_size,
                 cleanup_lazy_pages=self._lazy_pages.cleanup_browser,
                 cancel_ui_preparation=self._ui_preparation.cancel,
             )
