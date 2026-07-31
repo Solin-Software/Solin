@@ -13,12 +13,11 @@ from solin.core.network.http import HttpError, HttpStatusError, get_json
 log = logging.getLogger(__name__)
 
 PUB_MEDIA_URL = "https://b.jw-cdn.org/apis/pub-media/GETPUBMEDIALINKS"
-MEDIATOR_MEDIA_ITEM_URL = (
-    "https://b.jw-cdn.org/apis/mediator/v1/media-items/{language}/{item_id}"
-)
+MEDIATOR_MEDIA_ITEM_URL = "https://b.jw-cdn.org/apis/mediator/v1/media-items/{language}/{item_id}"
 DEFAULT_USER_AGENT = "Mozilla/5.0"
 DEFAULT_TIMEOUT = 20
 VIDEO_FORMATS = ("MP4", "M4V", "mp4", "m4v")
+AUDIO_FORMATS = ("MP3", "M4A", "mp3", "m4a")
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,6 +38,7 @@ class PublicationMediaRequest:
     meps_doc_id: int | None
     language: str
     is_sign_language: bool = False
+    media_type: str = "video"
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,26 +59,29 @@ class JwpubMediaInfo:
 class PublicationMediaResolver:
     """Resolve JW publication media metadata through GETPUBMEDIALINKS."""
 
-    def resolve_video(self, request: PublicationMediaRequest) -> PubMediaFile | None:
-        return resolve_publication_video_link(
+    def resolve_media(self, request: PublicationMediaRequest) -> PubMediaFile | None:
+        return resolve_publication_media_link(
             request.key_symbol,
             request.track,
             request.issue_tag,
             request.meps_doc_id,
             request.language,
             is_sign_language=request.is_sign_language,
+            media_type=request.media_type,
         )
 
     def resolve_jwpub(self, request: JwpubMediaRequest) -> JwpubMediaInfo:
-        data = fetch_pub_media_json({
-            "pub": request.pub,
-            "issue": request.issue,
-            "langwritten": request.language,
-            "fileformat": "JWPUB",
-            "output": "json",
-            "alllangs": "0",
-            "txtCMSLang": "E",
-        })
+        data = fetch_pub_media_json(
+            {
+                "pub": request.pub,
+                "issue": request.issue,
+                "langwritten": request.language,
+                "fileformat": "JWPUB",
+                "output": "json",
+                "alllangs": "0",
+                "txtCMSLang": "E",
+            }
+        )
         if not data:
             return JwpubMediaInfo(None, "", False)
 
@@ -146,7 +149,7 @@ def select_pub_media_file(
     return None
 
 
-def resolve_publication_video_link(
+def resolve_publication_media_link(
     key_symbol: str,
     track: int | None,
     issue_tag: int | None,
@@ -154,6 +157,7 @@ def resolve_publication_video_link(
     language: str,
     *,
     is_sign_language: bool = False,
+    media_type: str = "video",
 ) -> PubMediaFile | None:
     """Resolve a JW publication video/audio CDN link from known media identifiers."""
     try:
@@ -167,12 +171,17 @@ def resolve_publication_video_link(
     if is_sign_language and publication_symbol.lower() == "sjjm":
         publication_symbol = "sjj"
 
+    normalized_media_type = str(media_type or "video").lower()
+    is_audio = normalized_media_type == "audio"
+    requested_format = "mp3,m4a" if is_audio else "mp4,m4v"
+    file_formats = AUDIO_FORMATS if is_audio else VIDEO_FORMATS
+
     if publication_symbol:
         params: dict[str, Any] = {
             "pub": publication_symbol,
             "track": track_number,
             "langwritten": language,
-            "fileformat": "mp4,m4v",
+            "fileformat": requested_format,
             "output": "json",
             "alllangs": "0",
         }
@@ -182,7 +191,7 @@ def resolve_publication_video_link(
         params = {
             "docid": document_id,
             "langwritten": language,
-            "fileformat": "mp4,m4v",
+            "fileformat": requested_format,
             "output": "json",
             "alllangs": "0",
         }
@@ -195,10 +204,10 @@ def resolve_publication_video_link(
     media_file = select_pub_media_file(
         data,
         language,
-        VIDEO_FORMATS,
+        file_formats,
         prefer_highest_label=True,
     )
-    if media_file is None or media_file.thumbnail_url:
+    if media_file is None or (media_file.thumbnail_url and media_file.duration_ticks > 0):
         return media_file
 
     media_item = resolve_mediator_media_item(
@@ -207,17 +216,15 @@ def resolve_publication_video_link(
         issue_number,
         document_id,
         language,
+        media_type="AUDIO" if is_audio else "VIDEO",
     )
     if media_item is None:
         return media_file
     return replace(
         media_file,
         title=media_file.title or str(media_item.get("title") or ""),
-        thumbnail_url=_thumbnail_url(media_item.get("images") or {}),
-        duration_ticks=(
-            media_file.duration_ticks
-            or _media_duration_ticks(media_item, {})
-        ),
+        thumbnail_url=(media_file.thumbnail_url or _media_thumbnail_url(media_item)),
+        duration_ticks=(media_file.duration_ticks or _media_duration_ticks(media_item, {})),
     )
 
 
@@ -227,6 +234,7 @@ def resolve_mediator_media_item(
     issue: int,
     document_id: int,
     language: str,
+    media_type: str = "VIDEO",
 ) -> dict[str, Any] | None:
     """Return the first matching targeted Mediator item, when available."""
     for item_id in mediator_media_item_ids(
@@ -234,6 +242,7 @@ def resolve_mediator_media_item(
         track,
         issue,
         document_id,
+        media_type=media_type,
     ):
         url = MEDIATOR_MEDIA_ITEM_URL.format(
             language=urllib.parse.quote(language, safe=""),
@@ -269,11 +278,7 @@ def mediator_media_item_ids(
     document_id: int | str | None,
     media_type: str = "VIDEO",
 ) -> Iterator[str]:
-    source = (
-        f"pub-{publication_symbol}"
-        if publication_symbol
-        else f"docid-{document_id}"
-    )
+    source = f"pub-{publication_symbol}" if publication_symbol else f"docid-{document_id}"
     normalized_issue = re.sub(r"(\d{6})00$", r"\1", str(issue)) if issue else ""
     tracks = (str(track), "x", "0", "1")
     seen: set[str] = set()
@@ -318,13 +323,11 @@ def _pub_media_file_from_item(data: dict, item: dict) -> PubMediaFile | None:
     title = str(item.get("title") or data.get("pubName") or "")
     checksum = str(file_obj.get("checksum") or "")
     label = str(item.get("label") or "")
-    images = item.get("images", {})
-    thumbnail_url = _thumbnail_url(images if isinstance(images, dict) else {})
     return PubMediaFile(
         url=url,
         title=title,
         checksum=checksum,
-        thumbnail_url=thumbnail_url,
+        thumbnail_url=_media_thumbnail_url(item),
         label=label,
         duration_ticks=_media_duration_ticks(item, file_obj),
     )
@@ -366,3 +369,17 @@ def _thumbnail_url(images: dict) -> str:
             if candidate := image_url(section.get(size)):
                 return candidate
     return ""
+
+
+def _media_thumbnail_url(item: dict[str, Any]) -> str:
+    track_image = item.get("trackImage")
+    if isinstance(track_image, str):
+        direct = track_image.strip()
+    elif isinstance(track_image, dict):
+        direct = str(track_image.get("url") or "").strip()
+    else:
+        direct = ""
+    if direct:
+        return direct
+    images = item.get("images", {})
+    return _thumbnail_url(images if isinstance(images, dict) else {})

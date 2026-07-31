@@ -6,7 +6,7 @@ from solin.core.jw import publication_archive
 from solin.core.jw.publication_archive import (
     JwpubArchiveDownloadError,
     download_jwpub_archive,
-    resolve_meeting_video,
+    resolve_meeting_media,
 )
 from solin.core.jw.publication_links import PubMediaFile
 from solin.core.network.http import HttpError
@@ -94,11 +94,12 @@ def test_download_jwpub_archive_cancels_between_chunks_without_writing(tmp_path)
     assert not destination.exists()
 
 
-def test_resolve_meeting_video_returns_simple_result(monkeypatch):
+def test_resolve_meeting_media_returns_simple_result(monkeypatch):
     class Resolver:
-        def resolve_video(self, request):
+        def resolve_media(self, request):
             assert request.key_symbol == "sjjm"
             assert request.is_sign_language is True
+            assert request.media_type == "audio"
             return PubMediaFile(
                 url="https://example.test/song.mp4",
                 title="Song",
@@ -108,7 +109,15 @@ def test_resolve_meeting_video_returns_simple_result(monkeypatch):
 
     monkeypatch.setattr(publication_archive, "_PUBLICATION_MEDIA_RESOLVER", Resolver())
 
-    assert resolve_meeting_video("sjjm", 1, 0, 0, "T", is_sign_language=True) == {
+    assert resolve_meeting_media(
+        "sjjm",
+        1,
+        0,
+        0,
+        "T",
+        is_sign_language=True,
+        media_type="audio",
+    ) == {
         "url": "https://example.test/song.mp4",
         "title": "Song",
         "thumbnail": "https://example.test/thumb.jpg",

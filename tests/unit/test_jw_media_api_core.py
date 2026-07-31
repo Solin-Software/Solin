@@ -69,8 +69,35 @@ def testparse_songs_filters_video_quality_subtitles_and_track_mismatch():
             "title": "Good Song",
             "url": "https://example.test/selected.mp4",
             "duration": 0,
+            "thumbnail_url": "",
         }
     ]
+
+
+def test_parse_songs_preserves_authoritative_duration_and_track_image():
+    data = {
+        "pubName": "Songs",
+        "files": {
+            "T": {
+                "MP4": [
+                    {
+                        "title": "1. Song",
+                        "track": 1,
+                        "label": "480p",
+                        "subtitled": False,
+                        "duration": 140.8,
+                        "trackImage": {"url": "https://cdn.example/song.jpg"},
+                        "file": {"url": "https://cdn.example/song.mp4"},
+                    }
+                ]
+            }
+        },
+    }
+
+    songs, _pub_name = parse_songs(data, "T", "MP4")
+
+    assert songs[0]["duration"] == 140.8
+    assert songs[0]["thumbnail_url"] == "https://cdn.example/song.jpg"
 
 
 def testparse_clips_osg_selects_best_quality_and_newest_first():

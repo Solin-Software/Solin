@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import copy
 from dataclasses import dataclass
 from pathlib import Path
 import threading
@@ -10,6 +11,37 @@ from solin.core.foundation.exception_logging import log_ignored_exception
 from solin.core.foundation.resource_keys import ResourceClaim, file_resource_key
 from solin.core.foundation.resource_lanes import ResourceLaneRegistry
 from solin.core.storage.json_repository import JsonFileRepository
+from solin.core.media.duration import normalize_duration_ticks
+
+
+PLAYLIST_STORE_VERSION = 1
+
+
+def migrate_playlist_metadata(playlists: list[dict]) -> bool:
+    """Normalize legacy media metadata in place and report whether it changed."""
+
+    changed = False
+    for playlist in playlists:
+        if not isinstance(playlist, dict):
+            raise ValueError("Playlist entries must be objects")
+        items = playlist.get("items", [])
+        if not isinstance(items, list):
+            raise ValueError("Playlist 'items' must be a list")
+        for item in items:
+            if not isinstance(item, dict):
+                raise ValueError("Playlist media entries must be objects")
+            legacy_seconds = item.get("duration_seconds")
+            duration_ticks = normalize_duration_ticks(
+                ticks=item.get("base_duration_ticks"),
+                seconds=legacy_seconds,
+            )
+            if duration_ticks > 0 and item.get("base_duration_ticks") != duration_ticks:
+                item["base_duration_ticks"] = duration_ticks
+                changed = True
+            if "duration_seconds" in item:
+                item.pop("duration_seconds", None)
+                changed = True
+    return changed
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,6 +88,7 @@ class PlaylistRepository:
 
     def load_strict(self) -> list[dict]:
         """Load playlists while preserving read/parse failures for destructive callers."""
+
         def load() -> list[dict]:
             if not self._json.exists():
                 return []
@@ -77,8 +110,48 @@ class PlaylistRepository:
 
     def save_strict(self, playlists: list[dict]) -> None:
         """Atomically persist playlists and propagate serialization/write failures."""
-        self._run_exclusive(lambda: self._json.write({"playlists": playlists}))
+        normalized = copy.deepcopy(playlists)
+        migrate_playlist_metadata(normalized)
+        self._run_exclusive(
+            lambda: self._json.write({"version": PLAYLIST_STORE_VERSION, "playlists": normalized})
+        )
         self._publish_changed()
+
+    def migrate_strict(self) -> bool:
+        """Atomically upgrade persisted playlist metadata before mutable UI exists."""
+
+        def migrate() -> bool:
+            if not self._json.exists():
+                return False
+            raw = self._json.read()
+            if not isinstance(raw, dict):
+                raise ValueError("Playlist storage root must be an object")
+            raw_version = raw.get("version", 0)
+            if isinstance(raw_version, bool):
+                raise ValueError("Playlist storage version must be an integer")
+            try:
+                version = int(raw_version)
+            except (TypeError, ValueError, OverflowError) as exc:
+                raise ValueError("Playlist storage version must be an integer") from exc
+            if version > PLAYLIST_STORE_VERSION:
+                raise ValueError(f"Unsupported playlist storage version: {version}")
+            playlists = raw.get("playlists", [])
+            if not isinstance(playlists, list):
+                raise ValueError("Playlist storage 'playlists' must be a list")
+            normalized = copy.deepcopy(playlists)
+            changed = migrate_playlist_metadata(normalized)
+            if changed or version != PLAYLIST_STORE_VERSION:
+                updated = dict(raw)
+                updated["version"] = PLAYLIST_STORE_VERSION
+                updated["playlists"] = normalized
+                self._json.write(updated)
+                return True
+            return False
+
+        migrated = bool(self._run_exclusive(migrate))
+        if migrated:
+            self._publish_changed()
+        return migrated
 
     def _run_shared(self, action):
         if self._resource_lanes is None:
@@ -155,6 +228,7 @@ class PendingDeletionRepository:
 
     def load_strict(self) -> list[str]:
         """Load pending deletions while preserving invalid schema for cleanup callers."""
+
         def load() -> list[str]:
             if not self._json.exists():
                 return []

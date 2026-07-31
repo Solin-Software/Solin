@@ -43,6 +43,7 @@ from solin.core.meetings.tree_merger import (
     merge_persisted_meeting_trees,
 )
 from solin.core.meetings.tree_types import iter_nodes
+from solin.core.media.thumbnail_identity import thumbnail_source_fingerprint
 from solin.core.i18n.meeting_sections import display_meeting_section_title
 from solin.ui.qml.media_tree.media_presenter import MediaRoleInput, media_roles
 from solin.ui.qml.media_tree.state import MediaAvailability, MediaPresentationState
@@ -123,9 +124,7 @@ def test_media_info_request_replaces_pending_work_when_source_changes() -> None:
         _info_request_by_token={},
         _active_info_requests=set(),
         _next_token=1,
-        _media_info_source_identity=(
-            MeetingTreeController._media_info_source_identity
-        ),
+        _media_info_source_identity=(MeetingTreeController._media_info_source_identity),
     )
 
     MeetingTreeController._queue_info(
@@ -167,9 +166,7 @@ def test_media_info_request_replaces_same_path_when_source_revision_changes() ->
         _info_request_by_token={},
         _active_info_requests=set(),
         _next_token=1,
-        _media_info_source_identity=(
-            MeetingTreeController._media_info_source_identity
-        ),
+        _media_info_source_identity=(MeetingTreeController._media_info_source_identity),
     )
 
     MeetingTreeController._queue_info(
@@ -451,9 +448,7 @@ class MeetingTreeBuilderTests(unittest.TestCase):
         builder = MeetingTreeBuilder(
             media_fallback_title=lambda: "Translated media",
         )
-        tree = builder.build_weekend(
-            WeekData(wt_all_media=[media(label="", caption="")])
-        )
+        tree = builder.build_weekend(WeekData(wt_all_media=[media(label="", caption="")]))
 
         self.assertEqual(tree[0]["title"], "PUBLIC TALK")
         self.assertEqual(tree[1]["title"], "Watchtower Study")
@@ -532,11 +527,14 @@ class MeetingTreeBuilderTests(unittest.TestCase):
 
         tree = MeetingTreeBuilder().build_midweek(wd)
 
-        self.assertEqual([node["meeting_source_key"] for node in tree], [
-            "section:mwb:tgw",
-            "section:mwb:ayfm",
-            "section:mwb:lac",
-        ])
+        self.assertEqual(
+            [node["meeting_source_key"] for node in tree],
+            [
+                "section:mwb:tgw",
+                "section:mwb:ayfm",
+                "section:mwb:lac",
+            ],
+        )
         tgw = tree[0]
         ext = next(node for node in tgw["children"] if node["type"] == "subsection")
         self.assertEqual(ext["title"], "Synthetic Reference Manual (cl)")
@@ -544,8 +542,7 @@ class MeetingTreeBuilderTests(unittest.TestCase):
         self.assertIn("Synthetic reference topic", ext["children"][0]["text"])
         lac = tree[2]
         placeholder = next(
-            node for node in lac["children"]
-            if node["type"] == "media" and node["title"] == "Media"
+            node for node in lac["children"] if node["type"] == "media" and node["title"] == "Media"
         )
         self.assertTrue(placeholder["auto_title"])
         cbs = next(node for node in lac["children"] if node["type"] == "subsection")
@@ -712,10 +709,7 @@ class MeetingTreeMergerTests(unittest.TestCase):
         )
 
     def wt_section(self, tree):
-        return next(
-            node for node in tree
-            if node.get("meeting_source_key") == "section:wt:wt"
-        )
+        return next(node for node in tree if node.get("meeting_source_key") == "section:wt:wt")
 
     def test_first_load_uses_canonical(self):
         canonical = self.canonical()
@@ -789,20 +783,24 @@ class MeetingTreeMergerTests(unittest.TestCase):
 
     def test_promotes_manual_children_from_stale_section(self):
         canonical = self.canonical()
-        saved = [{
-            "id": "old-section",
-            "type": "section",
-            "title": "Old section",
-            "children": [{
-                "id": "manual",
-                "type": "media",
-                "title": "Manual",
-                "children": [],
-                "meeting_generated": False,
-            }],
-            "meeting_generated": True,
-            "meeting_source_key": "section:mwb:gone",
-        }]
+        saved = [
+            {
+                "id": "old-section",
+                "type": "section",
+                "title": "Old section",
+                "children": [
+                    {
+                        "id": "manual",
+                        "type": "media",
+                        "title": "Manual",
+                        "children": [],
+                        "meeting_generated": False,
+                    }
+                ],
+                "meeting_generated": True,
+                "meeting_source_key": "section:mwb:gone",
+            }
+        ]
         merged = MeetingTreeMerger(canonical).merge(saved)
         self.assertEqual(merged[0]["id"], "manual")
 
@@ -877,9 +875,7 @@ class MeetingTreeMergerTests(unittest.TestCase):
         )
 
         merged = merge_persisted_meeting_trees(prepared, portable)
-        node_ids = {
-            node["id"] for node in self.wt_section(merged)["children"]
-        }
+        node_ids = {node["id"] for node in self.wt_section(merged)["children"]}
 
         self.assertIn("local-manual", node_ids)
         self.assertIn("portable-manual", node_ids)
@@ -910,15 +906,11 @@ class MeetingTreeMergerTests(unittest.TestCase):
         merged = merge_persisted_meeting_trees(prepared, portable)
         source_key = official["meeting_source_key"]
         matching_official = [
-            node
-            for node in iter_nodes(merged)
-            if node.get("meeting_source_key") == source_key
+            node for node in iter_nodes(merged) if node.get("meeting_source_key") == source_key
         ]
 
         self.assertEqual(len(matching_official), 1)
-        self.assertTrue(
-            any(node.get("id") == "nested-manual" for node in iter_nodes(merged))
-        )
+        self.assertTrue(any(node.get("id") == "nested-manual" for node in iter_nodes(merged)))
 
     def test_discards_durable_media_metadata_when_identity_changes(self):
         canonical = self.canonical()
@@ -995,14 +987,68 @@ class MeetingTreeControllerMediaResolutionTests(unittest.TestCase):
         def stop(self):
             self.stopped += 1
 
+    def test_partial_resolution_preserves_duration_and_does_not_reenter_resolver(self):
+        class FakeController:
+            pass
+
+        node = {
+            "id": "video-node",
+            "type": "media",
+            "media_type": "video",
+            "resolved_url": "https://cdn.example/old.mp4",
+            "base_duration_ticks": 123_000_000,
+            "media_ref": {
+                "key_symbol": "mwbv",
+                "track": 2,
+                "mime_type": "video/mp4",
+            },
+        }
+        controller = FakeController()
+        controller._resolve_to_node_id = {"request": "video-node"}
+        controller._resolve_to_identity = {}
+        controller._resolved_urls = {}
+        controller._find_node = lambda _item_id: node
+        controller._save = lambda: True
+        controller._emit_media_changed = lambda _item_id: None
+        controller._emit_cloud_for_node = lambda _item_id: None
+        media_starts: list[bool] = []
+        controller._start_media_requests = lambda _nodes, *, resolve_jw_metadata=True: (
+            media_starts.append(resolve_jw_metadata)
+        )
+
+        MeetingTreeController._on_media_resolved(
+            controller,
+            "request",
+            {"url": "https://cdn.example/new.mp4"},
+        )
+
+        self.assertEqual(node["resolved_url"], "https://cdn.example/new.mp4")
+        self.assertEqual(node["base_duration_ticks"], 123_000_000)
+        self.assertEqual(media_starts, [False])
+
+    def test_canonical_image_is_not_sent_to_publication_media_resolver(self):
+        node = {
+            "id": "image-node",
+            "type": "media",
+            "media_type": "image",
+            "meeting_generated": True,
+            "media_ref": {
+                "key_symbol": "mwb",
+                "track": 2,
+                "mime_type": "image/jpeg",
+            },
+        }
+
+        self.assertFalse(MeetingTreeController._node_needs_jw_metadata(object(), node))
+
     def test_jwpub_file_path_is_deferred_to_the_async_probe(self):
         class FakeController:
             pass
 
         controller = FakeController()
         controller._resolved_urls = {}
-        controller._url_for_node = (
-            lambda node: MeetingTreeController._url_for_node(controller, node)
+        controller._url_for_node = lambda node: MeetingTreeController._url_for_node(
+            controller, node
         )
         requested: list[set[str]] = []
         controller._tree_session = SimpleNamespace(request_nodes=requested.append)
@@ -1166,9 +1212,7 @@ class MeetingTreeControllerMediaResolutionTests(unittest.TestCase):
             "available remote media must not be resolved again"
         )
         requests: list[tuple[tuple, dict]] = []
-        controller._queue_info = lambda *args, **kwargs: requests.append(
-            (args, kwargs)
-        )
+        controller._queue_info = lambda *args, **kwargs: requests.append((args, kwargs))
 
         MeetingTreeController._on_presentation_state_changed(
             controller,
@@ -1181,7 +1225,10 @@ class MeetingTreeControllerMediaResolutionTests(unittest.TestCase):
             [
                 (
                     ("video-node", thumbnail_url, "image"),
-                    {"purpose": "thumb"},
+                    {
+                        "purpose": "thumb",
+                        "source_signature": thumbnail_source_fingerprint(thumbnail_url),
+                    },
                 )
             ],
         )
@@ -1222,9 +1269,11 @@ class MeetingTreeControllerEditingTests(unittest.TestCase):
         return controller
 
     def test_placement_playlist_ref_uses_current_tree_snapshot(self):
-        controller = self.controller([
-            {"id": "media", "type": "media", "children": []},
-        ])
+        controller = self.controller(
+            [
+                {"id": "media", "type": "media", "children": []},
+            ]
+        )
 
         result = MeetingTreeController.placement_playlist_ref(controller)
 
@@ -1249,16 +1298,18 @@ class MeetingTreeControllerEditingTests(unittest.TestCase):
         )
 
     def test_placement_playlist_ref_uses_localized_section_titles(self):
-        controller = self.controller([
-            {
-                "id": "section",
-                "type": "section",
-                "title": "LIVING AS CHRISTIANS",
-                "meeting_generated": True,
-                "meeting_source_key": "section:mwb:lac",
-                "children": [],
-            },
-        ])
+        controller = self.controller(
+            [
+                {
+                    "id": "section",
+                    "type": "section",
+                    "title": "LIVING AS CHRISTIANS",
+                    "meeting_generated": True,
+                    "meeting_source_key": "section:mwb:lac",
+                    "children": [],
+                },
+            ]
+        )
 
         with patch(
             "solin.widgets.meetings.tree_controller.display_meeting_section_title",
@@ -1529,9 +1580,7 @@ class MeetingTreeControllerEditingTests(unittest.TestCase):
         controller._tree_key = "mwb:2026-05-25:T:20260500"
         controller._derived_media_patches = {}
         controller._derived_media_save_timer = timer
-        controller._save = lambda: (
-            setattr(controller, "saved", controller.saved + 1) or True
-        )
+        controller._save = lambda: setattr(controller, "saved", controller.saved + 1) or True
         controller._info_request_by_token = {
             1: (
                 "media-1",
@@ -1555,8 +1604,8 @@ class MeetingTreeControllerEditingTests(unittest.TestCase):
             (node for node in nodes if node["id"] == item_id),
             None,
         )
-        controller._queue_derived_media_patch = (
-            lambda node, patch: MeetingTreeController._queue_derived_media_patch(
+        controller._queue_derived_media_patch = lambda node, patch: (
+            MeetingTreeController._queue_derived_media_patch(
                 controller,
                 node,
                 patch,
@@ -1571,9 +1620,7 @@ class MeetingTreeControllerEditingTests(unittest.TestCase):
         self.assertEqual(emitted, ["media-1", "media-2"])
         self.assertEqual(timer.starts, 2)
 
-        self.assertTrue(
-            MeetingTreeController._flush_derived_media_patches(controller)
-        )
+        self.assertTrue(MeetingTreeController._flush_derived_media_patches(controller))
         self.assertEqual(controller.saved, 1)
         self.assertEqual(controller._derived_media_patches, {})
         self.assertEqual(nodes[0]["base_duration_ticks"], 10_000_000)
@@ -1612,9 +1659,7 @@ class MeetingTreeControllerEditingTests(unittest.TestCase):
         controller._media_cache_manager = manager
         controller._tree_session = SimpleNamespace(owner_id="meeting:test")
         controller._media_tree_runtime = SimpleNamespace(
-            registry=SimpleNamespace(
-                state=lambda _owner, _item: SimpleNamespace(cached=False)
-            )
+            registry=SimpleNamespace(state=lambda _owner, _item: SimpleNamespace(cached=False))
         )
         controller._url_for_node_id = lambda _item_id: url
         cloud_updates: list[str] = []
@@ -1647,8 +1692,8 @@ class MeetingTreeControllerStorageFeedbackTests(unittest.TestCase):
         controller._meeting_folder_imports = {}
         controller._store = SimpleNamespace(path=Path("meeting-trees.json"))
         controller._current_overview = lambda: None
-        controller._snapshot_storage_key = (
-            lambda tree_key=None: MeetingTreeController._snapshot_storage_key(
+        controller._snapshot_storage_key = lambda tree_key=None: (
+            MeetingTreeController._snapshot_storage_key(
                 controller,
                 tree_key,
             )
@@ -1683,17 +1728,15 @@ class MeetingTreeControllerStorageFeedbackTests(unittest.TestCase):
         controller._meeting_folder_imports = {}
         controller._store = store
         controller._current_overview = lambda: None
-        controller._snapshot_storage_key = (
-            lambda tree_key=None: MeetingTreeController._snapshot_storage_key(
+        controller._snapshot_storage_key = lambda tree_key=None: (
+            MeetingTreeController._snapshot_storage_key(
                 controller,
                 tree_key,
             )
         )
         queued: list[tuple[str, object]] = []
         controller._media_tree_runtime = SimpleNamespace(
-            snapshots=SimpleNamespace(
-                request=lambda key, writer: queued.append((key, writer)) or 1
-            )
+            snapshots=SimpleNamespace(request=lambda key, writer: queued.append((key, writer)) or 1)
         )
         controller.storageSaved = self._Signal()
         controller.storageSaveFailed = self._Signal()
@@ -1762,17 +1805,19 @@ class MeetingTreeStoreTests(unittest.TestCase):
     def test_round_trip(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = MeetingTreeStore(Path(tmp) / "meeting_trees.json")
-            nodes = [{
-                "id": "n1",
-                "type": "media",
-                "children": [],
-                "image_framing": {
-                    "version": 1,
-                    "zoom": 1.4,
-                    "norm_x": 0.12,
-                    "norm_y": -0.08,
-                },
-            }]
+            nodes = [
+                {
+                    "id": "n1",
+                    "type": "media",
+                    "children": [],
+                    "image_framing": {
+                        "version": 1,
+                        "zoom": 1.4,
+                        "norm_x": 0.12,
+                        "norm_y": -0.08,
+                    },
+                }
+            ]
             store.save("mwb:2026-05-25:T:20260500", nodes, "hash")
             loaded, digest = store.load("mwb:2026-05-25:T:20260500")
             self.assertEqual(loaded, nodes)
@@ -1879,7 +1924,7 @@ class MeetingTreeStoreTests(unittest.TestCase):
 
             self.assertEqual(saved.revision, 1)
             raw = json.loads(path.read_text(encoding="utf-8"))
-            self.assertEqual(raw["version"], 4)
+            self.assertEqual(raw["version"], 5)
             self.assertEqual(raw["trees"][tree_key]["revision"], 1)
 
     def test_spoken_and_sign_variants_have_distinct_persisted_identities(self):
@@ -2066,12 +2111,14 @@ class MeetingTreeStoreTests(unittest.TestCase):
             store = MeetingTreeStore(Path(tmp) / "meeting_trees.json")
             store.save(
                 "wt:2026-05-25:T:20260400",
-                [{
-                    "id": "keep",
-                    "type": "media",
-                    "children": [],
-                    "thumbnail_local_path": str(keep),
-                }],
+                [
+                    {
+                        "id": "keep",
+                        "type": "media",
+                        "children": [],
+                        "thumbnail_local_path": str(keep),
+                    }
+                ],
                 "hash",
             )
 
@@ -2111,9 +2158,7 @@ class MeetingTreeStoreTests(unittest.TestCase):
 
     def test_synthetic_jwpub_fixture_identifies_study_references(self):
         with tempfile.TemporaryDirectory() as tmp:
-            fixture = build_synthetic_jwpub(
-                Path(tmp) / "synthetic_meeting_workbook.jwpub"
-            )
+            fixture = build_synthetic_jwpub(Path(tmp) / "synthetic_meeting_workbook.jwpub")
             outer = Path(tmp) / "outer"
             inner = Path(tmp) / "inner"
             outer.mkdir()
@@ -2262,55 +2307,49 @@ class MeetingTreeControllerMeetingFolderImportTests(unittest.TestCase):
             owner_id="meeting:test",
             remove_pending_node=lambda _item_id: False,
         )
-        controller._media_tree_runtime = SimpleNamespace(
-            operations=ImmediateOperations()
-        )
-        controller._queue_linked_media_removal = (
-            lambda node, file_path, linked_source: (
-                MeetingTreeController._queue_linked_media_removal(
-                    controller,
-                    node,
-                    file_path,
-                    linked_source,
-                )
+        controller._media_tree_runtime = SimpleNamespace(operations=ImmediateOperations())
+        controller._queue_linked_media_removal = lambda node, file_path, linked_source: (
+            MeetingTreeController._queue_linked_media_removal(
+                controller,
+                node,
+                file_path,
+                linked_source,
             )
         )
         controller._cancel_media_info_requests_for_item = lambda _item_id: None
-        controller._find_node = (
-            lambda node_id, nodes=None: MeetingTreeController._find_node(
-                controller,
-                node_id,
-                nodes,
-            )
+        controller._find_node = lambda node_id, nodes=None: MeetingTreeController._find_node(
+            controller,
+            node_id,
+            nodes,
         )
-        controller._url_for_node = (
-            lambda node: MeetingTreeController._url_for_node(controller, node)
+        controller._url_for_node = lambda node: MeetingTreeController._url_for_node(
+            controller, node
         )
-        controller._remember_deleted_sources = (
-            lambda node, *, include_media: MeetingTreeController._remember_deleted_sources(
+        controller._remember_deleted_sources = lambda node, *, include_media: (
+            MeetingTreeController._remember_deleted_sources(
                 controller,
                 node,
                 include_media=include_media,
             )
         )
-        controller._replace_node = (
-            lambda node_id, replacement: MeetingTreeController._replace_node(
-                controller,
-                node_id,
-                replacement,
-            )
+        controller._replace_node = lambda node_id, replacement: MeetingTreeController._replace_node(
+            controller,
+            node_id,
+            replacement,
         )
         controller._cleanup_meeting_folder_import_for_removed_node = (
-            lambda node_id, file_path, *, source_removed: MeetingTreeController._cleanup_meeting_folder_import_for_removed_node(
-                controller,
-                node_id,
-                file_path,
-                source_removed=source_removed,
+            lambda node_id, file_path, *, source_removed: (
+                MeetingTreeController._cleanup_meeting_folder_import_for_removed_node(
+                    controller,
+                    node_id,
+                    file_path,
+                    source_removed=source_removed,
+                )
             )
         )
         controller.saved = False
-        controller._save_and_emit_replace = (
-            lambda _node_id, _replacement: setattr(controller, "saved", True)
+        controller._save_and_emit_replace = lambda _node_id, _replacement: setattr(
+            controller, "saved", True
         )
 
     def test_meeting_folder_imported_media_keeps_linked_folder_semantics(self):
@@ -2323,8 +2362,8 @@ class MeetingTreeControllerMeetingFolderImportTests(unittest.TestCase):
             controller = FakeController()
             controller._resolved_urls = {}
             controller._linked_folder_files = {}
-            controller._url_for_node = (
-                lambda node: MeetingTreeController._url_for_node(controller, node)
+            controller._url_for_node = lambda node: MeetingTreeController._url_for_node(
+                controller, node
             )
             captured = {}
 
@@ -2365,7 +2404,6 @@ class MeetingTreeControllerMeetingFolderImportTests(unittest.TestCase):
             self.assertEqual(captured["nodes"], [node])
             self.assertEqual(captured["record_node_ids"], ["auto-node"])
 
-
     def test_external_items_use_normal_target_and_insert_path_in_order(self):
         captured = []
 
@@ -2377,9 +2415,7 @@ class MeetingTreeControllerMeetingFolderImportTests(unittest.TestCase):
                 lambda item, title: {"title": title, "url": item["url"]}
             )
             _insert_nodes = staticmethod(
-                lambda list_id, index, nodes: (
-                    captured.append((list_id, index, nodes)) or True
-                )
+                lambda list_id, index, nodes: captured.append((list_id, index, nodes)) or True
             )
 
         added = MeetingTreeController.add_external_media_items(
@@ -2425,15 +2461,13 @@ class MeetingTreeControllerMeetingFolderImportTests(unittest.TestCase):
                 ],
             }
         ]
-        controller._media_identity_records = lambda: (
-            MeetingTreeController._media_identity_records(controller)
+        controller._media_identity_records = lambda: MeetingTreeController._media_identity_records(
+            controller
         )
         controller._meeting_thumbnail_store = SimpleNamespace(
             copy_from=lambda *_args: self.fail("duplicate must not copy thumbnail")
         )
-        controller._insert_nodes = lambda *_args: self.fail(
-            "duplicate must not mutate the tree"
-        )
+        controller._insert_nodes = lambda *_args: self.fail("duplicate must not mutate the tree")
 
         result = MeetingTreeController.add_from_jw_catalog(
             controller,
@@ -2452,22 +2486,50 @@ class MeetingTreeControllerMeetingFolderImportTests(unittest.TestCase):
         self.assertEqual(result.duplicate_count, 1)
         self.assertEqual(controller._nodes[0]["children"][0]["media_ref"], existing_ref)
 
+    def test_jw_insert_preserves_duration_and_official_thumbnail(self):
+        inserted = []
+        controller = SimpleNamespace(
+            _nodes=[],
+            _media_identity_records=lambda: [],
+            _insert_nodes=lambda list_id, index, nodes: (
+                inserted.append((list_id, index, nodes)) or True
+            ),
+        )
+
+        result = MeetingTreeController.add_from_jw_catalog(
+            controller,
+            {
+                "title": "Video",
+                "download_url": "https://cdn.example/video.mp4",
+                "media_type": "video",
+                "duration_seconds": 12.5,
+                "thumbnail_url": "https://cdn.example/video.jpg",
+                "pub": "mwb",
+                "track": 1,
+                "language": "T",
+            },
+            "root",
+            0,
+        )
+
+        self.assertEqual(result.added_count, 1)
+        [node] = inserted[0][2]
+        self.assertEqual(node["base_duration_ticks"], 125_000_000)
+        self.assertEqual(node["thumbnail_url"], "https://cdn.example/video.jpg")
+        self.assertEqual(node["thumbnail_binding"], "jw_artwork")
+
     def test_external_batch_adds_only_unique_items_in_order(self):
         captured = []
 
         class FakeController:
             _parse_list_id = staticmethod(lambda list_id: (list_id, ""))
             _children_for_target = staticmethod(lambda *_target: [])
-            _media_identity_records = staticmethod(
-                lambda: [{"file_path": "existing.mp4"}]
-            )
+            _media_identity_records = staticmethod(lambda: [{"file_path": "existing.mp4"}])
             _node_from_playlist_item = staticmethod(
                 lambda item, title: {"title": title, "url": item["url"]}
             )
             _insert_nodes = staticmethod(
-                lambda list_id, index, nodes: (
-                    captured.append((list_id, index, nodes)) or True
-                )
+                lambda list_id, index, nodes: captured.append((list_id, index, nodes)) or True
             )
 
         result = MeetingTreeController.add_external_media_items(
@@ -2508,14 +2570,12 @@ class MeetingTreeControllerMeetingFolderImportTests(unittest.TestCase):
             controller._meeting_folder_scan_operation_id = ""
             controller.chromeChanged = self._Signal()
             controller._watched_folder_file_store = WatchedFolderFileStore()
-            controller._apply_meeting_folder_scan = (
-                lambda folders, monday, pub_type: (
-                    MeetingTreeController._apply_meeting_folder_scan(
-                        controller,
-                        folders,
-                        monday,
-                        pub_type,
-                    )
+            controller._apply_meeting_folder_scan = lambda folders, monday, pub_type: (
+                MeetingTreeController._apply_meeting_folder_scan(
+                    controller,
+                    folders,
+                    monday,
+                    pub_type,
                 )
             )
 
@@ -2533,16 +2593,12 @@ class MeetingTreeControllerMeetingFolderImportTests(unittest.TestCase):
                 def cancel(_operation_id):
                     return None
 
-            controller._media_tree_runtime = SimpleNamespace(
-                operations=ImmediateOperations()
-            )
+            controller._media_tree_runtime = SimpleNamespace(operations=ImmediateOperations())
             captured = {}
 
             controller.set_sync_root = lambda _path: None
             controller._meeting_folder_target_list_id = lambda _pub: "section:lac"
-            controller._adopt_existing_meeting_folder_source = (
-                lambda _source_data, _folder_path: []
-            )
+            controller._adopt_existing_meeting_folder_source = lambda _source_data, _folder_path: []
             controller._remove_previous_meeting_folder_nodes = lambda _record: None
             controller._start_media_requests = lambda: None
 
@@ -2682,18 +2738,20 @@ class MeetingTreeControllerMeetingFolderImportTests(unittest.TestCase):
             source = folder / "official.mp4"
             source.write_bytes(b"video")
             controller = FakeController()
-            controller._nodes = [{
-                "id": "official",
-                "type": "media",
-                "title": "Resolved official title",
-                "auto_title": False,
-                "resolved_url": "https://cdn.example.invalid/official.mp4",
-                "linked_folder_source": str(folder),
-                "children": [],
-                "media_ref": {"file_path": str(source)},
-                "meeting_generated": True,
-                "meeting_source_key": "media:official",
-            }]
+            controller._nodes = [
+                {
+                    "id": "official",
+                    "type": "media",
+                    "title": "Resolved official title",
+                    "auto_title": False,
+                    "resolved_url": "https://cdn.example.invalid/official.mp4",
+                    "linked_folder_source": str(folder),
+                    "children": [],
+                    "media_ref": {"file_path": str(source)},
+                    "meeting_generated": True,
+                    "meeting_source_key": "media:official",
+                }
+            ]
             controller._resolved_urls = {}
             controller._linked_folder_files = {str(source): "official"}
             controller._meeting_folder_imports = {}
@@ -2725,14 +2783,16 @@ class MeetingTreeControllerMeetingFolderImportTests(unittest.TestCase):
             materialized = folder / "manually-added.mp4"
             materialized.write_bytes(b"video")
             controller = FakeController()
-            controller._nodes = [{
-                "id": "manual",
-                "type": "media",
-                "linked_folder_source": str(folder),
-                "children": [],
-                "media_ref": {"file_path": str(materialized)},
-                "meeting_generated": False,
-            }]
+            controller._nodes = [
+                {
+                    "id": "manual",
+                    "type": "media",
+                    "linked_folder_source": str(folder),
+                    "children": [],
+                    "media_ref": {"file_path": str(materialized)},
+                    "meeting_generated": False,
+                }
+            ]
             controller._resolved_urls = {}
             controller._linked_folder_files = {str(materialized): "manual"}
             controller._meeting_folder_imports = {}

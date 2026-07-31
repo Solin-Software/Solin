@@ -41,6 +41,7 @@ class _ProbeIntent:
     source: str
     thumbnail_path: Path | None
     thumbnail_source: str
+    thumbnail_expected_signature: str = ""
     attempt: int = 0
 
 
@@ -81,6 +82,7 @@ class MediaProbeController(QObject):
         source: str,
         thumbnail_path: str | Path | None = None,
         thumbnail_source: str = "",
+        thumbnail_expected_signature: str = "",
     ) -> MediaProbeKey | None:
         if self._closing:
             return None
@@ -91,6 +93,7 @@ class MediaProbeController(QObject):
             if previous is not None
             and previous.source == source
             and previous.thumbnail_path == (Path(thumbnail_path) if thumbnail_path else None)
+            and previous.thumbnail_expected_signature == thumbnail_expected_signature
             else 0
         )
         intent = _ProbeIntent(
@@ -99,6 +102,7 @@ class MediaProbeController(QObject):
             source=source,
             thumbnail_path=Path(thumbnail_path) if thumbnail_path else None,
             thumbnail_source=thumbnail_source,
+            thumbnail_expected_signature=thumbnail_expected_signature,
             attempt=attempt,
         )
         self._intents[identity] = intent
@@ -165,14 +169,16 @@ class MediaProbeController(QObject):
             self._operation_ids.pop(identity, None)
             result = value.result
             thumbnail_matches_source = bool(
-                not result.source_signature
-                or result.thumbnail_source_signature == result.source_signature
+                (result.thumbnail_source_signature == intent.thumbnail_expected_signature)
+                if intent.thumbnail_expected_signature
+                else (
+                    not result.source_signature
+                    or result.thumbnail_source_signature == result.source_signature
+                )
             )
             thumbnail_decoded = value.thumbnail is not None
             thumbnail_usable = (
-                result.thumbnail_exists
-                and thumbnail_decoded
-                and thumbnail_matches_source
+                result.thumbnail_exists and thumbnail_decoded and thumbnail_matches_source
             )
             thumbnail_temporarily_unreadable = (
                 result.thumbnail_exists
@@ -207,13 +213,9 @@ class MediaProbeController(QObject):
                     intent.node_id,
                     value.thumbnail if thumbnail_usable else None,
                 )
-            if (
-                accepted
-                and (
-                    result.availability
-                    == ProbedMediaAvailability.TEMPORARILY_UNAVAILABLE
-                    or thumbnail_temporarily_unreadable
-                )
+            if accepted and (
+                result.availability == ProbedMediaAvailability.TEMPORARILY_UNAVAILABLE
+                or thumbnail_temporarily_unreadable
             ):
                 self._schedule_retry(intent)
             elif accepted:
@@ -223,6 +225,7 @@ class MediaProbeController(QObject):
                     source=intent.source,
                     thumbnail_path=intent.thumbnail_path,
                     thumbnail_source=intent.thumbnail_source,
+                    thumbnail_expected_signature=intent.thumbnail_expected_signature,
                 )
 
         def finished_without_result() -> None:
@@ -266,9 +269,7 @@ class MediaProbeController(QObject):
         self._intents[identity] = retry
         timer = QTimer(self)
         timer.setSingleShot(True)
-        base_delay = _RETRY_DELAYS_MS[
-            min(intent.attempt, len(_RETRY_DELAYS_MS) - 1)
-        ]
+        base_delay = _RETRY_DELAYS_MS[min(intent.attempt, len(_RETRY_DELAYS_MS) - 1)]
         timer.setInterval(_jittered_delay_ms(base_delay, retry))
         timer.timeout.connect(lambda: self._retry(identity, retry, timer))
         self._retry_timers[identity] = timer
@@ -345,8 +346,8 @@ def _source_key(source: str) -> str:
 
 
 def _jittered_delay_ms(base_delay: int, intent: _ProbeIntent) -> int:
-    identity = (
-        f"{intent.owner_id}\0{intent.node_id}\0{intent.source}\0{intent.attempt}"
-    ).encode("utf-8", errors="surrogatepass")
+    identity = (f"{intent.owner_id}\0{intent.node_id}\0{intent.source}\0{intent.attempt}").encode(
+        "utf-8", errors="surrogatepass"
+    )
     sample = hashlib.blake2s(identity, digest_size=1).digest()[0] / 255
     return max(1, int(round(base_delay * (0.85 + sample * 0.30))))

@@ -11,6 +11,7 @@ ATENÇÃO — caminhos de dados/cache:
 Uso:
     from solin.core.foundation.constants import APP_VERSION, QSETTINGS_ORG_NAME, ...
 """
+
 from __future__ import annotations
 
 import sys
@@ -69,7 +70,7 @@ TEMP_STREAM_PREFIX: str = "Solin_stream_"
 
 # ── IPC ────────────────────────────────────────────────────────────────────────
 IPC_SERVER_NAME: str = "SolinDev_IPC_v1" if IS_DEV else "Solin_IPC_v1"
-IPC_TIMEOUT_MS:  int = 800
+IPC_TIMEOUT_MS: int = 800
 
 # ── Notificações remotas ────────────────────────────────────────────────────────
 # URL do endpoint JSON de notificações. Substitua pelo seu servidor em produção.
@@ -82,8 +83,8 @@ else:
 NOTIFICATION_CHECK_DELAY_MS: int = 1500
 
 # ── Ordem de reprodução ────────────────────────────────────────────────────────
-ORDER_OFF:    str = "off"
-ORDER_NEXT:   str = "next"
+ORDER_OFF: str = "off"
+ORDER_NEXT: str = "next"
 ORDER_RANDOM: str = "random"
 
 # ── Recursos de projeção ────────────────────────────────────────────────────────
@@ -102,20 +103,20 @@ SOLIN_PLAYLIST_EXTS: frozenset[str] = frozenset({".solinplaylist"})
 # Legacy dispatch remains JWL-only. Native packages are accepted exclusively by
 # their dedicated top-level import/open flow and must not enter flat JWL ingest.
 PLAYLIST_EXTS: frozenset[str] = JWL_PLAYLIST_EXTS
-PDF_EXTS:      frozenset[str] = frozenset({".pdf"})
-JWPUB_EXTS:    frozenset[str] = frozenset({".jwpub"})
-PPTX_EXTS:     frozenset[str] = frozenset({".pptx", ".ppt", ".odp"})
-DOCX_EXTS:     frozenset[str] = frozenset({".docx", ".doc", ".odt", ".rtf"})
+PDF_EXTS: frozenset[str] = frozenset({".pdf"})
+JWPUB_EXTS: frozenset[str] = frozenset({".jwpub"})
+PPTX_EXTS: frozenset[str] = frozenset({".pptx", ".ppt", ".odp"})
+DOCX_EXTS: frozenset[str] = frozenset({".docx", ".doc", ".odt", ".rtf"})
 
 # ── Qualidade de imagem ────────────────────────────────────────────────────────
-THUMB_JPEG_QUALITY: int = 85   # 0-100; usado em todos os saves de thumbnail
+THUMB_JPEG_QUALITY: int = 85  # 0-100; usado em todos os saves de thumbnail
 
 # ── Cache de API ───────────────────────────────────────────────────────────────
 CACHE_TTL_DAYS: int = 10
 
 # ── Qualidade de vídeo JW (GETPUBMEDIALINKS) ───────────────────────────────────
 # Resolução preferida para todos os vídeos buscados da API JW.org.
-# Usada em jw/media_api.py (cânticos sjjm/sjj, clipes osg) e playlists/reader.py.
+# Usada em jw/media_api.py (cânticos sjjm/sjj e clipes osg).
 VIDEO_PREFERRED_QUALITY: str = "720p"
 
 # Direção do fallback quando a resolução preferida não estiver disponível:
@@ -124,9 +125,14 @@ VIDEO_PREFERRED_QUALITY: str = "720p"
 VIDEO_QUALITY_FALLBACK_DIR: str = "below"
 
 # Ordem canônica de qualidades conhecidas, da mais alta para a mais baixa.
-# Usada por pick_quality() em jw/media_api.py e _extract_best_entry() em jw/metadata.py.
+# Usada por pick_quality() em jw/media_api.py.
 VIDEO_QUALITY_ORDER: tuple[str, ...] = (
-    "1080p", "720p", "480p", "360p", "240p", "180p",
+    "1080p",
+    "720p",
+    "480p",
+    "360p",
+    "240p",
+    "180p",
 )
 
 # ── Endpoint de verificação de atualização ──────────────────────────────────────

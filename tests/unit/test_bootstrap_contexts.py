@@ -163,6 +163,26 @@ def test_profile_preparation_prunes_only_expired_meeting_tree_records(
     assert old_thumbnail.read_bytes() == b"keep cached artifact"
 
 
+def test_profile_preparation_fails_closed_on_unsupported_storage_schema(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    paths = ProfilePaths.from_roots(
+        data_dir=tmp_path / "data",
+        cache_dir=tmp_path / "cache",
+        profile_id="main",
+    )
+    paths.ensure_dirs()
+    unsupported = {"version": 999, "playlists": [{"id": "keep"}]}
+    paths.playlists_file.write_text(json.dumps(unsupported), encoding="utf-8")
+    monkeypatch.setattr(bootstrap_application, "_import_main_window_class", object)
+
+    with pytest.raises(ValueError, match="Unsupported playlist storage version"):
+        bootstrap_application._prepare_profile_main_window(paths)
+
+    assert json.loads(paths.playlists_file.read_text(encoding="utf-8")) == unsupported
+
+
 def test_application_lifecycle_runs_cleanup_callbacks_once_in_reverse_order() -> None:
     events = []
 

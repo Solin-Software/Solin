@@ -5,7 +5,7 @@ from solin.core.jw.publication_links import (
     PublicationMediaResolver,
     VIDEO_FORMATS,
     build_pub_media_url,
-    resolve_publication_video_link,
+    resolve_publication_media_link,
     select_pub_media_file,
 )
 
@@ -144,16 +144,19 @@ def test_select_pub_media_file_falls_back_after_invalid_item_duration() -> None:
 
 
 def test_build_pub_media_url_encodes_query_params() -> None:
-    assert build_pub_media_url(
-        {
-            "pub": "mwb",
-            "langwritten": "pt BR",
-        },
-        "https://example.test/api",
-    ) == "https://example.test/api?pub=mwb&langwritten=pt+BR"
+    assert (
+        build_pub_media_url(
+            {
+                "pub": "mwb",
+                "langwritten": "pt BR",
+            },
+            "https://example.test/api",
+        )
+        == "https://example.test/api?pub=mwb&langwritten=pt+BR"
+    )
 
 
-def test_resolve_publication_video_link_uses_publication_identifiers(monkeypatch) -> None:
+def test_resolve_publication_media_link_uses_publication_identifiers(monkeypatch) -> None:
     calls = []
 
     def fetch(params):
@@ -164,10 +167,9 @@ def test_resolve_publication_video_link_uses_publication_identifiers(monkeypatch
                     "MP4": [
                         {
                             "title": "Resolved",
+                            "duration": 12,
                             "file": {"url": "https://example.test/video.mp4"},
-                            "images": {
-                                "sm": {"url": "https://example.test/thumb.jpg"}
-                            },
+                            "images": {"sm": {"url": "https://example.test/thumb.jpg"}},
                         }
                     ]
                 }
@@ -176,7 +178,7 @@ def test_resolve_publication_video_link_uses_publication_identifiers(monkeypatch
 
     monkeypatch.setattr(publication_links, "fetch_pub_media_json", fetch)
 
-    media_file = resolve_publication_video_link("mwb", 3, 202605, 0, "T")
+    media_file = resolve_publication_media_link("mwb", 3, 202605, 0, "T")
 
     assert media_file is not None
     assert media_file.url == "https://example.test/video.mp4"
@@ -194,7 +196,7 @@ def test_resolve_publication_video_link_uses_publication_identifiers(monkeypatch
     ]
 
 
-def test_resolve_publication_video_link_enriches_missing_catalog_thumbnail(
+def test_resolve_publication_media_link_enriches_missing_catalog_thumbnail(
     monkeypatch,
 ) -> None:
     monkeypatch.setattr(
@@ -203,18 +205,29 @@ def test_resolve_publication_video_link_enriches_missing_catalog_thumbnail(
         lambda _params: {
             "files": {
                 "T": {
-                    "MP4": [{
-                        "title": "122. Vamos continuar firmes!",
-                        "duration": 185.194667,
-                        "file": {"url": "https://example.test/song.mp4"},
-                    }]
+                    "MP4": [
+                        {
+                            "title": "122. Vamos continuar firmes!",
+                            "duration": 185.194667,
+                            "file": {"url": "https://example.test/song.mp4"},
+                        }
+                    ]
                 }
             }
         },
     )
     mediator_calls = []
 
-    def resolve_mediator(pub, track, issue, document_id, language):
+    def resolve_mediator(
+        pub,
+        track,
+        issue,
+        document_id,
+        language,
+        *,
+        media_type,
+    ):
+        assert media_type == "VIDEO"
         mediator_calls.append((pub, track, issue, document_id, language))
         return {
             "title": "122. Vamos continuar firmes!",
@@ -232,12 +245,45 @@ def test_resolve_publication_video_link_enriches_missing_catalog_thumbnail(
         resolve_mediator,
     )
 
-    media_file = resolve_publication_video_link("sjjm", 122, 0, 0, "T")
+    media_file = resolve_publication_media_link("sjjm", 122, 0, 0, "T")
 
     assert media_file is not None
     assert media_file.thumbnail_url == "https://example.test/song-sm.jpg"
     assert media_file.duration_ticks == 1_851_946_670
     assert mediator_calls == [("sjjm", 122, 0, 0, "T")]
+
+
+def test_resolve_publication_media_link_enriches_duration_when_thumbnail_exists(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        publication_links,
+        "fetch_pub_media_json",
+        lambda _params: {
+            "files": {
+                "T": {
+                    "MP4": [
+                        {
+                            "title": "Video",
+                            "trackImage": {"url": "https://example.test/thumb.jpg"},
+                            "file": {"url": "https://example.test/video.mp4"},
+                        }
+                    ]
+                }
+            }
+        },
+    )
+    monkeypatch.setattr(
+        publication_links,
+        "resolve_mediator_media_item",
+        lambda *_args, **_kwargs: {"duration": 37.25},
+    )
+
+    media_file = resolve_publication_media_link("mwb", 3, 202605, 0, "T")
+
+    assert media_file is not None
+    assert media_file.thumbnail_url == "https://example.test/thumb.jpg"
+    assert media_file.duration_ticks == 372_500_000
 
 
 def test_resolve_mediator_media_item_uses_targeted_natural_key(monkeypatch) -> None:
@@ -260,8 +306,7 @@ def test_resolve_mediator_media_item_uses_targeted_natural_key(monkeypatch) -> N
     assert media_item == {"naturalKey": "pub-sjjm_T_122_VIDEO"}
     assert calls == [
         (
-            "https://b.jw-cdn.org/apis/mediator/v1/media-items/"
-            "T/pub-sjjm_122_VIDEO",
+            "https://b.jw-cdn.org/apis/mediator/v1/media-items/T/pub-sjjm_122_VIDEO",
             publication_links.DEFAULT_TIMEOUT,
             {"User-Agent": publication_links.DEFAULT_USER_AGENT},
         )
@@ -282,18 +327,21 @@ def test_mediator_media_item_ids_share_issue_and_format_normalization() -> None:
         "pub-mwbv_202605_0_VIDEO",
         "pub-mwbv_202605_1_VIDEO",
     ]
-    assert next(
-        publication_links.mediator_media_item_ids(
-            "",
-            0,
-            None,
-            12345,
-            "audio",
+    assert (
+        next(
+            publication_links.mediator_media_item_ids(
+                "",
+                0,
+                None,
+                12345,
+                "audio",
+            )
         )
-    ) == "docid-12345_0_AUDIO"
+        == "docid-12345_0_AUDIO"
+    )
 
 
-def test_resolve_publication_video_link_normalizes_sign_language_song(monkeypatch) -> None:
+def test_resolve_publication_media_link_normalizes_sign_language_song(monkeypatch) -> None:
     calls = []
     monkeypatch.setattr(
         publication_links,
@@ -301,7 +349,7 @@ def test_resolve_publication_video_link_normalizes_sign_language_song(monkeypatc
         lambda params: calls.append(params) or {},
     )
 
-    media_file = resolve_publication_video_link(
+    media_file = resolve_publication_media_link(
         "sjjm",
         7,
         0,
@@ -323,7 +371,7 @@ def test_resolve_publication_video_link_normalizes_sign_language_song(monkeypatc
     ]
 
 
-def test_resolve_publication_video_link_falls_back_to_document_id(monkeypatch) -> None:
+def test_resolve_publication_media_link_falls_back_to_document_id(monkeypatch) -> None:
     calls = []
     monkeypatch.setattr(
         publication_links,
@@ -331,7 +379,7 @@ def test_resolve_publication_video_link_falls_back_to_document_id(monkeypatch) -
         lambda params: calls.append(params) or {},
     )
 
-    media_file = resolve_publication_video_link("", 0, 0, 12345, "T")
+    media_file = resolve_publication_media_link("", 0, 0, 12345, "T")
 
     assert media_file is None
     assert calls == [
@@ -351,25 +399,25 @@ def test_publication_media_resolver_resolves_video_request(monkeypatch) -> None:
     monkeypatch.setattr(
         publication_links,
         "fetch_pub_media_json",
-        lambda params: calls.append(params)
-        or {
-            "files": {
-                "T": {
-                    "MP4": [
-                        {
-                            "title": "Resolved",
-                            "file": {"url": "https://example.test/video.mp4"},
-                            "images": {
-                                "sm": {"url": "https://example.test/thumb.jpg"}
-                            },
-                        }
-                    ]
+        lambda params: (
+            calls.append(params)
+            or {
+                "files": {
+                    "T": {
+                        "MP4": [
+                            {
+                                "title": "Resolved",
+                                "file": {"url": "https://example.test/video.mp4"},
+                                "images": {"sm": {"url": "https://example.test/thumb.jpg"}},
+                            }
+                        ]
+                    }
                 }
             }
-        },
+        ),
     )
 
-    media_file = PublicationMediaResolver().resolve_video(
+    media_file = PublicationMediaResolver().resolve_media(
         PublicationMediaRequest(
             key_symbol="mwb",
             track=3,
@@ -390,21 +438,23 @@ def test_publication_media_resolver_returns_jwpub_info(monkeypatch) -> None:
     monkeypatch.setattr(
         publication_links,
         "fetch_pub_media_json",
-        lambda params: calls.append(params)
-        or {
-            "files": {
-                "T": {
-                    "JWPUB": [
-                        {
-                            "file": {
-                                "url": "https://example.test/mwb.jwpub",
-                                "checksum": "checksum",
+        lambda params: (
+            calls.append(params)
+            or {
+                "files": {
+                    "T": {
+                        "JWPUB": [
+                            {
+                                "file": {
+                                    "url": "https://example.test/mwb.jwpub",
+                                    "checksum": "checksum",
+                                }
                             }
-                        }
-                    ]
+                        ]
+                    }
                 }
             }
-        },
+        ),
     )
 
     media_info = PublicationMediaResolver().resolve_jwpub(

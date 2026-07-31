@@ -3,6 +3,7 @@ tree_store.py - Solin
 =============================
 Per-profile persistence for automatic meeting trees.
 """
+
 from __future__ import annotations
 
 import base64
@@ -28,7 +29,34 @@ from .tree_types import Node, clone_nodes, count_media, iter_nodes, iter_nodes_s
 
 log = logging.getLogger(__name__)
 
-MEETING_TREE_STORE_VERSION = 4
+MEETING_TREE_STORE_VERSION = 5
+
+
+def _migrate_thumbnail_binding(node: Node) -> None:
+    if node.get("type") == "media" and not node.get("thumbnail_binding"):
+        if node.get("thumbnail_url"):
+            node["thumbnail_binding"] = "jw_artwork"
+        elif node.get("thumbnail_local_path") or node.get("thumbnail_cache_key"):
+            node["thumbnail_binding"] = "media_frame"
+    children = node.get("children", [])
+    if isinstance(children, list):
+        for child in children:
+            if isinstance(child, dict):
+                _migrate_thumbnail_binding(child)
+
+
+def _migrate_record_metadata(record: dict[str, Any]) -> None:
+    for node_field in ("nodes", "canonical_nodes"):
+        nodes = record.get(node_field, [])
+        if isinstance(nodes, list):
+            for node in nodes:
+                if isinstance(node, dict):
+                    _migrate_thumbnail_binding(node)
+    hidden = record.get("hidden_canonical_media", {})
+    if isinstance(hidden, dict):
+        for node in hidden.values():
+            if isinstance(node, dict):
+                _migrate_thumbnail_binding(node)
 
 
 @dataclass(frozen=True, slots=True)
@@ -134,14 +162,52 @@ class MeetingTreeStore:
 
     @staticmethod
     def _normalize(data: dict[str, Any]) -> dict[str, Any]:
+        raw_version = data.get("version", 0)
+        if isinstance(raw_version, bool):
+            raise ValueError("Meeting tree storage version must be an integer")
+        try:
+            version = int(raw_version)
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise ValueError("Meeting tree storage version must be an integer") from exc
+        if version > MEETING_TREE_STORE_VERSION:
+            raise ValueError(f"Unsupported meeting tree storage version: {version}")
         trees = data.setdefault("trees", {})
         if not isinstance(trees, dict):
             raise ValueError("Meeting tree storage 'trees' must be an object")
         for record in trees.values():
             if isinstance(record, dict):
                 record.setdefault("revision", 0)
+                _migrate_record_metadata(record)
         data["version"] = MEETING_TREE_STORE_VERSION
         return data
+
+    def migrate_strict(self) -> bool:
+        """Atomically upgrade durable tree metadata before mutable UI exists."""
+
+        def migrate() -> bool:
+            if not self._json.exists():
+                return False
+            raw = self._json.read()
+            if not isinstance(raw, dict):
+                raise ValueError("Meeting tree storage root must be an object")
+            normalized = self._normalize(copy.deepcopy(raw))
+            if normalized == raw:
+                self._data = normalized
+                return False
+            self._json.write(normalized)
+            self._data = normalized
+            return True
+
+        if self._resource_lanes is None:
+            migrated = migrate()
+        else:
+            migrated = self._resource_lanes.run(
+                file_resource_key(self.path),
+                migrate,
+            )
+        if migrated:
+            self._publish_changed()
+        return bool(migrated)
 
     def _runtime_data(self) -> dict[str, Any]:
         if self._data is None:
@@ -165,6 +231,7 @@ class MeetingTreeStore:
 
     def load_all_strict(self) -> dict[str, Any]:
         """Load meeting trees while preserving read/parse failures for destructive callers."""
+
         def load() -> dict[str, Any]:
             if not self._json.exists():
                 return self._empty()
@@ -198,9 +265,7 @@ class MeetingTreeStore:
                     snapshot
                     for tree_key, record in trees.items()
                     if isinstance(tree_key, str)
-                    and (
-                        parsed := parse_meeting_tree_key(tree_key)
-                    ) is not None
+                    and (parsed := parse_meeting_tree_key(tree_key)) is not None
                     and parsed.pub_type == pub_type
                     and parsed.monday == monday
                     and parsed.language == lang
@@ -273,9 +338,7 @@ class MeetingTreeStore:
             if not isinstance(mapping, dict):
                 return {}
             return {
-                str(k): copy.deepcopy(v)
-                for k, v in mapping.items()
-                if k and isinstance(v, dict)
+                str(k): copy.deepcopy(v) for k, v in mapping.items() if k and isinstance(v, dict)
             }
 
     def find_snapshot(
@@ -296,9 +359,7 @@ class MeetingTreeStore:
                 snapshot
                 for tree_key, record in trees.items()
                 if isinstance(tree_key, str)
-                and (
-                    parsed := parse_meeting_tree_key(tree_key)
-                ) is not None
+                and (parsed := parse_meeting_tree_key(tree_key)) is not None
                 and parsed.pub_type == pub
                 and parsed.monday == monday
                 and parsed.language == lang
@@ -370,11 +431,7 @@ class MeetingTreeStore:
             durable_deleted_source_keys = (
                 merge_deleted_source_keys
                 if canonical_complete
-                else (
-                    set(current.deleted_source_keys)
-                    if current is not None
-                    else set()
-                )
+                else (set(current.deleted_source_keys) if current is not None else set())
             )
             durable_canonical_hash = (
                 canonical_hash
@@ -387,11 +444,7 @@ class MeetingTreeStore:
                 durable_canonical_hash,
                 durable_deleted_source_keys,
                 dict(saved.linked_folder_files) if saved is not None else None,
-                (
-                    copy.deepcopy(saved.meeting_folder_imports)
-                    if saved is not None
-                    else None
-                ),
+                (copy.deepcopy(saved.meeting_folder_imports) if saved is not None else None),
                 overview,
                 source_checksum=(
                     (
@@ -527,20 +580,14 @@ class MeetingTreeStore:
             else None
         )
         existing_hidden_value = (
-            existing.get("hidden_canonical_media")
-            if isinstance(existing, dict)
-            else None
+            existing.get("hidden_canonical_media") if isinstance(existing, dict) else None
         )
         existing_hidden_media: dict[str, Node] = (
-            existing_hidden_value
-            if isinstance(existing_hidden_value, dict)
-            else {}
+            existing_hidden_value if isinstance(existing_hidden_value, dict) else {}
         )
         baseline = canonical_nodes if canonical_nodes is not None else existing_canonical
         hidden_media = (
-            hidden_canonical_media
-            if hidden_canonical_media is not None
-            else existing_hidden_media
+            hidden_canonical_media if hidden_canonical_media is not None else existing_hidden_media
         )
         if baseline:
             valid_source_keys = canonical_source_keys(baseline)
@@ -559,9 +606,7 @@ class MeetingTreeStore:
         if baseline:
             durable_deleted_source_keys &= canonical_source_keys(baseline)
         revision = (
-            _int_or_default(existing.get("revision"), 0) + 1
-            if isinstance(existing, dict)
-            else 1
+            _int_or_default(existing.get("revision"), 0) + 1 if isinstance(existing, dict) else 1
         )
         record: dict[str, Any] = {
             "deleted_source_keys": sorted(durable_deleted_source_keys),
@@ -715,11 +760,7 @@ def _string_mapping(value: object) -> dict[str, str]:
 def _import_mapping(value: object) -> dict[str, dict[str, Any]]:
     if not isinstance(value, dict):
         return {}
-    return {
-        str(k): v
-        for k, v in value.items()
-        if k and isinstance(v, dict)
-    }
+    return {str(k): v for k, v in value.items() if k and isinstance(v, dict)}
 
 
 def _node_mapping(value: object) -> dict[str, Node]:
@@ -769,9 +810,7 @@ def _snapshot_from_record(
             0,
             _int_or_default(record.get("canonical_reset_generation"), 0),
         ),
-        hidden_canonical_media=_node_mapping(
-            record.get("hidden_canonical_media", {})
-        ),
+        hidden_canonical_media=_node_mapping(record.get("hidden_canonical_media", {})),
         source_checksum=str(record.get("source_checksum", "")),
         revision=max(0, _int_or_default(record.get("revision"), 0)),
         is_sign_language=key.is_sign_language,

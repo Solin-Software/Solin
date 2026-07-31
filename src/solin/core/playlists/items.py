@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, NotRequired, TypedDict, cast
 
 from ..media.formats import MediaKind, media_kind_from_path, media_type_from_path
+from ..media.insertion import MediaInsertPayload
 from solin.core.jw.identifiers import is_jw_url
 from solin.core.media.jw_reference import parse_jw_media_reference
 
@@ -32,6 +33,8 @@ class PlaylistMediaItem(TypedDict):
     jw_media_id: NotRequired[str]
     jw_identity_authoritative: NotRequired[bool]
     image_framing: NotRequired[dict[str, Any]]
+    thumbnail_url: NotRequired[str]
+    thumbnail_binding: NotRequired[str]
 
 
 def looks_like_filename_title(title: str) -> bool:
@@ -107,3 +110,36 @@ def playlist_items_from_jwpub(
             item["auto_title"] = False
         items.append(item)
     return items
+
+
+def create_playlist_item_from_insert(
+    payload: MediaInsertPayload,
+    *,
+    item_id: str | None = None,
+) -> PlaylistMediaItem:
+    """Project one normalized picker selection into the persisted playlist shape."""
+
+    attributes: dict[str, Any] = {
+        "type": payload.media_type,
+        "auto_title": True,
+        "key_symbol": payload.key_symbol or None,
+        "track": payload.track or None,
+        "issue_tag": payload.issue_tag or None,
+        "doc_id": payload.doc_id or None,
+        "meps_language": payload.meps_language,
+        "language": payload.language,
+        "jw_media_id": payload.jw_media_id,
+        "jw_identity_authoritative": payload.jw_identity_authoritative,
+    }
+    if item_id:
+        attributes["id"] = item_id
+    if payload.base_duration_ticks > 0:
+        attributes["base_duration_ticks"] = payload.base_duration_ticks
+    if payload.thumbnail_url:
+        attributes["thumbnail_url"] = payload.thumbnail_url
+        attributes["thumbnail_binding"] = "jw_artwork"
+    return create_playlist_item(
+        payload.title,
+        payload.source_url,
+        **attributes,
+    )

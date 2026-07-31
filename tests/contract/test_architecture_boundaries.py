@@ -94,16 +94,13 @@ def _dependency_targets(
 
 def _imports(path: Path):
     yield from (
-        node
-        for node in ast.walk(_tree(path))
-        if isinstance(node, (ast.Import, ast.ImportFrom))
+        node for node in ast.walk(_tree(path)) if isinstance(node, (ast.Import, ast.ImportFrom))
     )
 
 
 def test_application_source_layout_is_discoverable():
     assert CODEBASES, (
-        "No application source root found. Expected src/solin/ "
-        "relative to the repository root."
+        "No application source root found. Expected src/solin/ relative to the repository root."
     )
 
 
@@ -139,8 +136,7 @@ def test_package_initializers_do_not_reexport_concrete_symbols():
                 concrete_names = [
                     alias.name
                     for alias in node.names
-                    if alias.name == "*"
-                    or (*base, *alias.name.split(".")) not in codebase.modules
+                    if alias.name == "*" or (*base, *alias.name.split(".")) not in codebase.modules
                 ]
                 if concrete_names:
                     violations.append(
@@ -173,10 +169,7 @@ def test_top_level_packages_do_not_import_each_others_private_members():
                     private_module = any(part.startswith("_") for part in target[2:])
                     private_member = bool(
                         imported_name
-                        and any(
-                            part.startswith("_")
-                            for part in imported_name.split(".")
-                        )
+                        and any(part.startswith("_") for part in imported_name.split("."))
                     )
                     if private_module or private_member:
                         violations.append(_display(path, node))
@@ -207,13 +200,12 @@ def test_clean_architecture_layer_dependencies():
                         dependency = (
                             target[1]
                             if len(target) > 1 and target[0] == codebase.package
-                            else target[0] if target else ""
+                            else target[0]
+                            if target
+                            else ""
                         )
                         if dependency in forbidden:
-                            violations.append(
-                                f"{_display(path, node)} "
-                                f"[{layer} -> {dependency}]"
-                            )
+                            violations.append(f"{_display(path, node)} [{layer} -> {dependency}]")
 
     assert not violations, (
         "Clean Architecture dependency violations detected. Domain must remain "
@@ -398,9 +390,7 @@ def test_concrete_http_clients_stay_in_network_adapter():
         source = path.read_text(encoding="utf-8")
         for fragment in fragments:
             if fragment in source:
-                violations.append(
-                    f"{path.relative_to(PROJECT_ROOT)} contains {fragment}"
-                )
+                violations.append(f"{path.relative_to(PROJECT_ROOT)} contains {fragment}")
 
     assert violations == [], (
         "Concrete HTTP clients must stay behind solin.core.network.http adapters:\n"
@@ -444,8 +434,7 @@ def test_ui_workflows_do_not_import_document_conversion_adapters():
 
     assert violations == [], (
         "UI workflows must receive document conversion services from composition "
-        "instead of importing cache and worker adapters directly:\n"
-        + "\n".join(violations)
+        "instead of importing cache and worker adapters directly:\n" + "\n".join(violations)
     )
 
 
@@ -501,9 +490,7 @@ def test_qml_presentation_adapters_live_under_ui_qml():
         if path.exists():
             violations.append(f"{path.relative_to(PROJECT_ROOT)} still exists")
 
-    media_library_widget = (
-        PROJECT_ROOT / "src" / "solin" / "widgets" / "media_library_widget.py"
-    )
+    media_library_widget = PROJECT_ROOT / "src" / "solin" / "widgets" / "media_library_widget.py"
     widget_source = media_library_widget.read_text(encoding="utf-8")
     for fragment in (
         "class MediaLibraryBridge",
@@ -521,9 +508,7 @@ def test_qml_presentation_adapters_live_under_ui_qml():
             f"{timer_window.relative_to(PROJECT_ROOT)} contains class ClockRenderBridge"
         )
 
-    meetings_widget = (
-        PROJECT_ROOT / "src" / "solin" / "widgets" / "meetings" / "widget.py"
-    )
+    meetings_widget = PROJECT_ROOT / "src" / "solin" / "widgets" / "meetings" / "widget.py"
     meetings_source = meetings_widget.read_text(encoding="utf-8")
     for fragment in (
         "QQuickWidget",
@@ -533,9 +518,7 @@ def test_qml_presentation_adapters_live_under_ui_qml():
         "rootObject",
     ):
         if fragment in meetings_source:
-            violations.append(
-                f"{meetings_widget.relative_to(PROJECT_ROOT)} contains {fragment}"
-            )
+            violations.append(f"{meetings_widget.relative_to(PROJECT_ROOT)} contains {fragment}")
 
     forbidden_modules = {
         ("solin", "qml_module"),
@@ -554,11 +537,7 @@ def test_qml_presentation_adapters_live_under_ui_qml():
                     if target in forbidden_modules:
                         violations.append(_display(path, node))
 
-    missing = [
-        str(path.relative_to(PROJECT_ROOT))
-        for path in expected_paths
-        if not path.exists()
-    ]
+    missing = [str(path.relative_to(PROJECT_ROOT)) for path in expected_paths if not path.exists()]
     assert not missing, "Missing UI QML adapter modules:\n" + "\n".join(missing)
     assert violations == [], (
         "QML presentation adapters must live under solin.ui.qml instead of the "
@@ -578,10 +557,7 @@ def test_media_trees_have_one_complete_snapshot_reconciliation_boundary():
     qml_source = qml_path.read_text(encoding="utf-8")
     assert "treeSource" in qml_source
     assert "component DropList" in qml_source
-    assert (
-        "function reconcileFromNodes(nodes, forcePresentation, sharedVisualPool)"
-        in qml_source
-    )
+    assert "function reconcileFromNodes(nodes, forcePresentation, sharedVisualPool)" in qml_source
     assert "treeSource ? treeSource.treeData : []" in qml_source
     model_source = (
         PROJECT_ROOT / "src" / "solin" / "ui" / "qml" / "media_tree" / "model.py"
@@ -619,9 +595,7 @@ def test_media_trees_have_one_complete_snapshot_reconciliation_boundary():
 
 
 def test_media_tree_reconciliation_and_presenters_are_io_free() -> None:
-    media_tree_root = (
-        PROJECT_ROOT / "src" / "solin" / "ui" / "qml" / "media_tree"
-    )
+    media_tree_root = PROJECT_ROOT / "src" / "solin" / "ui" / "qml" / "media_tree"
     forbidden_call_names = {
         "open",
         "stat",
@@ -653,8 +627,7 @@ def test_media_tree_reconciliation_and_presenters_are_io_free() -> None:
 
     assert violations == [], (
         "Media-tree snapshots must be reconciled entirely from in-memory state; "
-        "filesystem and cache work belongs to the asynchronous runtime:\n"
-        + "\n".join(violations)
+        "filesystem and cache work belongs to the asynchronous runtime:\n" + "\n".join(violations)
     )
 
 
@@ -741,12 +714,7 @@ def test_wifi_upload_policy_has_no_framework_dependencies():
 def test_watched_folder_source_policies_have_no_framework_dependencies():
     paths = (
         PROJECT_ROOT / "src" / "solin" / "core" / "ingest" / "local_files.py",
-        PROJECT_ROOT
-        / "src"
-        / "solin"
-        / "core"
-        / "ingest"
-        / "meeting_folder_sources.py",
+        PROJECT_ROOT / "src" / "solin" / "core" / "ingest" / "meeting_folder_sources.py",
     )
     violations: list[str] = []
 
@@ -844,14 +812,7 @@ def test_meeting_domain_has_no_framework_or_application_dependencies():
 
 
 def test_meeting_linked_folder_sync_receives_schedule_resolver():
-    path = (
-        PROJECT_ROOT
-        / "src"
-        / "solin"
-        / "core"
-        / "meetings"
-        / "linked_folder_sync.py"
-    )
+    path = PROJECT_ROOT / "src" / "solin" / "core" / "meetings" / "linked_folder_sync.py"
     source = path.read_text(encoding="utf-8")
 
     assert "MeetingScheduleSettingsStore" not in source
@@ -860,22 +821,8 @@ def test_meeting_linked_folder_sync_receives_schedule_resolver():
 
 
 def test_meeting_folder_import_policy_lives_outside_controller():
-    controller = (
-        PROJECT_ROOT
-        / "src"
-        / "solin"
-        / "widgets"
-        / "meetings"
-        / "tree_controller.py"
-    )
-    policy = (
-        PROJECT_ROOT
-        / "src"
-        / "solin"
-        / "core"
-        / "meetings"
-        / "meeting_folder_imports.py"
-    )
+    controller = PROJECT_ROOT / "src" / "solin" / "widgets" / "meetings" / "tree_controller.py"
+    policy = PROJECT_ROOT / "src" / "solin" / "core" / "meetings" / "meeting_folder_imports.py"
     controller_source = controller.read_text(encoding="utf-8")
     policy_source = policy.read_text(encoding="utf-8")
 
@@ -952,12 +899,8 @@ def test_profile_infrastructure_receives_global_settings_from_composition():
 
 
 def test_native_visual_adapters_live_in_presentation_ui():
-    core_titlebar_path = (
-        PROJECT_ROOT / "src" / "solin" / "core" / "ui" / "titlebar.py"
-    )
-    core_macos_layer_path = (
-        PROJECT_ROOT / "src" / "solin" / "core" / "ui" / "macos_layer.py"
-    )
+    core_titlebar_path = PROJECT_ROOT / "src" / "solin" / "core" / "ui" / "titlebar.py"
+    core_macos_layer_path = PROJECT_ROOT / "src" / "solin" / "core" / "ui" / "macos_layer.py"
     ui_titlebar_path = PROJECT_ROOT / "src" / "solin" / "ui" / "titlebar.py"
     ui_macos_layer_path = PROJECT_ROOT / "src" / "solin" / "ui" / "macos_layer.py"
     consumers = (
@@ -1025,9 +968,7 @@ def test_screen_manager_lives_in_presentation_ui():
 
 def test_window_geometry_settings_live_in_core_windowing():
     old_path = PROJECT_ROOT / "src" / "solin" / "ui" / "window_settings.py"
-    new_path = (
-        PROJECT_ROOT / "src" / "solin" / "core" / "windowing" / "settings.py"
-    )
+    new_path = PROJECT_ROOT / "src" / "solin" / "core" / "windowing" / "settings.py"
     violations: list[str] = []
 
     assert not old_path.exists()
@@ -1095,14 +1036,7 @@ def test_presentation_has_no_trivial_refresh_language_aliases():
 
 def test_monitor_allocation_lives_with_projection_core():
     old_path = PROJECT_ROOT / "src" / "solin" / "core" / "ui" / "monitor_allocation.py"
-    new_path = (
-        PROJECT_ROOT
-        / "src"
-        / "solin"
-        / "core"
-        / "projection"
-        / "monitor_allocation.py"
-    )
+    new_path = PROJECT_ROOT / "src" / "solin" / "core" / "projection" / "monitor_allocation.py"
     violations: list[str] = []
 
     assert not old_path.exists()
@@ -1118,8 +1052,7 @@ def test_monitor_allocation_lives_with_projection_core():
 def test_core_ui_package_has_no_python_modules():
     core_ui_root = PROJECT_ROOT / "src" / "solin" / "core" / "ui"
     violations = [
-        str(path.relative_to(PROJECT_ROOT))
-        for path in sorted(core_ui_root.rglob("*.py"))
+        str(path.relative_to(PROJECT_ROOT)) for path in sorted(core_ui_root.rglob("*.py"))
     ]
     import_violations: list[str] = []
 
@@ -1158,11 +1091,7 @@ def test_media_and_playlist_item_domains_have_no_framework_dependencies():
 
     for path in domain_files:
         for node in _imports(path):
-            imported_module = (
-                node.module or ""
-                if isinstance(node, ast.ImportFrom)
-                else ""
-            )
+            imported_module = node.module or "" if isinstance(node, ast.ImportFrom) else ""
             roots = (
                 [alias.name.split(".", 1)[0] for alias in node.names]
                 if isinstance(node, ast.Import)
@@ -1281,7 +1210,7 @@ def test_publication_workflows_use_media_resolver_service():
     )
     forbidden_imports = {
         "fetch_pub_media_json",
-        "resolve_publication_video_link",
+        "resolve_publication_media_link",
         "select_pub_media_file",
     }
     violations: list[str] = []
@@ -1352,14 +1281,7 @@ def test_jwpub_cache_storage_has_no_framework_dependencies():
 
 
 def test_meeting_publication_content_has_no_framework_dependencies():
-    path = (
-        PROJECT_ROOT
-        / "src"
-        / "solin"
-        / "core"
-        / "meetings"
-        / "publication_content.py"
-    )
+    path = PROJECT_ROOT / "src" / "solin" / "core" / "meetings" / "publication_content.py"
     violations: list[str] = []
 
     for node in _imports(path):
@@ -1423,14 +1345,7 @@ def test_memorial_publication_client_has_no_framework_dependencies():
 
 def test_meeting_publication_worker_is_split_from_service_facade():
     facade = PROJECT_ROOT / "src" / "solin" / "core" / "meetings" / "publications.py"
-    worker = (
-        PROJECT_ROOT
-        / "src"
-        / "solin"
-        / "core"
-        / "meetings"
-        / "publication_worker.py"
-    )
+    worker = PROJECT_ROOT / "src" / "solin" / "core" / "meetings" / "publication_worker.py"
 
     facade_source = facade.read_text(encoding="utf-8")
     worker_source = worker.read_text(encoding="utf-8")
@@ -1442,14 +1357,7 @@ def test_meeting_publication_worker_is_split_from_service_facade():
 
 
 def test_meeting_publication_worker_uses_jw_archive_client_boundary():
-    path = (
-        PROJECT_ROOT
-        / "src"
-        / "solin"
-        / "core"
-        / "meetings"
-        / "publication_worker.py"
-    )
+    path = PROJECT_ROOT / "src" / "solin" / "core" / "meetings" / "publication_worker.py"
     source = path.read_text(encoding="utf-8")
 
     assert "stream_get" not in source
@@ -1484,14 +1392,7 @@ def test_publication_archive_client_has_no_framework_dependencies():
 
 def test_memorial_worker_is_split_from_service_facade():
     facade = PROJECT_ROOT / "src" / "solin" / "core" / "meetings" / "memorial.py"
-    worker = (
-        PROJECT_ROOT
-        / "src"
-        / "solin"
-        / "core"
-        / "meetings"
-        / "memorial_worker.py"
-    )
+    worker = PROJECT_ROOT / "src" / "solin" / "core" / "meetings" / "memorial_worker.py"
 
     facade_source = facade.read_text(encoding="utf-8")
     worker_source = worker.read_text(encoding="utf-8")
@@ -1551,13 +1452,7 @@ def test_zoom_service_uses_native_adapter_for_win32_calls():
 
 def test_obs_protocol_has_no_framework_network_or_thread_dependencies():
     path = (
-        PROJECT_ROOT
-        / "src"
-        / "solin"
-        / "core"
-        / "integrations"
-        / "automation"
-        / "obs_protocol.py"
+        PROJECT_ROOT / "src" / "solin" / "core" / "integrations" / "automation" / "obs_protocol.py"
     )
     forbidden_roots = {
         "PySide6",
@@ -1641,9 +1536,9 @@ def test_camera_option_consumers_import_model_from_defining_module():
         if forbidden in path.read_text(encoding="utf-8"):
             violations.append(str(path.relative_to(PROJECT_ROOT)))
 
-    camera_service_source = (
-        source_root / "core" / "integrations" / "camera.py"
-    ).read_text(encoding="utf-8")
+    camera_service_source = (source_root / "core" / "integrations" / "camera.py").read_text(
+        encoding="utf-8"
+    )
     assert "class CameraOption" not in camera_service_source
     assert "class CameraBackend" not in camera_service_source
     assert violations == []
@@ -1700,8 +1595,7 @@ def test_concrete_media_services_are_constructed_only_in_bootstrap():
 
     assert violations == [], (
         "Concrete media services must be created only by bootstrap/media.py. "
-        "Consumers must receive instances or explicit factories:\n"
-        + "\n".join(violations)
+        "Consumers must receive instances or explicit factories:\n" + "\n".join(violations)
     )
 
 
@@ -1712,11 +1606,7 @@ def test_media_cache_and_playback_do_not_import_concrete_downloader():
     for filename in ("cache.py", "playback.py"):
         path = media_root / filename
         for node in _imports(path):
-            imported_module = (
-                node.module or ""
-                if isinstance(node, ast.ImportFrom)
-                else ""
-            )
+            imported_module = node.module or "" if isinstance(node, ast.ImportFrom) else ""
             imported_names = {alias.name for alias in node.names}
             if imported_module.endswith("downloader") or "SongDownloader" in imported_names:
                 violations.append(_display(path, node))
@@ -1919,8 +1809,7 @@ def test_meeting_widgets_do_not_construct_meeting_services():
                 violations.append(_display(path, node))
 
     assert violations == [], (
-        "Meeting widgets must receive meeting services from composition:\n"
-        + "\n".join(violations)
+        "Meeting widgets must receive meeting services from composition:\n" + "\n".join(violations)
     )
 
 
@@ -1989,14 +1878,7 @@ def test_projection_integration_controller_receives_auto_share_actions():
 
 
 def test_auto_share_settings_section_receives_native_accessibility_probe():
-    path = (
-        PROJECT_ROOT
-        / "src"
-        / "solin"
-        / "widgets"
-        / "settings"
-        / "auto_share_section.py"
-    )
+    path = PROJECT_ROOT / "src" / "solin" / "widgets" / "settings" / "auto_share_section.py"
     source = path.read_text(encoding="utf-8")
 
     assert "core.integrations.automation.screen_share" not in source
@@ -2043,15 +1925,7 @@ def test_auto_key_action_model_has_no_framework_settings_or_process_dependencies
 
 
 def test_auto_key_dispatcher_has_no_settings_store_dependency():
-    path = (
-        PROJECT_ROOT
-        / "src"
-        / "solin"
-        / "core"
-        / "integrations"
-        / "automation"
-        / "shortcuts.py"
-    )
+    path = PROJECT_ROOT / "src" / "solin" / "core" / "integrations" / "automation" / "shortcuts.py"
     source = path.read_text(encoding="utf-8")
 
     assert "SettingsStore" not in source
@@ -2110,20 +1984,18 @@ def test_browser_url_policy_has_no_framework_dependencies():
 
 
 def test_media_info_services_live_outside_widget_package():
-    legacy_path = (
-        PROJECT_ROOT / "src" / "solin" / "widgets" / "media_info_extractor.py"
-    )
+    legacy_path = PROJECT_ROOT / "src" / "solin" / "widgets" / "media_info_extractor.py"
 
     assert not legacy_path.exists()
 
 
 def test_media_info_workers_are_injected_from_composition():
-    media_info_source = (
-        PROJECT_ROOT / "src" / "solin" / "ui" / "media_info.py"
-    ).read_text(encoding="utf-8")
-    composition_source = (
-        PROJECT_ROOT / "src" / "solin" / "bootstrap" / "media.py"
-    ).read_text(encoding="utf-8")
+    media_info_source = (PROJECT_ROOT / "src" / "solin" / "ui" / "media_info.py").read_text(
+        encoding="utf-8"
+    )
+    composition_source = (PROJECT_ROOT / "src" / "solin" / "bootstrap" / "media.py").read_text(
+        encoding="utf-8"
+    )
 
     assert "import threading" not in media_info_source
     assert "threading.Thread" not in media_info_source
@@ -2148,12 +2020,8 @@ def test_profile_media_bytes_are_persisted_outside_widgets():
             if not isinstance(node, ast.Call):
                 continue
             function = node.func
-            is_open = (
-                isinstance(function, ast.Name)
-                and function.id == "open"
-            ) or (
-                isinstance(function, ast.Attribute)
-                and function.attr == "open"
+            is_open = (isinstance(function, ast.Name) and function.id == "open") or (
+                isinstance(function, ast.Attribute) and function.attr == "open"
             )
             if not is_open:
                 continue
@@ -2201,7 +2069,7 @@ def test_thumbnail_persistence_is_outside_widgets():
         "meeting_thumb_path(",
         "playlist_thumb_path(",
         "shutil.copy2(thumb_path",
-        ".save(os.fspath(path), \"JPEG\"",
+        '.save(os.fspath(path), "JPEG"',
     }
     violations: list[str] = []
 
@@ -2373,18 +2241,12 @@ def test_live_and_headless_meeting_trees_share_one_controller_factory() -> None:
 
 def test_meeting_preparation_is_the_only_weekly_prefetch_pipeline() -> None:
     source_root = PROJECT_ROOT / "src" / "solin"
-    preparation = (
-        source_root / "core" / "meetings" / "preparation.py"
-    ).read_text(encoding="utf-8")
-    facade = (
-        source_root / "core" / "meetings" / "publications.py"
-    ).read_text(encoding="utf-8")
-    worker = (
-        source_root / "core" / "meetings" / "publication_worker.py"
-    ).read_text(encoding="utf-8")
-    widget = (
-        source_root / "widgets" / "meetings" / "widget.py"
-    ).read_text(encoding="utf-8")
+    preparation = (source_root / "core" / "meetings" / "preparation.py").read_text(encoding="utf-8")
+    facade = (source_root / "core" / "meetings" / "publications.py").read_text(encoding="utf-8")
+    worker = (source_root / "core" / "meetings" / "publication_worker.py").read_text(
+        encoding="utf-8"
+    )
+    widget = (source_root / "widgets" / "meetings" / "widget.py").read_text(encoding="utf-8")
 
     assert "class MeetingPreparationService" in preparation
     assert "self._store.reconcile(" in preparation

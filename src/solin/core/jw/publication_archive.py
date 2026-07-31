@@ -61,13 +61,14 @@ def resolve_jwpub_archive(pub: str, lang: str, issue: str) -> JwpubMediaInfo:
     )
 
 
-def resolve_meeting_video(
+def resolve_meeting_media(
     key_symbol: str,
     track: int,
     issue_tag: int,
     meps_doc_id: int,
     lang: str,
     is_sign_language: bool = False,
+    media_type: str = "video",
 ) -> dict:
     """
     Resolve a meeting media URL from JW publication media identifiers.
@@ -76,7 +77,7 @@ def resolve_meeting_video(
     """
     result = {"url": "", "title": "", "thumbnail": "", "duration_ticks": 0}
     try:
-        media_file = _PUBLICATION_MEDIA_RESOLVER.resolve_video(
+        media_file = _PUBLICATION_MEDIA_RESOLVER.resolve_media(
             PublicationMediaRequest(
                 key_symbol=key_symbol,
                 track=track,
@@ -84,6 +85,7 @@ def resolve_meeting_video(
                 meps_doc_id=meps_doc_id,
                 language=lang,
                 is_sign_language=is_sign_language,
+                media_type=media_type,
             )
         )
         if media_file is not None:
@@ -92,7 +94,7 @@ def resolve_meeting_video(
             result["thumbnail"] = media_file.thumbnail_url
             result["duration_ticks"] = media_file.duration_ticks
     except (AttributeError, IndexError, KeyError, TypeError, ValueError):
-        log.debug("Could not parse resolved video metadata", exc_info=True)
+        log.debug("Could not parse resolved meeting media metadata", exc_info=True)
     return result
 
 
@@ -141,5 +143,5 @@ __all__ = [
     "JwpubArchiveDownloadError",
     "download_jwpub_archive",
     "resolve_jwpub_archive",
-    "resolve_meeting_video",
+    "resolve_meeting_media",
 ]

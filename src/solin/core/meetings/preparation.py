@@ -17,7 +17,7 @@ from solin.core.foundation.qt_threads import stop_owned_qthread
 from solin.core.jw.language_context import JWMediaLanguageContext
 from solin.core.media.cache import MediaCacheManager
 
-from .models import WeekData
+from .models import WeekData, media_type_for_mime_type
 from .resolution_worker import MeetingMediaResolutionWorker
 from .tree_builder import MeetingTreeBuilder
 from .tree_merger import media_identity_signature
@@ -45,9 +45,7 @@ def _iter_media_with_download_eligibility(
         node_type = node.get("type")
         nested_in_subsection = inside_subsection or node_type == "subsection"
         if node_type == "media":
-            yield node, not (
-                nested_in_subsection and bool(node.get("meeting_generated"))
-            )
+            yield node, not (nested_in_subsection and bool(node.get("meeting_generated")))
         children = node.get("children") or []
         if isinstance(children, list):
             yield from _iter_media_with_download_eligibility(
@@ -139,15 +137,11 @@ class _PreparationJob:
         dict[str, tuple[tuple, dict[str, Any]]],
     ] = field(default_factory=dict)
     prefetched_urls: set[str] = field(default_factory=set)
-    resolved_signatures: set[tuple] = field(default_factory=set)
 
     @property
     def batch_id(self) -> str:
         sign = "sign" if self.key.is_sign_language else "spoken"
-        return (
-            f"meeting:{self.key.monday.isoformat()}:"
-            f"{self.key.language_code}:{sign}"
-        )
+        return f"meeting:{self.key.monday.isoformat()}:{self.key.language_code}:{sign}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -178,7 +172,7 @@ class MeetingPreparationService(QObject):
     state_changed = Signal(object, str, object)
     progress = Signal(object, str, int)
     error = Signal(object, str, str)
-    _resolve_requested = Signal(str, str, int, int, int, str, bool)
+    _resolve_requested = Signal(str, str, int, int, int, str, str, bool)
 
     def __init__(
         self,
@@ -264,15 +258,11 @@ class MeetingPreparationService(QObject):
             materialize_cached_publications=frozenset(
                 pub_type
                 for pub_type in ("mwb", "wt")
-                if (
-                    (snapshot := snapshots.get(pub_type)) is None
-                    or not snapshot.canonical_nodes
-                )
+                if ((snapshot := snapshots.get(pub_type)) is None or not snapshot.canonical_nodes)
             ),
             known_wt_issue=wt_snapshot.issue if wt_snapshot is not None else "",
             persisted_source_checksums={
-                pub_type: snapshot.source_checksum
-                for pub_type, snapshot in snapshots.items()
+                pub_type: snapshot.source_checksum for pub_type, snapshot in snapshots.items()
             },
         )
         return self.state(key, "mwb")
@@ -322,9 +312,7 @@ class MeetingPreparationService(QObject):
         snapshot = self.snapshot(key, pub_type)
         job = self._jobs.get(key)
         error = job.errors.get(pub_type, "") if job is not None else ""
-        source_status = (
-            job.terminal_statuses.get(pub_type, "") if job is not None else ""
-        )
+        source_status = job.terminal_statuses.get(pub_type, "") if job is not None else ""
         refreshing = bool(job and job.active)
         if snapshot is not None:
             phase = MeetingPreparationPhase.AVAILABLE
@@ -475,10 +463,7 @@ class MeetingPreparationService(QObject):
             job.key.is_sign_language,
         )
         try:
-            canonical_complete = (
-                pub_type != "mwb"
-                or wd.cbs_status in {"idle", "ready", "empty"}
-            )
+            canonical_complete = pub_type != "mwb" or wd.cbs_status in {"idle", "ready", "empty"}
             snapshot = self._store.reconcile(
                 tree_key,
                 canonical,
@@ -486,9 +471,7 @@ class MeetingPreparationService(QObject):
                 overview,
                 fallback=fallback,
                 source_checksum=(
-                    wd.mwb_source_checksum
-                    if pub_type == "mwb"
-                    else wd.wt_source_checksum
+                    wd.mwb_source_checksum if pub_type == "mwb" else wd.wt_source_checksum
                 ),
                 canonical_complete=canonical_complete,
             )
@@ -509,9 +492,7 @@ class MeetingPreparationService(QObject):
     ) -> None:
         ready_urls: set[str] = set()
         pending = job.pending_by_tree.setdefault(snapshot.tree_key, set())
-        for node, automatic_download in _iter_media_with_download_eligibility(
-            snapshot.nodes
-        ):
+        for node, automatic_download in _iter_media_with_download_eligibility(snapshot.nodes):
             url = self._remote_url(node)
             ref = node.get("media_ref") or {}
             has_jw_identity = isinstance(ref, dict) and bool(
@@ -524,14 +505,9 @@ class MeetingPreparationService(QObject):
             )
             if url and automatic_download:
                 ready_urls.add(url)
-            if url and (
-                not has_jw_identity
-                or signature in job.resolved_signatures
-                or (
-                    self._cache_manager.is_cached(url)
-                    and self._has_duration_metadata(node)
-                )
-            ):
+            if self._node_media_type(node) == "image":
+                continue
+            if url and (not has_jw_identity or self._has_required_metadata(node)):
                 continue
             if not isinstance(ref, dict) or not has_jw_identity:
                 continue
@@ -556,20 +532,24 @@ class MeetingPreparationService(QObject):
         return _remote_media_url(node)
 
     @staticmethod
-    def _has_duration_metadata(node: Node) -> bool:
-        media_type = str(node.get("media_type") or "").lower()
+    def _node_media_type(node: Node) -> str:
+        media_type = str(node.get("media_type") or "").strip().casefold()
+        if media_type:
+            return media_type
         ref = node.get("media_ref") or {}
-        mime_type = (
-            str(ref.get("mime_type") or "").lower()
-            if isinstance(ref, dict)
-            else ""
-        )
-        if media_type == "image" or mime_type.startswith("image/"):
+        mime_type = str(ref.get("mime_type") or "") if isinstance(ref, dict) else ""
+        return media_type_for_mime_type(mime_type)
+
+    @staticmethod
+    def _has_required_metadata(node: Node) -> bool:
+        if MeetingPreparationService._node_media_type(node) == "image":
             return True
         try:
-            return int(node.get("base_duration_ticks") or 0) > 0
+            has_duration = int(node.get("base_duration_ticks") or 0) > 0
         except (TypeError, ValueError):
             return False
+        has_thumbnail = bool(node.get("thumbnail_url") or node.get("thumbnail_local_path"))
+        return has_duration and has_thumbnail
 
     @staticmethod
     def _resolution_signature(
@@ -579,6 +559,7 @@ class MeetingPreparationService(QObject):
         return (
             key.language_code,
             key.is_sign_language,
+            media_type_for_mime_type(str(ref.get("mime_type") or "")),
             str(ref.get("key_symbol") or ""),
             int(ref.get("track") or 0),
             int(ref.get("issue_tag") or 0),
@@ -611,11 +592,7 @@ class MeetingPreparationService(QObject):
         self._dispatch_resolution()
 
     def _dispatch_resolution(self) -> None:
-        if (
-            self._stopped
-            or self._active_resolution is not None
-            or not self._pending_resolutions
-        ):
+        if self._stopped or self._active_resolution is not None or not self._pending_resolutions:
             return
         pending = max(
             self._pending_resolutions.values(),
@@ -631,6 +608,7 @@ class MeetingPreparationService(QObject):
             int(ref.get("track") or 0),
             int(ref.get("issue_tag") or 0),
             int(ref.get("meps_doc_id") or 0),
+            str(signature[2]),
             str(signature[0]),
             bool(signature[1]),
         )
@@ -698,15 +676,18 @@ class MeetingPreparationService(QObject):
                 continue
             tree_pending = job.pending_by_tree.setdefault(target.tree_key, set())
             tree_pending.discard(target.node_id)
-            if url:
-                job.resolved_signatures.add(pending.signature)
-                patch: dict[str, Any] = {"resolved_url": url}
+            effective_url = url or target.fallback_url
+            if effective_url or title or thumbnail or duration_ticks:
+                patch: dict[str, Any] = {}
+                if url:
+                    patch["resolved_url"] = url
                 if title:
                     patch["title"] = title
                     patch["auto_title"] = False
                     patch["media_ref_label"] = title
                 if thumbnail:
                     patch["thumbnail_url"] = thumbnail
+                    patch["thumbnail_binding"] = "jw_artwork"
                 if duration_ticks:
                     patch["base_duration_ticks"] = duration_ticks
                 job.patches_by_tree.setdefault(target.tree_key, {})[target.node_id] = (
@@ -742,11 +723,7 @@ class MeetingPreparationService(QObject):
     def _prefetch_urls(self, job: _PreparationJob, urls: set[str]) -> None:
         if not job.download_media:
             return
-        candidates = sorted(
-            url
-            for url in urls
-            if url and url not in job.prefetched_urls
-        )
+        candidates = sorted(url for url in urls if url and url not in job.prefetched_urls)
         if not candidates:
             return
         self._cache_manager.prefetch_many(candidates, job.batch_id)
@@ -794,9 +771,7 @@ class MeetingPreparationService(QObject):
         if job is None or job.generation != generation:
             return
         job.errors[pub_type] = message
-        job.terminal_statuses[pub_type] = (
-            "not_found" if message == "NOT_FOUND" else "error"
-        )
+        job.terminal_statuses[pub_type] = "not_found" if message == "NOT_FOUND" else "error"
         job.completed_publications.add(pub_type)
         self.error.emit(key, pub_type, message)
         self._finish_or_revalidate(job)

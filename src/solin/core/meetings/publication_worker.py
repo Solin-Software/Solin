@@ -17,7 +17,7 @@ from solin.core.jw.publication_archive import (
     JwpubArchiveDownloadError,
     download_jwpub_archive,
     resolve_jwpub_archive,
-    resolve_meeting_video,
+    resolve_meeting_media,
 )
 
 from . import models as meeting_models
@@ -36,6 +36,7 @@ log = logging.getLogger(__name__)
 
 # ── Worker — toda lógica bloqueante aqui, nunca na main thread ────────────────
 
+
 class JwpubWorker(QObject):
     """
     Roda num QThread dedicado. Toda operação bloqueante (HTTP, zip, SQLite)
@@ -48,15 +49,16 @@ class JwpubWorker(QObject):
       cbs_done(key, WeekData)
       progress(key, pub, pct)
       error(key, pub, msg)
-      video_resolved(request_id, url, title, thumbnail)
+      media_resolved(request_id, metadata)
     """
-    mwb_done          = Signal(str, object)
-    wt_done           = Signal(str, object)
-    cbs_done          = Signal(str, object)
-    load_finished     = Signal(str, str, bool, int)
-    progress          = Signal(str, str, int, str, bool, int)
-    error             = Signal(str, str, str, str, bool, int)
-    video_resolved    = Signal(str, str, str, str)   # request_id, url, title, thumb
+
+    mwb_done = Signal(str, object)
+    wt_done = Signal(str, object)
+    cbs_done = Signal(str, object)
+    load_finished = Signal(str, str, bool, int)
+    progress = Signal(str, str, int, str, bool, int)
+    error = Signal(str, str, str, str, bool, int)
+    media_resolved = Signal(str, object)  # request_id, resolved metadata
 
     def __init__(
         self,
@@ -65,9 +67,9 @@ class JwpubWorker(QObject):
         parent=None,
     ) -> None:
         super().__init__(parent)
-        self._cache           = JwpubCache(jwpub_cache_dir)
-        self._checksum_store  = checksum_store
-        self._lang            = "T"
+        self._cache = JwpubCache(jwpub_cache_dir)
+        self._checksum_store = checksum_store
+        self._lang = "T"
         self._is_sign_language = False
         self._request_generation = 0
         self._cancelled = threading.Event()
@@ -163,14 +165,10 @@ class JwpubWorker(QObject):
             else ()
         )
         materialize_cached = frozenset(
-            str(pub_type)
-            for pub_type in cached_publications
-            if pub_type in {"mwb", "wt"}
+            str(pub_type) for pub_type in cached_publications if pub_type in {"mwb", "wt"}
         )
         persisted_checksums = (
-            persisted_source_checksums
-            if isinstance(persisted_source_checksums, Mapping)
-            else {}
+            persisted_source_checksums if isinstance(persisted_source_checksums, Mapping) else {}
         )
         mwb_source_checksum = str(persisted_checksums.get("mwb") or "")
         wt_source_checksum = str(persisted_checksums.get("wt") or "")
@@ -209,7 +207,7 @@ class JwpubWorker(QObject):
     def _serve_mwb_cached(self, monday: date) -> bool:
         """Fase 1 (SWR): renderiza o MWB do cache local sem rede. True se servido."""
         issue = mwb_issue_for_week(monday)
-        lang  = self._lang
+        lang = self._lang
         if not self._cache.is_cached("mwb", lang, issue):
             return False
         self._parse_mwb(
@@ -237,9 +235,9 @@ class JwpubWorker(QObject):
         Fase 2 (SWR): consulta a API e só re-emite se o conteúdo do servidor
         mudou. ``served`` indica se a fase 1 já mostrou uma cópia do cache.
         """
-        key   = monday.isoformat()
+        key = monday.isoformat()
         issue = mwb_issue_for_week(monday)
-        lang  = self._lang
+        lang = self._lang
 
         archive_info = resolve_jwpub_archive("mwb", lang, issue)
         url = archive_info.download_url
@@ -257,34 +255,26 @@ class JwpubWorker(QObject):
                         monday,
                         mwb_status="loading",
                         mwb_issue=issue,
-                        mwb_source_checksum=self._checksum_store.get(
-                            "mwb", lang, issue
-                        ),
+                        mwb_source_checksum=self._checksum_store.get("mwb", lang, issue),
                     ),
                     monday,
                     issue,
                     lang,
                 )
                 return
-            self._emit_error(
-                key, "mwb", "NOT_FOUND" if not_found else f"No URL for mwb {issue}"
-            )
+            self._emit_error(key, "mwb", "NOT_FOUND" if not_found else f"No URL for mwb {issue}")
             return
 
         needs_materialization_download = materialize_cached and not served
-        if (
-            not needs_materialization_download
-            and not self._needs_jwpub_refresh(
-                "mwb",
-                lang,
-                issue,
-                checksum,
-                persisted_source_checksum=persisted_source_checksum,
-            )
+        if not needs_materialization_download and not self._needs_jwpub_refresh(
+            "mwb",
+            lang,
+            issue,
+            checksum,
+            persisted_source_checksum=persisted_source_checksum,
         ):
-            if (
-                (not served and materialize_cached)
-                or (checksum and checksum != persisted_source_checksum)
+            if (not served and materialize_cached) or (
+                checksum and checksum != persisted_source_checksum
             ):
                 self._parse_mwb(
                     self._new_week_data(
@@ -324,7 +314,7 @@ class JwpubWorker(QObject):
         )
 
     def _parse_mwb(self, wd: meeting_models.WeekData, monday: date, issue: str, lang: str):
-        key     = monday.isoformat()
+        key = monday.isoformat()
         pub_dir = self._ensure_extract("mwb", lang, issue)
         db_path = self._cache.db_path("mwb", lang, issue) if pub_dir else None
         if not pub_dir or not db_path:
@@ -343,14 +333,14 @@ class JwpubWorker(QObject):
             self._emit_if_active(self.mwb_done, key, wd)
             return
 
-        wd.mwb_pub_dir     = pub_dir
-        wd.mwb_date_label  = content.date_label
-        wd.mwb_week_title  = content.date_label
-        wd.mwb_all_media   = content.media_items
+        wd.mwb_pub_dir = pub_dir
+        wd.mwb_date_label = content.date_label
+        wd.mwb_week_title = content.date_label
+        wd.mwb_all_media = content.media_items
         wd.mwb_publication_refs = content.publication_refs
         wd.mwb_cover_bytes = content.cover_bytes
-        wd.mwb_status      = "ready"
-        wd.cbs_ref         = content.cbs_ref
+        wd.mwb_status = "ready"
+        wd.cbs_ref = content.cbs_ref
         sync_cbs_from_publication_refs(wd)
         if content.publication_refs:
             wd.cbs_status = "loading"
@@ -416,9 +406,7 @@ class JwpubWorker(QObject):
             archive_info = resolve_jwpub_archive("w", lang, issue)
             url = archive_info.download_url
             checksum = archive_info.checksum
-            needs_materialization_download = (
-                materialize_cached and served_issue is None
-            )
+            needs_materialization_download = materialize_cached and served_issue is None
             if url and (
                 needs_materialization_download
                 or self._needs_jwpub_refresh(
@@ -470,8 +458,9 @@ class JwpubWorker(QObject):
             watchtower_issue_candidates(monday)[:],
         )
 
-    def _try_wt_cached(self, wd: meeting_models.WeekData, monday: date,
-                        issue: str, lang: str) -> bool:
+    def _try_wt_cached(
+        self, wd: meeting_models.WeekData, monday: date, issue: str, lang: str
+    ) -> bool:
         pub_dir = self._ensure_extract("w", lang, issue)
         db_path = self._cache.db_path("w", lang, issue) if pub_dir else None
         if not pub_dir or not db_path:
@@ -521,17 +510,13 @@ class JwpubWorker(QObject):
                     wd = self._new_week_data(
                         monday,
                         wt_status="loading",
-                        wt_source_checksum=self._checksum_store.get(
-                            "w", lang, issue
-                        ),
+                        wt_source_checksum=self._checksum_store.get("w", lang, issue),
                     )
                     if self._try_wt_cached(wd, monday, issue, lang):
                         return
                 continue
 
-            if needs_jwpub_download(
-                self._cache, self._checksum_store, "w", lang, issue, checksum
-            ):
+            if needs_jwpub_download(self._cache, self._checksum_store, "w", lang, issue, checksum):
                 if not self._download("w", lang, issue, url, key, "wt"):
                     continue
                 self._checksum_store.save("w", lang, issue, checksum)
@@ -562,11 +547,7 @@ class JwpubWorker(QObject):
     ) -> bool:
         """Return whether a confirmed remote revision requires tree rebuilding."""
 
-        if (
-            checksum
-            and persisted_source_checksum
-            and persisted_source_checksum == checksum
-        ):
+        if checksum and persisted_source_checksum and persisted_source_checksum == checksum:
             return False
         return needs_jwpub_download(
             self._cache,
@@ -578,7 +559,7 @@ class JwpubWorker(QObject):
         )
 
     def _parse_wt(self, wd: meeting_models.WeekData, monday: date, issue: str, lang: str):
-        key     = monday.isoformat()
+        key = monday.isoformat()
         pub_dir = self._ensure_extract("w", lang, issue)
         db_path = self._cache.db_path("w", lang, issue) if pub_dir else None
         if not pub_dir or not db_path:
@@ -596,21 +577,18 @@ class JwpubWorker(QObject):
             wd.wt_status = "empty"
             self._emit_if_active(self.wt_done, key, wd)
             return
-        wd.wt_pub_dir     = pub_dir
-        wd.wt_issue       = issue
+        wd.wt_pub_dir = pub_dir
+        wd.wt_issue = issue
         wd.wt_study_title = content.title
-        wd.wt_all_media   = content.media_items
+        wd.wt_all_media = content.media_items
         wd.wt_cover_bytes = content.cover_bytes
-        wd.wt_status      = "ready"
+        wd.wt_status = "ready"
         self._emit_if_active(self.wt_done, key, wd)
 
     def _sync_loaded_publication_refs(self, wd: meeting_models.WeekData, lang: str) -> None:
         sync_cbs_from_publication_refs(wd)
         cbs_ref = next(
-            (
-                ref for ref in (wd.mwb_publication_refs or [])
-                if getattr(ref, "is_cbs", False)
-            ),
+            (ref for ref in (wd.mwb_publication_refs or []) if getattr(ref, "is_cbs", False)),
             None,
         )
         if cbs_ref:
@@ -682,7 +660,7 @@ class JwpubWorker(QObject):
         issue = ref.issue or "0"
 
         if cache_only:
-            for cand in ([issue] if issue == "0" else [issue, "0"]):
+            for cand in [issue] if issue == "0" else [issue, "0"]:
                 if self._cache.is_cached(pub, lang, cand):
                     if cand != issue:
                         ref.issue = cand
@@ -715,9 +693,7 @@ class JwpubWorker(QObject):
             self._checksum_store.save(pub, lang, issue, checksum)
             downloaded = True
         elif not url and is_cached:
-            log.warning(
-                "mwb ref %s/%s: API unreachable, using stale cache", pub, issue
-            )
+            log.warning("mwb ref %s/%s: API unreachable, using stale cache", pub, issue)
 
         return self._parse_ref_items(pub, lang, issue, ref), downloaded
 
@@ -736,29 +712,48 @@ class JwpubWorker(QObject):
             ref.caption,
         )
 
-    # ── Video URL resolution (async, called from main thread via signal) ──────
+    # ── Media URL resolution (async, called from main thread via signal) ──────
 
-    @Slot(str, str, int, int, int, str, bool)
-    def resolve_video_async(self, request_id: str, key_symbol: str,
-                             track: int, issue_tag: int,
-                             meps_doc_id: int, lang: str,
-                             is_sign_language: bool):
-        """Resolve URL de vídeo em background. Resultado via video_resolved signal."""
-        result = resolve_meeting_video(key_symbol, track, issue_tag, meps_doc_id, lang,
-                                is_sign_language=is_sign_language)
+    @Slot(str, str, int, int, int, str, str, bool)
+    def resolve_media_async(
+        self,
+        request_id: str,
+        key_symbol: str,
+        track: int,
+        issue_tag: int,
+        meps_doc_id: int,
+        media_type: str,
+        lang: str,
+        is_sign_language: bool,
+    ):
+        """Resolve meeting media metadata in the worker thread."""
+        result = resolve_meeting_media(
+            key_symbol,
+            track,
+            issue_tag,
+            meps_doc_id,
+            lang,
+            is_sign_language=is_sign_language,
+            media_type=media_type,
+        )
         self._emit_if_active(
-            self.video_resolved,
+            self.media_resolved,
             request_id,
-            result.get("url", ""),
-            result.get("title", ""),
-            result.get("thumbnail", ""),
+            result,
         )
 
     # ── Internal download helper ───────────────────────────────────────────────
 
-    def _download(self, pub: str, lang: str, issue: str,
-                  url: str, key: str, pub_ui: str,
-                  emit_error: bool = True) -> bool:
+    def _download(
+        self,
+        pub: str,
+        lang: str,
+        issue: str,
+        url: str,
+        key: str,
+        pub_ui: str,
+        emit_error: bool = True,
+    ) -> bool:
         """
         Baixa o arquivo, emitindo progress. Retorna True se sucesso.
 
@@ -784,8 +779,13 @@ class JwpubWorker(QObject):
             if emit_error:
                 self._emit_error(key, pub_ui, str(exc))
             else:
-                log.warning("%s %s/%s: background re-download failed, keeping "
-                            "served cache: %s", pub_ui, pub, issue, exc)
+                log.warning(
+                    "%s %s/%s: background re-download failed, keeping served cache: %s",
+                    pub_ui,
+                    pub,
+                    issue,
+                    exc,
+                )
             return False
 
     def _ensure_extract(self, pub: str, lang: str, issue: str) -> Optional[Path]:
@@ -793,5 +793,6 @@ class JwpubWorker(QObject):
         if ep.exists() and any(ep.glob("*.db")):
             return ep
         return self._cache.extract(pub, lang, issue)
+
 
 __all__ = ["JwpubWorker"]

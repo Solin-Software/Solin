@@ -56,6 +56,7 @@ from solin.core.network.http import HttpError, get_json as http_get_json
 log = logging.getLogger(__name__)
 
 _HTTP_TIMEOUT = 15
+_SONG_CACHE_SCHEMA_VERSION = 2
 
 # ── Base URL comum ────────────────────────────────────────────────────────────
 
@@ -70,6 +71,7 @@ _JW_MEDIATOR_CLIPS = (
     "https://b.jw-cdn.org/apis/mediator/v1/categories/{code}/AudioOriginalSongs"
     "?detailed=1&clientType=www"
 )
+
 
 def song_publication_symbol(is_sign_language: bool) -> str:
     """
@@ -148,8 +150,8 @@ def pick_quality(
     order = list(VIDEO_QUALITY_ORDER)
     if preferred in order:
         idx = order.index(preferred)
-        above = [q for q in order[:idx]    if q in labels_set]  # mais alto primeiro
-        below = [q for q in order[idx+1:]  if q in labels_set]  # mais baixo primeiro
+        above = [q for q in order[:idx] if q in labels_set]  # mais alto primeiro
+        below = [q for q in order[idx + 1 :] if q in labels_set]  # mais baixo primeiro
     else:
         above = [q for q in order if q in labels_set]
         below = []
@@ -167,6 +169,7 @@ def pick_quality(
 # ══════════════════════════════════════════════════════════════════════════════
 # Cânticos — vídeo (MP4 / sjjm ou sjj)
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def _cache_path(
     api_code: str,
@@ -212,7 +215,12 @@ def _is_cache_valid(
     cache_dir: str | os.PathLike[str],
 ) -> bool:
     path = _cache_path(api_code, is_sign, cache_dir)
-    return _is_cache_payload_fresh(_read_cache_json(path), "songs")
+    data = _read_cache_json(path)
+    return bool(
+        data
+        and data.get("_schema_version") == _SONG_CACHE_SCHEMA_VERSION
+        and _is_cache_payload_fresh(data, "songs")
+    )
 
 
 def _load_cache(
@@ -236,8 +244,15 @@ def _save_cache(
     path = _cache_path(api_code, is_sign, cache_dir)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(
-            {"_fetched_at": time.time(), "pub_name": pub_name, "songs": songs},
-            f, ensure_ascii=False, indent=2,
+            {
+                "_schema_version": _SONG_CACHE_SCHEMA_VERSION,
+                "_fetched_at": time.time(),
+                "pub_name": pub_name,
+                "songs": songs,
+            },
+            f,
+            ensure_ascii=False,
+            indent=2,
         )
 
 
@@ -301,7 +316,22 @@ def parse_songs(data: dict, api_code: str, fmt: str) -> tuple[list, str]:
             continue
 
         duration = item.get("duration", 0) or 0
-        songs.append({"number": num, "title": name, "url": url, "duration": duration})
+        track_image = item.get("trackImage")
+        if isinstance(track_image, dict):
+            thumbnail_url = str(track_image.get("url") or "")
+        elif isinstance(track_image, str):
+            thumbnail_url = track_image
+        else:
+            thumbnail_url = ""
+        songs.append(
+            {
+                "number": num,
+                "title": name,
+                "url": url,
+                "duration": duration,
+                "thumbnail_url": thumbnail_url,
+            }
+        )
         if is_audio:
             seen_numbers.add(num)
 
@@ -353,6 +383,13 @@ def fetch_songs(
                 is_sign_language=False,
                 cache_dir=cache_dir,
             )
+        cached_songs, cached_pub_name, cached_at = _load_cache(
+            api_code,
+            is_sign_language,
+            cache_dir,
+        )
+        if cached_songs is not None:
+            return cached_songs, cached_pub_name, float(cached_at), True
         raise
 
     songs, pub_name = parse_songs(data, api_code, fmt)
@@ -373,6 +410,7 @@ def fetch_songs(
 # ══════════════════════════════════════════════════════════════════════════════
 # Cânticos — áudio (MP3 ou MP4 para gestuais, sjjm ou sjj)
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def _songs_audio_cache_path(
     api_code: str,
@@ -416,7 +454,9 @@ def _save_songs_audio_cache(
     with open(path, "w", encoding="utf-8") as f:
         json.dump(
             {"_fetched_at": time.time(), "pub_name": pub_name, "songs": songs},
-            f, ensure_ascii=False, indent=2,
+            f,
+            ensure_ascii=False,
+            indent=2,
         )
 
 
@@ -480,6 +520,7 @@ def fetch_songs_audio(
 # Clipes musicais (Original Songs — pub=osg)
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def _clips_cache_path(
     api_code: str,
     is_sign: bool,
@@ -521,7 +562,9 @@ def _save_clips_cache(
     with open(path, "w", encoding="utf-8") as f:
         json.dump(
             {"_fetched_at": time.time(), "clips": clips},
-            f, ensure_ascii=False, indent=2,
+            f,
+            ensure_ascii=False,
+            indent=2,
         )
 
 
@@ -547,7 +590,7 @@ def _parse_clips_mediator(data: dict) -> list:
     for item in media_items:
         if not isinstance(item, dict):
             continue
-        title    = item.get("title", "").strip()
+        title = item.get("title", "").strip()
         duration = item.get("duration", 0) or 0
         url = ""
         for f in item.get("files", []):
@@ -667,6 +710,7 @@ def fetch_clips(
 # ══════════════════════════════════════════════════════════════════════════════
 # Utilitários de cache (usados por settings_widget, etc.)
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def get_cache_date(
     api_code: str,

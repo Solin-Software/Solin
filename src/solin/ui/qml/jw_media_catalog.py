@@ -15,6 +15,7 @@ Architecture
     navigation, client-side title search, item selection, and placement logic
     for inserting a video into the current playlist.
 """
+
 from __future__ import annotations
 
 import logging
@@ -40,7 +41,7 @@ from solin.core.media.placement import (
 )
 from solin.core.i18n.media_placement import translate_media_placement
 from solin.core.media.identity import contains_media, media_identity
-from solin.core.media.insertion import MediaInsertResult
+from solin.core.media.insertion import MediaInsertPayload, MediaInsertResult
 
 if TYPE_CHECKING:
     from solin.core.jw.catalog_service import JWMediaCatalogService
@@ -84,48 +85,49 @@ class JWMediaCatalogModel(QAbstractListModel):
     """
 
     # Roles
-    TitleRole            = Qt.ItemDataRole.UserRole + 1
-    ThumbnailSourceRole  = Qt.ItemDataRole.UserRole + 2
-    DurationTextRole     = Qt.ItemDataRole.UserRole + 3
-    ItemIdRole           = Qt.ItemDataRole.UserRole + 4
-    DownloadUrlRole      = Qt.ItemDataRole.UserRole + 5
-    LabelRole            = Qt.ItemDataRole.UserRole + 6
-    PubRole              = Qt.ItemDataRole.UserRole + 7
-    TrackRole            = Qt.ItemDataRole.UserRole + 8
-    DocIdRole            = Qt.ItemDataRole.UserRole + 9
-    LanguageRole         = Qt.ItemDataRole.UserRole + 10
-    DurationSecondsRole  = Qt.ItemDataRole.UserRole + 11
-    DurationTicksRole    = Qt.ItemDataRole.UserRole + 12
+    TitleRole = Qt.ItemDataRole.UserRole + 1
+    ThumbnailSourceRole = Qt.ItemDataRole.UserRole + 2
+    DurationTextRole = Qt.ItemDataRole.UserRole + 3
+    ItemIdRole = Qt.ItemDataRole.UserRole + 4
+    DownloadUrlRole = Qt.ItemDataRole.UserRole + 5
+    LabelRole = Qt.ItemDataRole.UserRole + 6
+    PubRole = Qt.ItemDataRole.UserRole + 7
+    TrackRole = Qt.ItemDataRole.UserRole + 8
+    DocIdRole = Qt.ItemDataRole.UserRole + 9
+    LanguageRole = Qt.ItemDataRole.UserRole + 10
+    DurationSecondsRole = Qt.ItemDataRole.UserRole + 11
+    DurationTicksRole = Qt.ItemDataRole.UserRole + 12
 
     _ROLE_NAMES: dict[int, bytes] = {
-        TitleRole:           b"title",
+        TitleRole: b"title",
         ThumbnailSourceRole: b"thumbnailSource",
-        DurationTextRole:    b"durationText",
-        ItemIdRole:          b"itemId",
-        DownloadUrlRole:     b"downloadUrl",
-        LabelRole:           b"label",
-        PubRole:             b"pub",
-        TrackRole:           b"track",
-        DocIdRole:           b"docId",
-        LanguageRole:        b"language",
+        DurationTextRole: b"durationText",
+        ItemIdRole: b"itemId",
+        DownloadUrlRole: b"downloadUrl",
+        LabelRole: b"label",
+        PubRole: b"pub",
+        TrackRole: b"track",
+        DocIdRole: b"docId",
+        LanguageRole: b"language",
         DurationSecondsRole: b"durationSeconds",
-        DurationTicksRole:   b"durationTicks",
+        DurationTicksRole: b"durationTicks",
     }
 
     _ROLE_KEY: dict[int, str] = {
-        TitleRole:           "title",
+        TitleRole: "title",
         ThumbnailSourceRole: "_thumb_source",
-        DurationTextRole:    "_duration_text",
-        ItemIdRole:          "id",
-        DownloadUrlRole:     "download_url",
-        LabelRole:           "label",
-        PubRole:             "pub",
-        TrackRole:           "track",
-        DocIdRole:           "docid",
-        LanguageRole:        "language",
+        DurationTextRole: "_duration_text",
+        ItemIdRole: "id",
+        DownloadUrlRole: "download_url",
+        LabelRole: "label",
+        PubRole: "pub",
+        TrackRole: "track",
+        DocIdRole: "docid",
+        LanguageRole: "language",
         DurationSecondsRole: "duration_seconds",
-        DurationTicksRole:   "duration_ticks",
+        DurationTicksRole: "duration_ticks",
     }
+
     def __init__(self, parent: Optional[QObject] = None) -> None:
         super().__init__(parent)
         self._items: list[dict[str, Any]] = []
@@ -157,9 +159,7 @@ class JWMediaCatalogModel(QAbstractListModel):
         desired = [self._enrich(item) for item in items]
         desired_ids = [self._identity(item) for item in desired]
         if not self._has_unique_identities(desired_ids):
-            log.warning(
-                "[CatalogModel] Replacing page with invalid or duplicate identities"
-            )
+            log.warning("[CatalogModel] Replacing page with invalid or duplicate identities")
             return self._replace_rows(desired)
         if not desired:
             changed = bool(self._items)
@@ -223,10 +223,7 @@ class JWMediaCatalogModel(QAbstractListModel):
     ) -> None:
         """Update one matching thumbnail without accepting a stale URL result."""
         for i, item in enumerate(self._items):
-            if (
-                item.get("id") != item_id
-                or item.get("thumbnail_url") != thumbnail_url
-            ):
+            if item.get("id") != item_id or item.get("thumbnail_url") != thumbnail_url:
                 continue
             thumb_source = _file_url(local_path) if local_path else ""
             if item.get("_thumb_source") == thumb_source:
@@ -295,9 +292,7 @@ class JWMediaCatalogModel(QAbstractListModel):
         if current == item:
             return False
         changed_roles = [
-            role
-            for role, key in self._ROLE_KEY.items()
-            if current.get(key) != item.get(key)
+            role for role, key in self._ROLE_KEY.items() if current.get(key) != item.get(key)
         ]
         self._items[row] = item
         if changed_roles:
@@ -324,20 +319,20 @@ class JWMediaCatalogBridge(QObject):
 
     # ── Notify signals ────────────────────────────────────────────────────
 
-    modelChanged           = Signal()
-    isLoadingChanged       = Signal()
-    hasMoreChanged         = Signal()
-    errorMessageChanged    = Signal()
+    modelChanged = Signal()
+    isLoadingChanged = Signal()
+    hasMoreChanged = Signal()
+    errorMessageChanged = Signal()
     currentCategoryChanged = Signal()
-    searchQueryChanged     = Signal()
-    resultCountChanged     = Signal()
-    pageChanged            = Signal()
-    pageCountChanged       = Signal()
-    loadProgressChanged    = Signal()
+    searchQueryChanged = Signal()
+    resultCountChanged = Signal()
+    pageChanged = Signal()
+    pageCountChanged = Signal()
+    loadProgressChanged = Signal()
     includeAudioDescriptionChanged = Signal()
-    showPlacementChanged   = Signal()
+    showPlacementChanged = Signal()
     placementOptionsChanged = Signal()
-    pendingItemChanged     = Signal()
+    pendingItemChanged = Signal()
 
     # ── Action signals ────────────────────────────────────────────────────
 
@@ -351,7 +346,7 @@ class JWMediaCatalogBridge(QObject):
         catalog_service_factory: Callable[[QObject], JWMediaCatalogService],
         thumbnail_session_factory: JWCatalogThumbnailSessionFactory,
         *,
-        insertion_handler: Callable[[dict[str, Any], str, int], MediaInsertResult],
+        insertion_handler: Callable[[MediaInsertPayload, str, int], MediaInsertResult],
         parent: Optional[QObject] = None,
     ) -> None:
         super().__init__(parent)
@@ -791,14 +786,16 @@ class JWMediaCatalogBridge(QObject):
         previous_page = self._current_page
         query = self._search_query.strip().lower()
         source_items = [
-            item for item in self._all_items
+            item
+            for item in self._all_items
             if self._include_audio_description
             or not str(item.get("primary_category", "")).endswith("AD")
         ]
         if query:
             search_terms = [term for term in query.split() if term]
             self._filtered_items = [
-                item for item in source_items
+                item
+                for item in source_items
                 if all(term in (item.get("title") or "").lower() for term in search_terms)
             ]
         else:
@@ -878,10 +875,7 @@ class JWMediaCatalogBridge(QObject):
         if not local_path:
             return
         for item in self._all_items:
-            if (
-                item.get("id") != item_id
-                or item.get("thumbnail_url") != thumbnail_url
-            ):
+            if item.get("id") != item_id or item.get("thumbnail_url") != thumbnail_url:
                 continue
             item["thumbnail_path"] = local_path
             self._resolved_thumbnails[(item_id, thumbnail_url)] = local_path
@@ -926,19 +920,19 @@ class JWMediaCatalogBridge(QObject):
 
         # Build a clean item-data dict for consumers.
         item_data: dict[str, Any] = {
-            k: v for k, v in self._pending_item.items()
-            if not k.startswith("_")
+            k: v for k, v in self._pending_item.items() if not k.startswith("_")
         }
         title = item_data.get("title", "")
         source_id = str(
-            item_data.get("natural_key")
-            or item_data.get("guid")
-            or item_data.get("id")
-            or ""
+            item_data.get("natural_key") or item_data.get("guid") or item_data.get("id") or ""
         )
         if source_id:
             item_data["jw_media_id"] = source_id
-        result = self._insertion_handler(item_data, target_list_id, target_index)
+        result = self._insertion_handler(
+            MediaInsertPayload.from_mapping(item_data),
+            target_list_id,
+            target_index,
+        )
         if result.added_count:
             self.mediaAdded.emit(str(title))
             self.cancelSelection()

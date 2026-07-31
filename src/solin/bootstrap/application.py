@@ -80,6 +80,7 @@ from solin.bootstrap.container import initialize_application_container
 from solin.bootstrap.file_open import (
     ApplicationFileOpenRouter,
 )
+
 log = logging.getLogger(__name__)
 from solin.core.foundation.resources import application_asset_path
 from solin.bootstrap.profile_flow import wire_profile_switch
@@ -132,9 +133,7 @@ def _build_main_window_profile_settings(profile_settings):
         camera=CameraSettingsStore.for_profile_settings(profile_settings),
         projection_playback=ProjectionPlaybackSettingsStore.for_profile_settings(profile_settings),
         meeting_schedule=MeetingScheduleSettingsStore.for_profile_settings(profile_settings),
-        media_countdown=(
-            MediaCountdownSettingsStore.for_profile_settings(profile_settings)
-        ),
+        media_countdown=(MediaCountdownSettingsStore.for_profile_settings(profile_settings)),
         watched_folder=WatchedFolderSettingsStore.for_profile_settings(profile_settings),
         yeartext=YeartextSettingsStore.for_profile_settings(profile_settings),
         background_song=BackgroundSongSettingsStore.for_profile_settings(profile_settings),
@@ -184,28 +183,34 @@ def _prepare_profile_main_window(profile_paths, cancellation=None):
         ProfileMaintenanceCancelled,
         ProfileMaintenanceService,
     )
+    from solin.core.foundation.resource_lanes import ResourceLaneRegistry
+    from solin.core.meetings.meeting_weeks import meeting_week_bounds
+    from solin.core.meetings.tree_store import MeetingTreeStore
+    from solin.core.playlists.storage import PlaylistRepository, PlaylistStoragePaths
+
+    storage_paths = PlaylistStoragePaths(
+        playlists_file=profile_paths.playlists_file,
+        pending_deletions_file=profile_paths.pending_deletions_file,
+    )
+    lanes = ResourceLaneRegistry()
+    meeting_tree_store = MeetingTreeStore(
+        profile_paths.meeting_trees_file,
+        resource_lanes=lanes,
+    )
+    playlist_repository = PlaylistRepository.from_paths(
+        storage_paths,
+        resource_lanes=lanes,
+    )
+
+    # Schema validation and migration are startup gates. Let failures reach the
+    # async-load error boundary so the UI cannot mutate unsupported/corrupt data.
+    playlist_repository.migrate_strict()
+    meeting_tree_store.migrate_strict()
 
     try:
-        from solin.core.foundation.resource_lanes import ResourceLaneRegistry
-        from solin.core.meetings.meeting_weeks import meeting_week_bounds
-        from solin.core.meetings.tree_store import MeetingTreeStore
-        from solin.core.playlists.storage import PlaylistRepository, PlaylistStoragePaths
-
-        storage_paths = PlaylistStoragePaths(
-            playlists_file=profile_paths.playlists_file,
-            pending_deletions_file=profile_paths.pending_deletions_file,
-        )
-        lanes = ResourceLaneRegistry()
-        meeting_tree_store = MeetingTreeStore(
-            profile_paths.meeting_trees_file,
-            resource_lanes=lanes,
-        )
         maintenance = ProfileMaintenanceService(
             storage_paths=storage_paths,
-            playlist_repository=PlaylistRepository.from_paths(
-                storage_paths,
-                resource_lanes=lanes,
-            ),
+            playlist_repository=playlist_repository,
             meeting_tree_store=meeting_tree_store,
             profile_paths=profile_paths,
             resource_lanes=lanes,
@@ -224,7 +229,7 @@ def _prepare_profile_main_window(profile_paths, cancellation=None):
             cancellation.run_if_active(prune_expired_trees)
     except ProfileMaintenanceCancelled:
         pass
-    except Exception:  # noqa: BLE001 - fail-closed maintenance boundary
+    except Exception:  # noqa: BLE001 - best-effort cleanup boundary
         from solin.core.foundation.exception_logging import log_ignored_exception
 
         log_ignored_exception(__name__, "Pre-UI profile maintenance failed")
@@ -254,6 +259,7 @@ def _build_main_window_service_factories(
     from solin.core.jw.yeartext import YeartextService
     from solin.core.meetings.memorial import MemorialService
     from solin.core.meetings.publications import JwpubService
+
     install_id_provider = lambda: get_install_id(installation_settings)
 
     def create_remote_services(parent):
@@ -586,9 +592,7 @@ def _launch_profile_window(
     from solin.core.windowing.settings import WindowGeometrySettingsStore
     from solin.bootstrap.application_window import ApplicationWindow
 
-    geometry_settings = WindowGeometrySettingsStore.for_profile_settings(
-        profile_context.settings
-    )
+    geometry_settings = WindowGeometrySettingsStore.for_profile_settings(profile_context.settings)
     width, height = geometry_settings.initial_size(1200, 760)
     window = ApplicationWindow(
         width=width,
@@ -751,9 +755,7 @@ def main():
         sys.exit(_run_zoom_poll_standalone(app, csv_args[0], lang_manager))
 
     # ── Single-instance ───────────────────────────────────────────────────────
-    ipc_server_name = (
-        os.environ.get("SOLIN_IPC_SERVER_NAME", "").strip() or IPC_SERVER_NAME
-    )
+    ipc_server_name = os.environ.get("SOLIN_IPC_SERVER_NAME", "").strip() or IPC_SERVER_NAME
     if try_forward_to_running(file_args, server_name=ipc_server_name):
         sys.exit(0)
     single_instance = SingleInstanceServer(

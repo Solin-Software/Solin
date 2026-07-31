@@ -50,9 +50,7 @@ from __future__ import annotations
 import io
 import logging
 import os
-import re
 import sqlite3
-import urllib.parse
 import zipfile
 from collections.abc import Callable
 from concurrent.futures import CancelledError
@@ -60,19 +58,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-from solin.core.network.http import HttpError, get_json
-from solin.core.foundation.constants import (
-    VIDEO_PREFERRED_QUALITY,
-    VIDEO_QUALITY_FALLBACK_DIR,
-    VIDEO_QUALITY_ORDER,
-)
-from solin.core.jw.identifiers import meps_to_lang
+from solin.core.jw.metadata import resolve_jworg_meta
 
 log = logging.getLogger(__name__)
-
-# ── Constantes JW.org ──────────────────────────────────────────────────────────
-_JWORG_API = "https://b.jw-cdn.org/apis/pub-media/GETPUBMEDIALINKS"
-_TIMEOUT    = 8   # segundos
 
 ProgressCallback = Callable[[str, int, int | None], None]
 CancelCallback = Callable[[], bool]
@@ -81,63 +69,66 @@ _READ_CHUNK_SIZE = 1024 * 1024
 
 # Mapa simples MimeType → extensão de arquivo
 _MIME_TO_EXT: dict[str, str] = {
-    "image/jpeg":   ".jpg",
-    "image/jpg":    ".jpg",
-    "image/png":    ".png",
-    "image/gif":    ".gif",
-    "image/webp":   ".webp",
-    "image/bmp":    ".bmp",
-    "image/svg+xml":".svg",
-    "video/mp4":    ".mp4",
-    "video/webm":   ".webm",
-    "audio/mpeg":   ".mp3",
-    "audio/mp4":    ".m4a",
-    "audio/ogg":    ".ogg",
+    "image/jpeg": ".jpg",
+    "image/jpg": ".jpg",
+    "image/png": ".png",
+    "image/gif": ".gif",
+    "image/webp": ".webp",
+    "image/bmp": ".bmp",
+    "image/svg+xml": ".svg",
+    "video/mp4": ".mp4",
+    "video/webm": ".webm",
+    "audio/mpeg": ".mp3",
+    "audio/mp4": ".m4a",
+    "audio/ogg": ".ogg",
 }
 
 
 # ── Dataclasses internos ──────────────────────────────────────────────────────
 
+
 @dataclass
 class _RawItem:
     """Representa um item bruto da tabela PlaylistItem."""
-    playlist_item_id:      int
-    label:                 str
-    position:              int
-    start_trim_ticks:      Optional[int] = None
-    end_trim_ticks:        Optional[int] = None
-    accuracy:              Optional[int] = None
-    end_action:            Optional[int] = None
-    thumbnail_file_path:   Optional[str] = None
+
+    playlist_item_id: int
+    label: str
+    position: int
+    start_trim_ticks: Optional[int] = None
+    end_trim_ticks: Optional[int] = None
+    accuracy: Optional[int] = None
+    end_action: Optional[int] = None
+    thumbnail_file_path: Optional[str] = None
     # preenchidos depois da junção com as tabelas de mapa:
     independent_media_id: Optional[int] = None
-    location_id:          Optional[int] = None
+    location_id: Optional[int] = None
 
 
 @dataclass
 class _IndependentMedia:
-    filepath:       str          # relativo dentro do ZIP
-    original_name:  str
-    mime_type:      str
+    filepath: str  # relativo dentro do ZIP
+    original_name: str
+    mime_type: str
     duration_ticks: Optional[int] = None
-    hash_:          str = ""
-    data:           bytes = field(default_factory=bytes, repr=False)
+    hash_: str = ""
+    data: bytes = field(default_factory=bytes, repr=False)
 
 
 @dataclass
 class _Location:
-    location_id:           int
-    key_symbol:            str
-    track:                 Optional[int]
-    issue_tag:             Optional[int]
-    doc_id:                Optional[int]
-    language_id:           int = 0
-    meps_language:         int = 0
+    location_id: int
+    key_symbol: str
+    track: Optional[int]
+    issue_tag: Optional[int]
+    doc_id: Optional[int]
+    language_id: int = 0
+    meps_language: int = 0
     major_multimedia_type: Optional[int] = None  # 0=audio, 2=video (da PlaylistItemLocationMap)
-    base_duration_ticks:   Optional[int] = None
+    base_duration_ticks: Optional[int] = None
 
 
 # ── Parser principal ──────────────────────────────────────────────────────────
+
 
 class PlaylistReadError(ValueError):
     """A playlist archive exists but its internal data cannot be read."""
@@ -290,7 +281,9 @@ class JWLPlaylistReader:
             try:
                 Path(tmp_path).unlink(missing_ok=True)
             except OSError:
-                log.warning("Could not remove temporary playlist database %s", tmp_path, exc_info=True)
+                log.warning(
+                    "Could not remove temporary playlist database %s", tmp_path, exc_info=True
+                )
 
         if mem is None:
             raise PlaylistReadError("Could not initialize playlist database")
@@ -381,11 +374,7 @@ class JWLPlaylistReader:
         # row[1] é o nome original da coluna; usamos o mapa lower→original
 
         # ── Coluna de ID ───────────────────────────────────────────────────────
-        id_col = (
-            col_names_lower.get("playlistitemid")
-            or col_names_lower.get("id")
-            or "rowid"
-        )
+        id_col = col_names_lower.get("playlistitemid") or col_names_lower.get("id") or "rowid"
 
         # ── Coluna de rótulo ───────────────────────────────────────────────────
         label_col = (
@@ -407,7 +396,9 @@ class JWLPlaylistReader:
 
         log.debug(
             "PlaylistItem colunas detectadas -> id=%s  label=%s  order=%s",
-            id_col, label_col, order_col,
+            id_col,
+            label_col,
+            order_col,
         )
 
         def _q(col: str) -> str:
@@ -429,15 +420,15 @@ class JWLPlaylistReader:
 
         # Colunas extras (opcionais)
         extra_cols = {
-            "start_trim":  _col("StartTrimOffsetTicks"),
-            "end_trim":    _col("EndTrimOffsetTicks"),
-            "accuracy":    _col("Accuracy"),
-            "end_action":  _col("EndAction"),
-            "thumbnail":   _col("ThumbnailFilePath"),
+            "start_trim": _col("StartTrimOffsetTicks"),
+            "end_trim": _col("EndTrimOffsetTicks"),
+            "accuracy": _col("Accuracy"),
+            "end_action": _col("EndAction"),
+            "thumbnail": _col("ThumbnailFilePath"),
         }
         for alias, orig in extra_cols.items():
             if orig:
-                select_parts.append(f'{_q(orig)} AS {alias}')
+                select_parts.append(f"{_q(orig)} AS {alias}")
 
         sql = "SELECT " + ", ".join(select_parts) + " FROM PlaylistItem " + order_clause
         log.debug("Query PlaylistItem: %s", sql)
@@ -473,16 +464,18 @@ class JWLPlaylistReader:
                 except (IndexError, KeyError):
                     return None
 
-            result.append(_RawItem(
-                playlist_item_id    = pid,
-                label               = lbl or f"Item {pos + 1}",
-                position            = pos,
-                start_trim_ticks    = _safe("start_trim"),
-                end_trim_ticks      = _safe("end_trim"),
-                accuracy            = _safe("accuracy"),
-                end_action          = _safe("end_action"),
-                thumbnail_file_path = _safe("thumbnail"),
-            ))
+            result.append(
+                _RawItem(
+                    playlist_item_id=pid,
+                    label=lbl or f"Item {pos + 1}",
+                    position=pos,
+                    start_trim_ticks=_safe("start_trim"),
+                    end_trim_ticks=_safe("end_trim"),
+                    accuracy=_safe("accuracy"),
+                    end_action=_safe("end_action"),
+                    thumbnail_file_path=_safe("thumbnail"),
+                )
+            )
 
         return result
 
@@ -494,13 +487,9 @@ class JWLPlaylistReader:
         result: dict[int, _IndependentMedia] = {}
         map_columns = {
             str(row["name"]).lower()
-            for row in con.execute(
-                "PRAGMA table_info(PlaylistItemIndependentMediaMap)"
-            ).fetchall()
+            for row in con.execute("PRAGMA table_info(PlaylistItemIndependentMediaMap)").fetchall()
         }
-        duration_column = (
-            "m.DurationTicks" if "durationticks" in map_columns else "NULL"
-        )
+        duration_column = "m.DurationTicks" if "durationticks" in map_columns else "NULL"
         try:
             rows = con.execute(
                 f"""
@@ -552,12 +541,12 @@ class JWLPlaylistReader:
                 continue
 
             result[row["PlaylistItemId"]] = _IndependentMedia(
-                filepath       = file_path,
-                original_name  = orig_name,
-                mime_type      = mime_type,
-                duration_ticks = row["DurationTicks"],
-                hash_          = hash_value,
-                data           = data,
+                filepath=file_path,
+                original_name=orig_name,
+                mime_type=mime_type,
+                duration_ticks=row["DurationTicks"],
+                hash_=hash_value,
+                data=data,
             )
             self._report_progress("media_items", index + 1, total_media)
 
@@ -592,17 +581,17 @@ class JWLPlaylistReader:
         for row in rows:
             self._raise_if_cancelled()
             result[row["PlaylistItemId"]] = _Location(
-                location_id           = row["LocationId"],
-                key_symbol            = _database_text(
+                location_id=row["LocationId"],
+                key_symbol=_database_text(
                     row["KeySymbol"],
                     "Location.KeySymbol",
                 ),
-                track                 = row["Track"],
-                issue_tag             = row["IssueTagNumber"],
-                doc_id                = row["DocumentId"],
-                meps_language         = row["MepsLanguage"],
-                major_multimedia_type = row["MajorMultimediaType"],
-                base_duration_ticks   = row["BaseDurationTicks"],
+                track=row["Track"],
+                issue_tag=row["IssueTagNumber"],
+                doc_id=row["DocumentId"],
+                meps_language=row["MepsLanguage"],
+                major_multimedia_type=row["MajorMultimediaType"],
+                base_duration_ticks=row["BaseDurationTicks"],
             )
 
         return result
@@ -651,18 +640,18 @@ class JWLPlaylistReader:
             media_type = "video"
 
         return {
-            "title":             raw.label,
-            "type":              media_type,
-            "source":            "embedded",
-            "data":              media.data,
-            "mime_type":         media.mime_type,
-            "filename":          media.original_name,
-            "url":               None,
-            "start_trim_ticks":  raw.start_trim_ticks,
-            "end_trim_ticks":    raw.end_trim_ticks,
+            "title": raw.label,
+            "type": media_type,
+            "source": "embedded",
+            "data": media.data,
+            "mime_type": media.mime_type,
+            "filename": media.original_name,
+            "url": None,
+            "start_trim_ticks": raw.start_trim_ticks,
+            "end_trim_ticks": raw.end_trim_ticks,
             "base_duration_ticks": media.duration_ticks,
-            "accuracy":          raw.accuracy,
-            "end_action":        raw.end_action,
+            "accuracy": raw.accuracy,
+            "end_action": raw.end_action,
         }
 
     def _build_image_entry(self, raw: _RawItem, media: _IndependentMedia) -> dict:
@@ -671,31 +660,31 @@ class JWLPlaylistReader:
             ext = Path(media.original_name).suffix or ".jpg"
 
         return {
-            "title":             raw.label,
-            "type":              "image",
-            "source":            "embedded",
-            "data":              media.data,
-            "mime_type":         media.mime_type,
-            "filename":          media.original_name,
-            "url":               None,
-            "start_trim_ticks":  raw.start_trim_ticks,
-            "end_trim_ticks":    raw.end_trim_ticks,
+            "title": raw.label,
+            "type": "image",
+            "source": "embedded",
+            "data": media.data,
+            "mime_type": media.mime_type,
+            "filename": media.original_name,
+            "url": None,
+            "start_trim_ticks": raw.start_trim_ticks,
+            "end_trim_ticks": raw.end_trim_ticks,
             "base_duration_ticks": media.duration_ticks,
-            "accuracy":          raw.accuracy,
-            "end_action":        raw.end_action,
+            "accuracy": raw.accuracy,
+            "end_action": raw.end_action,
         }
 
     def _build_video_entry(self, raw: _RawItem, loc: _Location) -> dict:
-        meta = resolve_jworg_metadata(
-            key_symbol            = loc.key_symbol,
-            track                 = loc.track,
-            issue_tag             = loc.issue_tag,
-            doc_id                = loc.doc_id,
-            meps_language         = loc.meps_language,
-            fallback_lang_code    = self._fallback_lang_code,
-            major_multimedia_type = loc.major_multimedia_type,
+        meta = resolve_jworg_meta(
+            key_symbol=loc.key_symbol,
+            doc_id=loc.doc_id,
+            track=loc.track,
+            issue_tag=loc.issue_tag,
+            meps_language=loc.meps_language,
+            fallback_lang=self._fallback_lang_code,
+            major_multimedia_type=loc.major_multimedia_type,
         )
-        url            = meta["url"]            if meta else None
+        url = meta["url"] if meta else None
         duration_ticks = (
             loc.base_duration_ticks
             if loc.base_duration_ticks is not None
@@ -703,7 +692,7 @@ class JWLPlaylistReader:
         )
         # Título canônico da API (ex: "Faça amizade com os mais velhos") tem
         # prioridade sobre o Label do banco — que pode ter sido editado/sufixado.
-        api_title      = meta.get("title")      if meta else None
+        api_title = meta.get("title") if meta else None
 
         if loc.major_multimedia_type == 0:
             media_type = "audio"
@@ -711,29 +700,31 @@ class JWLPlaylistReader:
             media_type = "video"
         else:
             _AUDIO_PREFIXES = ("sjj", "osg", "ia", "km")
-            media_type = "audio" if (loc.key_symbol or "").lower().startswith(_AUDIO_PREFIXES) else "video"
+            media_type = (
+                "audio" if (loc.key_symbol or "").lower().startswith(_AUDIO_PREFIXES) else "video"
+            )
 
         return {
-            "title":                  api_title or raw.label,
-            "type":                   media_type,
-            "source":                 "jworg",
-            "data":                   None,
-            "jworg_url":              url,
-            "url":                    url,
-            "key_symbol":             loc.key_symbol,
-            "track":                  loc.track,
-            "issue_tag":              loc.issue_tag,
-            "doc_id":                 loc.doc_id,
-            "language":               loc.meps_language,
-            "meps_language":          loc.meps_language,
-            "major_multimedia_type":  loc.major_multimedia_type,
-            "base_duration_ticks":    duration_ticks,
-            "start_trim_ticks":       raw.start_trim_ticks,
-            "end_trim_ticks":         raw.end_trim_ticks,
-            "accuracy":               raw.accuracy,
-            "end_action":             raw.end_action,
+            "title": api_title or raw.label,
+            "type": media_type,
+            "source": "jworg",
+            "data": None,
+            "jworg_url": url,
+            "url": url,
+            "key_symbol": loc.key_symbol,
+            "track": loc.track,
+            "issue_tag": loc.issue_tag,
+            "doc_id": loc.doc_id,
+            "language": loc.meps_language,
+            "meps_language": loc.meps_language,
+            "major_multimedia_type": loc.major_multimedia_type,
+            "base_duration_ticks": duration_ticks,
+            "start_trim_ticks": raw.start_trim_ticks,
+            "end_trim_ticks": raw.end_trim_ticks,
+            "accuracy": raw.accuracy,
+            "end_action": raw.end_action,
         }
-        
+
     def print_schema(self) -> None:
         """
         Lê o userData.db do ZIP e imprime na tela o esquema real de todas as tabelas.
@@ -745,22 +736,22 @@ class JWLPlaylistReader:
         with zipfile.ZipFile(self._path, "r") as zf:
             self._zip = zf
             self._names_in_zip = set(zf.namelist())
-            
+
             db_entry = self._find_db()
             if not db_entry:
                 log.error("userData.db not found in .jwlplaylist file")
                 return
-                
+
             db_bytes = self._zip.read(db_entry)
-            
+
             # Reutiliza o sistema robusto de conexão do _parse_db, mas altera o extrator final
             # Em vez de retornar self._extract, passamos uma função de dump temporária
             self._dump_schema(db_bytes)
-            
+
     def _dump_schema(self, db_bytes: bytes):
         import tempfile
         import os
-        
+
         fd, tmp_path = tempfile.mkstemp(suffix=".db", prefix="debug_jwl_")
         os.write(fd, db_bytes)
         os.close(fd)
@@ -776,15 +767,15 @@ class JWLPlaylistReader:
                 f" ESQUEMA DO BANCO: {self._path.name}",
                 "=" * 50,
             ]
-            
+
             # Pega todas as tabelas
             tables = con.execute("SELECT name FROM sqlite_master WHERE type='table';").fetchall()
-            
+
             for table_row in tables:
                 table_name = table_row["name"]
                 lines.append("")
                 lines.append(f"Table: {table_name}")
-                
+
                 # Pega as colunas de cada tabela
                 columns = con.execute(f"PRAGMA table_info('{table_name}')").fetchall()
                 for col in columns:
@@ -793,7 +784,7 @@ class JWLPlaylistReader:
 
             lines.extend(["", "=" * 50, ""])
             log.info("\n%s", "\n".join(lines))
-                    
+
         finally:
             if con is not None:
                 con.close()
@@ -801,6 +792,7 @@ class JWLPlaylistReader:
 
 
 # ── Função solta no final do arquivo (perto do read_jwlplaylist) ──────────────
+
 
 def introspect_jwlplaylist(path: str | Path) -> None:
     """
@@ -810,250 +802,9 @@ def introspect_jwlplaylist(path: str | Path) -> None:
     reader = JWLPlaylistReader(path)
     reader.print_schema()
 
-# ── Resolução de URL JW.org ───────────────────────────────────────────────────
-
-def resolve_jworg_url(
-    key_symbol:             str,
-    track:                  Optional[int] = None,
-    issue_tag:              Optional[int] = None,
-    doc_id:                 Optional[int] = None,
-    meps_language:          int           = 0,
-    quality:                str           = VIDEO_PREFERRED_QUALITY,
-    fallback_lang_code:     str           = "E",
-    major_multimedia_type:  Optional[int] = None,
-) -> Optional[str]:
-    """
-    Consulta a API publica do JW.org para obter a URL de streaming/download.
-
-    BUG 3 FIX: major_multimedia_type=0 → áudio → fileformat=MP3.
-    major_multimedia_type=2 (ou None/outro) → vídeo → fileformat=MP4.
-
-    A API retorna seções diferentes dependendo do fileformat pedido:
-      files > <lang_code> > MP4 > [...]   para vídeos
-      files > <lang_code> > MP3 > [...]   para áudios
-
-    fallback_lang_code: api_code do LanguageManager (usado quando meps_language
-    nao esta no mapa conhecido).
-    """
-    # Precisa de pelo menos key_symbol OU doc_id para identificar a publicação
-    if not key_symbol and not doc_id:
-        return None
-
-    # Decide o formato com base no tipo da mídia
-    is_audio  = (major_multimedia_type == 0)
-    fileformat = "MP3" if is_audio else "MP4"
-
-    lang_code = meps_to_lang(meps_language, fallback=fallback_lang_code)
-
-    params: dict[str, str] = {
-        "langwritten": lang_code,
-        "fileformat":  fileformat,
-    }
-    if key_symbol:
-        params["pub"] = key_symbol
-    if track is not None:
-        params["track"] = str(track)
-    if issue_tag:
-        params["issue"] = str(issue_tag)
-    if doc_id:
-        params["docid"] = str(doc_id)
-
-    api_url = f"{_JWORG_API}?{urllib.parse.urlencode(params)}"
-    log.debug("Resolving JW.org URL (%s): %s", fileformat, api_url)
-
-    try:
-        data = get_json(api_url, timeout=_TIMEOUT, headers={"User-Agent": "Solin/1.0"})
-    except HttpError as e:
-        log.warning("Could not resolve JW.org URL for '%s': %s", key_symbol, e)
-        return None
-
-    result = _extract_best_entry(data, lang_code=lang_code, preferred_quality=quality,
-                                 fileformat=fileformat)
-    if result is None:
-        return None
-    return result["url"]
-
-
-def resolve_jworg_metadata(
-    key_symbol:             str,
-    track:                  Optional[int] = None,
-    issue_tag:              Optional[int] = None,
-    doc_id:                 Optional[int] = None,
-    meps_language:          int           = 0,
-    quality:                str           = VIDEO_PREFERRED_QUALITY,
-    fallback_lang_code:     str           = "E",
-    major_multimedia_type:  Optional[int] = None,
-) -> Optional[dict]:
-    """
-    Como resolve_jworg_url, mas retorna um dict completo:
-      { "url": str, "duration_ticks": int | None }
-
-    duration_ticks = duration_seconds × 10_000_000
-    (1 tick = 100 ns, padrão Windows FILETIME — idêntico ao JW Library).
-
-    Retorna None se não conseguir resolver.
-    """
-    # Precisa de pelo menos key_symbol OU doc_id para identificar a publicação
-    if not key_symbol and not doc_id:
-        return None
-
-    is_audio   = (major_multimedia_type == 0)
-    fileformat = "MP3" if is_audio else "MP4"
-    lang_code  = meps_to_lang(meps_language, fallback=fallback_lang_code)
-
-    params: dict[str, str] = {
-        "langwritten": lang_code,
-        "fileformat":  fileformat,
-    }
-    if key_symbol:
-        params["pub"] = key_symbol
-    if track is not None:
-        params["track"] = str(track)
-    if issue_tag:
-        params["issue"] = str(issue_tag)
-    if doc_id:
-        params["docid"] = str(doc_id)
-
-    api_url = f"{_JWORG_API}?{urllib.parse.urlencode(params)}"
-    log.debug("Resolving JW.org metadata (%s): %s", fileformat, api_url)
-
-    try:
-        data = get_json(api_url, timeout=_TIMEOUT, headers={"User-Agent": "Solin/1.0"})
-    except HttpError as e:
-        log.warning("Could not resolve JW.org metadata for '%s': %s", key_symbol, e)
-        return None
-
-    entry = _extract_best_entry(data, lang_code=lang_code, preferred_quality=quality,
-                                fileformat=fileformat)
-    if entry is None:
-        return None
-
-    # duration na API é em segundos (float); converte para ticks de 100 ns
-    duration_s     = entry.get("duration_seconds")
-    duration_ticks = int(duration_s * 10_000_000) if duration_s else None
-
-    return {
-        "url":            entry["url"],
-        "duration_ticks": duration_ticks,
-        "title":          entry.get("title"),   # título canônico da API (pode ser None)
-    }
-
-
-def _extract_best_entry(
-    api_response:      dict,
-    lang_code:         str = "T",
-    preferred_quality: str = VIDEO_PREFERRED_QUALITY,
-    fileformat:        str = "MP4",
-) -> Optional[dict]:
-    """
-    Navega pela resposta da API JW.org e retorna um dict com:
-      { "url": str, "duration_seconds": float | None }
-
-    Para MP3: maior bitrate disponível.
-    Para MP4: usa VIDEO_PREFERRED_QUALITY + VIDEO_QUALITY_FALLBACK_DIR (constants.py),
-    sem legenda. Degrada conforme a direção configurada se necessário.
-    """
-    files = api_response.get("files", {})
-    fmt   = fileformat.upper()
-
-    lang_section = files.get(lang_code, {})
-    entries: list[dict] = lang_section.get(fmt, [])
-
-    if not entries:
-        for section in files.values():
-            if isinstance(section, dict):
-                candidate = section.get(fmt, [])
-                if candidate:
-                    entries = candidate
-                    break
-
-    if not entries:
-        log.warning("No %s file found in API response (lang=%s).", fmt, lang_code)
-        return None
-
-    def _url_from_entry(e: dict) -> Optional[str]:
-        return (
-            (e.get("file") or {}).get("url")
-            or e.get("progressiveDownloadURL")
-            or e.get("url")
-        )
-
-    def _make_result(e: dict) -> Optional[dict]:
-        url = _url_from_entry(e)
-        if not url:
-            return None
-        # A API devolve "duration" em segundos (float) em cada entrada de arquivo
-        dur = e.get("duration") or (e.get("file") or {}).get("duration")
-        # "title" na entrada da API é o título oficial da faixa
-        title = e.get("title")
-        # Labels de qualidade ("720p", "480p"…) não são títulos
-        if title and re.match(r'^\d+[pP]$|^\d+kbps$', title.strip(), re.I):
-            title = None
-        return {
-            "url":              url,
-            "duration_seconds": float(dur) if dur else None,
-            "title":            title.strip() if title else None,
-        }
-
-    # ── Áudio (MP3) ───────────────────────────────────────────────────────────
-    if fmt == "MP3":
-        for bitrate in ["320kbps", "256kbps", "192kbps", "128kbps", "96kbps", "64kbps", "32kbps"]:
-            for e in entries:
-                if isinstance(e, dict) and e.get("label") == bitrate:
-                    r = _make_result(e)
-                    if r:
-                        log.debug("MP3 selected: label=%s  %s", bitrate, r["url"])
-                        return r
-        for e in entries:
-            if isinstance(e, dict):
-                r = _make_result(e)
-                if r:
-                    return r
-        return None
-
-    # ── Vídeo (MP4) — qualidade centralizada de constants.py ──────────────────
-    labels_found = {e.get("label") for e in entries if isinstance(e, dict)}
-
-    # Constrói fallback seguindo VIDEO_QUALITY_FALLBACK_DIR
-    order = list(VIDEO_QUALITY_ORDER)
-    if preferred_quality in order:
-        idx   = order.index(preferred_quality)
-        above = [q for q in order[:idx]   if q in labels_found]
-        below = [q for q in order[idx+1:] if q in labels_found]
-    else:
-        above = [q for q in order if q in labels_found]
-        below = []
-
-    if VIDEO_QUALITY_FALLBACK_DIR == "above":
-        quality_order = [preferred_quality] + above + below
-    else:  # "below" (padrão)
-        quality_order = [preferred_quality] + below + above
-
-    # Labels desconhecidos ao final (robustez a novas resoluções JW)
-    quality_order += [q for q in labels_found if q not in quality_order]
-
-    for q in quality_order:
-        for e in entries:
-            if not isinstance(e, dict): continue
-            if e.get("label") == q and e.get("subtitled") is False:
-                r = _make_result(e)
-                if r:
-                    log.debug("MP4 selected: label=%s subtitled=False  %s", q, r["url"])
-                    return r
-
-    for q in quality_order:
-        for e in entries:
-            if not isinstance(e, dict): continue
-            if e.get("label") == q:
-                r = _make_result(e)
-                if r:
-                    log.debug("MP4 selected (with subtitles): label=%s  %s", q, r["url"])
-                    return r
-
-    log.warning("No usable URL found in API entries.")
-    return None
 
 # ── Função de conveniência ────────────────────────────────────────────────────
+
 
 def read_jwlplaylist(
     path: str | Path,
