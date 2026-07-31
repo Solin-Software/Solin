@@ -412,7 +412,10 @@ def test_internal_playlist_file_and_item_schema_are_stable(
 
     repository.save([playlist])
 
-    assert json.loads(playlists_file.read_text(encoding="utf-8")) == {"playlists": [playlist]}
+    assert json.loads(playlists_file.read_text(encoding="utf-8")) == {
+        "version": 1,
+        "playlists": [playlist],
+    }
     assert repository.load() == [playlist]
     assert set(item) == {
         "id",

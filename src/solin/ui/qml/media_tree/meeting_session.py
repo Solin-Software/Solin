@@ -13,6 +13,7 @@ from PySide6.QtGui import QImage
 
 from solin.controllers.media_tree_runtime import MediaTreeRuntime
 from solin.core.media.operations import MediaOperationRecord, MediaOperationState
+from solin.core.media.thumbnail_identity import thumbnail_source_fingerprint
 from solin.core.meetings.tree_types import iter_nodes
 from solin.ui.qml.media_tree.meeting_presenter import (
     MeetingTreePresenter,
@@ -204,8 +205,7 @@ class MeetingTreeSession(QObject):
                 candidate_id
                 for candidate_id, pending in self._pending.items()
                 if any(
-                    str(node.get("id") or "") == node_id
-                    for node in iter_nodes(list(pending.nodes))
+                    str(node.get("id") or "") == node_id for node in iter_nodes(list(pending.nodes))
                 )
             ),
             "",
@@ -266,11 +266,7 @@ class MeetingTreeSession(QObject):
 
     @Slot()
     def _resume_deferred_publish(self) -> None:
-        if (
-            self._publish_dirty
-            and self._tree_id
-            and not self._publish_timer.isActive()
-        ):
+        if self._publish_dirty and self._tree_id and not self._publish_timer.isActive():
             self._publish_timer.start()
 
     def _refresh_structure_revision(self) -> None:
@@ -316,10 +312,7 @@ class MeetingTreeSession(QObject):
         )
         badge_provider = self._badge_provider
         badges = (
-            {
-                media_type: badge_provider(media_type)
-                for media_type in ("audio", "image", "video")
-            }
+            {media_type: badge_provider(media_type) for media_type in ("audio", "image", "video")}
             if badge_provider is not None
             else {}
         )
@@ -388,7 +381,8 @@ class MeetingTreeSession(QObject):
 
     def _sync_sources(self, *, request_all: bool, request_changed: bool = True) -> None:
         media_nodes = [
-            node for node in iter_nodes(list(self._nodes))
+            node
+            for node in iter_nodes(list(self._nodes))
             if node.get("type") == "media" and node.get("id")
         ]
         by_id = {str(node["id"]): node for node in media_nodes}
@@ -426,12 +420,16 @@ class MeetingTreeSession(QObject):
             self._request_node(node, item_id, source)
 
     def _request_node(self, node: dict[str, Any], item_id: str, source: str) -> None:
+        thumbnail_expected_signature = ""
+        if node.get("thumbnail_binding") == "jw_artwork" and node.get("thumbnail_url"):
+            thumbnail_expected_signature = thumbnail_source_fingerprint(str(node["thumbnail_url"]))
         self._runtime.probes.request(
             owner_id=self._owner_id,
             node_id=item_id,
             source=source,
             thumbnail_path=self._thumbnail_path(node, item_id, source),
             thumbnail_source=f"image://playlistthumbs/{item_id}",
+            thumbnail_expected_signature=thumbnail_expected_signature,
         )
 
     @Slot(str, str)

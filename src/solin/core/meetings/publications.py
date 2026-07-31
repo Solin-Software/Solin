@@ -19,7 +19,7 @@ Isso elimina:
   • HTTP bloqueante na main thread (_get_jwpub_url era síncrono)
   • QRunnable + _Signals com moveToThread (AutoConnection frágil)
   • threading.Thread emitindo signals (sem QThread wrapper = DirectConnection)
-  • resolve_video() síncrono chamado de _MediaRow no __init__
+  • resolução síncrona de mídia durante construção da UI
 """
 
 from __future__ import annotations
@@ -33,10 +33,13 @@ from datetime import date
 from typing import Optional
 
 from PySide6.QtCore import (
-    QObject, QThread, Signal, Slot,
+    QObject,
+    QThread,
+    Signal,
+    Slot,
 )
 
-from solin.core.jw.publication_archive import resolve_meeting_video
+from solin.core.jw.publication_archive import resolve_meeting_media
 from . import models as meeting_models
 from .jwpub_cache import JwpubChecksumStore
 from .publication_worker import JwpubWorker
@@ -61,6 +64,7 @@ class _WeekLoadRequest:
 
 # ── JwpubService — vive na main thread, gerencia o worker thread ──────────────
 
+
 class JwpubService(QObject):
     """
     API pública para a UI. Vive na main thread.
@@ -73,23 +77,25 @@ class JwpubService(QObject):
       week_ready(key, WeekData)
       progress(key, pub, pct)
       error_sig(key, pub, msg)
-      video_resolved(request_id, url, title, thumbnail)
+      media_resolved(request_id, metadata)
     """
-    mwb_ready      = Signal(str, object)
-    wt_ready       = Signal(str, object)
-    cbs_ready      = Signal(str, object)
-    week_ready     = Signal(str, object)
-    progress       = Signal(str, str, int)
-    error_sig      = Signal(str, str, str)
+
+    mwb_ready = Signal(str, object)
+    wt_ready = Signal(str, object)
+    cbs_ready = Signal(str, object)
+    week_ready = Signal(str, object)
+    progress = Signal(str, str, int)
+    error_sig = Signal(str, str, str)
     context_progress = Signal(str, str, int, str, bool, int)
     context_error = Signal(str, str, str, str, bool, int)
-    video_resolved = Signal(str, str, str, str)   # request_id, url, title, thumb
+    media_resolved = Signal(str, object)  # request_id, resolved metadata
 
     # Sinais internos para o worker (despacham para a worker thread)
-    _sig_load_week         = Signal(object, bool, str, bool, int, object, str, object)
-    _sig_set_lang          = Signal(str)
+    _sig_load_week = Signal(object, bool, str, bool, int, object, str, object)
+    _sig_set_lang = Signal(str)
     _sig_set_sign_language = Signal(bool)
-    _sig_resolve           = Signal(str, str, int, int, int, str, bool)
+    _sig_resolve = Signal(str, str, int, int, int, str, str, bool)
+
     def __init__(
         self,
         jwpub_cache_dir: str | os.PathLike[str],
@@ -98,7 +104,7 @@ class JwpubService(QObject):
     ) -> None:
         super().__init__(parent)
         self._active: dict[tuple[str, str, bool, int], meeting_models.WeekData] = {}
-        self._lang   = "T"
+        self._lang = "T"
         self._is_sign_language = False
         self._load_order = itertools.count()
         self._pending_loads: dict[
@@ -123,13 +129,13 @@ class JwpubService(QObject):
         self._worker.progress.connect(self._on_worker_progress)
         self._worker.error.connect(self._on_worker_error)
         self._worker.load_finished.connect(self._on_load_finished)
-        self._worker.video_resolved.connect(self.video_resolved)
+        self._worker.media_resolved.connect(self.media_resolved)
 
         # JwpubService → Worker (worker thread, QueuedConnection automática)
         self._sig_load_week.connect(self._worker.load_week)
         self._sig_set_lang.connect(self._worker.set_lang)
         self._sig_set_sign_language.connect(self._worker.set_sign_language)
-        self._sig_resolve.connect(self._worker.resolve_video_async)
+        self._sig_resolve.connect(self._worker.resolve_media_async)
 
         self._thread.start()
 
@@ -207,11 +213,7 @@ class JwpubService(QObject):
         persisted_source_checksums: Mapping[str, str] | None = None,
     ):
         language = (language_code or self._lang).strip() or "T"
-        is_sign = (
-            self._is_sign_language
-            if is_sign_language is None
-            else bool(is_sign_language)
-        )
+        is_sign = self._is_sign_language if is_sign_language is None else bool(is_sign_language)
         key = self._active_key(monday, language, is_sign, generation)
         pending = self._pending_loads.get(key)
         if pending is not None:
@@ -320,11 +322,7 @@ class JwpubService(QObject):
         is_sign_language: bool | None = None,
     ) -> Optional[meeting_models.WeekData]:
         language = (language_code or self._lang).strip() or "T"
-        is_sign = (
-            self._is_sign_language
-            if is_sign_language is None
-            else bool(is_sign_language)
-        )
+        is_sign = self._is_sign_language if is_sign_language is None else bool(is_sign_language)
         candidates = [
             week
             for active_key, week in self._active.items()
@@ -334,29 +332,29 @@ class JwpubService(QObject):
             return None
         return max(candidates, key=lambda week: week.request_generation)
 
-    def resolve_video_async(self, request_id: str, item: "meeting_models.MeetingMedia"):
-        """
-        Resolve URL de vídeo de forma assíncrona.
-        Resultado chega via signal video_resolved(request_id, url, title, thumb).
-        NUNCA bloqueia a main thread.
-        """
+    def resolve_media_async(self, request_id: str, item: "meeting_models.MeetingMedia"):
+        """Resolve meeting media metadata without blocking the main thread."""
         self._sig_resolve.emit(
             request_id,
-            item.key_symbol, item.track, item.issue_tag,
-            item.meps_doc_id, self._lang, self._is_sign_language,
+            item.key_symbol,
+            item.track,
+            item.issue_tag,
+            item.meps_doc_id,
+            item.media_type,
+            self._lang,
+            self._is_sign_language,
         )
 
-    def resolve_video(self, item: "meeting_models.MeetingMedia") -> dict:
-        """
-        Resolve URL de vídeo de forma SÍNCRONA (bloqueia a main thread ~200ms).
-        Use apenas para ações pontuais do usuário (ex: clique em reproduzir),
-        nunca durante construção de widgets ou loops.
-        Para uso não-bloqueante, prefira resolve_video_async().
-        """
-        return resolve_meeting_video(
-            item.key_symbol, item.track, item.issue_tag,
-            item.meps_doc_id, self._lang,
+    def resolve_media(self, item: "meeting_models.MeetingMedia") -> dict:
+        """Resolve meeting media synchronously for explicit user actions."""
+        return resolve_meeting_media(
+            item.key_symbol,
+            item.track,
+            item.issue_tag,
+            item.meps_doc_id,
+            self._lang,
             is_sign_language=self._is_sign_language,
+            media_type=item.media_type,
         )
 
     def clear_week(self, monday: date):
@@ -400,17 +398,17 @@ class JwpubService(QObject):
         active_key = self._active_key_for_week_data(wd)
         existing = self._active.get(active_key)
         if existing:
-            existing.mwb_pub_dir     = wd.mwb_pub_dir
+            existing.mwb_pub_dir = wd.mwb_pub_dir
             existing.mwb_cover_bytes = wd.mwb_cover_bytes
-            existing.mwb_date_label  = wd.mwb_date_label
-            existing.mwb_week_title  = wd.mwb_week_title
-            existing.mwb_all_media   = wd.mwb_all_media
+            existing.mwb_date_label = wd.mwb_date_label
+            existing.mwb_week_title = wd.mwb_week_title
+            existing.mwb_all_media = wd.mwb_all_media
             existing.mwb_publication_refs = wd.mwb_publication_refs
-            existing.mwb_status      = wd.mwb_status
-            existing.mwb_issue       = wd.mwb_issue
+            existing.mwb_status = wd.mwb_status
+            existing.mwb_issue = wd.mwb_issue
             existing.mwb_source_checksum = wd.mwb_source_checksum
-            existing.cbs_ref         = wd.cbs_ref
-            existing.cbs_status      = wd.cbs_status
+            existing.cbs_ref = wd.cbs_ref
+            existing.cbs_status = wd.cbs_status
             self.mwb_ready.emit(key, existing)
             self._check_complete(key, existing)
         else:
@@ -423,13 +421,13 @@ class JwpubService(QObject):
         active_key = self._active_key_for_week_data(wd)
         existing = self._active.get(active_key)
         if existing:
-            existing.wt_pub_dir     = wd.wt_pub_dir
+            existing.wt_pub_dir = wd.wt_pub_dir
             existing.wt_cover_bytes = wd.wt_cover_bytes
             existing.wt_study_title = wd.wt_study_title
-            existing.wt_issue       = wd.wt_issue
+            existing.wt_issue = wd.wt_issue
             existing.wt_source_checksum = wd.wt_source_checksum
-            existing.wt_all_media   = wd.wt_all_media
-            existing.wt_status      = wd.wt_status
+            existing.wt_all_media = wd.wt_all_media
+            existing.wt_status = wd.wt_status
             self.wt_ready.emit(key, existing)
             self._check_complete(key, existing)
         else:
@@ -443,9 +441,9 @@ class JwpubService(QObject):
         existing = self._active.get(active_key)
         if existing:
             existing.cbs_pub_dir = wd.cbs_pub_dir
-            existing.cbs_items   = wd.cbs_items
+            existing.cbs_items = wd.cbs_items
             existing.mwb_publication_refs = wd.mwb_publication_refs
-            existing.cbs_status  = wd.cbs_status
+            existing.cbs_status = wd.cbs_status
             self.cbs_ready.emit(key, existing)
         else:
             self._active[active_key] = wd
@@ -522,10 +520,8 @@ class JwpubService(QObject):
         self._dispatch_week_load()
 
     def _check_complete(self, key: str, wd: meeting_models.WeekData):
-        if wd and wd.mwb_status in ("ready", "empty") \
-                and wd.wt_status in ("ready", "empty"):
+        if wd and wd.mwb_status in ("ready", "empty") and wd.wt_status in ("ready", "empty"):
             self.week_ready.emit(key, wd)
 
 
 # ── Public helpers ────────────────────────────────────────────────────────────
-

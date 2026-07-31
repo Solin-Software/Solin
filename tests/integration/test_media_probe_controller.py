@@ -101,9 +101,10 @@ def test_controller_retries_temporary_cloud_lock_without_ui_polling(
     controller.request(owner_id="playlist:1", node_id="media-1", source="cloud.mp4")
 
     _wait_until(
-        lambda: attempts >= 2
-        and registry.state("playlist:1", "media-1").availability
-        == MediaAvailability.AVAILABLE
+        lambda: (
+            attempts >= 2
+            and registry.state("playlist:1", "media-1").availability == MediaAvailability.AVAILABLE
+        )
     )
 
     assert registry.state("playlist:1", "media-1").local_path == "hydrated.mp4"
@@ -164,9 +165,11 @@ def test_controller_retries_existing_thumbnail_until_it_decodes(
         thumbnail_source="image://playlistthumbs/media-1",
     )
     _wait_until(
-        lambda: reads >= 2
-        and registry.state("playlist:1", "media-1").thumbnail_source
-        == "image://playlistthumbs/media-1"
+        lambda: (
+            reads >= 2
+            and registry.state("playlist:1", "media-1").thumbnail_source
+            == "image://playlistthumbs/media-1"
+        )
     )
 
     assert ready[0] is None
@@ -222,17 +225,62 @@ def test_controller_rejects_stale_thumbnail_when_same_path_content_changes(
         "thumbnail_source": "image://playlistthumbs/media-1",
     }
     controller.request(**request)
-    _wait_until(
-        lambda: registry.state("playlist:1", "media-1").source_signature == "10:20"
-    )
+    _wait_until(lambda: registry.state("playlist:1", "media-1").source_signature == "10:20")
     controller.request(**request)
-    _wait_until(
-        lambda: registry.state("playlist:1", "media-1").source_signature == "11:30"
-    )
+    _wait_until(lambda: registry.state("playlist:1", "media-1").source_signature == "11:30")
 
     assert isinstance(ready[0], QImage)
     assert ready[-1] is None
     assert registry.state("playlist:1", "media-1").thumbnail_source == ""
+    controller.shutdown()
+    _wait_until(lambda: coordinator.active_count == 0)
+    coordinator.shutdown()
+
+
+def test_controller_keeps_official_artwork_across_media_revision_changes(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    coordinator = MediaOperationCoordinator()
+    registry = MediaStateRegistry()
+    controller = MediaProbeController(
+        coordinator=coordinator,
+        registry=registry,
+        media_cache_dir=tmp_path / "cache",
+    )
+    ready = []
+    signatures = iter(("media:one", "media:two"))
+    monkeypatch.setattr(
+        "solin.controllers.media_probe_controller.probe_media_presentation",
+        lambda _request: MediaPresentationProbeResult(
+            ProbedMediaAvailability.AVAILABLE,
+            local_path="video.mp4",
+            thumbnail_exists=True,
+            thumbnail_source_signature="artwork:url",
+            source_signature=next(signatures),
+        ),
+    )
+    monkeypatch.setattr(
+        "solin.controllers.media_probe_controller._read_thumbnail",
+        lambda _path: QImage(2, 2, QImage.Format.Format_RGB32),
+    )
+    controller.thumbnailReady.connect(lambda *_args: ready.append(_args[2]))
+    request = {
+        "owner_id": "playlist:1",
+        "node_id": "media-1",
+        "source": "video.mp4",
+        "thumbnail_path": tmp_path / "thumb.jpg",
+        "thumbnail_source": "image://playlistthumbs/media-1",
+        "thumbnail_expected_signature": "artwork:url",
+    }
+
+    controller.request(**request)
+    _wait_until(lambda: registry.state("playlist:1", "media-1").source_signature == "media:one")
+    controller.request(**request)
+    _wait_until(lambda: registry.state("playlist:1", "media-1").source_signature == "media:two")
+
+    assert all(isinstance(image, QImage) for image in ready)
+    assert registry.state("playlist:1", "media-1").thumbnail_source
     controller.shutdown()
     _wait_until(lambda: coordinator.active_count == 0)
     coordinator.shutdown()
@@ -331,9 +379,10 @@ def test_controller_stabilizes_missing_local_media_before_confirming_absence(
     controller.request(owner_id="playlist:1", node_id="media-1", source="cloud.mp4")
 
     _wait_until(
-        lambda: attempts >= 3
-        and registry.state("playlist:1", "media-1").availability
-        == MediaAvailability.MISSING
+        lambda: (
+            attempts >= 3
+            and registry.state("playlist:1", "media-1").availability == MediaAvailability.MISSING
+        )
     )
 
     controller.shutdown()

@@ -693,7 +693,7 @@ class MediaProjectionController:
 
     def _resolve_and_project_meeting_item(self, item, title: str) -> None:
         service = self._context.meeting_service()
-        resolved = service.resolve_video(item)
+        resolved = service.resolve_media(item)
         url = resolved.get("url", "")
         if url:
             display_title = resolved.get("title") or title

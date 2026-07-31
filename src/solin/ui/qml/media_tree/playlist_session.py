@@ -13,7 +13,10 @@ from PySide6.QtGui import QImage
 
 from solin.controllers.media_tree_runtime import MediaTreeRuntime
 from solin.core.media.operations import MediaOperationRecord, MediaOperationState
-from solin.core.media.thumbnail_identity import thumbnail_storage_id
+from solin.core.media.thumbnail_identity import (
+    thumbnail_source_fingerprint,
+    thumbnail_storage_id,
+)
 from solin.core.playlists.tree_editing import (
     build_playlist_tree,
     can_drop_playlist_node,
@@ -290,9 +293,7 @@ class PlaylistTreeSession(QObject):
                 )
 
     def close(self) -> None:
-        for operation_id in {
-            operation.operation_id for operation in self._operations.values()
-        }:
+        for operation_id in {operation.operation_id for operation in self._operations.values()}:
             self._runtime.operations.cancel(operation_id)
             self._runtime.operations.discard(operation_id)
         if self._owner_id:
@@ -362,12 +363,8 @@ class PlaylistTreeSession(QObject):
             )
             for pending in self._pending.values()
         )
-        media_types = {
-            str(item.get("type") or "video")
-            for item in playlist.get("items", [])
-        } | {
-            str(pending.item.get("type") or "video")
-            for pending in pending_media
+        media_types = {str(item.get("type") or "video") for item in playlist.get("items", [])} | {
+            str(pending.item.get("type") or "video") for pending in pending_media
         }
         badges = {media_type: playlist_media_badge(media_type) for media_type in media_types}
         scheme = current_theme_scheme()
@@ -467,14 +464,24 @@ class PlaylistTreeSession(QObject):
             self._request_node(item_id, source)
 
     def _request_node(self, item_id: str, source: str) -> None:
+        item = next(
+            (
+                candidate
+                for candidate in (self._playlist or {}).get("items", [])
+                if str(candidate.get("id") or "") == item_id
+            ),
+            {},
+        )
+        thumbnail_expected_signature = ""
+        if item.get("thumbnail_binding") == "jw_artwork" and item.get("thumbnail_url"):
+            thumbnail_expected_signature = thumbnail_source_fingerprint(str(item["thumbnail_url"]))
         self._runtime.probes.request(
             owner_id=self._owner_id,
             node_id=item_id,
             source=source,
-            thumbnail_path=self._thumbnail_path(
-                thumbnail_storage_id(item_id, source)
-            ),
+            thumbnail_path=self._thumbnail_path(thumbnail_storage_id(item_id, source)),
             thumbnail_source=f"image://playlistthumbs/{item_id}",
+            thumbnail_expected_signature=thumbnail_expected_signature,
         )
 
     @Slot(str, str)

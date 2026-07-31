@@ -8,6 +8,15 @@ from pathlib import Path
 from typing import Any
 
 
+def media_type_for_mime_type(mime_type: str) -> str:
+    normalized = str(mime_type or "").strip().casefold()
+    if normalized.startswith("audio/"):
+        return "audio"
+    if normalized.startswith("image/"):
+        return "image"
+    return "video"
+
+
 @dataclass(slots=True)
 class MeetingMedia:
     multimedia_id: int = 0
@@ -30,6 +39,10 @@ class MeetingMedia:
     origin_kind: str = ""
     origin_container_id: str = ""
     origin_item_id: str = ""
+
+    @property
+    def media_type(self) -> str:
+        return media_type_for_mime_type(self.mime_type)
 
 
 @dataclass(slots=True)

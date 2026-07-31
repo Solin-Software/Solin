@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from ..media.formats import media_type_from_path
+from ..media.insertion import MediaInsertPayload
 from ..playlists.items import looks_like_filename_title
 from .models import MeetingMedia
 from .tree_types import Node, new_node_id
@@ -132,6 +133,52 @@ def create_manual_media_node(
         "children": [],
         "meeting_generated": False,
     }
+    return node
+
+
+def create_jw_media_node(
+    payload: MediaInsertPayload,
+    *,
+    node_id: str,
+    fallback_title: str,
+) -> Node:
+    """Project one normalized JW selection into a durable meeting node."""
+
+    title = payload.title or fallback_title
+    ref = {
+        "multimedia_id": 0,
+        "mime_type": mime_for_meeting_media(payload.source_url, payload.media_type),
+        "file_path": payload.source_url,
+        "label": title,
+        "caption": "",
+        "begin_ordinal": 0,
+        "key_symbol": payload.key_symbol,
+        "track": payload.track,
+        "issue_tag": payload.issue_tag,
+        "meps_doc_id": payload.doc_id,
+        "meps_language": payload.meps_language,
+        "language": payload.language,
+        "jw_media_id": payload.jw_media_id,
+        "jw_identity_authoritative": payload.jw_identity_authoritative,
+        "section": "",
+        "is_song": payload.key_symbol.lower() in {"sjj", "sjjm"},
+        "cbs_article_title": "",
+    }
+    node: Node = {
+        "id": node_id,
+        "type": "media",
+        "title": title,
+        "media_type": payload.media_type,
+        "media_ref": ref,
+        "children": [],
+        "meeting_generated": False,
+        "auto_title": True,
+    }
+    if payload.base_duration_ticks > 0:
+        node["base_duration_ticks"] = payload.base_duration_ticks
+    if payload.thumbnail_url:
+        node["thumbnail_url"] = payload.thumbnail_url
+        node["thumbnail_binding"] = "jw_artwork"
     return node
 
 

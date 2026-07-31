@@ -23,11 +23,17 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import (
-    QObject, Signal, Slot, QTimer,
-    QCoreApplication, QEvent,
+    QObject,
+    Signal,
+    Slot,
+    QTimer,
+    QCoreApplication,
+    QEvent,
 )
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QStackedWidget,
+    QWidget,
+    QVBoxLayout,
+    QStackedWidget,
 )
 
 from ...core.meetings.meeting_weeks import (
@@ -155,36 +161,40 @@ def _notify_meeting_tree_save_failed(
 
 # ── Study detail view (QML-based) ─────────────────────────────────────────────
 
+
 class StudyDetailView(QWidget):
     back_requested = Signal()
     play_requested = Signal(object)
     meeting_tree_saved = Signal(str)
 
-    def __init__(self, pub_type: str, wd: "WeekData", *,
-                 notifications=None,
-                 playback_protection,
-                 language_context: JWMediaLanguageContext,
-                 controller_factory: MeetingTreeControllerFactory,
-                 document_conversion_service: DocumentConversionService,
-                 jw_catalog_service_factory: Callable[[QObject], JWMediaCatalogService],
-                 jw_catalog_thumbnail_session_factory: JWCatalogThumbnailSessionFactory,
-                 jw_songs_store: JWSongsStore,
-                 saved_snapshot: MeetingTreeSnapshot,
-                 meeting_tree_saved_handler: Callable[[str], None] | None = None,
-                 watched_folder: str = "",
-                 parent=None):
+    def __init__(
+        self,
+        pub_type: str,
+        wd: "WeekData",
+        *,
+        notifications=None,
+        playback_protection,
+        language_context: JWMediaLanguageContext,
+        controller_factory: MeetingTreeControllerFactory,
+        document_conversion_service: DocumentConversionService,
+        jw_catalog_service_factory: Callable[[QObject], JWMediaCatalogService],
+        jw_catalog_thumbnail_session_factory: JWCatalogThumbnailSessionFactory,
+        jw_songs_store: JWSongsStore,
+        saved_snapshot: MeetingTreeSnapshot,
+        meeting_tree_saved_handler: Callable[[str], None] | None = None,
+        watched_folder: str = "",
+        parent=None,
+    ):
         super().__init__(parent)
-        self._pub   = pub_type
-        self._wd    = wd
+        self._pub = pub_type
+        self._wd = wd
         self._notifications = notifications
         self._playback_protection = playback_protection
         self._language_context = language_context
         self._controller_factory = controller_factory
         self._document_conversion_service = document_conversion_service
         self._jw_catalog_service_factory = jw_catalog_service_factory
-        self._jw_catalog_thumbnail_session_factory = (
-            jw_catalog_thumbnail_session_factory
-        )
+        self._jw_catalog_thumbnail_session_factory = jw_catalog_thumbnail_session_factory
         self._jw_songs_store = jw_songs_store
         self._meeting_tree_saved_handler = meeting_tree_saved_handler
         self._saved_snapshot = saved_snapshot
@@ -213,13 +223,9 @@ class StudyDetailView(QWidget):
         self.controller.backRequested.connect(self.back_requested.emit)
         self.controller.projectRequested.connect(self.play_requested.emit)
         self.controller.pointerEntered.connect(self.begin_qml_pointer_cursor)
-        self.controller.pointerCursorEntered.connect(
-            self.begin_qml_shaped_pointer_cursor
-        )
+        self.controller.pointerCursorEntered.connect(self.begin_qml_shaped_pointer_cursor)
         self.controller.pointerCursorChanged.connect(self.update_qml_pointer_cursor)
-        self.controller.pointerCursorExited.connect(
-            self.end_qml_shaped_pointer_cursor
-        )
+        self.controller.pointerCursorExited.connect(self.end_qml_shaped_pointer_cursor)
         self.controller.pointerExited.connect(self.end_qml_pointer_cursor)
         self.controller.storageSaved.connect(self.meeting_tree_saved.emit)
         if self._meeting_tree_saved_handler is not None:
@@ -243,6 +249,7 @@ class StudyDetailView(QWidget):
         self.songs_bridge = JWSongsBridge(
             self._jw_songs_store,
             insertion_handler=self.controller.add_from_jw_catalog,
+            thumbnail_session_factory=self._jw_catalog_thumbnail_session_factory,
             parent=self,
         )
         self._sync_songs_bridge_language()
@@ -274,9 +281,7 @@ class StudyDetailView(QWidget):
         self._post_frame_tasks_pending = True
         self._post_frame_window = self.qml_widget.quickWindow()
         if self._post_frame_window is not None:
-            self._post_frame_window.frameSwapped.connect(
-                self._on_first_detail_frame
-            )
+            self._post_frame_window.frameSwapped.connect(self._on_first_detail_frame)
             self.qml_widget.update()
         QTimer.singleShot(
             _POST_FRAME_TASK_FALLBACK_MS,
@@ -348,15 +353,14 @@ class StudyDetailView(QWidget):
         is_mwb = self._pub == "mwb"
         self.pill_text = (
             _tr_ctx("_PubCard", "LIFE & MINISTRY")
-            if is_mwb else _tr_ctx("_PubCard", "WATCHTOWER STUDY")
+            if is_mwb
+            else _tr_ctx("_PubCard", "WATCHTOWER STUDY")
         )
         date_lbl = week_label(self._wd.monday)
         if self._wd.mwb_date_label:
             date_lbl = self._wd.mwb_date_label
         self.date_text = date_lbl
-        self.no_items_text = _tr_ctx(
-            "StudyDetailView", "No media items found for this week."
-        )
+        self.no_items_text = _tr_ctx("StudyDetailView", "No media items found for this week.")
         if update_context and hasattr(self, "qml_widget"):
             self.qml_widget.update_shell_texts(
                 meeting_pill=self.pill_text,
@@ -450,14 +454,11 @@ class StudyDetailView(QWidget):
         paths = [
             url.toLocalFile()
             for url in event.mimeData().urls()
-            if url.isLocalFile()
-            and Path(url.toLocalFile()).suffix.lower() in accepted
+            if url.isLocalFile() and Path(url.toLocalFile()).suffix.lower() in accepted
         ]
-        list_id, insert_idx, tree_id, structure_revision = (
-            self.qml_widget.external_drop_target(
+        list_id, insert_idx, tree_id, structure_revision = self.qml_widget.external_drop_target(
             self,
             event.position().toPoint(),
-            )
         )
         if (
             tree_id != self.controller.treeIdentity()
@@ -494,31 +495,34 @@ class StudyDetailView(QWidget):
 
 # ── Memorial detail view (QML-based) ──────────────────────────────────────────
 
+
 class _MemorialDetailView(QWidget):
     back_requested = Signal()
     play_requested = Signal(object)
 
-    def __init__(self, md: "MemorialData", *,
-                 notifications=None,
-                 playback_protection,
-                 language_context: JWMediaLanguageContext,
-                 controller_factory: MeetingTreeControllerFactory,
-                 document_conversion_service: DocumentConversionService,
-                 jw_catalog_service_factory: Callable[[QObject], JWMediaCatalogService],
-                 jw_catalog_thumbnail_session_factory: JWCatalogThumbnailSessionFactory,
-                 jw_songs_store: JWSongsStore,
-                 parent=None):
+    def __init__(
+        self,
+        md: "MemorialData",
+        *,
+        notifications=None,
+        playback_protection,
+        language_context: JWMediaLanguageContext,
+        controller_factory: MeetingTreeControllerFactory,
+        document_conversion_service: DocumentConversionService,
+        jw_catalog_service_factory: Callable[[QObject], JWMediaCatalogService],
+        jw_catalog_thumbnail_session_factory: JWCatalogThumbnailSessionFactory,
+        jw_songs_store: JWSongsStore,
+        parent=None,
+    ):
         super().__init__(parent)
-        self._md  = md
+        self._md = md
         self._notifications = notifications
         self._playback_protection = playback_protection
         self._language_context = language_context
         self._controller_factory = controller_factory
         self._document_conversion_service = document_conversion_service
         self._jw_catalog_service_factory = jw_catalog_service_factory
-        self._jw_catalog_thumbnail_session_factory = (
-            jw_catalog_thumbnail_session_factory
-        )
+        self._jw_catalog_thumbnail_session_factory = jw_catalog_thumbnail_session_factory
         self._jw_songs_store = jw_songs_store
         self._disposed = False
         self.setAcceptDrops(True)
@@ -541,13 +545,9 @@ class _MemorialDetailView(QWidget):
         self.controller.backRequested.connect(self.back_requested.emit)
         self.controller.projectRequested.connect(self.play_requested.emit)
         self.controller.pointerEntered.connect(self.begin_qml_pointer_cursor)
-        self.controller.pointerCursorEntered.connect(
-            self.begin_qml_shaped_pointer_cursor
-        )
+        self.controller.pointerCursorEntered.connect(self.begin_qml_shaped_pointer_cursor)
         self.controller.pointerCursorChanged.connect(self.update_qml_pointer_cursor)
-        self.controller.pointerCursorExited.connect(
-            self.end_qml_shaped_pointer_cursor
-        )
+        self.controller.pointerCursorExited.connect(self.end_qml_shaped_pointer_cursor)
         self.controller.pointerExited.connect(self.end_qml_pointer_cursor)
         self.controller.storageSaveFailed.connect(self._on_storage_save_failed)
 
@@ -561,6 +561,7 @@ class _MemorialDetailView(QWidget):
         self.songs_bridge = JWSongsBridge(
             self._jw_songs_store,
             insertion_handler=self.controller.add_from_jw_catalog,
+            thumbnail_session_factory=self._jw_catalog_thumbnail_session_factory,
             parent=self,
         )
         self._sync_songs_bridge_language()
@@ -610,8 +611,7 @@ class _MemorialDetailView(QWidget):
     def _refresh_shell_texts(self, *, update_context: bool = True):
         self.pill_text = _tr_ctx("_MemorialCard", "MEMORIAL")
         self.date_text = (
-            format_single_date(self._md.memorial_date)
-            if self._md.memorial_date else ""
+            format_single_date(self._md.memorial_date) if self._md.memorial_date else ""
         )
         self.no_items_text = _tr_ctx("_MemorialDetailView", "No media items found.")
         if update_context and hasattr(self, "qml_widget"):
@@ -707,14 +707,11 @@ class _MemorialDetailView(QWidget):
         paths = [
             url.toLocalFile()
             for url in event.mimeData().urls()
-            if url.isLocalFile()
-            and Path(url.toLocalFile()).suffix.lower() in accepted
+            if url.isLocalFile() and Path(url.toLocalFile()).suffix.lower() in accepted
         ]
-        list_id, insert_idx, tree_id, structure_revision = (
-            self.qml_widget.external_drop_target(
+        list_id, insert_idx, tree_id, structure_revision = self.qml_widget.external_drop_target(
             self,
             event.position().toPoint(),
-            )
         )
         if (
             tree_id != self.controller.treeIdentity()
@@ -745,7 +742,10 @@ class _MemorialDetailView(QWidget):
     def deleteLater(self):
         self.dispose()
         super().deleteLater()
+
+
 # ── Main widget ───────────────────────────────────────────────────────────────
+
 
 class MeetingsWidget(QWidget):
     """
@@ -753,6 +753,7 @@ class MeetingsWidget(QWidget):
     Stack index 0 = overview  (navbar visible)
     Stack index 1+ = detail views (navbar hidden)
     """
+
     project_media = Signal(object)  # MeetingMedia
     destinationTargetsChanged = Signal(str)
 
@@ -794,10 +795,10 @@ class MeetingsWidget(QWidget):
             self.tr("Loading…"),
             self,
         )
-        self._lang_mgr  = lang_manager
+        self._lang_mgr = lang_manager
         self._notifications = notifications
         self._playback_protection = playback_protection
-        self._monday    = current_monday()
+        self._monday = current_monday()
         self._saved_snapshots: dict[str, dict[str, MeetingTreeSnapshot]] = {}
         self._details: dict[str, StudyDetailView | _MemorialDetailView] = {}
         self._destination_sessions: set[MeetingDestinationSession] = set()
@@ -815,9 +816,7 @@ class MeetingsWidget(QWidget):
         self._cache_manager = cache_manager
         self._media_tree_runtime = media_tree_runtime
         self._jw_catalog_service_factory = jw_catalog_service_factory
-        self._jw_catalog_thumbnail_session_factory = (
-            jw_catalog_thumbnail_session_factory
-        )
+        self._jw_catalog_thumbnail_session_factory = jw_catalog_thumbnail_session_factory
         self._jw_songs_store = jw_songs_store
         self._media_settings = media_settings
         self._meeting_linked_folder_sync = meeting_linked_folder_sync
@@ -841,9 +840,7 @@ class MeetingsWidget(QWidget):
                 media_tree_runtime=self._media_tree_runtime,
                 linked_folder_sync=self._meeting_linked_folder_sync,
                 media_info_queue_factory=self._media_info_queue_factory,
-                projection_aspect_ratio_provider=(
-                    self._projection_aspect_ratio_provider
-                ),
+                projection_aspect_ratio_provider=(self._projection_aspect_ratio_provider),
             )
         )
         startup.mark("meetings_controller_factory_ready")
@@ -867,9 +864,7 @@ class MeetingsWidget(QWidget):
 
         # Recarrega quando o idioma de mídia JW muda (independente da UI)
         if lang_manager and hasattr(lang_manager, "jw_lang_service"):
-            lang_manager.jw_lang_service.media_language_changed.connect(
-                self._on_media_lang_changed
-            )
+            lang_manager.jw_lang_service.media_language_changed.connect(self._on_media_lang_changed)
 
         self._auto_download_timer = QTimer(self)
         self._auto_download_timer.setSingleShot(True)
@@ -1060,10 +1055,7 @@ class MeetingsWidget(QWidget):
                 detail.apply_theme()
 
     def changeEvent(self, event) -> None:
-        if (
-            event.type() == QEvent.Type.LanguageChange
-            and not hasattr(self, "_stack")
-        ):
+        if event.type() == QEvent.Type.LanguageChange and not hasattr(self, "_stack"):
             self._loading_placeholder.set_text(self.tr("Loading…"))
         super().changeEvent(event)
 
@@ -1187,7 +1179,7 @@ class MeetingsWidget(QWidget):
     # ── Detail ────────────────────────────────────────────────────────────────
 
     def _open_detail(self, pub_type: str):
-        key    = self._monday.isoformat()
+        key = self._monday.isoformat()
         snapshot = self._saved_snapshot_for(pub_type, self._monday)
         if snapshot is None:
             state = self._preparation.state(
@@ -1226,9 +1218,7 @@ class MeetingsWidget(QWidget):
             controller_factory=self._tree_controller_factory,
             document_conversion_service=self._document_conversion_service,
             jw_catalog_service_factory=self._jw_catalog_service_factory,
-            jw_catalog_thumbnail_session_factory=(
-                self._jw_catalog_thumbnail_session_factory
-            ),
+            jw_catalog_thumbnail_session_factory=(self._jw_catalog_thumbnail_session_factory),
             jw_songs_store=self._jw_songs_store,
             meeting_tree_saved_handler=self._on_detail_tree_saved,
             saved_snapshot=saved_snapshot,
@@ -1280,9 +1270,7 @@ class MeetingsWidget(QWidget):
                 controller_factory=self._tree_controller_factory,
                 document_conversion_service=self._document_conversion_service,
                 jw_catalog_service_factory=self._jw_catalog_service_factory,
-                jw_catalog_thumbnail_session_factory=(
-                    self._jw_catalog_thumbnail_session_factory
-                ),
+                jw_catalog_thumbnail_session_factory=(self._jw_catalog_thumbnail_session_factory),
                 jw_songs_store=self._jw_songs_store,
             )
             d.back_requested.connect(self._on_detail_back)
@@ -1318,11 +1306,8 @@ class MeetingsWidget(QWidget):
         if isinstance(detail, StudyDetailView):
             detail.update_snapshot(snapshot)
         for session in list(self._destination_sessions):
-            if (
-                not (
-                    isinstance(detail, StudyDetailView)
-                    and session.controller is detail.controller
-                )
+            if not (
+                isinstance(detail, StudyDetailView) and session.controller is detail.controller
             ):
                 session.update_snapshot(snapshot)
         if key == self._preparation_key(self._monday):
@@ -1410,9 +1395,7 @@ class MeetingsWidget(QWidget):
 
     @Slot(str)
     def _on_lang_changed(self, code: str):
-        self._preparation.cancel_other_language_contexts(
-            self._current_media_context()
-        )
+        self._preparation.cancel_other_language_contexts(self._current_media_context())
         self._set_lang_from_mgr()
         self._set_memorial_lang_from_mgr()
         self._saved_snapshots.clear()
@@ -1429,9 +1412,7 @@ class MeetingsWidget(QWidget):
         Idioma de mídia JW mudou → recarrega reuniões com o novo código.
         Usa o contexto JW centralizado em vez do fallback da interface.
         """
-        self._preparation.cancel_other_language_contexts(
-            self._current_media_context()
-        )
+        self._preparation.cancel_other_language_contexts(self._current_media_context())
         self._set_lang_from_mgr()
         self._set_memorial_lang_from_mgr()
         self._saved_snapshots.clear()
@@ -1563,9 +1544,8 @@ class MeetingsWidget(QWidget):
 
         if pub_type == "mwb":
             title = _tr_ctx("_PubCard", "LIFE & MINISTRY")
-            detail = (
-                str(getattr(week_data, "mwb_date_label", "") or "")
-                or str(getattr(week_data, "mwb_week_title", "") or "")
+            detail = str(getattr(week_data, "mwb_date_label", "") or "") or str(
+                getattr(week_data, "mwb_week_title", "") or ""
             )
             color = str(PALETTE.accent)
         else:

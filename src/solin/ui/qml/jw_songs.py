@@ -1,4 +1,5 @@
 """QML bridge for adding JW video songs to playlists and meetings."""
+
 from __future__ import annotations
 
 import os
@@ -13,6 +14,7 @@ from PySide6.QtCore import (
     QObject,
     Property,
     Qt,
+    QUrl,
     Signal,
     Slot,
 )
@@ -20,6 +22,7 @@ from PySide6.QtCore import (
 from solin.core.jw.media_api import song_publication_symbol
 from solin.core.jw.identifiers import lang_to_meps, parse_jworg_url
 from solin.core.jw.songs import JWSongsStore
+from solin.core.jw.thumbnail_fetch import JWCatalogThumbnailSessionFactory
 from solin.core.media.placement import (
     MediaPlacementOption,
     build_media_placement_options,
@@ -27,7 +30,7 @@ from solin.core.media.placement import (
 )
 from solin.core.i18n.media_placement import translate_media_placement
 from solin.core.media.identity import contains_media, media_identity
-from solin.core.media.insertion import MediaInsertResult
+from solin.core.media.insertion import MediaInsertPayload, MediaInsertResult
 
 _BIG_INDEX = 2**31 - 1
 
@@ -39,6 +42,10 @@ def _format_duration(seconds: float) -> str:
     minutes = total // 60
     secs = total % 60
     return f"{minutes}:{secs:02d}"
+
+
+def _file_url(path: str) -> str:
+    return QUrl.fromLocalFile(path).toString() if path else ""
 
 
 def _song_number(item: dict[str, Any]) -> int:
@@ -169,7 +176,8 @@ class JWSongsBridge(QObject):
         self,
         store: JWSongsStore,
         *,
-        insertion_handler: Callable[[dict[str, Any], str, int], MediaInsertResult],
+        insertion_handler: Callable[[MediaInsertPayload, str, int], MediaInsertResult],
+        thumbnail_session_factory: JWCatalogThumbnailSessionFactory | None = None,
         parent: Optional[QObject] = None,
     ) -> None:
         super().__init__(parent)
@@ -178,6 +186,13 @@ class JWSongsBridge(QObject):
         self._store.songs_ready.connect(self._on_songs_ready)
         self._store.songs_failed.connect(self._on_songs_failed)
         self._store.loading_changed.connect(self._on_loading_changed)
+        self._thumbnail_session = (
+            thumbnail_session_factory.create(parent=self)
+            if thumbnail_session_factory is not None
+            else None
+        )
+        if self._thumbnail_session is not None:
+            self._thumbnail_session.ready.connect(self._on_thumbnail_ready)
 
         self._model = JWSongsModel(self)
         self._all_items: list[dict[str, Any]] = []
@@ -194,6 +209,8 @@ class JWSongsBridge(QObject):
         self._pending_item: dict[str, Any] | None = None
         self._placement_options: list[MediaPlacementOption] = []
         self._show_placement = False
+        self._deferred_submission: tuple[str, int] | None = None
+        self._resolved_thumbnail_urls: set[str] = set()
 
     @Property(QObject, notify=modelChanged)
     def model(self) -> QObject:
@@ -233,7 +250,12 @@ class JWSongsBridge(QObject):
 
     @Property(str, notify=pendingItemChanged)
     def pendingItemThumb(self) -> str:
-        return ""
+        if not self._pending_item:
+            return ""
+        local_path = str(self._pending_item.get("thumbnail_path") or "")
+        if local_path:
+            return _file_url(local_path)
+        return str(self._pending_item.get("thumbnail_url") or "")
 
     @Slot(str)
     def setSearchQuery(self, query: str) -> None:
@@ -308,6 +330,7 @@ class JWSongsBridge(QObject):
 
     @Slot()
     def cancelSelection(self) -> None:
+        self._deferred_submission = None
         self._pending_item = None
         self.pendingItemChanged.emit()
         self._show_placement = False
@@ -362,6 +385,8 @@ class JWSongsBridge(QObject):
             self._store.loading_changed.disconnect(self._on_loading_changed)
         except (RuntimeError, TypeError):
             pass
+        if self._thumbnail_session is not None:
+            self._thumbnail_session.close()
 
     def _sync_snapshot(self) -> None:
         snapshot = self._store.snapshot(self._active_key)
@@ -409,8 +434,7 @@ class JWSongsBridge(QObject):
             return
         self._is_loading = value
         self._status_text = (
-            QCoreApplication.translate("JWSongsBridge", "Loading songs...")
-            if value else ""
+            QCoreApplication.translate("JWSongsBridge", "Loading songs...") if value else ""
         )
         self.isLoadingChanged.emit()
         self.statusTextChanged.emit()
@@ -422,7 +446,8 @@ class JWSongsBridge(QObject):
         else:
             terms = [term for term in query.split() if term]
             filtered = [
-                item for item in sorted(self._all_items, key=_song_number)
+                item
+                for item in sorted(self._all_items, key=_song_number)
                 if self._matches(item, terms, query)
             ]
         self._filtered_items = filtered
@@ -449,12 +474,28 @@ class JWSongsBridge(QObject):
         language = _language_from_url(url, self._api_code)
         meps_language = parsed.get("meps_language") or lang_to_meps(language)
         duration = float(self._pending_item.get("duration") or 0)
+        thumbnail_url = str(self._pending_item.get("thumbnail_url") or "")
+        thumbnail_path = str(self._pending_item.get("thumbnail_path") or "")
+        if (
+            self._thumbnail_session is not None
+            and thumbnail_url
+            and not thumbnail_path
+            and thumbnail_url not in self._resolved_thumbnail_urls
+        ):
+            self._deferred_submission = (target_list_id, target_index)
+            request_id = str(
+                self._pending_item.get("number") or self._pending_item.get("url") or thumbnail_url
+            )
+            self._thumbnail_session.enqueue(request_id, thumbnail_url)
+            return False
 
         item_data: dict[str, Any] = {
             "title": _display_title(self._pending_item),
             "download_url": url,
             "media_type": "video",
             "duration_seconds": duration,
+            "thumbnail_url": thumbnail_url,
+            "thumbnail_path": thumbnail_path,
             "pub": pub,
             "track": parsed.get("track") or number,
             "issue": parsed.get("issue_tag"),
@@ -462,7 +503,8 @@ class JWSongsBridge(QObject):
             "language": language,
             "meps_language": meps_language,
         }
-        result = self._insertion_handler(item_data, target_list_id, target_index)
+        payload = MediaInsertPayload.from_mapping(item_data)
+        result = self._insertion_handler(payload, target_list_id, target_index)
         if result.added_count:
             self.mediaAdded.emit(str(item_data["title"]))
             self.cancelSelection()
@@ -473,6 +515,31 @@ class JWSongsBridge(QObject):
             self.mediaInsertionFailed.emit(str(item_data["title"]))
         self.cancelSelection()
         return False
+
+    @Slot(str, str, str)
+    def _on_thumbnail_ready(
+        self,
+        _item_id: str,
+        thumbnail_url: str,
+        local_path: str,
+    ) -> None:
+        self._resolved_thumbnail_urls.add(thumbnail_url)
+        if (
+            self._pending_item is None
+            or str(self._pending_item.get("thumbnail_url") or "") != thumbnail_url
+        ):
+            return
+        if local_path:
+            self._pending_item["thumbnail_path"] = local_path
+            self.pendingItemChanged.emit()
+        deferred = self._deferred_submission
+        self._deferred_submission = None
+        if deferred is not None:
+            inserted = self._submit_pending(*deferred)
+            if not local_path:
+                self._resolved_thumbnail_urls.discard(thumbnail_url)
+            if inserted:
+                self.modalShouldClose.emit()
 
     def _emit_duplicate(self, item: Mapping[str, Any]) -> None:
         identity = media_identity(item)

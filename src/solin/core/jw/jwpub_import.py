@@ -125,7 +125,7 @@ def _resolve_publication_media(
     meps_doc_id: int | str | None,
     language: str,
 ) -> PubMediaFile | None:
-    return _PUBLICATION_MEDIA_RESOLVER.resolve_video(
+    return _PUBLICATION_MEDIA_RESOLVER.resolve_media(
         PublicationMediaRequest(
             key_symbol=key_symbol,
             track=_int_or_zero(track),
@@ -289,16 +289,18 @@ def _build_video_items(
             except Exception:  # noqa: BLE001 - per-item external resolver isolation
                 log.debug("jwpub_import: resolve failed sym=%s", row["sym"], exc_info=True)
 
-        items.append({
-            "title": title,
-            "url": url,
-            "type": row["mtype"],
-            "key_symbol": row["sym"] or None,
-            "track": row["track"] if row["track"] else None,
-            "issue_tag": row["issue"] if row["issue"] != 0 else None,
-            "doc_id": row["meps"] if row["meps"] else None,
-            "meps_language": 0,
-        })
+        items.append(
+            {
+                "title": title,
+                "url": url,
+                "type": row["mtype"],
+                "key_symbol": row["sym"] or None,
+                "track": row["track"] if row["track"] else None,
+                "issue_tag": row["issue"] if row["issue"] != 0 else None,
+                "doc_id": row["meps"] if row["meps"] else None,
+                "meps_language": 0,
+            }
+        )
     return items
 
 

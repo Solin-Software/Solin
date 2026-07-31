@@ -17,22 +17,27 @@ from ...core.foundation.constants import (
 )
 from ...core.media.formats import MEDIA_EXTS, media_type_from_path
 from ...core.media.identity import contains_media, partition_media_items
-from ...core.media.insertion import MediaInsertResult
+from ...core.media.insertion import MediaInsertPayload, MediaInsertResult
 from ...core.media.operations import (
     MediaOperationPresentation,
     MediaOperationProgress,
     MediaOperationSpec,
     MediaOperationState,
 )
-from ...core.media.thumbnail_identity import thumbnail_storage_id
+from ...core.media.thumbnail_identity import (
+    thumbnail_source_fingerprint,
+    thumbnail_storage_id,
+)
 from ...core.foundation.resource_keys import child_folder_resource_claim
 from ...core.ingest.watched_folder_files import (
     WatchedFolderCopyRequest,
     WatchedFolderCopyResult,
 )
 from ...core.playlists.tree_editing import insert_playlist_media
-from ...core.jw.identifiers import lang_to_meps
-from ...core.playlists.items import create_playlist_item
+from ...core.playlists.items import (
+    create_playlist_item,
+    create_playlist_item_from_insert,
+)
 from ...ui.qml.media_tree.state import MediaAvailability
 from .dialogs import NameDialog
 
@@ -45,8 +50,7 @@ class PlaylistEditActionsMixin:
         if not section_id or not self._pl:
             return "root"
         section = next(
-            (s for s in self._pl.get("sections", [])
-             if s.get("id") == section_id),
+            (s for s in self._pl.get("sections", []) if s.get("id") == section_id),
             None,
         )
         if not section:
@@ -94,11 +98,13 @@ class PlaylistEditActionsMixin:
                 continue
 
             if self._is_watched and self._watched_path:
-                candidate = dict(create_playlist_item(
-                    title=Path(path).stem,
-                    url=path,
-                    **({"section_id": section_id} if section_id else {}),
-                ))
+                candidate = dict(
+                    create_playlist_item(
+                        title=Path(path).stem,
+                        url=path,
+                        **({"section_id": section_id} if section_id else {}),
+                    )
+                )
                 if contains_media(
                     [*self._pl.get("items", []), *pending_items],
                     candidate,
@@ -117,11 +123,13 @@ class PlaylistEditActionsMixin:
                 added += 1
                 continue
 
-            candidate = dict(create_playlist_item(
-                title=Path(path).stem,
-                url=path,
-                **({"section_id": section_id} if section_id else {}),
-            ))
+            candidate = dict(
+                create_playlist_item(
+                    title=Path(path).stem,
+                    url=path,
+                    **({"section_id": section_id} if section_id else {}),
+                )
+            )
             if contains_media(
                 [*self._pl.get("items", []), *new_items],
                 candidate,
@@ -192,10 +200,7 @@ class PlaylistEditActionsMixin:
         session_generation = self._tree_session.generation
         if playlist is None or not folder_path or not owner_id:
             return
-        initial_item_ids = {
-            str(current.get("id") or "")
-            for current in playlist.get("items", [])
-        }
+        initial_item_ids = {str(current.get("id") or "") for current in playlist.get("items", [])}
         item_id = str(item["id"])
         operation_id = f"linked-copy:{uuid.uuid4().hex}"
         stage = self.tr("Preparing media")
@@ -246,13 +251,9 @@ class PlaylistEditActionsMixin:
                     str(current.get("id") or "")
                     for current in active_playlist.get("items", [])
                     if str(current.get("id") or "") not in initial_item_ids
-                    and not str(current.get("url") or "").startswith(
-                        ("http://", "https://")
-                    )
+                    and not str(current.get("url") or "").startswith(("http://", "https://"))
                     and os.path.normcase(
-                        os.path.normpath(
-                            os.path.abspath(str(current.get("url") or ""))
-                        )
+                        os.path.normpath(os.path.abspath(str(current.get("url") or "")))
                     )
                     == destination_key
                 }
@@ -279,9 +280,7 @@ class PlaylistEditActionsMixin:
                 self._tree_session.refresh()
                 discard(value)
                 self._sync_playlist_chrome(emit_data_changed=False)
-                self._notifications.warning(
-                    self.tr("Could not update the linked folder.")
-                )
+                self._notifications.warning(self.tr("Could not update the linked folder."))
                 return
             self._schedule_manifest_save(folder_path, active_playlist)
             if self._tree_session.owner_id == owner_id:
@@ -320,64 +319,24 @@ class PlaylistEditActionsMixin:
 
     def _on_jw_media_confirmed(
         self,
-        item_data: dict,
+        item_data: MediaInsertPayload | dict[str, Any],
         target_list_id: str,
         target_index: int,
     ) -> MediaInsertResult:
         if not self._pl:
             return MediaInsertResult(target_valid=False)
 
+        payload = (
+            item_data
+            if isinstance(item_data, MediaInsertPayload)
+            else MediaInsertPayload.from_mapping(item_data)
+        )
         pl_item_id = str(uuid.uuid4())
-
-        track_val = None
-        try:
-            if item_data.get("track"):
-                track_val = int(item_data["track"])
-        except (ValueError, TypeError):
-            pass
-
-        meps_lang = 0
-        try:
-            meps_lang = int(item_data.get("meps_language") or 0)
-        except (ValueError, TypeError):
-            meps_lang = 0
-
-        lang_str = item_data.get("language", "").upper()
-        if not meps_lang and lang_str:
-            meps_lang = lang_to_meps(lang_str)
-
-        pl_item = {
-            "id": pl_item_id,
-            "title": item_data.get("title", ""),
-            "url": item_data.get("download_url", ""),
-            "type": item_data.get("media_type", "video"),
-            "auto_title": True,
-            "duration_seconds": item_data.get("duration_seconds", 0.0),
-            "key_symbol": item_data.get("pub") or None,
-            "track": track_val,
-            "issue_tag": item_data.get("issue") or None,
-            "doc_id": item_data.get("docid") or None,
-            "meps_language": meps_lang,
-            "language": lang_str,
-            "jw_media_id": item_data.get("jw_media_id") or None,
-        }
+        pl_item = create_playlist_item_from_insert(payload, item_id=pl_item_id)
 
         partition = partition_media_items(self._pl.get("items", []), [pl_item])
         if partition.duplicate_items:
             return MediaInsertResult(duplicate_items=partition.duplicate_items)
-
-        thumb_path = item_data.get("thumbnail_path", "")
-        if thumb_path:
-            self._media_tree_runtime.thumbnails.copy_file(
-                owner_id=self._tree_session.owner_id,
-                node_id=pl_item_id,
-                storage_id=thumbnail_storage_id(
-                    pl_item_id,
-                    str(pl_item.get("url") or ""),
-                ),
-                store=self._playlist_thumbnail_store,
-                source=thumb_path,
-            )
 
         items = self._pl.setdefault("items", [])
         inserted = False
@@ -393,6 +352,23 @@ class PlaylistEditActionsMixin:
                 return MediaInsertResult(target_valid=False)
             items.append(pl_item)
             self._tree_session.refresh()
+
+        if payload.thumbnail_path:
+            self._media_tree_runtime.thumbnails.copy_file(
+                owner_id=self._tree_session.owner_id,
+                node_id=pl_item_id,
+                storage_id=thumbnail_storage_id(
+                    pl_item_id,
+                    str(pl_item.get("url") or ""),
+                ),
+                store=self._playlist_thumbnail_store,
+                source=payload.thumbnail_path,
+                source_signature=(
+                    thumbnail_source_fingerprint(payload.thumbnail_url)
+                    if payload.thumbnail_url
+                    else ""
+                ),
+            )
 
         self._save()
         self._sync_playlist_chrome(emit_data_changed=False)

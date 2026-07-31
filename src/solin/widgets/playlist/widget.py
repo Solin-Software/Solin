@@ -3,6 +3,7 @@ playlist_widget.py  ─ Solin
 Drag-to-reorder completamente reescrito com container manual (sem QListWidget).
 Thumbnails persistem através de reordenações; botões com SVG real.
 """
+
 from __future__ import annotations
 
 import copy, logging, os, random, time, uuid
@@ -12,11 +13,19 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional
 
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QDialog, QMessageBox, QStackedWidget,
+    QWidget,
+    QVBoxLayout,
+    QDialog,
+    QMessageBox,
+    QStackedWidget,
 )
 from PySide6.QtCore import (
-    QObject, Signal, QTimer,
-    QEvent, QUrl, Slot,
+    QObject,
+    Signal,
+    QTimer,
+    QEvent,
+    QUrl,
+    Slot,
 )
 from PySide6.QtGui import QDesktopServices, QImage, QPixmap
 from PySide6.QtQuickWidgets import QQuickWidget
@@ -58,7 +67,10 @@ from ...core.media.formats import media_type_from_path
 from ...core.media.identity import partition_media_items
 from ...core.media.insertion import MediaInsertResult
 from ...core.media.operations import MediaOperationPresentation, MediaOperationSpec
-from ...core.media.thumbnail_identity import thumbnail_storage_id
+from ...core.media.thumbnail_identity import (
+    thumbnail_source_fingerprint,
+    thumbnail_storage_id,
+)
 from ...core.media.playback_request import MediaTrim
 from ...core.playlists.items import looks_like_filename_title
 from ...core.playlists.names import (
@@ -83,8 +95,9 @@ from .dialogs import HuePickerDialog, NameDialog
 from ...core.playlists.storage import (
     PlaylistStoragePaths,
 )
+
 _THUMB_W, _THUMB_H = 70, 46
-_ITEM_H            = 77   # altura fixa de cada item
+_ITEM_H = 77  # altura fixa de cada item
 _MANIFEST_SAVE_DEBOUNCE_MS = 180
 _MANIFEST_SAVE_RETRY_DELAYS_MS = (100, 250, 500, 1_000, 2_000, 5_000, 10_000, 15_000)
 _MANIFEST_SAVE_RETRY_BUDGET_SECONDS = 60.0
@@ -146,6 +159,7 @@ if TYPE_CHECKING:
 
 # ── Tela de edição ─────────────────────────────────────────────────────────────
 
+
 class PlaylistEditView(
     PlaylistEditActionsMixin,
     PlaylistDragDropMixin,
@@ -153,7 +167,7 @@ class PlaylistEditView(
     QWidget,
 ):
     back_requested = Signal()
-    project_items  = Signal(list, int, str)
+    project_items = Signal(list, int, str)
     save_temp_as_permanent = Signal(str, dict)  # name, playlist data
     export_requested = Signal(str)
     import_jwl_requested = Signal(object, int, str)
@@ -210,12 +224,12 @@ class PlaylistEditView(
         self._defer_qml = defer_qml
         self._pl: Optional[dict] = None
         self._is_temp: bool = False
-        self._is_watched: bool = False          # linked folder mode
-        self._watched_path: str = ""            # physical subfolder path
+        self._is_watched: bool = False  # linked folder mode
+        self._watched_path: str = ""  # physical subfolder path
         self._wf_sync_thread: object = None
-        self._id_to_thumb:     dict[str, QPixmap] = {}   # cache de thumbnails por ID
-        self._thumb_idx_to_id: dict[int, str] = {}       # request token → item ID
-        self._thumb_idx_to_source: dict[int, str] = {}   # request token → source URL
+        self._id_to_thumb: dict[str, QPixmap] = {}  # cache de thumbnails por ID
+        self._thumb_idx_to_id: dict[int, str] = {}  # request token → item ID
+        self._thumb_idx_to_source: dict[int, str] = {}  # request token → source URL
         self._thumb_idx_to_intent: dict[int, _ThumbnailRequestIntent] = {}
         self._thumb_pending_item_ids: set[str] = set()
         self._thumb_request_token: int = 0
@@ -233,9 +247,7 @@ class PlaylistEditView(
         self._image_framing_save_timer = QTimer(self)
         self._image_framing_save_timer.setSingleShot(True)
         self._image_framing_save_timer.setInterval(200)
-        self._image_framing_save_timer.timeout.connect(
-            self._flush_image_framing_save
-        )
+        self._image_framing_save_timer.timeout.connect(self._flush_image_framing_save)
         self._pending_manifest_saves: dict[str, _PendingPlaylistManifestSave] = {}
         self._manifest_state_generation = 0
         self._manifest_save_inflight: tuple[str, int] | None = None
@@ -252,12 +264,10 @@ class PlaylistEditView(
         self._manifest_save_timer = QTimer(self)
         self._manifest_save_timer.setSingleShot(True)
         self._manifest_save_timer.timeout.connect(self._drain_manifest_saves)
-        self._watchedFolderRefreshCompleted.connect(
-            self._on_watched_folder_refresh_completed
-        )
-        self._pdf_threads:  list[object] = []
-        self._lo_threads:   list[object] = []
-        self._wf_refresh_pending: bool = False      # deferred refresh flag
+        self._watchedFolderRefreshCompleted.connect(self._on_watched_folder_refresh_completed)
+        self._pdf_threads: list[object] = []
+        self._lo_threads: list[object] = []
+        self._wf_refresh_pending: bool = False  # deferred refresh flag
         self._wf_refresh_superseded = False
         self._wf_refresh_generation = 0
         self._wf_refresh_manifest_generation = 0
@@ -277,12 +287,8 @@ class PlaylistEditView(
             thumbnail_ready=self._accept_probed_thumbnail,
             parent=self,
         )
-        media_tree_runtime.registry.stateChanged.connect(
-            self._on_presentation_state_changed
-        )
-        media_tree_runtime.snapshots.writeFailed.connect(
-            self._on_playlist_snapshot_write_failed
-        )
+        media_tree_runtime.registry.stateChanged.connect(self._on_presentation_state_changed)
+        media_tree_runtime.snapshots.writeFailed.connect(self._on_playlist_snapshot_write_failed)
         media_tree_runtime.snapshots.writeCompleted.connect(
             self._on_playlist_snapshot_write_completed
         )
@@ -303,6 +309,7 @@ class PlaylistEditView(
         self.songs_bridge = JWSongsBridge(
             jw_songs_store,
             insertion_handler=self._on_jw_media_confirmed,
+            thumbnail_session_factory=jw_catalog_thumbnail_session_factory,
             parent=self,
         )
 
@@ -561,9 +568,7 @@ class PlaylistEditView(
             else:
                 request.next_attempt_at = now
             current_key = (
-                os.path.normcase(os.path.abspath(self._watched_path))
-                if self._watched_path
-                else ""
+                os.path.normcase(os.path.abspath(self._watched_path)) if self._watched_path else ""
             )
             if is_latest and key == current_key and self._wf_refresh_pending:
                 self._wf_refresh_pending = False
@@ -684,12 +689,8 @@ class PlaylistEditView(
         self.bridge.removeItemSignal.connect(self._remove_item)
         self.bridge.renameItemSignal.connect(self._rename_item)
         self.bridge.downloadItemSignal.connect(self._download_item)
-        self.bridge.operationCancelRequested.connect(
-            self._media_tree_runtime.operations.cancel
-        )
-        self.bridge.operationRetryRequested.connect(
-            self._media_tree_runtime.operations.retry
-        )
+        self.bridge.operationCancelRequested.connect(self._media_tree_runtime.operations.cancel)
+        self.bridge.operationRetryRequested.connect(self._media_tree_runtime.operations.retry)
         self.bridge.imageFramingSetRequested.connect(self._set_image_framing)
         self.bridge.imageFramingResetRequested.connect(self._reset_image_framing)
         self.bridge.mediaTrimSetRequested.connect(self._set_media_trim)
@@ -703,9 +704,7 @@ class PlaylistEditView(
         self.bridge.collapseSectionSignal.connect(self._toggle_section_collapse)
         self.bridge.dragFinished.connect(self._save)
         self.bridge.pointerEntered.connect(self.begin_qml_pointer_cursor)
-        self.bridge.pointerCursorEntered.connect(
-            self.begin_qml_shaped_pointer_cursor
-        )
+        self.bridge.pointerCursorEntered.connect(self.begin_qml_shaped_pointer_cursor)
         self.bridge.pointerCursorChanged.connect(self.update_qml_pointer_cursor)
         self.bridge.pointerCursorExited.connect(self.end_qml_shaped_pointer_cursor)
         self.bridge.pointerExited.connect(self.end_qml_pointer_cursor)
@@ -728,8 +727,11 @@ class PlaylistEditView(
         if not self._pl:
             return
         item = next(
-            (candidate for candidate in self._pl.get("items", [])
-             if candidate.get("id") == item_id),
+            (
+                candidate
+                for candidate in self._pl.get("items", [])
+                if candidate.get("id") == item_id
+            ),
             None,
         )
         if not item or item.get("type") != "image":
@@ -771,8 +773,11 @@ class PlaylistEditView(
         if not self._pl:
             return
         item = next(
-            (candidate for candidate in self._pl.get("items", [])
-             if candidate.get("id") == item_id),
+            (
+                candidate
+                for candidate in self._pl.get("items", [])
+                if candidate.get("id") == item_id
+            ),
             None,
         )
         if not item or "image_framing" not in item:
@@ -792,8 +797,11 @@ class PlaylistEditView(
         if not self._pl:
             return
         item = next(
-            (candidate for candidate in self._pl.get("items", [])
-             if candidate.get("id") == item_id),
+            (
+                candidate
+                for candidate in self._pl.get("items", [])
+                if candidate.get("id") == item_id
+            ),
             None,
         )
         if not item or item.get("type") not in {"audio", "video"}:
@@ -959,6 +967,7 @@ class PlaylistEditView(
             parent=self,
         )
         self._wf_sync_thread = thread
+
         @thread.sync_complete.connect
         def _on_done():
             self._wf_sync_thread = None
@@ -967,11 +976,13 @@ class PlaylistEditView(
                 self.refresh_watched_folder()
             else:
                 self.refresh_watched_folder()
+
         @thread.sync_failed.connect
         def _on_err(err):
             self._wf_sync_thread = None
             self._notifications.error(str(err)[:160])
-        thread.finished.connect(lambda: setattr(self, '_wf_sync_thread', None))
+
+        thread.finished.connect(lambda: setattr(self, "_wf_sync_thread", None))
         thread.finished.connect(thread.deleteLater)
         thread.start()
 
@@ -1024,9 +1035,7 @@ class PlaylistEditView(
             url = str(item.get("url") or "")
             if not item_id or not url or MediaCacheManager.is_remote(url):
                 continue
-            path_key = os.path.normcase(
-                os.path.normpath(os.path.abspath(url))
-            )
+            path_key = os.path.normcase(os.path.normpath(os.path.abspath(url)))
             if previous.get(path_key) != current.get(path_key):
                 changed.append(item_id)
         return tuple(changed)
@@ -1095,15 +1104,10 @@ class PlaylistEditView(
     ) -> _WatchedFolderSnapshot:
         def read() -> _WatchedFolderSnapshot:
             playlist = self._watched_folder_playlist_store.load_playlist(folder_path)
-            availability = (
-                self._watched_folder_playlist_store.file_availability_signature(
-                    item.get("url", "")
-                    for item in playlist.get("items", [])
-                )
+            availability = self._watched_folder_playlist_store.file_availability_signature(
+                item.get("url", "") for item in playlist.get("items", [])
             )
-            pending_files = tuple(
-                self._watched_folder_playlist_store.pending_files(folder_path)
-            )
+            pending_files = tuple(self._watched_folder_playlist_store.pending_files(folder_path))
             return _WatchedFolderSnapshot(
                 playlist=playlist,
                 availability=availability,
@@ -1154,17 +1158,10 @@ class PlaylistEditView(
         self._wf_refresh_future = None
 
         save_generation_changed = (
-            self._wf_refresh_manifest_generation
-            != self._manifest_state_generation
+            self._wf_refresh_manifest_generation != self._manifest_state_generation
         )
-        if (
-            self._wf_refresh_superseded
-            or self._wf_refresh_pending
-            or save_generation_changed
-        ):
-            should_refresh_now = (
-                self._wf_refresh_pending or save_generation_changed
-            )
+        if self._wf_refresh_superseded or self._wf_refresh_pending or save_generation_changed:
+            should_refresh_now = self._wf_refresh_pending or save_generation_changed
             self._wf_refresh_superseded = False
             self._wf_refresh_pending = False
             if should_refresh_now:
@@ -1172,9 +1169,7 @@ class PlaylistEditView(
             return
 
         current_key = (
-            os.path.normcase(os.path.abspath(self._watched_path))
-            if self._watched_path
-            else ""
+            os.path.normcase(os.path.abspath(self._watched_path)) if self._watched_path else ""
         )
         can_apply = (
             self._is_watched
@@ -1241,10 +1236,7 @@ class PlaylistEditView(
         # Fix types
         items = self._pl.get("items", [])
         sections = self._pl.get("sections", [])
-        subsection_ids = {
-            section.get("id") for section in sections
-            if section.get("parent_id")
-        }
+        subsection_ids = {section.get("id") for section in sections if section.get("parent_id")}
         needs_save = False
         for item in items:
             detected = media_type_from_path(
@@ -1255,17 +1247,18 @@ class PlaylistEditView(
                 item["type"] = detected
                 needs_save = True
             url = item.get("url", "")
-            if (not item.get("auto_title")
-                    and url.startswith(("http://", "https://"))
-                    and is_jw_url(url)
-                    and " | " in item.get("title", "")):
+            if (
+                not item.get("auto_title")
+                and url.startswith(("http://", "https://"))
+                and is_jw_url(url)
+                and " | " in item.get("title", "")
+            ):
                 item["auto_title"] = True
                 needs_save = True
         markers = self._pl.get("markers")
         if markers:
             valid_markers = [
-                marker for marker in markers
-                if marker.get("subsection_id") in subsection_ids
+                marker for marker in markers if marker.get("subsection_id") in subsection_ids
             ]
             if len(valid_markers) != len(markers):
                 self._pl["markers"] = valid_markers
@@ -1311,7 +1304,7 @@ class PlaylistEditView(
 
         batch_size = 32
         end = min(self._thumb_scan_index + batch_size, len(self._thumb_scan_items))
-        for item in self._thumb_scan_items[self._thumb_scan_index:end]:
+        for item in self._thumb_scan_items[self._thumb_scan_index : end]:
             self._request_missing_thumbnail_for_item(item)
         self._thumb_scan_index = end
 
@@ -1324,6 +1317,15 @@ class PlaylistEditView(
     def _request_missing_thumbnail_for_item(self, item: dict) -> None:
         intent = self._thumbnail_request_intent(item)
         if not any((intent.thumbnail, intent.title, intent.duration)):
+            return
+        thumbnail_url = str(item.get("thumbnail_url") or "")
+        if intent.thumbnail and thumbnail_url:
+            self._request_thumbnail(
+                item["id"],
+                thumbnail_url,
+                "image",
+                require_thumbnail=True,
+            )
             return
         self._request_thumbnail(
             item["id"],
@@ -1343,9 +1345,7 @@ class PlaylistEditView(
         )
         probe_ready = state.availability == MediaAvailability.AVAILABLE
         needs_title = (
-            probe_ready
-            and media_type in {"audio", "video"}
-            and bool(item.get("auto_title", False))
+            probe_ready and media_type in {"audio", "video"} and bool(item.get("auto_title", False))
         )
         duration_ticks = item.get("base_duration_ticks")
         has_duration = (
@@ -1353,17 +1353,14 @@ class PlaylistEditView(
             and not isinstance(duration_ticks, bool)
             and duration_ticks > 0
         )
-        needs_duration = (
-            probe_ready
-            and media_type in {"audio", "video"}
-            and not has_duration
-        )
+        needs_duration = probe_ready and media_type in {"audio", "video"} and not has_duration
 
         cached = self._id_to_thumb.get(item_id)
         has_thumbnail = bool(
             (cached is not None and not cached.isNull())
             or state.thumbnail_source
-            or media_type == "image" and state.local_path
+            or media_type == "image"
+            and state.local_path
         )
         return _ThumbnailRequestIntent(
             thumbnail=probe_ready and not has_thumbnail,
@@ -1390,19 +1387,21 @@ class PlaylistEditView(
     def _reconcile_thumbnail_requests(self, items: list[dict]) -> None:
         """Keep in-flight work when its media identity is unchanged."""
 
-        current_items = {
-            str(item.get("id") or ""): item
-            for item in items
-            if item.get("id")
-        }
+        current_items = {str(item.get("id") or ""): item for item in items if item.get("id")}
         for token, item_id in tuple(self._thumb_idx_to_id.items()):
             requested_source = self._thumb_idx_to_source.get(token, "")
             current_item = current_items.get(item_id)
             active_intent = self._thumb_idx_to_intent.get(token)
             desired_intent = (
-                self._thumbnail_request_intent(current_item)
+                self._thumbnail_request_intent(current_item) if current_item is not None else None
+            )
+            desired_source = (
+                str(current_item.get("thumbnail_url") or "")
                 if current_item is not None
-                else None
+                and desired_intent is not None
+                and desired_intent.thumbnail
+                and current_item.get("thumbnail_url")
+                else str((current_item or {}).get("url") or "")
             )
             if (
                 current_item is not None
@@ -1421,23 +1420,31 @@ class PlaylistEditView(
                 )
                 and self._same_media_source(
                     requested_source,
-                    str(current_item.get("url") or ""),
+                    desired_source,
                 )
             ):
                 continue
             self._thumb_queue.invalidate(token)
             self._retire_thumbnail_request(token)
-            if current_item is not None and desired_intent is not None and any(
-                (
-                    desired_intent.thumbnail,
-                    desired_intent.title,
-                    desired_intent.duration,
+            if (
+                current_item is not None
+                and desired_intent is not None
+                and any(
+                    (
+                        desired_intent.thumbnail,
+                        desired_intent.title,
+                        desired_intent.duration,
+                    )
                 )
             ):
                 self._request_thumbnail(
                     item_id,
-                    str(current_item.get("url") or ""),
-                    str(current_item.get("type") or "video"),
+                    desired_source,
+                    (
+                        "image"
+                        if desired_source == str(current_item.get("thumbnail_url") or "")
+                        else str(current_item.get("type") or "video")
+                    ),
                     require_thumbnail=desired_intent.thumbnail,
                     require_title=desired_intent.title,
                     require_duration=desired_intent.duration,
@@ -1488,9 +1495,15 @@ class PlaylistEditView(
                 candidate
                 for candidate in self._pl.get("items", [])
                 if candidate.get("id") == item_id
-                and self._same_media_source(
-                    str(candidate.get("url") or ""),
-                    source_url,
+                and (
+                    self._same_media_source(
+                        str(candidate.get("url") or ""),
+                        source_url,
+                    )
+                    or self._same_media_source(
+                        str(candidate.get("thumbnail_url") or ""),
+                        source_url,
+                    )
                 )
             ),
             None,
@@ -1514,9 +1527,7 @@ class PlaylistEditView(
         second_remote = MediaCacheManager.is_remote(second)
         if first_remote or second_remote:
             return first_remote and second_remote and first == second
-        return os.path.normcase(os.path.abspath(first)) == os.path.normcase(
-            os.path.abspath(second)
-        )
+        return os.path.normcase(os.path.abspath(first)) == os.path.normcase(os.path.abspath(second))
 
     def _request_thumbnail(
         self,
@@ -1530,14 +1541,28 @@ class PlaylistEditView(
     ) -> None:
         if not (require_thumbnail or require_title or require_duration):
             return
+        current_item = next(
+            (
+                item
+                for item in (getattr(self, "_pl", None) or {}).get("items", [])
+                if str(item.get("id") or "") == item_id
+            ),
+            {},
+        )
+        thumbnail_url = str(current_item.get("thumbnail_url") or "")
+        official_artwork = bool(thumbnail_url and self._same_media_source(thumbnail_url, url))
         requested_intent = _ThumbnailRequestIntent(
             thumbnail=require_thumbnail,
             title=require_title,
             duration=require_duration,
-            source_signature=self._media_tree_runtime.registry.state(
-                self._tree_session.owner_id,
-                item_id,
-            ).source_signature,
+            source_signature=(
+                thumbnail_source_fingerprint(thumbnail_url)
+                if official_artwork
+                else self._media_tree_runtime.registry.state(
+                    self._tree_session.owner_id,
+                    item_id,
+                ).source_signature
+            ),
         )
         active_tokens = [
             token
@@ -1552,10 +1577,7 @@ class PlaylistEditView(
                 )
                 for token in active_tokens
             )
-            active_intents = [
-                self._thumb_idx_to_intent.get(token)
-                for token in active_tokens
-            ]
+            active_intents = [self._thumb_idx_to_intent.get(token) for token in active_tokens]
             if (
                 matching_source
                 and all(intent is not None for intent in active_intents)
@@ -1574,9 +1596,7 @@ class PlaylistEditView(
                     if active_intent is None:
                         continue
                     requested_intent = _ThumbnailRequestIntent(
-                        thumbnail=(
-                            requested_intent.thumbnail or active_intent.thumbnail
-                        ),
+                        thumbnail=(requested_intent.thumbnail or active_intent.thumbnail),
                         title=requested_intent.title or active_intent.title,
                         duration=requested_intent.duration or active_intent.duration,
                         source_signature=requested_intent.source_signature,
@@ -1613,11 +1633,7 @@ class PlaylistEditView(
             return
 
         current_item = next(
-            (
-                item
-                for item in (self._pl or {}).get("items", [])
-                if item.get("id") == item_id
-            ),
+            (item for item in (self._pl or {}).get("items", []) if item.get("id") == item_id),
             None,
         )
         if current_item is None:
@@ -1656,10 +1672,11 @@ class PlaylistEditView(
                 if item.get("id") != item_id:
                     continue
                 current = item.get("title", "")
-                title_changed = bool(title) and (
-                    looks_like_filename_title(current)
-                    or item.get("auto_title")
-                ) and title != current
+                title_changed = (
+                    bool(title)
+                    and (looks_like_filename_title(current) or item.get("auto_title"))
+                    and title != current
+                )
                 auto_title_resolved = bool(title) and bool(item.get("auto_title"))
                 if title_changed:
                     item["title"] = title
@@ -1731,19 +1748,28 @@ class PlaylistEditView(
             return None
         return next(
             (
-                section for section in self._pl.get("sections", [])
+                section
+                for section in self._pl.get("sections", [])
                 if section.get("id") == section_id
             ),
             None,
         )
 
     def _create_section(self):
-        if not self._pl: return
-        dlg = NameDialog(lang=self.lang, parent=self, label=self.tr("Section name:"), placeholder=self.tr("E.g.: Introduction"))
+        if not self._pl:
+            return
+        dlg = NameDialog(
+            lang=self.lang,
+            parent=self,
+            label=self.tr("Section name:"),
+            placeholder=self.tr("E.g.: Introduction"),
+        )
         dlg.setWindowTitle(self.tr("New Section"))
-        if dlg.exec() != QDialog.DialogCode.Accepted: return
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
         name = dlg.get_name()
-        if not name: return
+        if not name:
+            return
         sections = self._pl.setdefault("sections", [])
         existing_hues = [s.get("color_hue", 0) for s in sections]
         hue = generate_section_hue(existing_hues)
@@ -1759,12 +1785,20 @@ class PlaylistEditView(
         self._sync_playlist_chrome(emit_data_changed=False)
 
     def _create_subsection(self, parent_section_id: str):
-        if not self._pl: return
-        dlg = NameDialog(lang=self.lang, parent=self, label=self.tr("Subsection name:"), placeholder=self.tr("E.g.: Part 1"))
+        if not self._pl:
+            return
+        dlg = NameDialog(
+            lang=self.lang,
+            parent=self,
+            label=self.tr("Subsection name:"),
+            placeholder=self.tr("E.g.: Part 1"),
+        )
         dlg.setWindowTitle(self.tr("New Subsection"))
-        if dlg.exec() != QDialog.DialogCode.Accepted: return
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
         name = dlg.get_name()
-        if not name: return
+        if not name:
+            return
         sections = self._pl.setdefault("sections", [])
         sub = {
             "id": str(uuid.uuid4()),
@@ -1781,8 +1815,11 @@ class PlaylistEditView(
         if not self._pl:
             return
         subsection = next(
-            (s for s in self._pl.get("sections", [])
-             if s.get("id") == subsection_id and s.get("parent_id")),
+            (
+                s
+                for s in self._pl.get("sections", [])
+                if s.get("id") == subsection_id and s.get("parent_id")
+            ),
             None,
         )
         if not subsection:
@@ -1808,8 +1845,7 @@ class PlaylistEditView(
         if not self._pl:
             return
         marker = next(
-            (m for m in self._pl.get("markers", [])
-             if m.get("id") == marker_id),
+            (m for m in self._pl.get("markers", []) if m.get("id") == marker_id),
             None,
         )
         if not marker:
@@ -1824,42 +1860,53 @@ class PlaylistEditView(
         markers = self._pl.get("markers", [])
         if not any(m.get("id") == marker_id for m in markers):
             return
-        self._pl["markers"] = [
-            marker for marker in markers
-            if marker.get("id") != marker_id
-        ]
+        self._pl["markers"] = [marker for marker in markers if marker.get("id") != marker_id]
         self._save()
         self._tree_session.refresh(probe_changed_sources=False)
         self._sync_playlist_chrome(emit_data_changed=False)
 
     def _rename_section(self, sec_id: str):
-        if not self._pl: return
+        if not self._pl:
+            return
         sections = self._pl.get("sections", [])
         sec = next((s for s in sections if s["id"] == sec_id), None)
-        if not sec: return
-        dlg = NameDialog(sec.get("name", ""), lang=self.lang, parent=self, label=self.tr("Section name:"), placeholder=self.tr("E.g.: Introduction"))
+        if not sec:
+            return
+        dlg = NameDialog(
+            sec.get("name", ""),
+            lang=self.lang,
+            parent=self,
+            label=self.tr("Section name:"),
+            placeholder=self.tr("E.g.: Introduction"),
+        )
         dlg.setWindowTitle(self.tr("Rename section"))
-        if dlg.exec() != QDialog.DialogCode.Accepted: return
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
         name = dlg.get_name()
-        if not name: return
+        if not name:
+            return
         sec["name"] = name
         self._save()
         self._tree_session.refresh(probe_changed_sources=False)
 
     def _delete_section(self, sec_id: str):
         """Delete a section/subsection but keep its items."""
-        if not self._pl: return
+        if not self._pl:
+            return
         sections = self._pl.get("sections", [])
         sec = next((s for s in sections if s["id"] == sec_id), None)
-        if not sec: return
+        if not sec:
+            return
         reply = QMessageBox.question(
-            self, self.tr("Delete section"),
+            self,
+            self.tr("Delete section"),
             self.tr('Delete section "{name}"?\nItems inside will be kept.').replace(
                 "{name}", sec.get("name", "")
             ),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
-        if reply != QMessageBox.StandardButton.Yes: return
+        if reply != QMessageBox.StandardButton.Yes:
+            return
         parent_id = sec.get("parent_id") or None
         is_subsection = bool(parent_id)
         replacement_section_id = parent_id if is_subsection else None
@@ -1874,7 +1921,8 @@ class PlaylistEditView(
             for child in child_sections:
                 child["parent_id"] = parent_id
             self._pl["markers"] = [
-                marker for marker in self._pl.get("markers", [])
+                marker
+                for marker in self._pl.get("markers", [])
                 if marker.get("subsection_id") != sec_id
             ]
         else:
@@ -1886,7 +1934,8 @@ class PlaylistEditView(
                 sections.remove(child)
             removed_section_ids = child_ids | {sec_id}
             self._pl["markers"] = [
-                marker for marker in self._pl.get("markers", [])
+                marker
+                for marker in self._pl.get("markers", [])
                 if marker.get("subsection_id") not in removed_section_ids
             ]
         self._save()
@@ -1895,19 +1944,23 @@ class PlaylistEditView(
 
     def _recolor_section(self, sec_id: str):
         """Open hue picker to choose section color."""
-        if not self._pl: return
+        if not self._pl:
+            return
         sections = self._pl.get("sections", [])
         sec = next((s for s in sections if s["id"] == sec_id), None)
-        if not sec: return
+        if not sec:
+            return
         current_hue = sec.get("color_hue", APP_BASE_HUE)
         dlg = HuePickerDialog(current_hue, parent=self)
-        if dlg.exec() != QDialog.DialogCode.Accepted: return
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
         sec["color_hue"] = dlg.selected_hue()
         self._save()
         self._tree_session.refresh(probe_changed_sources=False)
 
     def _remove_item(self, item_id: str):
-        if not self._pl: return
+        if not self._pl:
+            return
         pending = self._tree_session.pending_item(item_id)
         if pending is not None:
             operation = self._tree_session.operation_for(item_id)
@@ -1921,18 +1974,19 @@ class PlaylistEditView(
         if item and self._media_ctrl is not None:
             item_type = item.get("type", "video")
             if item_type in ("video", "audio"):
-                item_url   = item.get("url", "")
-                cur_url    = self._media_ctrl.current_url or ""
-                cur_local  = self._media_ctrl.local_path or ""
-                playing    = item_url and item_url in (cur_url, cur_local)
+                item_url = item.get("url", "")
+                cur_url = self._media_ctrl.current_url or ""
+                cur_local = self._media_ctrl.local_path or ""
+                playing = item_url and item_url in (cur_url, cur_local)
                 if not playing and cur_local and item_url:
                     playing = os.path.normpath(item_url) == os.path.normpath(cur_local)
                 if playing:
                     QMessageBox.warning(
                         self,
                         self.tr("Media is playing"),
-                        self.tr('Cannot remove "{title}" while it is currently playing.\nStop the projection and try again.')
-                                    .replace("{title}", str(item.get("title", item_url))),
+                        self.tr(
+                            'Cannot remove "{title}" while it is currently playing.\nStop the projection and try again.'
+                        ).replace("{title}", str(item.get("title", item_url))),
                     )
                     return
         self._pl["items"] = [it for it in self._pl["items"] if it["id"] != item_id]
@@ -1977,9 +2031,11 @@ class PlaylistEditView(
         )
 
     def _rename_item(self, item_id: str):
-        if not self._pl: return
+        if not self._pl:
+            return
         item = next((it for it in self._pl.get("items", []) if it["id"] == item_id), None)
-        if not item: return
+        if not item:
+            return
         dlg = NameDialog(item.get("title", ""), lang=self.lang, parent=self)
         dlg.setWindowTitle(self.tr("Rename media"))
         if dlg.exec() and dlg.get_name():
@@ -2039,7 +2095,9 @@ class PlaylistEditView(
     def _reset_qml_pointer_cursor(self) -> None:
         self._qml_pointer_cursor.reset()
 
+
 # ── Widget principal ───────────────────────────────────────────────────────────
+
 
 class PlaylistWidget(QWidget):
     project_video_signal = Signal(str, str, object, str)
@@ -2076,7 +2134,7 @@ class PlaylistWidget(QWidget):
         parent=None,
     ):
         super().__init__(parent)
-        self.lang        = lang
+        self.lang = lang
         self._media_ctrl = media_ctrl
         self._notifications = notifications
         self._playback_protection = playback_protection
@@ -2093,9 +2151,7 @@ class PlaylistWidget(QWidget):
         self._media_cache_manager = media_cache_manager
         self._media_tree_runtime = media_tree_runtime
         self._jw_catalog_service_factory = jw_catalog_service_factory
-        self._jw_catalog_thumbnail_session_factory = (
-            jw_catalog_thumbnail_session_factory
-        )
+        self._jw_catalog_thumbnail_session_factory = jw_catalog_thumbnail_session_factory
         self._jw_songs_store = jw_songs_store
         self._media_info_queue_factory = media_info_queue_factory
         self._projection_aspect_ratio_provider = projection_aspect_ratio_provider
@@ -2139,7 +2195,8 @@ class PlaylistWidget(QWidget):
 
         # Index 0: list view
         self._list_view = PlaylistListView(
-            self._playlists, self.lang,
+            self._playlists,
+            self.lang,
             media_ctrl=self._media_ctrl,
             watched_folder=self._watched_folder,
             persist_playlists=self._persist_playlists,
@@ -2161,9 +2218,7 @@ class PlaylistWidget(QWidget):
         self._list_view.open_playlist.connect(self._open_playlist)
         self._list_view.open_watched_folder.connect(self._open_watched_folder)
         self._list_view.import_requested.connect(self._on_playlist_import_requested)
-        self._list_view.export_playlist_requested.connect(
-            self._on_playlist_export_requested
-        )
+        self._list_view.export_playlist_requested.connect(self._on_playlist_export_requested)
         self._list_view.export_watched_folder_requested.connect(
             self._on_watched_folder_export_requested
         )
@@ -2201,9 +2256,7 @@ class PlaylistWidget(QWidget):
             media_cache_manager=self._media_cache_manager,
             media_tree_runtime=self._media_tree_runtime,
             jw_catalog_service_factory=self._jw_catalog_service_factory,
-            jw_catalog_thumbnail_session_factory=(
-                self._jw_catalog_thumbnail_session_factory
-            ),
+            jw_catalog_thumbnail_session_factory=(self._jw_catalog_thumbnail_session_factory),
             jw_songs_store=self._jw_songs_store,
             media_info_queue_factory=self._media_info_queue_factory,
             projection_aspect_ratio_provider=self._projection_aspect_ratio_provider,
@@ -2220,9 +2273,7 @@ class PlaylistWidget(QWidget):
         edit_view.project_items.connect(self._on_project_items)
         edit_view.save_temp_as_permanent.connect(self._on_save_temp_playlist)
         edit_view.export_requested.connect(self._on_edit_export_requested)
-        edit_view.import_jwl_requested.connect(
-            self._on_edit_jwl_import_requested
-        )
+        edit_view.import_jwl_requested.connect(self._on_edit_jwl_import_requested)
         edit_view.qml_load_handle.start()
         return edit_view
 
@@ -2242,9 +2293,7 @@ class PlaylistWidget(QWidget):
         self._wf_refresh_debounce = QTimer(self)
         self._wf_refresh_debounce.setSingleShot(True)
         self._wf_refresh_debounce.setInterval(600)
-        self._wf_refresh_debounce.timeout.connect(
-            self._flush_watched_folder_refresh
-        )
+        self._wf_refresh_debounce.timeout.connect(self._flush_watched_folder_refresh)
         self._wf_root_refresh_pending = False
         self._wf_pending_sub_path: str = ""
 
@@ -2269,7 +2318,8 @@ class PlaylistWidget(QWidget):
 
     def _open_playlist(self, pl_id: str):
         pl = next((p for p in self._playlists if p["id"] == pl_id), None)
-        if not pl: return
+        if not pl:
+            return
         self._ensure_edit_view().load_playlist(pl)
         self._stack.setCurrentIndex(1)
 
@@ -2327,9 +2377,7 @@ class PlaylistWidget(QWidget):
         )
         if playlist is None:
             return
-        self._playlist_transfers.export_playlist(
-            copy.deepcopy(playlist), playlist_format
-        )
+        self._playlist_transfers.export_playlist(copy.deepcopy(playlist), playlist_format)
 
     @Slot(str, str)
     def _on_watched_folder_export_requested(
@@ -2341,9 +2389,7 @@ class PlaylistWidget(QWidget):
         self._playlist_transfers.load_and_export_playlist(
             display_name=display_name,
             playlist_format=playlist_format,
-            loader=lambda: self._watched_folder_playlist_store.load_playlist(
-                folder_path
-            ),
+            loader=lambda: self._watched_folder_playlist_store.load_playlist(folder_path),
             empty_message=self.tr('No media files found in "{name}".').replace(
                 "{name}", display_name
             ),
@@ -2394,11 +2440,7 @@ class PlaylistWidget(QWidget):
     def _on_folder_changed(self) -> None:
         """O watcher detectou mudança na pasta raiz ou subpastas (debounced)."""
         edit_view = self._edit_view
-        if (
-            edit_view is not None
-            and self._stack.currentIndex() == 1
-            and edit_view._is_watched
-        ):
+        if edit_view is not None and self._stack.currentIndex() == 1 and edit_view._is_watched:
             edit_view.supersede_watched_folder_refresh()
         self._wf_root_refresh_pending = True
         self._wf_refresh_debounce.start()
@@ -2425,9 +2467,7 @@ class PlaylistWidget(QWidget):
 
         edit_view = self._edit_view
         edit_is_open = (
-            edit_view is not None
-            and self._stack.currentIndex() == 1
-            and edit_view._is_watched
+            edit_view is not None and self._stack.currentIndex() == 1 and edit_view._is_watched
         )
         if refresh_root and not edit_is_open:
             self._list_view.refresh_watched()
@@ -2449,9 +2489,7 @@ class PlaylistWidget(QWidget):
             name = ensure_unique_playlist_name(name, self._playlists)
         except PlaylistNameConflictError as exc:
             self._notifications.warning(
-                self.tr('A playlist named "{name}" already exists.').replace(
-                    "{name}", exc.name
-                )
+                self.tr('A playlist named "{name}" already exists.').replace("{name}", exc.name)
             )
             return
         except PlaylistNameError:
@@ -2482,19 +2520,16 @@ class PlaylistWidget(QWidget):
         return playlist_id
 
     def _on_project_items(self, items: list, start_idx: int, order: str):
-        if not items: return
-        item  = items[start_idx]
-        url   = item.get("url", "")
+        if not items:
+            return
+        item = items[start_idx]
+        url = item.get("url", "")
         title = item.get("title", "")
         pl = [dict(playlist_item) for playlist_item in items]
         edit_view = self._edit_view
         source = getattr(edit_view, "_pl", None) or {}
         container_id = str(source.get("id") or "")
-        origin_kind = (
-            "temporary"
-            if getattr(edit_view, "_is_temp", False)
-            else "playlist"
-        )
+        origin_kind = "temporary" if getattr(edit_view, "_is_temp", False) else "playlist"
         if getattr(edit_view, "_is_watched", False):
             origin_kind = "linked_folder" if container_id else "temporary"
         for playlist_item in pl:
@@ -2533,11 +2568,7 @@ class PlaylistWidget(QWidget):
         if edit_view is None:
             return False
         playlist = edit_view._pl
-        if (
-            not edit_view._is_temp
-            or playlist is None
-            or playlist.get("id") != playlist_id
-        ):
+        if not edit_view._is_temp or playlist is None or playlist.get("id") != playlist_id:
             return False
         playlist.setdefault("items", []).extend(copy.deepcopy(items))
         edit_view._reconcile_playlist()
@@ -2580,10 +2611,12 @@ class PlaylistWidget(QWidget):
 
         self._persist_playlists()
         edit_view = self._edit_view
-        if (self._stack.currentIndex() == 1
-                and edit_view is not None
-                and edit_view._pl
-                and edit_view._pl["id"] == pl_id):
+        if (
+            self._stack.currentIndex() == 1
+            and edit_view is not None
+            and edit_view._pl
+            and edit_view._pl["id"] == pl_id
+        ):
             edit_view._reconcile_playlist()
         return MediaInsertResult(
             added_items=tuple(added_items),

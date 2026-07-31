@@ -110,26 +110,37 @@ def _by_id(nodes: list[dict]) -> dict[str, dict]:
 
 
 def test_diff_ignores_manual_nodes_and_operational_media_state() -> None:
-    canonical = [_section("section:mwb:lac", "Our Christian Life", [
-        _media("media:a", "A"),
-        _media("media:b", "B"),
-    ])]
-    current = [_manual_media("manual-root", "Root"), canonical[0] | {
-        "collapsed": True,
-        "children": [
-            _manual_media("manual-2", "Manual 2"),
-            canonical[0]["children"][0] | {
-                "resolved_url": "https://example.invalid/a.mp4",
-                "thumbnail_cache_key": "thumb",
-                "base_duration_ticks": 90_000,
-                "start_trim_ticks": 3_000,
-                "end_trim_ticks": 4_000,
-                "image_framing": {"zoom": 1.25},
-            },
-            _manual_media("manual-1", "Manual 1"),
-            canonical[0]["children"][1],
-        ],
-    }]
+    canonical = [
+        _section(
+            "section:mwb:lac",
+            "Our Christian Life",
+            [
+                _media("media:a", "A"),
+                _media("media:b", "B"),
+            ],
+        )
+    ]
+    current = [
+        _manual_media("manual-root", "Root"),
+        canonical[0]
+        | {
+            "collapsed": True,
+            "children": [
+                _manual_media("manual-2", "Manual 2"),
+                canonical[0]["children"][0]
+                | {
+                    "resolved_url": "https://example.invalid/a.mp4",
+                    "thumbnail_cache_key": "thumb",
+                    "base_duration_ticks": 90_000,
+                    "start_trim_ticks": 3_000,
+                    "end_trim_ticks": 4_000,
+                    "image_framing": {"zoom": 1.25},
+                },
+                _manual_media("manual-1", "Manual 1"),
+                canonical[0]["children"][1],
+            ],
+        },
+    ]
 
     assert not canonical_tree_diff(canonical, current).has_changes
 
@@ -145,37 +156,49 @@ def test_diff_detects_redundant_official_title_override() -> None:
 
 def test_diff_detects_every_official_divergence_category() -> None:
     canonical = [
-        _section("section:a", "Section A", [
-            _subsection("sub:a", "Subsection", [
-                _marker("marker:a", "Marker"),
-                _media("media:a", "Media A") | {
-                    "resolved_url": "https://example.invalid/canonical-a.mp4"
-                },
-            ]),
-            _media("media:b", "Media B"),
-        ]),
+        _section(
+            "section:a",
+            "Section A",
+            [
+                _subsection(
+                    "sub:a",
+                    "Subsection",
+                    [
+                        _marker("marker:a", "Marker"),
+                        _media("media:a", "Media A")
+                        | {"resolved_url": "https://example.invalid/canonical-a.mp4"},
+                    ],
+                ),
+                _media("media:b", "Media B"),
+            ],
+        ),
         _section("section:b", "Section B", [_media("media:c", "Media C")]),
     ]
     changed = _by_key(canonical)
     current = [
-        changed["section:b"] | {
+        changed["section:b"]
+        | {
             "children": [
-                changed["media:a"] | {
+                changed["media:a"]
+                | {
                     "title": "Custom media",
                     "user_title_override": True,
                 },
                 changed["media:c"],
             ],
         },
-        changed["section:a"] | {
+        changed["section:a"]
+        | {
             "title": "Renamed section",
             "color_hue": 12,
             "children": [
                 changed["media:b"],
-                changed["sub:a"] | {
+                changed["sub:a"]
+                | {
                     "title": "Renamed subsection",
                     "children": [
-                        changed["marker:a"] | {
+                        changed["marker:a"]
+                        | {
                             "text": "Renamed marker",
                             "user_title_override": True,
                         },
@@ -197,15 +220,23 @@ def test_diff_detects_every_official_divergence_category() -> None:
 
 def test_restore_rebuilds_official_tree_and_preserves_manual_state() -> None:
     canonical = [
-        _section("section:a", "Section A", [
-            _subsection("sub:a", "Subsection", [
-                _marker("marker:a", "Marker"),
-                _media("media:a", "Media A") | {
-                    "resolved_url": "https://example.invalid/canonical-a.mp4"
-                },
-            ]),
-            _media("media:b", "Media B"),
-        ], hue=205),
+        _section(
+            "section:a",
+            "Section A",
+            [
+                _subsection(
+                    "sub:a",
+                    "Subsection",
+                    [
+                        _marker("marker:a", "Marker"),
+                        _media("media:a", "Media A")
+                        | {"resolved_url": "https://example.invalid/canonical-a.mp4"},
+                    ],
+                ),
+                _media("media:b", "Media B"),
+            ],
+            hue=205,
+        ),
         _section("section:b", "Section B", [_media("media:c", "Media C")]),
     ]
     by_key = _by_key(canonical)
@@ -248,14 +279,16 @@ def test_restore_rebuilds_official_tree_and_preserves_manual_state() -> None:
     }
     current = [
         manual_root_section,
-        by_key["section:b"] | {
+        by_key["section:b"]
+        | {
             "children": [
                 _manual_media("manual-other-section", "Other section"),
                 moved_media,
                 by_key["media:c"],
             ],
         },
-        by_key["section:a"] | {
+        by_key["section:a"]
+        | {
             "id": "persisted-section-a",
             "title": "Accidental name",
             "color_hue": 7,
@@ -264,11 +297,13 @@ def test_restore_rebuilds_official_tree_and_preserves_manual_state() -> None:
                 by_key["media:b"],
                 _manual_media("manual-a", "Manual A"),
                 manual_subsection,
-                by_key["sub:a"] | {
+                by_key["sub:a"]
+                | {
                     "id": "persisted-sub-a",
                     "title": "Accidental subsection",
                     "children": [
-                        by_key["marker:a"] | {
+                        by_key["marker:a"]
+                        | {
                             "id": "persisted-marker-a",
                             "text": "Accidental marker",
                             "user_title_override": True,
@@ -283,7 +318,9 @@ def test_restore_rebuilds_official_tree_and_preserves_manual_state() -> None:
     restored_by_key = _by_key(restored)
     restored_by_id = _by_id(restored)
 
-    assert [node.get("meeting_source_key") for node in restored if node.get("meeting_generated")] == [
+    assert [
+        node.get("meeting_source_key") for node in restored if node.get("meeting_generated")
+    ] == [
         "section:a",
         "section:b",
     ]
@@ -354,26 +391,26 @@ def test_restore_never_inverts_manual_siblings_when_official_anchors_cross() -> 
     media_b = _media("media:b", "B")
     media_c = _media("media:c", "C")
     canonical = [_section("section:a", "Section", [media_c, media_a, media_b])]
-    current = [_section("section:a", "Section", [
-        media_a,
-        _manual_media("manual-1", "Manual 1"),
-        media_b,
-        _manual_media("manual-2", "Manual 2"),
-        media_c,
-    ])]
+    current = [
+        _section(
+            "section:a",
+            "Section",
+            [
+                media_a,
+                _manual_media("manual-1", "Manual 1"),
+                media_b,
+                _manual_media("manual-2", "Manual 2"),
+                media_c,
+            ],
+        )
+    ]
 
     restored = restore_canonical_tree(canonical, current)
     children = restored[0]["children"]
     official_order = [
-        child["meeting_source_key"]
-        for child in children
-        if child.get("meeting_generated")
+        child["meeting_source_key"] for child in children if child.get("meeting_generated")
     ]
-    manual_order = [
-        child["id"]
-        for child in children
-        if not child.get("meeting_generated")
-    ]
+    manual_order = [child["id"] for child in children if not child.get("meeting_generated")]
 
     assert official_order == ["media:c", "media:a", "media:b"]
     assert manual_order == ["manual-1", "manual-2"]
@@ -424,7 +461,7 @@ def test_legacy_hidden_media_without_state_is_resolved_after_restore() -> None:
     class Service:
         calls: list[tuple] = []
 
-        def resolve_video_async(self, request_id, media) -> None:
+        def resolve_media_async(self, request_id, media) -> None:
             self.calls.append((request_id, media))
 
     class Controller:
@@ -467,7 +504,7 @@ def test_restored_placeholder_title_is_resolved_even_when_remote_url_survived() 
     class Service:
         calls: list[tuple] = []
 
-        def resolve_video_async(self, request_id, media) -> None:
+        def resolve_media_async(self, request_id, media) -> None:
             self.calls.append((request_id, media))
 
     class Controller:
@@ -512,16 +549,18 @@ def test_store_persists_baseline_and_legacy_waits_for_reconciliation(tmp_path: P
     tree_key = "mwb:2026-05-25:T:issue"
     path = tmp_path / "meeting_trees.json"
     path.write_text(
-        json.dumps({
-            "version": 2,
-            "trees": {
-                tree_key: {
-                    "nodes": [_manual_media("legacy", "Legacy")],
-                    "last_canonical_hash": "legacy-hash",
-                    "deleted_source_keys": ["media:a", "media:gone"],
-                }
-            },
-        }),
+        json.dumps(
+            {
+                "version": 2,
+                "trees": {
+                    tree_key: {
+                        "nodes": [_manual_media("legacy", "Legacy")],
+                        "last_canonical_hash": "legacy-hash",
+                        "deleted_source_keys": ["media:a", "media:gone"],
+                    }
+                },
+            }
+        ),
         encoding="utf-8",
     )
     store = MeetingTreeStore(path)
@@ -549,9 +588,8 @@ def test_store_persists_baseline_and_legacy_waits_for_reconciliation(tmp_path: P
         reconciled.canonical_hash,
         {"media:a", "media:gone"},
         hidden_canonical_media={
-            "media:a": _media("media:a", "Resolved") | {
-                "resolved_url": "https://cdn.example.invalid/a.mp4"
-            },
+            "media:a": _media("media:a", "Resolved")
+            | {"resolved_url": "https://cdn.example.invalid/a.mp4"},
             "media:gone": _media("media:gone", "Gone"),
         },
     )
@@ -561,7 +599,7 @@ def test_store_persists_baseline_and_legacy_waits_for_reconciliation(tmp_path: P
     assert set(saved.hidden_canonical_media) == {"media:a"}
     assert saved.hidden_canonical_media["media:a"]["title"] == "Resolved"
     raw = json.loads(path.read_text(encoding="utf-8"))
-    assert raw["version"] == 4
+    assert raw["version"] == 5
 
 
 def test_preliminary_reconciliation_preserves_confirmed_canonical_state(
@@ -654,8 +692,8 @@ def _transaction_controller(store, *, sync_service=None):
     controller._generated_asset_roots = lambda: []
     controller._meeting_folder_imported_node_ids = lambda: set()
     controller.saved = 0
-    controller._save_local_cache = (
-        lambda: setattr(controller, "saved", controller.saved + 1) or True
+    controller._save_local_cache = lambda: (
+        setattr(controller, "saved", controller.saved + 1) or True
     )
 
     def submit_modal_operation(**options):
@@ -736,9 +774,7 @@ def test_restore_materialization_failure_never_persists_or_publishes() -> None:
     assert store.calls == 0
     assert controller.saved == 0
     assert controller.storageSaved.calls == []
-    assert controller.storageSaveFailed.calls == [
-        ("mwb:2026-05-25:T:issue", "copy failed")
-    ]
+    assert controller.storageSaveFailed.calls == [("mwb:2026-05-25:T:issue", "copy failed")]
 
 
 def test_deleting_official_section_with_manual_structure_is_blocked() -> None:

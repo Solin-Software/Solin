@@ -15,7 +15,11 @@ from solin.core.meetings.preparation import (
     MeetingPreparationService,
     _automatic_download_urls,
 )
-from solin.core.meetings.tree_store import MeetingTreeStore
+from solin.core.meetings.tree_store import (
+    MeetingTreeOverview,
+    MeetingTreeSnapshot,
+    MeetingTreeStore,
+)
 from solin.core.meetings.tree_types import clone_nodes, iter_nodes
 from solin.core.jw.language_context import JWMediaLanguageContext
 
@@ -68,10 +72,33 @@ class _CacheManager:
         self.cancel_calls.append(batch_id)
 
 
+def test_resolution_signature_separates_audio_and_video_formats() -> None:
+    key = MeetingPreparationKey(date(2026, 5, 25), "T")
+    identity = {
+        "key_symbol": "mwbv",
+        "track": 2,
+        "issue_tag": 20260500,
+        "meps_doc_id": 123,
+    }
+
+    audio = MeetingPreparationService._resolution_signature(
+        key,
+        identity | {"mime_type": "audio/mpeg"},
+    )
+    video = MeetingPreparationService._resolution_signature(
+        key,
+        identity | {"mime_type": "video/mp4"},
+    )
+
+    assert audio[2] == "audio"
+    assert video[2] == "video"
+    assert audio != video
+
+
 class _ImmediateResolver(QObject):
     resolved = Signal(str, object)
 
-    @Slot(str, str, int, int, int, str, bool)
+    @Slot(str, str, int, int, int, str, str, bool)
     def resolve(self, request_id, *_args) -> None:
         self.resolved.emit(
             request_id,
@@ -91,11 +118,13 @@ class _DeferredResolver(QObject):
     def __init__(self) -> None:
         super().__init__()
         self.request_id = ""
+        self.args: tuple[object, ...] = ()
         type(self).latest = self
 
-    @Slot(str, str, int, int, int, str, bool)
-    def resolve(self, request_id, *_args) -> None:
+    @Slot(str, str, int, int, int, str, str, bool)
+    def resolve(self, request_id, *args) -> None:
         self.request_id = request_id
+        self.args = args
 
     def complete(self) -> None:
         self.resolved.emit(
@@ -188,9 +217,7 @@ def test_tree_and_resolved_urls_are_committed_before_prefetch(monkeypatch, tmp_p
     service, publication, store, cache = _service(monkeypatch, tmp_path)
     key = MeetingPreparationKey(date(2026, 5, 25), "T")
     try:
-        service.ensure_week(
-            MeetingPreparationRequest(key=key, download_media=True)
-        )
+        service.ensure_week(MeetingPreparationRequest(key=key, download_media=True))
         generation = int(publication.loads[0]["generation"])
         publication.mwb_ready.emit(key.monday.isoformat(), _week_data(generation, with_media=True))
 
@@ -202,6 +229,98 @@ def test_tree_and_resolved_urls_are_committed_before_prefetch(monkeypatch, tmp_p
         assert media["resolved_url"] == "https://cdn.example/meeting.mp4"
         assert media["base_duration_ticks"] == 123_000_000
         assert cache.prefetch_calls[0][0] == ["https://cdn.example/meeting.mp4"]
+    finally:
+        service.shutdown(wait_ms=1000)
+
+
+def test_canonical_image_does_not_enter_audiovisual_resolver(monkeypatch, tmp_path) -> None:
+    service, publication, store, _cache = _service(
+        monkeypatch,
+        tmp_path,
+        resolver_class=_DeferredResolver,
+    )
+    key = MeetingPreparationKey(date(2026, 5, 25), "T")
+    try:
+        service.ensure_week(MeetingPreparationRequest(key=key))
+        generation = int(publication.loads[0]["generation"])
+        week = WeekData(
+            monday=key.monday,
+            language_code=key.language_code,
+            request_generation=generation,
+            mwb_status="ready",
+            mwb_issue="20260500",
+            mwb_date_label="May 25-31",
+            cbs_status="idle",
+            mwb_all_media=[
+                MeetingMedia(
+                    key_symbol="mwb",
+                    track=2,
+                    issue_tag=20260500,
+                    section="tgw",
+                    mime_type="image/jpeg",
+                )
+            ],
+        )
+
+        publication.mwb_ready.emit(key.monday.isoformat(), week)
+        _spin_until(lambda: store.find_snapshot("mwb", key.monday, key.language_code) is not None)
+
+        assert _DeferredResolver.latest is not None
+        assert _DeferredResolver.latest.request_id == ""
+        snapshot = store.find_snapshot("mwb", key.monday, key.language_code)
+        assert snapshot is not None
+        image = next(node for node in iter_nodes(snapshot.nodes) if node.get("type") == "media")
+        assert image["media_type"] == "image"
+        assert not image.get("resolved_url")
+    finally:
+        service.shutdown(wait_ms=1000)
+
+
+def test_audiovisual_metadata_without_url_still_enters_resolver(monkeypatch, tmp_path) -> None:
+    service, _publication, _store, _cache = _service(
+        monkeypatch,
+        tmp_path,
+        resolver_class=_DeferredResolver,
+    )
+    key = MeetingPreparationKey(date(2026, 5, 25), "T")
+    try:
+        service.ensure_week(MeetingPreparationRequest(key=key))
+        job = service._jobs[key]
+        snapshot = MeetingTreeSnapshot(
+            tree_key="mwb:2026-05-25:T:20260500",
+            pub_type="mwb",
+            monday=key.monday,
+            language=key.language_code,
+            issue="20260500",
+            nodes=[
+                {
+                    "id": "video-node",
+                    "type": "media",
+                    "media_type": "video",
+                    "base_duration_ticks": 123_000_000,
+                    "thumbnail_url": "https://cdn.example/thumb.jpg",
+                    "meeting_generated": True,
+                    "children": [],
+                    "media_ref": {
+                        "key_symbol": "mwbv",
+                        "track": 2,
+                        "issue_tag": 20260500,
+                        "mime_type": "video/mp4",
+                    },
+                }
+            ],
+            canonical_hash="canonical",
+            deleted_source_keys=set(),
+            linked_folder_files={},
+            meeting_folder_imports={},
+            overview=MeetingTreeOverview(),
+        )
+
+        service._schedule_snapshot_media(job, "mwb", snapshot)
+        _spin_until(lambda: bool(_DeferredResolver.latest and _DeferredResolver.latest.request_id))
+
+        assert _DeferredResolver.latest is not None
+        assert _DeferredResolver.latest.args[4] == "video"
     finally:
         service.shutdown(wait_ms=1000)
 
@@ -259,29 +378,31 @@ def test_resolved_official_subsection_media_is_persisted_without_prefetch(
     tree_key = "mwb:2026-05-25:T:20260500"
     store.save(
         tree_key,
-        [{
-            "id": "subsection",
-            "type": "subsection",
-            "children": [{
-                "id": "nested-official",
-                "type": "media",
-                "meeting_generated": True,
-                "meeting_source_key": "media:cbs:official",
-                "media_type": "video",
-                "media_ref": {
-                    "key_symbol": "mwbv",
-                    "track": 1,
-                    "mime_type": "video/mp4",
-                },
-                "children": [],
-            }],
-        }],
+        [
+            {
+                "id": "subsection",
+                "type": "subsection",
+                "children": [
+                    {
+                        "id": "nested-official",
+                        "type": "media",
+                        "meeting_generated": True,
+                        "meeting_source_key": "media:cbs:official",
+                        "media_type": "video",
+                        "media_ref": {
+                            "key_symbol": "mwbv",
+                            "track": 1,
+                            "mime_type": "video/mp4",
+                        },
+                        "children": [],
+                    }
+                ],
+            }
+        ],
         "hash",
     )
     try:
-        service.ensure_week(
-            MeetingPreparationRequest(key=key, download_media=True)
-        )
+        service.ensure_week(MeetingPreparationRequest(key=key, download_media=True))
 
         _spin_until(
             lambda: bool(
@@ -297,9 +418,7 @@ def test_resolved_official_subsection_media_is_persisted_without_prefetch(
         snapshot = store.snapshot(tree_key)
         assert snapshot is not None
         media = next(
-            node
-            for node in iter_nodes(snapshot.nodes)
-            if node.get("id") == "nested-official"
+            node for node in iter_nodes(snapshot.nodes) if node.get("id") == "nested-official"
         )
         assert media["resolved_url"] == "https://cdn.example/meeting.mp4"
         assert media["thumbnail_url"] == "https://cdn.example/meeting.jpg"
@@ -318,27 +437,27 @@ def test_cached_media_missing_duration_is_enriched_without_opening_detail(
     tree_key = "mwb:2026-05-25:T:20260500"
     store.save(
         tree_key,
-        [{
-            "id": "official",
-            "type": "media",
-            "meeting_generated": True,
-            "meeting_source_key": "media:mwb:official",
-            "media_type": "video",
-            "resolved_url": "https://cdn.example/meeting.mp4",
-            "media_ref": {
-                "key_symbol": "mwbv",
-                "track": 1,
-                "mime_type": "video/mp4",
-            },
-            "children": [],
-        }],
+        [
+            {
+                "id": "official",
+                "type": "media",
+                "meeting_generated": True,
+                "meeting_source_key": "media:mwb:official",
+                "media_type": "video",
+                "resolved_url": "https://cdn.example/meeting.mp4",
+                "media_ref": {
+                    "key_symbol": "mwbv",
+                    "track": 1,
+                    "mime_type": "video/mp4",
+                },
+                "children": [],
+            }
+        ],
         "hash",
     )
     cache.is_cached = lambda _url: True
     try:
-        service.ensure_week(
-            MeetingPreparationRequest(key=key, download_media=True)
-        )
+        service.ensure_week(MeetingPreparationRequest(key=key, download_media=True))
 
         _spin_until(
             lambda: bool(
@@ -451,15 +570,11 @@ def test_automatic_download_prefetches_persisted_url_before_revalidation(
         "hash",
     )
     try:
-        service.ensure_week(
-            MeetingPreparationRequest(key=key, download_media=True)
-        )
+        service.ensure_week(MeetingPreparationRequest(key=key, download_media=True))
 
         assert cache.prefetch_calls[0][0] == ["https://cdn.example/meeting.mp4"]
         assert len(publication.loads) == 1
-        assert publication.loads[0]["materialize_cached_publications"] == frozenset(
-            {"mwb", "wt"}
-        )
+        assert publication.loads[0]["materialize_cached_publications"] == frozenset({"mwb", "wt"})
         assert publication.loads[0]["known_wt_issue"] == ""
         assert publication.loads[0]["persisted_source_checksums"] == {"mwb": ""}
     finally:
@@ -475,13 +590,15 @@ def test_legacy_persisted_week_materializes_cache_to_seed_canonical_baseline(
     tree_key = "mwb:2026-05-25:T:20260500"
     store.save(
         tree_key,
-        [{
-            "id": "legacy-official",
-            "type": "media",
-            "children": [],
-            "meeting_generated": True,
-            "meeting_source_key": "media:mwb:legacy",
-        }],
+        [
+            {
+                "id": "legacy-official",
+                "type": "media",
+                "children": [],
+                "meeting_generated": True,
+                "meeting_source_key": "media:mwb:legacy",
+            }
+        ],
         "legacy-hash",
         source_checksum="confirmed",
     )
@@ -537,14 +654,16 @@ def test_persisted_week_skips_cached_materialization_and_passes_wt_issue(
     service, publication, store, _cache = _service(monkeypatch, tmp_path)
     key = MeetingPreparationKey(date(2026, 5, 25), "T")
     for pub_type, issue in (("mwb", "20260500"), ("wt", "20260400")):
-        canonical = [{
-            "id": f"{pub_type}-section",
-            "type": "section",
-            "title": "Section",
-            "children": [],
-            "meeting_generated": True,
-            "meeting_source_key": f"section:{pub_type}:official",
-        }]
+        canonical = [
+            {
+                "id": f"{pub_type}-section",
+                "type": "section",
+                "title": "Section",
+                "children": [],
+                "meeting_generated": True,
+                "meeting_source_key": f"section:{pub_type}:official",
+            }
+        ]
         store.save(
             f"{pub_type}:2026-05-25:T:{issue}",
             canonical,
@@ -567,16 +686,10 @@ def test_language_context_change_retires_obsolete_jobs(monkeypatch, tmp_path) ->
     old_key = MeetingPreparationKey(date(2026, 5, 25), "T")
     new_key = MeetingPreparationKey(date(2026, 5, 25), "E")
     try:
-        service.ensure_week(
-            MeetingPreparationRequest(key=old_key, download_media=True)
-        )
-        service.ensure_week(
-            MeetingPreparationRequest(key=new_key, download_media=True)
-        )
+        service.ensure_week(MeetingPreparationRequest(key=old_key, download_media=True))
+        service.ensure_week(MeetingPreparationRequest(key=new_key, download_media=True))
 
-        service.cancel_other_language_contexts(
-            JWMediaLanguageContext("E", "E", False)
-        )
+        service.cancel_other_language_contexts(JWMediaLanguageContext("E", "E", False))
 
         assert old_key not in service._jobs
         assert new_key in service._jobs
@@ -617,9 +730,7 @@ def test_late_generation_cannot_overwrite_forced_refresh(monkeypatch, tmp_path) 
                 wt_issue="20260500",
             ),
         )
-        service.ensure_week(
-            MeetingPreparationRequest(key=key, force_refresh=True)
-        )
+        service.ensure_week(MeetingPreparationRequest(key=key, force_refresh=True))
         second_generation = int(publication.loads[-1]["generation"])
         assert second_generation > first_generation
 
@@ -643,9 +754,7 @@ def test_pending_force_refresh_runs_when_final_publication_fails(
     try:
         service.ensure_week(MeetingPreparationRequest(key=key))
         generation = int(publication.loads[0]["generation"])
-        service.ensure_week(
-            MeetingPreparationRequest(key=key, force_refresh=True)
-        )
+        service.ensure_week(MeetingPreparationRequest(key=key, force_refresh=True))
 
         publication.context_error.emit(
             key.monday.isoformat(),
@@ -679,16 +788,10 @@ def test_resolution_patch_preserves_concurrent_manual_insertion(monkeypatch, tmp
     )
     key = MeetingPreparationKey(date(2026, 5, 25), "T")
     try:
-        service.ensure_week(
-            MeetingPreparationRequest(key=key, download_media=True)
-        )
+        service.ensure_week(MeetingPreparationRequest(key=key, download_media=True))
         generation = int(publication.loads[0]["generation"])
         publication.mwb_ready.emit(key.monday.isoformat(), _week_data(generation, with_media=True))
-        _spin_until(
-            lambda: bool(
-                _DeferredResolver.latest and _DeferredResolver.latest.request_id
-            )
-        )
+        _spin_until(lambda: bool(_DeferredResolver.latest and _DeferredResolver.latest.request_id))
 
         snapshot = store.find_snapshot("mwb", key.monday, "T")
         assert snapshot is not None

@@ -1,7 +1,40 @@
 from __future__ import annotations
 
+import math
+from typing import Any
+
 
 TICKS_PER_SECOND = 10_000_000
+
+
+def normalize_duration_ticks(
+    *,
+    ticks: Any = None,
+    seconds: Any = None,
+) -> int:
+    """Return one validated duration in 100 ns ticks.
+
+    Persisted media uses ticks as its single duration unit. Seconds are accepted
+    only at external API boundaries and are converted here exactly once.
+    """
+
+    if not isinstance(ticks, bool):
+        try:
+            normalized_ticks = int(ticks)
+        except (TypeError, ValueError, OverflowError):
+            normalized_ticks = 0
+        if normalized_ticks > 0:
+            return normalized_ticks
+
+    if isinstance(seconds, bool):
+        return 0
+    try:
+        normalized_seconds = float(seconds)
+    except (TypeError, ValueError, OverflowError):
+        return 0
+    if not math.isfinite(normalized_seconds) or normalized_seconds <= 0:
+        return 0
+    return round(normalized_seconds * TICKS_PER_SECOND)
 
 
 def effective_duration_ticks(
@@ -24,9 +57,7 @@ def effective_duration_ticks(
 
     return max(
         0,
-        base_duration_ticks
-        - valid_trim(start_trim_ticks)
-        - valid_trim(end_trim_ticks),
+        base_duration_ticks - valid_trim(start_trim_ticks) - valid_trim(end_trim_ticks),
     )
 
 

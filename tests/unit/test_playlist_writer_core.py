@@ -120,7 +120,7 @@ def test_jwl_round_trip_prefers_location_duration_from_database(
     )
     monkeypatch.setattr(
         reader,
-        "resolve_jworg_metadata",
+        "resolve_jworg_meta",
         lambda **_kwargs: {
             "title": "Resolved title",
             "url": "https://example.test/video.mp4",
@@ -153,9 +153,7 @@ def test_write_jwlplaylist_reports_progress(tmp_path):
         ],
         archive,
         tmp_path / "cache",
-        progress_callback=lambda phase, completed, total: events.append(
-            (phase, completed, total)
-        ),
+        progress_callback=lambda phase, completed, total: events.append((phase, completed, total)),
     )
 
     assert ("items", 0, 1) in events

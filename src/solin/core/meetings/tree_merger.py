@@ -6,6 +6,7 @@ Merge canonical meeting trees with saved user state.
 The meeting QML controller is intentionally thin around this module: tree
 merging is domain logic and should remain usable without importing Qt widgets.
 """
+
 from __future__ import annotations
 
 import copy
@@ -17,6 +18,8 @@ _DURABLE_MEDIA_FIELDS = (
     "thumbnail_url",
     "thumbnail_local_path",
     "thumbnail_cache_key",
+    "thumbnail_source_key",
+    "thumbnail_binding",
     "base_duration_ticks",
     "start_trim_ticks",
     "end_trim_ticks",
@@ -26,6 +29,7 @@ _DURABLE_MEDIA_FIELDS = (
 _CANONICAL_RESOLUTION_FIELDS = (
     "resolved_url",
     "thumbnail_url",
+    "thumbnail_binding",
     "base_duration_ticks",
 )
 _MEDIA_IDENTITY_FIELDS = (
@@ -119,6 +123,7 @@ class _PersistedManualNodeMerger:
     _RESOLUTION_FIELDS = (
         "resolved_url",
         "thumbnail_url",
+        "thumbnail_binding",
         "base_duration_ticks",
     )
 
@@ -168,9 +173,10 @@ class _PersistedManualNodeMerger:
                     self._include_level(target_level, source_children)
                 continue
             self._overlay_resolution(source, target)
-            if source.get("type") in ("section", "subsection") and target.get(
-                "type"
-            ) in ("section", "subsection"):
+            if source.get("type") in ("section", "subsection") and target.get("type") in (
+                "section",
+                "subsection",
+            ):
                 target_children = target.setdefault("children", [])
                 source_children = source.get("children", [])
                 if isinstance(target_children, list) and isinstance(source_children, list):
@@ -236,7 +242,8 @@ class MeetingTreeMerger:
         self._canonical_by_key = {
             node.get("meeting_source_key"): node
             for node in iter_nodes(self._canonical)
-            if node.get("meeting_generated") and node.get("meeting_source_key")
+            if node.get("meeting_generated")
+            and node.get("meeting_source_key")
             and node.get("meeting_source_key") not in self._deleted_source_keys
         }
         self._used: set[str] = set()

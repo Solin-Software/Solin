@@ -252,7 +252,7 @@ class _MeetingServiceStub:
     def __init__(self):
         self.resolved = {}
 
-    def resolve_video(self, item):
+    def resolve_media(self, item):
         return self.resolved
 
 
