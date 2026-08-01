@@ -62,6 +62,10 @@ class SettingsKey:
     CAMERA_BACKEND: Final = "camera/backend"
     CAMERA_DEVICE_NAME: Final = "camera/device_name"
 
+    # Virtual-camera scene configuration (meeting mode + rule overrides + PiP),
+    # JSON-encoded as a single value. NOT the OBS-remote "scenes".
+    VCAM_SCENE_CONFIG: Final = "vcam/scene_config"
+
     OBS_ENABLED: Final = "obs/enabled"
     OBS_PORT: Final = "obs/port"
     OBS_PASSWORD: Final = "obs/password"

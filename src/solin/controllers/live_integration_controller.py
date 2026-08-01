@@ -6,13 +6,19 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from PySide6.QtCore import Slot
+from PySide6.QtCore import QObject, Signal, Slot
 from PySide6.QtGui import QImage
 
 from ..core.integrations.camera_options import CameraOption
 from ..core.foundation.constants import MEMORIZE_PRE_MEDIA_SCENE
 
 log = logging.getLogger(__name__)
+
+
+class _VcamProvisionSink(QObject):
+    """Marshals the off-thread provisioning result back onto the GUI thread."""
+
+    done = Signal(bool)
 
 
 @dataclass(frozen=True, slots=True)
@@ -188,8 +194,127 @@ class LiveIntegrationController:
         if not enabled and self._session.state_type == "camera_stream":
             self._handlers.stop_projection()
 
-    def on_camera_selection_changed(self, _option) -> None:
+    def on_camera_selection_changed(self, option) -> None:
         self.refresh_obs_camera_stream_availability()
+        self._sync_vcam_camera(option)
+
+    def on_vcam_scene_override(self, comp) -> None:
+        """Force the virtual camera to a specific scene for the current projected
+        content (``comp`` a VcamComposition), or resume following the projector
+        (``comp`` is None). No-op off the libobs engine."""
+        from ..projection.window import obs_media_engine_active
+
+        if not obs_media_engine_active():
+            return
+        try:
+            from ..core.media.vcam_director import vcam_director
+
+            director = vcam_director()
+            if comp is None:
+                director.clear_override()
+            else:
+                director.set_override(comp)
+        except Exception:  # noqa: BLE001 - override must not crash the toolbar
+            log.debug("Virtual-camera scene override failed", exc_info=True)
+
+    # ── virtual camera (obs engine) ─────────────────────────────────────────
+
+    def start_virtual_camera(self) -> None:
+        """Bring the virtual camera up at launch and follow the projector.
+
+        No-op off the libobs engine. On Linux the sink is a ``v4l2loopback``
+        device whose branded name needs a one-time, polkit-authorised setup
+        (:mod:`vcam_provision`): if the module is missing the operator is guided to
+        install it; if it is unloaded or wrongly labelled Solin provisions it (off
+        the GUI thread) before starting; otherwise it starts straight away.
+        """
+        from ..projection.window import obs_media_engine_active
+
+        active = obs_media_engine_active()
+        log.info("Virtual camera: startup requested (obs engine active=%s)", active)
+        if not active:
+            return
+        from ..core.media import vcam_provision as prov
+
+        state = prov.detect()
+        log.info("Virtual camera: provision state = %s", state.value)
+        if state is prov.VcamProvisionState.MODULE_MISSING:
+            self._context.notifications.warning(
+                prov.install_hint(),
+                title=self._context.translate("Virtual camera unavailable"),
+                dedupe_key="vcam-module-missing",
+            )
+            return
+        if state in (
+            prov.VcamProvisionState.NOT_LOADED,
+            prov.VcamProvisionState.WRONG_LABEL,
+        ):
+            self._provision_vcam_then_start()
+            return
+        self._start_virtual_camera_now()
+
+    def _provision_vcam_then_start(self) -> None:
+        """Run the privileged one-time setup off the GUI thread, then start."""
+        from PySide6.QtCore import QRunnable, QThreadPool
+
+        sink = _VcamProvisionSink()
+        sink.done.connect(self._on_vcam_provisioned)
+        self._vcam_provision_sink = sink  # keep alive until the signal fires
+
+        class _Worker(QRunnable):
+            def run(self) -> None:  # runs on a QThreadPool worker thread
+                from ..core.media import vcam_provision as prov
+
+                sink.done.emit(prov.provision())
+
+        QThreadPool.globalInstance().start(_Worker())
+
+    def _on_vcam_provisioned(self, ok: bool) -> None:
+        # Start regardless: on success the sink is now "Solin Virtual Camera"; on
+        # failure/cancel it still works on whatever loopback exists (start() logs
+        # the real name). NOT_LOADED with a failed setup simply has no device and
+        # start() reports that.
+        self._vcam_provision_sink = None
+        if not ok:
+            log.info("Virtual camera: continuing without the branded setup.")
+        self._start_virtual_camera_now()
+
+    def _start_virtual_camera_now(self) -> None:
+        from ..core.media.obs_virtual_camera import virtual_camera
+        from ..core.media.vcam_director import vcam_director
+
+        if not virtual_camera().start():
+            return
+        self._load_vcam_scene_config()
+        self._sync_vcam_camera(self.selected_camera_option())
+        vcam_director().start_following()
+        toolbar = self._context.quick_toolbar()
+        if toolbar is not None and hasattr(toolbar, "set_scene_override_available"):
+            toolbar.set_scene_override_available(True)
+
+    def _load_vcam_scene_config(self) -> None:
+        """Seed the director with the operator's persisted Scenes config, just
+        before it starts following (so a saved config applies from the start)."""
+        try:
+            from ..core.media.vcam_director import vcam_director
+            from ..core.media.vcam_settings import VcamSettingsStore
+
+            store = VcamSettingsStore(self._context.camera_settings.settings)
+            vcam_director().set_config(store.scene_config())
+        except Exception:  # noqa: BLE001 - config load must not block the vcam
+            log.debug("Could not load virtual-camera scene config", exc_info=True)
+
+    def _sync_vcam_camera(self, option) -> None:
+        """Feed the operator's selected camera to the virtual camera (obs only)."""
+        from ..projection.window import obs_media_engine_active
+
+        if not obs_media_engine_active():
+            return
+        from ..core.media.camera_source import camera_target
+        from ..core.media.obs_virtual_camera import virtual_camera
+
+        path, name = camera_target(option)
+        virtual_camera().set_meeting_camera(path, name)
 
     def on_quick_obs_scene_change(self, scene_name: str) -> None:
         self._context.obs_service.request_scene_change(scene_name)

@@ -8,7 +8,7 @@ def test_nav_button_specs_keep_page_indices_and_sidebar_order_stable():
     attr_names = [attr_name for attr_name, _icon, _label, _index in specs]
     page_indices = [index for _attr_name, _icon, _label, index in specs]
 
-    assert page_indices == list(range(10))
+    assert page_indices == list(range(11))
     assert attr_names == [
         "nav_songs_btn",
         "nav_meetings_btn",
@@ -20,6 +20,7 @@ def test_nav_button_specs_keep_page_indices_and_sidebar_order_stable():
         "nav_playlist_btn",
         "nav_cache_btn",
         "nav_wifi_btn",
+        "nav_scenes_btn",
     ]
     assert MainWindowUiController.sidebar_layout_order() == (
         "nav_meetings_btn",
@@ -29,6 +30,7 @@ def test_nav_button_specs_keep_page_indices_and_sidebar_order_stable():
         "nav_songs_btn",
         "nav_clips_btn",
         "nav_theme_btn",
+        "nav_scenes_btn",
         "nav_cache_btn",
         "nav_wifi_btn",
     )

@@ -118,6 +118,15 @@ class MediaComposition:
         # (projection program → channels → OBS context, in that order). No-op for
         # the default Qt engine, or if the libobs runtime never started.
         if os.environ.get("SOLIN_MEDIA_ENGINE", "").strip().lower() == "obs":
+            # Stop the virtual-camera follow loop (a GUI-thread QTimer) before the
+            # native runtime is freed; the vcam's own sources are released inside
+            # obs_runtime().shutdown().
+            try:
+                from solin.core.media.vcam_director import vcam_director
+
+                vcam_director().stop_following()
+            except Exception:  # noqa: BLE001 - shutdown must not raise
+                log.warning("virtual camera director shutdown errored", exc_info=True)
             try:
                 from solin.core.media.obs_runtime import obs_runtime
 

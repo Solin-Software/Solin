@@ -18,7 +18,6 @@ program.
 from __future__ import annotations
 
 import logging
-import sys
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QImage
@@ -45,29 +44,6 @@ _KEY_CAMERA = "camera"
 _KEY_NDI = "ndi"
 _KEY_IDLE_VIDEO = "idle_video"
 _KEY_IDLE_IMAGE = "idle_image"
-
-
-def _camera_source_spec(device_path: str, device_name: str) -> tuple[str, dict]:
-    """The libobs capture-source kind + settings for a camera, per platform.
-
-    ``QCameraDevice.id()`` yields the platform-native device id — Linux:
-    ``/dev/videoN``; Windows: the DirectShow device path; macOS: the AVFoundation
-    ``uniqueID`` — and each OBS capture source expects it under a different key:
-
-    * Linux  → ``v4l2_input``        ``device_id``
-    * Windows→ ``dshow_input``       ``video_device_id`` (``"<name>:<path>"``)
-    * macOS  → ``av_capture_input``  ``device``
-
-    (Windows' dshow matches ``"<friendly name>:<device path>"``; the plain path is
-    a best-effort fallback.) If the native source can't be created the caller
-    keeps the Qt QCamera path, so an imperfect id degrades, it doesn't break.
-    """
-    if sys.platform == "win32":
-        vid = f"{device_name}:{device_path}" if device_name else device_path
-        return "dshow_input", {"video_device_id": vid, "last_video_device_id": vid}
-    if sys.platform == "darwin":
-        return "av_capture_input", {"device": device_path}
-    return "v4l2_input", {"device_id": device_path}
 
 
 def _image_signature(image: QImage) -> object:
@@ -116,10 +92,9 @@ class ProjectionProgramDriver:
         # show_ndi_frame).
         self._browser_frames = None
         self._ndi_frames = None
-        self._source_seq = 0  # unique names for created input sources (camera, idle)
-        # Reused v4l2_input source for the camera (one per device; re-shown across
-        # scenes so libobs opens/closes the device on activate/deactivate).
-        self._camera_source = None
+        self._source_seq = 0  # unique names for created input sources (idle bg)
+        # The camera the projector currently shows (the source itself is the shared
+        # per-device source owned by the runtime — see ObsRuntime.camera_source).
         self._camera_device: str | None = None
         # Paths of the custom idle background currently on the program (for dedup;
         # the sources themselves are owned by the program and released when the
@@ -337,46 +312,24 @@ class ProjectionProgramDriver:
 
     def show_camera(self, device_path: str, device_name: str = "") -> bool:
         """Project a camera as a native libobs capture source — ``v4l2_input``
-        (Linux), ``dshow_input`` (Windows) or ``av_capture_input`` (macOS), see
-        :func:`_camera_source_spec`. libobs owns the device, decodes, composites
-        and crossfades it. Returns False if the source can't be created so the
-        caller keeps the Qt QCamera path.
+        (Linux), ``dshow_input`` (Windows) or ``av_capture_input`` (macOS). Returns
+        False if the source can't be created so the caller keeps the Qt QCamera path.
 
-        ONE source is created per device and **reused** across re-shows (the OBS
-        model): crossfading away leaves the source but drops it from every scene,
-        so libobs deactivates it and closes the device; re-showing re-adds it to a
-        new scene, reactivating it and reopening the device. (Creating a fresh
-        source each time raced the device close → the camera showed only once.)
+        Uses the ONE shared per-device source (:meth:`ObsRuntime.camera_source`) so
+        the projector and the virtual camera can show the same camera at once
+        without opening the device twice. ``owned=False``: the runtime owns the
+        source; the crossfade only disposes the wrapping scene (source deactivated
+        → device closed once no scene/view references it).
         """
         if not device_path:
             return False
         self.ensure()
         if self._program.current_key == _KEY_CAMERA and self._camera_device == device_path:
             return True  # already projecting this camera
-        source = self._camera_source
-        if source is not None and self._camera_device != device_path:
-            # A different camera was picked — drop the old source/device first.
-            try:
-                source.release()
-            except Exception:  # noqa: BLE001 - libobs boundary
-                log.debug("Error releasing previous camera source", exc_info=True)
-            source = None
-            self._camera_source = None
+        source = obs_runtime().camera_source(device_path, device_name)
         if source is None:
-            ob = obs_runtime().ob
-            self._source_seq += 1
-            kind, settings = _camera_source_spec(device_path, device_name)
-            try:
-                source = ob.Source.create(kind, f"solin-camera-{self._source_seq}", settings)
-            except Exception:  # noqa: BLE001 - source-creation / plugin boundary
-                log.warning("Could not create %s for %s", kind, device_path, exc_info=True)
-                return False
-            if source is None:
-                return False
-            self._camera_source = source
-            self._camera_device = device_path
-        # owned=False: the driver keeps the reusable source; the crossfade only
-        # disposes the wrapping scene (source deactivated → device closed).
+            return False
+        self._camera_device = device_path
         self._program.show_source(_KEY_CAMERA, source, owned=False)
         return True
 

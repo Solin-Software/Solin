@@ -92,6 +92,7 @@ EXPECTED_SETTINGS_KEYS = {
     "CAMERA_ENABLED": "camera/enabled",
     "CAMERA_BACKEND": "camera/backend",
     "CAMERA_DEVICE_NAME": "camera/device_name",
+    "VCAM_SCENE_CONFIG": "vcam/scene_config",
     "OBS_ENABLED": "obs/enabled",
     "OBS_PORT": "obs/port",
     "OBS_PASSWORD": "obs/password",

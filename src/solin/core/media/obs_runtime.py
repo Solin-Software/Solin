@@ -189,6 +189,11 @@ class ObsRuntime:
         self._video = ObsVideoConfig()
         self._used_channels: set[int] = set()
         self._monitoring_device: tuple[str, str] | None = None
+        # ONE shared capture source per camera device — a V4L2 device can't be
+        # opened twice, so the projector and the virtual camera reference the same
+        # source (see :meth:`camera_source`).
+        self._camera_sources: dict[str, Any] = {}
+        self._camera_source_seq = 0
 
     # ── Lifecycle ─────────────────────────────────────────────────────────
 
@@ -214,6 +219,47 @@ class ObsRuntime:
     @property
     def video(self) -> ObsVideoConfig:
         return self._video
+
+    def camera_source(self, device_path: str, device_name: str = "") -> Any:
+        """The ONE shared capture source for ``device_path``, created on first use.
+
+        A camera device can be opened only once, so every consumer (the projector's
+        program scene and the virtual camera's view) must reference the SAME libobs
+        source — a source can be in multiple scenes/views at once, and libobs opens
+        the device once while it is active in any of them. The runtime owns these
+        sources and frees them on shutdown; callers add them ``owned=False``.
+        Returns None (logged) if the source can't be created.
+        """
+        if not device_path:
+            return None
+        with self._lock:
+            existing = self._camera_sources.get(device_path)
+            if existing is not None:
+                return existing
+            self.ensure_started()
+            from .camera_source import camera_source_spec
+
+            kind, settings = camera_source_spec(device_path, device_name)
+            self._camera_source_seq += 1
+            try:
+                source = self.ob.Source.create(
+                    kind, f"solin-shared-cam-{self._camera_source_seq}", settings
+                )
+            except Exception:  # noqa: BLE001 - source-creation / plugin boundary
+                log.warning("Could not create %s for %s", kind, device_path, exc_info=True)
+                return None
+            if source is None:
+                return None
+            self._camera_sources[device_path] = source
+            return source
+
+    def _release_camera_sources(self) -> None:
+        for source in self._camera_sources.values():
+            try:
+                source.release()
+            except Exception:  # noqa: BLE001 - shutdown must be total
+                log.debug("Error releasing shared camera source", exc_info=True)
+        self._camera_sources.clear()
 
     def ensure_started(
         self,
@@ -289,6 +335,14 @@ class ObsRuntime:
                 projection_program().shutdown()
             except Exception:  # noqa: BLE001 - shutdown must be total
                 log.warning("Projection program shutdown errored", exc_info=True)
+            # The virtual camera holds an output + its own view/scene referencing
+            # this context — release them before it is freed. Lazy import.
+            try:
+                from .obs_virtual_camera import virtual_camera
+
+                virtual_camera().shutdown()
+            except Exception:  # noqa: BLE001 - shutdown must be total
+                log.warning("Virtual camera shutdown errored", exc_info=True)
             for channel in sorted(self._used_channels):
                 try:
                     self.set_channel_source(channel, None)
@@ -296,6 +350,8 @@ class ObsRuntime:
                     log.warning("Could not clear libobs channel %d on shutdown", channel,
                                 exc_info=True)
             self._used_channels.clear()
+            # Release the shared camera sources now that no scene references them.
+            self._release_camera_sources()
             try:
                 self._context.shutdown()
             except Exception:  # noqa: BLE001 - shutdown must not raise

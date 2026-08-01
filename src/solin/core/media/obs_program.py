@@ -134,6 +134,17 @@ class ProjectionProgram:
         shared channel-0 output as-is instead of resetting it to the idle screen."""
         return self._current_key in (None, _BLACK_KEY)
 
+    def transition_source(self):
+        """The channel-0 fade transition (a long-lived libobs ``Source``).
+
+        A second view — the virtual camera — mirrors it on one of its channels to
+        show *exactly* what the projector shows, frame-synced and without
+        re-decoding any media. Long-lived (created in :meth:`ensure`, released only
+        on shutdown), so it is safe to reference from another view. ``None`` until
+        :meth:`ensure` has run.
+        """
+        return self._transition
+
     def ensure(self) -> None:
         """Create the fade transition on channel 0 (idempotent)."""
         with self._lock:

@@ -222,6 +222,33 @@ Item {
                 }
             }
 
+            // ── Virtual-camera scene override ────────────────────────
+            Item {
+                visible: bridge.sceneVisible
+                width: 30; height: 30
+
+                Rectangle {
+                    anchors.fill: parent; radius: 15
+                    color: sceneMA.pressed
+                           ? root.toolbarPressed
+                           : sceneMA.containsMouse
+                             ? root.toolbarHover : "transparent"
+                }
+                Image {
+                    anchors.centerIn: parent
+                    source: "image://icons/scene/14/" + bridge.sceneIconColor
+                    sourceSize: Qt.size(14, 14)
+                    cache: false
+                }
+                MouseArea {
+                    id: sceneMA; anchors.fill: parent
+                    hoverEnabled: true
+                    onEntered: root.beginButtonHover(sceneMA, bridge.sceneTooltip)
+                    onExited: root.endButtonHover()
+                    onClicked: bridge.onSceneClicked()
+                }
+            }
+
             // ── Zoom ─────────────────────────────────────────────────
             Item {
                 visible: bridge.zoomVisible

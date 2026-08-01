@@ -50,8 +50,9 @@ _QAT_ANIM_MS = 250
 _QAT_BAR_H = 48
 _QAT_MINI_W = 26
 _QAT_MINI_H = 30
-# The QQuickWidget is fixed-width; QML handles the actual pill width.
-_QAT_MAX_W = 240
+# The QQuickWidget is fixed-width; QML handles the actual pill width. Sized for
+# the widest case (all buttons visible incl. the vcam scene-override button).
+_QAT_MAX_W = 280
 
 # Pill / mini corner radii used for the native macOS layer clip (see below).
 _QAT_PILL_RADIUS = 20
@@ -173,6 +174,7 @@ class QuickAccessToolbar(QQuickWidget):
     obs_camera_stream_requested = Signal()
     camera_stream_requested = Signal()
     camera_selection_changed = Signal(object)
+    vcam_scene_override_requested = Signal(object)  # VcamComposition, or None = auto
     remote_session_disconnect_requested = Signal(str)
     remote_sessions_disconnect_all_requested = Signal()
 
@@ -244,6 +246,7 @@ class QuickAccessToolbar(QQuickWidget):
         self._bridge.obsClicked.connect(self._on_obs_clicked)
         self._bridge.zoomClicked.connect(self._on_zoom_clicked)
         self._bridge.cameraClicked.connect(self._on_camera_clicked)
+        self._bridge.sceneClicked.connect(self._on_scene_clicked)
         self._bridge.remoteControlClicked.connect(self._on_remote_control_clicked)
         self._bridge.minimizeToggled.connect(self._toggle_minimize)
         self._bridge.pointerEntered.connect(self._begin_qml_pointer_cursor)
@@ -945,6 +948,8 @@ class QuickAccessToolbar(QQuickWidget):
             items.append(30)
         if self._bridge._camera_visible:
             items.append(30)
+        if self._bridge._scene_visible:
+            items.append(30)
         if self._bridge._zoom_visible:
             items.append(30)
         if self._bridge._remote_control_visible:
@@ -1150,6 +1155,44 @@ class QuickAccessToolbar(QQuickWidget):
         if panel is None:
             return
         panel.show_above(self._active_surface())
+
+    def set_scene_override_available(self, available: bool) -> None:
+        """Show/hide the virtual-camera scene-override toolbar button."""
+        self._bridge.set_scene_visible(bool(available))
+        self._bridge.set_scene_icon_color("8b949e" if available else "484f58")
+        # Recompute the input mask + layout so the widened pill (extra button)
+        # is fully revealed — otherwise the stale mask clips it.
+        self._update_separator()
+        self._reposition()
+
+    def _on_scene_clicked(self) -> None:
+        """Pop a menu to force the vcam scene for the current content (or auto)."""
+        hide_themed_tooltip()
+        from PySide6.QtGui import QCursor
+        from PySide6.QtWidgets import QMenu
+
+        from ..core.media.vcam_model import SCENE_PRESETS
+
+        menu = QMenu(self)
+        auto = menu.addAction(self.tr("Automatic (follow projector)"))
+        auto.triggered.connect(
+            lambda: self.vcam_scene_override_requested.emit(None)
+        )
+        menu.addSeparator()
+        for preset_id, comp in SCENE_PRESETS:
+            action = menu.addAction(self._scene_preset_label(preset_id))
+            action.triggered.connect(
+                lambda _checked=False, c=comp: self.vcam_scene_override_requested.emit(c)
+            )
+        menu.exec(QCursor.pos())
+
+    def _scene_preset_label(self, preset_id: str) -> str:
+        return {
+            "camera_full": self.tr("Camera, full screen"),
+            "media_full": self.tr("Projected content, full screen"),
+            "media_with_camera": self.tr("Content + camera (PiP)"),
+            "logo_only": self.tr("Solin logo"),
+        }.get(preset_id, preset_id)
 
     def _on_remote_control_clicked(self) -> None:
         hide_themed_tooltip()

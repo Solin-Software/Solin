@@ -477,3 +477,37 @@ def test_graphics_module_path_returns_bundled_absolute_path(monkeypatch, tmp_pat
     assert path is not None
     assert os.path.isabs(path)
     assert path.endswith(os.path.join("linux", "x86_64", "libobs-opengl.so"))
+
+
+class _FakeCamSource:
+    def __init__(self, name: str) -> None:
+        self.name = name
+        self.released = 0
+
+    def release(self) -> None:
+        self.released += 1
+
+
+def test_camera_source_is_shared_per_device_and_freed(monkeypatch):
+    context = _FakeContext()
+    ob = _FakeOb(context)
+    created: list[str] = []
+    ob.Source = types.SimpleNamespace(
+        create=lambda kind, name, settings: created.append(name) or _FakeCamSource(name)
+    )
+    rt = _prime(monkeypatch, ob=ob)
+    monkeypatch.setattr(rt, "ensure_started", lambda *a, **k: None)
+    monkeypatch.setattr(sys, "platform", "linux")
+
+    a = rt.camera_source("/dev/video0")
+    b = rt.camera_source("/dev/video0")
+    assert a is b and len(created) == 1  # one shared source per device
+
+    c = rt.camera_source("/dev/video1")
+    assert c is not a and len(created) == 2
+
+    assert rt.camera_source("") is None  # empty path → no source
+
+    rt._release_camera_sources()
+    assert a.released == 1 and c.released == 1
+    assert rt._camera_sources == {}

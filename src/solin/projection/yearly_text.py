@@ -4,21 +4,20 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from PySide6.QtCore import QByteArray, QRectF, Qt
+from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import (
     QColor,
     QFont,
     QFontMetrics,
     QFontMetricsF,
     QPainter,
-    QPixmap,
 )
-from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import QWidget
 
 from ..core.rendering.fonts import FontManager
 from ..core.timer.render import format_fixed_countdown
 from ..ui.fonts import timer_digit_font_family
+from .brand import render_jw_badge
 
 __all__ = ("YearlyTextWidget",)
 
@@ -194,21 +193,7 @@ class YearlyTextWidget(QWidget):
 
         # ── JW Badge (bottom-right) ───────────────────────────────────────
         badge_x, badge_y, badge_size = self._jw_badge_geometry()
-
-        painter.fillRect(badge_x, badge_y, badge_size, badge_size, QColor(51, 51, 51))
-
-        jw_svg = b"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 151 153">
-  <path fill="black" d="M47.34 87c.22-13.47-.15-26.95.16-40.43 2.33 0 4.66 0 6.99-.01.25 13.48.1 26.97.08 40.46.09 6.42-3.16 13.91-9.88 15.63-6.87 1.58-14.59.65-20.24-3.8 1.03-1.94 2.09-3.86 3.14-5.78 3.76 2.25 7.87 4.83 12.46 4.07 4.68-.73 7.34-5.74 7.29-10.14m14.14-40.42c2.57.01 5.15.01 7.72.05 1.74 9.51 4.19 18.88 5.95 28.39.93 4.65 1.7 9.36 3.24 13.86 4.04-13.41 8.11-26.81 12.45-40.12 1.83-.06 3.66-.11 5.5-.15 3.19 7.38 4.6 15.36 7.14 22.97 1.89 5.54 3.1 11.28 4.95 16.84 1.12-1.86 1.63-3.97 2.02-6.09 2.35-11.94 5.51-23.7 7.76-35.66 2.51-.08 5.02-.08 7.53-.11-4.7 18.69-9.12 37.44-13.86 56.11-2.11.01-4.22 0-6.33 0-4.19-13.92-7.88-27.99-11.96-41.95-4.46 13.96-8.67 28.01-13.2 41.94-1.99.02-3.97.04-5.95.05-4.6-18.64-8.58-37.43-12.96-56.13"/>
-</svg>"""
-        renderer = QSvgRenderer(QByteArray(jw_svg))
-        jw_pixmap = QPixmap(badge_size, badge_size)
-        jw_pixmap.fill(QColor(51, 51, 51))
-        pix_painter = QPainter(jw_pixmap)
-        pix_painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        pad = int(badge_size * -0.08)
-        renderer.render(pix_painter, QRectF(pad, pad, badge_size - 2 * pad, badge_size - 2 * pad))
-        pix_painter.end()
-        painter.drawPixmap(badge_x, badge_y, jw_pixmap)
+        painter.drawPixmap(badge_x, badge_y, render_jw_badge(badge_size))
 
         self._paint_countdown(painter, countdown_layout)
         painter.end()

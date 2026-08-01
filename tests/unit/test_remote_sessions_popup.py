@@ -12,7 +12,7 @@ from solin.core.remote_control.security import RemoteSessionInfo
 from solin.styles.icons import ICON_REMOTE_CONTROL, make_icon
 from solin.ui.controls import ButtonConfirmationFeedback
 from solin.ui.qml.quick_toolbar import QuickToolbarBridge
-from solin.widgets.quick_access_toolbar import QuickAccessToolbar
+from solin.widgets.quick_access_toolbar import _QAT_MAX_W, QuickAccessToolbar
 from solin.widgets.remote_control_setup_dialog import (
     RemoteControlSetupDialog,
     RemoteControlSetupPresentation,
@@ -131,13 +131,16 @@ def test_remote_toolbar_control_keeps_the_maximum_pill_within_its_fixed_surface(
         _separator_visible=True,
         _obs_visible=True,
         _camera_visible=True,
+        _scene_visible=True,
         _zoom_visible=True,
         _remote_control_visible=True,
     )
     toolbar = SimpleNamespace(_bridge=bridge)
     source = Path("src/solin/qml/QuickAccessToolbar.qml").read_text(encoding="utf-8")
 
-    assert QuickAccessToolbar._calc_pill_width(toolbar) == 240
+    # The widest pill (every button visible, incl. the vcam scene override) must
+    # still fit inside the fixed-width QQuickWidget surface.
+    assert QuickAccessToolbar._calc_pill_width(toolbar) <= _QAT_MAX_W
     assert source.index("id: zoomMA") < source.index("id: remoteControlButton")
     assert source.index("id: remoteControlButton") < source.index("id: minMA")
     assert "Accessible.role: Accessible.Button" in source

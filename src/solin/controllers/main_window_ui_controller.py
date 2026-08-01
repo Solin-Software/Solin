@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 
 from ..core.meetings.preparation import MeetingPreparationService
 from ..styles.icons import (
+    ICON_CAMERA,
     ICON_MENU,
     ICON_NAV_BROWSER,
     ICON_NAV_CACHE,
@@ -46,6 +47,7 @@ from ..widgets.playlist.widget import PlaylistWidget
 from ..widgets.projection.bar import ProjectionBar
 from ..widgets.quick_access_toolbar import QuickAccessToolbar
 from ..widgets.deferred_talk_theme_widget import DeferredTalkThemeWidget
+from ..widgets.scenes_widget import ScenesWidget
 from ..widgets.settings_widget import SettingsWidget
 from ..widgets.songs_widget import SongsWidget
 from ..widgets.timer_widget import TimerWidget
@@ -161,6 +163,7 @@ class MainWindowUiHandlers:
     project_obs_stream: Callable[..., Any]
     project_camera_stream: Callable[..., Any]
     camera_selection_changed: Callable[..., Any]
+    vcam_scene_override: Callable[..., Any]
     profile_switch_requested: Callable[..., Any]
 
 
@@ -179,6 +182,7 @@ class MainWindowUiResources:
     talk_theme_widget: DeferredTalkThemeWidget
     playlist_widget: PlaylistWidget
     meetings_widget: MeetingsWidget
+    scenes_widget: ScenesWidget
     quick_toolbar: QuickAccessToolbar
     sidebar_title_label: QLabel
     sidebar_subtitle_label: QLabel
@@ -197,6 +201,7 @@ class _PageResources:
     talk_theme_widget: DeferredTalkThemeWidget
     playlist_widget: PlaylistWidget
     meetings_widget: MeetingsWidget
+    scenes_widget: ScenesWidget
 
 
 @dataclass(frozen=True, slots=True)
@@ -224,6 +229,7 @@ class MainWindowUiController:
         ICON_NAV_PLAYLIST,
         ICON_NAV_CACHE,
         ICON_NAV_WIFI,
+        ICON_CAMERA,  # nav_scenes_btn (virtual-camera scenes)
     )
     _NAV_BUTTON_SPECS = tuple(
         (attr_name, icon, label, index)
@@ -239,6 +245,7 @@ class MainWindowUiController:
         "nav_songs_btn",
         "nav_clips_btn",
         "nav_theme_btn",
+        "nav_scenes_btn",
         "nav_cache_btn",
         "nav_wifi_btn",
     )
@@ -374,6 +381,7 @@ class MainWindowUiController:
             talk_theme_widget=pages.talk_theme_widget,
             playlist_widget=pages.playlist_widget,
             meetings_widget=pages.meetings_widget,
+            scenes_widget=pages.scenes_widget,
             quick_toolbar=quick_toolbar,
             sidebar_title_label=sidebar.title_label,
             sidebar_subtitle_label=sidebar.subtitle_label,
@@ -569,6 +577,25 @@ class MainWindowUiController:
             meetings_widget.set_automatic_download_enabled
         )
 
+        # Virtual-camera scenes page — reuses the profile-prefs settings store the
+        # camera settings live in (same QSettings namespace, different key).
+        from ..core.media.vcam_settings import VcamSettingsStore
+
+        vcam_settings = VcamSettingsStore(context.camera_settings.settings)
+        scene_config = vcam_settings.scene_config()
+
+        def _apply_vcam_scene_config(cfg) -> None:
+            vcam_settings.save_scene_config(cfg)
+            self._push_vcam_scene_config(cfg)
+
+        # The persisted config is applied to the director when the vcam actually
+        # starts (LiveIntegrationController._start_virtual_camera_now) — NOT here,
+        # so building this page never spins up libobs on the startup critical path.
+        scenes_widget = ScenesWidget(
+            scene_config, _apply_vcam_scene_config, parent=context.parent
+        )
+        timeline.mark("page_scenes_constructed")
+
         stack.addWidget(songs_widget)
         stack.addWidget(meetings_widget)
         stack.addWidget(lazy_pages.placeholder())
@@ -579,6 +606,7 @@ class MainWindowUiController:
         stack.addWidget(playlist_widget)
         stack.addWidget(lazy_pages.placeholder())
         stack.addWidget(lazy_pages.placeholder())
+        stack.addWidget(scenes_widget)  # nav index 10 (appended; no index shift)
 
         return _PageResources(
             songs_widget=songs_widget,
@@ -588,7 +616,30 @@ class MainWindowUiController:
             talk_theme_widget=talk_theme_widget,
             playlist_widget=playlist_widget,
             meetings_widget=meetings_widget,
+            scenes_widget=scenes_widget,
         )
+
+    def _push_vcam_scene_config(self, config) -> None:
+        """Apply a live Scenes edit to the running virtual camera.
+
+        No-op unless the vcam is actually running — so editing the page never
+        spins up libobs; the change is already persisted and is picked up when the
+        vcam next starts.
+        """
+        try:
+            from ..core.media.obs_virtual_camera import virtual_camera
+
+            if not virtual_camera().active:
+                return
+            from ..core.media.vcam_director import vcam_director
+
+            vcam_director().set_config(config)
+        except Exception:  # noqa: BLE001 - config apply must not break the UI
+            import logging
+
+            logging.getLogger(__name__).debug(
+                "Could not apply virtual-camera scene config", exc_info=True
+            )
 
     def _build_sidebar(
         self,
@@ -716,6 +767,7 @@ class MainWindowUiController:
         toolbar.obs_camera_stream_requested.connect(handlers.project_camera_stream)
         toolbar.camera_stream_requested.connect(handlers.project_camera_stream)
         toolbar.camera_selection_changed.connect(handlers.camera_selection_changed)
+        toolbar.vcam_scene_override_requested.connect(handlers.vcam_scene_override)
         toolbar.set_camera_enabled(settings_widget.get_camera_enabled())
         toolbar.show()
         toolbar.reposition()

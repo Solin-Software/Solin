@@ -11,6 +11,7 @@ from solin.styles.icons import (
     ICON_CAMERA,
     ICON_CHEVRON_DOWN,
     ICON_CHEVRON_LEFT,
+    ICON_CLAPPERBOARD,
     ICON_MONITOR,
     ICON_MUSIC,
     ICON_OBS,
@@ -26,6 +27,7 @@ QUICK_TOOLBAR_ICON_SVGS: dict[str, object] = {
     "obs": ICON_OBS,
     "zoom": ICON_ZOOM,
     "camera": ICON_CAMERA,
+    "scene": ICON_CLAPPERBOARD,  # virtual-camera scene override
     "remote_control": ICON_REMOTE_CONTROL,
     "chevron_down": ICON_CHEVRON_DOWN,
     "chevron_left": ICON_CHEVRON_LEFT,
@@ -48,6 +50,7 @@ class QuickToolbarBridge(QObject):
     obsClicked = Signal()
     zoomClicked = Signal()
     cameraClicked = Signal()
+    sceneClicked = Signal()
     remoteControlClicked = Signal()
     minimizeToggled = Signal()
     pointerEntered = Signal()
@@ -69,6 +72,8 @@ class QuickToolbarBridge(QObject):
         self._zoom_icon_color: str = "484f58"
         self._camera_visible: bool = False
         self._camera_icon_color: str = "484f58"
+        self._scene_visible: bool = False
+        self._scene_icon_color: str = "484f58"
         self._remote_control_visible: bool = False
         self._remote_control_icon_color: str = "484f58"
         self._remote_control_badge: str = ""
@@ -85,6 +90,7 @@ class QuickToolbarBridge(QObject):
         self._obs_tooltip: str = ""
         self._zoom_tooltip: str = ""
         self._camera_tooltip: str = ""
+        self._scene_tooltip: str = ""
         self._remote_control_tooltip: str = ""
         self._minimize_tooltip: str = ""
         self._expand_tooltip: str = ""
@@ -114,6 +120,10 @@ class QuickToolbarBridge(QObject):
         return self._camera_icon_color
 
     @Property(str, notify=stateChanged)
+    def sceneIconColor(self) -> str:  # noqa: N802
+        return self._scene_icon_color
+
+    @Property(str, notify=stateChanged)
     def remoteControlIconColor(self) -> str:  # noqa: N802
         return self._remote_control_icon_color
 
@@ -141,6 +151,10 @@ class QuickToolbarBridge(QObject):
     @Property(bool, notify=stateChanged)
     def cameraVisible(self) -> bool:  # noqa: N802
         return self._camera_visible
+
+    @Property(bool, notify=stateChanged)
+    def sceneVisible(self) -> bool:  # noqa: N802
+        return self._scene_visible
 
     @Property(bool, notify=stateChanged)
     def remoteControlVisible(self) -> bool:  # noqa: N802
@@ -195,6 +209,10 @@ class QuickToolbarBridge(QObject):
         return self._camera_tooltip
 
     @Property(str, notify=tooltipsChanged)
+    def sceneTooltip(self) -> str:  # noqa: N802
+        return self._scene_tooltip
+
+    @Property(str, notify=tooltipsChanged)
     def remoteControlTooltip(self) -> str:  # noqa: N802
         return self._remote_control_tooltip
 
@@ -227,6 +245,10 @@ class QuickToolbarBridge(QObject):
     @Slot()
     def onCameraClicked(self) -> None:  # noqa: N802
         self.cameraClicked.emit()
+
+    @Slot()
+    def onSceneClicked(self) -> None:  # noqa: N802
+        self.sceneClicked.emit()
 
     @Slot()
     def onRemoteControlClicked(self) -> None:  # noqa: N802
@@ -320,6 +342,17 @@ class QuickToolbarBridge(QObject):
             self._camera_icon_color = color
             self.stateChanged.emit()
 
+    def set_scene_visible(self, visible: bool) -> None:
+        if self._scene_visible != visible:
+            self._scene_visible = visible
+            self.stateChanged.emit()
+
+    def set_scene_icon_color(self, color: str) -> None:
+        color = color.lstrip("#")
+        if self._scene_icon_color != color:
+            self._scene_icon_color = color
+            self.stateChanged.emit()
+
     def set_remote_control_visible(self, visible: bool) -> None:
         if self._remote_control_visible != visible:
             self._remote_control_visible = visible
@@ -390,6 +423,7 @@ class QuickToolbarBridge(QObject):
         self._obs_tooltip = self.tr("OBS Scenes")
         self._zoom_tooltip = self.tr("Zoom Settings")
         self._camera_tooltip = self.tr("Camera")
+        self._scene_tooltip = self.tr("Virtual camera scene")
         self._remote_control_tooltip = self.tr("Remote control")
         self._minimize_tooltip = self.tr("Minimize")
         self._expand_tooltip = self.tr("Expand toolbar")

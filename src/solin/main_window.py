@@ -550,6 +550,9 @@ class MainWindow(QWidget):
                 camera_selection_changed=lambda option: (
                     self._live_integrations.on_camera_selection_changed(option)
                 ),
+                vcam_scene_override=lambda comp: (
+                    self._live_integrations.on_vcam_scene_override(comp)
+                ),
                 profile_switch_requested=self._profile_switch.request_switch,
             ),
             media_info_queue_factory=media_info_queue_factory,
@@ -921,6 +924,12 @@ class MainWindow(QWidget):
             )
         timeline.mark("deferred_startup_complete")
         timeline.emit_json()
+        # Bring the virtual camera up once the app is fully ready (obs engine
+        # only; no-op otherwise). Must never block UI readiness.
+        try:
+            self._live_integrations.start_virtual_camera()
+        except Exception:  # noqa: BLE001 - vcam startup must not break startup
+            log.debug("Virtual camera startup skipped", exc_info=True)
         if startup_benchmark_exit_requested():
             # Leave the current cooperative-dispatch event before closing the
             # native window; Windows COM rejects teardown from an input-sync

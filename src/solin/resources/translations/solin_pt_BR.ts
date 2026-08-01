@@ -1132,6 +1132,14 @@
       <source>Receive via Wi-Fi</source>
       <translation>Receber via Wi-Fi</translation>
     </message>
+    <message>
+      <source>Scenes</source>
+      <translation>Cenas</translation>
+    </message>
+    <message>
+      <source>Virtual camera unavailable</source>
+      <translation>Câmera virtual indisponível</translation>
+    </message>
   </context>
   <context>
     <name>MediaCard</name>
@@ -3794,6 +3802,26 @@ Esta ação não pode ser desfeita.</translation>
       <source>Remote control · no signed-in devices</source>
       <translation>Controle remoto · nenhum dispositivo conectado</translation>
     </message>
+    <message>
+      <source>Automatic (follow projector)</source>
+      <translation>Automático (seguir o projetor)</translation>
+    </message>
+    <message>
+      <source>Camera, full screen</source>
+      <translation>Câmera, tela cheia</translation>
+    </message>
+    <message>
+      <source>Projected content, full screen</source>
+      <translation>Conteúdo projetado, tela cheia</translation>
+    </message>
+    <message>
+      <source>Content + camera (PiP)</source>
+      <translation>Conteúdo + câmera (PiP)</translation>
+    </message>
+    <message>
+      <source>Solin logo</source>
+      <translation>Logotipo do Solin</translation>
+    </message>
   </context>
   <context>
     <name>QuickToolbarBridge</name>
@@ -3836,6 +3864,10 @@ Esta ação não pode ser desfeita.</translation>
       <location line="+1" />
       <source>Expand toolbar</source>
       <translation>Expandir barra de ferramentas</translation>
+    </message>
+    <message>
+      <source>Virtual camera scene</source>
+      <translation>Cena da câmera virtual</translation>
     </message>
   </context>
   <context>
@@ -7829,6 +7861,89 @@ Adicione uma quando quiser.</translation>
     <message>
       <source>Name</source>
       <translation>Nome</translation>
+    </message>
+  </context>
+  <context>
+    <name>ScenesWidget</name>
+    <message>
+      <source>Virtual Camera Scenes</source>
+      <translation>Cenas da Câmera Virtual</translation>
+    </message>
+    <message>
+      <source>Choose what the virtual camera sends to the meeting for each kind of projected content.</source>
+      <translation>Escolha o que a câmera virtual envia para a reunião conforme cada tipo de conteúdo projetado.</translation>
+    </message>
+    <message>
+      <source>Meeting mode</source>
+      <translation>Modo da reunião</translation>
+    </message>
+    <message>
+      <source>When the projector shows…</source>
+      <translation>Quando o projetor exibe…</translation>
+    </message>
+    <message>
+      <source>Camera picture-in-picture corner</source>
+      <translation>Canto da câmera (picture-in-picture)</translation>
+    </message>
+    <message>
+      <source>Regular</source>
+      <translation>Comum</translation>
+    </message>
+    <message>
+      <source>Sign language</source>
+      <translation>Língua de sinais</translation>
+    </message>
+    <message>
+      <source>Nothing / yeartext</source>
+      <translation>Nada / texto do ano</translation>
+    </message>
+    <message>
+      <source>A picture</source>
+      <translation>Uma imagem</translation>
+    </message>
+    <message>
+      <source>A video</source>
+      <translation>Um vídeo</translation>
+    </message>
+    <message>
+      <source>The camera</source>
+      <translation>A câmera</translation>
+    </message>
+    <message>
+      <source>A stream (browser / OBS)</source>
+      <translation>Uma transmissão (navegador / OBS)</translation>
+    </message>
+    <message>
+      <source>Camera, full screen</source>
+      <translation>Câmera, tela cheia</translation>
+    </message>
+    <message>
+      <source>Projected content, full screen</source>
+      <translation>Conteúdo projetado, tela cheia</translation>
+    </message>
+    <message>
+      <source>Content + camera (picture-in-picture)</source>
+      <translation>Conteúdo + câmera (picture-in-picture)</translation>
+    </message>
+    <message>
+      <source>Solin logo</source>
+      <translation>Logotipo do Solin</translation>
+    </message>
+    <message>
+      <source>Bottom right</source>
+      <translation>Inferior direito</translation>
+    </message>
+    <message>
+      <source>Bottom left</source>
+      <translation>Inferior esquerdo</translation>
+    </message>
+    <message>
+      <source>Top right</source>
+      <translation>Superior direito</translation>
+    </message>
+    <message>
+      <source>Top left</source>
+      <translation>Superior esquerdo</translation>
     </message>
   </context>
 </TS>
