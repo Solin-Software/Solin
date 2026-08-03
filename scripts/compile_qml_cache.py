@@ -261,6 +261,17 @@ def stage_qt_qml_runtime(output_dir: Path, module_names: list[str]) -> list[Path
     source_root = find_qt_qml_runtime_dir()
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    # Drop modules staged by an EARLIER build that are no longer requested. The
+    # per-module copy below only refreshes what it stages, so a module removed
+    # from the list would linger in the cache and keep shipping. That is exactly
+    # how the QtMultimedia QML plugin kept reaching the installer after the
+    # dependency was dropped — and it links against a Qt6Multimedia.dll that is
+    # no longer packaged beside it.
+    wanted_roots = {name.split("/")[0] for name in module_names}
+    for entry in output_dir.iterdir():
+        if entry.is_dir() and entry.name not in wanted_roots:
+            shutil.rmtree(entry)
+
     staged = []
     for module_name in _sort_qml_modules(module_names):
         module_source = source_root.joinpath(*module_name.split("/"))

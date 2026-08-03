@@ -59,6 +59,33 @@ def test_find_qt_library_dir_reports_missing_required_frameworks(tmp_path, monke
         compile_qml_cache.find_qt_library_dir(["QtQuickLayouts.framework"])
 
 
+def test_stage_qt_qml_runtime_prunes_modules_dropped_since_the_last_build(tmp_path, monkeypatch):
+    """A module removed from the list must not survive in the staging dir.
+
+    Regression: the per-module copy only refreshes what it stages, so dropping
+    QtMultimedia left its plugin in the cache and it kept shipping in the
+    installer — linking against a Qt6Multimedia.dll no longer packaged with it.
+    """
+    source_root = tmp_path / "PySide6" / "qml"
+    output_root = tmp_path / "out"
+    for module_name in ("QtQml", "QtQuick"):
+        module_dir = source_root.joinpath(module_name)
+        module_dir.mkdir(parents=True)
+        (module_dir / "qmldir").write_text(module_name, encoding="utf-8")
+    monkeypatch.setattr(compile_qml_cache, "find_qt_qml_runtime_dir", lambda: source_root)
+
+    # Simulate a previous build that staged a module we no longer want.
+    stale = output_root / "QtMultimedia"
+    stale.mkdir(parents=True)
+    (stale / "quickmultimediaplugin.dll").write_text("stale", encoding="utf-8")
+
+    compile_qml_cache.stage_qt_qml_runtime(output_root, ["QtQml", "QtQuick"])
+
+    assert not stale.exists()
+    assert (output_root / "QtQml" / "qmldir").exists()
+    assert (output_root / "QtQuick" / "qmldir").exists()
+
+
 def test_stage_qt_qml_runtime_copies_selected_modules_without_unused_submodules(tmp_path, monkeypatch):
     source_root = tmp_path / "PySide6" / "qml"
     output_root = tmp_path / "out"
