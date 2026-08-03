@@ -1,13 +1,13 @@
 """
-Qt media metadata extraction and thumbnail services.
+Media metadata extraction and thumbnail services.
 Extração centralizada de thumbnail + título de mídia, de forma assíncrona
 e sem download completo de arquivos remotos.
 
 Fontes de metadado (em ordem de prioridade):
   Áudio local   : bytes brutos do header (ID3v2/MP4 atoms/FLAC/OGG) → sem player
   Áudio remoto  : HTTP Range request (512 KB máx) → mesmos parsers de bytes
-  Vídeo local   : QMediaPlayer → QMediaMetaData (CoverArtImage + Title) → frame 5%
-  Vídeo remoto  : QMediaPlayer em streaming → mesma lógica (sem download completo)
+  Vídeo local   : capa das tags do arquivo → sonda libobs (duração + frame a 5%)
+  Vídeo remoto  : sonda libobs em streaming → mesma lógica (sem download completo)
   URL qualquer  : RemotePageMetaExtractor → og:image + og:title via HTTP HEAD/GET parcial
   Fallback local: arquivo remoto completo com .done → usado após falha da origem
 
@@ -19,7 +19,7 @@ Para alimentação ao vivo (player em reprodução), use feed_live_frame() /
 feed_live_cover() na ThumbnailQueue — emitem info_ready com title="".
 
 Nota: completamente independente da API JW.org. Thumb e título são extraídos
-diretamente do stream de mídia (QMediaPlayer) ou dos metadados HTML da página.
+diretamente das tags do arquivo, da sonda libobs ou dos metadados HTML da página.
 """
 
 from __future__ import annotations
@@ -1342,7 +1342,7 @@ class _RemoteVideoMetaThenStream(QObject):
     def _start_stream(self, index: int) -> None:
         if self._stream_ex is not None:
             return
-        # Estágio 2: fallback para QMediaPlayer (captura frame do stream)
+        # Estágio 2: fallback para a sonda libobs (captura frame do stream)
         self._stream_ex = MediaInfoExtractor(
             index,
             self._url,
