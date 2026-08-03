@@ -94,6 +94,10 @@ class _Job:
     settle_ticks: int = 0
     elapsed_ms: int = 0
     source: object | None = None
+    #: Scene wrapping :attr:`source` so it can carry letterbox bounds.
+    scene: object | None = None
+    #: True once the source's active/showing refcounts were incremented.
+    activated: bool = False
     cancelled: bool = False
 
 
@@ -229,9 +233,11 @@ class LibobsVideoProbe(QObject):
             settings = {"is_local_file": False, "input": job.url}
         else:
             settings = {"is_local_file": True, "local_file": job.url}
-        # Decode video only: the probe never listens, and letting a probe join the
-        # audio mix would leak the file's sound into the live programme.
-        settings["hw_decode"] = True
+        # Deliberately NO hw_decode. Hardware decoding is a per-machine gamble --
+        # measured here, DXVA2 surface creation fails ("Could not create the
+        # surfaces") and ffmpeg_source goes straight to ENDED with 0x0
+        # dimensions, i.e. a silently black thumbnail. Software decode of one
+        # frame in the background is cheap and always works.
         try:
             source = ob.Source.create_private(
                 "ffmpeg_source", f"solin-probe-{job.token}", settings
@@ -247,11 +253,35 @@ class LibobsVideoProbe(QObject):
         except Exception:  # noqa: BLE001 - not fatal; probe is still usable
             log.debug("Could not mute the probe source", exc_info=True)
         job.source = source
+        # A source put straight on a channel renders at its NATIVE size, anchored
+        # top-left — a 1280x720 clip on a 1920x1080 canvas would give a thumbnail
+        # sitting in the corner of a black frame. Wrapping it in a scene lets the
+        # item carry letterbox bounds, so any clip fills the frame the way the
+        # projector and the virtual camera already composite media.
         try:
-            self._view.set_source(_CH_PROBE, source)
+            scene = ob.Scene.create(f"solin-probe-scene-{job.token}")
+            item = scene.add(source)
+            canvas = runtime.video
+            item.bounds_type = int(ob.BoundsType.SCALE_INNER)
+            item.bounds = (float(canvas.width), float(canvas.height))
+            item.bounds_alignment = int(ob.Alignment.CENTER)
+            job.scene = scene
+            self._view.set_source(_CH_PROBE, scene.as_source())
+            # A private obs_view does NOT activate a media source: ffmpeg_source
+            # only starts decoding once libobs considers it active/showing, and
+            # a view channel alone does not count. Without this the source sits
+            # at media_state NONE with 0x0 dimensions and the mix stays black.
+            # (A colour source renders regardless, which is what made this look
+            # like a working harness.) Global channels would activate it, but
+            # they also feed the programme -- which would project the probe.
+            from pylibobs._ffi import get_lib
+            lib = get_lib()
+            lib.obs_source_inc_active(source._ptr)
+            lib.obs_source_inc_showing(source._ptr)
+            job.activated = True
         except Exception:  # noqa: BLE001 - libobs boundary
             log.debug("Could not bind the probe source to the view", exc_info=True)
-            job.source = None
+            self._release_source(job)
             return False
         return True
 
@@ -330,6 +360,22 @@ class LibobsVideoProbe(QObject):
                 self._view.set_source(_CH_PROBE, None)
             except Exception:  # noqa: BLE001 - libobs boundary
                 log.debug("Could not unbind the probe source", exc_info=True)
+        if job.activated and job.source is not None:
+            job.activated = False
+            try:
+                from pylibobs._ffi import get_lib
+
+                lib = get_lib()
+                lib.obs_source_dec_showing(job.source._ptr)
+                lib.obs_source_dec_active(job.source._ptr)
+            except Exception:  # noqa: BLE001 - libobs boundary
+                log.debug("Could not drop the probe source refcounts", exc_info=True)
+        scene, job.scene = job.scene, None
+        if scene is not None:
+            try:
+                scene.release()
+            except Exception:  # noqa: BLE001 - libobs boundary
+                log.debug("Could not release the probe scene", exc_info=True)
         source = job.source
         job.source = None
         if source is None:
