@@ -170,8 +170,6 @@ def test_begin_video_qt_engine_shows_media_page_on_first_frame(monkeypatch, tmp_
     """Regression: in the DEFAULT Qt engine, begin_video() must not pre-set
     _is_showing_media — otherwise update_frame() never switches the page stack to
     the media page and the video stays invisible on the projection windows."""
-    from PySide6.QtMultimedia import QVideoFrame
-
     harness = _harness(monkeypatch, tmp_path, obs_on=False)
     assert harness._obs_surface is None
 
@@ -180,8 +178,7 @@ def test_begin_video_qt_engine_shows_media_page_on_first_frame(monkeypatch, tmp_
 
     image = QImage(8, 8, QImage.Format.Format_RGB32)
     image.fill(0)
-    frame = QVideoFrame(image)  # pyright: ignore[reportCallIssue, reportArgumentType]
-    harness.update_frame(frame)
+    harness.update_frame(image)
 
     assert harness._is_showing_media is True
     assert harness._stack.currentIndex() == harness._PAGE_MEDIA
@@ -483,19 +480,16 @@ def test_no_surface_path_does_not_crash_without_obs(monkeypatch, tmp_path):
 
 
 def test_update_frame_ignored_under_obs(monkeypatch, tmp_path):
-    from PySide6.QtMultimedia import QVideoFrame
-
     harness = _harness(monkeypatch, tmp_path)
     harness.begin_video()
 
     image = QImage(8, 8, QImage.Format.Format_RGB32)
     image.fill(0)
-    frame = QVideoFrame(image)  # pyright: ignore[reportCallIssue, reportArgumentType]
-    harness.update_frame(frame)
+    harness.update_frame(image)
 
     # The engine's per-source frame_ready is only for the operator preview; the
     # projection paints media through the libobs program instead.
-    assert harness.display_label._video_frame is None
+    assert harness.display_label._pending_video_image is None
 
 
 # ── ObsProjectionSurface contract ────────────────────────────────────────────

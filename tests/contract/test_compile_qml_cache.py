@@ -73,7 +73,6 @@ def test_stage_qt_qml_runtime_copies_selected_modules_without_unused_submodules(
         "QtQuick/Effects": ["qmldir", "libeffectsplugin.dylib"],
         "QtQuick/Layouts": ["qmldir", "libqquicklayoutsplugin.dylib"],
         "QtQuick/Templates": ["qmldir", "libqtquicktemplates2plugin.dylib"],
-        "QtMultimedia": ["qmldir", "libquickmultimediaplugin.dylib"],
     }
     for module_name, filenames in module_files.items():
         module_dir = source_root.joinpath(*module_name.split("/"))
@@ -104,7 +103,8 @@ def test_stage_qt_qml_runtime_copies_selected_modules_without_unused_submodules(
     assert (output_root / "QtQuick" / "Effects" / "libeffectsplugin.dylib").exists()
     assert (output_root / "QtQuick" / "Layouts" / "libqquicklayoutsplugin.dylib").exists()
     assert (output_root / "QtQuick" / "Templates" / "libqtquicktemplates2plugin.dylib").exists()
-    assert (output_root / "QtMultimedia" / "libquickmultimediaplugin.dylib").exists()
+    # QtMultimedia is deliberately NOT staged: nothing in Solin imports it any more.
+    assert not (output_root / "QtMultimedia").exists()
     assert not (output_root / "QtQml" / "StateMachine").exists()
     assert not (output_root / "QtQml" / "XmlListModel").exists()
     assert not (output_root / "QtQuick" / "Controls" / "Material").exists()
@@ -168,9 +168,9 @@ def test_stage_windows_qt_quick_libraries_includes_required_runtime(
 
     staged = compile_qml_cache.stage_windows_qt_quick_libraries(tmp_path / "out")
 
+    # The Multimedia DLLs exist in the source dir but must NOT be staged:
+    # dropping QtMultimedia is the point, so this asserts they are filtered out.
     assert {path.name for path in staged} == {
-        "Qt6Multimedia.dll",
-        "Qt6MultimediaQuick.dll",
         "Qt6QuickEffects.dll",
         "Qt6QuickLayouts.dll",
     }

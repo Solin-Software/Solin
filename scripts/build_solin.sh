@@ -148,7 +148,7 @@ fi
     --include-data-files="src/solin/resources/translations/*.qm=solin/resources/translations/" \
     --include-data-files="${SIDEVIEW_NATIVE}=sideview/libsideview_native.so" \
     --enable-plugin=pyside6 \
-    --include-qt-plugins=platforms,platformthemes,imageformats,multimedia,position,xcbglintegrations \
+    --include-qt-plugins=platforms,platformthemes,imageformats,position,xcbglintegrations \
     main.py
 
 [[ -x "${DIST_DIR}/Solin.bin" ]] || fail "Nuitka did not produce ${DIST_DIR}/Solin.bin."
@@ -172,8 +172,6 @@ find "${DIST_DIR}/solin/qml/Solin" -maxdepth 1 -name '*.qml' -print -quit | grep
     "Raw app QML source remained in the standalone distribution."
 [[ -f "${DIST_DIR}/PySide6/qml/QtQuick/qmldir" ]] || fail "QtQuick QML runtime is missing."
 [[ -f "${DIST_DIR}/PySide6/qml/QtQml/qmldir" ]] || fail "QtQml QML runtime is missing."
-[[ -f "${DIST_DIR}/PySide6/qml/QtMultimedia/libquickmultimediaplugin.so" ]] || fail \
-    "QtMultimedia QML plugin is missing."
 [[ -f "${DIST_DIR}/PySide6/qml/QtQuick/Controls/libqtquickcontrols2plugin.so" ]] || fail \
     "QtQuick Controls QML plugin is missing."
 

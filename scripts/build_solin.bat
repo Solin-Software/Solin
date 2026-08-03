@@ -167,7 +167,7 @@ if defined PYLIBOBS_DIR (
     --include-data-files="%SIDEVIEW_NATIVE_DLL%=sideview/sideview_native.dll" ^
     %VCAM_INCLUDES% ^
     --enable-plugin=pyside6 ^
-    --include-qt-plugins=platforms,styles,imageformats,multimedia,position ^
+    --include-qt-plugins=platforms,styles,imageformats,position ^
     "%MAIN_SCRIPT%"
 
 if %ERRORLEVEL% NEQ 0 (
@@ -282,12 +282,6 @@ if not exist "%DIST%\PySide6\qml\QtQml\qmldir" (
     exit /b 1
 )
 
-if not exist "%DIST%\PySide6\qml\QtMultimedia\quickmultimediaplugin.dll" (
-    echo  [ERRO] Plugin QML QtMultimedia nao foi empacotado.
-    pause
-    exit /b 1
-)
-
 if not exist "%DIST%\PySide6\qml\QtQuick\Layouts\qquicklayoutsplugin.dll" (
     echo  [ERRO] Plugin QML qquicklayoutsplugin.dll nao foi empacotado.
     pause
@@ -344,18 +338,6 @@ if not exist "%DIST%\Qt6QuickControls2BasicStyleImpl.dll" (
 
 if not exist "%DIST%\Qt6QuickTemplates2.dll" (
     echo  [ERRO] Qt6QuickTemplates2.dll nao foi empacotado.
-    pause
-    exit /b 1
-)
-
-if not exist "%DIST%\Qt6Multimedia.dll" (
-    echo  [ERRO] Qt6Multimedia.dll nao foi empacotado.
-    pause
-    exit /b 1
-)
-
-if not exist "%DIST%\Qt6MultimediaQuick.dll" (
-    echo  [ERRO] Qt6MultimediaQuick.dll nao foi empacotado.
     pause
     exit /b 1
 )

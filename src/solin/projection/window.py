@@ -23,7 +23,6 @@ from PySide6.QtGui import (
     QPainter,
     QPixmap,
 )
-from PySide6.QtMultimedia import QVideoFrame
 from PySide6.QtWidgets import (
     QGraphicsOpacityEffect,
     QStackedWidget,
@@ -314,7 +313,7 @@ class VideoDisplayWidget(QWidget):
     High-performance video/image display widget.
 
     Video path (per frame):
-      • Receives QVideoFrame via set_video_frame() — no conversion yet.
+      • Receives a QImage via set_video_frame() — no conversion yet.
       • Calls self.update() *only once* per pending paint (throttle flag).
       • paintEvent converts the frame to QImage and draws it directly onto
         the widget via QPainter.drawImage(), with SmoothPixmapTransform
@@ -348,7 +347,7 @@ class VideoDisplayWidget(QWidget):
         self.setStyleSheet("background-color: black;")
 
         # ── video state ───────────────────────────────────────────────────
-        self._video_frame: QVideoFrame | None = None
+        self._pending_video_image: QImage | None = None
         self._video_image: QImage | None = None
         self._paint_pending: bool = False
 
@@ -375,11 +374,17 @@ class VideoDisplayWidget(QWidget):
 
     # ── public API ────────────────────────────────────────────────────────
 
-    def set_video_frame(self, frame: QVideoFrame) -> None:
-        """Accept a new video frame (called up to 60× per second)."""
-        if not frame.isValid():
+    def set_video_frame(self, frame: QImage) -> None:
+        """Accept a new video frame (called up to 60× per second).
+
+        Takes a ``QImage``: the libobs engine emits frames as plain images, and
+        the QVideoFrame this used to accept was unwrapped on the next line
+        anyway. Conversion still happens in paintEvent so a frame that is
+        superseded before the next paint costs nothing.
+        """
+        if frame is None or frame.isNull():
             return
-        self._video_frame = frame
+        self._pending_video_image = frame
         self._mode = "video"
         if not self._paint_pending:
             self._paint_pending = True
@@ -393,7 +398,7 @@ class VideoDisplayWidget(QWidget):
     ) -> None:
         """Display a static QImage (replaces any active video)."""
         coming_from_black = (self._mode == "black")
-        self._video_frame = None
+        self._pending_video_image = None
         self._video_image = None
         self._static_image = image
         self._mode = "image"
@@ -416,7 +421,7 @@ class VideoDisplayWidget(QWidget):
 
     def clear(self) -> None:
         """Go black — clear any displayed content."""
-        self._video_frame = None
+        self._pending_video_image = None
         self._video_image = None
         self._static_image = None
         self._mode = "black"
@@ -519,13 +524,13 @@ class VideoDisplayWidget(QWidget):
 
         # ── Resolve image to draw ─────────────────────────────────────────
         if self._mode == "video":
-            if self._video_frame is not None:
-                img = self._video_frame.toImage()
+            if self._pending_video_image is not None:
+                img = self._pending_video_image
                 if not img.isNull():
                     if img.format() != QImage.Format.Format_ARGB32_Premultiplied:
                         img = img.convertToFormat(QImage.Format.Format_ARGB32_Premultiplied)
                     self._video_image = img
-                self._video_frame = None
+                self._pending_video_image = None
             img_to_draw = self._video_image
         else:
             img_to_draw = self._static_image
@@ -958,8 +963,8 @@ class BaseProjectionView(QWidget):
         # switches the page stack to _PAGE_MEDIA (setting it True here would keep
         # the projection stuck on the idle page and the video invisible).
 
-    @Slot(QVideoFrame)
-    def update_frame(self, frame: QVideoFrame) -> None:
+    @Slot(object)
+    def update_frame(self, frame) -> None:
         """Receive a video frame and display it."""
         # Reject frames when we are not expecting video — this is the primary
         # defence against residual pipeline frames arriving after clear() is
@@ -971,10 +976,16 @@ class BaseProjectionView(QWidget):
         # operator preview, so ignore it here.
         if self._obs_mode:
             return
-        # Pass the raw QVideoFrame — VideoDisplayWidget handles throttle + conversion
-        if not frame.isValid():
+        # VideoDisplayWidget handles the throttle + format conversion. Accept
+        # anything image-shaped: the engine emits QImage, but the signal is
+        # untyped and older callers handed over a frame wrapper.
+        image = frame if isinstance(frame, QImage) else None
+        if image is None:
+            to_image = getattr(frame, "toImage", None)
+            image = to_image() if callable(to_image) else None
+        if image is None or image.isNull():
             return
-        self.display_label.set_video_frame(frame)
+        self.display_label.set_video_frame(image)
 
         if not self._is_showing_media:
             self._stop_all_anims()

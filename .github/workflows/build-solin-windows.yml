@@ -184,7 +184,7 @@ jobs:
             --include-data-files="src\solin\resources\translations\*.qm=solin/resources/translations/" `
             --include-data-files="$sideviewDll=sideview/sideview_native.dll" `
             --enable-plugin=pyside6 `
-            --include-qt-plugins=platforms,styles,imageformats,multimedia,position `
+            --include-qt-plugins=platforms,styles,imageformats,position `
             main.py
 
       - name: Post-build cleanup
@@ -234,9 +234,6 @@ jobs:
           if (-not (Test-Path (Join-Path $dist "PySide6\qml\QtQml\qmldir"))) {
             throw "QtQml QML runtime was not packaged."
           }
-          if (-not (Test-Path (Join-Path $dist "PySide6\qml\QtMultimedia\quickmultimediaplugin.dll"))) {
-            throw "QtMultimedia QML runtime was not packaged."
-          }
           if (-not (Test-Path (Join-Path $dist "PySide6\qml\QtQuick\Layouts\qquicklayoutsplugin.dll"))) {
             throw "qquicklayoutsplugin.dll was not packaged."
           }
@@ -266,12 +263,6 @@ jobs:
           }
           if (-not (Test-Path (Join-Path $dist "Qt6QuickTemplates2.dll"))) {
             throw "Qt6QuickTemplates2.dll was not packaged."
-          }
-          if (-not (Test-Path (Join-Path $dist "Qt6Multimedia.dll"))) {
-            throw "Qt6Multimedia.dll was not packaged."
-          }
-          if (-not (Test-Path (Join-Path $dist "Qt6MultimediaQuick.dll"))) {
-            throw "Qt6MultimediaQuick.dll was not packaged."
           }
           Write-Host "App QML packaged as compiled .qmlc cache only."
 
