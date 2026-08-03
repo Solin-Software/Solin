@@ -13,6 +13,7 @@ from solin.ui.qml.playlist.visuals import (
     PlaylistIconProvider,
     PlaylistThumbnailProvider,
 )
+from solin.ui.qml.trim_preview import install_trim_preview
 
 
 class MeetingDetailQmlHost(QQuickWidget):
@@ -33,16 +34,20 @@ class MeetingDetailQmlHost(QQuickWidget):
     ) -> None:
         super().__init__(parent)
 
+        _providers = {
+            "playlistthumbs": PlaylistThumbnailProvider(controller.thumb_cache),
+            "playlisticons": PlaylistIconProvider(),
+        }
+        _context: dict = {"controller": controller}
+        # The trim dialog's preview player (libobs, on its own private mix).
+        self._trim_preview = install_trim_preview(_context, _providers)
         configure_qml_host(
             self,
             type_name="MeetingDetailView",
             clear_color=PALETTE.bg0,
-            image_providers={
-                "playlistthumbs": PlaylistThumbnailProvider(controller.thumb_cache),
-                "playlisticons": PlaylistIconProvider(),
-            },
+            image_providers=_providers,
             context_properties={
-                "controller": controller,
+                **_context,
                 "catalogBridge": catalog_bridge,
                 "songsBridge": songs_bridge,
                 "pillColor": pill_color,

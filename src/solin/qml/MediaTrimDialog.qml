@@ -1,13 +1,31 @@
 import QtQuick 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Controls 2.15
-import QtMultimedia
 
 Dialog {
     id: dialog
     objectName: "mediaTrimDialog"
 
     property var controller: null
+
+    // The preview player is a libobs-backed object injected as a context
+    // property (see ui/qml/trim_preview.py). It plays on its own private mix,
+    // so previewing never reaches the projector. Read defensively: hosts that
+    // do not install it still load this dialog, which then reports that the
+    // media cannot be previewed rather than throwing.
+    readonly property var previewPlayer: (typeof trimPreview !== "undefined") ? trimPreview : null
+
+    // QMediaPlayer enum values, which the preview player mirrors exactly (see
+    // core/media/playback_state.py). These used to come from `MediaPlayer.*`
+    // via the QtMultimedia import.
+    readonly property int mpPlaying: 1
+    readonly property int mpLoading: 1
+    readonly property int mpLoaded: 2
+    readonly property int mpStalled: 3
+    readonly property int mpBuffering: 4
+    readonly property int mpBuffered: 5
+    readonly property int mpInvalid: 7
+
     property string itemId: ""
     property string mediaTitle: ""
     property string mediaSource: ""
@@ -39,13 +57,13 @@ Dialog {
                                        && endMs - startMs >= minimumRangeMs
     readonly property bool initialPreviewLoading: !previewPrepared
                                                   && preparationError === ""
-                                                  && (previewPlayer.mediaStatus === MediaPlayer.LoadingMedia
-                                                      || previewPlayer.mediaStatus === MediaPlayer.BufferingMedia)
+                                                  && (previewPlayer.mediaStatus === dialog.mpLoading
+                                                      || previewPlayer.mediaStatus === dialog.mpBuffering)
     readonly property bool previewActuallyStalled: previewPrepared
                                                    && stalledLongEnough
                                                    && preparationError === ""
-                                                   && previewPlayer.playbackState === MediaPlayer.PlayingState
-                                                   && previewPlayer.mediaStatus === MediaPlayer.StalledMedia
+                                                   && previewPlayer.playbackState === dialog.mpPlaying
+                                                   && previewPlayer.mediaStatus === dialog.mpStalled
 
     parent: Overlay.overlay
     anchors.centerIn: parent
@@ -159,7 +177,7 @@ Dialog {
     function togglePreview() {
         if (!rangeValid)
             return
-        if (previewPlayer.playbackState === MediaPlayer.PlayingState) {
+        if (previewPlayer.playbackState === dialog.mpPlaying) {
             previewPlayer.pause()
             return
         }
@@ -186,16 +204,21 @@ Dialog {
 
     Overlay.modal: Rectangle { color: Qt.rgba(0, 0, 0, 0.58) }
 
-    MediaPlayer {
-        id: previewPlayer
-        objectName: "trimPreviewPlayer"
-        audioOutput: AudioOutput {
-            volume: 0.72
-            muted: !dialog.previewAudioEnabled
-        }
-        videoOutput: previewOutput
+    // Preview audio is routed through libobs MONITORING only and is kept out of
+    // every output mix, so it reaches the operator without ever entering the
+    // programme or the virtual camera. The binding still mutes it while another
+    // item is playing, matching the old AudioOutput binding.
+    Binding {
+        target: previewPlayer
+        property: "muted"
+        value: !dialog.previewAudioEnabled
+        when: previewPlayer !== null
+    }
 
-        onDurationChanged: function(duration) {
+    Connections {
+        target: previewPlayer
+
+        function onDurationChanged(duration) {
             if (duration <= 0)
                 return
             dialog.durationMs = duration
@@ -216,33 +239,33 @@ Dialog {
             if (previewPlayer.seekable)
                 dialog.previewPrepared = true
         }
-        onPositionChanged: function(position) {
-            if (playbackState === MediaPlayer.PlayingState
+        function onPositionChanged(position) {
+            if (previewPlayer.playbackState === dialog.mpPlaying
                     && dialog.endMs > 0 && position >= dialog.endMs) {
-                pause()
+                previewPlayer.pause()
                 previewPlayer.position = dialog.endMs
             }
         }
-        onErrorOccurred: function(error, errorString) {
+        function onErrorOccurred(error, errorString) {
             dialog.preparationError = errorString || qsTr("The media could not be opened.")
         }
-        onSeekableChanged: function(seekable) {
+        function onSeekableChanged(seekable) {
             if (seekable && dialog.durationMs > 0)
                 dialog.previewPrepared = true
-            if ((mediaStatus === MediaPlayer.LoadedMedia
-                 || mediaStatus === MediaPlayer.BufferedMedia) && !seekable)
+            if ((previewPlayer.mediaStatus === dialog.mpLoaded
+                 || previewPlayer.mediaStatus === dialog.mpBuffered) && !seekable)
                 dialog.preparationError = qsTr("This source does not support reliable seeking. Download it for offline use before setting custom times.")
         }
-        onMediaStatusChanged: function(status) {
+        function onMediaStatusChanged(status) {
             dialog.stalledLongEnough = false
-            if (status === MediaPlayer.LoadedMedia
-                    || status === MediaPlayer.BufferedMedia)
+            if (status === dialog.mpLoaded
+                    || status === dialog.mpBuffered)
                 dialog.previewPrepared = true
-            if (status === MediaPlayer.InvalidMedia)
+            if (status === dialog.mpInvalid)
                 dialog.preparationError = qsTr("The media could not be opened.")
         }
-        onPlaybackStateChanged: function(state) {
-            if (state !== MediaPlayer.PlayingState)
+        function onPlaybackStateChanged(state) {
+            if (state !== dialog.mpPlaying)
                 dialog.stalledLongEnough = false
         }
     }
@@ -253,8 +276,8 @@ Dialog {
                  && dialog.previewPrepared
                  && !dialog.stalledLongEnough
                  && dialog.preparationError === ""
-                 && previewPlayer.playbackState === MediaPlayer.PlayingState
-                 && previewPlayer.mediaStatus === MediaPlayer.StalledMedia
+                 && previewPlayer.playbackState === dialog.mpPlaying
+                 && previewPlayer.mediaStatus === dialog.mpStalled
         onTriggered: dialog.stalledLongEnough = true
     }
 
@@ -450,11 +473,21 @@ Dialog {
                     border.color: appTheme.border_
                     clip: true
 
-                    VideoOutput {
+                    // libobs frames arrive through an image provider (the same
+                    // Python->QML path the playlist thumbnails use). The
+                    // revision in the URL is pure cache-busting: it changes per
+                    // frame, which is what makes the Image re-request.
+                    Image {
                         id: previewOutput
                         anchors.fill: parent
                         visible: dialog.mediaType === "video"
-                        fillMode: VideoOutput.PreserveAspectFit
+                        fillMode: Image.PreserveAspectFit
+                        cache: false
+                        asynchronous: false
+                        smooth: true
+                        source: (previewPlayer && dialog.mediaType === "video")
+                                ? "image://trimpreview/" + previewPlayer.frameRevision
+                                : ""
                     }
 
                     Column {
@@ -565,7 +598,7 @@ Dialog {
 
                         ToolTip.visible: hovered
                         ToolTip.delay: 450
-                        ToolTip.text: previewPlayer.playbackState === MediaPlayer.PlayingState
+                        ToolTip.text: previewPlayer.playbackState === dialog.mpPlaying
                                       ? qsTr("Pause") : qsTr("Play")
 
                         contentItem: Image {
@@ -573,7 +606,7 @@ Dialog {
                             width: 10
                             height: 10
                             source: dialog.iconSource(
-                                        previewPlayer.playbackState === MediaPlayer.PlayingState
+                                        previewPlayer.playbackState === dialog.mpPlaying
                                         ? "pause" : "play",
                                         20,
                                         previewButton.enabled

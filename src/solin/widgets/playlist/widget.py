@@ -33,6 +33,7 @@ from PySide6.QtQuickWidgets import QQuickWidget
 from solin.styles.theme import PALETTE, QML_THEME
 from solin.controllers.playlist_transfer_workflow import PlaylistTransferWorkflow
 from solin.ui.qml.host import apply_qml_theme, configure_qml_host
+from solin.ui.qml.trim_preview import install_trim_preview
 from solin.ui.qml.playlist.bridge import PlaylistEditBridge
 from solin.ui.qml.media_tree.playlist_session import PlaylistTreeSession
 from solin.ui.qml.media_tree.state import MediaAvailability
@@ -639,21 +640,25 @@ class PlaylistEditView(
         self.qml_widget = QQuickWidget(self)
         self._qml_pointer_cursor = QmlPointerCursorState(self.qml_widget)
         self.qml_widget.installEventFilter(self)
+        _providers = {
+            "playlistthumbs": PlaylistThumbnailProvider(self._id_to_thumb),
+            "playlisticons": PlaylistIconProvider(),
+        }
+        _context = {
+            "playlistTreeSource": self.tree_source,
+            "controller": self.bridge,
+            "catalogBridge": self.catalog_bridge,
+            "songsBridge": self.songs_bridge,
+            "playbackProtection": self._playback_protection,
+        }
+        # The trim dialog's preview player (libobs, on its own private mix).
+        self._trim_preview = install_trim_preview(_context, _providers)
         self.qml_load_handle = configure_qml_host(
             self.qml_widget,
             type_name="PlaylistEditView",
             clear_color=QML_THEME["mediaPlaceholder"],
-            image_providers={
-                "playlistthumbs": PlaylistThumbnailProvider(self._id_to_thumb),
-                "playlisticons": PlaylistIconProvider(),
-            },
-            context_properties={
-                "playlistTreeSource": self.tree_source,
-                "controller": self.bridge,
-                "catalogBridge": self.catalog_bridge,
-                "songsBridge": self.songs_bridge,
-                "playbackProtection": self._playback_protection,
-            },
+            image_providers=_providers,
+            context_properties=_context,
             mouse_tracking=True,
             defer_load=self._defer_qml,
         )
