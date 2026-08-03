@@ -37,9 +37,8 @@ import zlib
 from pathlib import Path
 from typing import Any, Callable, cast
 
-from PySide6.QtCore import QObject, Signal, Slot, QTimer, QUrl
+from PySide6.QtCore import QObject, Signal, Slot, QTimer
 from PySide6.QtGui import QPixmap, QImage
-from PySide6.QtMultimedia import QMediaPlayer, QVideoSink, QMediaMetaData
 
 from ..core.foundation.exception_logging import log_ignored_exception
 from ..core.foundation.thread_workers import CancellationFlag, WorkerHandle, WorkerPool
@@ -885,32 +884,34 @@ class LocalAudioInfoExtractor(_ThreadedMediaInfoExtractor):
 # ─────────────────────────────────────────────────────────────────────────────
 
 class MediaInfoExtractor(QObject):
-    """
-    Extrai thumbnail e título de vídeo/áudio via QMediaPlayer assíncrono.
+    """Extrai thumbnail, título e duração de vídeo/áudio pelo motor libobs.
 
-    Problema clássico do seek resolvido:
-      setPosition() é ASSÍNCRONO — monitora positionChanged e só captura o
-      frame quando a posição real chegou próxima ao alvo (margem 500ms).
+    Substitui o extractor baseado em ``QMediaPlayer``. Isso não é cosmético: a
+    lista de mídia precisa descrever o que o projetor vai realmente tocar, e
+    manter um segundo decodificador só para as miniaturas deixava um arquivo
+    renderizar na lista e falhar ao projetar.
 
-    Prioridade de saída:
-      1. Cover art de metadados (QMediaMetaData.CoverArtImage/ThumbnailImage)
-      2. Frame capturado no seek de 5% da duração
-      Título lido de QMediaMetaData.Title em qualquer dos dois casos.
+    Ordem de prioridade (a mesma de antes):
+      1. Cover art embutida nas tags do arquivo (ID3 APIC / MP4 covr / FLAC /
+         OGG), lida direto dos bytes — nenhum decodificador envolvido.
+      2. Um quadro decodificado pela sonda libobs (:mod:`core.media.media_probe`).
 
     Sinais:
       info_ready(index, pixmap, title)  — extração concluída (pixmap pode ser nulo)
       thumbnail_failed(index, failure)  — timeout ou erro de processamento
-      duration_ready(index, dur_ms)     — duração real lida pelo player
+      duration_ready(index, dur_ms)     — duração real lida da mídia
     """
 
     info_ready       = Signal(int, QPixmap, str)   # (index, pixmap, title)
     thumbnail_failed = Signal(int, object)
     duration_ready   = Signal(int, int)            # (index, duration_ms)
 
-    _TIMEOUT_MS    = 10_000
-    _SEEK_WAIT_MS  =    800
-    _COVER_WAIT_MS =    400
-    _DURATION_WAIT_MS = 750
+    #: A sonda tem o próprio timeout; este é a rede de segurança caso ela nunca
+    #: responda (por exemplo se o motor de mídia não subir).
+    _TIMEOUT_MS = 20_000
+
+    #: Tokens distinguem as respostas da sonda, que é compartilhada e serializada.
+    _next_token = 0
 
     def __init__(
         self,
@@ -920,49 +921,29 @@ class MediaInfoExtractor(QObject):
         parent=None,
     ):
         super().__init__(parent)
-        self._index          = index
-        self._url            = url
-        self._media_type     = media_type
-        self._seek_target    = -1
-        self._seek_confirmed = False
-        self._done           = False
-        self._cover_emitted  = False
-        self._duration_observed = False
-        self._duration_emitted = False
+        self._index = index
+        self._url = url
+        self._media_type = media_type
+        self._done = False
         self._require_thumbnail = True
         self._require_title = True
         self._require_duration = False
+        self._meta_title = ""
+        self._duration_emitted = False
         self._pending_cover: QPixmap | None = None
-        self._pending_frame: QPixmap | None = None
-        self._meta_title: str = ""          # título lido dos metadados
+        self._probe = None
 
-        self._player = QMediaPlayer(self)
-        self._sink   = QVideoSink(self)
-        self._player.setVideoSink(self._sink)
+        MediaInfoExtractor._next_token += 1
+        self._token = MediaInfoExtractor._next_token
 
-        self._sink.videoFrameChanged.connect(self._on_frame)
-        self._player.metaDataChanged.connect(self._on_metadata)
-        self._player.durationChanged.connect(self._on_duration)
-        self._player.positionChanged.connect(self._on_position)
-        self._player.errorOccurred.connect(self._on_error)
-
-        self._t_global = QTimer(self); self._t_global.setSingleShot(True)
+        self._t_global = QTimer(self)
+        self._t_global.setSingleShot(True)
         self._t_global.timeout.connect(self._on_timeout)
-        self._t_global.start(self._TIMEOUT_MS)
 
-        self._t_seek = QTimer(self); self._t_seek.setSingleShot(True)
-        self._t_seek.timeout.connect(self._accept_any_frame)
-        self._t_seek.start(self._SEEK_WAIT_MS)
-
-        self._t_cover = QTimer(self); self._t_cover.setSingleShot(True)
-        self._t_cover.timeout.connect(self._emit_pending_frame)
-        self._t_duration = QTimer(self); self._t_duration.setSingleShot(True)
-        self._t_duration.timeout.connect(self._emit_pending_cover)
-
-        src = (QUrl(url) if url.startswith(("http://", "https://"))
-               else QUrl.fromLocalFile(url))
-        self._player.setSource(src)
-        self._player.play()
+        # O trabalho começa no próximo tick do event loop: o chamador ainda
+        # precisa conectar os sinais e chamar set_request_intent(), e uma capa
+        # embutida pode resolver tudo sem sequer acionar a sonda.
+        QTimer.singleShot(0, self._start)
 
     def set_require_duration(self, required: bool) -> None:
         self._require_duration = bool(required)
@@ -978,201 +959,173 @@ class MediaInfoExtractor(QObject):
         self._require_title = require_title
         self._require_duration = require_duration
 
-    # ── Handlers ─────────────────────────────────────────────────────────────
+    # ── Execução ─────────────────────────────────────────────────────────────
 
-    def _on_metadata(self):
-        """Lê cover art e título dos metadados. Cover tem prioridade máxima."""
-        if not self._player:
-            return
-
-        meta = self._player.metaData()
-
-        if self._require_title and not self._meta_title:
-            t = meta.value(QMediaMetaData.Key.Title)
-            if isinstance(t, str):
-                self._meta_title = t.strip()
-
-        if (
-            not self._require_thumbnail
-            and not self._require_duration
-            and (not self._require_title or self._meta_title)
-        ):
-            self._complete_info(QPixmap())
-            return
-
-        if self._cover_emitted or not self._require_thumbnail:
-            return
-
-        for key in (QMediaMetaData.Key.CoverArtImage, QMediaMetaData.Key.ThumbnailImage):
-            value = meta.value(key)
-            if value is None:
-                continue
-            pixmap = None
-            if isinstance(value, QImage) and not value.isNull():
-                pixmap = QPixmap.fromImage(value)
-            elif isinstance(value, QPixmap) and not value.isNull():
-                pixmap = value
-            if pixmap:
-                self._cover_emitted = True
-                self._pending_frame = None
-                self._emit_duration_if_available(self._player.duration())
-                if self._require_duration and not self._duration_emitted:
-                    self._pending_cover = pixmap
-                    self._t_duration.start(self._DURATION_WAIT_MS)
-                else:
-                    self._complete_info(pixmap)
-                return
-
-    def _on_duration(self, dur_ms: int):
+    def _start(self) -> None:
         if self._done:
             return
-        if dur_ms > 0 and self._seek_target < 0:
-            self._t_seek.stop()
-            self._emit_duration_if_available(dur_ms)
-            if not self._require_thumbnail and self._duration_emitted:
-                self._complete_info(QPixmap())
-                return
-            if self._pending_cover is not None:
-                self._emit_pending_cover()
-                return
-            if self._cover_emitted:
-                return
-            self._seek_target = max(2_000, min(dur_ms * 5 // 100, 10_000))
-            self._player.setPosition(self._seek_target)
+        self._t_global.start(self._TIMEOUT_MS)
 
-    def _emit_duration_if_available(self, duration_ms: int) -> None:
-        if duration_ms <= 0:
+        self._pending_cover = self._read_tags()
+
+        # Uma capa embutida já responde tudo que não seja duração; nesse caso
+        # nem vale abrir a mídia.
+        if self._pending_cover is not None and not self._require_duration:
+            self._complete(self._pending_cover)
             return
-        self._duration_observed = True
-        if not self._require_duration or self._duration_emitted:
+
+        if not self._require_thumbnail and not self._require_duration:
+            self._complete(self._pending_cover or QPixmap())
+            return
+
+        self._submit_probe()
+
+    def _read_tags(self) -> "QPixmap | None":
+        """Capa + título das tags do arquivo. Só se aplica a arquivos locais."""
+        if self._url.startswith(("http://", "https://")):
+            return None
+        cover_bytes, title = _audio_info_from_file(self._url)
+        if self._require_title and title:
+            self._meta_title = title.strip()
+        if not cover_bytes:
+            return None
+        image = QImage.fromData(cover_bytes)
+        if image.isNull():
+            return None
+        return QPixmap.fromImage(image)
+
+    def _submit_probe(self) -> None:
+        try:
+            from solin.core.media.media_probe import video_probe
+
+            probe = video_probe()
+        except Exception:  # noqa: BLE001 - libobs/optional-dependency boundary
+            log_ignored_exception(__name__, "libobs media probe unavailable")
+            self._fail_or_finish("Solin's media engine is unavailable")
+            return
+
+        self._probe = probe
+        probe.frame_ready.connect(self._on_probe_frame)
+        probe.duration_ready.connect(self._on_probe_duration)
+        probe.failed.connect(self._on_probe_failed)
+        probe.submit(
+            self._token,
+            self._url,
+            want_frame=self._require_thumbnail and self._pending_cover is None,
+            want_duration=self._require_duration,
+        )
+
+    # ── Respostas da sonda (filtradas por token) ─────────────────────────────
+
+    def _on_probe_duration(self, token: int, duration_ms: int) -> None:
+        if token != self._token or self._done:
+            return
+        self._emit_duration(duration_ms)
+        # Se a capa já resolveu a miniatura, a duração era a única pendência.
+        if self._pending_cover is not None:
+            self._complete(self._pending_cover)
+        elif not self._require_thumbnail:
+            self._complete(QPixmap())
+
+    def _on_probe_frame(self, token: int, payload) -> None:
+        if token != self._token or self._done:
+            return
+        pixmap = self._payload_to_pixmap(payload)
+        if pixmap is None:
+            self._fail_or_finish("The video opened without yielding a decodable frame")
+            return
+        self._complete(pixmap)
+
+    def _on_probe_failed(self, token: int, message: str) -> None:
+        if token != self._token or self._done:
+            return
+        self._fail_or_finish(message)
+
+    @staticmethod
+    def _payload_to_pixmap(payload) -> "QPixmap | None":
+        try:
+            data, width, height, stride = payload
+        except (TypeError, ValueError):
+            return None
+        if not data or width <= 0 or height <= 0:
+            return None
+        image = QImage(data, width, height, stride, QImage.Format.Format_ARGB32).copy()
+        if image.isNull():
+            return None
+        return QPixmap.fromImage(image)
+
+    # ── Conclusão ────────────────────────────────────────────────────────────
+
+    def _emit_duration(self, duration_ms: int) -> None:
+        if duration_ms <= 0 or self._duration_emitted or not self._require_duration:
             return
         self._duration_emitted = True
         self.duration_ready.emit(self._index, duration_ms)
 
-    def _complete_info(self, pixmap: QPixmap) -> None:
+    def _complete(self, pixmap: QPixmap) -> None:
         if self._done:
             return
         self._done = True
+        self._teardown()
         self.info_ready.emit(self._index, pixmap, self._meta_title)
-        QTimer.singleShot(0, self._finish)
+        QTimer.singleShot(0, self.deleteLater)
 
-    def _emit_pending_cover(self) -> None:
-        pixmap = self._pending_cover
-        self._pending_cover = None
-        if pixmap is None or pixmap.isNull():
-            return
-        self._emit_duration_if_available(self._player.duration())
-        self._complete_info(pixmap)
+    def _fail_or_finish(self, reason: str) -> None:
+        """Falha só quando não há nada útil a entregar.
 
-    def _on_position(self, pos_ms: int):
-        if self._seek_confirmed or self._seek_target < 0:
+        Uma capa embutida já é resultado, e áudio sem capa não é erro. Só vira
+        thumbnail_failed quando a miniatura era o pedido e nada pôde ser
+        produzido.
+        """
+        if self._done:
             return
-        margin = 500 if self._seek_target > 0 else 0
-        if pos_ms >= self._seek_target - margin:
-            self._seek_confirmed = True
-
-    def _accept_any_frame(self):
-        self._seek_target    = 0
-        self._seek_confirmed = True
-
-    def _on_frame(self, frame):
-        if (
-            self._done
-            or not self._require_thumbnail
-            or self._cover_emitted
-            or not self._seek_confirmed
-            or not frame.isValid()
-        ):
+        if self._pending_cover is not None:
+            self._complete(self._pending_cover)
             return
-        if self._pending_frame is not None:
+        if not self._require_thumbnail or self._media_type == "audio":
+            self._complete(QPixmap())
             return
-        img = frame.toImage()
-        if img.isNull():
-            return
-        self._pending_frame = QPixmap.fromImage(img)
-        self._t_cover.start(self._COVER_WAIT_MS)
-
-    def _emit_pending_frame(self):
-        if self._done or self._cover_emitted:
-            return
-        px = self._pending_frame
-        self._pending_frame = None
-        self._emit_duration_if_available(self._player.duration())
         self._done = True
-        self._finish()
-        if px and not px.isNull():
-            self.info_ready.emit(self._index, px, self._meta_title)
-        elif self._media_type == "audio":
-            # A mídia foi aberta, mas não contém capa incorporada.
-            self.info_ready.emit(self._index, QPixmap(), self._meta_title)
-        else:
-            self.thumbnail_failed.emit(
-                self._index,
-                MediaInfoFailure(
-                    MediaInfoFailureKind.TRANSIENT,
-                    "The video opened without yielding a decodable frame",
-                    "frame-unavailable",
-                ),
-            )
+        self._teardown()
+        self.thumbnail_failed.emit(
+            self._index,
+            MediaInfoFailure(
+                MediaInfoFailureKind.TRANSIENT,
+                reason,
+                "probe-failed",
+            ),
+        )
+        QTimer.singleShot(0, self.deleteLater)
 
-    def _on_error(self, _err, message):
-        if not self._done:
-            if self._pending_cover is not None:
-                self._emit_pending_cover()
-                return
-            self._done = True
-            self._pending_frame = None
-            self._emit_duration_if_available(self._player.duration())
-            self._finish()
-            self.thumbnail_failed.emit(
-                self._index,
-                MediaInfoFailure(
-                    MediaInfoFailureKind.TRANSIENT,
-                    str(message or "Qt multimedia could not open the source"),
-                    "qmedia-error",
-                ),
-            )
-
-    def _on_timeout(self):
-        if not self._done:
-            if self._pending_cover is not None:
-                self._emit_pending_cover()
-                return
-            self._done = True
-            self._pending_frame = None
-            self._emit_duration_if_available(self._player.duration())
-            self._finish()
-            if (
-                not self._require_thumbnail
-                and (not self._require_duration or self._duration_emitted)
-            ):
-                self.info_ready.emit(self._index, QPixmap(), self._meta_title)
-            elif self._media_type == "audio" and self._duration_observed:
-                self.info_ready.emit(self._index, QPixmap(), self._meta_title)
-            else:
-                self.thumbnail_failed.emit(
-                    self._index,
-                    MediaInfoFailure(
-                        MediaInfoFailureKind.TRANSIENT,
-                        "Thumbnail extraction timed out",
-                        "timeout",
-                    ),
-                )
+    def _on_timeout(self) -> None:
+        self._fail_or_finish("Thumbnail extraction timed out")
 
     def cancel(self) -> None:
         if self._done:
             return
         self._done = True
-        self._pending_frame = None
-        self._pending_cover = None
-        self._finish()
+        self._teardown()
 
-    def _finish(self):
-        self._t_global.stop(); self._t_seek.stop(); self._t_cover.stop()
-        self._t_duration.stop()
-        self._player.stop()
-        self._player.setSource(QUrl())
-        self.deleteLater()
+    def _teardown(self) -> None:
+        self._t_global.stop()
+        probe, self._probe = self._probe, None
+        if probe is None:
+            return
+        # A sonda é compartilhada: cancelar o job e soltar os sinais impede que
+        # um extractor descartado siga recebendo respostas de outros itens.
+        try:
+            probe.cancel(self._token)
+        except Exception:  # noqa: BLE001 - probe boundary
+            log_ignored_exception(__name__, "Could not cancel the media probe job")
+        for signal, slot in (
+            (probe.frame_ready, self._on_probe_frame),
+            (probe.duration_ready, self._on_probe_duration),
+            (probe.failed, self._on_probe_failed),
+        ):
+            try:
+                signal.disconnect(slot)
+            except (TypeError, RuntimeError):
+                pass
 
 
 # ─────────────────────────────────────────────────────────────────────────────
