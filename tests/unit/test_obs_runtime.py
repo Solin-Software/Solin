@@ -453,12 +453,71 @@ def test_obs_runtime_accessor_returns_process_singleton(monkeypatch):
 # ── graphics module path (real helper) ───────────────────────────────────────
 
 
-def test_graphics_module_path_is_none_or_absolute_opengl():
+def test_graphics_module_path_is_none_or_absolute_for_this_platform():
     path = obs_runtime_mod._graphics_module_path()
     if path is not None:
         assert os.path.isabs(path)  # the whole point: absolute, not LD_LIBRARY_PATH-dependent
         base = os.path.basename(path)
-        assert base.startswith("libobs-opengl")
+        expected = "libobs-d3d11" if sys.platform == "win32" else "libobs-opengl"
+        assert base.startswith(expected)
+
+
+def test_graphics_module_path_prefers_d3d11_on_windows(monkeypatch, tmp_path):
+    """Windows must render through D3D11, even though OpenGL is also bundled.
+
+    OBS's Windows OpenGL module requires the ARB_pixel_format extension, which is
+    absent under the Basic Render Driver and many headless/RDP sessions — picking
+    it makes obs_reset_video fail with a bare "not supported".
+    """
+    pylibobs = pytest.importorskip("pylibobs")  # needs the real package; skip in CI
+
+    pkg_dir = tmp_path / "pylibobs"
+    lib_dir = pkg_dir / "_libs" / "windows" / "x86_64"
+    lib_dir.mkdir(parents=True)
+    (lib_dir / "libobs-d3d11.dll").write_bytes(b"")
+    (lib_dir / "libobs-opengl.dll").write_bytes(b"")  # both present: D3D11 must win
+    monkeypatch.setattr(pylibobs, "__file__", str(pkg_dir / "__init__.py"))
+    monkeypatch.setattr(sys, "platform", "win32")
+
+    path = obs_runtime_mod._graphics_module_path()
+
+    assert path is not None
+    assert path.endswith("libobs-d3d11.dll")
+
+
+def test_graphics_module_path_finds_the_macos_framework_layout(monkeypatch, tmp_path):
+    """macOS keeps the module under Frameworks/, not at the arch root.
+
+    pylibobs ships the mac bundle .app-style (macos/<arch>/Frameworks/), so a
+    path without that component never matches and the absolute-path guarantee
+    quietly degrades to libobs' bare default name.
+    """
+    pylibobs = pytest.importorskip("pylibobs")
+
+    pkg_dir = tmp_path / "pylibobs"
+    lib_dir = pkg_dir / "_libs" / "macos" / "arm64" / "Frameworks"
+    lib_dir.mkdir(parents=True)
+    (lib_dir / "libobs-opengl.dylib").write_bytes(b"")
+    monkeypatch.setattr(pylibobs, "__file__", str(pkg_dir / "__init__.py"))
+    monkeypatch.setattr(sys, "platform", "darwin")
+
+    path = obs_runtime_mod._graphics_module_path()
+
+    assert path is not None
+    assert path.endswith(os.path.join("Frameworks", "libobs-opengl.dylib"))
+
+
+def test_graphics_module_path_falls_back_to_opengl_on_windows(monkeypatch, tmp_path):
+    pylibobs = pytest.importorskip("pylibobs")
+
+    pkg_dir = tmp_path / "pylibobs"
+    lib_dir = pkg_dir / "_libs" / "windows" / "x86_64"
+    lib_dir.mkdir(parents=True)
+    (lib_dir / "libobs-opengl.dll").write_bytes(b"")  # no D3D11 in this bundle
+    monkeypatch.setattr(pylibobs, "__file__", str(pkg_dir / "__init__.py"))
+    monkeypatch.setattr(sys, "platform", "win32")
+
+    assert obs_runtime_mod._graphics_module_path().endswith("libobs-opengl.dll")
 
 
 def test_graphics_module_path_returns_bundled_absolute_path(monkeypatch, tmp_path):

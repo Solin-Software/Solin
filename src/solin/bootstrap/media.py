@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -13,7 +12,6 @@ from solin.core.foundation.thread_workers import ThreadedWorkerPool
 from solin.core.media.browser_downloads import BrowserDownloadService
 from solin.core.media.cache import MediaCacheManager
 from solin.core.media.downloader import SongDownloader
-from solin.core.media.playback import MediaController
 from solin.core.media.qt_contracts import PlaybackDownloader
 from solin.core.media.settings import MediaPlaybackSettings
 from solin.core.network.browser_images import BrowserImageFetchService
@@ -52,33 +50,25 @@ class MediaComposition:
         *,
         projection: bool = True,
     ):
-        """Build a playback controller.
+        """Build the libobs-backed playback controller.
 
-        The engine is selected by ``SOLIN_MEDIA_ENGINE``: ``obs`` uses the
-        libobs-backed :class:`ObsMediaController`; anything else (default) uses
-        the Qt :class:`MediaController`. Both expose the same public surface.
+        libobs is Solin's only media engine. It is what the projection program,
+        the crossfade transition and the virtual camera are all built on, so a Qt
+        fallback could not provide those anyway — a second engine would only be a
+        second, less-capable code path to maintain and test.
 
-        ``projection`` selects how an ``obs`` engine emits video: the default
-        routes the source through the projection program (channel-0 crossfade);
+        ``projection`` selects how video is emitted: the default routes the
+        source through the projection program (channel-0 crossfade);
         ``projection=False`` keeps it on a private audio-only channel (for the
         background song player, which is never shown).
         """
-        engine = os.environ.get("SOLIN_MEDIA_ENGINE", "").strip().lower()
-        if engine == "obs":
-            from solin.core.media.obs_playback import ObsMediaController
+        from solin.core.media.obs_playback import ObsMediaController
 
-            log.info("Using libobs media engine (SOLIN_MEDIA_ENGINE=obs)")
-            return ObsMediaController(
-                settings,
-                self.cache_manager,
-                downloader_factory=self.create_downloader,
-                projection=projection,
-                parent=parent,
-            )
-        return MediaController(
+        return ObsMediaController(
             settings,
             self.cache_manager,
             downloader_factory=self.create_downloader,
+            projection=projection,
             parent=parent,
         )
 
@@ -114,22 +104,22 @@ class MediaComposition:
         alive = self._media_info_workers.shutdown()
         if alive:
             log.warning("Media info workers still alive after shutdown: %s", alive)
-        # obs engine: tear the native runtime down deterministically on app exit
-        # (projection program → channels → OBS context, in that order). No-op for
-        # the default Qt engine, or if the libobs runtime never started.
-        if os.environ.get("SOLIN_MEDIA_ENGINE", "").strip().lower() == "obs":
-            # Stop the virtual-camera follow loop (a GUI-thread QTimer) before the
-            # native runtime is freed; the vcam's own sources are released inside
-            # obs_runtime().shutdown().
-            try:
-                from solin.core.media.vcam_director import vcam_director
+        # Tear the native runtime down deterministically on app exit: projection
+        # program → channels → OBS context, in that order. Every step is
+        # best-effort; shutdown must not raise.
+        #
+        # The virtual-camera follow loop is a GUI-thread QTimer and has to stop
+        # before the native runtime is freed; the vcam's own sources are released
+        # inside obs_runtime().shutdown().
+        try:
+            from solin.core.media.vcam_director import vcam_director
 
-                vcam_director().stop_following()
-            except Exception:  # noqa: BLE001 - shutdown must not raise
-                log.warning("virtual camera director shutdown errored", exc_info=True)
-            try:
-                from solin.core.media.obs_runtime import obs_runtime
+            vcam_director().stop_following()
+        except Exception:  # noqa: BLE001 - shutdown must not raise
+            log.warning("virtual camera director shutdown errored", exc_info=True)
+        try:
+            from solin.core.media.obs_runtime import obs_runtime
 
-                obs_runtime().shutdown()
-            except Exception:  # noqa: BLE001 - shutdown must not raise
-                log.warning("libobs runtime shutdown errored", exc_info=True)
+            obs_runtime().shutdown()
+        except Exception:  # noqa: BLE001 - shutdown must not raise
+            log.warning("libobs runtime shutdown errored", exc_info=True)

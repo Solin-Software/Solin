@@ -93,6 +93,36 @@ if %ERRORLEVEL% NEQ 0 (
     exit /b %ERRORLEVEL%
 )
 
+:: ── Virtual camera (optional) ─────────────────────────────
+:: Two pieces, both optional so a build without them still succeeds:
+::   1. camera\solin-dshowcam-{x64,x86}.dll — Solin's DirectShow filter. Shipped
+::      unregistered; Solin registers it on first use, with one UAC prompt.
+::      BOTH bitnesses are required: a DirectShow filter loads inside the
+::      consuming app, so a 32-bit host can only ever load the 32-bit build.
+::   2. pylibobs + its bundled libobs binaries. It is imported dynamically inside
+::      a try/except, so Nuitka cannot discover it on its own.
+set VCAM_INCLUDES=
+set VCAM_DIR=%PROJECT_ROOT%tools\solin-dshowcam
+if exist "%VCAM_DIR%\solin-dshowcam-x64.dll" (
+    set VCAM_INCLUDES=--include-data-files="%VCAM_DIR%\solin-dshowcam-x64.dll=camera/solin-dshowcam-x64.dll"
+) else (
+    echo  [AVISO] Filtro da camera virtual ausente ^(tools\solin-dshowcam\build.bat^).
+)
+if exist "%VCAM_DIR%\solin-dshowcam-x86.dll" (
+    set VCAM_INCLUDES=!VCAM_INCLUDES! --include-data-files="%VCAM_DIR%\solin-dshowcam-x86.dll=camera/solin-dshowcam-x86.dll"
+) else (
+    echo  [AVISO] Filtro 32-bit ausente: apps 32-bit nao verao a camera virtual.
+)
+
+for /f "delims=" %%I in ('call "%PYTHON%" -c "import pylibobs,pathlib;print(pathlib.Path(pylibobs.__file__).resolve().parent)" 2^>nul') do set PYLIBOBS_DIR=%%I
+if defined PYLIBOBS_DIR (
+    REM Only the Python package here. Its _libs tree is copied after the build:
+    REM --include-data-dir drops every DLL and .exe, which is all that matters.
+    set VCAM_INCLUDES=!VCAM_INCLUDES! --include-package=pylibobs
+) else (
+    echo  [AVISO] pylibobs ausente: o motor obs e a camera virtual ficarao indisponiveis.
+)
+
 "%PYTHON%" -m nuitka ^
     --standalone ^
     --output-dir="%OUTPUT_DIR%" ^
@@ -135,6 +165,7 @@ if %ERRORLEVEL% NEQ 0 (
     --include-data-files="%QT_LIBRARY_CACHE_DIR%\*.dll=./" ^
     --include-data-files="%PROJECT_ROOT%src\solin\resources\translations\*.qm=solin/resources/translations/" ^
     --include-data-files="%SIDEVIEW_NATIVE_DLL%=sideview/sideview_native.dll" ^
+    %VCAM_INCLUDES% ^
     --enable-plugin=pyside6 ^
     --include-qt-plugins=platforms,styles,imageformats,multimedia,position ^
     "%MAIN_SCRIPT%"
@@ -156,6 +187,34 @@ if not exist "%DIST%\sideview\sideview_native.dll" (
     echo  [ERRO] O backend nativo do SideView nao foi empacotado.
     pause
     exit /b 1
+)
+
+:: ── libobs: copiar os binarios pos-build ──────────────────
+:: --include-data-dir do Nuitka ignora DLLs e executaveis de proposito, entao o
+:: _libs empacotado por ele vem sem um unico .dll (so .effect/.ini/.png). Copiar
+:: a arvore inteira aqui e o unico jeito de garantir obs.dll, os plugins e os
+:: helpers .exe. Sem isso o app compila, inicia e falha ao criar o motor.
+if defined PYLIBOBS_DIR (
+    echo  Copiando binarios do libobs...
+    robocopy "%PYLIBOBS_DIR%\_libs" "%DIST%\pylibobs\_libs" /E /NFL /NDL /NJH /NJS /NP >nul
+    if errorlevel 8 (
+        echo  [ERRO] Falha ao copiar os binarios do libobs.
+        pause
+        exit /b 1
+    )
+    if not exist "%DIST%\pylibobs\_libs\windows\x86_64\obs.dll" (
+        echo  [ERRO] obs.dll ausente do pacote: o motor de midia nao iniciaria.
+        pause
+        exit /b 1
+    )
+    REM obs.dll e os plugins importam o runtime MSVC. Nuitka o coloca na raiz do
+    REM dist, mas o carregador do libobs procura ao lado do proprio modulo — numa
+    REM maquina sem o redistribuivel instalado isso e a diferenca entre carregar e
+    REM falhar em silencio. Copiar ao lado de obs.dll remove a duvida.
+    for %%R in (vcruntime140.dll vcruntime140_1.dll msvcp140.dll) do (
+        if exist "%DIST%\%%R" copy /y "%DIST%\%%R" "%DIST%\pylibobs\_libs\windows\x86_64\%%R" >nul
+    )
+    echo  [OK] libobs empacotado.
 )
  
 :: _avif nao usado

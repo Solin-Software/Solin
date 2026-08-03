@@ -1,0 +1,8 @@
+# Build artefacts — built locally / in CI, never committed.
+*.dll
+*.exe
+*.lib
+*.exp
+*.obj
+*.pdb
+obj/

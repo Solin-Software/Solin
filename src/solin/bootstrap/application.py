@@ -36,8 +36,6 @@ def _configure_qt_gl_integration() -> None:
       sidesteps that entirely and leaves the GPU to libobs (fine for the
       operator UI — it is not GPU-bound).
     """
-    if os.environ.get("SOLIN_MEDIA_ENGINE", "").strip().lower() != "obs":
-        return
     if sys.platform.startswith("linux"):
         if not os.environ.get("QT_XCB_GL_INTEGRATION"):
             os.environ["QT_XCB_GL_INTEGRATION"] = "xcb_egl"

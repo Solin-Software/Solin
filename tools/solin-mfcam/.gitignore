@@ -1,0 +1,7 @@
+# Build artefacts — the DLL is built locally / in CI, never committed.
+*.dll
+*.exe
+*.lib
+*.exp
+*.obj
+*.pdb

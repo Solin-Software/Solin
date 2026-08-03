@@ -1,5 +1,4 @@
 import ctypes
-import os
 import sys
 
 from PySide6.QtCore import (
@@ -70,8 +69,13 @@ def exclude_from_aero_peek(hwnd: int) -> None:
 
 
 def obs_media_engine_active() -> bool:
-    """True when the libobs media engine is selected (SOLIN_MEDIA_ENGINE=obs)."""
-    return os.environ.get("SOLIN_MEDIA_ENGINE", "").strip().lower() == "obs"
+    """True — libobs is Solin's only media engine.
+
+    Kept as a function rather than inlined at its call sites: it still reads as
+    the intent ("are we on the libobs path?"), and the tests that exercise the
+    non-obs branches of the projection surface patch it.
+    """
+    return True
 
 
 # libobs can only bind a Display to the native projection surface once its X

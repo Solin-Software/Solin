@@ -214,3 +214,19 @@ class CameraSettingsStore(_ProfilePrefsSettings):
         self.settings.set_value(SettingsKey.CAMERA_BACKEND, backend, sync=False)
         self.settings.set_value(SettingsKey.CAMERA_DEVICE_NAME, name, sync=False)
         self.settings.sync()
+
+    # ── virtual camera ────────────────────────────────────────────────────
+    # Same profile-prefs namespace as the camera keys above, so deleting a
+    # profile clears it too.
+
+    def vcam_autostart(self) -> bool:
+        """Whether to bring the virtual camera up when Solin opens.
+
+        Defaults to True: the camera started unconditionally before this setting
+        existed, so an unset key must preserve that rather than quietly removing
+        the device from meeting apps on upgrade.
+        """
+        return bool(self.settings.value(SettingsKey.VCAM_AUTOSTART, True, bool))
+
+    def set_vcam_autostart(self, enabled: bool) -> None:
+        self.settings.set_value(SettingsKey.VCAM_AUTOSTART, bool(enabled))

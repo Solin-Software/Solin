@@ -64,6 +64,9 @@ class LiveIntegrationController:
         self._handlers = handlers
         self._session = context.projection_session
         self._camera_tap_connected = False  # program-preview tap wiring (obs camera)
+        #: Alive only while a privileged vcam provisioning run is in flight; also
+        #: the re-entrancy guard against a second elevation prompt.
+        self._vcam_provision_sink = None
 
     @Slot(bool)
     def on_zoom_settings_enabled_toggled(self, enabled: bool) -> None:
@@ -234,10 +237,17 @@ class LiveIntegrationController:
         log.info("Virtual camera: startup requested (obs engine active=%s)", active)
         if not active:
             return
+        if not self._vcam_autostart_enabled():
+            log.info("Virtual camera: start skipped — disabled in Settings")
+            return
         from ..core.media import vcam_provision as prov
 
         state = prov.detect()
         log.info("Virtual camera: provision state = %s", state.value)
+        if state is prov.VcamProvisionState.UNSUPPORTED:
+            # macOS has no vcam sink yet. Falling through would try to start it
+            # and warn the operator at every launch about something they cannot fix.
+            return
         if state is prov.VcamProvisionState.MODULE_MISSING:
             self._context.notifications.warning(
                 prov.install_hint(),
@@ -253,9 +263,57 @@ class LiveIntegrationController:
             return
         self._start_virtual_camera_now()
 
+    def _vcam_autostart_enabled(self) -> bool:
+        """Whether the operator wants the camera up when Solin opens.
+
+        Fails open: a settings read that raises must not silently strip the
+        camera out of every meeting app.
+        """
+        try:
+            return bool(self._context.camera_settings.vcam_autostart())
+        except Exception:  # noqa: BLE001 - settings must not gate the camera
+            log.debug("Could not read the vcam autostart setting", exc_info=True)
+            return True
+
+    def on_vcam_autostart_toggled(self, enabled: bool) -> None:
+        """Apply the operator's choice immediately.
+
+        This doubles as the only manual control: turning it on starts the camera
+        now, turning it off stops it. Without that, switching the setting off
+        would leave no way to switch the camera back on without restarting.
+        """
+        if enabled:
+            self.start_virtual_camera()
+        else:
+            self.stop_virtual_camera()
+
+    def stop_virtual_camera(self) -> None:
+        """Take the virtual camera down (idempotent).
+
+        The device itself stays registered — meeting apps keep listing it and see
+        the filter's own placeholder, exactly as they do before Solin starts.
+        """
+        try:
+            from ..core.media.obs_virtual_camera import virtual_camera
+            from ..core.media.vcam_director import vcam_director
+
+            vcam_director().stop_following()
+            virtual_camera().stop()
+        except Exception:  # noqa: BLE001 - teardown must not break the UI
+            log.debug("Virtual camera stop failed", exc_info=True)
+        toolbar = self._context.quick_toolbar()
+        if toolbar is not None and hasattr(toolbar, "set_scene_override_available"):
+            toolbar.set_scene_override_available(False)
+
     def _provision_vcam_then_start(self) -> None:
         """Run the privileged one-time setup off the GUI thread, then start."""
         from PySide6.QtCore import QRunnable, QThreadPool
+
+        # Re-entrancy guard: the toggle can call this while a run is in flight,
+        # and a second privileged worker means a second UAC prompt.
+        if self._vcam_provision_sink is not None:
+            log.debug("Virtual camera: provisioning already in flight")
+            return
 
         sink = _VcamProvisionSink()
         sink.done.connect(self._on_vcam_provisioned)
@@ -284,6 +342,15 @@ class LiveIntegrationController:
         from ..core.media.vcam_director import vcam_director
 
         if not virtual_camera().start():
+            # Tell the operator. Otherwise the camera is simply absent from every
+            # meeting app, the Scenes override never appears, and nothing on
+            # screen explains why.
+            reason = virtual_camera().last_error
+            self._context.notifications.warning(
+                reason or self._context.translate("The virtual camera could not start."),
+                title=self._context.translate("Virtual camera unavailable"),
+                dedupe_key="vcam-start-failed",
+            )
             return
         self._load_vcam_scene_config()
         self._sync_vcam_camera(self.selected_camera_option())

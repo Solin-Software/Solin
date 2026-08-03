@@ -61,11 +61,17 @@ def libobs_available() -> bool:
 
 
 def _graphics_module_path() -> str | None:
-    """Absolute path to the bundled ``libobs-opengl`` graphics module, if present.
+    """Absolute path to the bundled graphics module for this platform, if present.
 
     Passing this to ``set_video`` avoids depending on ``LD_LIBRARY_PATH`` for the
     graphics-module dlopen on Linux.  Returns ``None`` on platforms/layouts where
     the co-located module is not found (libobs then uses its default name).
+
+    The module differs per platform: Linux/macOS render through OpenGL, but
+    Windows must use **D3D11**. OBS's Windows OpenGL module requires the
+    ``ARB_pixel_format`` extension, which is absent under the Basic Render Driver
+    (and on plenty of real headless/RDP sessions), so forcing OpenGL there makes
+    ``obs_reset_video`` fail outright with "not supported".
     """
     try:
         import pylibobs  # type: ignore[import-not-found]
@@ -82,9 +88,21 @@ def _graphics_module_path() -> str | None:
     if sys.platform.startswith("linux"):
         candidates = ["linux/x86_64/libobs-opengl.so", "linux/x86_64/libobs-opengl.so.0"]
     elif sys.platform == "darwin":
-        candidates = ["macos/universal/libobs-opengl.dylib", "macos/arm64/libobs-opengl.dylib"]
+        # pylibobs keeps the macOS bundle in a .app-style layout —
+        # macos/<arch>/Frameworks/ — so the module is NOT at the arch root. Without
+        # the Frameworks/ component this never matched and the absolute-path
+        # guarantee silently degraded to libobs' bare default name.
+        candidates = [
+            f"macos/{arch}/Frameworks/libobs-opengl.dylib"
+            for arch in ("arm64", "universal", "x86_64")
+        ]
     elif sys.platform == "win32":
-        candidates = ["windows/x86_64/libobs-opengl.dll"]
+        # D3D11 first: it is OBS's default Windows renderer. OpenGL stays as a
+        # last resort for the rare box where D3D11 is unavailable.
+        candidates = [
+            "windows/x86_64/libobs-d3d11.dll",
+            "windows/x86_64/libobs-opengl.dll",
+        ]
     else:
         candidates = []
 

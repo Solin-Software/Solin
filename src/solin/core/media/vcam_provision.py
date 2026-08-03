@@ -1,4 +1,20 @@
-"""Self-contained v4l2loopback provisioning for the virtual camera (Linux).
+"""Self-contained provisioning for the virtual-camera sink.
+
+This module is the **platform-dispatching facade** callers import. The sink it
+prepares differs per OS — a ``v4l2loopback`` kernel device on Linux, a
+COM-registered DirectShow filter on Windows (:mod:`vcam_provision_win`), a
+Camera Extension on macOS (:mod:`vcam_provision_mac`) — but the contract does
+not: :func:`detect` classifies the situation into a
+:class:`VcamProvisionState`, :func:`provision` performs the one-time privileged
+setup behind the platform's own consent dialog (polkit / UAC), and
+:func:`find_loopback_device` reports the name meeting apps will actually show.
+
+macOS is the exception to :func:`provision`: a camera extension can only be
+installed by the signed ``.app`` itself and approved by the user, so there it
+detects and explains rather than acting. See ``docs/macos-vcam-handover.md``.
+
+The Linux implementation lives here; Windows and macOS delegate. Everything
+below this paragraph describes the Linux sink.
 
 The virtual-camera sink is a ``v4l2loopback`` device whose visible name (what
 Zoom/Meet show) is its ``card_label`` — fixed when the kernel module loads, a root
@@ -45,17 +61,44 @@ _SAFE_LABEL = re.compile(r"\A[A-Za-z0-9 ]{1,32}\Z")
 
 
 class VcamProvisionState(Enum):
-    """What, if anything, must happen before the vcam sink is correctly named."""
+    """What, if anything, must happen before the vcam sink is correctly named.
 
-    UNSUPPORTED = "unsupported"  # not Linux — vcam sink handled by the OS
-    MODULE_MISSING = "module_missing"  # v4l2loopback not installed (system package)
-    NOT_LOADED = "not_loaded"  # installed but no loopback device present
-    WRONG_LABEL = "wrong_label"  # a loopback exists, but not named DESIRED_LABEL
-    READY = "ready"  # a loopback exists, already named DESIRED_LABEL
+    The vocabulary is shared across platforms; only the underlying sink differs.
+    On Windows "the module" is the DirectShow filter DLL and "loaded" means
+    COM-registered.
+    """
+
+    UNSUPPORTED = "unsupported"  # no vcam sink implementation for this OS
+    MODULE_MISSING = "module_missing"  # v4l2loopback / filter DLL not installed
+    NOT_LOADED = "not_loaded"  # installed but no device present / not registered
+    WRONG_LABEL = "wrong_label"  # a device exists, but not named DESIRED_LABEL
+    READY = "ready"  # a device exists, already named DESIRED_LABEL
+
+
+def _win():
+    """The Windows implementation, imported lazily to keep this module cycle-free."""
+    from . import vcam_provision_win
+
+    return vcam_provision_win
+
+
+def _mac():
+    """The macOS implementation, imported lazily (same reason as :func:`_win`)."""
+    from . import vcam_provision_mac
+
+    return vcam_provision_mac
 
 
 def is_loaded() -> bool:
-    """True when the ``v4l2loopback`` kernel module is currently loaded."""
+    """True when the sink's prerequisite is satisfied.
+
+    Linux: the ``v4l2loopback`` kernel module is loaded. Windows: the DirectShow
+    filter is COM-registered.
+    """
+    if sys.platform == "win32":
+        return _win().is_loaded()
+    if sys.platform == "darwin":
+        return _mac().is_loaded()
     return os.path.isdir(_V4L2LOOPBACK_SYSFS)
 
 
@@ -63,8 +106,13 @@ def module_installed() -> bool:
     """True when ``v4l2loopback`` is installed for the running kernel.
 
     Loaded implies installed; otherwise ask ``modinfo``; if that is unavailable,
-    fall back to scanning the modules tree.
+    fall back to scanning the modules tree. On Windows this asks whether the
+    DirectShow filter DLL is on disk.
     """
+    if sys.platform == "win32":
+        return _win().module_installed()
+    if sys.platform == "darwin":
+        return _mac().module_installed()
     if is_loaded():
         return True
     modinfo = shutil.which("modinfo")
@@ -90,7 +138,13 @@ def find_loopback_device() -> tuple[str, str] | None:
     Loopback devices are identified by their v4l2loopback-specific sysfs knobs
     (real cameras lack ``max_openers``), so this works regardless of the label the
     module was loaded with — and reports the real name to the operator.
+
+    On Windows the pair is ``(filter CLSID, registered friendly name)``.
     """
+    if sys.platform == "win32":
+        return _win().find_loopback_device()
+    if sys.platform == "darwin":
+        return _mac().find_loopback_device()
     if not sys.platform.startswith("linux"):
         return None
     import glob
@@ -108,7 +162,11 @@ def find_loopback_device() -> tuple[str, str] | None:
 
 
 def detect() -> VcamProvisionState:
-    """Classify the current v4l2loopback situation for the vcam sink."""
+    """Classify the current situation for the vcam sink. Never raises."""
+    if sys.platform == "win32":
+        return _win().detect()
+    if sys.platform == "darwin":
+        return _mac().detect()
     if not sys.platform.startswith("linux"):
         return VcamProvisionState.UNSUPPORTED
     if not is_loaded():
@@ -133,7 +191,11 @@ def pkexec_available() -> bool:
 
 
 def install_hint() -> str:
-    """Operator guidance to install the v4l2loopback kernel module."""
+    """Operator guidance to install the missing vcam sink prerequisite."""
+    if sys.platform == "win32":
+        return _win().install_hint()
+    if sys.platform == "darwin":
+        return _mac().install_hint()
     return (
         "The virtual camera needs the 'v4l2loopback' kernel module, which is a "
         "system package (not part of Solin, and not OBS). Install it once, e.g.:\n"
@@ -169,12 +231,17 @@ def _provision_script() -> str:
 
 
 def provision_argv() -> list[str]:
-    """The full ``pkexec`` argv that performs the privileged setup.
+    """The full argv that performs the privileged setup.
 
     The interpreter is a hardcoded absolute ``/bin/sh`` — never resolved through
     the caller's ``$PATH`` — so a malicious ``sh`` planted earlier in a
-    user-writable PATH entry cannot hijack the root-authorised command.
+    user-writable PATH entry cannot hijack the root-authorised command. The
+    Windows argv applies the same rule to ``powershell.exe``/``regsvr32.exe``.
     """
+    if sys.platform == "win32":
+        return _win().provision_argv()
+    if sys.platform == "darwin":
+        return _mac().provision_argv()
     return ["pkexec", "/bin/sh", "-c", _provision_script()]
 
 
@@ -184,8 +251,15 @@ def provision(runner=subprocess.run, timeout: int = 120) -> bool:
 
     Returns True on success. Returns False (logged) if pkexec is unavailable, the
     operator cancels the prompt, or the command fails. Intended to be called off
-    the GUI thread — it blocks on the polkit dialog.
+    the GUI thread — it blocks on the polkit dialog (UAC on Windows).
     """
+    if sys.platform == "win32":
+        return _win().provision(runner=runner, timeout=timeout)
+    if sys.platform == "darwin":
+        # Always False: a camera extension is installed by the signed .app via
+        # OSSystemExtensionRequest and approved by the user, so there is nothing
+        # to run here. The caller surfaces prerequisite_hint() instead.
+        return _mac().provision(runner=runner, timeout=timeout)
     if not sys.platform.startswith("linux"):
         return False
     if not pkexec_available():

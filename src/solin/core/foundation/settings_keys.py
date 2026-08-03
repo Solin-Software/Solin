@@ -65,6 +65,10 @@ class SettingsKey:
     # Virtual-camera scene configuration (meeting mode + rule overrides + PiP),
     # JSON-encoded as a single value. NOT the OBS-remote "scenes".
     VCAM_SCENE_CONFIG: Final = "vcam/scene_config"
+    #: Bring the virtual camera up when Solin opens. Defaults to on: startup was
+    #: unconditional before this key existed, and an unset key must not silently
+    #: remove the camera from an existing operator's meeting app.
+    VCAM_AUTOSTART: Final = "vcam/autostart"
 
     OBS_ENABLED: Final = "obs/enabled"
     OBS_PORT: Final = "obs/port"

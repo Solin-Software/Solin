@@ -6,9 +6,10 @@ channel 0), so it can differ from the projector: while nothing is projected it
 shows a branded, centred JW logo instead of black, and later (the rule engine) it
 will show camera / media / camera+media per the projected content.
 
-Video only: on Linux the sink is ``v4l2loopback`` (a video device), so audio to
-the conference is a separate concern. The kernel module must be loaded (root) —
-Solin detects it and guides the operator rather than failing silently.
+Video only: the sink is ``v4l2loopback`` on Linux and a DirectShow filter on
+Windows — both video devices — so audio to the conference is a separate concern.
+Either sink needs a one-time privileged setup (root / administrator); Solin
+detects that and guides the operator rather than failing silently.
 
 Process-wide singleton.
 """
@@ -29,6 +30,24 @@ from .vcam_provision import DESIRED_LABEL, find_loopback_device, is_loaded
 log = logging.getLogger(__name__)
 
 _VCAM_OUTPUT_KIND = "virtualcam_output"
+
+#: Windows drives its own DirectShow filter over a shared frame transport, so the
+#: libobs output exists only to make the vcam's view render at all — a raw
+#: callback alone gets nothing (measured: 0 fps without an active output, 30 with).
+#:
+#: It must NOT be virtualcam_output: OBS's win-dshow plugin only registers that
+#: output when OBS's *own* DirectShow filter is present in the registry, so on a
+#: machine without OBS Studio installed it does not exist and the camera cannot
+#: start. ffmpeg_output lives in obs-ffmpeg.dll with no such dependency.
+_VCAM_PUMP_KIND = "ffmpeg_output"
+
+#: rawvideo into the null muxer: the pump has to consume the mix, not encode it.
+_VCAM_PUMP_SETTINGS = {
+    "url": "NUL",
+    "format_name": "null",
+    "video_encoder": "rawvideo",
+    "audio_encoder": "pcm_s16le",
+}
 _IDLE_KEY = "vcam-idle"
 
 # ── view channel layout (z-order back→front) ──────────────────────────────────
@@ -53,6 +72,10 @@ class VirtualCamera:
         self._idle_source: Any = None
         self._image_dir: Path | None = None
         self._active = False
+        # Windows sink: frames go to Solin's own DirectShow filter through a
+        # shared mapping rather than through a libobs output.
+        self._transport: Any = None
+        self._bridge: Any = None
         # Camera layer (channel 2): one shared capture source + its wrapping scene.
         self._camera_source: Any = None
         self._camera_scene: Any = None
@@ -63,6 +86,9 @@ class VirtualCamera:
         self._pip_fraction = _PIP_FRACTION
         # The composition currently applied, so redundant re-applies are cheap.
         self._composition: VcamComposition | None = None
+        #: Why the last start() failed, in operator-readable terms. The camera
+        #: failing is otherwise silent — no device, no Scenes button, no clue.
+        self._last_error: str = ""
 
     # ── availability ──────────────────────────────────────────────────────
 
@@ -71,10 +97,12 @@ class VirtualCamera:
         """Cheap, no-runtime readiness check.
 
         On Linux the ``v4l2loopback`` module must be loaded (it creates the
-        /dev/videoN device the conferencing app reads). Windows/macOS ship their
-        own vcam sink, so assume ready there (refined when those are built out).
+        /dev/videoN device the conferencing app reads). On Windows the DirectShow
+        filter must be COM-registered, otherwise the output starts but no meeting
+        app can see it. Both questions are ``is_loaded()``. macOS ships its own
+        vcam sink, so assume ready there (refined when that is built out).
         """
-        if sys.platform.startswith("linux"):
+        if sys.platform.startswith("linux") or sys.platform == "win32":
             return is_loaded()
         return True
 
@@ -87,6 +115,10 @@ class VirtualCamera:
                 'card_label="Solin Virtual Camera"\n'
                 "(add it to /etc/modules-load.d/ to persist across reboots)."
             )
+        if sys.platform == "win32":
+            from .vcam_provision_win import prerequisite_hint as win_hint
+
+            return win_hint()
         return ""
 
     def is_available(self) -> bool:
@@ -96,7 +128,7 @@ class VirtualCamera:
         try:
             rt = self._rt()
             rt.ensure_started()
-            return _VCAM_OUTPUT_KIND in rt.ob.enum_output_types()
+            return self._output_spec()[0] in rt.ob.enum_output_types()
         except Exception:  # noqa: BLE001 - libobs boundary
             log.debug("vcam availability check failed", exc_info=True)
             return False
@@ -112,41 +144,122 @@ class VirtualCamera:
         hint) if unavailable, so callers can surface guidance to the operator."""
         if self._active:
             return True
+        self._last_error = ""
         if not self.platform_prerequisite_ok():
             log.warning("Virtual camera unavailable. %s", self.prerequisite_hint())
+            self._last_error = self.prerequisite_hint()
             return False
         try:
             rt = self._rt()
             rt.ensure_started()
             ob = rt.ob
-            if _VCAM_OUTPUT_KIND not in ob.enum_output_types():
-                log.warning("virtualcam_output not registered in this libobs build")
+            kind, settings = self._output_spec()
+            if kind not in ob.enum_output_types():
+                log.warning(
+                    "%s is not registered in this libobs build. Available: %s",
+                    kind,
+                    ", ".join(sorted(ob.enum_output_types())) or "(none)",
+                )
+                self._last_error = (
+                    f"Solin's media engine has no '{kind}' output, so the virtual "
+                    "camera cannot be driven."
+                )
                 return False
             self._ensure_view()
-            if self._output is None:
-                self._output = ob.Output.create(
-                    _VCAM_OUTPUT_KIND, "Solin Virtual Camera", {}
-                )
-            # Bind the output to THIS view's mix (independent of channel 0).
+            # Bind to THIS view's mix (independent of channel 0), so the camera
+            # can show something different from what is being projected.
             video = self._view.add()
             if video is None:
                 log.warning("obs_view_add returned no video mix for the vcam")
                 return False
+
+            if self._output is None:
+                self._output = ob.Output.create(kind, "Solin Virtual Camera", settings)
             self._output.set_media(video, self._audio())
             if not self._output.start():
-                log.warning(
-                    "virtualcam_output failed to start. %s", self.prerequisite_hint()
+                log.warning("%s failed to start. %s", kind, self.prerequisite_hint())
+                self._last_error = self.prerequisite_hint() or (
+                    f"Solin's media engine could not start its '{kind}' output."
                 )
                 return False
+
+            # On Windows the device other applications see is Solin's own
+            # DirectShow filter, fed over a shared transport — the output above
+            # is what makes the view's mix render at all (a raw callback alone
+            # does not: measured 0 frames without an active output).
+            #
+            # Deliberately non-fatal: the camera is running either way, and a
+            # filter with no frames shows its own placeholder rather than
+            # breaking the meeting app. Losing the picture is better than losing
+            # the device.
+            if sys.platform == "win32":
+                self._start_transport(video)
             self._active = True
             self._log_started()
             return True
-        except Exception:  # noqa: BLE001 - libobs boundary
+        except Exception as exc:  # noqa: BLE001 - libobs boundary
             log.warning("Could not start the virtual camera", exc_info=True)
+            self._last_error = f"{type(exc).__name__}: {exc}"
             return False
+
+    @staticmethod
+    def _output_spec() -> tuple[str, dict]:
+        """The libobs output to bind the vcam's view to, and its settings.
+
+        Linux drives the camera *through* this output (v4l2loopback via
+        virtualcam_output). Windows does not: Solin's own DirectShow filter is
+        the device, fed over a shared transport, so the output there is only a
+        render pump — see :data:`_VCAM_PUMP_KIND` for why it must not be
+        virtualcam_output on Windows.
+        """
+        if sys.platform == "win32":
+            return _VCAM_PUMP_KIND, dict(_VCAM_PUMP_SETTINGS)
+        return _VCAM_OUTPUT_KIND, {}
+
+    @property
+    def last_error(self) -> str:
+        """Why the last :meth:`start` failed ("" if it succeeded).
+
+        Surfaced to the operator: a camera that silently fails to appear looks
+        identical to one that was never asked to start.
+        """
+        return self._last_error
+
+    def _start_transport(self, video) -> bool:
+        """Windows: pump this view's mix into the shared frame transport.
+
+        The device other applications see is Solin's DirectShow filter, which
+        lives in *their* process and reads frames from that transport — so unlike
+        Linux there is no libobs output to start here. The filter stays
+        registered whether or not Solin runs, showing its own placeholder until
+        frames appear, which is why nothing needs tearing down on stop beyond
+        letting the frames cease.
+        """
+        try:
+            from .vcam_transport import FrameTransport, RawVideoBridge
+
+            if self._transport is None:
+                self._transport = FrameTransport()
+            if not self._transport.open():
+                log.warning("Virtual camera: could not open the frame transport")
+                return False
+            if self._bridge is None:
+                self._bridge = RawVideoBridge(self._transport)
+            if not self._bridge.connect(video):
+                log.warning("Virtual camera: could not attach to the libobs mix")
+                self._transport.close()
+                return False
+        except Exception:  # noqa: BLE001 - libobs/cffi boundary
+            log.warning("Virtual camera: frame transport unavailable", exc_info=True)
+            return False
+        return True
 
     def stop(self) -> None:
         """Stop the virtual camera (idempotent). Safe to call on shutdown."""
+        if self._bridge is not None:
+            self._bridge.disconnect()
+        if self._transport is not None:
+            self._transport.close()
         if self._output is not None:
             try:
                 self._output.stop()

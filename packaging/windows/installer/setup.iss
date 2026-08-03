@@ -224,7 +224,27 @@ Root: HKA; Subkey: "Software\RegisteredApplications"; ValueType: string; ValueNa
 
 ; =============================================================================
 [Run]
+; ── Virtual camera ───────────────────────────────────────────────────────────
+; Register the DirectShow filter here, while the installer still holds elevation
+; (all-users installs only — a per-user install cannot write HKLM, so Solin
+; registers the filter itself on first use with a single UAC prompt instead).
+;
+; BOTH bitnesses, each with its OWN regsvr32: a DirectShow filter is loaded
+; in-process by the consuming application, so a 32-bit host can only ever load
+; the 32-bit build. This installer is 32-bit (no ArchitecturesInstallIn64BitMode),
+; so {sys} would be redirected to SysWOW64 — {sysnative} is what reaches the real
+; System32 for the 64-bit DLL.
+Filename: "{sysnative}\regsvr32.exe"; Parameters: "/s ""{app}\camera\solin-dshowcam-x64.dll"""; StatusMsg: "Registering the Solin virtual camera..."; Flags: runhidden waituntilterminated; Check: ShouldRegisterCamera
+Filename: "{syswow64}\regsvr32.exe"; Parameters: "/s ""{app}\camera\solin-dshowcam-x86.dll"""; StatusMsg: "Registering the Solin virtual camera..."; Flags: runhidden waituntilterminated; Check: ShouldRegisterCamera
+
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+
+; =============================================================================
+[UninstallRun]
+; Unregister before the files are deleted, or the CLSID is left pointing at a
+; path that no longer exists and every app keeps listing a dead camera.
+Filename: "{sysnative}\regsvr32.exe"; Parameters: "/s /u ""{app}\camera\solin-dshowcam-x64.dll"""; Flags: runhidden waituntilterminated; RunOnceId: "UnregSolinCameraX64"; Check: ShouldRegisterCamera
+Filename: "{syswow64}\regsvr32.exe"; Parameters: "/s /u ""{app}\camera\solin-dshowcam-x86.dll"""; Flags: runhidden waituntilterminated; RunOnceId: "UnregSolinCameraX86"; Check: ShouldRegisterCamera
 
 ; =============================================================================
 [Code]
@@ -400,6 +420,19 @@ begin
     Result := ExpandConstant('{autopf}\{#MyAppName}')
   else
     Result := ExpandConstant('{localappdata}\Programs\{#MyAppName}');
+end;
+
+// ── Virtual camera ────────────────────────────────────────────────────────────
+
+function ShouldRegisterCamera(): Boolean;
+begin
+  // Only an all-users install is elevated, and registering a DirectShow filter
+  // writes to HKLM. A per-user install skips this and Solin registers the filter
+  // itself on first use, with one UAC prompt.
+  //
+  // 64-bit only: the bundled libobs is x86_64, so Solin does not run on 32-bit
+  // Windows, and {sysnative}/{syswow64} do not both exist there.
+  Result := IsAdminInstallMode() and IsWin64();
 end;
 
 // ── Running process detection ─────────────────────────────────────────────────

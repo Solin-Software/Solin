@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 import types
 
 import solin.core.media.obs_virtual_camera as vcam_mod
@@ -113,7 +114,10 @@ class _FakeOb:
     class Alignment:
         CENTER = 0
 
-    def __init__(self, output, types=("virtualcam_output",)) -> None:
+    # Both, because the output the vcam binds to is platform-dependent: Linux
+    # drives the camera through virtualcam_output, Windows uses ffmpeg_output
+    # purely as a render pump (see VirtualCamera._output_spec).
+    def __init__(self, output, types=("virtualcam_output", "ffmpeg_output")) -> None:
         self._types = list(types)
         self.View = types_ns(create=lambda: _FakeView())
         self.Output = types_ns(create=lambda kind, name, settings: output)
@@ -148,7 +152,16 @@ class _FakeRuntime:
         return src
 
 
-def _vcam(monkeypatch, *, output=None, types=("virtualcam_output",), prereq=True):
+def _vcam(
+    monkeypatch,
+    *,
+    output=None,
+    # Advertise both: the output the vcam binds to is platform-dependent
+    # (virtualcam_output on Linux, ffmpeg_output as a pump on Windows), and these
+    # tests are about the view/output wiring, not that choice.
+    types=("virtualcam_output", "ffmpeg_output"),
+    prereq=True,
+):
     # Decouple from the host platform + avoid any real image/file work.
     monkeypatch.setattr(VirtualCamera, "platform_prerequisite_ok", staticmethod(lambda: prereq))
     monkeypatch.setattr(vcam_mod, "render_idle_logo", lambda w, h: types_ns(save=lambda p: None))
@@ -172,6 +185,27 @@ def test_prerequisite_hint_mentions_modprobe(monkeypatch):
     assert "modprobe v4l2loopback" in VirtualCamera.prerequisite_hint()
 
 
+def test_prerequisite_ok_windows_requires_a_registered_filter(monkeypatch):
+    # An unregistered DirectShow filter still lets the output start, but no
+    # meeting app can see the camera — so it must gate exactly like v4l2loopback.
+    monkeypatch.setattr(vcam_mod.sys, "platform", "win32")
+    monkeypatch.setattr(vcam_mod, "is_loaded", lambda: False)
+    assert VirtualCamera.platform_prerequisite_ok() is False
+    monkeypatch.setattr(vcam_mod, "is_loaded", lambda: True)
+    assert VirtualCamera.platform_prerequisite_ok() is True
+
+
+def test_prerequisite_hint_windows_mentions_registration(monkeypatch):
+    monkeypatch.setattr(vcam_mod.sys, "platform", "win32")
+    assert "registered" in VirtualCamera.prerequisite_hint()
+
+
+def test_prerequisite_ok_macos_still_assumes_ready(monkeypatch):
+    monkeypatch.setattr(vcam_mod.sys, "platform", "darwin")
+    assert VirtualCamera.platform_prerequisite_ok() is True
+    assert VirtualCamera.prerequisite_hint() == ""
+
+
 def test_start_builds_independent_view_with_idle_and_starts_output(monkeypatch):
     cam, rt, out, _prog = _vcam(monkeypatch)
 
@@ -191,6 +225,50 @@ def test_start_is_idempotent(monkeypatch):
     assert cam.start() is True
     assert cam.start() is True  # already active → no second output start attempt
     assert out.stopped == 0
+
+
+def test_windows_does_not_drive_the_camera_through_virtualcam_output(monkeypatch):
+    """On Windows the pump must not be virtualcam_output.
+
+    OBS's win-dshow plugin only registers that output when OBS's *own* DirectShow
+    filter is in the registry, so on a machine without OBS Studio installed it
+    does not exist — and the camera silently fails to start. This was a real
+    field failure: it worked on a developer box with OBS installed and nowhere
+    else.
+    """
+    monkeypatch.setattr(sys, "platform", "win32")
+    kind, settings = vcam_mod.VirtualCamera._output_spec()
+
+    assert kind != "virtualcam_output"
+    assert kind == "ffmpeg_output"
+    assert settings  # rawvideo into the null muxer: consume the mix, don't encode
+
+
+def test_linux_still_drives_the_camera_through_virtualcam_output(monkeypatch):
+    """Linux is different: there the output IS the sink (v4l2loopback)."""
+    monkeypatch.setattr(sys, "platform", "linux")
+    kind, settings = vcam_mod.VirtualCamera._output_spec()
+
+    assert kind == "virtualcam_output"
+    assert settings == {}
+
+
+def test_start_survives_an_unusable_frame_transport(monkeypatch):
+    """On Windows the camera must still come up if the transport cannot attach.
+
+    The libobs output is already running at that point, and Solin's DirectShow
+    filter shows its own placeholder when no frames arrive. Losing the picture is
+    recoverable; losing the device mid-meeting is not.
+    """
+    cam, _rt, out, _prog = _vcam(monkeypatch)
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(
+        cam, "_start_transport", lambda video: False, raising=False
+    )
+
+    assert cam.start() is True
+    assert cam.active is True
+    assert out.started is True
 
 
 def test_start_returns_false_when_prerequisite_missing(monkeypatch):

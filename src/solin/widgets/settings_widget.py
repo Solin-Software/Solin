@@ -90,6 +90,7 @@ class SettingsWidget(
     zoom_participants_toggled = Signal(bool)
     obs_stream_config_changed = Signal()
     camera_enabled_toggled = Signal(bool)
+    vcam_autostart_toggled = Signal(bool)
     background_song_toggled = Signal(bool)
     meetings_auto_download_toggled = Signal(bool)
     meeting_schedule_changed = Signal()

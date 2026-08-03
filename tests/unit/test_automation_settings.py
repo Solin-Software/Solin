@@ -166,3 +166,26 @@ def test_zoom_and_camera_settings_read_defaults_and_saved_values():
         assert camera.device_name() == "Cam"
     finally:
         settings.clear()
+
+
+def test_virtual_camera_autostart_defaults_to_on():
+    """An unset key must keep the pre-setting behaviour.
+
+    The camera started unconditionally before this option existed, so defaulting
+    to off would silently remove it from every existing operator's meeting app
+    on upgrade — with no migration to tell them why.
+    """
+    profile_settings = _profile_settings()
+    settings = _settings(profile_settings)
+    camera = CameraSettingsStore(settings)
+    settings.clear()
+    try:
+        assert camera.vcam_autostart() is True
+
+        camera.set_vcam_autostart(False)
+        assert camera.vcam_autostart() is False
+
+        camera.set_vcam_autostart(True)
+        assert camera.vcam_autostart() is True
+    finally:
+        settings.clear()

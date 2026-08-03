@@ -177,6 +177,9 @@ class SignalConnectionController:
         settings.camera_enabled_toggled.connect(
             live_integrations.on_camera_settings_enabled_toggled
         )
+        settings.vcam_autostart_toggled.connect(
+            live_integrations.on_vcam_autostart_toggled
+        )
         settings.background_song_toggled.connect(
             handlers.background_song_service.set_enabled
         )
