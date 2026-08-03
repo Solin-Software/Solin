@@ -15,7 +15,7 @@ from .idle_dialog import SetAsIdleConfirmDialog
 _ANIM_MS = 220
 
 
-def _frame_to_image(frame) -> QImage | None:
+def frame_to_image(frame) -> QImage | None:
     """Best-effort ``QImage`` from whatever the preview tap emitted.
 
     Accepts a bare ``QImage`` (what the libobs engine emits) as well as anything
@@ -378,7 +378,7 @@ class ProjectionPlaylistMixin:
         # pré-visualização, guardado por _on_video_frame. Ele só existe enquanto
         # alguém está assistindo (preview expandida ou tela cheia); sem quadro,
         # a miniatura continua vindo do pipeline normal de media_info.
-        img = _frame_to_image(getattr(self, "_last_video_frame", None))
+        img = frame_to_image(getattr(self, "_last_video_frame", None))
         if img is None or img.isNull():
             return
 

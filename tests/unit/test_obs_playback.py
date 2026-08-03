@@ -13,6 +13,7 @@ import types
 
 import pytest
 from PySide6.QtCore import QObject, Signal
+from PySide6.QtGui import QImage
 
 import solin.core.media.obs_playback as obs_playback
 from solin.core.media.cache import MediaCacheManager
@@ -913,7 +914,10 @@ def test_enable_frame_output_registers_callback_and_emits_frame(monkeypatch, tmp
 
     assert len(frames) == 1
     frame = frames[0]
-    assert frame.isValid()
+    # The payload is a plain QImage: every consumer immediately called toImage()
+    # on the QVideoFrame this used to be wrapped in, so the wrap was a round-trip.
+    assert isinstance(frame, QImage)
+    assert not frame.isNull()
     assert (frame.width(), frame.height()) == (w, h)
     controller.shutdown()
 
@@ -1139,11 +1143,9 @@ def test_metadata_probe_clears_cover_for_remote_source():
 # ── QMediaPlayer-compatible .player shim ──────────────────────────────────────
 
 
-def test_player_shim_reflects_state_and_returns_metadata(monkeypatch, tmp_path):
-    from PySide6.QtMultimedia import QMediaMetaData
-
+def test_player_shim_reflects_state(monkeypatch, tmp_path):
     controller, runtime, downloader, registry = _make(monkeypatch, tmp_path=tmp_path)
-    # callers reach into media_controller.player.playbackState() / .metaData()
+    # callers reach into media_controller.player.playbackState()
     assert controller.player.playbackState() == PlaybackState.StoppedState
 
     local = tmp_path / "clip.mp4"
@@ -1151,6 +1153,7 @@ def test_player_shim_reflects_state_and_returns_metadata(monkeypatch, tmp_path):
     controller.start_playback(MediaPlaybackRequest(str(local)))
 
     assert controller.player.playbackState() == PlaybackState.PlayingState
-    # the fake probe has no _player, so metaData falls back to an empty object
-    assert isinstance(controller.player.metaData(), QMediaMetaData)
+    # metaData() is gone: title/cover reach the UI through title_from_metadata
+    # and cover_art_changed, so the shim no longer needs QtMultimedia at all.
+    assert not hasattr(controller.player, "metaData")
     controller.shutdown()

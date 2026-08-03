@@ -89,7 +89,11 @@ from .controls import (
     projection_menu_style,
 )
 from .fullscreen import FullscreenVideoOverlay
-from .playlist import ProjectionPlaylistMixin, playback_order_has_pending_item
+from .playlist import (
+    ProjectionPlaylistMixin,
+    frame_to_image,
+    playback_order_has_pending_item,
+)
 from .preview import ImagePreviewWidget
 from solin.widgets.songs_widget import BufferedSlider
 from ...core.media.playback_state import PlaybackState
@@ -741,8 +745,8 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
             overlay.set_frame(frame)
         if not self._expanded:
             return
-        img = frame.toImage()
-        if img.isNull():
+        img = frame_to_image(frame)
+        if img is None or img.isNull():
             return
         pixmap = QPixmap.fromImage(img)
         self.preview_content.setPixmap(pixmap)

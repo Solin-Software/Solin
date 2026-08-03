@@ -8,10 +8,11 @@ notifications) works unchanged — only the decode/output engine differs:
     QMediaPlayer + QAudioOutput   →   libobs ffmpeg_source
                                       (+ audio monitoring to speakers)
 
-Video is **not** delivered as ``frame_ready`` frames here: under the libobs
-architecture the projection/preview surfaces host their own ``Display`` that
-renders the shared OBS canvas (see the projection layer).  ``frame_ready`` is kept
-in the signal list for interface parity but is not emitted.
+Projection does not go through ``frame_ready``: the projection surfaces host their
+own ``Display`` rendering the shared OBS canvas (see the projection layer).
+``frame_ready`` carries a ``QImage`` and exists only for the Qt-painted *operator*
+surfaces (expanded preview, fullscreen overlay); it is emitted only while one of
+them is actually watching — see :meth:`set_frame_output_enabled`.
 
 Download/cache behaviour is preserved: remote sources are resolved through the
 same :class:`MediaCacheManager`/downloader and libobs plays a resolved local file
@@ -32,7 +33,6 @@ from typing import Any
 
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, QTimer, Signal
 from PySide6.QtGui import QImage, QPixmap
-from PySide6.QtMultimedia import QVideoFrame
 
 from .cache import MediaCacheManager
 from .obs_runtime import MONITORING_MONITOR_ONLY, ObsRuntimeError, obs_runtime
@@ -111,9 +111,10 @@ class _ObsPlayerShim:
     ``media_controller.player`` directly (playlist live-thumb capture, the
     projection bar's playback-state overlay, the remote-control controller).
 
-    The libobs engine has no ``QMediaPlayer``; this exposes the two members
-    those call sites use — ``playbackState()`` and ``metaData()`` — backed by the
-    controller's tracked state and its metadata probe.
+    The libobs engine has no ``QMediaPlayer``; this exposes the one member those
+    call sites still use — ``playbackState()`` — backed by the controller's
+    tracked state. Title/cover art reach the UI through ``title_from_metadata``
+    and ``cover_art_changed`` instead (see :class:`_MetadataProbe`).
     """
 
     def __init__(self, controller: "ObsMediaController") -> None:
@@ -121,16 +122,6 @@ class _ObsPlayerShim:
 
     def playbackState(self):  # noqa: N802 - Qt-compatible name
         return self._controller._last_state
-
-    def metaData(self):  # noqa: N802 - Qt-compatible name
-        from PySide6.QtMultimedia import QMediaMetaData
-
-        md = QMediaMetaData()
-        probe = getattr(self._controller, "_metadata_probe", None)
-        title = getattr(probe, "_last_title", "") if probe is not None else ""
-        if title:
-            md.insert(QMediaMetaData.Key.Title, title)
-        return md
 
 
 def _read_media_tag_bytes(path: str) -> tuple[str | None, bytes | None]:
@@ -333,7 +324,7 @@ class ObsMediaController(QObject):
 
         # Gated preview-frame output: the libobs raw callback buffers the latest
         # composited frame (on the graphics thread); a timer emits it as a
-        # QVideoFrame via frame_ready, but only while an operator surface (preview
+        # QImage via frame_ready, but only while an operator surface (preview
         # or fullscreen) has requested output. Projection uses the Display, so it
         # needs no frames — this exists purely for the Qt-painted operator views.
         self._frame_lock = threading.Lock()
@@ -607,9 +598,10 @@ class ObsMediaController(QObject):
         image = QImage(data, width, height, stride, QImage.Format.Format_ARGB32).copy()
         if image.isNull():
             return
-        # QVideoFrame(QImage) is valid at runtime; the bundled stubs omit the overload.
-        frame = QVideoFrame(image)  # pyright: ignore[reportCallIssue, reportArgumentType]
-        self.frame_ready.emit(frame)
+        # A QImage IS the payload: every consumer immediately called toImage() on
+        # the QVideoFrame this used to be wrapped in, and nothing set a start
+        # time, rotation or surface format on it — the wrap was a round-trip.
+        self.frame_ready.emit(image)
 
     # ── Source lifecycle ──────────────────────────────────────────────────
 

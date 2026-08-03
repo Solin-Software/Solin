@@ -32,6 +32,7 @@ from PySide6.QtWidgets import (
 )
 
 from solin.core.foundation.constants import ORDER_NEXT, ORDER_OFF, ORDER_RANDOM
+from .playlist import frame_to_image
 from solin.styles.icons import (
     ICON_CLOSE,
     ICON_FULLSCREEN_EXIT,
@@ -62,8 +63,8 @@ class FullscreenVideoSurface(QWidget):
         self.setStyleSheet(f"background: {PALETTE.black};")
 
     def set_frame(self, frame) -> None:
-        image = frame.toImage()
-        if image.isNull():
+        image = frame_to_image(frame)
+        if image is None or image.isNull():
             return
         self._pixmap = QPixmap.fromImage(image)
         self.update()
