@@ -214,6 +214,13 @@ if defined PYLIBOBS_DIR (
     for %%R in (vcruntime140.dll vcruntime140_1.dll msvcp140.dll) do (
         if exist "%DIST%\%%R" copy /y "%DIST%\%%R" "%DIST%\pylibobs\_libs\windows\x86_64\%%R" >nul
     )
+    REM O robocopy /E acima ja leva obs-plugins\ inteiro. Avisar (sem falhar) se
+    REM o solin-framesrc faltar: sem ele a projecao do navegador/NDI cai no
+    REM caminho Qt quadro-a-quadro em vez de compor pelo libobs.
+    if not exist "%DIST%\pylibobs\_libs\windows\x86_64\obs-plugins\solin-framesrc.dll" (
+        echo  [AVISO] solin-framesrc.dll ausente: rode tools\obs-frame-source\build.bat
+        echo          antes de empacotar para compor o navegador/NDI pelo libobs.
+    )
     echo  [OK] libobs empacotado.
 )
  

@@ -11,7 +11,10 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-OBS_TAG="${OBS_TAG:-32.2.1}"
+# Must match the libobs the bundle actually ships: OBS_DECLARE_MODULE() compiles
+# the API version in and libobs refuses a module that disagrees. Check with
+#   python -c "import ctypes;l=ctypes.CDLL('libobs.so.0');l.obs_get_version.restype=ctypes.c_uint32;print(l.obs_get_version())"
+OBS_TAG="${OBS_TAG:-32.1.2}"
 OBS_REPO="${OBS_REPO:-/home/jonata/Projetos/obs-studio}"
 WORK="${WORK:-${TMPDIR:-/tmp}/solin-linux-capture-build}"  # share the capture build's dir
 PY="${PY:-$(cd "$HERE/../.." && pwd)/.venv/bin/python}"

@@ -14,6 +14,7 @@ Requires the bundled ``solin_frame_source`` plugin (tools/obs-frame-source).
 from __future__ import annotations
 
 import logging
+import sys
 import time
 from typing import Any
 
@@ -64,9 +65,11 @@ def create_frame_source(runtime, name: str = "solin-frame-source"):
     try:
         source = runtime.ob.Source.create("solin_frame_source", name, {})
     except Exception:  # noqa: BLE001 - source-creation / plugin boundary
+        builder = "build.bat" if sys.platform == "win32" else "build.sh"
         log.warning(
             "Could not create solin_frame_source — is the solin-framesrc plugin "
-            "installed in the pylibobs bundle? (tools/obs-frame-source/build.sh)",
+            "installed in the pylibobs bundle? (tools/obs-frame-source/%s)",
+            builder,
             exc_info=True,
         )
         return None
