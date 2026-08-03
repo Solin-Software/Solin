@@ -22,7 +22,6 @@ from PySide6.QtGui import (
     QPainter,
     QPixmap,
 )
-from PySide6.QtMultimedia import QMediaPlayer
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -52,6 +51,7 @@ from solin.widgets.common.themed_slider import ThemedHorizontalSlider
 from solin.widgets.songs_widget import BufferedSlider
 
 from .controls import SPEED_CHOICES, icon_button, projection_menu_style
+from ...core.media.playback_state import PlaybackState
 
 
 class FullscreenVideoSurface(QWidget):
@@ -136,7 +136,7 @@ class FullscreenVideoOverlay(QWidget):
         self._playback_options_active = False
         self._muted = False
         self._pre_mute_volume = 0.8
-        self._playback_state = QMediaPlayer.PlaybackState.StoppedState
+        self._playback_state = PlaybackState.StoppedState
         self._navigation_state = (False, False, False)
 
         self.setObjectName("AppFullscreenVideoOverlay")
@@ -393,7 +393,7 @@ class FullscreenVideoOverlay(QWidget):
 
     def set_playback_state(self, state) -> None:
         self._playback_state = state
-        playing = state == QMediaPlayer.PlaybackState.PlayingState
+        playing = state == PlaybackState.PlayingState
         icon = ICON_PAUSE if playing else ICON_PLAY
         self.play_btn.setIcon(make_icon(icon, 16, PALETTE.text_primary))
 

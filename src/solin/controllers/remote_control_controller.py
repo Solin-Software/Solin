@@ -13,7 +13,6 @@ import time
 from typing import Any, TYPE_CHECKING
 
 from PySide6.QtCore import QObject, Qt, QTimer, Signal, Slot
-from PySide6.QtMultimedia import QMediaPlayer
 
 from ..core.i18n.meeting_sections import display_meeting_section_title
 from ..core.i18n.remote_control import remote_control_localization
@@ -73,6 +72,9 @@ from ..core.remote_control.thumbnails import (
     render_local_image_thumbnail,
     render_media_placeholder_thumbnail,
 )
+# Aliased: the remote-control protocol above already owns the name
+# PlaybackState (a StrEnum of wire values), and this is the player's state.
+from ..core.media.playback_state import PlaybackState as MediaPlaybackState
 
 
 log = logging.getLogger(__name__)
@@ -682,10 +684,10 @@ class RemoteControlController(QObject):
             self._playback_timer.start()
 
     @Slot(object)
-    def _on_media_state(self, state: QMediaPlayer.PlaybackState) -> None:
+    def _on_media_state(self, state: MediaPlaybackState) -> None:
         if state in (
-            QMediaPlayer.PlaybackState.PlayingState,
-            QMediaPlayer.PlaybackState.PausedState,
+            MediaPlaybackState.PlayingState,
+            MediaPlaybackState.PausedState,
         ):
             self._last_media_error = ""
         self._refresh_playback()
@@ -730,9 +732,9 @@ class RemoteControlController(QObject):
         elif is_video and self._last_media_error:
             playback_state = PlaybackState.ERROR
             error = ProjectionError("media_error", self._last_media_error)
-        elif is_video and player_state is QMediaPlayer.PlaybackState.PlayingState:
+        elif is_video and player_state is MediaPlaybackState.PlayingState:
             playback_state = PlaybackState.PLAYING
-        elif is_video and player_state is QMediaPlayer.PlaybackState.PausedState:
+        elif is_video and player_state is MediaPlaybackState.PausedState:
             playback_state = PlaybackState.PAUSED
         elif is_video:
             playback_state = PlaybackState.LOADING
@@ -760,8 +762,8 @@ class RemoteControlController(QObject):
         media_kind = self._media_kind_for_state(state_type, state)
         navigation_unlocked = not dependencies.playback_protection.locked
         capabilities = PlaybackCapabilities(
-            can_pause=is_video and player_state is QMediaPlayer.PlaybackState.PlayingState,
-            can_resume=is_video and player_state is QMediaPlayer.PlaybackState.PausedState,
+            can_pause=is_video and player_state is MediaPlaybackState.PlayingState,
+            can_resume=is_video and player_state is MediaPlaybackState.PausedState,
             can_seek=is_video and duration is not None and navigation_unlocked,
             can_set_volume=is_video,
             can_previous=projection_bar.can_navigate_previous(),

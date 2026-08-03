@@ -13,7 +13,6 @@ import types
 
 import pytest
 from PySide6.QtCore import QObject, Signal
-from PySide6.QtMultimedia import QMediaPlayer
 
 import solin.core.media.obs_playback as obs_playback
 from solin.core.media.cache import MediaCacheManager
@@ -24,6 +23,7 @@ from solin.core.media.playback_request import (
     MediaTrim,
     PlaybackCachePolicy,
 )
+from solin.core.media.playback_state import PlaybackState
 
 
 # ── libobs fakes ─────────────────────────────────────────────────────────────
@@ -446,7 +446,7 @@ def test_poll_emits_duration_position_and_state(monkeypatch, tmp_path):
     assert source_durations == [3000]
     assert durations == [3000]
     assert positions[-1] == 1200
-    assert states and states[-1] == QMediaPlayer.PlaybackState.PlayingState
+    assert states and states[-1] == PlaybackState.PlayingState
     # duration is emitted once, not on every poll
     controller._on_poll()
     assert source_durations == [3000]
@@ -747,14 +747,14 @@ def test_set_playback_rate_without_source_is_noop(monkeypatch, tmp_path):
 @pytest.mark.parametrize(
     "obs_state,expected",
     [
-        (0, QMediaPlayer.PlaybackState.StoppedState),  # none
-        (1, QMediaPlayer.PlaybackState.PlayingState),  # playing
-        (2, QMediaPlayer.PlaybackState.StoppedState),  # opening
-        (3, QMediaPlayer.PlaybackState.PlayingState),  # buffering → playing
-        (4, QMediaPlayer.PlaybackState.PausedState),  # paused
-        (5, QMediaPlayer.PlaybackState.StoppedState),  # stopped
-        (6, QMediaPlayer.PlaybackState.StoppedState),  # ended
-        (7, QMediaPlayer.PlaybackState.StoppedState),  # error
+        (0, PlaybackState.StoppedState),  # none
+        (1, PlaybackState.PlayingState),  # playing
+        (2, PlaybackState.StoppedState),  # opening
+        (3, PlaybackState.PlayingState),  # buffering → playing
+        (4, PlaybackState.PausedState),  # paused
+        (5, PlaybackState.StoppedState),  # stopped
+        (6, PlaybackState.StoppedState),  # ended
+        (7, PlaybackState.StoppedState),  # error
     ],
 )
 def test_map_state_covers_every_obs_media_state(obs_state, expected):
@@ -1144,13 +1144,13 @@ def test_player_shim_reflects_state_and_returns_metadata(monkeypatch, tmp_path):
 
     controller, runtime, downloader, registry = _make(monkeypatch, tmp_path=tmp_path)
     # callers reach into media_controller.player.playbackState() / .metaData()
-    assert controller.player.playbackState() == QMediaPlayer.PlaybackState.StoppedState
+    assert controller.player.playbackState() == PlaybackState.StoppedState
 
     local = tmp_path / "clip.mp4"
     local.write_bytes(b"x")
     controller.start_playback(MediaPlaybackRequest(str(local)))
 
-    assert controller.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState
+    assert controller.player.playbackState() == PlaybackState.PlayingState
     # the fake probe has no _player, so metaData falls back to an empty object
     assert isinstance(controller.player.metaData(), QMediaMetaData)
     controller.shutdown()

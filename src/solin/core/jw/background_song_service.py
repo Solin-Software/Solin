@@ -7,7 +7,6 @@ from datetime import datetime, timedelta
 from typing import Any, Protocol
 
 from PySide6.QtCore import QObject, QTimer, Signal, Slot
-from PySide6.QtMultimedia import QMediaPlayer
 
 from solin.core.jw.background_song_settings import (
     DEFAULT_BACKGROUND_SONG_FADE_SECONDS,
@@ -36,7 +35,7 @@ from solin.core.jw.background_song_status import (
 )
 from solin.core.jw.language_context import jw_media_language_context
 from solin.core.jw.songs import JWSongsStore
-from solin.core.media.playback import MediaController
+from solin.core.media.obs_playback import ObsMediaController
 from solin.core.media.playback_request import (
     MediaPlaybackRequest,
     PlaybackCachePolicy,
@@ -45,6 +44,7 @@ from solin.core.meetings.schedule import (
     MeetingSchedule,
     MeetingOccurrence,
 )
+from ...core.media.playback_state import PlaybackState
 
 _SCHEDULE_POLL_MS = 30_000
 _FADE_TICK_MS = 50
@@ -98,7 +98,7 @@ class BackgroundSongService(QObject):
         settings: BackgroundSongSettingsStore,
         schedule_source: MeetingScheduleSource,
         songs_store: JWSongsStore,
-        media_controller: MediaController,
+        media_controller: ObsMediaController,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
@@ -556,11 +556,11 @@ class BackgroundSongService(QObject):
         if self._desired_playing:
             self._play_next()
 
-    @Slot(QMediaPlayer.PlaybackState)
-    def _on_playback_state(self, state: QMediaPlayer.PlaybackState) -> None:
-        if state == QMediaPlayer.PlaybackState.PlayingState:
+    @Slot(PlaybackState)
+    def _on_playback_state(self, state: PlaybackState) -> None:
+        if state == PlaybackState.PlayingState:
             self._retry_timer.stop()
-        self.playback_changed.emit(state == QMediaPlayer.PlaybackState.PlayingState)
+        self.playback_changed.emit(state == PlaybackState.PlayingState)
 
     def _on_player_error(self, error_string: str) -> None:
         if error_string:

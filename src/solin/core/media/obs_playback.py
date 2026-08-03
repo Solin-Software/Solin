@@ -1,6 +1,6 @@
 """libobs-backed playback engine exposing the :class:`MediaController` surface.
 
-This is the pylibobs counterpart to :class:`solin.core.media.playback.MediaController`.
+This is Solin's only playback engine; the Qt-backed one it replaced is gone.
 It keeps the *same* public Qt signals, methods and the ``audio_output`` shim so
 every existing consumer (projection bar, remote control, background-song service,
 notifications) works unchanged — only the decode/output engine differs:
@@ -32,13 +32,14 @@ from typing import Any
 
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, QTimer, Signal
 from PySide6.QtGui import QImage, QPixmap
-from PySide6.QtMultimedia import QMediaPlayer, QVideoFrame
+from PySide6.QtMultimedia import QVideoFrame
 
 from .cache import MediaCacheManager
 from .obs_runtime import MONITORING_MONITOR_ONLY, ObsRuntimeError, obs_runtime
 from .playback_request import MediaPlaybackRequest, ResolvedPlaybackRange
 from .qt_contracts import PlaybackDownloaderFactory
 from .settings import MediaPlaybackSettings
+from .playback_state import PlaybackState
 
 log = logging.getLogger(__name__)
 
@@ -270,7 +271,7 @@ class ObsMediaController(QObject):
     """Drop-in libobs playback engine mirroring :class:`MediaController`."""
 
     frame_ready = Signal(object)  # kept for parity; not emitted (Display renders)
-    state_changed = Signal(QMediaPlayer.PlaybackState)
+    state_changed = Signal(PlaybackState)
     duration_changed = Signal(int)
     source_duration_changed = Signal(int)
     position_changed = Signal(int)
@@ -323,7 +324,7 @@ class ObsMediaController(QObject):
         self._requested_playing = False
         self._duration_ms = 0
         self._duration_emitted = False
-        self._last_state = QMediaPlayer.PlaybackState.StoppedState
+        self._last_state = PlaybackState.StoppedState
         self._ended_emitted = False
 
         self._poll = QTimer(self)
@@ -381,11 +382,11 @@ class ObsMediaController(QObject):
 
     @property
     def is_playing(self) -> bool:
-        return self._last_state == QMediaPlayer.PlaybackState.PlayingState
+        return self._last_state == PlaybackState.PlayingState
 
     @property
     def is_paused(self) -> bool:
-        return self._last_state == QMediaPlayer.PlaybackState.PausedState
+        return self._last_state == PlaybackState.PausedState
 
     @property
     def duration(self) -> int:
@@ -490,10 +491,10 @@ class ObsMediaController(QObject):
         self._ended_emitted = False
         self.buffer_progress.emit(0, 0)
         self.playback_source_changed.emit(False)
-        self._emit_state(QMediaPlayer.PlaybackState.StoppedState)
+        self._emit_state(PlaybackState.StoppedState)
 
     def toggle_play_pause(self) -> None:
-        if self._last_state == QMediaPlayer.PlaybackState.PlayingState:
+        if self._last_state == PlaybackState.PlayingState:
             self.pause()
         else:
             self.play()
@@ -660,9 +661,9 @@ class ObsMediaController(QObject):
         source.media_play_pause(not self._requested_playing)
         self._poll.start()
         self._emit_state(
-            QMediaPlayer.PlaybackState.PlayingState
+            PlaybackState.PlayingState
             if self._requested_playing
-            else QMediaPlayer.PlaybackState.PausedState
+            else PlaybackState.PausedState
         )
         self._refresh_frame_output()
 
@@ -786,18 +787,18 @@ class ObsMediaController(QObject):
         self._ended_emitted = True
         self.media_ended.emit()
 
-    def _emit_state(self, state: QMediaPlayer.PlaybackState) -> None:
+    def _emit_state(self, state: PlaybackState) -> None:
         if state != self._last_state:
             self._last_state = state
             self.state_changed.emit(state)
 
     @staticmethod
-    def _map_state(obs_state: int) -> QMediaPlayer.PlaybackState:
+    def _map_state(obs_state: int) -> PlaybackState:
         if obs_state == _OBS_STATE_PLAYING or obs_state == _OBS_STATE_BUFFERING:
-            return QMediaPlayer.PlaybackState.PlayingState
+            return PlaybackState.PlayingState
         if obs_state == _OBS_STATE_PAUSED:
-            return QMediaPlayer.PlaybackState.PausedState
-        return QMediaPlayer.PlaybackState.StoppedState
+            return PlaybackState.PausedState
+        return PlaybackState.StoppedState
 
     # ── Download callbacks ────────────────────────────────────────────────
 

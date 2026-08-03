@@ -1603,7 +1603,7 @@ def test_media_cache_and_playback_do_not_import_concrete_downloader():
     media_root = PROJECT_ROOT / "src" / "solin" / "core" / "media"
     violations: list[str] = []
 
-    for filename in ("cache.py", "playback.py"):
+    for filename in ("cache.py", "obs_playback.py"):
         path = media_root / filename
         for node in _imports(path):
             imported_module = node.module or "" if isinstance(node, ast.ImportFrom) else ""

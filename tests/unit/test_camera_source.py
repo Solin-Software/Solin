@@ -57,3 +57,29 @@ def test_camera_spec_macos_uses_av_capture(monkeypatch):
     kind, settings = cs.camera_source_spec("uid-123", "FaceTime")
     assert kind == "av_capture_input"
     assert settings == {"device": "uid-123"}
+
+
+def test_libobs_cameras_is_empty_where_qt_ids_already_work(monkeypatch):
+    """Only Windows has two disagreeing device namespaces.
+
+    Linux hands v4l2_input a /dev/videoN path and macOS hands av_capture_input an
+    AVFoundation uniqueID — both are exactly what Qt reports, so there is nothing
+    to reconcile and no reason to spin up libobs to ask.
+    """
+    for platform in ("linux", "darwin"):
+        monkeypatch.setattr(cs.sys, "platform", platform)
+        assert cs.libobs_cameras() == []
+
+
+def test_libobs_cameras_survives_libobs_being_unavailable(monkeypatch):
+    """Enumeration is best-effort: losing it must not lose the camera list."""
+    import solin.core.media.obs_runtime as rt
+
+    monkeypatch.setattr(cs.sys, "platform", "win32")
+
+    def _boom():
+        raise RuntimeError("libobs not started")
+
+    monkeypatch.setattr(rt, "obs_runtime", _boom)
+
+    assert cs.libobs_cameras() == []

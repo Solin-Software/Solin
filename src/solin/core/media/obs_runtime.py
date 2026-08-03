@@ -2,7 +2,7 @@
 
 libobs is a **singleton engine**: there is exactly one ``obs_startup``/video/audio
 context per process.  Solin, by contrast, owns several playback surfaces — two
-:class:`~solin.core.media.playback.MediaController` instances (foreground video +
+:class:`~solin.core.media.obs_playback.ObsMediaController` instances (foreground video +
 background audio) plus N projection/preview windows.  They cannot each own an OBS
 context; instead they all share the one built here.
 
@@ -25,6 +25,7 @@ Key libobs facts encoded here (validated against pylibobs 0.0.1 / libobs 32.1.2)
 from __future__ import annotations
 
 import logging
+import sys
 import threading
 from dataclasses import dataclass
 from pathlib import Path
@@ -82,8 +83,6 @@ def _graphics_module_path() -> str | None:
         base = Path(module_file).resolve().parent / "_libs"
     except Exception:  # noqa: BLE001 - optional dependency probe
         return None
-
-    import sys
 
     if sys.platform.startswith("linux"):
         candidates = ["linux/x86_64/libobs-opengl.so", "linux/x86_64/libobs-opengl.so.0"]
@@ -453,16 +452,50 @@ class ObsRuntime:
 
     @staticmethod
     def _os_default_output_name() -> str:
-        """The OS default audio-output device description (empty if unavailable)."""
-        try:
-            from PySide6.QtMultimedia import QMediaDevices
+        """The OS default audio-output device name ("" if it cannot be determined).
 
-            device = QMediaDevices.defaultAudioOutput()
-            if device is not None and not device.isNull():
-                return device.description() or ""
-        except Exception:  # noqa: BLE001 - Qt audio enumeration boundary
+        Asked of the OS directly rather than through Qt: this module is
+        deliberately framework-free, and pulling in a Qt *multimedia* class just
+        to read a device name was the last reason it needed one.
+
+        Windows is the only platform where the answer is not already in libobs'
+        own device list — Linux (PulseAudio/PipeWire) and macOS both surface an
+        explicit default entry, which the caller matches before ever getting
+        here.
+        """
+        if sys.platform != "win32":
             return ""
-        return ""
+        try:
+            import ctypes
+
+            # WinMM's waveOut device 0 is, by definition, the current default
+            # output endpoint — the same device the Core Audio "eConsole" role
+            # points at. Cheap and dependency-free.
+            #
+            # NB: szPname is 32 wchars, so long names come back TRUNCATED
+            # ("Alto-falantes (High Definition "). The caller matches as a
+            # substring in both directions precisely so a truncated name still
+            # finds its device.
+            class _WaveOutCaps(ctypes.Structure):
+                _fields_ = [
+                    ("wMid", ctypes.c_ushort),
+                    ("wPid", ctypes.c_ushort),
+                    ("vDriverVersion", ctypes.c_uint),
+                    ("szPname", ctypes.c_wchar * 32),
+                    ("dwFormats", ctypes.c_uint),
+                    ("wChannels", ctypes.c_ushort),
+                    ("wReserved1", ctypes.c_ushort),
+                    ("dwSupport", ctypes.c_uint),
+                ]
+
+            caps = _WaveOutCaps()
+            winmm = ctypes.WinDLL("winmm")
+            if winmm.waveOutGetDevCapsW(0, ctypes.byref(caps), ctypes.sizeof(caps)) != 0:
+                return ""
+            return caps.szPname or ""
+        except Exception:  # noqa: BLE001 - Win32 boundary
+            log.debug("Could not read the OS default audio output", exc_info=True)
+            return ""
 
     @property
     def monitoring_device(self) -> tuple[str, str] | None:

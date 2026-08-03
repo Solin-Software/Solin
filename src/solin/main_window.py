@@ -109,7 +109,7 @@ from .core.integrations.automation.screen_share import (
     macos_accessibility_trusted,
 )
 from .core.jw.songs import JWSongsStore
-from .core.media.playback import MediaController
+from .core.media.obs_playback import ObsMediaController as MediaController
 from .core.media.cache import MediaCacheManager
 from .core.media.profile_store import ProfileMediaStore
 from .core.media.thumbnail_store import ThumbnailStore

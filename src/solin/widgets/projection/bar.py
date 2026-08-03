@@ -21,7 +21,6 @@ from PySide6.QtGui import (
     QImage,
     QPixmap,
 )
-from PySide6.QtMultimedia import QMediaPlayer
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -36,7 +35,7 @@ from PySide6.QtWidgets import (
 from solin.core.foundation.constants import ORDER_OFF, ORDER_NEXT, ORDER_RANDOM
 from solin.core.foundation.runtime_paths import ProfilePaths
 from solin.core.foundation.time_utils import ceil_remaining_seconds
-from solin.core.media.playback import MediaController
+from solin.core.media.obs_playback import ObsMediaController as MediaController
 from solin.core.media.profile_store import ProfileMediaStore
 from solin.core.media.settings import ProjectionPlaybackSettingsStore
 from solin.core.projection.aspect_ratio import (
@@ -93,6 +92,7 @@ from .fullscreen import FullscreenVideoOverlay
 from .playlist import ProjectionPlaylistMixin, playback_order_has_pending_item
 from .preview import ImagePreviewWidget
 from solin.widgets.songs_widget import BufferedSlider
+from ...core.media.playback_state import PlaybackState
 
 
 # Keep ProjectionBar decoupled from PlaylistPanel internals while preserving timing.
@@ -1857,9 +1857,9 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
 
     # ── Callbacks de mídia ────────────────────────────────────────────────
 
-    @Slot(QMediaPlayer.PlaybackState)
+    @Slot(PlaybackState)
     def _on_state_changed(self, state):
-        playing = (state == QMediaPlayer.PlaybackState.PlayingState)
+        playing = (state == PlaybackState.PlayingState)
         icon = ICON_PAUSE if playing else ICON_PLAY
         self.play_btn.setIcon(make_icon(icon, 15, PALETTE.text_secondary))
         overlay = getattr(self, "_fullscreen_overlay", None)
