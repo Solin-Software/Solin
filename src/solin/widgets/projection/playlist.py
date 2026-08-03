@@ -15,6 +15,27 @@ from .idle_dialog import SetAsIdleConfirmDialog
 _ANIM_MS = 220
 
 
+def _frame_to_image(frame) -> QImage | None:
+    """Best-effort ``QImage`` from whatever the preview tap emitted.
+
+    Accepts a bare ``QImage`` (what the libobs engine emits) as well as anything
+    exposing ``toImage()``, so the live-thumbnail capture does not care which
+    payload type the frame signal carries.
+    """
+    if frame is None:
+        return None
+    if isinstance(frame, QImage):
+        return frame
+    to_image = getattr(frame, "toImage", None)
+    if to_image is None:
+        return None
+    try:
+        image = to_image()
+    except Exception:  # noqa: BLE001 - frame payload boundary
+        return None
+    return image if isinstance(image, QImage) else None
+
+
 def playback_order_has_pending_item(
     *,
     order: str,
@@ -347,33 +368,18 @@ class ProjectionPlaylistMixin:
 
         idx = self._playlist_index
 
-        from PySide6.QtMultimedia import QMediaMetaData
-
-        meta = self.media.player.metaData()
-        for key in (QMediaMetaData.Key.CoverArtImage, QMediaMetaData.Key.ThumbnailImage):
-            value = meta.value(key)
-            if value is None:
-                continue
-            pixmap = None
-            if isinstance(value, QImage) and not value.isNull():
-                pixmap = QPixmap.fromImage(value)
-            elif isinstance(value, QPixmap) and not value.isNull():
-                pixmap = value
-            if pixmap:
-                self._live_thumb_captured = True
-                self._thumb_queue.invalidate(idx)
-                self._thumb_queue.feed_live_cover(idx, pixmap)
-                self.playlist_panel.set_thumbnail(idx, pixmap)
-                return
-
         if self._is_audio:
+            # A capa de áudio chega pela sonda de tags (mutagen) via
+            # cover_art_changed; não há nada a capturar aqui.
             return
 
-        frame = self.media.video_sink.videoFrame()
-        if not frame.isValid():
-            return
-        img = frame.toImage()
-        if img.isNull():
+        # O motor libobs não tem um sink de vídeo de onde reler um quadro sob
+        # demanda — o único quadro disponível é o último que passou pelo tap de
+        # pré-visualização, guardado por _on_video_frame. Ele só existe enquanto
+        # alguém está assistindo (preview expandida ou tela cheia); sem quadro,
+        # a miniatura continua vindo do pipeline normal de media_info.
+        img = _frame_to_image(getattr(self, "_last_video_frame", None))
+        if img is None or img.isNull():
             return
 
         self._live_thumb_captured = True

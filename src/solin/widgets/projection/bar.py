@@ -243,6 +243,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._panel_populated = False
         # Timer one-shot: captura thumbnail da mídia atual ao vivo (uma vez por faixa)
         self._live_thumb_captured: bool = False
+        self._last_video_frame = None
         self._live_thumb_timer = QTimer(self)
         self._live_thumb_timer.setSingleShot(True)
         self._live_thumb_timer.timeout.connect(self._do_live_thumb_capture)
@@ -731,6 +732,10 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         # MP3 não tem frames de vídeo — ignora para não sobrescrever a capa
         if self._mode != 'video' or self._is_audio:
             return
+        # Guarda o último quadro (sem converter) para a captura de miniatura ao
+        # vivo: o motor libobs não expõe um sink de onde reler um quadro, então
+        # o único quadro disponível é o que já passa por aqui.
+        self._last_video_frame = frame
         overlay = getattr(self, "_fullscreen_overlay", None)
         if overlay is not None and overlay.is_active():
             overlay.set_frame(frame)
