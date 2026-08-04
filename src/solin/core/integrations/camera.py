@@ -143,6 +143,18 @@ class CameraService(QObject):
 # ── Camera discovery ──────────────────────────────────────────────────────────
 
 
+def _is_own_virtual_camera(name: str) -> bool:
+    """True for Solin's own virtual camera, whatever platform published it.
+
+    Matched by the single canonical label the provisioning code registers
+    (:data:`vcam_provision.DESIRED_LABEL`) rather than a fresh string literal,
+    so renaming the device cannot silently un-hide it here.
+    """
+    from ..media.vcam_provision import DESIRED_LABEL
+
+    return name.strip().casefold() == DESIRED_LABEL.casefold()
+
+
 
 def discover_cameras() -> list[camera_options.CameraOption]:
     """Every camera libobs can open, in the order it reports them.
@@ -164,6 +176,14 @@ def discover_cameras() -> list[camera_options.CameraOption]:
     for index, (name, device_id) in enumerate(cameras):
         if not name.strip():
             _log.debug("discover: skipping blank-name device")
+            continue
+        if _is_own_virtual_camera(name):
+            # Solin's own virtual camera is an OUTPUT. Offering it as an input
+            # would let the operator point Solin at its own composite — a
+            # feedback loop that can only ever show the previous frame. Other
+            # virtual cameras (OBS's, for instance) stay listed: consuming one
+            # is a legitimate setup.
+            _log.debug("discover: hiding Solin's own virtual camera %r", name)
             continue
         option = camera_options.CameraOption(
             name=name,

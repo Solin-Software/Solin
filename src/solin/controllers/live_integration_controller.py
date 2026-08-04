@@ -484,11 +484,9 @@ class LiveIntegrationController:
         )
         self.set_camera_stream_active(True)
 
-        # Native libobs camera: a v4l2_input source libobs owns, decodes and
-        # crossfades — no QImage round-trip, no Qt QCamera on the device. The
-        # operator preview is fed from a channel-0 tap (libobs holds the device,
-        # so the Qt camera service can't). Falls back to the Qt camera path if the
-        # source can't be created (non-obs engine, or no v4l2 device path).
+        # Native libobs camera: a capture source libobs owns, decodes and
+        # crossfades — no QImage round-trip. The operator preview is fed from a
+        # channel-0 tap, because libobs holds the device exclusively.
         from ..projection.window import obs_media_engine_active
 
         if obs_media_engine_active() and option.device_path:
@@ -501,6 +499,18 @@ class LiveIntegrationController:
             if shown:
                 self._start_camera_preview_tap()
                 return
+            # There is no Qt camera path left to fall back to: CameraService no
+            # longer captures, it only records the selection. Falling through
+            # here used to leave the operator with a camera that was selected,
+            # showed nothing, and reported nothing. Say what happened instead.
+            self.on_camera_error(
+                context.translate(
+                    "Could not open '%s'. The camera may be in use by another "
+                    "application, or its driver may not expose it to Solin."
+                )
+                % option.name
+            )
+            return
 
         context.camera_service.start(option)
 
