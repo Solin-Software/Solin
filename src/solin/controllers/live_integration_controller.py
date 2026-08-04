@@ -496,13 +496,21 @@ class LiveIntegrationController:
                     option.device_path, option.name
                 ):
                     shown = True
+            if not shown:
+                # No projection window is open — a single-monitor setup, or the
+                # operator simply has not started projecting. The windows only
+                # RENDER the shared libobs program; the program is what holds the
+                # device and feeds the operator preview tap. Driving it directly
+                # here is what stops "camera selected, nothing anywhere" when
+                # there is no window to iterate over.
+                shown = self._show_camera_on_program(option)
             if shown:
                 self._start_camera_preview_tap()
                 return
             # There is no Qt camera path left to fall back to: CameraService no
             # longer captures, it only records the selection. Falling through
-            # here used to leave the operator with a camera that was selected,
-            # showed nothing, and reported nothing. Say what happened instead.
+            # here left the operator with a camera that was selected, showed
+            # nothing, and reported nothing. Say what happened instead.
             self.on_camera_error(
                 context.translate(
                     "Could not open '%s'. The camera may be in use by another "
@@ -513,6 +521,21 @@ class LiveIntegrationController:
             return
 
         context.camera_service.start(option)
+
+    def _show_camera_on_program(self, option) -> bool:
+        """Put the camera on the shared libobs program, with no window involved."""
+        try:
+            from ..projection.program_driver import projection_program_driver
+
+            return bool(
+                projection_program_driver().show_camera(option.device_path, option.name)
+            )
+        except Exception:  # noqa: BLE001 - projection/libobs boundary
+            # Includes the driver not being initialised yet (it needs a
+            # FontManager on first construction), which is not an error worth
+            # surfacing on its own — the caller reports the failed camera.
+            log.warning("Could not show the camera on the program", exc_info=True)
+            return False
 
     def _start_camera_preview_tap(self) -> None:
         from ..projection.program_preview import program_preview_tap

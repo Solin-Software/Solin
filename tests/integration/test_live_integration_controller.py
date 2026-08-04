@@ -1,5 +1,6 @@
 from types import SimpleNamespace
 
+from solin.core.integrations.camera_options import CameraBackend, CameraOption
 from solin.controllers.live_integration_controller import (
     LiveIntegrationContext,
     LiveIntegrationController,
@@ -76,6 +77,15 @@ class _ProjectionBarStub:
     def update_tab_live_preview(self, frame):
         self.tab_previews.append(frame)
 
+    def set_playlist(self, items):
+        self.playlist = list(items)
+
+    def activate_live_stream(self, title, keep_expanded=False):
+        self.live_stream = (title, keep_expanded)
+
+    def is_expanded(self):
+        return False
+
     def set_obs_btn_available(self, available):
         self.obs_btn_available = available
 
@@ -130,11 +140,22 @@ class _QuickToolbarStub:
     def set_zoom_sharing(self, sharing):
         self.zoom_sharing = sharing
 
+    def set_camera_stream_active(self, active):
+        self.camera_stream_active = active
+
 
 class _CameraServiceStub:
     def __init__(self, saved_option=None):
         self.saved_option = saved_option
         self.find_saved_args = None
+        self.started = []
+        self.stops = 0
+
+    def start(self, option):
+        self.started.append(option)
+
+    def stop(self):
+        self.stops += 1
 
     def find_saved(self, backend, name):
         self.find_saved_args = (backend, name)
@@ -175,9 +196,9 @@ class _WindowStub:
         self.proj_bar = _ProjectionBarStub()
         self.projection_session = ProjectionSession()
         self.obs_scene_session = ObsSceneSession()
-        self._ndi_service = SimpleNamespace(is_running=False)
+        self._ndi_service = SimpleNamespace(is_running=False, stop=lambda: None)
         self._zoom_service = SimpleNamespace()
-        self.media_ctrl = SimpleNamespace()
+        self.media_ctrl = SimpleNamespace(stop=lambda: None)
         self.stopped_projection = False
         self.browser_projection_stops = 0
         self.projection_statuses = []
@@ -266,6 +287,53 @@ class _NdiProjectionWindowStub:
 
     def show_image_from_qimage(self, image, cache_pixmap: bool = True) -> None:
         self.qt_frames.append((image, cache_pixmap))
+
+
+def test_camera_stream_uses_the_program_when_no_projection_window_is_open(monkeypatch):
+    """A camera must still reach the operator with zero projection windows.
+
+    Regression: the camera was only ever shown by iterating projection windows.
+    On a single-monitor setup — or before the operator starts projecting — that
+    list is empty, so nothing opened the camera and nothing started the preview
+    tap. The selection silently produced no picture anywhere and no error, which
+    is exactly what a field report showed: the vcam composited the device one
+    line before CameraService.start() (the dead fallback) was reached.
+    """
+    import solin.projection.program_driver as program_driver
+
+    shown: list[tuple[str, str]] = []
+
+    class _Driver:
+        def show_camera(self, device_path: str, device_name: str = "") -> bool:
+            shown.append((device_path, device_name))
+            return True
+
+    monkeypatch.setattr(program_driver, "projection_program_driver", lambda *a, **k: _Driver())
+
+    window = _WindowStub()
+    option = CameraOption(
+        name="PLX Camera",
+        label="PLX Camera",
+        backend=CameraBackend.QT,
+        cv_index=0,
+        # As libobs reports it: "<name>:<path>", with '#' encoded as '#22'.
+        device_path=r"PLX Camera:\\?\usb#22vid_0c45",
+    )
+    window._quick_toolbar.camera_option = option
+    controller = _controller(window, projection_windows=[])   # no windows at all
+
+    taps: list[bool] = []
+    monkeypatch.setattr(
+        controller, "_start_camera_preview_tap", lambda: taps.append(True)
+    )
+    errors: list[str] = []
+    monkeypatch.setattr(controller, "on_camera_error", lambda msg: errors.append(msg))
+
+    controller.project_camera_stream()
+
+    assert shown == [(option.device_path, option.name)]
+    assert taps == [True]        # the operator preview is fed
+    assert errors == []          # and it is not reported as a failure
 
 
 def test_on_obs_ndi_frame_composites_in_libobs():
