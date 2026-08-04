@@ -36,7 +36,13 @@ import os
 import re
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
+
+# winreg is Windows-only and its stub is gated on sys.platform, so a type checker
+# running on Linux (as CI does) sees none of its members. Each use below binds it
+# through Any. Deliberately NOT a sys.platform guard around the calls: that would
+# change what these functions do off Windows, and the tests drive this Windows
+# logic from Linux with a faked registry.
 
 from . import vcam_provision as _base
 
@@ -196,13 +202,10 @@ def _registry_views() -> list[tuple[int, int]]:
     Both bitnesses of the filter are registered, and a per-user (non-elevated)
     registration redirects to ``HKCU\\Software\\Classes`` — so all four
     combinations have to be searched before concluding "not registered".
-
-    Empty off Windows: there is no registry, and the guard is what lets a type
-    checker running on Linux see that the winreg calls below are unreachable.
     """
-    if sys.platform != "win32":
-        return []
-    import winreg
+    import winreg as _winreg
+
+    winreg: Any = _winreg
 
     return [
         (winreg.HKEY_LOCAL_MACHINE, winreg.KEY_WOW64_64KEY),
@@ -214,9 +217,9 @@ def _registry_views() -> list[tuple[int, int]]:
 
 def _inproc_server(hive: int, wow: int, clsid: str) -> str:
     """The DLL backing ``clsid`` in one registry view ("" when absent)."""
-    if sys.platform != "win32":
-        return ""
-    import winreg
+    import winreg as _winreg
+
+    winreg: Any = _winreg
 
     path = f"SOFTWARE\\Classes\\CLSID\\{clsid}\\InprocServer32"
     try:
@@ -229,9 +232,9 @@ def _inproc_server(hive: int, wow: int, clsid: str) -> str:
 
 def _iter_registered_cameras() -> Iterator[tuple[str, str, str]]:
     """Yield ``(clsid, friendly_name, dll_path)`` for every DirectShow camera."""
-    if sys.platform != "win32":
-        return
-    import winreg
+    import winreg as _winreg
+
+    winreg: Any = _winreg
 
     for hive, wow in _registry_views():
         instances = f"SOFTWARE\\Classes\\CLSID\\{_VIDEO_INPUT_CATEGORY}\\Instance"
