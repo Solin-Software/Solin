@@ -24,6 +24,7 @@ import struct
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -64,16 +65,22 @@ def rgb_to_nv12(rgb: bytes, width: int, height: int) -> bytes:
     """
     from PIL import Image
 
+    def _luma(v: int) -> int:
+        return 16 + (v * 219) // 255
+
+    def _chroma(v: int) -> int:
+        return 128 + ((v - 128) * 224) // 255
+
     img = Image.frombytes("RGB", (width, height), rgb).convert("YCbCr")
     y, cb, cr = img.split()
 
-    y = y.point(lambda v: 16 + (v * 219) // 255)
-    cb = cb.point(lambda v: 128 + ((v - 128) * 224) // 255)
-    cr = cr.point(lambda v: 128 + ((v - 128) * 224) // 255)
+    y = y.point(_luma)
+    cb = cb.point(_chroma)
+    cr = cr.point(_chroma)
 
     half = (width // 2, height // 2)
-    cb_small = cb.resize(half, Image.BILINEAR).tobytes()
-    cr_small = cr.resize(half, Image.BILINEAR).tobytes()
+    cb_small = cb.resize(half, Image.Resampling.BILINEAR).tobytes()
+    cr_small = cr.resize(half, Image.Resampling.BILINEAR).tobytes()
 
     uv = bytearray(len(cb_small) * 2)
     uv[0::2] = cb_small  # NV12 interleaves U then V
@@ -242,7 +249,7 @@ class RawVideoBridge:
             logger.debug("pylibobs ffi unavailable for the vcam bridge", exc_info=True)
             return False
 
-        lib = get_lib()
+        lib: Any = get_lib()
 
         @ffi.callback("void(void*, struct video_data*)")
         def _on_frame(_param, frame):  # runs on a libobs thread — keep it short
@@ -260,7 +267,7 @@ class RawVideoBridge:
         # 1280x720, and without this the frames arrive at canvas size — copying
         # FRAME_WIDTH bytes per row then silently CROPS the top-left quadrant
         # rather than scaling, which puts a centred logo in the lower right.
-        conversion = ffi.new("struct video_scale_info *")
+        conversion: Any = ffi.new("struct video_scale_info *")
         conversion.format = _VIDEO_FORMAT_NV12
         conversion.width = FRAME_WIDTH
         conversion.height = FRAME_HEIGHT
@@ -322,7 +329,7 @@ class RawVideoBridge:
                 dst = base + row * FRAME_WIDTH
                 buf[dst:dst + FRAME_WIDTH] = src_uv[start:start + FRAME_WIDTH]
 
-        if self._transport.publish(buf):
+        if self._transport.publish(memoryview(buf)):
             self.frames += 1
 
     def disconnect(self) -> None:

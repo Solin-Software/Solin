@@ -196,7 +196,12 @@ def _registry_views() -> list[tuple[int, int]]:
     Both bitnesses of the filter are registered, and a per-user (non-elevated)
     registration redirects to ``HKCU\\Software\\Classes`` — so all four
     combinations have to be searched before concluding "not registered".
+
+    Empty off Windows: there is no registry, and the guard is what lets a type
+    checker running on Linux see that the winreg calls below are unreachable.
     """
+    if sys.platform != "win32":
+        return []
     import winreg
 
     return [
@@ -209,6 +214,8 @@ def _registry_views() -> list[tuple[int, int]]:
 
 def _inproc_server(hive: int, wow: int, clsid: str) -> str:
     """The DLL backing ``clsid`` in one registry view ("" when absent)."""
+    if sys.platform != "win32":
+        return ""
     import winreg
 
     path = f"SOFTWARE\\Classes\\CLSID\\{clsid}\\InprocServer32"
@@ -222,6 +229,8 @@ def _inproc_server(hive: int, wow: int, clsid: str) -> str:
 
 def _iter_registered_cameras() -> Iterator[tuple[str, str, str]]:
     """Yield ``(clsid, friendly_name, dll_path)`` for every DirectShow camera."""
+    if sys.platform != "win32":
+        return
     import winreg
 
     for hive, wow in _registry_views():

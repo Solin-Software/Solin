@@ -27,6 +27,7 @@ import os
 import sys
 import threading
 from dataclasses import dataclass, field
+from typing import Any
 
 from PySide6.QtCore import QObject, QTimer, Signal
 
@@ -93,9 +94,9 @@ class _Job:
     seeked: bool = False
     settle_ticks: int = 0
     elapsed_ms: int = 0
-    source: object | None = None
+    source: Any = None
     #: Scene wrapping :attr:`source` so it can carry letterbox bounds.
-    scene: object | None = None
+    scene: Any = None
     #: True once the source's active/showing refcounts were incremented.
     activated: bool = False
     cancelled: bool = False
@@ -151,13 +152,13 @@ class LibobsVideoProbe(QObject):
         self._current: _Job | None = None
         self._frames = _FrameBuffer()
 
-        self._view = None
-        self._video = None
+        self._view: Any = None
+        self._video: Any = None
         self._output = None
         self._callback = None  # cffi trampoline; libobs holds a raw pointer
         self._conversion = None  # cffi struct; must outlive the connect call
-        self._ffi = None
-        self._lib = None
+        self._ffi: Any = None
+        self._lib: Any = None
 
         self._poll = QTimer(self)
         self._poll.setInterval(_POLL_MS)
@@ -275,7 +276,8 @@ class LibobsVideoProbe(QObject):
             # like a working harness.) Global channels would activate it, but
             # they also feed the programme -- which would project the probe.
             from pylibobs._ffi import get_lib
-            lib = get_lib()
+
+            lib: Any = get_lib()
             lib.obs_source_inc_active(source._ptr)
             lib.obs_source_inc_showing(source._ptr)
             job.activated = True
@@ -365,7 +367,7 @@ class LibobsVideoProbe(QObject):
             try:
                 from pylibobs._ffi import get_lib
 
-                lib = get_lib()
+                lib: Any = get_lib()
                 lib.obs_source_dec_showing(job.source._ptr)
                 lib.obs_source_dec_active(job.source._ptr)
             except Exception:  # noqa: BLE001 - libobs boundary
@@ -447,11 +449,11 @@ class LibobsVideoProbe(QObject):
         if self._callback is not None:
             return True
         try:
-            from pylibobs._ffi import ffi, get_lib
+            from pylibobs._ffi import ffi, get_lib  # type: ignore[import-not-found]
         except Exception:  # noqa: BLE001 - optional dependency
             log.debug("Probe harness: pylibobs ffi unavailable", exc_info=True)
             return False
-        lib = get_lib()
+        lib: Any = get_lib()
         frames = self._frames
 
         @ffi.callback("void(void*, struct video_data*)")
@@ -468,7 +470,7 @@ class LibobsVideoProbe(QObject):
         # Ask libobs to scale and convert; without this the frames arrive at
         # canvas size in the canvas format and a naive copy crops instead of
         # scaling (the bug that put the vcam logo in the corner).
-        conversion = ffi.new("struct video_scale_info *")
+        conversion: Any = ffi.new("struct video_scale_info *")
         conversion.format = _VIDEO_FORMAT_BGRA
         conversion.width = PROBE_WIDTH
         conversion.height = PROBE_HEIGHT

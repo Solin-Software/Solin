@@ -79,7 +79,8 @@ def create_frame_source(runtime, name: str = "solin-frame-source"):
 
     # Show pushed frames immediately (low latency); we feed real-time frames.
     try:
-        get_lib().obs_source_set_async_unbuffered(source._ptr, True)
+        lib: Any = get_lib()
+        lib.obs_source_set_async_unbuffered(source._ptr, True)
     except Exception:  # noqa: BLE001 - optional, libobs boundary
         log.debug("obs_source_set_async_unbuffered unavailable", exc_info=True)
     return ObsFrameSource(source)
@@ -126,7 +127,8 @@ class ObsFrameSource:
         # copies it synchronously, so ``buf``/``frame`` only need to survive the call.
         frame_ptr = ffi.cast("struct obs_source_frame *", int(_frame_ffi.cast("uintptr_t", frame)))
         try:
-            get_lib().obs_source_output_video(source._ptr, frame_ptr)
+            out_lib: Any = get_lib()
+            out_lib.obs_source_output_video(source._ptr, frame_ptr)
         except Exception:  # noqa: BLE001 - libobs boundary
             log.debug("obs_source_output_video failed", exc_info=True)
 

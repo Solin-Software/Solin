@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import logging
 import threading
+from typing import Any
 
 from PySide6.QtCore import QObject, QTimer, Signal
 from PySide6.QtGui import QImage
@@ -100,17 +101,17 @@ class ObsPreviewPlayer(QObject):
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
-        self._source = None
-        self._scene = None
-        self._view = None
-        self._video = None
-        self._output = None
+        self._source: Any = None
+        self._scene: Any = None
+        self._view: Any = None
+        self._video: Any = None
+        self._output: Any = None
         self._activated = False
 
         self._callback = None    # cffi trampoline; libobs holds a raw pointer
         self._conversion = None  # cffi struct; must outlive the connect call
-        self._ffi = None
-        self._lib = None
+        self._ffi: Any = None
+        self._lib: Any = None
 
         self._frame_lock = threading.Lock()
         self._latest: tuple[bytes, int, int, int] | None = None
@@ -339,7 +340,7 @@ class ObsPreviewPlayer(QObject):
             self._view.set_source(_CH_PREVIEW, scene.as_source())
             from pylibobs._ffi import get_lib
 
-            lib = get_lib()
+            lib: Any = get_lib()
             lib.obs_source_inc_active(source._ptr)
             lib.obs_source_inc_showing(source._ptr)
             self._activated = True
@@ -370,7 +371,7 @@ class ObsPreviewPlayer(QObject):
             try:
                 from pylibobs._ffi import get_lib
 
-                lib = get_lib()
+                lib: Any = get_lib()
                 lib.obs_source_dec_showing(source._ptr)
                 lib.obs_source_dec_active(source._ptr)
             except Exception:  # noqa: BLE001 - libobs boundary
@@ -541,7 +542,7 @@ class ObsPreviewPlayer(QObject):
         except Exception:  # noqa: BLE001 - optional dependency
             log.debug("Preview harness: pylibobs ffi unavailable", exc_info=True)
             return False
-        lib = get_lib()
+        lib: Any = get_lib()
         frame_lock = self._frame_lock
 
         @ffi.callback("void(void*, struct video_data*)")
@@ -556,7 +557,7 @@ class ObsPreviewPlayer(QObject):
             except Exception:  # noqa: BLE001 - never raise into libobs
                 log.debug("Preview frame tap failed", exc_info=True)
 
-        conversion = ffi.new("struct video_scale_info *")
+        conversion: Any = ffi.new("struct video_scale_info *")
         conversion.format = _VIDEO_FORMAT_BGRA
         conversion.width = PREVIEW_WIDTH
         conversion.height = PREVIEW_HEIGHT

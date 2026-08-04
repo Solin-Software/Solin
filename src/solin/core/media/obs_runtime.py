@@ -534,7 +534,8 @@ class ObsRuntime:
         from pylibobs._ffi import ffi, get_lib  # type: ignore[import-not-found]
 
         ptr = ffi.NULL if source is None else source._ptr
-        get_lib().obs_set_output_source(channel, ptr)
+        lib: Any = get_lib()
+        lib.obs_set_output_source(channel, ptr)
 
     # ── Source helpers ────────────────────────────────────────────────────
 
@@ -542,7 +543,8 @@ class ObsRuntime:
         """Set a source's monitoring type (route its audio to the speakers)."""
         from pylibobs._ffi import get_lib  # type: ignore[import-not-found]
 
-        get_lib().obs_source_set_monitoring_type(source._ptr, int(monitoring_type))
+        lib: Any = get_lib()
+        lib.obs_source_set_monitoring_type(source._ptr, int(monitoring_type))
 
 
 _runtime: ObsRuntime | None = None

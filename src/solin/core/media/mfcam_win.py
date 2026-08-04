@@ -94,7 +94,7 @@ class MfVirtualCamera:
     def start(self) -> bool:
         if self._handle is not None:
             return True
-        if not available():
+        if sys.platform != "win32" or not available():
             return False
 
         try:
@@ -194,6 +194,8 @@ class MfVirtualCamera:
 
     @classmethod
     def _invoke(cls, handle: ctypes.c_void_p, slot: int) -> bool:
+        if sys.platform != "win32":
+            return False
         fn = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, ctypes.c_void_p)(
             cls._vtable(handle)[slot]
         )
@@ -201,6 +203,8 @@ class MfVirtualCamera:
 
     @classmethod
     def _release(cls, handle: ctypes.c_void_p) -> None:
+        if sys.platform != "win32":
+            return
         fn = ctypes.WINFUNCTYPE(ctypes.c_ulong, ctypes.c_void_p)(cls._vtable(handle)[2])
         fn(handle)
 
@@ -219,7 +223,8 @@ def is_source_registered() -> bool:
     key = rf"SOFTWARE\Classes\CLSID\{CLSID_SOLIN_CAMERA}\InprocServer32"
     try:
         with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, key) as handle:
-            path, _ = winreg.QueryValueEx(handle, None)
+            # None reads the key's DEFAULT value; the stub only admits str.
+            path, _ = winreg.QueryValueEx(handle, None)  # type: ignore[arg-type]
             return bool(path) and os.path.isfile(path)
     except OSError:
         return False
