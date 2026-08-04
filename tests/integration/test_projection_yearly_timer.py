@@ -7,6 +7,7 @@ from PySide6.QtWidgets import QApplication, QVBoxLayout
 
 from solin.core.timer.models import MediaCountdownPresentation
 from solin.core.projection.image_framing import IDENTITY_IMAGE_TRANSFORM
+import solin.projection.window as projection_window
 from solin.projection.window import BaseProjectionView
 from solin.projection.yearly_text import YearlyTextWidget
 
@@ -105,7 +106,20 @@ def test_countdown_digits_align_vertically_with_the_jw_badge():
     assert countdown_layout.text_rect.center().y() == badge_y + (badge_size / 2.0)
 
 
-def test_clearing_yearly_timer_fades_whole_page_before_restoring_idle():
+def _qt_engine(monkeypatch):
+    """Force the Qt clear path for the two tests that describe it.
+
+    Under the libobs engine, clear() hands off to _obs_clear and the PROGRAM
+    crossfades to the yeartext scene inside libobs, so the Qt-side yearly page
+    fade never runs. That fade is the behaviour these tests are about, and
+    obs_media_engine_active exists precisely so tests can reach the non-obs
+    branches of the projection surface.
+    """
+    monkeypatch.setattr(projection_window, "obs_media_engine_active", lambda: False)
+
+
+def test_clearing_yearly_timer_fades_whole_page_before_restoring_idle(monkeypatch):
+    _qt_engine(monkeypatch)
     view = _ProjectionViewHarness()
     view.resize(1280, 720)
     view.set_yearly_text("Annual text", "Reference")
@@ -147,7 +161,8 @@ def test_immediate_countdown_clear_always_requests_a_repaint():
     assert widget.update_requests >= 1
 
 
-def test_new_projection_cancels_pending_yearly_page_fade_out():
+def test_new_projection_cancels_pending_yearly_page_fade_out(monkeypatch):
+    _qt_engine(monkeypatch)
     view = _ProjectionViewHarness()
     view.resize(1280, 720)
     view.set_yearly_text("Annual text", "Reference")

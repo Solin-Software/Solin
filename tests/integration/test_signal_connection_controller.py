@@ -99,6 +99,7 @@ class _WindowStub:
             "zoom_participants_toggled",
             "obs_stream_config_changed",
             "camera_enabled_toggled",
+            "vcam_autostart_toggled",
             "background_song_toggled",
             "meeting_schedule_changed",
         )
@@ -151,6 +152,7 @@ class _WindowStub:
             on_zoom_settings_parts_toggled=_slot("zoom_parts"),
             refresh_obs_stream_availability=_slot("refresh_obs_stream"),
             on_camera_settings_enabled_toggled=_slot("camera_enabled"),
+            on_vcam_autostart_toggled=_slot("vcam_autostart"),
             on_obs_state_changed=_slot("obs_state"),
             on_obs_scene_changed=_slot("obs_scene"),
             refresh_obs_btn_availability=_slot("refresh_obs_button"),
@@ -243,7 +245,9 @@ def test_connect_signals_wires_expected_signal_graph():
     controller.connect_signals()
 
     total_connections = sum(len(signal.connected) for signal in _Signal.registry)
-    assert total_connections == 53
+    # 54 since the virtual camera gained its auto-start setting, which wires
+    # settings.vcam_autostart_toggled to the live-integration handler.
+    assert total_connections == 54
     assert window.songs_widget.project_video_signal.connected == [
         window._media_projection.on_sjjm_project
     ]

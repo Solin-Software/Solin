@@ -241,54 +241,44 @@ def test_all_windows_includes_floating_preview_when_present():
     assert controller.all_windows() == [secondary, floating]
 
 
-def test_on_idle_media_changed_activates_source_and_windows(tmp_path):
+def test_on_idle_media_changed_composites_in_libobs_and_clears(tmp_path):
+    """The idle background goes straight to libobs — there is no Qt decoder.
+
+    It used to be routed through a shared Qt IdleMediaSource whenever the obs
+    engine was off; that path is gone, so the file is handed to the surface and
+    libobs decodes and composites it.
+    """
     img = tmp_path / "idle.png"
     img.write_bytes(b"fake")
-    src = _StubIdleSource()
     window = _WindowStub()
     win = _ProjectionWindowStub()
     window.projection_session.projection_windows = [win]
-    controller = ProjectionWindowController(
-        _projection_context(window),
-        idle_source_factory=lambda: src,
-    )
+    controller = ProjectionWindowController(_projection_context(window))
 
     controller.on_idle_media_changed(str(img))
     assert window.projection_session.idle_media_path == str(img)
-    assert src.media_set == [str(img)]   # decoded once on the shared source
-    assert win.idle_active == 1
+    assert win.obs_idle_calls == [(str(img), "image")]
+    assert win.idle_active == 0  # no Qt idle-media mode any more
 
     controller.on_idle_media_changed("")
     assert window.projection_session.idle_media_path == ""
-    assert src.cleared == 1
     assert win.cleared_idle == 1
     assert window._monitor_popup.idle_paths == [str(img), ""]
 
 
-def test_on_idle_media_changed_composites_in_libobs_in_obs_mode(tmp_path, monkeypatch):
-    # In obs mode the idle background composites inside libobs (no Qt decoder):
-    # the controller routes the file straight to the surface, never touching the
-    # shared IdleMediaSource.
-    monkeypatch.setattr(
-        projection_controller, "obs_media_engine_active", lambda: True
-    )
+def test_on_idle_media_changed_passes_the_media_type(tmp_path):
+    """A video idle background is announced as video, not image."""
     vid = tmp_path / "idle.mp4"
     vid.write_bytes(b"fake")
-    src = _StubIdleSource()
     window = _WindowStub()
     win = _ProjectionWindowStub()
     window.projection_session.projection_windows = [win]
-    controller = ProjectionWindowController(
-        _projection_context(window),
-        idle_source_factory=lambda: src,
-    )
+    controller = ProjectionWindowController(_projection_context(window))
 
     controller.on_idle_media_changed(str(vid))
 
     assert win.obs_idle_calls == [(str(vid), "video")]
-    assert win.idle_active == 0          # Qt idle-media mode not used
-    assert src.media_set == []           # shared Qt decoder never created/loaded
-    assert controller._idle_source is None
+    assert win.idle_active == 0
 
 
 def test_on_idle_media_changed_rejects_missing_file():
@@ -296,93 +286,13 @@ def test_on_idle_media_changed_rejects_missing_file():
     window = _WindowStub()
     win = _ProjectionWindowStub()
     window.projection_session.projection_windows = [win]
-    controller = ProjectionWindowController(
-        _projection_context(window),
-        idle_source_factory=lambda: src,
-    )
+    controller = ProjectionWindowController(_projection_context(window))
 
     controller.on_idle_media_changed("does-not-exist.png")
 
     assert window.projection_session.idle_media_path == ""
     assert src.media_set == []
     assert win.cleared_idle == 1
-
-
-def test_distribute_idle_frame_fans_out_to_all_surfaces(tmp_path):
-    """The single shared decoder must hand the *same* frame to every surface —
-    this is what keeps the monitors frame-locked instead of each decoding its own
-    copy and drifting out of sync."""
-    img = tmp_path / "idle.png"
-    img.write_bytes(b"fake")
-    src = _StubIdleSource()
-    window = _WindowStub()
-    secondary = _ProjectionWindowStub()
-    floating = _ProjectionWindowStub()
-    window.projection_session.projection_windows = [secondary]
-    window.projection_session.floating_preview_window = floating
-    controller = ProjectionWindowController(
-        _projection_context(window),
-        idle_source_factory=lambda: src,
-    )
-
-    controller.on_idle_media_changed(str(img))   # creates + wires the source
-    frame = object()
-    src.frame_ready.emit(frame)                  # source decoded one frame
-
-    assert secondary.idle_images == [frame]
-    assert floating.idle_images == [frame]
-    assert secondary.idle_images[0] is floating.idle_images[0]
-
-
-def test_apply_full_state_pushes_current_frame_to_new_surface(tmp_path):
-    """A surface created while idle playback is active must paint the latest frame
-    immediately (no black flash) and then receive subsequent frames."""
-    img = tmp_path / "idle.png"
-    img.write_bytes(b"fake")
-    src = _StubIdleSource()
-    window = _WindowStub()
-    window.projection_session.set_idle_media_path(str(img))
-    controller = ProjectionWindowController(
-        _projection_context(window),
-        idle_source_factory=lambda: src,
-    )
-    controller._ensure_idle_source()
-    src.current_image = object()
-
-    new_win = _ProjectionWindowStub()
-    controller.apply_full_state_to_window(new_win)
-
-    assert new_win.idle_active == 1
-    assert new_win.idle_images == [src.current_image]
-
-
-def test_idle_video_paused_while_hidden_and_resumed_when_visible(tmp_path):
-    """A custom idle video must not burn CPU while a clip/image/timer is shown —
-    the shared decoder is paused until some surface displays the idle screen."""
-    vid = tmp_path / "idle.mp4"
-    vid.write_bytes(b"fake")
-    src = _StubIdleSource()
-    window = _WindowStub()
-    win = _ProjectionWindowStub()
-    win.idle_visible_flag = False        # a clip is being projected → idle hidden
-    window.projection_session.projection_windows = [win]
-    controller = ProjectionWindowController(
-        _projection_context(window),
-        idle_source_factory=lambda: src,
-    )
-
-    controller.on_idle_media_changed(str(vid))
-    assert src.playing_calls[-1] is False   # stays paused while hidden
-
-    # The projection returns to idle → the page becomes visible.
-    win.idle_visible_flag = True
-    controller._on_idle_visibility_changed(True)
-    assert src.playing_calls[-1] is True
-
-    # Something visual is projected again → idle hidden → paused.
-    win.idle_visible_flag = False
-    controller._on_idle_visibility_changed(False)
-    assert src.playing_calls[-1] is False
 
 
 # ── image zoom/pan transform persistence ─────────────────────────────────────
@@ -504,7 +414,7 @@ def test_apply_full_state_applies_yearly_idle_and_projection():
     controller.apply_full_state_to_window(win)
 
     assert win.yearly == [("Quote", "Reference", "E")]
-    assert win.idle_active == 1
+    assert len(win.obs_idle_calls) == 1
     assert win.cleared_idle == 0
     assert win.images == [b"img"]
 
@@ -578,7 +488,7 @@ def test_reconcile_applies_idle_media_to_newly_connected_monitor(monkeypatch):
     assert len(created) == 1
     new_win = created[0]
     assert new_win.screen() is screen_b
-    assert new_win.idle_active == 1
+    assert len(new_win.obs_idle_calls) == 1
     assert new_win in window.projection_session.projection_windows
 
 
@@ -604,7 +514,7 @@ def test_reconcile_recreates_idle_after_screen_identity_swap(monkeypatch):
     assert len(created) == 2
     assert {w.screen() for w in created} == {screen_b, screen_c}
     for w in created:
-        assert w.idle_active == 1
+        assert len(w.obs_idle_calls) == 1
 
 
 def test_reconcile_skips_deactivated_screens(monkeypatch):
@@ -637,7 +547,7 @@ def test_on_monitor_toggle_activate_applies_idle(monkeypatch):
     controller.on_monitor_toggle(0, make_active=True)
 
     assert len(created) == 1
-    assert created[0].idle_active == 1
+    assert len(created[0].obs_idle_calls) == 1
     assert created[0].yearly == [("Quote", "Reference", "E")]
 
 
@@ -654,5 +564,5 @@ def test_open_projection_windows_applies_idle_to_all(monkeypatch):
 
     assert len(created) == 2
     for w in created:
-        assert w.idle_active == 1
+        assert len(w.obs_idle_calls) == 1
         assert w.yearly == [("Quote", "Reference", "E")]
