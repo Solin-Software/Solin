@@ -84,7 +84,17 @@ def libobs_cameras() -> list[tuple[str, str]]:
 
         props = Properties.from_source_id(source_id)
     except Exception:  # noqa: BLE001 - libobs/optional-dependency boundary
-        log.debug("libobs camera enumeration unavailable", exc_info=True)
+        # WARNING, not debug: this is the difference between "you have no
+        # cameras" and "Solin could not ask". Reported as the former, it sends
+        # the operator hunting a hardware fault that does not exist — and the
+        # usual cause is the capture plugin (win-dshow / v4l2 / av_capture)
+        # failing to load, which nothing else in the log would reveal.
+        log.warning(
+            "Camera enumeration unavailable: could not create %r properties. "
+            "Is the capture plugin present in the libobs bundle?",
+            source_id,
+            exc_info=True,
+        )
         return []
 
     cameras: list[tuple[str, str]] = []
@@ -99,9 +109,22 @@ def libobs_cameras() -> list[tuple[str, str]]:
                     cameras.append((name, value))
             break
     except Exception:  # noqa: BLE001 - property walk is best-effort
-        log.debug("libobs camera property walk failed", exc_info=True)
+        log.warning("libobs camera property walk failed", exc_info=True)
         return []
-    log.info("libobs reports %d camera(s): %s", len(cameras), [n for n, _ in cameras])
+    if not cameras:
+        # The source exists but listed nothing. Distinguishing this from the
+        # failure above matters: here the capture plugin loaded and genuinely
+        # sees no devices, which points at the OS/driver rather than at Solin.
+        log.warning(
+            "%r loaded but listed no devices under %r — the capture plugin sees "
+            "no cameras at all.",
+            source_id,
+            list_property,
+        )
+    else:
+        log.info(
+            "libobs reports %d camera(s): %s", len(cameras), [n for n, _ in cameras]
+        )
     return cameras
 
 
