@@ -7,9 +7,8 @@ import types
 
 import solin.core.media.obs_virtual_camera as vcam_mod
 from solin.core.media.obs_virtual_camera import (
-    _CH_CAMERA,
+    _CH_COMPOSITE,
     _CH_IDLE,
-    _CH_MIRROR,
     VirtualCamera,
 )
 from solin.core.media.vcam_model import CameraLayout, PipCorner, VcamComposition
@@ -72,10 +71,14 @@ class _FakeScene:
         self.name = name
         self.released = 0
         self.item = None
+        self.added: list = []      # every source composited into this scene
+        self.items: list = []
         self._source = object()
 
-    def add(self, _source):
+    def add(self, source):
+        self.added.append(source)
         self.item = _FakeItem()
+        self.items.append(self.item)
         return self.item
 
     def as_source(self):
@@ -107,12 +110,43 @@ class _FakeSource:
         self.released += 1
 
 
+class _FakeTransition:
+    """Records the crossfades the vcam asks for."""
+
+    def __init__(self) -> None:
+        self.size = None
+        self.seeded = None
+        self.starts: list = []
+        self.cleared = 0
+        self.released = 0
+        self.start_ok = True
+
+    def set_size(self, cx, cy) -> None:
+        self.size = (cx, cy)
+
+    def set_source(self, source) -> None:
+        self.seeded = source
+
+    def start(self, destination, duration_ms=500, mode=None) -> bool:
+        self.starts.append((destination, duration_ms, mode))
+        return self.start_ok
+
+    def clear(self) -> None:
+        self.cleared += 1
+
+    def release(self) -> None:
+        self.released += 1
+
+
 class _FakeOb:
     class BoundsType:
         SCALE_INNER = 2
 
     class Alignment:
         CENTER = 0
+
+    class TransitionMode:
+        AUTO = 0
 
     # Both, because the output the vcam binds to is platform-dependent: Linux
     # drives the camera through virtualcam_output, Windows uses ffmpeg_output
@@ -123,6 +157,8 @@ class _FakeOb:
         self.Output = types_ns(create=lambda kind, name, settings: output)
         self.Scene = types_ns(create=lambda name: _FakeScene(name))
         self.Source = types_ns(create=lambda kind, name, settings: _FakeSource())
+        self.transition = _FakeTransition()
+        self.Transition = types_ns(create=lambda kind, name: self.transition)
 
     def enum_output_types(self):
         return list(self._types)
@@ -169,7 +205,16 @@ def _vcam(
     rt = _FakeRuntime(_FakeOb(out, types=types))
     prog = _FakeProgram()
     cam = VirtualCamera(runtime=rt, program=prog)
+    # Run deferred work (fade settle, scene disposal) immediately: these tests
+    # assert the composite the vcam ends up with, not the wall-clock timing, and
+    # a real QTimer would never fire in a unit test.
+    cam._defer = lambda _ms, fn: fn()
     return cam, rt, out, prog
+
+
+def _composite(cam):
+    """The scene currently faded to (what the camera is showing)."""
+    return cam._current_entry.scene
 
 
 def test_prerequisite_ok_linux_requires_v4l2loopback(monkeypatch):
@@ -312,16 +357,39 @@ _CAMERA_FULL = VcamComposition(program_visible=False, camera=CameraLayout.FULL)
 _IDLE = VcamComposition(program_visible=False, camera=CameraLayout.OFF)
 
 
+def test_composition_changes_crossfade_rather_than_cut(monkeypatch):
+    """The whole point: a composition change dissolves, it does not cut.
+
+    Regression: layers used to be swapped straight onto view channels, so going
+    from "camera full" to "media + camera PiP" changed in one frame. The only
+    motion an operator saw was the PROJECTOR's own fade leaking through the
+    newly revealed mirror — which is why it looked like a blink to the yeartext
+    followed by a fade, instead of the camera fading to the picture.
+    """
+    cam, rt, _out, _prog = _vcam(monkeypatch)
+    cam.set_meeting_camera("/dev/video0")
+    tr = rt.ob.transition
+
+    cam.apply_composition(_CAMERA_FULL)
+    cam.apply_composition(_MIRROR_PIP)
+
+    # The transition drives the picture, and it is what sits on the view.
+    assert cam._view.sources[_CH_COMPOSITE] is tr
+    assert len(tr.starts) == 2
+    assert all(duration > 0 for _dest, duration, _mode in tr.starts)
+    assert _CH_IDLE in cam._view.sources  # branded floor still underneath
+
+
 def test_apply_mirror_only_shows_projector_no_camera(monkeypatch):
     cam, rt, _out, prog = _vcam(monkeypatch)
 
     cam.apply_composition(_MIRROR_ONLY)
 
-    view = cam._view
-    assert view.sources[_CH_MIRROR] == prog.transition  # projector mirrored
-    assert view.sources[_CH_CAMERA] is None  # no camera
-    assert prog.ensured >= 1  # the program was ensured before mirroring
-    assert _CH_IDLE in view.sources  # idle logo floor exists
+    scene = _composite(cam)
+    assert prog.transition in scene.added  # projector mirrored
+    assert len(scene.added) == 1  # and nothing else: no camera
+    assert prog.ensured >= 1
+    assert _CH_IDLE in cam._view.sources  # idle logo floor exists
 
 
 def test_apply_camera_full_without_camera_leaves_logo(monkeypatch):
@@ -329,9 +397,8 @@ def test_apply_camera_full_without_camera_leaves_logo(monkeypatch):
 
     cam.apply_composition(_CAMERA_FULL)
 
-    view = cam._view
-    assert view.sources[_CH_MIRROR] is None  # not mirroring → logo shows through
-    assert view.sources[_CH_CAMERA] is None  # no camera configured → logo only
+    # Nothing composited above the floor, so the branded logo shows through.
+    assert _composite(cam).added == []
 
 
 def test_camera_full_fills_canvas(monkeypatch):
@@ -340,9 +407,9 @@ def test_camera_full_fills_canvas(monkeypatch):
 
     cam.apply_composition(_CAMERA_FULL)
 
-    view = cam._view
-    assert view.sources[_CH_CAMERA] == cam._camera_scene.as_source()
-    item = cam._camera_scene.item
+    scene = _composite(cam)
+    assert scene.added == [cam._camera_source]
+    item = scene.items[-1]
     assert item.bounds == (1280.0, 720.0)  # fills the 1280x720 canvas
     assert item.pos == (640.0, 360.0)  # centred
 
@@ -353,42 +420,61 @@ def test_camera_pip_sits_bottom_right(monkeypatch):
 
     cam.apply_composition(_MIRROR_PIP)
 
-    view = cam._view
-    assert view.sources[_CH_MIRROR] == prog.transition  # mirror behind the PiP
-    assert view.sources[_CH_CAMERA] == cam._camera_scene.as_source()
-    item = cam._camera_scene.item
+    scene = _composite(cam)
+    # Mirror first, camera on top — z-order is insertion order.
+    assert scene.added == [prog.transition, cam._camera_source]
+    item = scene.items[-1]
     assert item.bounds == (320.0, 180.0)  # a quarter of the canvas
-    # bottom-right quadrant → both coordinates past the canvas centre
     assert item.pos[0] > 640.0 and item.pos[1] > 360.0
+
+
+def test_each_composite_gets_its_own_camera_item(monkeypatch):
+    """A shared source laid out per composite must not deform the outgoing one.
+
+    Both composites reference the SAME camera source; if they shared a scene item
+    the incoming PiP transform would shrink the full-screen camera that is still
+    dissolving away.
+    """
+    cam, rt, _out, _prog = _vcam(monkeypatch)
+    cam.set_meeting_camera("/dev/video0")
+
+    cam.apply_composition(_CAMERA_FULL)
+    full_item = _composite(cam).items[-1]
+    cam.apply_composition(_MIRROR_PIP)
+    pip_item = _composite(cam).items[-1]
+
+    assert full_item is not pip_item
+    assert full_item.bounds == (1280.0, 720.0)  # untouched by the PiP layout
+    assert pip_item.bounds == (320.0, 180.0)
 
 
 def test_set_meeting_camera_switch_keeps_shared_source_and_clear_removes(monkeypatch):
     cam, rt, _out, _prog = _vcam(monkeypatch)
     assert cam.set_meeting_camera("/dev/video0") is True
     first_source = cam._camera_source
-    first_scene = cam._camera_scene
     cam.apply_composition(_CAMERA_FULL)
+    first_scene = _composite(cam)
 
-    # Switching device rebuilds the wrapping SCENE, but the per-device SOURCE is
-    # owned by the runtime — the vcam must NOT release it (the projector may use it).
+    # Switching device recomposes, but the per-device SOURCE is owned by the
+    # runtime — the vcam must NOT release it (the projector may be using it).
     assert cam.set_meeting_camera("/dev/video1") is True
-    assert first_scene.released >= 1  # old wrapping scene released
+    assert first_scene.released >= 1  # the composite that held it was retired
     assert first_source.released == 0  # shared source left alone
     assert cam._camera_device == "/dev/video1"
     assert cam._camera_source is not first_source
 
-    # Clearing releases the scene, blanks the channel, and holds no source.
+    # Clearing holds no source, and the composite no longer references one.
     assert cam.set_meeting_camera("") is True
     assert cam._camera_source is None
-    assert cam._view.sources[_CH_CAMERA] is None
+    assert _composite(cam).added == []
 
 
 def test_set_meeting_camera_same_device_is_noop(monkeypatch):
     cam, rt, _out, _prog = _vcam(monkeypatch)
     cam.set_meeting_camera("/dev/video0")
-    scene = cam._camera_scene
+    source = cam._camera_source
     assert cam.set_meeting_camera("/dev/video0") is True
-    assert cam._camera_scene is scene  # not rebuilt
+    assert cam._camera_source is source  # not reopened
 
 
 def test_show_idle_clears_mirror_and_camera(monkeypatch):
@@ -398,9 +484,8 @@ def test_show_idle_clears_mirror_and_camera(monkeypatch):
 
     cam.show_idle()
 
-    view = cam._view
-    assert view.sources[_CH_MIRROR] is None
-    assert view.sources[_CH_CAMERA] is None
+    # Idle composites to nothing: the branded floor is all that remains.
+    assert _composite(cam).added == []
 
 
 # ── PiP placement (configurable corner + size) ────────────────────────────────
@@ -420,7 +505,7 @@ def test_pip_placement_per_corner(monkeypatch):
     for corner, (ex, ey) in _CORNER_CENTRES.items():
         cam.set_pip_placement(corner)
         cam.apply_composition(_MIRROR_PIP)
-        px, py = cam._camera_scene.item.pos
+        px, py = _composite(cam).items[-1].pos
         assert (round(px, 1), round(py, 1)) == (ex, ey)
 
 
@@ -429,7 +514,7 @@ def test_set_pip_placement_moves_live_pip(monkeypatch):
     cam.set_meeting_camera("/dev/video0")
     cam.apply_composition(_MIRROR_PIP)  # default bottom-right
     cam.set_pip_placement(PipCorner.TOP_LEFT)  # re-applies live
-    px, py = cam._camera_scene.item.pos
+    px, py = _composite(cam).items[-1].pos
     assert (round(px, 1), round(py, 1)) == _CORNER_CENTRES[PipCorner.TOP_LEFT]
 
 
@@ -438,5 +523,5 @@ def test_pip_fraction_resizes_box(monkeypatch):
     cam.set_meeting_camera("/dev/video0")
     cam.set_pip_placement(PipCorner.BOTTOM_RIGHT, fraction=0.4)
     cam.apply_composition(_MIRROR_PIP)
-    bw, bh = cam._camera_scene.item.bounds
+    bw, bh = _composite(cam).items[-1].bounds
     assert (round(bw, 1), round(bh, 1)) == (512.0, 288.0)

@@ -20,6 +20,8 @@ import logging
 import sys
 import tempfile
 from pathlib import Path
+from threading import RLock
+from time import monotonic
 from typing import Any
 
 from ...projection.brand import render_idle_logo
@@ -28,6 +30,13 @@ from .vcam_model import CameraLayout, PipCorner, VcamComposition
 from .vcam_provision import DESIRED_LABEL, find_loopback_device, is_loaded
 
 log = logging.getLogger(__name__)
+
+
+def _default_defer(delay_ms: int, fn) -> None:
+    """Run ``fn`` after ``delay_ms`` on the GUI thread (injectable for tests)."""
+    from PySide6.QtCore import QTimer
+
+    QTimer.singleShot(int(delay_ms), fn)
 
 _VCAM_OUTPUT_KIND = "virtualcam_output"
 
@@ -51,13 +60,40 @@ _VCAM_PUMP_SETTINGS = {
 _IDLE_KEY = "vcam-idle"
 
 # ── view channel layout (z-order back→front) ──────────────────────────────────
-_CH_IDLE = 0  # branded idle logo — the floor, always present
-_CH_MIRROR = 1  # the projector's program transition (mirrored), when visible
-_CH_CAMERA = 2  # the camera layer (PiP or full), when shown
+_CH_IDLE = 0  # branded idle logo — the floor, always present, never faded
+_CH_COMPOSITE = 1  # the vcam's OWN fade transition, holding composition scenes
+_CH_LEGACY_CAMERA = 2  # retired; still cleared on teardown for older sessions
+
+#: Match the projector's crossfade (obs_program._DEFAULT_CROSSFADE_MS) so that
+#: when both fade at once the result reads as a single ramp rather than two.
+_VCAM_CROSSFADE_MS = 450
+#: Grace after a fade before the outgoing scene is released — it is still the
+#: transition's A side until the dissolve finishes.
+_DISPOSAL_GRACE_MS = 120
+#: Margin on the in-flight deadline, so a coalesced change never starts early.
+_FADE_SETTLE_MS = 60
 
 #: Picture-in-picture camera size + margin, as a fraction of the canvas.
 _PIP_FRACTION = 0.25
 _PIP_MARGIN = 0.035
+
+
+class _VcamEntry:
+    """One composition rendered as a scene.
+
+    Owns NOTHING but the scene: the mirrored program transition belongs to
+    :class:`ProjectionProgram` and the camera to :class:`ObsRuntime`. Disposal is
+    therefore a single ``obs_scene_release`` — which is what makes the dangerous
+    mistake unrepresentable. ``Source.release()`` in pylibobs runs
+    ``obs_source_remove`` first, and calling it on anything inside a composite
+    would rip the projector's own transition out of every scene holding it.
+    """
+
+    __slots__ = ("scene", "comp")
+
+    def __init__(self, scene, comp) -> None:
+        self.scene = scene
+        self.comp = comp
 
 
 class VirtualCamera:
@@ -76,10 +112,19 @@ class VirtualCamera:
         # shared mapping rather than through a libobs output.
         self._transport: Any = None
         self._bridge: Any = None
-        # Camera layer (channel 2): one shared capture source + its wrapping scene.
+        # Crossfade machinery: composition changes dissolve instead of cutting.
+        self._vtr: Any = None  # the vcam's own fade transition
+        self._current_entry: _VcamEntry | None = None
+        self._target: VcamComposition | None = None  # coalesced pending change
+        self._pending_disposal: list[_VcamEntry] = []
+        self._in_flight: list[list[_VcamEntry]] = []
+        self._fade_until: float = 0.0
+        self._seq = 0
+        self._instant_only = False  # latched if the transition is unavailable
+        self._lock = RLock()
+        self._defer = _default_defer
+        # The shared capture source for the selected camera (owned by ObsRuntime).
         self._camera_source: Any = None
-        self._camera_scene: Any = None
-        self._camera_item: Any = None
         self._camera_device: str | None = None
         # Picture-in-picture placement (operator-configurable via the Scenes panel).
         self._pip_corner = PipCorner.BOTTOM_RIGHT
@@ -287,7 +332,7 @@ class VirtualCamera:
             return self._camera_source is not None
         self._release_camera()
         if not device_path:
-            self._reapply_camera()
+            self._recompose()
             log.info("Virtual camera: camera cleared (idle logo / projector mirror)")
             return True
         source = self._rt().camera_source(device_path, device_name)
@@ -295,17 +340,26 @@ class VirtualCamera:
             return False
         self._camera_source = source
         self._camera_device = device_path
-        self._build_camera_scene()
-        self._reapply_camera()
+        self._recompose()
         log.info("Virtual camera: compositing camera device %s", device_path)
         return True
 
     def apply_composition(self, comp: VcamComposition) -> None:
-        """Set what the vcam shows: mirror the projector? + camera placement."""
-        self._ensure_view()
-        self._set_mirror(comp.program_visible)
-        self._set_camera(comp.camera)
-        self._composition = comp
+        """Set what the vcam shows: mirror the projector? + camera placement.
+
+        Crossfades rather than cutting; a change arriving mid-fade is coalesced
+        and applied when the current one settles.
+        """
+        with self._lock:
+            try:
+                self._ensure_view()
+                if comp == self._composition:
+                    self._target = None  # a queued change was undone before it ran
+                    return
+                self._target = comp
+                self._maybe_start()
+            except Exception:  # noqa: BLE001 - never raise at the director boundary
+                log.debug("vcam apply_composition failed", exc_info=True)
 
     def show_idle(self) -> None:
         """Show only the branded idle logo (no projector mirror, no camera)."""
@@ -324,7 +378,7 @@ class VirtualCamera:
         if fraction is not None:
             self._pip_fraction = max(0.1, min(0.5, float(fraction)))
         if self._composition is not None and self._composition.camera is CameraLayout.PIP:
-            self._set_camera(CameraLayout.PIP)
+            self._recompose()
 
     # ── teardown ──────────────────────────────────────────────────────────
 
@@ -338,10 +392,39 @@ class VirtualCamera:
             except Exception:  # noqa: BLE001 - libobs boundary
                 log.debug("vcam output release errored", exc_info=True)
             self._output = None
+        # Drain every deferred disposal synchronously first: emptying the lists
+        # also turns any timer that fires later into a no-op, so nothing releases
+        # a scene after the view is gone.
+        with self._lock:
+            batches, self._in_flight = self._in_flight, []
+            pending, self._pending_disposal = self._pending_disposal, []
+            self._target = None
         if self._view is not None:
             try:
-                for channel in (_CH_IDLE, _CH_MIRROR, _CH_CAMERA):
+                for channel in (_CH_IDLE, _CH_COMPOSITE, _CH_LEGACY_CAMERA):
                     self._view.set_source(channel, None)
+            except Exception:  # noqa: BLE001 - libobs boundary
+                log.debug("vcam channel clear errored", exc_info=True)
+        if self._vtr is not None:
+            try:
+                # Drop the transition's A/B references before releasing the
+                # scenes they point at — including, transitively, the projector's
+                # own transition, which the vcam must never free.
+                self._vtr.clear()
+                self._vtr.release()  # the vcam owns this one
+            except Exception:  # noqa: BLE001 - libobs boundary
+                log.debug("vcam transition release errored", exc_info=True)
+            self._vtr = None
+        for batch in batches:
+            for entry in batch:
+                self._release_entry(entry)
+        for entry in pending:
+            self._release_entry(entry)
+        if self._current_entry is not None:
+            self._release_entry(self._current_entry)
+            self._current_entry = None
+        if self._view is not None:
+            try:
                 self._view.remove()
                 self._view.release()
             except Exception:  # noqa: BLE001 - libobs boundary
@@ -387,9 +470,15 @@ class VirtualCamera:
             return None
 
     def _ensure_view(self) -> None:
-        """Create the vcam's independent view with the branded idle logo as the
-        floor (channel 0). The mirror (channel 1) and camera (channel 2) layers
-        are set on top by :meth:`apply_composition`."""
+        """Create the vcam's view: branded logo floor + its own fade transition.
+
+        Channel 0 is the logo and is never touched again. Channel 1 holds a
+        ``fade_transition`` the vcam owns, and every composition change is a
+        dissolve through it — the layers used to be swapped straight onto
+        channels, so a change from "camera full" to "media + camera PiP" cut in
+        one frame and the only motion an operator ever saw was the projector's
+        own fade leaking through the newly revealed mirror.
+        """
         if self._view is not None:
             return
         rt = self._rt()
@@ -399,16 +488,168 @@ class VirtualCamera:
         self._view = ob.View.create()
         self._idle_scene, self._idle_source = self._build_idle_scene(ob, canvas)
         self._view.set_source(_CH_IDLE, self._idle_scene.as_source())
+        try:
+            self._vtr = ob.Transition.create("fade_transition", "solin-vcam")
+            # Without an explicit size the transition renders 0x0.
+            self._vtr.set_size(canvas.width, canvas.height)
+        except Exception:  # noqa: BLE001 - libobs boundary
+            log.warning(
+                "vcam crossfade unavailable — composing without fades", exc_info=True
+            )
+            self._vtr = None
+            self._instant_only = True
+        # Seed with an EMPTY composite so startup looks exactly as before: nothing
+        # above the floor, so the branded logo shows.
+        seed = self._build_composite(
+            VcamComposition(program_visible=False, camera=CameraLayout.OFF)
+        )
+        self._current_entry = seed
+        if self._vtr is not None:
+            self._vtr.set_source(seed.scene.as_source())  # instant: the A side
+            self._view.set_source(_CH_COMPOSITE, self._vtr)
+        else:
+            self._view.set_source(_CH_COMPOSITE, seed.scene.as_source())
+
+    def _next_seq(self) -> int:
+        self._seq += 1
+        return self._seq
+
+    def _build_composite(self, comp: VcamComposition) -> _VcamEntry:
+        """Everything above the idle floor, as one fresh scene (z = insertion).
+
+        Each composite gets its OWN scene item for the shared camera source, so
+        laying out an incoming PiP cannot deform the outgoing full-screen camera
+        while the two are dissolving against each other.
+
+        A layer that cannot be built is simply absent, leaving that part of the
+        composite transparent and the branded floor showing through — the same
+        graceful degradation the channel-based code had.
+        """
+        ob = self._rt().ob
+        canvas = self._rt().video
+        scene = ob.Scene.create(f"vcam-comp-{self._next_seq()}")
+        if comp.program_visible:
+            mirror = self._program_transition()
+            if mirror is not None:
+                item = scene.add(mirror)
+                item.bounds_type = int(ob.BoundsType.SCALE_INNER)
+                item.bounds = (float(canvas.width), float(canvas.height))
+                item.bounds_alignment = int(ob.Alignment.CENTER)
+        if comp.camera is not CameraLayout.OFF and self._camera_source is not None:
+            self._layout_camera_item(scene.add(self._camera_source), comp.camera)
+        return _VcamEntry(scene, comp)
+
+    # ── crossfade ─────────────────────────────────────────────────────────
+
+    def _fading(self) -> bool:
+        return monotonic() < self._fade_until
+
+    def _maybe_start(self) -> None:
+        """Start the queued change, unless a fade is still running.
+
+        Coalescing matters: the director polls every 150ms while a fade lasts
+        450ms, so without this a flapping composition would restart the dissolve
+        continuously and the picture would never settle.
+        """
+        comp, self._target = self._target, None
+        if comp is None:
+            return
+        if self._fading():
+            self._target = comp
+            return
+        self._crossfade_to(comp)
+
+    def _crossfade_to(self, comp: VcamComposition) -> None:
+        entry = self._build_composite(comp)
+        if self._vtr is None or self._instant_only:
+            self._show_instant(entry)
+            return
+        try:
+            started = self._vtr.start(
+                entry.scene.as_source(),
+                duration_ms=_VCAM_CROSSFADE_MS,
+                mode=self._rt().ob.TransitionMode.AUTO,
+            )
+        except Exception:  # noqa: BLE001 - libobs boundary
+            log.warning(
+                "vcam crossfade failed — falling back to instant swaps", exc_info=True
+            )
+            self._instant_only = True
+            self._show_instant(entry)
+            return
+        if not started:
+            # The picture did not change, so bookkeeping must NOT advance —
+            # otherwise _current_entry would name a scene that is not on screen.
+            self._retire(entry)
+            self._schedule_disposal()
+            return
+        previous, self._current_entry = self._current_entry, entry
+        self._composition = comp
+        self._fade_until = monotonic() + (_VCAM_CROSSFADE_MS + _FADE_SETTLE_MS) / 1000.0
+        if previous is not None:
+            self._retire(previous)
+        self._schedule_disposal()
+        self._defer(_VCAM_CROSSFADE_MS + _FADE_SETTLE_MS, self._settled)
+
+    def _settled(self) -> None:
+        with self._lock:
+            # The timer firing IS the fade ending; clear the deadline before
+            # draining, or the coalesced change re-queues itself forever.
+            self._fade_until = 0.0
+            self._maybe_start()
+
+    def _show_instant(self, entry: _VcamEntry) -> None:
+        """Degraded path: swap without a dissolve (as the vcam always used to)."""
+        previous, self._current_entry = self._current_entry, entry
+        self._composition = entry.comp
+        try:
+            self._view.set_source(_CH_COMPOSITE, entry.scene.as_source())
+        except Exception:  # noqa: BLE001 - libobs boundary
+            log.debug("vcam instant composite swap failed", exc_info=True)
+        if previous is not None:
+            self._retire(previous)
+        self._schedule_disposal()
+
+    def _recompose(self) -> None:
+        """Rebuild the CURRENT composition (PiP moved, or camera device changed)."""
+        if self._composition is None:
+            return
+        self._target = self._composition
+        self._maybe_start()
+
+    # ── deferred disposal ─────────────────────────────────────────────────
+
+    def _retire(self, entry: _VcamEntry) -> None:
+        self._pending_disposal.append(entry)
+
+    def _schedule_disposal(self) -> None:
+        if not self._pending_disposal:
+            return
+        batch, self._pending_disposal = self._pending_disposal, []
+        self._in_flight.append(batch)
+        self._defer(
+            _VCAM_CROSSFADE_MS + _DISPOSAL_GRACE_MS, lambda: self._dispose_batch(batch)
+        )
+
+    def _dispose_batch(self, batch: list[_VcamEntry]) -> None:
+        with self._lock:
+            if not any(b is batch for b in self._in_flight):
+                return  # already drained by shutdown
+            self._in_flight = [b for b in self._in_flight if b is not batch]
+            for entry in batch:
+                self._release_entry(entry)
+
+    @staticmethod
+    def _release_entry(entry: _VcamEntry) -> None:
+        # obs_scene_release ONLY. Never Source.release() on anything inside a
+        # composite: pylibobs runs obs_source_remove first, which would yank the
+        # projector's transition — and the shared camera — out of every scene.
+        try:
+            entry.scene.release()
+        except Exception:  # noqa: BLE001 - libobs boundary
+            log.debug("vcam composite release errored", exc_info=True)
 
     # ── composition internals ──────────────────────────────────────────────
-
-    def _set_mirror(self, visible: bool) -> None:
-        """Channel 1: the projector's program transition, or clear it (logo shows)."""
-        if self._view is None:
-            return
-        transition = self._program_transition() if visible else None
-        # None-safe: clears the channel when the program isn't ready / not visible.
-        self._view.set_source(_CH_MIRROR, transition)
 
     def _program_transition(self):
         prog = self._program_ref()
@@ -428,30 +669,10 @@ class VirtualCamera:
             self._program = projection_program()
         return self._program
 
-    def _set_camera(self, layout: CameraLayout) -> None:
-        """Channel 2: place the camera (PiP / full), or clear it."""
-        if self._view is None:
-            return
-        if layout is CameraLayout.OFF or self._camera_item is None:
-            self._view.set_source(_CH_CAMERA, None)
-            return
-        self._layout_camera_item(layout)
-        self._view.set_source(_CH_CAMERA, self._camera_scene.as_source())
-
-    def _reapply_camera(self) -> None:
-        if self._composition is not None:
-            self._set_camera(self._composition.camera)
-
-    def _build_camera_scene(self) -> None:
-        ob = self._rt().ob
-        self._camera_scene = ob.Scene.create("vcam-camera-scene")
-        self._camera_item = self._camera_scene.add(self._camera_source)
-
-    def _layout_camera_item(self, layout: CameraLayout) -> None:
+    def _layout_camera_item(self, item, layout: CameraLayout) -> None:
         ob = self._rt().ob
         canvas = self._rt().video
         cw, ch = float(canvas.width), float(canvas.height)
-        item = self._camera_item
         item.bounds_type = int(ob.BoundsType.SCALE_INNER)
         item.bounds_alignment = int(ob.Alignment.CENTER)
         item.alignment = int(ob.Alignment.CENTER)
@@ -473,20 +694,12 @@ class VirtualCamera:
             item.pos = (x, y)
 
     def _release_camera(self) -> None:
-        if self._view is not None:
-            try:
-                self._view.set_source(_CH_CAMERA, None)
-            except Exception:  # noqa: BLE001 - libobs boundary
-                log.debug("vcam camera channel clear errored", exc_info=True)
-        # Release only the wrapping scene — the camera SOURCE is the runtime's
-        # shared per-device source (freed on runtime shutdown), never ours to free.
-        if self._camera_scene is not None:
-            try:
-                self._camera_scene.release()
-            except Exception:  # noqa: BLE001 - libobs boundary
-                log.debug("vcam camera scene release errored", exc_info=True)
-        self._camera_scene = self._camera_item = self._camera_source = None
+        # Nothing to free: the camera SOURCE belongs to ObsRuntime (shared with
+        # the projector) and the composites that referenced it are retired through
+        # the normal disposal path. Just forget it and rebuild the composition.
+        self._camera_source = None
         self._camera_device = None
+        self._recompose()
 
     def _build_idle_scene(self, ob, canvas):
         """A canvas-filling scene showing the centred JW idle logo."""
