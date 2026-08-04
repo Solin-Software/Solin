@@ -38,6 +38,7 @@ def _default_defer(delay_ms: int, fn) -> None:
 
     QTimer.singleShot(int(delay_ms), fn)
 
+
 _VCAM_OUTPUT_KIND = "virtualcam_output"
 
 #: Windows drives its own DirectShow filter over a shared frame transport, so the
@@ -449,7 +450,11 @@ class VirtualCamera:
     @staticmethod
     def _log_started() -> None:
         """Tell the operator the real device name to pick."""
-        device = find_loopback_device()
+        try:
+            device = find_loopback_device()
+        except Exception:  # noqa: BLE001 - naming the device must never fail start()
+            log.info("Virtual camera started.")
+            return
         if device is None:
             log.info("Virtual camera started (branded idle).")
             return

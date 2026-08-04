@@ -35,7 +35,7 @@ import logging
 import os
 import re
 import sys
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import TYPE_CHECKING, Any
 
 # winreg is Windows-only and its stub is gated on sys.platform, so a type checker
@@ -231,8 +231,16 @@ def _inproc_server(hive: int, wow: int, clsid: str) -> str:
 
 
 def _iter_registered_cameras() -> Iterator[tuple[str, str, str]]:
-    """Yield ``(clsid, friendly_name, dll_path)`` for every DirectShow camera."""
-    import winreg as _winreg
+    """Yield ``(clsid, friendly_name, dll_path)`` for every DirectShow camera.
+
+    Yields nothing where there is no registry to read: callers guard against
+    OSError, so letting ImportError escape would turn "no camera registered"
+    into a crash.
+    """
+    try:
+        import winreg as _winreg
+    except ImportError:  # pragma: no cover - non-Windows
+        return
 
     winreg: Any = _winreg
 
@@ -257,8 +265,15 @@ def _iter_registered_cameras() -> Iterator[tuple[str, str, str]]:
 
 
 def _is_obs_filter(dll_path: str) -> bool:
-    """True when a registered CLSID is backed by an OBS virtual-camera module."""
-    return Path(dll_path).name.lower() in {n.lower() for n in _FILTER_DLLS}
+    """True when a registered CLSID is backed by an OBS virtual-camera module.
+
+    ``PureWindowsPath``, not ``Path``: this string comes out of the Windows
+    registry and is always backslash-separated, but ``Path`` follows the HOST's
+    rules — on POSIX it treats the whole ``C:\\...\\module64.dll`` as one
+    filename, so nothing ever matches. That only shows up when these Windows
+    code paths are exercised from Linux, which is exactly what CI does.
+    """
+    return PureWindowsPath(dll_path).name.lower() in {n.lower() for n in _FILTER_DLLS}
 
 
 def find_loopback_device() -> tuple[str, str] | None:
@@ -377,12 +392,14 @@ def _dll_bits(dll: Path) -> int:
     ``solin-dshowcam-x86.dll``. Getting this wrong hands the DLL to the wrong
     ``regsvr32``, which fails with a module-format error.
     """
-    stem = dll.stem.lower()
+    stem = PureWindowsPath(dll).stem.lower()
     return 32 if stem.endswith("32") or stem.endswith("x86") else 64
 
 
 def _is_solin_filter(dll: Path) -> bool:
-    return dll.name.lower() in {name.lower() for name in _SOLIN_FILTER_DLLS}
+    return PureWindowsPath(dll).name.lower() in {
+        name.lower() for name in _SOLIN_FILTER_DLLS
+    }
 
 
 def _register_commands(dlls: list[Path]) -> list[str]:
