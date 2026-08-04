@@ -22,19 +22,32 @@ BADGE_BACKGROUND = QColor(51, 51, 51)
 #: Idle-screen background (matches the projection Display's black letterbox).
 IDLE_BACKGROUND = QColor(0, 0, 0)
 
+#: Monogram colour on the idle/standby screen. The artwork's black glyph is
+#: invisible there (black on #333 on black); a light glyph makes the standby
+#: picture read as "Solin is idle" rather than "the camera is broken".
+IDLE_BADGE_GLYPH = QColor(0xE6, 0xE6, 0xE6)
+
 #: Centred idle badge size as a fraction of the canvas' shorter side.
 _IDLE_BADGE_FRACTION = 0.24
 
 
-def render_jw_badge(size: int) -> QPixmap:
-    """The dark JW badge (as shown bottom-right on the yeartext screen), ``size``²."""
+def render_jw_badge(size: int, *, glyph: QColor | None = None) -> QPixmap:
+    """The dark JW badge (as shown bottom-right on the yeartext screen), ``size``².
+
+    ``glyph`` recolours the monogram. It defaults to the black of the artwork,
+    which is what the yeartext screen wants — there the badge is a deliberately
+    subtle watermark over bright content.
+    """
     size = max(1, int(size))
     pixmap = QPixmap(size, size)
     pixmap.fill(BADGE_BACKGROUND)
     painter = QPainter(pixmap)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     pad = int(size * -0.08)  # slight bleed, matching the yeartext badge
-    QSvgRenderer(QByteArray(JW_LOGO_SVG)).render(
+    svg = JW_LOGO_SVG
+    if glyph is not None:
+        svg = svg.replace(b'fill="black"', f'fill="{glyph.name()}"'.encode())
+    QSvgRenderer(QByteArray(svg)).render(
         painter, QRectF(pad, pad, size - 2 * pad, size - 2 * pad)
     )
     painter.end()
@@ -48,6 +61,11 @@ def render_idle_logo(
 
     Used as the virtual camera's default/standby screen — branded, not black —
     so a videoconference always sees the logo when nothing is being projected.
+
+    The monogram is drawn LIGHT here, unlike the yeartext badge. The artwork's
+    black glyph sits on a #333 square, which is legible over the bright yeartext
+    but disappears on this screen's black field: the badge was being delivered
+    and looked like an unlit camera.
     """
     width = max(1, int(width))
     height = max(1, int(height))
@@ -55,7 +73,7 @@ def render_idle_logo(
     image.fill(background if background is not None else IDLE_BACKGROUND)
     size = int(min(width, height) * _IDLE_BADGE_FRACTION)
     if size > 0:
-        badge = render_jw_badge(size)
+        badge = render_jw_badge(size, glyph=IDLE_BADGE_GLYPH)
         painter = QPainter(image)
         painter.drawPixmap((width - size) // 2, (height - size) // 2, badge)
         painter.end()

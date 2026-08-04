@@ -236,8 +236,13 @@ class VirtualCamera:
         letting the frames cease.
         """
         try:
-            from .vcam_transport import FrameTransport, RawVideoBridge
+            from .vcam_transport import FrameTransport, RawVideoBridge, write_standby_frame
 
+            # Leave the branded standby picture on disk for the filter to fall
+            # back to. It is what the camera shows while Solin is CLOSED, so it
+            # has to be written before we could ever stop producing — refreshing
+            # it here also picks up branding changes.
+            write_standby_frame()
             if self._transport is None:
                 self._transport = FrameTransport()
             if not self._transport.open():

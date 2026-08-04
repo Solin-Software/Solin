@@ -29,6 +29,13 @@ logger = logging.getLogger(__name__)
 
 FRAME_PATH = Path(r"C:\ProgramData\Solin\vcam-frame.bin")
 
+#: Branded standby picture the DirectShow filter falls back to when Solin is not
+#: producing frames. Without it the camera shows a black rectangle whenever Solin
+#: is closed, which reads as a broken device rather than an idle one. Written as
+#: raw NV12 at the filter's geometry so the filter needs no image decoder; the
+#: filter loads it once and caches it (see frame_transport.h).
+STANDBY_PATH = Path(r"C:\ProgramData\Solin\vcam-standby.nv12")
+
 _MAGIC = 0x31435653  # 'SVC1'
 _VERSION = 1
 _HEADER_BYTES = 64
@@ -46,6 +53,72 @@ _HEADER = struct.Struct("<8I2Q16s")
 _VIDEO_FORMAT_NV12 = 2
 _VIDEO_RANGE_PARTIAL = 1
 _VIDEO_CS_709 = 2
+
+
+def rgb_to_nv12(rgb: bytes, width: int, height: int) -> bytes:
+    """RGB888 -> NV12, studio swing.
+
+    Pillow's YCbCr is full-range (JPEG); video wants 16-235 / 16-240, so the
+    planes are rescaled. Done with Pillow point tables so the whole conversion
+    stays in C rather than a Python loop over ~900k pixels.
+    """
+    from PIL import Image
+
+    img = Image.frombytes("RGB", (width, height), rgb).convert("YCbCr")
+    y, cb, cr = img.split()
+
+    y = y.point(lambda v: 16 + (v * 219) // 255)
+    cb = cb.point(lambda v: 128 + ((v - 128) * 224) // 255)
+    cr = cr.point(lambda v: 128 + ((v - 128) * 224) // 255)
+
+    half = (width // 2, height // 2)
+    cb_small = cb.resize(half, Image.BILINEAR).tobytes()
+    cr_small = cr.resize(half, Image.BILINEAR).tobytes()
+
+    uv = bytearray(len(cb_small) * 2)
+    uv[0::2] = cb_small  # NV12 interleaves U then V
+    uv[1::2] = cr_small
+    return y.tobytes() + bytes(uv)
+
+
+def write_standby_frame(path: Path = STANDBY_PATH) -> bool:
+    """Render Solin's branded idle screen and leave it on disk for the filter.
+
+    Written once per run rather than continuously: it is the picture the camera
+    shows while Solin is CLOSED, so it has to outlive the process. Cheap enough
+    to refresh at startup, which also picks up branding changes.
+    """
+    if sys.platform != "win32":
+        return False
+    try:
+        from ...projection.brand import render_idle_logo
+
+        image = render_idle_logo(FRAME_WIDTH, FRAME_HEIGHT)
+        rgb = image.convertToFormat(image.Format.Format_RGB888)
+        stride = rgb.bytesPerLine()
+        raw = bytes(rgb.constBits())
+        row = FRAME_WIDTH * 3
+        if stride != row:
+            raw = b"".join(
+                raw[y * stride : y * stride + row] for y in range(FRAME_HEIGHT)
+            )
+        nv12 = rgb_to_nv12(raw, FRAME_WIDTH, FRAME_HEIGHT)
+        if len(nv12) != FRAME_BYTES:
+            logger.warning(
+                "standby frame is %d bytes, expected %d", len(nv12), FRAME_BYTES
+            )
+            return False
+        path.parent.mkdir(parents=True, exist_ok=True)
+        # Write beside the target and replace, so the filter never maps a
+        # half-written file.
+        tmp = path.with_suffix(".tmp")
+        tmp.write_bytes(nv12)
+        tmp.replace(path)
+    except Exception:  # noqa: BLE001 - branding must never block the camera
+        logger.warning("Could not write the virtual-camera standby frame", exc_info=True)
+        return False
+    logger.info("Virtual camera standby frame written to %s", path)
+    return True
 
 
 class FrameTransport:

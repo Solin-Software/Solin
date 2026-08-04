@@ -219,13 +219,21 @@ public:
         next_due_ = (now - next_due_ > 10 * kFrameDuration) ? now + kFrameDuration
                                                             : next_due_ + kFrameDuration;
 
-        // Solin's composite when it is producing, black otherwise. Never withhold
-        // a sample: a starved consumer spins and then errors out.
+        // Solin's composite when it is producing; otherwise the branded standby
+        // picture, and black only if even that is unavailable. Never withhold a
+        // sample: a starved consumer spins and then errors out.
+        const char* source = "solin";
         bool live = reader_.Read(nv12_) && !reader_.Stale();
-        if (!live) fill_black_nv12(nv12_);
+        if (!live) {
+            if (reader_.ReadStandby(nv12_)) {
+                source = "standby";
+            } else {
+                fill_black_nv12(nv12_);
+                source = "black";
+            }
+        }
         if (frame_index_ == 0 || frame_index_ % 90 == 0) {
-            solin_log("frame %llu fmt=%d source=%s", frame_index_, format_index_,
-                      live ? "solin" : "black");
+            solin_log("frame %llu fmt=%d source=%s", frame_index_, format_index_, source);
         }
 
         switch (fmt.compression) {

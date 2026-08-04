@@ -9,10 +9,19 @@
 
 #include <windows.h>
 #include <intrin.h>  // _ReadBarrier
+#include <vector>
 
 #include "solin_guids.h"
 
 static const wchar_t kFramePath[] = L"C:\\ProgramData\\Solin\\vcam-frame.bin";
+
+// Standby picture shown when Solin is not producing frames. Raw NV12 at the
+// filter's own geometry, written by Solin (see vcam_transport.write_standby)
+// from the same branded renderer the libobs vcam uses, so the camera shows the
+// badge instead of a black rectangle while Solin is closed. Kept as a separate
+// file rather than baked into the DLL: the branding then follows the app, and
+// the filter needs no image decoder.
+static const wchar_t kStandbyPath[] = L"C:\\ProgramData\\Solin\\vcam-standby.nv12";
 static const UINT32 kFrameMagic = 0x31435653;  // 'SVC1'
 static const UINT32 kFrameVersion = 1;
 static const DWORD kHeaderBytes = 64;
@@ -89,6 +98,18 @@ public:
         return true;
     }
 
+    // Copies the branded standby picture into dst, if Solin has ever written one.
+    // Read once and cached: this is the steady state while Solin is closed, so
+    // re-reading it 30 times a second would be pure waste.
+    bool ReadStandby(BYTE* dst) {
+        if (standby_state_ == 0) {
+            standby_state_ = LoadStandby() ? 1 : 2;
+        }
+        if (standby_state_ != 1) return false;
+        memcpy(dst, standby_.data(), kNv12Bytes);
+        return true;
+    }
+
     // Copies the newest published NV12 frame into dst. False means "no producer" —
     // the caller must still deliver a frame (black), never stall the graph.
     bool Read(BYTE* dst) {
@@ -137,10 +158,37 @@ public:
     }
 
 private:
+    // Reads the standby NV12 once. Any problem (absent, short, unreadable) simply
+    // means "no standby picture" and the caller falls back to black — a missing
+    // brand frame must never stop the camera delivering samples.
+    bool LoadStandby() {
+        HANDLE fh = CreateFileW(kStandbyPath, GENERIC_READ,
+                                FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
+                                OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (fh == INVALID_HANDLE_VALUE) return false;
+        LARGE_INTEGER size = {};
+        if (!GetFileSizeEx(fh, &size) || size.QuadPart != (LONGLONG)kNv12Bytes) {
+            CloseHandle(fh);
+            return false;
+        }
+        standby_.resize(kNv12Bytes);
+        DWORD read = 0;
+        BOOL ok = ReadFile(fh, standby_.data(), (DWORD)kNv12Bytes, &read, nullptr);
+        CloseHandle(fh);
+        if (!ok || read != kNv12Bytes) {
+            standby_.clear();
+            return false;
+        }
+        return true;
+    }
+
     HANDLE file_;
     HANDLE mapping_;
     const BYTE* view_;
     size_t size_;
     UINT64 last_index_;
     ULONGLONG last_change_;
+    //: 0 = not tried, 1 = loaded, 2 = unavailable (do not retry every frame)
+    int standby_state_ = 0;
+    std::vector<BYTE> standby_;
 };
