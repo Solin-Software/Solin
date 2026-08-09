@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import os
 from pathlib import Path
+import subprocess
+import sys
 from time import monotonic, sleep
 
 from PySide6.QtCore import (
@@ -1316,6 +1319,42 @@ def test_editor_captures_and_exports_exact_clean_canvas_png(tmp_path, monkeypatc
     assert notifications.messages == []
     widget.cleanup()
     widget.close()
+
+
+def test_editor_capture_is_independent_of_qt_scale_factor(tmp_path) -> None:
+    test_path = Path(__file__).resolve()
+    project_root = test_path.parents[2]
+
+    for scale_factor in ("1.25", "1.5", "1.75"):
+        environment = os.environ.copy()
+        environment.update(
+            {
+                "QT_QPA_PLATFORM": "offscreen",
+                "QT_SCALE_FACTOR": scale_factor,
+            }
+        )
+        completed = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "pytest",
+                f"{test_path}::test_editor_captures_and_exports_exact_clean_canvas_png",
+                "-q",
+                "--basetemp",
+                str(tmp_path / f"scale-{scale_factor}"),
+            ],
+            cwd=project_root,
+            env=environment,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+
+        assert completed.returncode == 0, (
+            f"Talk-theme capture failed at {scale_factor}x scaling:\n"
+            f"{completed.stdout}\n{completed.stderr}"
+        )
 
 
 def test_editor_exports_the_background_blur_effect(tmp_path, monkeypatch) -> None:

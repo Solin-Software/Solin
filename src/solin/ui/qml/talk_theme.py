@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from enum import Enum
+from math import isfinite
 from pathlib import Path
 from time import monotonic
 from typing import Any, Callable, cast
@@ -17,6 +18,7 @@ from PySide6.QtCore import (
     QSize,
     Slot,
     QTimer,
+    Qt,
     QUrl,
 )
 from PySide6.QtQuickWidgets import QQuickWidget
@@ -45,6 +47,22 @@ from solin.ui.qml.svg_icons import SvgIconProvider
 
 
 _CAPTURE_TIMEOUT_MS = 5000
+
+
+def _capture_request_size(canvas: Any, target: ThemeRenderTarget) -> QSize:
+    device_pixel_ratio = 1.0
+    try:
+        window = canvas.window()
+        if window is not None:
+            device_pixel_ratio = float(window.devicePixelRatio())
+    except Exception:  # noqa: BLE001 - defensive QQuickWindow boundary
+        device_pixel_ratio = 1.0
+    if not isfinite(device_pixel_ratio) or device_pixel_ratio <= 0:
+        device_pixel_ratio = 1.0
+    return QSize(
+        max(1, round(target.width / device_pixel_ratio)),
+        max(1, round(target.height / device_pixel_ratio)),
+    )
 
 
 class _CapturePurpose(Enum):
@@ -223,7 +241,7 @@ class TalkThemeEditorWidget(QWidget):
             )
             return
         try:
-            result = canvas.grabToImage(QSize(target.width, target.height))
+            result = canvas.grabToImage(_capture_request_size(canvas, target))
         except Exception:  # noqa: BLE001 - Qt Quick render boundary
             canvas.setProperty("finalOutput", False)
             self._capture_failed(
@@ -258,13 +276,26 @@ class TalkThemeEditorWidget(QWidget):
         self._grab_result = None
         canvas.setProperty("finalOutput", False)
         image = result.image()
-        if image.isNull() or image.size() != QSize(target.width, target.height):
+        target_size = QSize(target.width, target.height)
+        if image.isNull():
             self._capture_failed(
                 self.tr("The final talk-theme image is incomplete."),
                 purpose,
             )
             return
         image.setDevicePixelRatio(1.0)
+        if image.size() != target_size:
+            image = image.scaled(
+                target_size,
+                Qt.AspectRatioMode.IgnoreAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+        if image.isNull() or image.size() != target_size:
+            self._capture_failed(
+                self.tr("The final talk-theme image is incomplete."),
+                purpose,
+            )
+            return
         payload = QByteArray()
         buffer = QBuffer(payload)
         if not buffer.open(QIODevice.OpenModeFlag.WriteOnly) or not image.save(buffer, "PNG"):
