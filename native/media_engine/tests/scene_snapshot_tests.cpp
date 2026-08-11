@@ -107,16 +107,12 @@ template <typename Callback> void expect_rejected(Callback&& callback, const cha
     outputs.push_back({
         {"bus_id", "media_windows"},
         {"default_scene_id", "scene-1"},
-        {"transition", "cut"},
-        {"transition_duration_ms", 0U},
         {"start_with_solin", false},
         {"video_format", video_format("bgra")},
     });
     outputs.push_back({
         {"bus_id", "virtual_camera"},
         {"default_scene_id", "scene-1"},
-        {"transition", "cut"},
-        {"transition_duration_ms", 0U},
         {"start_with_solin", false},
         {"video_format", video_format("nv12")},
     });
@@ -128,7 +124,7 @@ template <typename Callback> void expect_rejected(Callback&& callback, const cha
     return {
         {"document",
          {
-             {"schema_version", 8U},
+             {"schema_version", 9U},
              {"document_id", "document-1"},
              {"revision", 7U},
              {"sources", std::move(sources)},

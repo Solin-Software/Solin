@@ -13,6 +13,10 @@ def _scene(scene_id: str, name: str) -> dict[str, object]:
         "default": False,
         "media": False,
         "live": False,
+        "transition_override": False,
+        "transition_kind": "",
+        "transition_duration_ms": 0,
+        "transition_label": "",
     }
 
 

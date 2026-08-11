@@ -20,7 +20,7 @@ namespace {
 
 using Json = nlohmann::json;
 
-constexpr std::uint64_t kSceneSchemaVersion = 8U;
+constexpr std::uint64_t kSceneSchemaVersion = 9U;
 constexpr std::size_t kMaximumSources = 256U;
 constexpr std::size_t kMaximumScenes = 256U;
 constexpr std::size_t kMaximumLayersPerScene = 128U;
@@ -604,22 +604,12 @@ void validate_ptz_binding(const Json& value) {
 
 [[nodiscard]] SceneOutputDefinition parse_output(const Json& value) {
     require_exact_fields(value,
-                         {"bus_id", "default_scene_id", "transition", "transition_duration_ms",
-                          "start_with_solin", "video_format"},
+                         {"bus_id", "default_scene_id", "start_with_solin", "video_format"},
                          "output");
-    const auto transition = bounded_text(value.at("transition"), 16U, "output transition");
-    require_one_of(transition, {"cut", "fade"}, "output transition");
-    const auto duration =
-        unsigned_integer(value.at("transition_duration_ms"), 10'000U, "output transition duration");
-    if (transition == "cut" && duration != 0U) {
-        invalid("output transition duration");
-    }
     return {
         .bus = output_bus(value.at("bus_id"), "output bus"),
         .default_scene_id =
             bounded_text(value.at("default_scene_id"), 128U, "output default scene", true),
-        .transition = transition,
-        .transition_duration_ms = static_cast<std::uint32_t>(duration),
         .start_with_solin = boolean(value.at("start_with_solin"), "output startup state"),
         .video_format = parse_output_video_format(value.at("video_format")),
     };

@@ -12,7 +12,7 @@ from solin.core.scenes.engine import (
     SceneEngineSnapshot,
     SceneEngineStatus,
 )
-from solin.core.scenes.model import BusId, TransitionKind
+from solin.core.scenes.model import BusId, TransitionKind, TransitionSpec
 from solin.core.scenes.presets import SceneSeedNames, create_default_scene_document
 from solin.core.scenes.process_engine import (
     SceneEngineCommandRejectedError,
@@ -76,7 +76,7 @@ def _snapshot(sequence: int = 1) -> SceneEngineSnapshot:
 def test_subprocess_engine_executes_the_scene_command_lifecycle() -> None:
     engine = _engine()
     capabilities = engine.start(session_id="integration-session", deadline_ms=2000).result(3)
-    assert capabilities.protocol_version == 2
+    assert capabilities.protocol_version == 3
     assert not capabilities.hardware_compositing
 
     discovery = engine.list_local_cameras(
@@ -94,6 +94,7 @@ def test_subprocess_engine_executes_the_scene_command_lifecycle() -> None:
     preparation = engine.prepare_scene(
         BusId.MEDIA_WINDOWS,
         snapshot.active_scenes[0][1],
+        transition=TransitionSpec(TransitionKind.CUT, 0),
         document_revision=snapshot.document.revision,
         request_id="prepare-1",
         sequence=2,
@@ -101,8 +102,6 @@ def test_subprocess_engine_executes_the_scene_command_lifecycle() -> None:
     ).result(2)
     taken = engine.take_prepared(
         preparation,
-        transition=TransitionKind.CUT,
-        transition_duration_ms=0,
         request_id="take-1",
         sequence=3,
         deadline_ms=1000,
@@ -194,6 +193,7 @@ def test_subprocess_engine_expires_unanswered_requests() -> None:
     future = engine.prepare_scene(
         BusId.MEDIA_WINDOWS,
         snapshot.active_scenes[0][1],
+        transition=TransitionSpec(TransitionKind.CUT, 0),
         document_revision=snapshot.document.revision,
         request_id="prepare-timeout",
         sequence=2,
@@ -215,6 +215,7 @@ def test_subprocess_engine_surfaces_command_rejection_without_restarting() -> No
     future = engine.prepare_scene(
         BusId.MEDIA_WINDOWS,
         snapshot.active_scenes[0][1],
+        transition=TransitionSpec(TransitionKind.CUT, 0),
         document_revision=snapshot.document.revision,
         request_id="prepare-rejected",
         sequence=2,
@@ -258,6 +259,34 @@ def test_rejected_hydration_does_not_advance_the_applied_document_revision() -> 
     assert not rejected.applied
     assert rejected.document_revision == 7
     assert output.document_revision == 0
+    engine.stop()
+
+
+def test_subprocess_engine_returns_a_typed_transition_fallback() -> None:
+    engine = _engine("transition_fallback")
+    engine.start(session_id="integration-session", deadline_ms=2000).result(3)
+    snapshot = _snapshot()
+    engine.hydrate(snapshot, request_id="hydrate-1", deadline_ms=1000).result(2)
+
+    preparation = engine.prepare_scene(
+        BusId.VIRTUAL_CAMERA,
+        snapshot.active_scenes[1][1],
+        transition=TransitionSpec(TransitionKind.DISSOLVE, 350),
+        document_revision=snapshot.document.revision,
+        request_id="prepare-1",
+        sequence=2,
+        deadline_ms=1000,
+    ).result(2)
+
+    assert preparation.transition == TransitionSpec(TransitionKind.CUT, 0)
+    assert preparation.fallback_applied
+    assert preparation.fallback_reason == "transition_pipeline_unavailable"
+    assert engine.take_prepared(
+        preparation,
+        request_id="take-1",
+        sequence=3,
+        deadline_ms=1000,
+    ).result(2).applied
     engine.stop()
 
 
@@ -315,7 +344,7 @@ def test_subprocess_engine_locks_gstreamer_to_its_bundled_runtime(tmp_path: Path
 
     capabilities = engine.start(session_id="integration-session", deadline_ms=2000).result(3)
 
-    assert capabilities.protocol_version == 2
+    assert capabilities.protocol_version == 3
     engine.stop()
 
 

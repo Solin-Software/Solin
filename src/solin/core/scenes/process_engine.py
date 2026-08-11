@@ -32,6 +32,7 @@ from solin.core.scenes.engine import (
     ScenePreparation,
     SourceHealthEvent,
     SourceHealthStatus,
+    scene_engine_document_record,
 )
 from solin.core.scenes.ipc_protocol import (
     PROTOCOL_VERSION,
@@ -45,7 +46,13 @@ from solin.core.scenes.ipc_protocol import (
     require_text,
     write_envelope,
 )
-from solin.core.scenes.model import BusId, CameraMediaType, SceneLayer, TransitionKind
+from solin.core.scenes.model import (
+    BusId,
+    CameraMediaType,
+    SceneLayer,
+    TransitionKind,
+    TransitionSpec,
+)
 
 
 _SUPERVISOR_TICK_SECONDS = 0.05
@@ -60,7 +67,17 @@ _HELLO_FIELDS = frozenset(
 )
 _ACK_FIELDS = frozenset({"applied", "error_code", "error_message"})
 _ERROR_FIELDS = frozenset({"error_code", "error_message"})
-_PREPARATION_FIELDS = frozenset({"bus_id", "scene_id", "preparation_token"})
+_PREPARATION_FIELDS = frozenset(
+    {
+        "bus_id",
+        "scene_id",
+        "preparation_token",
+        "transition",
+        "fallback_applied",
+        "fallback_reason",
+    }
+)
+_TRANSITION_FIELDS = frozenset({"kind", "duration_ms"})
 _HEARTBEAT_FIELDS = frozenset({"monotonic_ms"})
 _SOURCE_HEALTH_FIELDS = frozenset({"source_id", "status", "error_code", "message"})
 _LOCAL_CAMERA_LIST_FIELDS = frozenset({"supported", "ready", "generation", "devices", "error_code"})
@@ -313,7 +330,7 @@ class SubprocessSceneEngine:
         if not isinstance(snapshot, SceneEngineSnapshot):
             return _failed_future(TypeError("Invalid scene engine snapshot"))
         payload: dict[str, object] = {
-            "document": snapshot.document.to_record(),
+            "document": scene_engine_document_record(snapshot.document),
             "active_scenes": {
                 bus_id.value: scene_id for bus_id, scene_id in snapshot.active_scenes
             },
@@ -389,6 +406,7 @@ class SubprocessSceneEngine:
         bus_id: BusId,
         scene_id: str,
         *,
+        transition: TransitionSpec,
         document_revision: int,
         request_id: str,
         sequence: int,
@@ -396,6 +414,8 @@ class SubprocessSceneEngine:
     ) -> Future[ScenePreparation]:
         if not isinstance(bus_id, BusId):
             return _failed_future(TypeError("Invalid output bus"))
+        if not isinstance(transition, TransitionSpec):
+            return _failed_future(TypeError("Invalid scene transition"))
         _validate_identity(scene_id, "scene id")
         return self._request(
             message_type="prepare_scene",
@@ -404,7 +424,11 @@ class SubprocessSceneEngine:
             sequence=sequence,
             document_revision=document_revision,
             deadline_ms=deadline_ms,
-            payload={"bus_id": bus_id.value, "scene_id": scene_id},
+            payload={
+                "bus_id": bus_id.value,
+                "scene_id": scene_id,
+                "transition": transition.to_record(),
+            },
             converter=_preparation_from_envelope,
         )
 
@@ -412,18 +436,12 @@ class SubprocessSceneEngine:
         self,
         preparation: ScenePreparation,
         *,
-        transition: TransitionKind,
-        transition_duration_ms: int,
         request_id: str,
         sequence: int,
         deadline_ms: int,
     ) -> Future[SceneEngineAck]:
         if not isinstance(preparation, ScenePreparation):
             return _failed_future(TypeError("Invalid scene preparation"))
-        if not isinstance(transition, TransitionKind):
-            return _failed_future(TypeError("Invalid scene transition"))
-        if type(transition_duration_ms) is not int or transition_duration_ms < 0:
-            return _failed_future(ValueError("Invalid scene transition duration"))
         return self._request(
             message_type="take_prepared",
             expected_message_type="ack",
@@ -435,8 +453,6 @@ class SubprocessSceneEngine:
                 "bus_id": preparation.bus_id.value,
                 "scene_id": preparation.scene_id,
                 "preparation_token": preparation.preparation_token,
-                "transition": transition.value,
-                "transition_duration_ms": transition_duration_ms,
             },
             converter=_ack_from_envelope,
         )
@@ -1132,6 +1148,30 @@ def _preparation_from_envelope(envelope: SceneIpcEnvelope) -> ScenePreparation:
         bus_id = BusId(require_text(payload["bus_id"], "preparation bus", maximum=64))
     except ValueError as exc:
         raise SceneIpcMessageError("Invalid preparation bus") from exc
+    raw_transition = payload["transition"]
+    if not isinstance(raw_transition, dict):
+        raise SceneIpcMessageError("Prepared transition must be an object")
+    transition_record = require_payload_fields(
+        raw_transition,
+        _TRANSITION_FIELDS,
+        message_type="prepared transition",
+    )
+    try:
+        transition = TransitionSpec(
+            kind=TransitionKind(
+                require_text(
+                    transition_record["kind"],
+                    "prepared transition kind",
+                    maximum=64,
+                )
+            ),
+            duration_ms=require_non_negative_int(
+                transition_record["duration_ms"],
+                "prepared transition duration",
+            ),
+        )
+    except (TypeError, ValueError) as exc:
+        raise SceneIpcMessageError("Invalid prepared transition") from exc
     return ScenePreparation(
         request_id=envelope.request_id,
         session_id=envelope.session_id,
@@ -1143,6 +1183,16 @@ def _preparation_from_envelope(envelope: SceneIpcEnvelope) -> ScenePreparation:
         preparation_token=require_text(
             payload["preparation_token"],
             "preparation token",
+            maximum=256,
+        ),
+        transition=transition,
+        fallback_applied=require_bool(
+            payload["fallback_applied"],
+            "transition fallback state",
+        ),
+        fallback_reason=require_text(
+            payload["fallback_reason"],
+            "transition fallback reason",
             maximum=256,
         ),
     )

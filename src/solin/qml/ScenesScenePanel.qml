@@ -18,6 +18,9 @@ Rectangle {
         bool isDefaultScene,
         bool isMediaScene,
         bool isLiveScene,
+        bool hasTransitionOverride,
+        string transitionKind,
+        int transitionDurationMs,
         int sceneCount,
         var anchor,
         real x,
@@ -230,6 +233,9 @@ Rectangle {
                 required property bool isDefaultScene
                 required property bool isMediaScene
                 required property bool isLiveScene
+                required property bool hasTransitionOverride
+                required property string transitionOverrideKind
+                required property int transitionOverrideDurationMs
                 readonly property bool selected: root.bridge && root.bridge.selectedSceneId === sceneId
                 property real previewOffsetY: root.previewOffset(index, sceneId)
 
@@ -290,6 +296,9 @@ Rectangle {
                                     sceneRow.isDefaultScene,
                                     sceneRow.isMediaScene,
                                     sceneRow.isLiveScene,
+                                    sceneRow.hasTransitionOverride,
+                                    sceneRow.transitionOverrideKind,
+                                    sceneRow.transitionOverrideDurationMs,
                                     sceneList.count,
                                     menuMouse,
                                     0,
@@ -367,6 +376,9 @@ Rectangle {
                                 sceneRow.isDefaultScene,
                                 sceneRow.isMediaScene,
                                 sceneRow.isLiveScene,
+                                sceneRow.hasTransitionOverride,
+                                sceneRow.transitionOverrideKind,
+                                sceneRow.transitionOverrideDurationMs,
                                 sceneList.count,
                                 rowMouse,
                                 mouse.x,

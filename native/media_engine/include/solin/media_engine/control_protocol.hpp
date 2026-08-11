@@ -10,7 +10,7 @@
 
 namespace solin::media_engine {
 
-inline constexpr std::uint64_t kControlProtocolVersion = 2U;
+inline constexpr std::uint64_t kControlProtocolVersion = 3U;
 
 struct ControlEnvelope {
     std::uint64_t protocol_version{kControlProtocolVersion};
@@ -38,12 +38,12 @@ struct ControlSessionServices {
     std::function<nlohmann::json()> capabilities{};
     std::function<nlohmann::json()> list_local_cameras{};
     std::function<nlohmann::json(const nlohmann::json&, std::uint64_t, std::uint64_t)> hydrate{};
-    std::function<ControlServiceReply(std::string_view, std::string_view, std::uint64_t,
-                                      std::string_view, std::uint64_t)>
+    std::function<ControlServiceReply(std::string_view, std::string_view, std::string_view,
+                                      std::uint64_t, std::uint64_t, std::string_view,
+                                      std::uint64_t)>
         prepare_scene{};
     std::function<nlohmann::json(std::string_view, std::string_view, std::string_view,
-                                 std::string_view, std::uint64_t, std::uint64_t,
-                                 std::uint64_t)>
+                                 std::uint64_t, std::uint64_t)>
         take_prepared{};
     std::function<void(std::string_view)> cancel_preparation{};
     std::function<nlohmann::json(std::string_view, std::string_view,

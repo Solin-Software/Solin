@@ -19,6 +19,8 @@ from solin.core.scenes.model import (
     NO_SIGNAL_SOURCE_ID,
     SourceDefinition,
     SourceKind,
+    TransitionKind,
+    TransitionSpec,
 )
 from solin.core.scenes.presets import (
     CAMERA_SCENE_ID,
@@ -233,6 +235,31 @@ def test_scene_profiles_preserve_output_preferences_when_switching(tmp_path: Pat
 
     assert workspace.runtime.state.output(BusId.MEDIA_WINDOWS).enabled is True
     assert workspace.runtime.state.output(BusId.VIRTUAL_CAMERA).enabled is False
+
+
+def test_scene_profiles_keep_independent_program_transition_policies(
+    tmp_path: Path,
+) -> None:
+    identities = iter(("default-document", "collection-b", "document-b"))
+    workspace = SceneWorkspaceService(
+        _paths(tmp_path),
+        seed_names=_names(),
+        identity_factory=lambda: next(identities),
+    )
+    first_collection_id = workspace.active_collection.id
+    first_spec = TransitionSpec(TransitionKind.FADE_TO_BLACK, 800)
+    workspace.documents.set_program_transition(first_spec)
+    created = workspace.create_collection("Auditorium")
+
+    workspace.activate_collection(created.id)
+
+    assert workspace.documents.document.transition_policy.default == TransitionSpec(
+        TransitionKind.DISSOLVE,
+        350,
+    )
+    workspace.documents.set_program_transition(TransitionSpec(TransitionKind.CUT, 0))
+    workspace.activate_collection(first_collection_id)
+    assert workspace.documents.document.transition_policy.default == first_spec
 
 
 def test_activation_commit_failure_rolls_back_catalog_and_runtime(

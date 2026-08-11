@@ -98,6 +98,7 @@ class ScenesEditorWidget(QWidget):
             "chevron-up": icons.ICON_CHEVRON_UP,
             "refresh": icons.ICON_REFRESH,
             "copy": icons.ICON_COPY,
+            "transition": icons.ICON_REPEAT,
             "check": icons.ICON_CHECK,
             "close": icons.ICON_CLOSE,
             "crosshair": icons.ICON_CROSSHAIR,

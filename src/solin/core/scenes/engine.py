@@ -16,7 +16,7 @@ from solin.core.scenes.model import (
     CameraMediaType,
     SceneDocument,
     SceneLayer,
-    TransitionKind,
+    TransitionSpec,
     VideoColorRange,
     VideoColorSpace,
     VideoPixelFormat,
@@ -25,6 +25,24 @@ from solin.core.scenes.model import (
 
 MAXIMUM_OUTPUT_WINDOW_TARGETS = 32
 DEFAULT_ENGINE_STARTUP_DEADLINE_MS = 15_000
+
+
+def scene_engine_document_record(document: SceneDocument) -> dict[str, object]:
+    """Serialize only graph state consumed by the isolated compositor."""
+
+    if not isinstance(document, SceneDocument):
+        raise TypeError("Invalid scene document")
+    record = document.to_record()
+    record.pop("transition_policy", None)
+    return record
+
+
+def scene_engine_graph_signature(document: SceneDocument) -> dict[str, object]:
+    """Return revision-independent graph state for hydration invalidation."""
+
+    record = scene_engine_document_record(document)
+    record.pop("revision", None)
+    return record
 
 
 class SceneEngineStatus(StrEnum):
@@ -345,6 +363,9 @@ class ScenePreparation:
     bus_id: BusId
     scene_id: str
     preparation_token: str
+    transition: TransitionSpec
+    fallback_applied: bool = False
+    fallback_reason: str = ""
 
     def __post_init__(self) -> None:
         _identity(self.request_id, "request id")
@@ -356,6 +377,13 @@ class ScenePreparation:
             raise ValueError("Invalid preparation bus")
         _identity(self.scene_id, "preparation scene id")
         _identity(self.preparation_token, "preparation token")
+        if not isinstance(self.transition, TransitionSpec):
+            raise ValueError("Invalid prepared transition")
+        if not isinstance(self.fallback_applied, bool):
+            raise ValueError("Transition fallback state must be a boolean")
+        _bounded_text(self.fallback_reason, 256, "transition fallback reason")
+        if self.fallback_applied == bool(not self.fallback_reason):
+            raise ValueError("Transition fallback state and reason must agree")
 
 
 @dataclass(frozen=True, slots=True)
@@ -496,6 +524,7 @@ class SceneEngine(Protocol):
         bus_id: BusId,
         scene_id: str,
         *,
+        transition: TransitionSpec,
         document_revision: int,
         request_id: str,
         sequence: int,
@@ -506,8 +535,6 @@ class SceneEngine(Protocol):
         self,
         preparation: ScenePreparation,
         *,
-        transition: TransitionKind,
-        transition_duration_ms: int,
         request_id: str,
         sequence: int,
         deadline_ms: int,

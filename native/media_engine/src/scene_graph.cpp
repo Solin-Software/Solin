@@ -170,9 +170,9 @@ class SceneGraphRuntime::Impl final {
         std::string request_id{};
         std::uint64_t document_revision{0U};
         std::shared_ptr<const CompiledSceneGraph> graph{};
-        std::vector<SourceLease> source_leases{};
-        // Declared after source_leases so the render graph is destroyed first.
+        std::shared_ptr<SceneRenderResources> render_resources{};
         std::shared_ptr<PreparedSceneRenderGraph> render_graph{};
+        std::shared_ptr<PreparedSceneRenderGraph> transition_output{};
     };
 
     class DeferredReleaseQueue final {
@@ -292,12 +292,18 @@ class SceneGraphRuntime::Impl final {
         if (!scene.has_value()) {
             return;
         }
+        if (scene->transition_output != nullptr) {
+            scene->transition_output->stop();
+        }
         deferred_releases.defer(std::move(scene.value()));
         scene.reset();
     }
 
     void defer_all_pending() {
         for (auto& [_, scene] : pending_by_token) {
+            if (scene.transition_output != nullptr) {
+                scene.transition_output->stop();
+            }
             deferred_releases.defer(std::move(scene));
         }
         pending_by_token.clear();
@@ -319,6 +325,7 @@ class SceneGraphRuntime::Impl final {
         const std::uint64_t expected_document_revision, const std::string_view request_id,
         const std::shared_ptr<const CompiledSceneDocument>& compiled_document,
         const SceneOutputDefinition& output,
+        const SceneTransitionSpec& requested_transition = {},
         SourceRegistryUpdate* source_update = nullptr) {
         if (compiled_document == nullptr ||
             expected_document_revision != compiled_document->document_revision) {
@@ -337,6 +344,37 @@ class SceneGraphRuntime::Impl final {
                 retained->receipt.preparation_token = token;
                 retained->request_id = std::string{request_id};
                 retained->graph = graph->second;
+                retained->receipt.effective_transition = {};
+                retained->receipt.fallback_applied = false;
+                retained->receipt.fallback_reason.clear();
+                retained->transition_output.reset();
+                if (requested_transition.kind != SceneTransitionKind::cut) {
+                    if (renderer == nullptr) {
+                        retained->receipt.fallback_applied = true;
+                        retained->receipt.fallback_reason =
+                            "transition_renderer_unavailable";
+                    } else {
+                        try {
+                            auto transition = renderer->prepare_transition(
+                                bus, retained->render_graph, requested_transition);
+                            retained->receipt.effective_transition =
+                                transition.effective_transition;
+                            retained->receipt.fallback_applied =
+                                transition.fallback_applied;
+                            retained->receipt.fallback_reason =
+                                std::move(transition.fallback_reason);
+                            retained->transition_output =
+                                std::move(transition.render_output);
+                        } catch (const SceneRendererError& error) {
+                            retained->receipt.fallback_applied = true;
+                            retained->receipt.fallback_reason = error.error_code();
+                        } catch (...) {
+                            retained->receipt.fallback_applied = true;
+                            retained->receipt.fallback_reason =
+                                "transition_preparation_failed";
+                        }
+                    }
+                }
                 return std::move(retained.value());
             }
         }
@@ -347,11 +385,13 @@ class SceneGraphRuntime::Impl final {
             .request_id = std::string{request_id},
             .document_revision = expected_document_revision,
             .graph = graph->second,
+            .render_resources = std::make_shared<SceneRenderResources>(),
         };
-        prepared.source_leases.reserve(graph->second->active_leaf_source_ids.size());
+        prepared.render_resources->source_leases.reserve(
+            graph->second->active_leaf_source_ids.size());
         try {
             for (const auto& source_id : graph->second->active_leaf_source_ids) {
-                prepared.source_leases.push_back(
+                prepared.render_resources->source_leases.push_back(
                     source_update == nullptr
                         ? registry.acquire(source_id, token)
                         : source_update->acquire(source_id, token));
@@ -367,9 +407,11 @@ class SceneGraphRuntime::Impl final {
                 .document_revision = expected_document_revision,
                 .output = output,
                 .graph = prepared.graph,
+                .resources = prepared.render_resources,
             };
-            render_preparation.sources.reserve(prepared.source_leases.size());
-            for (const auto& lease : prepared.source_leases) {
+            render_preparation.sources.reserve(
+                prepared.render_resources->source_leases.size());
+            for (const auto& lease : prepared.render_resources->source_leases) {
                 render_preparation.sources.push_back({
                     .source_id = lease.source().id,
                     .generation = lease.generation(),
@@ -389,6 +431,30 @@ class SceneGraphRuntime::Impl final {
                                       "The scene renderer returned an invalid graph"};
             }
         }
+        prepared.receipt.effective_transition = {};
+        if (requested_transition.kind != SceneTransitionKind::cut) {
+            if (renderer == nullptr) {
+                prepared.receipt.fallback_applied = true;
+                prepared.receipt.fallback_reason = "transition_renderer_unavailable";
+            } else {
+                try {
+                    auto transition = renderer->prepare_transition(
+                        bus, prepared.render_graph, requested_transition);
+                    prepared.receipt.effective_transition =
+                        transition.effective_transition;
+                    prepared.receipt.fallback_applied = transition.fallback_applied;
+                    prepared.receipt.fallback_reason =
+                        std::move(transition.fallback_reason);
+                    prepared.transition_output = std::move(transition.render_output);
+                } catch (const SceneRendererError& error) {
+                    prepared.receipt.fallback_applied = true;
+                    prepared.receipt.fallback_reason = error.error_code();
+                } catch (...) {
+                    prepared.receipt.fallback_applied = true;
+                    prepared.receipt.fallback_reason = "transition_preparation_failed";
+                }
+            }
+        }
         return prepared;
     }
 
@@ -399,6 +465,9 @@ class SceneGraphRuntime::Impl final {
                 continue;
             }
             token_by_request.erase(iterator->second.request_id);
+            if (iterator->second.transition_output != nullptr) {
+                iterator->second.transition_output->stop();
+            }
             deferred_releases.defer(std::move(iterator->second));
             iterator = pending_by_token.erase(iterator);
         }
@@ -464,7 +533,7 @@ void SceneGraphRuntime::hydrate(const SceneHydrationSnapshot& snapshot,
         next_active[index].emplace(impl_->prepare_graph(
             bus, snapshot.active_scene_ids[index], snapshot.document_revision,
             index == 0U ? "hydrate-media-windows" : "hydrate-virtual-camera", next_document,
-            snapshot.outputs[index], &source_update.value()));
+            snapshot.outputs[index], {}, &source_update.value()));
     }
     try {
         source_update->commit();
@@ -493,7 +562,12 @@ void SceneGraphRuntime::hydrate(const SceneHydrationSnapshot& snapshot,
 ScenePreparationReceipt SceneGraphRuntime::prepare(
     const OutputBus bus, const std::string_view scene_id,
     const std::uint64_t document_revision, const std::string_view request_id,
-    const std::uint64_t sequence) {
+    const std::uint64_t sequence, const SceneTransitionSpec& transition) {
+    try {
+        validate_scene_transition(transition);
+    } catch (const std::invalid_argument& error) {
+        throw SceneGraphError{"invalid_transition", error.what()};
+    }
     std::scoped_lock lock{impl_->mutex};
     if (impl_->closed) {
         throw SceneGraphError{"media_graph_stopped", "The scene graph is stopped"};
@@ -507,9 +581,12 @@ ScenePreparationReceipt SceneGraphRuntime::prepare(
                               "The scene preparation request already exists"};
     }
     const auto index = bus_index(bus);
-    auto prepared = impl_->prepare_graph(bus, scene_id, document_revision, request_id,
-                                         impl_->document,
-                                         impl_->applied_snapshot->outputs[index]);
+    const auto effective_request = bus == OutputBus::media_windows
+                                       ? SceneTransitionSpec{}
+                                       : transition;
+    auto prepared = impl_->prepare_graph(
+        bus, scene_id, document_revision, request_id, impl_->document,
+        impl_->applied_snapshot->outputs[index], effective_request);
     const auto receipt = prepared.receipt;
     impl_->erase_pending_for_bus(bus);
     impl_->token_by_request.emplace(prepared.request_id,
@@ -521,27 +598,19 @@ ScenePreparationReceipt SceneGraphRuntime::prepare(
 }
 
 void SceneGraphRuntime::take(const ScenePreparationReceipt& preparation,
-                             const std::string_view transition,
-                             const std::uint32_t transition_duration_ms,
                              const std::uint64_t document_revision,
                              const std::uint64_t sequence) {
-    take(preparation.bus, preparation.scene_id, preparation.preparation_token, transition,
-         transition_duration_ms, document_revision, sequence);
+    take(preparation.bus, preparation.scene_id, preparation.preparation_token,
+         document_revision, sequence);
 }
 
 void SceneGraphRuntime::take(const OutputBus bus, const std::string_view scene_id,
                              const std::string_view preparation_token,
-                             const std::string_view transition,
-                             const std::uint32_t transition_duration_ms,
                              const std::uint64_t document_revision,
                              const std::uint64_t sequence) {
     std::scoped_lock lock{impl_->mutex};
     if (impl_->closed) {
         throw SceneGraphError{"media_graph_stopped", "The scene graph is stopped"};
-    }
-    if (transition != "cut" || transition_duration_ms != 0U) {
-        throw SceneGraphError{"transition_not_implemented",
-                              "Only CUT transitions are currently available"};
     }
     if (impl_->document == nullptr ||
         document_revision != impl_->document->document_revision) {
@@ -568,7 +637,8 @@ void SceneGraphRuntime::take(const OutputBus bus, const std::string_view scene_i
     impl_->token_by_request.erase(committed.request_id);
     impl_->defer_release(impl_->active[index]);
     if (impl_->renderer != nullptr) {
-        impl_->renderer->commit_take(bus, committed.render_graph, sequence);
+        impl_->renderer->commit_take(bus, committed.render_graph,
+                                     committed.transition_output, sequence);
     }
     impl_->active[index] = std::move(committed);
     impl_->last_mutation_sequence = sequence;
@@ -586,6 +656,9 @@ void SceneGraphRuntime::cancel(const std::string_view request_id) noexcept {
         }
         const auto pending = impl_->pending_by_token.find(token->second);
         if (pending != impl_->pending_by_token.end()) {
+            if (pending->second.transition_output != nullptr) {
+                pending->second.transition_output->stop();
+            }
             impl_->deferred_releases.defer(std::move(pending->second));
             impl_->pending_by_token.erase(pending);
         }

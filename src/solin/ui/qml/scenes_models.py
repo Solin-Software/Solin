@@ -15,6 +15,10 @@ class _SceneRole(IntEnum):
     DEFAULT = METADATA + 1
     MEDIA = DEFAULT + 1
     LIVE = MEDIA + 1
+    TRANSITION_OVERRIDE = LIVE + 1
+    TRANSITION_KIND = TRANSITION_OVERRIDE + 1
+    TRANSITION_DURATION = TRANSITION_KIND + 1
+    TRANSITION_LABEL = TRANSITION_DURATION + 1
 
 
 class _LayerRole(IntEnum):
@@ -46,6 +50,10 @@ _SCENE_ROLES = {
     _SceneRole.DEFAULT: QByteArray(b"isDefaultScene"),
     _SceneRole.MEDIA: QByteArray(b"isMediaScene"),
     _SceneRole.LIVE: QByteArray(b"isLiveScene"),
+    _SceneRole.TRANSITION_OVERRIDE: QByteArray(b"hasTransitionOverride"),
+    _SceneRole.TRANSITION_KIND: QByteArray(b"transitionOverrideKind"),
+    _SceneRole.TRANSITION_DURATION: QByteArray(b"transitionOverrideDurationMs"),
+    _SceneRole.TRANSITION_LABEL: QByteArray(b"transitionOverrideLabel"),
 }
 
 _LAYER_ROLES = {
@@ -201,6 +209,10 @@ class SceneListModel(_MappingListModel):
                 _SceneRole.DEFAULT: "default",
                 _SceneRole.MEDIA: "media",
                 _SceneRole.LIVE: "live",
+                _SceneRole.TRANSITION_OVERRIDE: "transition_override",
+                _SceneRole.TRANSITION_KIND: "transition_kind",
+                _SceneRole.TRANSITION_DURATION: "transition_duration_ms",
+                _SceneRole.TRANSITION_LABEL: "transition_label",
             },
             parent,
         )

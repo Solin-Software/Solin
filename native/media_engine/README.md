@@ -9,10 +9,14 @@ shared D3D11 device with coherent invalidation and a system-memory fallback. Reg
 budgets cap aggregate frame pixels, decoder sessions, runtime generations, and consumers.
 Validated scene references compile into an immutable DAG. Hydration stages candidate source
 generations and atomically commits both output buses only after preparation succeeds;
-manual preparation tokens are cancellable, single-use, revision-bound, and support rendered
-CUT selection. The renderer builds one bounded BGRA/D3D11 pipeline per output, shares leaf
-sources and nested scene nodes inside each pipeline, and implements crop, contain/cover/
-stretch fit, mirroring, rotation, placement, and opacity. Solin content enters through a
+manual preparation tokens are cancellable, single-use, revision-bound, and bind the
+validated Program transition before Take. The renderer supports atomic Cut, cross-dissolve,
+and fade-through-black. Animated transitions use a temporary D3D11 compositor, retain the
+source leases required by both graphs, follow the Program output clock, and release their
+temporary resources after completion. The editor Preview always cuts immediately. The
+renderer builds one bounded BGRA/D3D11 pipeline per output, shares leaf sources and nested
+scene nodes inside each pipeline, and implements crop, contain/cover/stretch fit, mirroring,
+rotation, placement, and opacity. Solin content enters through a
 versioned, three-slot latest-frame video channel. Qt video stays in NV12 and is copied plane
 for plane without `QImage` conversion; static and unsupported formats use the BGRA path.
 Both feed a native `appsrc` and upload to the compositor's D3D11 device without using the
@@ -85,9 +89,15 @@ payload. The maximum accepted control frame is 8 MiB. Video frames never use thi
 The semantic protocol is versioned and rejects unknown envelope fields, duplicate JSON
 keys, invalid identities, stale sessions, mismatched process generations, and expired
 deadlines. Local-camera discovery, immutable scene-graph hydration, transactional
-preparation, cancellation, output state, rendered CUT selection, media-window egress, and
-Windows virtual-camera publication are available. Composed frames stay in bounded D3D11 or
-shared-memory latest-frame transports; they never traverse the JSON pipe. Hardware
+preparation, cancellation, output state, rendered Program transitions, media-window egress,
+and Windows virtual-camera publication are available. Protocol version 3 binds Cut,
+Dissolve, or Fade through black to `prepare_scene`; `take_prepared` consumes the resulting
+token without accepting replacement effect parameters. If an animated effect cannot be
+prepared, the response reports a typed fallback and Take still converges to the prepared
+destination with Cut. Rapid requests retain only the latest destination and use the latest
+composed GPU frame, or the last stable origin before the first composed frame, to preserve
+visual continuity. Composed frames stay in bounded D3D11 or shared-memory latest-frame
+transports; they never traverse the JSON pipe. Hardware
 composition is advertised only when the runtime D3D11 compositor probe succeeds; individual
 layer features remain schema-bounded. Virtual-camera readiness is probe-driven: an unregistered source,
 unsupported Windows build, or failed Media Foundation initialization keeps that capability

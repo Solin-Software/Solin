@@ -26,6 +26,7 @@ from solin.core.scenes.model import (
     SceneReferenceConfig,
     SourceDefinition,
     SourceKind,
+    TransitionKind,
     new_identity,
 )
 from solin.core.scenes.presets import CAMERA_SCENE_ID, CONTENT_SCENE_ID, SceneSeedNames
@@ -60,9 +61,13 @@ class _PreviewStore:
 class _Notifications:
     def __init__(self) -> None:
         self.errors: list[tuple[str, dict[str, str]]] = []
+        self.warnings: list[tuple[str, dict[str, str]]] = []
 
     def error(self, message: str, **options: str) -> None:
         self.errors.append((message, options))
+
+    def warning(self, message: str, **options: str) -> None:
+        self.warnings.append((message, options))
 
 
 class _Credentials:
@@ -524,6 +529,81 @@ def test_bridge_reports_profile_failures_through_central_notifications(
             {"title": "Scenes", "dedupe_key": "scenes-profile-update-failed"},
         )
     ]
+    bridge.close()
+    controller.close()
+
+
+def test_bridge_edits_profile_and_scene_transition_policies(tmp_path: Path) -> None:
+    _workspace, controller, bridge, _preview_store = _bridge(tmp_path)
+    scene_id = bridge.selectedSceneId
+
+    bridge.setProgramTransition(TransitionKind.DISSOLVE.value, 450)
+
+    assert bridge.programTransitionKind == TransitionKind.DISSOLVE.value
+    assert bridge.programTransitionDurationMs == 450
+    assert bridge.programTransitionLabel == "Dissolve · 450 ms"
+
+    bridge.setSceneTransitionOverride(
+        scene_id,
+        TransitionKind.FADE_TO_BLACK.value,
+        -1,
+    )
+
+    override = controller.documents.effective_transition(scene_id)
+    assert override.kind is TransitionKind.FADE_TO_BLACK
+    assert override.duration_ms == 450
+    assert bridge.selectedSceneTransitionOverrideKind == TransitionKind.FADE_TO_BLACK.value
+    assert bridge.selectedSceneTransitionOverrideDurationMs == 450
+    row = next(
+        bridge.scenesModel.get(index)
+        for index in range(bridge.scenesModel.rowCount())
+        if bridge.scenesModel.get(index)["id"] == scene_id
+    )
+    assert row["transition_override"] is True
+    assert row["transition_kind"] == TransitionKind.FADE_TO_BLACK.value
+    assert row["transition_label"] == "Fade through black · 450 ms"
+    assert "Fade through black · 450 ms" in str(row["metadata"])
+
+    bridge.setSceneTransitionOverride(scene_id, TransitionKind.DISSOLVE.value, -1)
+    assert controller.documents.effective_transition(scene_id).duration_ms == 450
+
+    bridge.clearSceneTransitionOverride(scene_id)
+    assert bridge.selectedSceneTransitionOverrideKind == ""
+    assert controller.documents.effective_transition(scene_id).kind is TransitionKind.DISSOLVE
+    bridge.close()
+    controller.close()
+
+
+def test_bridge_reports_invalid_transition_without_mutating_policy(
+    tmp_path: Path,
+) -> None:
+    notifications = _Notifications()
+    _workspace, controller, bridge, _preview_store = _bridge(
+        tmp_path,
+        notifications=notifications,
+    )
+    original = controller.document.transition_policy
+
+    bridge.setProgramTransition(TransitionKind.DISSOLVE.value, 49)
+
+    assert controller.document.transition_policy == original
+    assert notifications.errors[-1][1]["dedupe_key"] == "scenes-transition-invalid"
+    bridge.close()
+    controller.close()
+
+
+def test_bridge_does_not_duplicate_application_transition_notifications(
+    tmp_path: Path,
+) -> None:
+    notifications = _Notifications()
+    _workspace, controller, bridge, _preview_store = _bridge(
+        tmp_path,
+        notifications=notifications,
+    )
+
+    controller.transition_fallback.emit("The transition used a cut instead.")
+
+    assert notifications.warnings == []
     bridge.close()
     controller.close()
 

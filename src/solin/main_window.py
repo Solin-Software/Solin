@@ -408,6 +408,9 @@ class MainWindow(QWidget):
         )
 
         self.notifications = NotificationCenter(self)
+        self.scene_runtime.transition_fallback.connect(
+            self._on_scene_transition_fallback
+        )
         self.playback_protection = PlaybackProtectionController(
             self._media_settings,
             self.media_ctrl,
@@ -1128,6 +1131,13 @@ class MainWindow(QWidget):
             return
         self._native_window_output_suppressed = True
         self._reconcile_native_scene_surfaces()
+
+    def _on_scene_transition_fallback(self, message: str) -> None:
+        self.notifications.warning(
+            message,
+            title=self.tr("Scenes"),
+            dedupe_key="scene-transition-fallback",
+        )
 
     def _on_scene_preview_frame(self, image) -> None:
         self.scene_runtime.publish_preview_frame(image)

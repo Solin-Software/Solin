@@ -18,12 +18,15 @@ Item {
     property bool contextSceneDefault: false
     property bool contextSceneMedia: false
     property bool contextSceneLive: false
+    property bool contextSceneTransitionOverride: false
+    property string contextSceneTransitionKind: ""
+    property int contextSceneTransitionDurationMs: 0
     property int contextSceneCount: 0
     readonly property bool fullWorkspace: width >= 1180
     readonly property bool sceneRailVisible: width >= 1180
     readonly property bool sourceRailVisible: width >= 760
     readonly property bool narrow: width < 760
-    readonly property bool compactHeader: width < 560
+    readonly property bool compactHeader: width < 860
     readonly property color bgColor: theme ? theme.bg : "#0e1622"
     readonly property color surface: theme ? theme.surface : "#172131"
     readonly property color surfaceSoft: theme ? theme.bg : "#111927"
@@ -73,12 +76,16 @@ Item {
 
     function popupSceneMenu(
             sceneId, sceneName, isDefaultScene, isMediaScene,
-            isLiveScene, sceneCount, anchor, x, y) {
+            isLiveScene, hasTransitionOverride, transitionKind,
+            transitionDurationMs, sceneCount, anchor, x, y) {
         contextSceneId = sceneId
         contextSceneName = sceneName
         contextSceneDefault = isDefaultScene
         contextSceneMedia = isMediaScene
         contextSceneLive = isLiveScene
+        contextSceneTransitionOverride = hasTransitionOverride
+        contextSceneTransitionKind = transitionKind
+        contextSceneTransitionDurationMs = transitionDurationMs
         contextSceneCount = sceneCount
         if (bridge)
             bridge.selectScene(sceneId)
@@ -177,6 +184,13 @@ Item {
                 onClicked: root.bridge.redo()
             }
 
+            TransitionButton {
+                id: transitionButton
+                objectName: "scenesProgramTransitionButton"
+                label: root.bridge ? root.bridge.programTransitionLabel : qsTr("Cut")
+                onClicked: transitionPopover.openFor(transitionButton)
+            }
+
             OutputButton {
                 id: outputButton
                 stateLabel: root.bridge ? root.bridge.outputStateLabel : qsTr("Off")
@@ -211,10 +225,12 @@ Item {
                 onRequestCreateScene: createSceneDialog.openForCreate()
                 onRequestSceneMenu: function(
                         sceneId, sceneName, isDefaultScene, isMediaScene,
-                        isLiveScene, sceneCount, anchor, x, y) {
+                        isLiveScene, hasTransitionOverride, transitionKind,
+                        transitionDurationMs, sceneCount, anchor, x, y) {
                     root.popupSceneMenu(
                         sceneId, sceneName, isDefaultScene, isMediaScene,
-                        isLiveScene, sceneCount, anchor, x, y)
+                        isLiveScene, hasTransitionOverride, transitionKind,
+                        transitionDurationMs, sceneCount, anchor, x, y)
                 }
             }
 
@@ -474,10 +490,12 @@ Item {
                         onRequestCreateScene: createSceneDialog.openForCreate()
                         onRequestSceneMenu: function(
                                 sceneId, sceneName, isDefaultScene, isMediaScene,
-                                isLiveScene, sceneCount, anchor, x, y) {
+                                isLiveScene, hasTransitionOverride, transitionKind,
+                                transitionDurationMs, sceneCount, anchor, x, y) {
                             root.popupSceneMenu(
                                 sceneId, sceneName, isDefaultScene, isMediaScene,
-                                isLiveScene, sceneCount, anchor, x, y)
+                                isLiveScene, hasTransitionOverride, transitionKind,
+                                transitionDurationMs, sceneCount, anchor, x, y)
                         }
                     }
                     StackLayout {
@@ -570,11 +588,158 @@ Item {
         }
     }
 
+    Popup {
+        id: transitionPopover
+        objectName: "scenesProgramTransitionPopover"
+        parent: root
+        width: 326
+        padding: 16
+        modal: false
+        focus: true
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        z: 500
+        property string draftKind: "cut"
+        property int draftDurationMs: 350
+
+        function openFor(anchor) {
+            if (!root.bridge || !anchor)
+                return
+            draftKind = root.bridge.programTransitionKind
+            draftDurationMs = root.bridge.programTransitionKind === "cut"
+                ? 350 : root.bridge.programTransitionDurationMs
+            var point = anchor.mapToItem(root, 0, anchor.height + 6)
+            x = Math.max(8, Math.min(root.width - width - 8, point.x))
+            y = Math.max(header.height + 4,
+                Math.min(root.height - implicitHeight - 8, point.y))
+            open()
+        }
+
+        onOpened: {
+            if (draftKind === "cut")
+                transitionCutChoice.forceActiveFocus()
+            else if (draftKind === "dissolve")
+                transitionDissolveChoice.forceActiveFocus()
+            else
+                transitionFadeChoice.forceActiveFocus()
+        }
+
+        enter: Transition {
+            ParallelAnimation {
+                NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 130 }
+                NumberAnimation { property: "scale"; from: 0.98; to: 1; duration: 150; easing.type: Easing.OutCubic }
+            }
+        }
+        exit: Transition {
+            NumberAnimation { property: "opacity"; from: 1; to: 0; duration: 90 }
+        }
+        background: Rectangle {
+            color: root.surface
+            radius: 14
+            border.width: 1
+            border.color: root.borderStrong
+        }
+        contentItem: ColumnLayout {
+            spacing: 12
+            Text {
+                Layout.fillWidth: true
+                text: qsTr("Program transition")
+                color: root.textPrimary
+                font.pixelSize: 14
+                font.weight: Font.DemiBold
+            }
+            Text {
+                Layout.fillWidth: true
+                text: qsTr("Used when scenes go live. Editor preview stays instant.")
+                color: root.textMuted
+                font.pixelSize: 9
+                wrapMode: Text.Wrap
+            }
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 6
+                TransitionChoice {
+                    id: transitionCutChoice
+                    Layout.fillWidth: true
+                    title: qsTr("Cut")
+                    detail: qsTr("Switch immediately")
+                    selected: transitionPopover.draftKind === "cut"
+                    onClicked: transitionPopover.draftKind = "cut"
+                }
+                TransitionChoice {
+                    id: transitionDissolveChoice
+                    Layout.fillWidth: true
+                    title: qsTr("Dissolve")
+                    detail: qsTr("Blend the two scenes")
+                    selected: transitionPopover.draftKind === "dissolve"
+                    onClicked: transitionPopover.draftKind = "dissolve"
+                }
+                TransitionChoice {
+                    id: transitionFadeChoice
+                    Layout.fillWidth: true
+                    title: qsTr("Fade through black")
+                    detail: qsTr("Fade out, then fade in")
+                    selected: transitionPopover.draftKind === "fade_to_black"
+                    onClicked: transitionPopover.draftKind = "fade_to_black"
+                }
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 10
+                Text {
+                    Layout.fillWidth: true
+                    text: qsTr("Duration")
+                    color: transitionPopover.draftKind === "cut"
+                        ? root.textMuted : root.textSecondary
+                    font.pixelSize: 10
+                }
+                ScenesSpinBox {
+                    id: transitionDuration
+                    objectName: "scenesProgramTransitionDuration"
+                    theme: root.theme
+                    Layout.preferredWidth: 116
+                    from: 50
+                    to: 10000
+                    stepSize: 50
+                    value: transitionPopover.draftDurationMs
+                    enabled: transitionPopover.draftKind !== "cut"
+                    unitText: qsTr("ms")
+                    onValueModified: transitionPopover.draftDurationMs = value
+                }
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+                Item { Layout.fillWidth: true }
+                ScenesDialogButton {
+                    theme: root.theme
+                    text: qsTr("Cancel")
+                    onClicked: transitionPopover.close()
+                }
+                ScenesDialogButton {
+                    objectName: "scenesProgramTransitionApply"
+                    theme: root.theme
+                    text: qsTr("Apply")
+                    primary: true
+                    onClicked: {
+                        var durationMs = transitionDuration.pendingValue()
+                        transitionPopover.draftDurationMs = durationMs
+                        root.bridge.setProgramTransition(
+                            transitionPopover.draftKind,
+                            transitionPopover.draftKind === "cut"
+                                ? 0 : durationMs)
+                        transitionPopover.close()
+                    }
+                }
+            }
+        }
+    }
+
     Menu {
         id: sceneMenu
         objectName: "scenesContextMenu"
         width: 218
         padding: 6
+        delegate: ScenesMenuItem { theme: root.theme }
         background: Rectangle {
             color: root.surface
             radius: 11
@@ -613,6 +778,65 @@ Item {
                 ? qsTr("Remove media") : qsTr("Set as media")
             onTriggered: root.bridge.setMediaScene(
                 root.contextSceneId, !root.contextSceneMedia)
+        }
+        Menu {
+            title: qsTr("Transition override")
+            width: 238
+            padding: 6
+            delegate: ScenesMenuItem { theme: root.theme }
+            background: Rectangle {
+                color: root.surface
+                radius: 11
+                border.width: 1
+                border.color: root.borderColor
+            }
+            ScenesMenuItem {
+                theme: root.theme
+                text: qsTr("Use profile transition")
+                checkable: true
+                checked: !root.contextSceneTransitionOverride
+                onTriggered: root.bridge.clearSceneTransitionOverride(
+                    root.contextSceneId)
+            }
+            ScenesMenuSeparator { theme: root.theme }
+            ScenesMenuItem {
+                theme: root.theme
+                text: qsTr("Cut")
+                checkable: true
+                checked: root.contextSceneTransitionOverride
+                    && root.contextSceneTransitionKind === "cut"
+                onTriggered: root.bridge.setSceneTransitionOverride(
+                    root.contextSceneId, "cut", 0)
+            }
+            ScenesMenuItem {
+                theme: root.theme
+                text: qsTr("Dissolve")
+                checkable: true
+                checked: root.contextSceneTransitionOverride
+                    && root.contextSceneTransitionKind === "dissolve"
+                onTriggered: root.bridge.setSceneTransitionOverride(
+                    root.contextSceneId, "dissolve", -1)
+            }
+            ScenesMenuItem {
+                theme: root.theme
+                text: qsTr("Fade through black")
+                checkable: true
+                checked: root.contextSceneTransitionOverride
+                    && root.contextSceneTransitionKind === "fade_to_black"
+                onTriggered: root.bridge.setSceneTransitionOverride(
+                    root.contextSceneId, "fade_to_black", -1)
+            }
+            ScenesMenuSeparator { theme: root.theme }
+            ScenesMenuItem {
+                theme: root.theme
+                text: qsTr("Duration…")
+                enabled: root.contextSceneTransitionOverride
+                    && root.contextSceneTransitionKind !== "cut"
+                onTriggered: transitionDurationDialog.openFor(
+                    root.contextSceneId,
+                    root.contextSceneTransitionKind,
+                    root.contextSceneTransitionDurationMs)
+            }
         }
         ScenesMenuSeparator { theme: root.theme }
         ScenesMenuItem {
@@ -849,6 +1073,81 @@ Item {
     ScenesTransformDialog { id: transformDialog; bridge: root.bridge; theme: root.theme }
     ScenesPtzPopup { id: ptzPopup; bridge: root.bridge; theme: root.theme }
 
+    Dialog {
+        id: transitionDurationDialog
+        objectName: "scenesTransitionOverrideDurationDialog"
+        modal: true
+        anchors.centerIn: parent
+        width: Math.min(360, root.width - 28)
+        padding: 18
+        standardButtons: Dialog.NoButton
+        property string sceneId: ""
+        property string transitionKind: ""
+        function openFor(sceneIdValue, transitionKindValue, durationMs) {
+            sceneId = sceneIdValue
+            transitionKind = transitionKindValue
+            overrideDuration.value = durationMs
+            open()
+        }
+        onOpened: overrideDuration.forceActiveFocus()
+        background: Rectangle {
+            color: root.surface
+            radius: 14
+            border.width: 1
+            border.color: root.borderColor
+        }
+        contentItem: ColumnLayout {
+            spacing: 13
+            Text {
+                Layout.fillWidth: true
+                text: qsTr("Transition duration")
+                color: root.textPrimary
+                font.pixelSize: 15
+                font.weight: Font.DemiBold
+            }
+            Text {
+                Layout.fillWidth: true
+                text: qsTr("Set how long this scene's transition takes.")
+                color: root.textMuted
+                font.pixelSize: 10
+                wrapMode: Text.Wrap
+            }
+            ScenesSpinBox {
+                id: overrideDuration
+                objectName: "scenesTransitionOverrideDuration"
+                theme: root.theme
+                Layout.fillWidth: true
+                from: 50
+                to: 10000
+                stepSize: 50
+                value: 350
+                unitText: qsTr("ms")
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                Item { Layout.fillWidth: true }
+                ScenesDialogButton {
+                    theme: root.theme
+                    text: qsTr("Cancel")
+                    onClicked: transitionDurationDialog.close()
+                }
+                ScenesDialogButton {
+                    objectName: "scenesTransitionOverrideDurationApply"
+                    theme: root.theme
+                    text: qsTr("Apply")
+                    primary: true
+                    onClicked: {
+                        root.bridge.setSceneTransitionOverride(
+                            transitionDurationDialog.sceneId,
+                            transitionDurationDialog.transitionKind,
+                            overrideDuration.pendingValue())
+                        transitionDurationDialog.close()
+                    }
+                }
+            }
+        }
+    }
+
     NameDialog {
         id: createSceneDialog
         titleText: qsTr("New scene")
@@ -1032,6 +1331,126 @@ Item {
         }
         ToolTip.visible: iconMouse.containsMouse && button.toolTipText.length > 0
         ToolTip.text: button.toolTipText
+    }
+
+    component TransitionButton: Rectangle {
+        id: button
+        property string label: ""
+        signal clicked()
+        readonly property bool expanded: root.width >= 980
+        Layout.preferredWidth: expanded ? Math.max(150, labelText.implicitWidth + 54) : 38
+        Layout.preferredHeight: 38
+        radius: 11
+        color: transitionMouse.containsMouse ? root.hover : root.surface
+        border.width: 1
+        border.color: root.borderStrong
+        Row {
+            anchors.centerIn: parent
+            spacing: 7
+            Image {
+                anchors.verticalCenter: parent.verticalCenter
+                width: 14
+                height: 14
+                source: "image://sceneicons/transition/16/" + root.iconHex(root.textSecondary)
+            }
+            Text {
+                id: labelText
+                visible: button.expanded
+                anchors.verticalCenter: parent.verticalCenter
+                text: button.label
+                color: root.textPrimary
+                font.pixelSize: 10
+                font.weight: Font.DemiBold
+            }
+            Image {
+                visible: button.expanded
+                anchors.verticalCenter: parent.verticalCenter
+                width: 11
+                height: 11
+                source: "image://sceneicons/chevron-down/16/" + root.iconHex(root.textMuted)
+            }
+        }
+        MouseArea {
+            id: transitionMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            activeFocusOnTab: true
+            cursorShape: Qt.PointingHandCursor
+            Accessible.role: Accessible.Button
+            Accessible.name: qsTr("Program transition: %1").arg(button.label)
+            onClicked: button.clicked()
+            Keys.onSpacePressed: button.clicked()
+            Keys.onReturnPressed: button.clicked()
+        }
+        ToolTip.visible: transitionMouse.containsMouse && !button.expanded
+        ToolTip.text: qsTr("Program transition: %1").arg(button.label)
+    }
+
+    component TransitionChoice: Rectangle {
+        id: choice
+        property string title: ""
+        property string detail: ""
+        property bool selected: false
+        signal clicked()
+        implicitHeight: 48
+        radius: 10
+        color: selected ? root.accentTint
+            : choiceMouse.containsMouse ? root.hover : root.surfaceSoft
+        border.width: selected ? 1 : 0
+        border.color: root.accent
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: 11
+            anchors.rightMargin: 11
+            spacing: 10
+            Rectangle {
+                Layout.preferredWidth: 14
+                Layout.preferredHeight: 14
+                radius: 7
+                color: "transparent"
+                border.width: 1
+                border.color: choice.selected ? root.accent : root.borderStrong
+                Rectangle {
+                    visible: choice.selected
+                    anchors.centerIn: parent
+                    width: 6
+                    height: 6
+                    radius: 3
+                    color: root.accent
+                }
+            }
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 0
+                Text {
+                    Layout.fillWidth: true
+                    text: choice.title
+                    color: root.textPrimary
+                    font.pixelSize: 10
+                    font.weight: Font.DemiBold
+                }
+                Text {
+                    Layout.fillWidth: true
+                    text: choice.detail
+                    color: root.textMuted
+                    font.pixelSize: 8
+                    elide: Text.ElideRight
+                }
+            }
+        }
+        MouseArea {
+            id: choiceMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            activeFocusOnTab: true
+            cursorShape: Qt.PointingHandCursor
+            Accessible.role: Accessible.RadioButton
+            Accessible.name: choice.title + ". " + choice.detail
+            Accessible.checked: choice.selected
+            onClicked: choice.clicked()
+            Keys.onSpacePressed: choice.clicked()
+            Keys.onReturnPressed: choice.clicked()
+        }
     }
 
     component ProfileButton: Rectangle {

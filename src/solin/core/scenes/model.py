@@ -12,7 +12,7 @@ from typing import Any, TypeAlias, TypeVar
 from urllib.parse import SplitResult, parse_qsl, urlsplit
 
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 MAXIMUM_CAMERA_SOURCE_DIMENSION = 3_840
 MAXIMUM_CAMERA_SOURCE_SHORT_EDGE = 2_160
 MAXIMUM_CAMERA_SOURCE_PIXELS = 3_840 * 2_160
@@ -104,7 +104,139 @@ class OutputMode(StrEnum):
 
 class TransitionKind(StrEnum):
     CUT = "cut"
-    FADE = "fade"
+    DISSOLVE = "dissolve"
+    FADE_TO_BLACK = "fade_to_black"
+
+
+@dataclass(frozen=True, slots=True)
+class TransitionSpec:
+    kind: TransitionKind
+    duration_ms: int
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.kind, TransitionKind):
+            raise SceneValidationError("Invalid transition kind")
+        if isinstance(self.duration_ms, bool) or not isinstance(self.duration_ms, int):
+            raise SceneValidationError("Transition duration must be an integer")
+        if self.kind is TransitionKind.CUT:
+            if self.duration_ms != 0:
+                raise SceneValidationError("Cut transition duration must be zero")
+            return
+        if not 50 <= self.duration_ms <= 10_000:
+            raise SceneValidationError(
+                "Animated transition duration must be between 50 and 10000 milliseconds"
+            )
+
+    def to_record(self) -> dict[str, object]:
+        return {"kind": self.kind.value, "duration_ms": self.duration_ms}
+
+    @classmethod
+    def from_record(cls, raw: object) -> TransitionSpec:
+        data = _mapping(
+            raw,
+            field_name="transition specification",
+            allowed_keys={"kind", "duration_ms"},
+        )
+        return cls(
+            kind=_enum(
+                TransitionKind,
+                data.get("kind"),
+                field_name="transition specification.kind",
+            ),
+            duration_ms=_integer(
+                data.get("duration_ms"),
+                field_name="transition specification.duration_ms",
+                minimum=0,
+                maximum=10_000,
+            ),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class SceneTransitionPolicy:
+    default: TransitionSpec = field(
+        default_factory=lambda: TransitionSpec(TransitionKind.CUT, 0)
+    )
+    overrides: tuple[tuple[str, TransitionSpec], ...] = ()
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.default, TransitionSpec):
+            raise SceneValidationError("Invalid default transition")
+        if not isinstance(self.overrides, tuple) or not all(
+            isinstance(override, tuple)
+            and len(override) == 2
+            and isinstance(override[0], str)
+            and isinstance(override[1], TransitionSpec)
+            for override in self.overrides
+        ):
+            raise SceneValidationError(
+                "Scene transition overrides must be an immutable transition tuple"
+            )
+        for scene_id, _ in self.overrides:
+            _validate_identity(scene_id, field_name="transition override scene id")
+        _ensure_unique(
+            (scene_id for scene_id, _ in self.overrides),
+            field_name="transition override scene id",
+        )
+
+    def override_for(self, scene_id: str) -> TransitionSpec | None:
+        return next(
+            (spec for candidate_id, spec in self.overrides if candidate_id == scene_id),
+            None,
+        )
+
+    def effective_for(self, scene_id: str) -> TransitionSpec:
+        return self.override_for(scene_id) or self.default
+
+    def with_override(
+        self,
+        scene_id: str,
+        spec: TransitionSpec | None,
+    ) -> SceneTransitionPolicy:
+        _validate_identity(scene_id, field_name="transition override scene id")
+        if spec is not None and not isinstance(spec, TransitionSpec):
+            raise SceneValidationError("Invalid scene transition override")
+        retained = tuple(
+            override for override in self.overrides if override[0] != scene_id
+        )
+        return replace(
+            self,
+            overrides=retained if spec is None else (*retained, (scene_id, spec)),
+        )
+
+    def to_record(self) -> dict[str, object]:
+        return {
+            "default": self.default.to_record(),
+            "overrides": {
+                scene_id: spec.to_record() for scene_id, spec in self.overrides
+            },
+        }
+
+    @classmethod
+    def from_record(cls, raw: object) -> SceneTransitionPolicy:
+        data = _mapping(
+            raw,
+            field_name="scene transition policy",
+            allowed_keys={"default", "overrides"},
+        )
+        overrides = _mapping(
+            data.get("overrides", {}),
+            field_name="scene transition policy.overrides",
+        )
+        return cls(
+            default=TransitionSpec.from_record(data.get("default")),
+            overrides=tuple(
+                (
+                    _string(
+                        scene_id,
+                        field_name="transition override scene id",
+                        maximum=128,
+                    ),
+                    TransitionSpec.from_record(spec),
+                )
+                for scene_id, spec in overrides.items()
+            ),
+        )
 
 
 class VideoPixelFormat(StrEnum):
@@ -1518,8 +1650,6 @@ class SceneDefinition:
 class OutputRoute:
     bus_id: BusId
     default_scene_id: str
-    transition: TransitionKind = TransitionKind.CUT
-    transition_duration_ms: int = 0
     start_with_solin: bool = False
     video_format: VideoFormat = field(default_factory=VideoFormat)
 
@@ -1530,16 +1660,6 @@ class OutputRoute:
             _validate_identity(self.default_scene_id, field_name="output default scene id")
         elif not isinstance(self.default_scene_id, str):
             raise SceneValidationError("Invalid output default scene id")
-        if not isinstance(self.transition, TransitionKind):
-            raise SceneValidationError("Invalid output transition")
-        if (
-            isinstance(self.transition_duration_ms, bool)
-            or not isinstance(self.transition_duration_ms, int)
-            or not 0 <= self.transition_duration_ms <= 10_000
-        ):
-            raise SceneValidationError("Invalid transition duration")
-        if self.transition is TransitionKind.CUT and self.transition_duration_ms != 0:
-            raise SceneValidationError("Cut transition duration must be zero")
         if not isinstance(self.start_with_solin, bool):
             raise SceneValidationError("Output startup state must be a boolean")
         if not isinstance(self.video_format, VideoFormat):
@@ -1549,8 +1669,6 @@ class OutputRoute:
         return {
             "bus_id": self.bus_id.value,
             "default_scene_id": self.default_scene_id,
-            "transition": self.transition.value,
-            "transition_duration_ms": self.transition_duration_ms,
             "start_with_solin": self.start_with_solin,
             "video_format": self.video_format.to_record(),
         }
@@ -1563,8 +1681,6 @@ class OutputRoute:
             allowed_keys={
                 "bus_id",
                 "default_scene_id",
-                "transition",
-                "transition_duration_ms",
                 "start_with_solin",
                 "video_format",
             },
@@ -1576,17 +1692,6 @@ class OutputRoute:
                 field_name="output route.default_scene_id",
                 allow_empty=True,
                 maximum=128,
-            ),
-            transition=_enum(
-                TransitionKind,
-                data.get("transition", TransitionKind.CUT.value),
-                field_name="output route.transition",
-            ),
-            transition_duration_ms=_integer(
-                data.get("transition_duration_ms", 0),
-                field_name="output route.transition_duration_ms",
-                minimum=0,
-                maximum=10_000,
             ),
             start_with_solin=_boolean(
                 data.get("start_with_solin", False),
@@ -1697,6 +1802,7 @@ class SceneDocument:
     scenes: tuple[SceneDefinition, ...]
     outputs: tuple[OutputRoute, ...]
     automation: tuple[AutomationMap, ...]
+    transition_policy: SceneTransitionPolicy = field(default_factory=SceneTransitionPolicy)
     camera_presets: tuple[CameraPreset, ...] = ()
     schema_version: int = SCHEMA_VERSION
 
@@ -1723,6 +1829,8 @@ class SceneDocument:
                 raise SceneValidationError(
                     f"Document {field_name} must be an immutable typed tuple"
                 )
+        if not isinstance(self.transition_policy, SceneTransitionPolicy):
+            raise SceneValidationError("Invalid scene transition policy")
         if not self.scenes:
             raise SceneValidationError("Document must contain at least one scene")
         if len(self.sources) > MAX_SOURCES:
@@ -1744,6 +1852,13 @@ class SceneDocument:
         source_by_id = {source.id: source for source in self.sources}
         scene_ids = {scene.id for scene in self.scenes}
         preset_by_id = {preset.id: preset for preset in self.camera_presets}
+        if any(
+            scene_id not in scene_ids
+            for scene_id, _ in self.transition_policy.overrides
+        ):
+            raise SceneValidationError(
+                "Transition overrides must reference existing scenes"
+            )
 
         content_source = source_by_id.get(CONTENT_SOURCE_ID)
         if content_source is None or content_source.kind is not SourceKind.SOLIN_CONTENT:
@@ -1882,6 +1997,7 @@ class SceneDocument:
             "scenes": [scene.to_record() for scene in self.scenes],
             "outputs": [route.to_record() for route in self.outputs],
             "automation": [mapping.to_record() for mapping in self.automation],
+            "transition_policy": self.transition_policy.to_record(),
             "camera_presets": [preset.to_record() for preset in self.camera_presets],
         }
 
@@ -1898,6 +2014,7 @@ class SceneDocument:
                 "scenes",
                 "outputs",
                 "automation",
+                "transition_policy",
                 "camera_presets",
             },
         )
@@ -1938,6 +2055,9 @@ class SceneDocument:
             automation=tuple(
                 AutomationMap.from_record(item)
                 for item in _sequence(data.get("automation"), field_name="automation")
+            ),
+            transition_policy=SceneTransitionPolicy.from_record(
+                data.get("transition_policy")
             ),
             camera_presets=tuple(
                 CameraPreset.from_record(item)
@@ -1996,6 +2116,69 @@ def _normalize_program_destinations_record(migrated: dict[str, Any]) -> None:
     for mapping in automation:
         if isinstance(mapping, dict):
             mapping["assignments"] = dict(program_assignments)
+
+
+def _migrate_program_transition_record(migrated: dict[str, Any]) -> None:
+    outputs = migrated.get("outputs")
+    canonical_route: dict[str, Any] | None = None
+    if isinstance(outputs, list):
+        canonical_route = next(
+            (
+                route
+                for route in outputs
+                if isinstance(route, dict)
+                and route.get("bus_id") == BusId.VIRTUAL_CAMERA.value
+            ),
+            None,
+        )
+        if canonical_route is None:
+            canonical_route = next(
+                (route for route in outputs if isinstance(route, dict)),
+                None,
+            )
+    if "transition_policy" not in migrated:
+        legacy_kind = (
+            canonical_route.get("transition", TransitionKind.CUT.value)
+            if canonical_route is not None
+            else TransitionKind.CUT.value
+        )
+        legacy_duration = (
+            canonical_route.get("transition_duration_ms", 0)
+            if canonical_route is not None
+            else 0
+        )
+        if legacy_kind not in {"cut", "fade"}:
+            raise SceneValidationError("Invalid legacy output transition")
+        if (
+            isinstance(legacy_duration, bool)
+            or not isinstance(legacy_duration, int)
+            or not 0 <= legacy_duration <= 10_000
+        ):
+            raise SceneValidationError("Invalid legacy output transition duration")
+        if legacy_kind == "cut" and legacy_duration != 0:
+            raise SceneValidationError("Legacy cut transition duration must be zero")
+        if legacy_kind == "fade":
+            # Version 8 accepted a zero-duration fade. Keep those documents
+            # loadable while moving them to a real animated transition.
+            duration = max(50, legacy_duration)
+            default_transition = {
+                "kind": TransitionKind.DISSOLVE.value,
+                "duration_ms": duration,
+            }
+        else:
+            default_transition = {
+                "kind": TransitionKind.CUT.value,
+                "duration_ms": 0,
+            }
+        migrated["transition_policy"] = {
+            "default": default_transition,
+            "overrides": {},
+        }
+    if isinstance(outputs, list):
+        for route in outputs:
+            if isinstance(route, dict):
+                route.pop("transition", None)
+                route.pop("transition_duration_ms", None)
 
 
 def _migrate_scene_document_record(
@@ -2214,6 +2397,11 @@ def _migrate_scene_document_record(
             continue
         if current_version == 7:
             current_version = 8
+            migrated["schema_version"] = current_version
+            continue
+        if current_version == 8:
+            _migrate_program_transition_record(migrated)
+            current_version = 9
             migrated["schema_version"] = current_version
             continue
         raise UnsupportedSceneSchemaError(current_version)

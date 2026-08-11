@@ -111,6 +111,23 @@ it restores the base/default scene. A manual Take during active content suspends
 only for that projection session, and the next session resumes automatically. Editing history
 never rewinds Program or destination-enabled state.
 
+Each Scene profile owns one default Program transition and optional per-scene overrides.
+New Scene profiles default to Dissolve at 350 ms; migrated profiles preserve their persisted
+Cut or legacy fade setting, with the legacy technical `fade` value interpreted as Dissolve.
+Cut is immediate, Dissolve cross-blends both scenes, and Fade passes through an opaque black
+frame. The transition applies to manual Take and automatic media entry/return, but never to
+the editor Preview. Changing only this policy is a persisted editor mutation and does not
+rehydrate active source pipelines. Duplicating or deleting a scene respectively copies or
+removes its override, and Undo/Redo covers both operations.
+
+The transition is resolved and bound to the preparation token before Take. A rapid request
+replaces the previous destination instead of entering a queue: after composition begins it
+uses the latest composed D3D11 frame as a frozen origin; before that first frame it uses the
+last stable scene. An effect-preparation failure reports a typed reason and cuts to the
+prepared destination, while destination preparation failure preserves the current Program.
+Program shutdown, profile hydration, and output disablement cancel animation immediately and
+release temporary resources without waiting for the remaining duration.
+
 The UI must distinguish three values:
 
 1. desired scene selected by automation/manual control;
@@ -639,12 +656,15 @@ claims stale applied state, and restores the newest desired state after restart.
   pixels, decoder sessions, runtime generations, and consumers.
 - [x] Compile flat scenes and acyclic scene references into immutable shared DAG nodes.
 - [x] Implement staged source generations, atomic destination hydration, revision-bound
-  prepare/commit/cancel, consumable tokens, and logical CUT selection.
+  prepare/commit/cancel, consumable tokens, and transition binding at preparation time.
 - [x] Implement bounded BGRA/D3D11 composition, reusable nested-scene nodes,
   crop/fit/transform/opacity, destination pipelines, and rendered CUT.
+- [x] Implement Program-only Dissolve and Fade through black with a temporary D3D11
+  compositor, output-clock progress, one final NV12 conversion/download, typed Cut fallback,
+  source-lease retention, latest-request-wins retargeting, and bounded asynchronous cleanup.
+  Preview remains an immediate Cut, and idle animated-compositor cost is zero.
 - [ ] Complete the Solin shader compositor for exact borders and corner radii before
   advertising the full hardware-compositing layer contract.
-- [ ] Implement FADE only after CUT passes latency and soak gates.
 
 Exit gate: preview/mirror and virtual-camera destination branches run concurrently for 30
 minutes without an unbounded queue, deadlock, source duplication, or memory growth.

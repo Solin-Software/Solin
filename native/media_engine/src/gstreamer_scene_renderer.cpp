@@ -297,7 +297,8 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
                                 GStreamerD3d11DeviceLease device,
                                 std::shared_ptr<std::atomic_uint64_t> frame_sequence)
         : output_(preparation.output.video_format), bus_id_(preparation.bus),
-          device_(std::move(device)), frame_sequence_(std::move(frame_sequence)) {
+          device_(std::move(device)), frame_sequence_(std::move(frame_sequence)),
+          resources_(preparation.resources) {
         validate_preparation(preparation);
         if (!device_ || frame_sequence_ == nullptr) {
             throw SceneRendererError{"renderer_device_unavailable",
@@ -364,7 +365,7 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
 
     ~PreparedGStreamerSceneGraph() override { stop(); }
 
-    void stop() noexcept {
+    void stop() noexcept override {
         if (stopped_.exchange(true)) {
             return;
         }
@@ -378,9 +379,11 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
         release_pipeline(pipeline);
         std::scoped_lock lock{frame_mutex_};
         latest_frame_.reset();
+        latest_gpu_frame_.reset();
     }
 
-    [[nodiscard]] std::shared_ptr<const SourceFrame> latest_frame() const noexcept {
+    [[nodiscard]] std::shared_ptr<const SourceFrame>
+    latest_frame() const noexcept override {
         if (failed_.load()) {
             return {};
         }
@@ -394,11 +397,36 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
 
     [[nodiscard]] std::optional<std::uint64_t>
     visit_latest_frame(const std::uint64_t after_sequence,
-                       const VideoFrameVisitor& visitor) const noexcept {
+                       const VideoFrameVisitor& visitor) const noexcept override {
         try {
             return visit_gstreamer_frame(latest_frame(), after_sequence, visitor);
         } catch (...) {
             return std::nullopt;
+        }
+    }
+
+    [[nodiscard]] std::shared_ptr<const SourceFrame>
+    latest_gpu_frame() const noexcept override {
+        if (failed_.load()) {
+            return {};
+        }
+        try {
+            std::scoped_lock lock{frame_mutex_};
+            return latest_gpu_frame_;
+        } catch (...) {
+            return {};
+        }
+    }
+
+    [[nodiscard]] const OutputVideoFormat& output_format() const noexcept { return output_; }
+
+    void set_direct_output_enabled(const bool enabled) noexcept override {
+        try {
+            if (direct_output_valve_ != nullptr) {
+                g_object_set(direct_output_valve_, "drop", enabled ? FALSE : TRUE,
+                             nullptr);
+            }
+        } catch (...) {
         }
     }
 
@@ -745,6 +773,9 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
     }
 
     void add_output_branch(GstElement* root_tee) {
+        if (bus_id_ == OutputBus::virtual_camera) {
+            add_gpu_transition_tap(root_tee);
+        }
         auto* queue = add_element(pipeline_, "queue");
         auto* sink = add_element(pipeline_, "appsink");
         g_object_set(queue, "max-size-buffers", 1U, "max-size-bytes", 0U,
@@ -777,7 +808,13 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
                                          "Output pixel-format caps are unavailable"};
             }
             g_object_set(gpu_caps_filter, "caps", gpu_caps.get(), nullptr);
-            require_link(queue, convert);
+            if (bus_id_ == OutputBus::virtual_camera) {
+                direct_output_valve_ = add_element(pipeline_, "valve");
+                require_link(queue, direct_output_valve_);
+                require_link(direct_output_valve_, convert);
+            } else {
+                require_link(queue, convert);
+            }
             require_link(convert, gpu_caps_filter);
             if (bus_id_ == OutputBus::virtual_camera) {
                 auto* download = add_element(pipeline_, "d3d11download");
@@ -804,11 +841,35 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
         }
     }
 
-    static GstFlowReturn on_new_sample(GstAppSink* sink, gpointer user_data) noexcept {
-        return static_cast<PreparedGStreamerSceneGraph*>(user_data)->publish_sample(sink);
+    void add_gpu_transition_tap(GstElement* root_tee) {
+        auto* queue = add_element(pipeline_, "queue");
+        auto* sink = add_element(pipeline_, "appsink");
+        g_object_set(queue, "max-size-buffers", 1U, "max-size-bytes", 0U,
+                     "max-size-time", static_cast<guint64>(0U), "leaky", 2, nullptr);
+        g_object_set(sink, "sync", FALSE, "enable-last-sample", FALSE,
+                     "wait-on-eos", FALSE, nullptr);
+        gst_app_sink_set_max_buffers(GST_APP_SINK(sink), 1U);
+        gst_app_sink_set_leaky_type(GST_APP_SINK(sink),
+                                    GST_APP_LEAKY_TYPE_DOWNSTREAM);
+        GstAppSinkCallbacks callbacks{};
+        callbacks.new_sample = &PreparedGStreamerSceneGraph::on_new_gpu_sample;
+        gst_app_sink_set_callbacks(GST_APP_SINK(sink), &callbacks, this, nullptr);
+        connect_tee(root_tee, queue);
+        require_link(queue, sink);
     }
 
-    GstFlowReturn publish_sample(GstAppSink* sink) noexcept {
+    static GstFlowReturn on_new_sample(GstAppSink* sink, gpointer user_data) noexcept {
+        return static_cast<PreparedGStreamerSceneGraph*>(user_data)
+            ->publish_sample(sink, false);
+    }
+
+    static GstFlowReturn on_new_gpu_sample(GstAppSink* sink,
+                                           gpointer user_data) noexcept {
+        return static_cast<PreparedGStreamerSceneGraph*>(user_data)
+            ->publish_sample(sink, true);
+    }
+
+    GstFlowReturn publish_sample(GstAppSink* sink, const bool gpu_tap) noexcept {
         auto* sample = gst_app_sink_pull_sample(sink);
         if (sample == nullptr) {
             return GST_FLOW_EOS;
@@ -851,7 +912,11 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
                 .payload = std::move(payload),
             });
             std::scoped_lock lock{frame_mutex_};
-            latest_frame_ = std::move(frame);
+            if (gpu_tap) {
+                latest_gpu_frame_ = std::move(frame);
+            } else {
+                latest_frame_ = std::move(frame);
+            }
             return GST_FLOW_OK;
         } catch (...) {
             return GST_FLOW_ERROR;
@@ -933,6 +998,7 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
     GStreamerD3d11DeviceLease device_{};
     GstElement* pipeline_{nullptr};
     GstBus* bus_{nullptr};
+    GstElement* direct_output_valve_{nullptr};
     std::map<std::string, SourceRuntime*, std::less<>> source_bindings_{};
     std::map<std::string, SourceInput, std::less<>> sources_{};
     std::map<const CompiledSceneGraph*, GstElement*> scene_outputs_{};
@@ -945,8 +1011,480 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
     std::mutex feeder_mutex_{};
     std::condition_variable feeder_wakeup_{};
     std::shared_ptr<std::atomic_uint64_t> frame_sequence_{};
+    std::shared_ptr<SceneRenderResources> resources_{};
     mutable std::mutex frame_mutex_{};
     std::shared_ptr<const SourceFrame> latest_frame_{};
+    std::shared_ptr<const SourceFrame> latest_gpu_frame_{};
+};
+
+class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
+  public:
+    PreparedGStreamerTransition(
+        std::shared_ptr<PreparedSceneRenderGraph> outgoing,
+        std::shared_ptr<PreparedGStreamerSceneGraph> incoming,
+        const SceneTransitionSpec transition, GStreamerD3d11DeviceLease device,
+        std::shared_ptr<std::atomic_uint64_t> frame_sequence)
+        : incoming_(std::move(incoming)), transition_(transition),
+          device_(std::move(device)), frame_sequence_(std::move(frame_sequence)) {
+        validate_scene_transition(transition_);
+        if (transition_.kind == SceneTransitionKind::cut || outgoing == nullptr ||
+            incoming_ == nullptr || !device_ || frame_sequence_ == nullptr) {
+            throw SceneRendererError{"transition_preparation_failed",
+                                     "The transition inputs are unavailable"};
+        }
+        outgoing_control_ = outgoing;
+        if (outgoing->is_transition_output()) {
+            frozen_outgoing_gpu_ = outgoing->latest_gpu_frame();
+            frozen_outgoing_cpu_ = outgoing->latest_frame();
+            if (frozen_outgoing_gpu_ == nullptr) {
+                outgoing_ = outgoing->transition_origin();
+                if (outgoing_ == nullptr) {
+                    outgoing_ = std::move(outgoing);
+                }
+            }
+        } else {
+            outgoing_ = std::move(outgoing);
+        }
+        if (frozen_outgoing_gpu_ == nullptr && outgoing_ == nullptr) {
+            throw SceneRendererError{"transition_origin_unavailable",
+                                     "The transition origin has no stable frame source"};
+        }
+        const auto& output_format = incoming_->output_format();
+        frame_interval_ = scene_transition_frame_interval(output_format);
+        build_pipeline(output_format);
+    }
+
+    ~PreparedGStreamerTransition() override { stop(); }
+
+    [[nodiscard]] bool is_transition_output() const noexcept override { return true; }
+
+    [[nodiscard]] std::shared_ptr<PreparedSceneRenderGraph>
+    transition_target() const noexcept override {
+        return incoming_;
+    }
+
+    [[nodiscard]] std::shared_ptr<PreparedSceneRenderGraph>
+    transition_origin() const noexcept override {
+        return outgoing_;
+    }
+
+    void set_direct_output_enabled(const bool enabled) noexcept override {
+        if (incoming_ != nullptr) {
+            incoming_->set_direct_output_enabled(enabled);
+        }
+    }
+
+    void start_transition() noexcept override {
+        if (outgoing_control_ != nullptr) {
+            outgoing_control_->set_direct_output_enabled(false);
+            outgoing_control_.reset();
+        }
+        incoming_->set_direct_output_enabled(false);
+        start_requested_.store(true);
+        wakeup_.notify_all();
+    }
+
+    void stop() noexcept override {
+        if (stopped_.exchange(true)) {
+            return;
+        }
+        wakeup_.notify_all();
+        if (feeder_.joinable() && feeder_.get_id() != std::this_thread::get_id()) {
+            feeder_.join();
+        }
+        release_transition_pipeline();
+        std::scoped_lock lock{frame_mutex_};
+        latest_frame_.reset();
+        latest_gpu_frame_.reset();
+    }
+
+    [[nodiscard]] std::shared_ptr<const SourceFrame>
+    latest_frame() const noexcept override {
+        try {
+            if (completed_.load()) {
+                return incoming_->latest_frame();
+            }
+            std::scoped_lock lock{frame_mutex_};
+            if (latest_frame_ != nullptr) {
+                return latest_frame_;
+            }
+            if (frozen_outgoing_cpu_ != nullptr) {
+                return frozen_outgoing_cpu_;
+            }
+            return outgoing_ == nullptr ? nullptr : outgoing_->latest_frame();
+        } catch (...) {
+            return incoming_ == nullptr ? nullptr : incoming_->latest_frame();
+        }
+    }
+
+    [[nodiscard]] std::shared_ptr<const SourceFrame>
+    latest_gpu_frame() const noexcept override {
+        try {
+            if (completed_.load()) {
+                return incoming_->latest_gpu_frame();
+            }
+            std::scoped_lock lock{frame_mutex_};
+            if (latest_gpu_frame_ != nullptr) {
+                return latest_gpu_frame_;
+            }
+            if (frozen_outgoing_gpu_ != nullptr) {
+                return frozen_outgoing_gpu_;
+            }
+            return outgoing_ == nullptr ? nullptr : outgoing_->latest_gpu_frame();
+        } catch (...) {
+            return incoming_ == nullptr ? nullptr : incoming_->latest_gpu_frame();
+        }
+    }
+
+    [[nodiscard]] std::optional<std::uint64_t>
+    visit_latest_frame(const std::uint64_t after_sequence,
+                       const VideoFrameVisitor& visitor) const noexcept override {
+        try {
+            return visit_gstreamer_frame(latest_frame(), after_sequence, visitor);
+        } catch (...) {
+            return std::nullopt;
+        }
+    }
+
+  private:
+    void build_pipeline(const OutputVideoFormat& format) {
+        auto* raw_pipeline = gst_pipeline_new(nullptr);
+        if (raw_pipeline == nullptr) {
+            throw SceneRendererError{"transition_preparation_failed",
+                                     "The transition pipeline could not be created"};
+        }
+        std::unique_ptr<GstElement, decltype(&release_pipeline)> pipeline{
+            raw_pipeline, &release_pipeline};
+        auto* context = gst_d3d11_context_new(device_.device);
+        if (context == nullptr) {
+            throw SceneRendererError{"renderer_device_unavailable",
+                                     "The transition D3D11 context is unavailable"};
+        }
+        gst_element_set_context(pipeline.get(), context);
+        gst_context_unref(context);
+        pipeline_ = pipeline.get();
+
+        outgoing_source_ = add_transition_input(pipeline.get());
+        incoming_source_ = add_transition_input(pipeline.get());
+        auto* compositor = add_live_compositor(pipeline.get());
+        g_object_set(compositor, "background", 1, nullptr);
+        outgoing_pad_ = link_transition_input(outgoing_source_, compositor, 0U);
+        incoming_pad_ = link_transition_input(incoming_source_, compositor, 1U);
+        apply_weights({.outgoing = 1.0, .incoming = 0.0});
+
+        auto* caps_filter = add_element(pipeline.get(), "capsfilter");
+        const auto caps = output_caps(format);
+        if (caps == nullptr) {
+            throw SceneRendererError{"renderer_format_unsupported",
+                                     "Transition output caps are unavailable"};
+        }
+        g_object_set(caps_filter, "caps", caps.get(), nullptr);
+        auto* tee = add_element(pipeline.get(), "tee");
+        require_link(compositor, caps_filter);
+        require_link(caps_filter, tee);
+        add_gpu_output(tee);
+        add_cpu_output(tee);
+
+        pipeline_ = pipeline.release();
+        bus_ = gst_element_get_bus(pipeline_);
+        if (bus_ == nullptr ||
+            gst_element_set_state(pipeline_, GST_STATE_PLAYING) ==
+                GST_STATE_CHANGE_FAILURE) {
+            stop();
+            throw SceneRendererError{"transition_preparation_failed",
+                                     "The transition pipeline could not start"};
+        }
+        try {
+            feeder_ = std::thread([this] { feed(); });
+        } catch (...) {
+            stop();
+            throw SceneRendererError{"renderer_worker_failed",
+                                     "The transition worker could not start"};
+        }
+    }
+
+    [[nodiscard]] static GstElement* add_transition_input(GstElement* pipeline) {
+        auto* source = add_element(pipeline, "appsrc");
+        g_object_set(source, "is-live", TRUE, "do-timestamp", TRUE, "format",
+                     GST_FORMAT_TIME, "block", FALSE, "emit-signals", FALSE,
+                     "max-buffers", static_cast<guint64>(1U), "max-bytes",
+                     static_cast<guint64>(0U), "max-time", static_cast<guint64>(0U),
+                     "leaky-type", 2, nullptr);
+        return source;
+    }
+
+    [[nodiscard]] static GstPad* link_transition_input(GstElement* source,
+                                                        GstElement* compositor,
+                                                        const guint zorder) {
+        auto* parent = gst_element_get_parent(source);
+        if (parent == nullptr) {
+            throw SceneRendererError{"transition_preparation_failed",
+                                     "The transition input has no pipeline"};
+        }
+        auto* queue = add_element(GST_ELEMENT(parent), "queue");
+        gst_object_unref(parent);
+        g_object_set(queue, "max-size-buffers", 1U, "max-size-bytes", 0U,
+                     "max-size-time", static_cast<guint64>(0U), "leaky", 2, nullptr);
+        require_link(source, queue);
+        auto* source_pad = gst_element_get_static_pad(queue, "src");
+        auto* compositor_pad = gst_element_request_pad_simple(compositor, "sink_%u");
+        if (source_pad == nullptr || compositor_pad == nullptr ||
+            gst_pad_link(source_pad, compositor_pad) != GST_PAD_LINK_OK) {
+            if (source_pad != nullptr) {
+                gst_object_unref(source_pad);
+            }
+            if (compositor_pad != nullptr) {
+                gst_object_unref(compositor_pad);
+            }
+            throw SceneRendererError{"transition_preparation_failed",
+                                     "A transition input could not be linked"};
+        }
+        gst_object_unref(source_pad);
+        g_object_set(compositor_pad, "zorder", zorder, nullptr);
+        return compositor_pad;
+    }
+
+    void add_gpu_output(GstElement* tee) {
+        auto* queue = add_element(pipeline_, "queue");
+        auto* sink = add_element(pipeline_, "appsink");
+        configure_sink(queue, sink, &PreparedGStreamerTransition::on_gpu_sample);
+        connect_tee(tee, queue);
+        require_link(queue, sink);
+    }
+
+    void add_cpu_output(GstElement* tee) {
+        auto* queue = add_element(pipeline_, "queue");
+        auto* convert = add_element(pipeline_, "d3d11convert");
+        auto* gpu_caps_filter = add_element(pipeline_, "capsfilter");
+        const std::unique_ptr<GstCaps, decltype(&release_caps)> gpu_caps{
+            gst_caps_from_string(
+                "video/x-raw(memory:D3D11Memory),format=NV12,"
+                "pixel-aspect-ratio=1/1,colorimetry=bt709"),
+            &release_caps};
+        auto* download = add_element(pipeline_, "d3d11download");
+        auto* cpu_caps_filter = add_element(pipeline_, "capsfilter");
+        const std::unique_ptr<GstCaps, decltype(&release_caps)> cpu_caps{
+            gst_caps_from_string(
+                "video/x-raw,format=NV12,pixel-aspect-ratio=1/1,colorimetry=bt709"),
+            &release_caps};
+        auto* sink = add_element(pipeline_, "appsink");
+        if (gpu_caps == nullptr || cpu_caps == nullptr) {
+            throw SceneRendererError{"renderer_format_unsupported",
+                                     "Transition conversion caps are unavailable"};
+        }
+        g_object_set(gpu_caps_filter, "caps", gpu_caps.get(), nullptr);
+        g_object_set(cpu_caps_filter, "caps", cpu_caps.get(), nullptr);
+        configure_sink(queue, sink, &PreparedGStreamerTransition::on_cpu_sample);
+        connect_tee(tee, queue);
+        require_link(queue, convert);
+        require_link(convert, gpu_caps_filter);
+        require_link(gpu_caps_filter, download);
+        require_link(download, cpu_caps_filter);
+        require_link(cpu_caps_filter, sink);
+    }
+
+    void configure_sink(GstElement* queue, GstElement* sink,
+                        GstFlowReturn (*callback)(GstAppSink*, gpointer)) {
+        g_object_set(queue, "max-size-buffers", 1U, "max-size-bytes", 0U,
+                     "max-size-time", static_cast<guint64>(0U), "leaky", 2, nullptr);
+        g_object_set(sink, "sync", FALSE, "enable-last-sample", FALSE,
+                     "wait-on-eos", FALSE, nullptr);
+        gst_app_sink_set_max_buffers(GST_APP_SINK(sink), 1U);
+        gst_app_sink_set_leaky_type(GST_APP_SINK(sink),
+                                    GST_APP_LEAKY_TYPE_DOWNSTREAM);
+        GstAppSinkCallbacks callbacks{};
+        callbacks.new_sample = callback;
+        gst_app_sink_set_callbacks(GST_APP_SINK(sink), &callbacks, this, nullptr);
+    }
+
+    static GstFlowReturn on_gpu_sample(GstAppSink* sink, gpointer user_data) noexcept {
+        return static_cast<PreparedGStreamerTransition*>(user_data)
+            ->publish_sample(sink, true);
+    }
+
+    static GstFlowReturn on_cpu_sample(GstAppSink* sink, gpointer user_data) noexcept {
+        return static_cast<PreparedGStreamerTransition*>(user_data)
+            ->publish_sample(sink, false);
+    }
+
+    GstFlowReturn publish_sample(GstAppSink* sink, const bool gpu) noexcept {
+        auto* sample = gst_app_sink_pull_sample(sink);
+        if (sample == nullptr) {
+            return GST_FLOW_EOS;
+        }
+        std::unique_ptr<GstSample, decltype(&gst_sample_unref)> sample_guard{
+            sample, &gst_sample_unref};
+        try {
+            auto* caps = gst_sample_get_caps(sample);
+            auto* buffer = gst_sample_get_buffer(sample);
+            GstVideoInfo info{};
+            if (caps == nullptr || buffer == nullptr ||
+                gst_video_info_from_caps(&info, caps) == FALSE) {
+                return GST_FLOW_ERROR;
+            }
+            const auto sequence = frame_sequence_->fetch_add(1U) + 1U;
+            auto payload = std::make_shared<GStreamerRenderedFramePayload>(
+                sample_guard.release(), device_.owner);
+            const auto* format =
+                gst_video_format_to_string(GST_VIDEO_INFO_FORMAT(&info));
+            if (format == nullptr) {
+                return GST_FLOW_ERROR;
+            }
+            auto frame = std::make_shared<SourceFrame>(SourceFrame{
+                .sequence = sequence,
+                .stream_epoch = 1U,
+                .discontinuity = false,
+                .presentation_timestamp_ns = valid_clock_time(GST_BUFFER_PTS(buffer)),
+                .duration_ns = valid_clock_time(GST_BUFFER_DURATION(buffer)),
+                .received_monotonic_ns = monotonic_nanoseconds(),
+                .width = static_cast<std::uint32_t>(GST_VIDEO_INFO_WIDTH(&info)),
+                .height = static_cast<std::uint32_t>(GST_VIDEO_INFO_HEIGHT(&info)),
+                .pixel_format = format,
+                .memory = gpu ? SourceFrameMemory::d3d11
+                              : SourceFrameMemory::system_memory,
+                .payload = std::move(payload),
+            });
+            std::scoped_lock lock{frame_mutex_};
+            if (gpu) {
+                latest_gpu_frame_ = std::move(frame);
+            } else {
+                latest_frame_ = std::move(frame);
+            }
+            return GST_FLOW_OK;
+        } catch (...) {
+            return GST_FLOW_ERROR;
+        }
+    }
+
+    [[nodiscard]] bool push_frame(GstElement* source,
+                                  const std::shared_ptr<const SourceFrame>& frame) noexcept {
+        try {
+            const auto sample = gstreamer_sample(frame);
+            if (!sample) {
+                return false;
+            }
+            auto* original = gst_sample_get_buffer(sample.sample);
+            auto* caps = gst_sample_get_caps(sample.sample);
+            if (original == nullptr || caps == nullptr) {
+                return false;
+            }
+            auto* buffer = gst_buffer_copy(original);
+            if (buffer == nullptr) {
+                return false;
+            }
+            GST_BUFFER_PTS(buffer) = GST_CLOCK_TIME_NONE;
+            GST_BUFFER_DTS(buffer) = GST_CLOCK_TIME_NONE;
+            GST_BUFFER_DURATION(buffer) = GST_CLOCK_TIME_NONE;
+            auto* retimed = gst_sample_new(buffer, caps, nullptr, nullptr);
+            gst_buffer_unref(buffer);
+            if (retimed == nullptr) {
+                return false;
+            }
+            const auto flow =
+                gst_app_src_push_sample(GST_APP_SRC(source), retimed);
+            gst_sample_unref(retimed);
+            return flow == GST_FLOW_OK;
+        } catch (...) {
+            return false;
+        }
+    }
+
+    void apply_weights(const SceneTransitionWeights weights) noexcept {
+        g_object_set(outgoing_pad_, "alpha", weights.outgoing, nullptr);
+        g_object_set(incoming_pad_, "alpha", weights.incoming, nullptr);
+    }
+
+    void feed() noexcept {
+        std::optional<std::chrono::steady_clock::time_point> started_at;
+        while (!stopped_.load()) {
+            auto* error = gst_bus_pop_filtered(bus_, GST_MESSAGE_ERROR);
+            if (error != nullptr) {
+                gst_message_unref(error);
+                break;
+            }
+            const auto outgoing =
+                frozen_outgoing_gpu_ != nullptr
+                    ? frozen_outgoing_gpu_
+                    : (outgoing_ == nullptr ? nullptr
+                                            : outgoing_->latest_gpu_frame());
+            const auto incoming = incoming_->latest_gpu_frame();
+            const bool have_outgoing = outgoing != nullptr &&
+                                       push_frame(outgoing_source_, outgoing);
+            const bool have_incoming = incoming != nullptr &&
+                                       push_frame(incoming_source_, incoming);
+            if (start_requested_.load() && have_outgoing && have_incoming &&
+                !started_at.has_value()) {
+                started_at = std::chrono::steady_clock::now();
+            }
+            if (started_at.has_value()) {
+                const auto elapsed = std::chrono::steady_clock::now() - *started_at;
+                const auto duration = std::chrono::milliseconds{transition_.duration_ms};
+                const auto progress =
+                    std::chrono::duration<double>(elapsed).count() /
+                    std::chrono::duration<double>(duration).count();
+                apply_weights(scene_transition_weights(transition_, progress));
+                if (progress >= 1.0) {
+                    break;
+                }
+            }
+            std::unique_lock lock{wakeup_mutex_};
+            wakeup_.wait_for(lock, frame_interval_,
+                             [this] { return stopped_.load(); });
+        }
+        if (!stopped_.load()) {
+            incoming_->set_direct_output_enabled(true);
+            outgoing_.reset();
+            frozen_outgoing_gpu_.reset();
+            frozen_outgoing_cpu_.reset();
+            completed_.store(true);
+            release_transition_pipeline();
+        }
+    }
+
+    void release_transition_pipeline() noexcept {
+        try {
+            std::scoped_lock lock{pipeline_mutex_};
+            auto* outgoing_pad = std::exchange(outgoing_pad_, nullptr);
+            auto* incoming_pad = std::exchange(incoming_pad_, nullptr);
+            if (outgoing_pad != nullptr) {
+                gst_object_unref(outgoing_pad);
+            }
+            if (incoming_pad != nullptr) {
+                gst_object_unref(incoming_pad);
+            }
+            auto* pipeline = std::exchange(pipeline_, nullptr);
+            auto* bus = std::exchange(bus_, nullptr);
+            release_bus(bus);
+            release_pipeline(pipeline);
+        } catch (...) {
+        }
+    }
+
+    std::shared_ptr<PreparedSceneRenderGraph> outgoing_{};
+    std::shared_ptr<PreparedSceneRenderGraph> outgoing_control_{};
+    std::shared_ptr<PreparedGStreamerSceneGraph> incoming_{};
+    std::shared_ptr<const SourceFrame> frozen_outgoing_gpu_{};
+    std::shared_ptr<const SourceFrame> frozen_outgoing_cpu_{};
+    SceneTransitionSpec transition_{};
+    GStreamerD3d11DeviceLease device_{};
+    std::shared_ptr<std::atomic_uint64_t> frame_sequence_{};
+    GstElement* pipeline_{nullptr};
+    GstBus* bus_{nullptr};
+    GstElement* outgoing_source_{nullptr};
+    GstElement* incoming_source_{nullptr};
+    GstPad* outgoing_pad_{nullptr};
+    GstPad* incoming_pad_{nullptr};
+    std::mutex pipeline_mutex_{};
+    std::atomic_bool start_requested_{false};
+    std::atomic_bool stopped_{false};
+    std::atomic_bool completed_{false};
+    std::thread feeder_{};
+    std::mutex wakeup_mutex_{};
+    std::condition_variable wakeup_{};
+    std::chrono::nanoseconds frame_interval_{33'333'333};
+    mutable std::mutex frame_mutex_{};
+    std::shared_ptr<const SourceFrame> latest_frame_{};
+    std::shared_ptr<const SourceFrame> latest_gpu_frame_{};
 };
 
 class GStreamerSceneRenderer final : public SceneRenderer {
@@ -970,7 +1508,51 @@ class GStreamerSceneRenderer final : public SceneRenderer {
             graph->stop();
             throw SceneRendererError{"renderer_stopped", "The scene renderer is stopped"};
         }
+        if (preparation.bus == OutputBus::virtual_camera) {
+            graph->set_direct_output_enabled(false);
+        }
         return graph;
+    }
+
+    [[nodiscard]] SceneRenderTransitionPreparation
+    prepare_transition(
+        const OutputBus bus,
+        const std::shared_ptr<PreparedSceneRenderGraph>& incoming,
+        const SceneTransitionSpec& transition) override {
+        validate_scene_transition(transition);
+        if (bus == OutputBus::media_windows ||
+            transition.kind == SceneTransitionKind::cut) {
+            return {.effective_transition = {}};
+        }
+        const auto target =
+            std::dynamic_pointer_cast<PreparedGStreamerSceneGraph>(incoming);
+        if (target == nullptr) {
+            return {
+                .effective_transition = {},
+                .fallback_applied = true,
+                .fallback_reason = "transition_destination_unavailable",
+            };
+        }
+        std::shared_ptr<PreparedSceneRenderGraph> outgoing;
+        {
+            std::scoped_lock lock{mutex_};
+            outgoing = active_[bus_index(bus)];
+        }
+        if (outgoing == nullptr) {
+            return {
+                .effective_transition = {},
+                .fallback_applied = true,
+                .fallback_reason = "transition_origin_unavailable",
+            };
+        }
+        auto transition_output = std::make_shared<PreparedGStreamerTransition>(
+            std::move(outgoing), target, transition,
+            gstreamer_d3d11_device(source_factory_),
+            frame_sequences_[bus_index(bus)]);
+        return {
+            .effective_transition = transition,
+            .render_output = std::move(transition_output),
+        };
     }
 
     void commit_hydration(
@@ -980,16 +1562,27 @@ class GStreamerSceneRenderer final : public SceneRenderer {
             std::scoped_lock lock{mutex_};
             active_ = graphs;
             enabled_ = enabled;
+            if (active_[bus_index(OutputBus::virtual_camera)] != nullptr) {
+                active_[bus_index(OutputBus::virtual_camera)]
+                    ->set_direct_output_enabled(true);
+            }
         } catch (...) {
         }
     }
 
     void commit_take(const OutputBus bus,
-                     std::shared_ptr<PreparedSceneRenderGraph> graph,
+                     std::shared_ptr<PreparedSceneRenderGraph> target_graph,
+                     std::shared_ptr<PreparedSceneRenderGraph> render_output,
                      std::uint64_t) noexcept override {
         try {
             std::scoped_lock lock{mutex_};
-            active_[bus_index(bus)] = std::move(graph);
+            if (render_output != nullptr) {
+                render_output->start_transition();
+                active_[bus_index(bus)] = std::move(render_output);
+            } else {
+                target_graph->set_direct_output_enabled(true);
+                active_[bus_index(bus)] = std::move(target_graph);
+            }
         } catch (...) {
         }
     }
@@ -998,7 +1591,17 @@ class GStreamerSceneRenderer final : public SceneRenderer {
                             std::uint64_t) noexcept override {
         try {
             std::scoped_lock lock{mutex_};
-            enabled_[bus_index(bus)] = enabled;
+            const auto index = bus_index(bus);
+            enabled_[index] = enabled;
+            auto& active = active_[index];
+            if (!enabled && active != nullptr && active->is_transition_output()) {
+                auto target = active->transition_target();
+                active->stop();
+                active = std::move(target);
+            }
+            if (active != nullptr && !active->is_transition_output()) {
+                active->set_direct_output_enabled(enabled);
+            }
         } catch (...) {
         }
     }
@@ -1014,9 +1617,7 @@ class GStreamerSceneRenderer final : public SceneRenderer {
                 }
                 graph = active_[bus_index(bus)];
             }
-            const auto prepared =
-                std::dynamic_pointer_cast<PreparedGStreamerSceneGraph>(graph);
-            return prepared == nullptr ? nullptr : prepared->latest_frame();
+            return graph == nullptr ? nullptr : graph->latest_frame();
         } catch (...) {
             return {};
         }
@@ -1034,11 +1635,9 @@ class GStreamerSceneRenderer final : public SceneRenderer {
                 }
                 graph = active_[bus_index(bus)];
             }
-            const auto prepared =
-                std::dynamic_pointer_cast<PreparedGStreamerSceneGraph>(graph);
-            return prepared == nullptr
+            return graph == nullptr
                        ? std::nullopt
-                       : prepared->visit_latest_frame(after_sequence, visitor);
+                       : graph->visit_latest_frame(after_sequence, visitor);
         } catch (...) {
             return std::nullopt;
         }
@@ -1057,10 +1656,8 @@ class GStreamerSceneRenderer final : public SceneRenderer {
             return;
         }
         for (auto& graph : active) {
-            const auto prepared =
-                std::dynamic_pointer_cast<PreparedGStreamerSceneGraph>(graph);
-            if (prepared != nullptr) {
-                prepared->stop();
+            if (graph != nullptr) {
+                graph->stop();
             }
         }
     }

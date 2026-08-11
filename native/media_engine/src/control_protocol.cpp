@@ -142,23 +142,14 @@ void require_bus(const Json& value) {
 
 void validate_unavailable_command(const ControlEnvelope& request) {
     if (request.message_type == "take_prepared") {
-        if (!has_exact_fields(request.payload, {"bus_id", "scene_id", "preparation_token",
-                                                "transition", "transition_duration_ms"})) {
+        if (!has_exact_fields(request.payload,
+                              {"bus_id", "scene_id", "preparation_token"})) {
             throw std::runtime_error("invalid take prepared payload");
         }
         require_bus(request.payload.at("bus_id"));
         static_cast<void>(strict_identity(request.payload.at("scene_id"), "scene id"));
         static_cast<void>(
             strict_identity(request.payload.at("preparation_token"), "preparation token"));
-        const auto transition = strict_identity(request.payload.at("transition"), "transition");
-        if (transition != "cut" && transition != "fade") {
-            throw std::runtime_error("invalid transition");
-        }
-        const auto duration =
-            strict_integer(request.payload.at("transition_duration_ms"), "transition duration");
-        if (duration > std::numeric_limits<std::uint32_t>::max()) {
-            throw std::runtime_error("invalid transition duration");
-        }
         return;
     }
     if (!has_exact_fields(request.payload, {"bus_id", "enabled"}) ||
@@ -242,13 +233,35 @@ void validate_error_payload(const Json& payload) {
 
 void validate_preparation_payload(const Json& payload, const std::string_view expected_bus,
                                   const std::string_view expected_scene) {
-    if (!has_exact_fields(payload, {"bus_id", "scene_id", "preparation_token"})) {
+    if (!has_exact_fields(payload,
+                          {"bus_id", "scene_id", "preparation_token", "transition",
+                           "fallback_applied", "fallback_reason"}) ||
+        !payload.at("transition").is_object() ||
+        !has_exact_fields(payload.at("transition"), {"kind", "duration_ms"}) ||
+        !payload.at("fallback_applied").is_boolean() ||
+        !payload.at("fallback_reason").is_string()) {
         throw std::runtime_error("invalid scene preparation");
     }
     require_bus(payload.at("bus_id"));
     const auto bus = strict_identity(payload.at("bus_id"), "output bus");
     const auto scene = strict_identity(payload.at("scene_id"), "scene id");
     static_cast<void>(strict_identity(payload.at("preparation_token"), "preparation token"));
+    const auto transition_kind =
+        strict_identity(payload.at("transition").at("kind"), "transition kind");
+    const auto transition_duration = strict_integer(
+        payload.at("transition").at("duration_ms"), "transition duration");
+    if ((transition_kind == "cut" && transition_duration != 0U) ||
+        ((transition_kind == "dissolve" || transition_kind == "fade_to_black") &&
+         (transition_duration < 50U || transition_duration > 10'000U)) ||
+        (transition_kind != "cut" && transition_kind != "dissolve" &&
+         transition_kind != "fade_to_black")) {
+        throw std::runtime_error("invalid prepared transition");
+    }
+    const auto fallback = payload.at("fallback_applied").get<bool>();
+    const auto reason = payload.at("fallback_reason").get<std::string>();
+    if (reason.size() > 128U || (fallback && reason.empty()) || (!fallback && !reason.empty())) {
+        throw std::runtime_error("invalid transition fallback");
+    }
     if (bus != expected_bus || scene != expected_scene) {
         throw std::runtime_error("mismatched scene preparation");
     }
@@ -405,14 +418,9 @@ ProtocolReply ControlSession::handle(const ControlEnvelope& request) {
         const auto scene_id = strict_identity(request.payload.at("scene_id"), "scene id");
         const auto preparation_token = strict_identity(
             request.payload.at("preparation_token"), "preparation token");
-        const auto transition =
-            strict_identity(request.payload.at("transition"), "transition");
-        const auto transition_duration_ms = strict_integer(
-            request.payload.at("transition_duration_ms"), "transition duration");
         auto payload = services_.take_prepared
                            ? services_.take_prepared(
-                                 bus, scene_id, preparation_token, transition,
-                                 transition_duration_ms, request.document_revision,
+                                 bus, scene_id, preparation_token, request.document_revision,
                                  request.sequence)
                            : unavailable_ack();
         validate_ack_payload(payload);
@@ -457,15 +465,30 @@ ProtocolReply ControlSession::handle(const ControlEnvelope& request) {
         return {.response = response_for(request, "ack", std::move(payload))};
     }
     if (request.message_type == "prepare_scene") {
-        if (!has_exact_fields(request.payload, {"bus_id", "scene_id"})) {
+        if (!has_exact_fields(request.payload, {"bus_id", "scene_id", "transition"}) ||
+            !request.payload.at("transition").is_object() ||
+            !has_exact_fields(request.payload.at("transition"), {"kind", "duration_ms"})) {
             throw std::runtime_error("invalid prepare scene payload");
         }
         require_bus(request.payload.at("bus_id"));
         const auto bus = strict_identity(request.payload.at("bus_id"), "output bus");
         const auto scene_id = strict_identity(request.payload.at("scene_id"), "scene id");
+        const auto transition_kind = strict_identity(
+            request.payload.at("transition").at("kind"), "transition kind");
+        const auto transition_duration_ms = strict_integer(
+            request.payload.at("transition").at("duration_ms"), "transition duration");
+        if ((transition_kind == "cut" && transition_duration_ms != 0U) ||
+            ((transition_kind == "dissolve" || transition_kind == "fade_to_black") &&
+             (transition_duration_ms < 50U || transition_duration_ms > 10'000U)) ||
+            (transition_kind != "cut" && transition_kind != "dissolve" &&
+             transition_kind != "fade_to_black")) {
+            throw std::runtime_error("invalid prepare scene transition");
+        }
         auto reply = services_.prepare_scene
-                         ? services_.prepare_scene(bus, scene_id, request.document_revision,
-                                                   request.request_id, request.sequence)
+                         ? services_.prepare_scene(
+                               bus, scene_id, transition_kind, transition_duration_ms,
+                               request.document_revision, request.request_id,
+                               request.sequence)
                          : ControlServiceReply{
                                .message_type = "error",
                                .payload = {

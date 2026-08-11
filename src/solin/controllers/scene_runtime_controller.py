@@ -23,6 +23,7 @@ from solin.core.scenes.engine import (
     SceneEngineStatus,
     ScenePreparation,
     SourceHealthEvent,
+    scene_engine_graph_signature,
 )
 from solin.core.scenes.model import (
     AUTOMATIC_MEDIA_CATEGORIES,
@@ -33,6 +34,8 @@ from solin.core.scenes.model import (
     SceneDocument,
     SceneLayer,
     SceneValidationError,
+    TransitionKind,
+    TransitionSpec,
     new_identity,
 )
 from solin.core.scenes.model import (
@@ -95,6 +98,7 @@ class _PendingTake:
     scene_id: str
     prepare_request_id: str
     prepare_sequence: int
+    document_revision: int
     take_request_id: str = ""
     take_sequence: int = -1
 
@@ -162,6 +166,7 @@ class SceneRuntimeController(QObject):
     engine_event = Signal(object)
     ptz_event = Signal(object)
     engine_error = Signal(str)
+    transition_fallback = Signal(str)
     operational_state_changed = Signal()
     local_cameras_changed = Signal(object)
     preview_scene_changed = Signal(object)
@@ -198,6 +203,8 @@ class SceneRuntimeController(QObject):
         self._process_generation = ""
         self._hydrate_in_flight: tuple[str, SceneEngineSnapshot] | None = None
         self._hydrate_dirty = False
+        self._engine_document_revision = 0
+        self._observed_graph_record = scene_engine_graph_signature(self._documents.document)
         self._preview_geometry_in_flight: _PendingLayerPreview | None = None
         self._queued_preview_geometry: tuple[str, SceneLayer, int] | None = None
         self._profile_activation: _PendingProfileActivation | None = None
@@ -496,7 +503,7 @@ class SceneRuntimeController(QObject):
         self._queued_preview_geometry = (
             scene_id,
             layer,
-            self._documents.document.revision,
+            self._engine_document_revision,
         )
         self._dispatch_preview_geometry()
 
@@ -785,6 +792,7 @@ class SceneRuntimeController(QObject):
         self._process_generation = ""
         self._hydrate_in_flight = None
         self._hydrate_dirty = False
+        self._engine_document_revision = 0
         self._preview_geometry_in_flight = None
         self._queued_preview_geometry = None
         self._set_last_engine_error_code("")
@@ -806,8 +814,13 @@ class SceneRuntimeController(QObject):
             self._ptz.close()
 
     def _on_document_changed(self, change: SceneDocumentChange) -> None:
-        self._cancel_all_pending(cancel_native=self._engine_ready)
+        graph_record = scene_engine_graph_signature(change.document)
+        graph_changed = graph_record != self._observed_graph_record
+        self._observed_graph_record = graph_record
         self.document_changed.emit(change.document)
+        if not graph_changed:
+            return
+        self._cancel_all_pending(cancel_native=self._engine_ready)
         self._reconcile_desired(prepare=False)
         self._hydrate_if_ready()
 
@@ -825,6 +838,8 @@ class SceneRuntimeController(QObject):
         self._unsubscribe_runtime = self._runtime.subscribe(self._on_runtime_changed)
         self._hydrate_in_flight = None
         self._hydrate_dirty = False
+        self._engine_document_revision = 0
+        self._observed_graph_record = scene_engine_graph_signature(self._documents.document)
         self._preview_geometry_in_flight = None
         self._queued_preview_geometry = None
         self._preview_scene_id = self._profile_preview_scene_id
@@ -933,7 +948,13 @@ class SceneRuntimeController(QObject):
             self._track_future(
                 future,
                 "output",
-                (request_id, sequence, bus_id, enabled),
+                (
+                    request_id,
+                    sequence,
+                    bus_id,
+                    enabled,
+                    self._engine_document_revision,
+                ),
             )
         for bus_id, enabled in renders:
             if previous_renders.get(bus_id) == enabled:
@@ -950,7 +971,13 @@ class SceneRuntimeController(QObject):
             self._track_future(
                 future,
                 "render",
-                (request_id, sequence, bus_id, enabled),
+                (
+                    request_id,
+                    sequence,
+                    bus_id,
+                    enabled,
+                    self._engine_document_revision,
+                ),
             )
 
     def _hydrate_if_ready(self) -> None:
@@ -1044,12 +1071,19 @@ class SceneRuntimeController(QObject):
             scene_id=scene_id,
             prepare_request_id=request_id,
             prepare_sequence=sequence,
+            document_revision=self._engine_document_revision,
         )
         self._pending[bus_id] = pending
+        transition = (
+            TransitionSpec(TransitionKind.CUT, 0)
+            if bus_id is BusId.MEDIA_WINDOWS
+            else self._documents.effective_transition(scene_id)
+        )
         future = self._engine.prepare_scene(
             bus_id,
             scene_id,
-            document_revision=self._documents.document.revision,
+            transition=transition,
+            document_revision=pending.document_revision,
             request_id=request_id,
             sequence=sequence,
             deadline_ms=_PREPARE_DEADLINE_MS,
@@ -1141,15 +1175,13 @@ class SceneRuntimeController(QObject):
             scene_id=pending.scene_id,
             prepare_request_id=pending.prepare_request_id,
             prepare_sequence=pending.prepare_sequence,
+            document_revision=pending.document_revision,
             take_request_id=request_id,
             take_sequence=sequence,
         )
         self._pending[preparation.bus_id] = pending
-        route = self._documents.document.output(preparation.bus_id)
         future = self._engine.take_prepared(
             preparation,
-            transition=route.transition,
-            transition_duration_ms=route.transition_duration_ms,
             request_id=request_id,
             sequence=sequence,
             deadline_ms=_TAKE_DEADLINE_MS,
@@ -1265,6 +1297,7 @@ class SceneRuntimeController(QObject):
             self._report_rejection("hydrate", ack)
             return
         self._set_last_engine_error_code("")
+        self._engine_document_revision = snapshot.document.revision
         self._set_applied_scenes(snapshot.active_scenes)
         if self._hydrate_dirty:
             return
@@ -1299,6 +1332,8 @@ class SceneRuntimeController(QObject):
             self._profile_activation = None
             self._profile_preview_scene_id = None
         self._set_last_engine_error_code("")
+        self._engine_document_revision = context.snapshot.document.revision
+        self._observed_graph_record = scene_engine_graph_signature(context.snapshot.document)
         self._set_applied_scenes(context.snapshot.active_scenes)
         delete_collection_id = self._delete_after_profile_activation
         self._delete_after_profile_activation = ""
@@ -1339,6 +1374,7 @@ class SceneRuntimeController(QObject):
             document_revision=result.document_revision,
             expected_request_id=expected.prepare_request_id,
             expected_sequence=expected.prepare_sequence,
+            expected_document_revision=expected.document_revision,
         )
         if result.bus_id is not bus_id or result.scene_id != expected.scene_id:
             raise RuntimeError("Scene engine prepared a different scene")
@@ -1348,6 +1384,14 @@ class SceneRuntimeController(QObject):
             self._pending.pop(bus_id, None)
             self._continue_pending_reconciliation(bus_id, expected.scene_id)
             return
+        if result.fallback_applied:
+            log.warning(
+                "Scene transition fell back to Cut (%s)",
+                result.fallback_reason,
+            )
+            self.transition_fallback.emit(
+                self.tr("The selected transition is unavailable. The scene was cut instead.")
+            )
         self._run_ptz_entry_actions(result, expected)
 
     def _handle_taken(self, context: object, result: object) -> None:
@@ -1360,7 +1404,7 @@ class SceneRuntimeController(QObject):
             result,
             request_id=expected.take_request_id,
             sequence=expected.take_sequence,
-            document_revision=self._documents.document.revision,
+            document_revision=expected.document_revision,
         )
         if not ack.applied:
             self._clear_failed_pending("take", context)
@@ -1446,18 +1490,22 @@ class SceneRuntimeController(QObject):
         context: object,
         result: object,
     ) -> None:
-        request_id, sequence, _bus_id, _enabled = _context_tuple(
+        request_id, sequence, _bus_id, _enabled, document_revision = _context_tuple(
             context,
-            4,
+            5,
             operation,
         )
-        if not isinstance(request_id, str) or not isinstance(sequence, int):
+        if (
+            not isinstance(request_id, str)
+            or not isinstance(sequence, int)
+            or not isinstance(document_revision, int)
+        ):
             raise RuntimeError(f"Invalid {operation} context")
         ack = self._validated_ack(
             result,
             request_id=request_id,
             sequence=sequence,
-            document_revision=self._documents.document.revision,
+            document_revision=document_revision,
         )
         if not ack.applied:
             self._report_rejection(operation, ack)

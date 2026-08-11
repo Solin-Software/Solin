@@ -8,6 +8,7 @@ from solin.core.scenes.application import (
     SceneConflictError,
     SceneDocumentService,
     SceneHistoryEmptyError,
+    SceneNotFoundError,
 )
 from solin.core.scenes.model import (
     DEFAULT_CAMERA_SOURCE_ID,
@@ -22,6 +23,8 @@ from solin.core.scenes.model import (
     SceneReferenceConfig,
     SourceDefinition,
     SourceKind,
+    TransitionKind,
+    TransitionSpec,
 )
 from solin.core.scenes.presets import (
     CAMERA_SCENE_ID,
@@ -84,6 +87,59 @@ def test_scene_crud_is_transactional_and_revisions_are_monotonic() -> None:
     service.delete_scene("new-scene")
     assert service.document.revision == 5
     assert all(scene.id != "new-scene" for scene in service.document.scenes)
+
+
+def test_program_and_scene_transition_policy_support_undo_and_redo() -> None:
+    service = _service()
+    profile_spec = TransitionSpec(TransitionKind.FADE_TO_BLACK, 700)
+    scene_spec = TransitionSpec(TransitionKind.DISSOLVE, 450)
+
+    service.set_program_transition(profile_spec)
+    service.set_scene_transition_override(CONTENT_SCENE_ID, scene_spec)
+
+    assert service.effective_transition(CAMERA_SCENE_ID) == profile_spec
+    assert service.effective_transition(CONTENT_SCENE_ID) == scene_spec
+    assert service.document.revision == 2
+
+    service.undo()
+    assert service.effective_transition(CONTENT_SCENE_ID) == profile_spec
+    service.undo()
+    assert service.effective_transition(CONTENT_SCENE_ID) == TransitionSpec(
+        TransitionKind.DISSOLVE,
+        350,
+    )
+    service.redo()
+    service.redo()
+    assert service.effective_transition(CONTENT_SCENE_ID) == scene_spec
+
+
+def test_duplicate_scene_copies_override_and_delete_scene_removes_it() -> None:
+    service = _service(identities=["duplicate-scene", "duplicate-layer"])
+    override = TransitionSpec(TransitionKind.FADE_TO_BLACK, 500)
+    service.set_scene_transition_override(CONTENT_SCENE_ID, override)
+
+    service.duplicate_scene(CONTENT_SCENE_ID, name="Content copy")
+
+    assert service.document.transition_policy.override_for("duplicate-scene") == override
+    service.delete_scene("duplicate-scene")
+    assert service.document.transition_policy.override_for("duplicate-scene") is None
+
+
+def test_scene_transition_override_can_be_removed_and_unknown_scene_is_rejected() -> None:
+    service = _service()
+    override = TransitionSpec(TransitionKind.CUT, 0)
+
+    service.set_scene_transition_override(CONTENT_SCENE_ID, override)
+    assert service.effective_transition(CONTENT_SCENE_ID) == override
+    service.set_scene_transition_override(CONTENT_SCENE_ID, None)
+    assert service.effective_transition(CONTENT_SCENE_ID) == (
+        service.document.transition_policy.default
+    )
+
+    with pytest.raises(SceneNotFoundError, match="does not exist"):
+        service.set_scene_transition_override("missing-scene", override)
+    with pytest.raises(SceneNotFoundError, match="does not exist"):
+        service.effective_transition("missing-scene")
 
 
 def test_referenced_scene_deletion_clears_program_roles_transactionally() -> None:

@@ -5,6 +5,14 @@ import QtQuick.Controls 2.15
 SpinBox {
     id: root
     property var theme: null
+    property string unitText: ""
+
+    function pendingValue() {
+        var parsed = Number(root.valueFromText(valueEditor.text, root.locale))
+        if (!isFinite(parsed))
+            return root.value
+        return Math.max(root.from, Math.min(root.to, Math.round(parsed)))
+    }
 
     readonly property color surface: theme ? theme.surface : "#172131"
     readonly property color hover: theme ? theme.hover : "#233043"
@@ -19,9 +27,12 @@ SpinBox {
     font.pixelSize: 11
 
     contentItem: TextInput {
+        id: valueEditor
+        objectName: root.objectName.length > 0
+            ? root.objectName + "-input" : "scenesSpinBoxInput"
         z: 2
         leftPadding: 10
-        rightPadding: 48
+        rightPadding: 30 + (unitLabel.visible ? unitLabel.implicitWidth + 8 : 0)
         text: root.displayText
         color: root.textPrimary
         selectionColor: root.accent
@@ -30,8 +41,22 @@ SpinBox {
         horizontalAlignment: TextInput.AlignLeft
         verticalAlignment: TextInput.AlignVCenter
         readOnly: !root.editable
+        selectByMouse: true
         validator: root.validator
         inputMethodHints: Qt.ImhFormattedNumbersOnly
+    }
+
+    Text {
+        id: unitLabel
+        objectName: root.objectName.length > 0
+            ? root.objectName + "-unit" : "scenesSpinBoxUnit"
+        anchors.right: parent.right
+        anchors.rightMargin: 28
+        anchors.verticalCenter: parent.verticalCenter
+        visible: text.length > 0
+        text: root.unitText
+        color: root.textMuted
+        font: root.font
     }
 
     up.indicator: Rectangle {

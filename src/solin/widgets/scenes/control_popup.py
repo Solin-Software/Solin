@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
 )
 
 from solin.controllers.scene_runtime_controller import SceneRuntimeController
-from solin.core.scenes.model import BusId, OutputMode
+from solin.core.scenes.model import BusId, OutputMode, TransitionKind, TransitionSpec
 from solin.styles.icons import ICON_CLAPPERBOARD, make_icon
 from solin.styles.theme import PALETTE, qss_rgba
 from solin.ui.scene_engine_status import scene_engine_error_summary
@@ -247,6 +247,14 @@ class SceneControlPopup(QWidget):
                 markers.append(self.tr("MEDIA"))
             suffix = f"  ·  {' · '.join(markers)}" if markers else ""
             button.setText(f"{scene.name}{suffix}")
+            override = self._controller.document.transition_policy.override_for(scene.id)
+            button.setToolTip(
+                ""
+                if override is None
+                else self.tr("Transition override: %1").replace(
+                    "%1", self._transition_label(override)
+                )
+            )
             button.setCursor(Qt.CursorShape.PointingHandCursor)
             button.clicked.connect(lambda _checked=False, scene_id=scene.id: self._take(scene_id))
             self._list_layout.addWidget(button)
@@ -274,6 +282,19 @@ class SceneControlPopup(QWidget):
         self._feedback.setText(self._feedback_text)
         self._feedback.setVisible(bool(self._feedback_text))
         self._sync_geometry()
+
+    def _transition_label(self, spec: TransitionSpec) -> str:
+        labels = {
+            TransitionKind.CUT: self.tr("Cut"),
+            TransitionKind.DISSOLVE: self.tr("Dissolve"),
+            TransitionKind.FADE_TO_BLACK: self.tr("Fade through black"),
+        }
+        label = labels[spec.kind]
+        return (
+            label
+            if spec.kind is TransitionKind.CUT
+            else f"{label} · {spec.duration_ms} ms"
+        )
 
     def show_above(self, anchor: QWidget) -> None:
         top_left = anchor.mapToGlobal(anchor.rect().topLeft())

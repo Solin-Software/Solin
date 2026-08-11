@@ -53,6 +53,9 @@ struct ScenePreparationReceipt {
     OutputBus bus{OutputBus::media_windows};
     std::string scene_id{};
     std::string preparation_token{};
+    SceneTransitionSpec effective_transition{};
+    bool fallback_applied{false};
+    std::string fallback_reason{};
 };
 
 class SceneGraphRuntime final {
@@ -69,12 +72,11 @@ class SceneGraphRuntime final {
     void hydrate(const SceneHydrationSnapshot& snapshot, std::uint64_t sequence);
     [[nodiscard]] ScenePreparationReceipt
     prepare(OutputBus bus, std::string_view scene_id, std::uint64_t document_revision,
-            std::string_view request_id, std::uint64_t sequence);
-    void take(const ScenePreparationReceipt& preparation, std::string_view transition,
-              std::uint32_t transition_duration_ms, std::uint64_t document_revision,
-              std::uint64_t sequence);
+            std::string_view request_id, std::uint64_t sequence,
+            const SceneTransitionSpec& transition = {});
+    void take(const ScenePreparationReceipt& preparation,
+              std::uint64_t document_revision, std::uint64_t sequence);
     void take(OutputBus bus, std::string_view scene_id, std::string_view preparation_token,
-              std::string_view transition, std::uint32_t transition_duration_ms,
               std::uint64_t document_revision, std::uint64_t sequence);
     void cancel(std::string_view request_id) noexcept;
     void set_output_enabled(OutputBus bus, bool enabled, std::uint64_t document_revision,

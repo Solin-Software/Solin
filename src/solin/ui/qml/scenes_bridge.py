@@ -34,6 +34,8 @@ from solin.core.scenes.model import (
     SceneValidationError,
     SourceDefinition,
     SourceKind,
+    TransitionKind,
+    TransitionSpec,
     ViscaIpPtzBinding,
     ViscaSerialPtzBinding,
     ViscaTransport,
@@ -179,6 +181,31 @@ class ScenesBridge(QObject):
     @Property(int, notify=changed)
     def outputHeight(self) -> int:
         return self._controller.document.output(BusId.MEDIA_WINDOWS).video_format.height
+
+    @Property(str, notify=changed)
+    def programTransitionKind(self) -> str:
+        return self._controller.document.transition_policy.default.kind.value
+
+    @Property(int, notify=changed)
+    def programTransitionDurationMs(self) -> int:
+        return self._controller.document.transition_policy.default.duration_ms
+
+    @Property(str, notify=changed)
+    def programTransitionLabel(self) -> str:
+        return self._transition_label(
+            self._controller.document.transition_policy.default,
+            include_duration=True,
+        )
+
+    @Property(str, notify=changed)
+    def selectedSceneTransitionOverrideKind(self) -> str:
+        override = self._scene_transition_override(self._selected_scene_id)
+        return "" if override is None else override.kind.value
+
+    @Property(int, notify=changed)
+    def selectedSceneTransitionOverrideDurationMs(self) -> int:
+        override = self._scene_transition_override(self._selected_scene_id)
+        return 0 if override is None else override.duration_ms
 
     @Property(bool, notify=changed)
     def canUndo(self) -> bool:
@@ -500,6 +527,59 @@ class ScenesBridge(QObject):
             lambda: self._controller.documents.set_program_media_scene(
                 scene_id if enabled else None
             )
+        )
+
+    @Slot(str, int)
+    def setProgramTransition(self, kind: str, duration_ms: int) -> None:
+        try:
+            transition_kind = TransitionKind(kind)
+            spec = TransitionSpec(
+                kind=transition_kind,
+                duration_ms=0 if transition_kind is TransitionKind.CUT else duration_ms,
+            )
+        except (TypeError, ValueError, SceneValidationError):
+            self._notify_failure(
+                self.tr("Choose a valid transition and duration."),
+                dedupe_key="scenes-transition-invalid",
+            )
+            return
+        self._run_edit(lambda: self._controller.documents.set_program_transition(spec))
+
+    @Slot(str, str, int)
+    def setSceneTransitionOverride(
+        self,
+        scene_id: str,
+        kind: str,
+        duration_ms: int,
+    ) -> None:
+        try:
+            transition_kind = TransitionKind(kind)
+            resolved_duration = (
+                0
+                if transition_kind is TransitionKind.CUT
+                else self._animated_transition_duration(scene_id, duration_ms)
+            )
+            spec = TransitionSpec(
+                kind=transition_kind,
+                duration_ms=resolved_duration,
+            )
+        except (TypeError, ValueError, SceneValidationError):
+            self._notify_failure(
+                self.tr("Choose a valid transition and duration."),
+                dedupe_key="scenes-transition-override-invalid",
+            )
+            return
+        self._run_edit(
+            lambda: self._controller.documents.set_scene_transition_override(
+                scene_id,
+                spec,
+            )
+        )
+
+    @Slot(str)
+    def clearSceneTransitionOverride(self, scene_id: str) -> None:
+        self._run_edit(
+            lambda: self._controller.documents.set_scene_transition_override(scene_id, None)
         )
 
     @Slot(str)
@@ -1215,6 +1295,9 @@ class ScenesBridge(QObject):
                 roles.append(self.tr("Media"))
             if scene.id == live_id:
                 roles.append(self.tr("Live"))
+            override = self._scene_transition_override(scene.id)
+            if override is not None:
+                roles.append(self._transition_label(override, include_duration=True))
             scene_records.append(
                 {
                     "id": scene.id,
@@ -1223,6 +1306,12 @@ class ScenesBridge(QObject):
                     "default": scene.id == default_id,
                     "media": scene.id == media_id,
                     "live": scene.id == live_id,
+                    "transition_override": override is not None,
+                    "transition_kind": "" if override is None else override.kind.value,
+                    "transition_duration_ms": 0 if override is None else override.duration_ms,
+                    "transition_label": ""
+                    if override is None
+                    else self._transition_label(override, include_duration=True),
                 }
             )
         self._scenes.replace_items(scene_records)
@@ -1235,6 +1324,36 @@ class ScenesBridge(QObject):
             ]
         )
         self.changed.emit()
+
+    def _scene_transition_override(self, scene_id: str) -> TransitionSpec | None:
+        return self._controller.document.transition_policy.override_for(scene_id)
+
+    def _animated_transition_duration(self, scene_id: str, requested: int) -> int:
+        if requested >= 0:
+            return requested
+        override = self._scene_transition_override(scene_id)
+        if override is not None and override.kind is not TransitionKind.CUT:
+            return override.duration_ms
+        default = self._controller.document.transition_policy.default
+        if default.kind is not TransitionKind.CUT:
+            return default.duration_ms
+        return 350
+
+    def _transition_label(
+        self,
+        spec: TransitionSpec,
+        *,
+        include_duration: bool,
+    ) -> str:
+        labels = {
+            TransitionKind.CUT: self.tr("Cut"),
+            TransitionKind.DISSOLVE: self.tr("Dissolve"),
+            TransitionKind.FADE_TO_BLACK: self.tr("Fade through black"),
+        }
+        label = labels[spec.kind]
+        if include_duration and spec.kind is not TransitionKind.CUT:
+            return f"{label} · {spec.duration_ms} ms"
+        return label
 
     def _selected_scene(self):
         return self._controller.document.scene(self._selected_scene_id)

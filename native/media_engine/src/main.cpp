@@ -168,7 +168,7 @@ hydrate_scene_graph(solin::media_engine::SceneGraphRuntime* graph,
 }
 
 int run_self_test() {
-    constexpr std::string_view payload = R"({"protocol_version":2,"message_type":"probe"})";
+    constexpr std::string_view payload = R"({"protocol_version":3,"message_type":"probe"})";
     std::stringstream stream;
     if (!solin::media_engine::write_frame(stream, payload)) {
         return 1;
@@ -305,6 +305,8 @@ int run_protocol() {
                 },
             .prepare_scene =
                 [&scene_graph](const std::string_view bus, const std::string_view scene_id,
+                               const std::string_view transition_kind,
+                               const std::uint64_t transition_duration_ms,
                                const std::uint64_t document_revision,
                                const std::string_view request_id, const std::uint64_t sequence) {
                     if (scene_graph == nullptr) {
@@ -314,7 +316,12 @@ int run_protocol() {
                     try {
                         const auto receipt =
                             scene_graph->prepare(output_bus_from_text(bus), scene_id,
-                                                 document_revision, request_id, sequence);
+                                                 document_revision, request_id, sequence,
+                                                 {.kind = solin::media_engine::
+                                                              scene_transition_kind_from_text(
+                                                                  transition_kind),
+                                                  .duration_ms = static_cast<std::uint32_t>(
+                                                      transition_duration_ms)});
                         return solin::media_engine::ControlServiceReply{
                             .message_type = "scene_prepared",
                             .payload =
@@ -322,6 +329,13 @@ int run_protocol() {
                                     {"bus_id", bus},
                                     {"scene_id", receipt.scene_id},
                                     {"preparation_token", receipt.preparation_token},
+                                    {"transition",
+                                     {{"kind", solin::media_engine::scene_transition_kind_text(
+                                                   receipt.effective_transition.kind)},
+                                      {"duration_ms",
+                                       receipt.effective_transition.duration_ms}}},
+                                    {"fallback_applied", receipt.fallback_applied},
+                                    {"fallback_reason", receipt.fallback_reason},
                                 },
                         };
                     } catch (const solin::media_engine::SceneGraphError& error) {
@@ -331,8 +345,7 @@ int run_protocol() {
             .take_prepared =
                 [&scene_graph](
                     const std::string_view bus, const std::string_view scene_id,
-                    const std::string_view preparation_token, const std::string_view transition,
-                    const std::uint64_t transition_duration_ms,
+                    const std::string_view preparation_token,
                     const std::uint64_t document_revision, const std::uint64_t sequence) {
                     if (scene_graph == nullptr) {
                         return rejected_ack("media_graph_unavailable",
@@ -340,8 +353,6 @@ int run_protocol() {
                     }
                     try {
                         scene_graph->take(output_bus_from_text(bus), scene_id, preparation_token,
-                                          transition,
-                                          static_cast<std::uint32_t>(transition_duration_ms),
                                           document_revision, sequence);
                         return applied_ack();
                     } catch (const solin::media_engine::SceneGraphError& error) {

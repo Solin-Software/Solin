@@ -6,7 +6,7 @@ from PySide6.QtCore import QCoreApplication
 
 from solin.controllers.scene_runtime_controller import SceneRuntimeController
 from solin.core.foundation.runtime_paths import ProfilePaths
-from solin.core.scenes.model import BusId, OutputMode
+from solin.core.scenes.model import BusId, OutputMode, TransitionKind, TransitionSpec
 from solin.core.scenes.presets import SceneSeedNames
 from solin.core.scenes.workspace import SceneWorkspaceService
 from solin.widgets.scenes.control_popup import SceneControlPopup
@@ -72,6 +72,23 @@ def test_scene_toolbar_popup_controls_one_program_and_two_destinations(
     )
     assert "invalid_scene_snapshot" in popup._engine_status.toolTip()
 
+    popup.deleteLater()
+    QCoreApplication.processEvents()
+    controller.close()
+
+
+def test_scene_toolbar_popup_only_describes_transition_overrides(tmp_path: Path) -> None:
+    controller = _controller(tmp_path)
+    scene_id = controller.document.scenes[0].id
+    controller.documents.set_scene_transition_override(
+        scene_id,
+        TransitionSpec(TransitionKind.DISSOLVE, 500),
+    )
+
+    popup = SceneControlPopup(controller)
+    button = popup._list.findChildren(type(popup._output))[0]
+
+    assert button.toolTip() == "Transition override: Dissolve · 500 ms"
     popup.deleteLater()
     QCoreApplication.processEvents()
     controller.close()

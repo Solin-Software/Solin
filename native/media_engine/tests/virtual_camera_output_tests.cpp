@@ -116,6 +116,14 @@ class FakeRenderer final : public solin::media_engine::SceneRenderer {
         return {};
     }
 
+    [[nodiscard]] solin::media_engine::SceneRenderTransitionPreparation
+    prepare_transition(
+        solin::media_engine::OutputBus,
+        const std::shared_ptr<solin::media_engine::PreparedSceneRenderGraph>&,
+        const solin::media_engine::SceneTransitionSpec& transition) override {
+        return {.effective_transition = transition};
+    }
+
     void commit_hydration(
         const std::array<std::shared_ptr<
             solin::media_engine::PreparedSceneRenderGraph>,
@@ -130,9 +138,11 @@ class FakeRenderer final : public solin::media_engine::SceneRenderer {
     void commit_take(
         const solin::media_engine::OutputBus bus,
         std::shared_ptr<solin::media_engine::PreparedSceneRenderGraph> graph,
+        std::shared_ptr<solin::media_engine::PreparedSceneRenderGraph> transition,
         const std::uint64_t sequence) noexcept override {
         static_cast<void>(bus);
         static_cast<void>(graph);
+        static_cast<void>(transition);
         static_cast<void>(sequence);
     }
 
@@ -186,7 +196,6 @@ void test_controller_normalizes_and_pumps_the_virtual_camera_bus() {
     const solin::media_engine::SceneOutputDefinition output{
         .bus = solin::media_engine::OutputBus::virtual_camera,
         .default_scene_id = "scene-main",
-        .transition = "cut",
         .video_format = {
             .width = 4U,
             .height = 2U,

@@ -149,8 +149,6 @@ struct OutputVideoFormat {
 struct SceneOutputDefinition {
     OutputBus bus{OutputBus::media_windows};
     std::string default_scene_id{};
-    std::string transition{};
-    std::uint32_t transition_duration_ms{0U};
     bool start_with_solin{false};
     OutputVideoFormat video_format{};
 

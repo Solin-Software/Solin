@@ -41,6 +41,7 @@ from solin.core.scenes.model import (
     SceneDocument,
     SceneValidationError,
     TransitionKind,
+    TransitionSpec,
 )
 from solin.core.foundation.runtime_paths import ProfilePaths
 from solin.core.scenes.ptz import (
@@ -150,7 +151,7 @@ class _Engine:
             restart_count=0,
         )
         self.snapshots: list[tuple[str, SceneEngineSnapshot]] = []
-        self.preparations: list[tuple[str, BusId, str, int]] = []
+        self.preparations: list[tuple[str, BusId, str, int, TransitionSpec]] = []
         self.takes: list[tuple[str, ScenePreparation]] = []
         self.outputs: list[tuple[str, BusId, bool]] = []
         self.renders: list[tuple[str, BusId, bool]] = []
@@ -252,13 +253,14 @@ class _Engine:
         bus_id: BusId,
         scene_id: str,
         *,
+        transition: TransitionSpec,
         document_revision: int,
         request_id: str,
         sequence: int,
         deadline_ms: int,
     ) -> Future[ScenePreparation]:
         assert deadline_ms > 0
-        self.preparations.append((request_id, bus_id, scene_id, sequence))
+        self.preparations.append((request_id, bus_id, scene_id, sequence, transition))
         return _completed(
             ScenePreparation(
                 request_id=request_id,
@@ -269,6 +271,7 @@ class _Engine:
                 bus_id=bus_id,
                 scene_id=scene_id,
                 preparation_token=f"prepared-{sequence}",
+                transition=transition,
             )
         )
 
@@ -276,15 +279,11 @@ class _Engine:
         self,
         preparation: ScenePreparation,
         *,
-        transition: TransitionKind,
-        transition_duration_ms: int,
         request_id: str,
         sequence: int,
         deadline_ms: int,
     ) -> Future[SceneEngineAck]:
         assert deadline_ms > 0
-        assert transition is TransitionKind.CUT
-        assert transition_duration_ms == 0
         self.takes.append((request_id, preparation))
         return _completed(self._ack(request_id, sequence, preparation.document_revision))
 
@@ -842,6 +841,177 @@ def test_runtime_prepares_and_takes_without_full_snapshot_on_hot_path() -> None:
     assert readiness == [True, False]
 
 
+def test_transition_policy_changes_do_not_rehydrate_and_preview_always_cuts() -> None:
+    engine = _Engine()
+    documents, _runtime, controller = _runtime_controller(
+        engine,
+        _Projection(),
+        request_ids=(
+            "hydrate",
+            "prepare-media",
+            "take-media",
+            "prepare-program",
+            "take-program",
+        ),
+    )
+    controller.start_engine()
+    hydrated_revision = engine.snapshots[0][1].document.revision
+
+    documents.set_program_transition(
+        TransitionSpec(TransitionKind.FADE_TO_BLACK, 600)
+    )
+    documents.set_scene_transition_override(
+        CONTENT_SCENE_ID,
+        TransitionSpec(TransitionKind.DISSOLVE, 450),
+    )
+
+    assert len(engine.snapshots) == 1
+    assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
+
+    controller.take_program_scene(CONTENT_SCENE_ID)
+
+    prepared = {
+        bus_id: transition
+        for _, bus_id, scene_id, _sequence, transition in engine.preparations
+        if scene_id == CONTENT_SCENE_ID
+    }
+    assert prepared[BusId.MEDIA_WINDOWS] == TransitionSpec(TransitionKind.CUT, 0)
+    assert prepared[BusId.VIRTUAL_CAMERA] == TransitionSpec(
+        TransitionKind.DISSOLVE,
+        450,
+    )
+    assert engine.takes[-1][1].document_revision == hydrated_revision
+    assert len(engine.snapshots) == 1
+    controller.close()
+
+
+def test_policy_only_revision_uses_hydrated_revision_for_auxiliary_commands() -> None:
+    engine = _Engine()
+    documents, _runtime, controller = _runtime_controller(
+        engine,
+        _Projection(),
+        request_ids=("hydrate", "output", "render", "preview-geometry"),
+    )
+    errors: list[str] = []
+    controller.engine_error.connect(errors.append)
+    controller.start_engine()
+    hydrated_revision = engine.snapshots[0][1].document.revision
+
+    documents.set_program_transition(
+        TransitionSpec(TransitionKind.FADE_TO_BLACK, 600)
+    )
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
+    scene = documents.document.scene(CAMERA_SCENE_ID)
+    controller.preview_layer_geometry(scene.id, scene.layers[0])
+
+    assert len(engine.snapshots) == 1
+    assert engine.preview_geometries[-1][4] == hydrated_revision
+    assert errors == []
+    controller.close()
+
+
+def test_transition_fallback_is_reported_without_marking_engine_failed() -> None:
+    class _FallbackEngine(_Engine):
+        def prepare_scene(
+            self,
+            bus_id: BusId,
+            scene_id: str,
+            *,
+            transition: TransitionSpec,
+            document_revision: int,
+            request_id: str,
+            sequence: int,
+            deadline_ms: int,
+        ) -> Future[ScenePreparation]:
+            prepared = super().prepare_scene(
+                bus_id,
+                scene_id,
+                transition=transition,
+                document_revision=document_revision,
+                request_id=request_id,
+                sequence=sequence,
+                deadline_ms=deadline_ms,
+            ).result()
+            if bus_id is BusId.VIRTUAL_CAMERA:
+                prepared = replace(
+                    prepared,
+                    transition=TransitionSpec(TransitionKind.CUT, 0),
+                    fallback_applied=True,
+                    fallback_reason="transition_pipeline_unavailable",
+                )
+            return _completed(prepared)
+
+    engine = _FallbackEngine()
+    _documents, _runtime, controller = _runtime_controller(
+        engine,
+        _Projection(),
+        request_ids=(
+            "hydrate",
+            "prepare-media",
+            "take-media",
+            "prepare-program",
+            "take-program",
+        ),
+    )
+    fallbacks: list[str] = []
+    controller.transition_fallback.connect(fallbacks.append)
+    controller.start_engine()
+
+    controller.take_program_scene(CONTENT_SCENE_ID)
+
+    assert fallbacks == [
+        "The selected transition is unavailable. The scene was cut instead."
+    ]
+    assert controller.last_engine_error_code == ""
+    assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
+    controller.close()
+
+
+def test_auto_switch_resolves_transition_for_each_destination_scene() -> None:
+    projection = _Projection()
+    engine = _Engine()
+    documents, _runtime, controller = _runtime_controller(
+        engine,
+        projection,
+        request_ids=(
+            "hydrate",
+            "prepare-content-preview",
+            "take-content-preview",
+            "prepare-content-program",
+            "take-content-program",
+            "prepare-default-preview",
+            "take-default-preview",
+            "prepare-default-program",
+            "take-default-program",
+        ),
+    )
+    documents.set_scene_transition_override(
+        CONTENT_SCENE_ID,
+        TransitionSpec(TransitionKind.FADE_TO_BLACK, 700),
+    )
+    controller.start_engine()
+
+    projection.set_type("image")
+    projection.set_type("idle")
+
+    program_transitions = [
+        (scene_id, transition)
+        for _, bus_id, scene_id, _sequence, transition in engine.preparations
+        if bus_id is BusId.VIRTUAL_CAMERA
+    ]
+    preview_transitions = [
+        transition
+        for _, bus_id, _scene_id, _sequence, transition in engine.preparations
+        if bus_id is BusId.MEDIA_WINDOWS
+    ]
+    assert program_transitions == [
+        (CONTENT_SCENE_ID, TransitionSpec(TransitionKind.FADE_TO_BLACK, 700)),
+        (CAMERA_SCENE_ID, TransitionSpec(TransitionKind.DISSOLVE, 350)),
+    ]
+    assert preview_transitions == [TransitionSpec(TransitionKind.CUT, 0)] * 2
+    controller.close()
+
+
 def test_runtime_coalesces_rapid_scene_selection_while_prepare_is_in_flight() -> None:
     class _PendingPrepareEngine(_Engine):
         def __init__(self) -> None:
@@ -853,19 +1023,20 @@ def test_runtime_coalesces_rapid_scene_selection_while_prepare_is_in_flight() ->
             bus_id: BusId,
             scene_id: str,
             *,
+            transition: TransitionSpec,
             document_revision: int,
             request_id: str,
             sequence: int,
             deadline_ms: int,
         ) -> Future[ScenePreparation]:
             assert deadline_ms > 0
-            self.preparations.append((request_id, bus_id, scene_id, sequence))
+            self.preparations.append((request_id, bus_id, scene_id, sequence, transition))
             future: Future[ScenePreparation] = Future()
             self.pending_preparations.append(future)
             return future
 
         def complete_preparation(self, index: int) -> None:
-            request_id, bus_id, scene_id, sequence = self.preparations[index]
+            request_id, bus_id, scene_id, sequence, transition = self.preparations[index]
             self.pending_preparations[index].set_result(
                 ScenePreparation(
                     request_id=request_id,
@@ -876,6 +1047,7 @@ def test_runtime_coalesces_rapid_scene_selection_while_prepare_is_in_flight() ->
                     bus_id=bus_id,
                     scene_id=scene_id,
                     preparation_token=f"prepared-{sequence}",
+                    transition=transition,
                 )
             )
 
@@ -1317,6 +1489,7 @@ def test_failed_preparation_cancels_its_native_resource() -> None:
             bus_id: BusId,
             scene_id: str,
             *,
+            transition: TransitionSpec,
             document_revision: int,
             request_id: str,
             sequence: int,
@@ -1357,12 +1530,13 @@ def test_rejected_preparation_preserves_the_native_error_code() -> None:
             bus_id: BusId,
             scene_id: str,
             *,
+            transition: TransitionSpec,
             document_revision: int,
             request_id: str,
             sequence: int,
             deadline_ms: int,
         ) -> Future[ScenePreparation]:
-            self.preparations.append((request_id, bus_id, scene_id, sequence))
+            self.preparations.append((request_id, bus_id, scene_id, sequence, transition))
             return _failed(SceneEngineCommandRejectedError("source_unavailable"))
 
     engine = _RejectingPrepareEngine()
@@ -1394,6 +1568,7 @@ def test_cancelled_preparation_does_not_publish_a_sticky_engine_error() -> None:
             bus_id: BusId,
             scene_id: str,
             *,
+            transition: TransitionSpec,
             document_revision: int,
             request_id: str,
             sequence: int,
@@ -1425,8 +1600,6 @@ def test_rejected_take_keeps_applied_scene_and_reports_sanitized_error() -> None
             self,
             preparation: ScenePreparation,
             *,
-            transition: TransitionKind,
-            transition_duration_ms: int,
             request_id: str,
             sequence: int,
             deadline_ms: int,

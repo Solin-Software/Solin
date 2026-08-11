@@ -84,7 +84,7 @@ void test_control_envelope_round_trip() {
 
 void test_control_envelope_rejects_duplicate_keys() {
     constexpr std::string_view duplicate =
-        R"({"protocol_version":2,"protocol_version":2,"message_type":"hello","request_id":"r","session_id":"s","process_generation":"g","sequence":0,"document_revision":0,"deadline_monotonic_ms":1,"payload":{}})";
+        R"({"protocol_version":3,"protocol_version":3,"message_type":"hello","request_id":"r","session_id":"s","process_generation":"g","sequence":0,"document_revision":0,"deadline_monotonic_ms":1,"payload":{}})";
     try {
         static_cast<void>(solin::media_engine::parse_control_envelope(duplicate));
         expect(false, "duplicate JSON keys are rejected");
@@ -95,7 +95,7 @@ void test_control_envelope_rejects_duplicate_keys() {
 
 void test_control_envelope_rejects_the_previous_protocol_generation() {
     constexpr std::string_view previous_generation =
-        R"({"protocol_version":1,"message_type":"hello","request_id":"r","session_id":"s","process_generation":"g","sequence":0,"document_revision":0,"deadline_monotonic_ms":1,"payload":{}})";
+        R"({"protocol_version":2,"message_type":"hello","request_id":"r","session_id":"s","process_generation":"g","sequence":0,"document_revision":0,"deadline_monotonic_ms":1,"payload":{}})";
     try {
         static_cast<void>(solin::media_engine::parse_control_envelope(previous_generation));
         expect(false, "the previous control protocol generation is rejected");
@@ -158,7 +158,11 @@ void test_control_session_handshake_and_heartbeat() {
     prepare.message_type = "prepare_scene";
     prepare.request_id = "request-3";
     prepare.sequence = 4U;
-    prepare.payload = {{"bus_id", "media_windows"}, {"scene_id", "scene-1"}};
+    prepare.payload = {
+        {"bus_id", "media_windows"},
+        {"scene_id", "scene-1"},
+        {"transition", {{"kind", "cut"}, {"duration_ms", 0U}}},
+    };
     const auto rejected = session.handle(prepare);
     expect(rejected.response.has_value() && rejected.response->message_type == "error",
            "unavailable media graph rejects preparation without breaking the protocol");
@@ -196,10 +200,13 @@ void test_control_session_dispatches_validated_graph_commands() {
             .prepare_scene = [&prepared](
                                  const std::string_view bus,
                                  const std::string_view scene_id,
+                                 const std::string_view transition,
+                                 const std::uint64_t duration,
                                  const std::uint64_t revision,
                                  const std::string_view request_id,
                                  const std::uint64_t sequence) {
                 prepared = bus == "virtual_camera" && scene_id == "scene-2" &&
+                           transition == "dissolve" && duration == 350U &&
                            revision == 7U && request_id == "prepare-request" &&
                            sequence == 2U;
                 return solin::media_engine::ControlServiceReply{
@@ -208,6 +215,9 @@ void test_control_session_dispatches_validated_graph_commands() {
                         {"bus_id", bus},
                         {"scene_id", scene_id},
                         {"preparation_token", "preparation-1"},
+                        {"transition", {{"kind", "dissolve"}, {"duration_ms", 350U}}},
+                        {"fallback_applied", false},
+                        {"fallback_reason", ""},
                     },
                 };
             },
@@ -215,13 +225,10 @@ void test_control_session_dispatches_validated_graph_commands() {
                                  const std::string_view bus,
                                  const std::string_view scene_id,
                                  const std::string_view token,
-                                 const std::string_view transition,
-                                 const std::uint64_t duration,
                                  const std::uint64_t revision,
                                  const std::uint64_t sequence) {
                 taken = bus == "virtual_camera" && scene_id == "scene-2" &&
-                        token == "preparation-1" && transition == "cut" &&
-                        duration == 0U && revision == 7U && sequence == 3U;
+                        token == "preparation-1" && revision == 7U && sequence == 3U;
                 return nlohmann::json{
                     {"applied", true},
                     {"error_code", ""},
@@ -302,7 +309,11 @@ void test_control_session_dispatches_validated_graph_commands() {
     prepare.request_id = "prepare-request";
     prepare.sequence = 2U;
     prepare.document_revision = 7U;
-    prepare.payload = {{"bus_id", "virtual_camera"}, {"scene_id", "scene-2"}};
+    prepare.payload = {
+        {"bus_id", "virtual_camera"},
+        {"scene_id", "scene-2"},
+        {"transition", {{"kind", "dissolve"}, {"duration_ms", 350U}}},
+    };
     const auto preparation_reply = session.handle(prepare);
     expect(prepared && preparation_reply.response.has_value() &&
                preparation_reply.response->message_type == "scene_prepared",
@@ -317,8 +328,6 @@ void test_control_session_dispatches_validated_graph_commands() {
         {"bus_id", "virtual_camera"},
         {"scene_id", "scene-2"},
         {"preparation_token", "preparation-1"},
-        {"transition", "cut"},
-        {"transition_duration_ms", 0U},
     };
     const auto take_reply = session.handle(take);
     expect(taken && take_reply.response.has_value() &&
@@ -372,6 +381,47 @@ void test_control_session_dispatches_validated_graph_commands() {
            "render state is dispatched independently from destination state");
 }
 
+void test_transition_contract_rejects_invalid_and_legacy_payloads() {
+    solin::media_engine::ControlSession session{"generation-1"};
+    static_cast<void>(session.handle(hello_envelope()));
+
+    auto invalid = hello_envelope();
+    invalid.message_type = "prepare_scene";
+    invalid.request_id = "invalid-transition";
+    invalid.sequence = 1U;
+    invalid.document_revision = 7U;
+    invalid.payload = {
+        {"bus_id", "virtual_camera"},
+        {"scene_id", "scene-1"},
+        {"transition", {{"kind", "dissolve"}, {"duration_ms", 49U}}},
+    };
+    try {
+        static_cast<void>(session.handle(invalid));
+        expect(false, "animated transition durations below 50 ms are rejected");
+    } catch (const std::exception&) {
+        expect(true, "animated transition durations below 50 ms are rejected");
+    }
+
+    auto legacy_take = hello_envelope();
+    legacy_take.message_type = "take_prepared";
+    legacy_take.request_id = "legacy-take";
+    legacy_take.sequence = 2U;
+    legacy_take.document_revision = 7U;
+    legacy_take.payload = {
+        {"bus_id", "virtual_camera"},
+        {"scene_id", "scene-1"},
+        {"preparation_token", "preparation-1"},
+        {"transition", "fade"},
+        {"transition_duration_ms", 350U},
+    };
+    try {
+        static_cast<void>(session.handle(legacy_take));
+        expect(false, "Take cannot replace the transition bound to its token");
+    } catch (const std::exception&) {
+        expect(true, "Take cannot replace the transition bound to its token");
+    }
+}
+
 } // namespace
 
 int main() {
@@ -385,6 +435,7 @@ int main() {
     test_control_envelope_rejects_the_previous_protocol_generation();
     test_control_session_handshake_and_heartbeat();
     test_control_session_dispatches_validated_graph_commands();
+    test_transition_contract_rejects_invalid_and_legacy_payloads();
     if (failures != 0) {
         std::cerr << failures << " native protocol test(s) failed\n";
         return 1;

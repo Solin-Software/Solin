@@ -971,6 +971,10 @@
   <context>
     <name>MainWindow</name>
     <message>
+      <source>Scenes</source>
+      <translation>Cenas</translation>
+    </message>
+    <message>
       <location filename="../../main_window.py" line="+328" />
       <location filename="../../controllers/main_window_nav.py" line="+9" />
       <source>Solin</source>
@@ -7758,6 +7762,122 @@ Adicione uma quando quiser.</translation>
     <message>
       <source>Name</source>
       <translation>Nome</translation>
+    </message>
+  </context>
+  <context>
+    <name>SceneRuntimeController</name>
+    <message>
+      <source>The selected transition is unavailable. The scene was cut instead.</source>
+      <translation>A transição selecionada não está disponível. A cena foi trocada com Corte.</translation>
+    </message>
+  </context>
+  <context>
+    <name>ScenesBridge</name>
+    <message>
+      <source>Cut</source>
+      <translation>Corte</translation>
+    </message>
+    <message>
+      <source>Dissolve</source>
+      <translation>Esmaecer</translation>
+    </message>
+    <message>
+      <source>Fade through black</source>
+      <translation>Fade</translation>
+    </message>
+    <message>
+      <source>Choose a valid transition and duration.</source>
+      <translation>Escolha uma transição e duração válidas.</translation>
+    </message>
+  </context>
+  <context>
+    <name>SceneControlPopup</name>
+    <message>
+      <source>Transition override: %1</source>
+      <translation>Sobrescrita de transição: %1</translation>
+    </message>
+    <message>
+      <source>Cut</source>
+      <translation>Corte</translation>
+    </message>
+    <message>
+      <source>Dissolve</source>
+      <translation>Esmaecer</translation>
+    </message>
+    <message>
+      <source>Fade through black</source>
+      <translation>Fade</translation>
+    </message>
+  </context>
+  <context>
+    <name>ScenesEditorView</name>
+    <message>
+      <source>Program transition: %1</source>
+      <translation>Transição do Program: %1</translation>
+    </message>
+    <message>
+      <source>Program transition</source>
+      <translation>Transição do Program</translation>
+    </message>
+    <message>
+      <source>Used when scenes go live. Editor preview stays instant.</source>
+      <translation>Usada quando as cenas entram no ar. A prévia do editor continua instantânea.</translation>
+    </message>
+    <message>
+      <source>Cut</source>
+      <translation>Corte</translation>
+    </message>
+    <message>
+      <source>Switch immediately</source>
+      <translation>Trocar imediatamente</translation>
+    </message>
+    <message>
+      <source>Dissolve</source>
+      <translation>Esmaecer</translation>
+    </message>
+    <message>
+      <source>Blend the two scenes</source>
+      <translation>Mesclar as duas cenas</translation>
+    </message>
+    <message>
+      <source>Fade through black</source>
+      <translation>Fade</translation>
+    </message>
+    <message>
+      <source>Fade out, then fade in</source>
+      <translation>Desaparecer no preto e reaparecer</translation>
+    </message>
+    <message>
+      <source>Duration</source>
+      <translation>Duração</translation>
+    </message>
+    <message>
+      <source>Transition override</source>
+      <translation>Sobrescrever transição</translation>
+    </message>
+    <message>
+      <source>Use profile transition</source>
+      <translation>Usar transição do perfil</translation>
+    </message>
+    <message>
+      <source>Duration…</source>
+      <translation>Duração…</translation>
+    </message>
+    <message>
+      <source>Transition duration</source>
+      <translation>Duração da transição</translation>
+    </message>
+    <message>
+      <source>Set how long this scene's transition takes.</source>
+      <translation>Defina quanto tempo a transição desta cena leva.</translation>
+    </message>
+    <message>
+      <source>Cancel</source>
+      <translation>Cancelar</translation>
+    </message>
+    <message>
+      <source>Apply</source>
+      <translation>Aplicar</translation>
     </message>
   </context>
 </TS>

@@ -21,6 +21,7 @@ from solin.core.scenes.model import (
     SceneDocument,
     SceneLayer,
     SceneReferenceConfig,
+    TransitionSpec,
     SourceDefinition,
     SourceKind,
     new_identity,
@@ -194,7 +195,19 @@ class SceneDocumentService:
             created_at=timestamp,
             updated_at=timestamp,
         )
-        return self._commit(replace(self._document, scenes=(*self._document.scenes, duplicate)))
+        override = self._document.transition_policy.override_for(scene_id)
+        transition_policy = (
+            self._document.transition_policy.with_override(duplicate.id, override)
+            if override is not None
+            else self._document.transition_policy
+        )
+        return self._commit(
+            replace(
+                self._document,
+                scenes=(*self._document.scenes, duplicate),
+                transition_policy=transition_policy,
+            )
+        )
 
     def update_scene(self, scene_id: str, scene: SceneDefinition) -> SceneDocument:
         current = self._scene(scene_id)
@@ -271,6 +284,10 @@ class SceneDocumentService:
                 scenes=scenes,
                 outputs=outputs,
                 automation=automation,
+                transition_policy=self._document.transition_policy.with_override(
+                    scene_id,
+                    None,
+                ),
             )
         )
 
@@ -552,6 +569,36 @@ class SceneDocumentService:
             for mapping in self._document.automation
         )
         return self._commit(replace(self._document, automation=automation))
+
+    def set_program_transition(self, spec: TransitionSpec) -> SceneDocument:
+        """Set the default Program transition for this Scene profile."""
+
+        transition_policy = replace(self._document.transition_policy, default=spec)
+        return self._commit(
+            replace(self._document, transition_policy=transition_policy)
+        )
+
+    def set_scene_transition_override(
+        self,
+        scene_id: str,
+        spec: TransitionSpec | None,
+    ) -> SceneDocument:
+        """Set or remove the transition used when taking one destination scene."""
+
+        self._scene(scene_id)
+        transition_policy = self._document.transition_policy.with_override(
+            scene_id,
+            spec,
+        )
+        return self._commit(
+            replace(self._document, transition_policy=transition_policy)
+        )
+
+    def effective_transition(self, scene_id: str) -> TransitionSpec:
+        """Resolve a destination scene override against this profile's default."""
+
+        self._scene(scene_id)
+        return self._document.transition_policy.effective_for(scene_id)
 
     @property
     def program_default_scene_id(self) -> str | None:

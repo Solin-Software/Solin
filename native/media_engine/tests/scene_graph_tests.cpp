@@ -1,5 +1,6 @@
 #include "solin/media_engine/scene_graph.hpp"
 
+#include <algorithm>
 #include <atomic>
 #include <cstdint>
 #include <exception>
@@ -115,11 +116,104 @@ class FakePreparedRenderGraph final
         return true;
     }
 
+    void set_direct_output_enabled(const bool enabled) noexcept override {
+        direct_output_enabled = enabled;
+        ++direct_output_change_count;
+    }
+
     std::string scene_id{};
     solin::media_engine::OutputBus bus{solin::media_engine::OutputBus::media_windows};
     std::string preview_layer_id{};
     solin::media_engine::SceneLayerGeometry preview_geometry{};
     std::uint64_t preview_count{0U};
+    bool direct_output_enabled{true};
+    std::uint64_t direct_output_change_count{0U};
+};
+
+struct TransitionCounters final {
+    std::uint64_t started{0U};
+    std::uint64_t stopped{0U};
+    std::uint64_t active{0U};
+    std::uint64_t maximum_active{0U};
+};
+
+class FakePreparedTransition final
+    : public solin::media_engine::PreparedSceneRenderGraph {
+  public:
+    FakePreparedTransition(
+        std::shared_ptr<TransitionCounters> counters,
+        std::shared_ptr<solin::media_engine::PreparedSceneRenderGraph> origin,
+        std::shared_ptr<solin::media_engine::PreparedSceneRenderGraph> target)
+        : counters_(std::move(counters)), origin_(std::move(origin)),
+          target_(std::move(target)) {}
+
+    [[nodiscard]] bool is_transition_output() const noexcept override { return true; }
+
+    void start_transition() noexcept override {
+        if (started_) {
+            return;
+        }
+        started_ = true;
+        ++counters_->started;
+        ++counters_->active;
+        counters_->maximum_active =
+            (std::max)(counters_->maximum_active, counters_->active);
+        if (origin_ != nullptr) {
+            origin_->set_direct_output_enabled(false);
+        }
+        if (target_ != nullptr) {
+            target_->set_direct_output_enabled(false);
+        }
+    }
+
+    void stop() noexcept override {
+        if (!started_ || stopped_) {
+            return;
+        }
+        stopped_ = true;
+        ++counters_->stopped;
+        --counters_->active;
+    }
+
+    [[nodiscard]] std::shared_ptr<solin::media_engine::PreparedSceneRenderGraph>
+    transition_origin() const noexcept override {
+        return origin_;
+    }
+
+    [[nodiscard]] std::shared_ptr<solin::media_engine::PreparedSceneRenderGraph>
+    transition_target() const noexcept override {
+        return target_;
+    }
+
+    void set_direct_output_enabled(const bool enabled) noexcept override {
+        if (target_ != nullptr) {
+            target_->set_direct_output_enabled(enabled);
+        }
+    }
+
+    [[nodiscard]] std::shared_ptr<const solin::media_engine::SourceFrame>
+    latest_gpu_frame() const noexcept override {
+        return composed_frame_;
+    }
+
+    void publish_composed_frame() {
+        composed_frame_ = std::make_shared<solin::media_engine::SourceFrame>();
+    }
+
+    void complete() {
+        if (target_ != nullptr) {
+            target_->set_direct_output_enabled(true);
+        }
+        origin_.reset();
+    }
+
+  private:
+    std::shared_ptr<TransitionCounters> counters_{};
+    std::shared_ptr<solin::media_engine::PreparedSceneRenderGraph> origin_{};
+    std::shared_ptr<solin::media_engine::PreparedSceneRenderGraph> target_{};
+    std::shared_ptr<const solin::media_engine::SourceFrame> composed_frame_{};
+    bool started_{false};
+    bool stopped_{false};
 };
 
 class FakeRenderer final : public solin::media_engine::SceneRenderer {
@@ -145,6 +239,39 @@ class FakeRenderer final : public solin::media_engine::SceneRenderer {
                                                          preparation.bus);
     }
 
+    [[nodiscard]] solin::media_engine::SceneRenderTransitionPreparation
+    prepare_transition(
+        const solin::media_engine::OutputBus bus,
+        const std::shared_ptr<solin::media_engine::PreparedSceneRenderGraph>& incoming,
+        const solin::media_engine::SceneTransitionSpec& transition) override {
+        requested_transition = transition;
+        ++transition_prepare_count;
+        static_cast<void>(incoming);
+        if (transition.kind == solin::media_engine::SceneTransitionKind::cut) {
+            return {.effective_transition = transition};
+        }
+        if (transitions_available) {
+            const auto origin = active[static_cast<std::size_t>(bus)];
+            if (origin != nullptr && origin->is_transition_output()) {
+                if (origin->latest_gpu_frame() == nullptr) {
+                    ++retarget_before_first_frame;
+                } else {
+                    ++retarget_after_composed_frame;
+                }
+            }
+            return {
+                .effective_transition = transition,
+                .render_output = std::make_shared<FakePreparedTransition>(
+                    transition_counters, origin, incoming),
+            };
+        }
+        return {
+            .effective_transition = {},
+            .fallback_applied = true,
+            .fallback_reason = "synthetic_transition_unavailable",
+        };
+    }
+
     void commit_hydration(
         const std::array<std::shared_ptr<solin::media_engine::PreparedSceneRenderGraph>,
                          2U>& graphs,
@@ -159,8 +286,15 @@ class FakeRenderer final : public solin::media_engine::SceneRenderer {
     void commit_take(
         const solin::media_engine::OutputBus bus,
         std::shared_ptr<solin::media_engine::PreparedSceneRenderGraph> graph,
+        std::shared_ptr<solin::media_engine::PreparedSceneRenderGraph> transition,
         const std::uint64_t sequence) noexcept override {
-        active[static_cast<std::size_t>(bus)] = std::move(graph);
+        if (transition == nullptr) {
+            graph->set_direct_output_enabled(true);
+            active[static_cast<std::size_t>(bus)] = std::move(graph);
+        } else {
+            transition->start_transition();
+            active[static_cast<std::size_t>(bus)] = std::move(transition);
+        }
         take_sequence = sequence;
         ++take_commit_count;
     }
@@ -199,6 +333,13 @@ class FakeRenderer final : public solin::media_engine::SceneRenderer {
     std::uint64_t hydration_sequence{0U};
     std::uint64_t take_sequence{0U};
     std::uint64_t output_sequence{0U};
+    std::uint64_t transition_prepare_count{0U};
+    bool transitions_available{false};
+    solin::media_engine::SceneTransitionSpec requested_transition{};
+    std::shared_ptr<TransitionCounters> transition_counters{
+        std::make_shared<TransitionCounters>()};
+    std::uint64_t retarget_before_first_frame{0U};
+    std::uint64_t retarget_after_composed_frame{0U};
     std::array<std::shared_ptr<solin::media_engine::PreparedSceneRenderGraph>, 2U>
         active{};
     std::array<bool, 2U> output_enabled{};
@@ -329,12 +470,12 @@ void test_hydrate_prepare_cancel_and_take_are_transactional() {
     expect(runtime.pending_preparation_count() == 0U,
            "cancellation removes the matching preparation");
     expect_error(
-        [&runtime, &cancelled] { runtime.take(cancelled, "cut", 0U, 1U, 3U); },
+        [&runtime, &cancelled] { runtime.take(cancelled, 1U, 3U); },
         "preparation_not_found", "a cancelled token cannot be committed");
 
     const auto prepared = runtime.prepare(solin::media_engine::OutputBus::media_windows,
                                           "scene-c", 1U, "prepare-committed", 4U);
-    runtime.take(prepared, "cut", 0U, 1U, 5U);
+    runtime.take(prepared, 1U, 5U);
     expect(runtime.active_scene(solin::media_engine::OutputBus::media_windows) ==
                "scene-c" &&
                runtime.active_scene(solin::media_engine::OutputBus::virtual_camera) ==
@@ -343,7 +484,7 @@ void test_hydrate_prepare_cancel_and_take_are_transactional() {
     expect(runtime.pending_preparation_count() == 0U,
            "Take consumes its preparation token");
     expect_error(
-        [&runtime, &prepared] { runtime.take(prepared, "cut", 0U, 1U, 6U); },
+        [&runtime, &prepared] { runtime.take(prepared, 1U, 6U); },
         "preparation_not_found", "a consumed preparation cannot be replayed");
 
     const auto superseded = runtime.prepare(
@@ -352,9 +493,9 @@ void test_hydrate_prepare_cancel_and_take_are_transactional() {
     const auto newest = runtime.prepare(solin::media_engine::OutputBus::media_windows,
                                         "scene-b", 1U, "prepare-newest", 8U);
     expect_error(
-        [&runtime, &superseded] { runtime.take(superseded, "cut", 0U, 1U, 9U); },
+        [&runtime, &superseded] { runtime.take(superseded, 1U, 9U); },
         "preparation_not_found", "a newer preparation invalidates an older bus token");
-    runtime.take(newest, "cut", 0U, 1U, 10U);
+    runtime.take(newest, 1U, 10U);
 
     runtime.set_output_enabled(solin::media_engine::OutputBus::virtual_camera, true,
                                1U, 11U);
@@ -397,7 +538,7 @@ void test_failed_or_stale_prepare_preserves_the_previous_preparation() {
                 "prepare-stale", 1U));
         },
         "stale_command_sequence", "an older preparation cannot replace a newer one");
-    runtime.take(prepared, "cut", 0U, 1U, 4U);
+    runtime.take(prepared, 1U, 4U);
     expect(runtime.active_scene(solin::media_engine::OutputBus::media_windows) ==
                "scene-a",
            "the preserved preparation remains consumable after rejected replacements");
@@ -545,7 +686,7 @@ void test_renderer_prepare_and_commits_follow_scene_transactions() {
                renderer->active_scene(
                    solin::media_engine::OutputBus::media_windows) == "scene-a",
            "prepare prerolls a renderer graph without changing active output");
-    runtime.take(prepared, "cut", 0U, 1U, 3U);
+    runtime.take(prepared, 1U, 3U);
     expect(renderer->take_commit_count == 1U && renderer->take_sequence == 3U &&
                renderer->active_scene(
                    solin::media_engine::OutputBus::media_windows) == "scene-c",
@@ -571,7 +712,7 @@ void test_recent_scene_graph_is_reused_for_a_return_cut() {
     const auto away = runtime.prepare(
         solin::media_engine::OutputBus::media_windows, "scene-c", 1U,
         "prepare-away", 2U);
-    runtime.take(away, "cut", 0U, 1U, 3U);
+    runtime.take(away, 1U, 3U);
     expect(renderer->prepare_count == 3U,
            "the first cut prepares the destination graph once");
 
@@ -582,7 +723,7 @@ void test_recent_scene_graph_is_reused_for_a_return_cut() {
            "a prompt return reuses the retained graph without another preroll");
     expect(back.preparation_token != away.preparation_token,
            "a reused graph receives a fresh transaction identity");
-    runtime.take(back, "cut", 0U, 1U, 5U);
+    runtime.take(back, 1U, 5U);
     expect(renderer->active_scene(
                solin::media_engine::OutputBus::media_windows) == "scene-a",
            "the retained graph remains committable as the active scene");
@@ -611,10 +752,162 @@ void test_renderer_failure_preserves_applied_and_pending_graphs() {
                renderer->active_scene(
                    solin::media_engine::OutputBus::media_windows) == "scene-a",
            "a renderer failure preserves active and previously pending graphs");
-    runtime.take(preserved, "cut", 0U, 1U, 4U);
+    runtime.take(preserved, 1U, 4U);
     expect(renderer->active_scene(
                solin::media_engine::OutputBus::media_windows) == "scene-b",
            "the preserved renderer graph remains committable");
+}
+
+void test_transition_contract_is_bound_during_program_preparation() {
+    using solin::media_engine::OutputBus;
+    using solin::media_engine::SceneTransitionKind;
+    using solin::media_engine::SceneTransitionSpec;
+
+    expect_error(
+        [] {
+            try {
+                solin::media_engine::validate_scene_transition(
+                    {.kind = SceneTransitionKind::cut, .duration_ms = 1U});
+            } catch (const std::invalid_argument&) {
+                throw solin::media_engine::SceneGraphError{
+                    "invalid_transition", "Synthetic invalid transition"};
+            }
+        },
+        "invalid_transition", "CUT rejects a non-zero duration");
+    const solin::media_engine::BgraPixel red{0U, 0U, 255U, 255U};
+    const solin::media_engine::BgraPixel blue{255U, 0U, 0U, 255U};
+    const auto dissolve_midpoint = solin::media_engine::scene_transition_blend_pixel(
+        {.kind = SceneTransitionKind::dissolve, .duration_ms = 350U}, 0.5,
+        red, blue);
+    expect(dissolve_midpoint ==
+               solin::media_engine::BgraPixel{128U, 0U, 128U, 255U},
+           "Dissolve produces the expected purple BGRA midpoint from red and blue");
+    const auto fade_midpoint = solin::media_engine::scene_transition_blend_pixel(
+        {.kind = SceneTransitionKind::fade_to_black, .duration_ms = 350U}, 0.5,
+        red, blue);
+    expect(fade_midpoint == solin::media_engine::BgraPixel{0U, 0U, 0U, 255U},
+           "Fade through black produces an opaque black BGRA midpoint");
+    const auto final_frame = solin::media_engine::scene_transition_blend_pixel(
+        {.kind = SceneTransitionKind::fade_to_black, .duration_ms = 350U}, 1.0,
+        red, blue);
+    expect(final_frame == blue,
+           "the final transition frame is byte-identical to its destination");
+    const auto output_format = snapshot().outputs[1].video_format;
+    expect(solin::media_engine::scene_transition_frame_interval(output_format) ==
+               std::chrono::nanoseconds{16'666'666},
+           "transition feeding follows the configured 60 fps output clock instead of 250 Hz");
+
+    auto counters = std::make_shared<RuntimeCounters>();
+    auto renderer = std::make_shared<FakeRenderer>();
+    solin::media_engine::SceneGraphRuntime runtime{
+        std::make_shared<FakeRuntimeFactory>(counters), renderer};
+    runtime.hydrate(snapshot(), 1U);
+
+    const SceneTransitionSpec dissolve{
+        .kind = SceneTransitionKind::dissolve,
+        .duration_ms = 350U,
+    };
+    const auto preview = runtime.prepare(OutputBus::media_windows, "scene-c", 1U,
+                                         "preview-transition", 2U, dissolve);
+    expect(preview.effective_transition.kind == SceneTransitionKind::cut &&
+               renderer->transition_prepare_count == 0U,
+           "the editor Preview always resolves an animated request to CUT");
+    runtime.take(preview, 1U, 3U);
+
+    const auto fallback = runtime.prepare(OutputBus::virtual_camera, "scene-c", 1U,
+                                          "program-fallback", 4U, dissolve);
+    expect(fallback.effective_transition.kind == SceneTransitionKind::cut &&
+               fallback.fallback_applied &&
+               fallback.fallback_reason == "synthetic_transition_unavailable",
+           "effect preparation failure binds a typed CUT fallback to the token");
+    runtime.take(fallback, 1U, 5U);
+    expect(runtime.active_scene(OutputBus::virtual_camera) == "scene-c",
+           "a prepared fallback still converges Program to its destination");
+
+    renderer->transitions_available = true;
+    const SceneTransitionSpec fade{
+        .kind = SceneTransitionKind::fade_to_black,
+        .duration_ms = 500U,
+    };
+    const auto animated = runtime.prepare(OutputBus::virtual_camera, "scene-b", 1U,
+                                          "program-animated", 6U, fade);
+    expect(animated.effective_transition == fade && !animated.fallback_applied &&
+               renderer->requested_transition == fade,
+           "Program preparation binds the resolved transition before Take");
+    runtime.take(animated, 1U, 7U);
+    expect(runtime.active_scene(OutputBus::virtual_camera) == "scene-b",
+           "Take consumes the token without accepting a replacement transition");
+}
+
+void test_rapid_program_retargets_are_latest_wins_and_resource_bounded() {
+    using solin::media_engine::OutputBus;
+    using solin::media_engine::SceneTransitionKind;
+    const solin::media_engine::SceneTransitionSpec dissolve{
+        .kind = SceneTransitionKind::dissolve,
+        .duration_ms = 350U,
+    };
+    auto counters = std::make_shared<RuntimeCounters>();
+    auto renderer = std::make_shared<FakeRenderer>();
+    renderer->transitions_available = true;
+    solin::media_engine::SceneGraphRuntime runtime{
+        std::make_shared<FakeRuntimeFactory>(counters), renderer};
+    runtime.hydrate(snapshot(), 1U);
+
+    const auto first = runtime.prepare(OutputBus::virtual_camera, "scene-c", 1U,
+                                       "rapid-first", 2U, dissolve);
+    const auto stable_origin = std::dynamic_pointer_cast<FakePreparedRenderGraph>(
+        renderer->active[static_cast<std::size_t>(OutputBus::virtual_camera)]);
+    expect(stable_origin != nullptr && stable_origin->direct_output_enabled &&
+               stable_origin->direct_output_change_count == 0U,
+           "preparing an effect does not mutate the on-air direct output branch");
+    runtime.take(first, 1U, 3U);
+    const auto active_first = std::dynamic_pointer_cast<FakePreparedTransition>(
+        renderer->active[static_cast<std::size_t>(OutputBus::virtual_camera)]);
+    const auto first_target = active_first == nullptr
+                                  ? nullptr
+                                  : std::dynamic_pointer_cast<FakePreparedRenderGraph>(
+                                        active_first->transition_target());
+    expect(stable_origin != nullptr && !stable_origin->direct_output_enabled &&
+               first_target != nullptr && !first_target->direct_output_enabled,
+           "Take disables both direct NV12 branches before the temporary compositor starts");
+    const auto second = runtime.prepare(OutputBus::virtual_camera, "scene-b", 1U,
+                                        "rapid-second", 4U, dissolve);
+    expect(renderer->retarget_before_first_frame == 1U,
+           "a retarget before the first composed frame uses the stable transition origin");
+    runtime.take(second, 1U, 5U);
+
+    const auto active_second = std::dynamic_pointer_cast<FakePreparedTransition>(
+        renderer->active[static_cast<std::size_t>(OutputBus::virtual_camera)]);
+    expect(active_second != nullptr,
+           "the newest prepared animated destination is the only active transition");
+    if (active_second != nullptr) {
+        active_second->publish_composed_frame();
+        active_second->complete();
+    }
+    const auto completed_target = active_second == nullptr
+                                      ? nullptr
+                                      : std::dynamic_pointer_cast<FakePreparedRenderGraph>(
+                                            active_second->transition_target());
+    const auto third = runtime.prepare(OutputBus::virtual_camera, "scene-c", 1U,
+                                       "rapid-third", 6U, dissolve);
+    expect(renderer->retarget_after_composed_frame == 1U,
+           "a retarget after composition observes the latest composed GPU frame");
+    expect(completed_target != nullptr && completed_target->direct_output_enabled,
+           "a completed/frozen retarget leaves the current direct branch enabled during prepare");
+    runtime.take(third, 1U, 7U);
+    expect(completed_target != nullptr && !completed_target->direct_output_enabled,
+           "the completed wrapper delegates direct-output gating when the retarget is taken");
+
+    const auto cut = runtime.prepare(OutputBus::virtual_camera, "scene-a", 1U,
+                                     "rapid-cut", 8U);
+    runtime.take(cut, 1U, 9U);
+    expect(runtime.active_scene(OutputBus::virtual_camera) == "scene-a",
+           "the final request wins without a transition queue");
+    expect(renderer->transition_counters->active == 0U &&
+               renderer->transition_counters->started == 3U &&
+               renderer->transition_counters->stopped == 3U &&
+               renderer->transition_counters->maximum_active == 1U,
+           "rapid retargets stop superseded compositors and keep resource use bounded");
 }
 
 } // namespace
@@ -630,6 +923,8 @@ int main() {
     test_renderer_prepare_and_commits_follow_scene_transactions();
     test_recent_scene_graph_is_reused_for_a_return_cut();
     test_renderer_failure_preserves_applied_and_pending_graphs();
+    test_transition_contract_is_bound_during_program_preparation();
+    test_rapid_program_retargets_are_latest_wins_and_resource_bounded();
     if (failures != 0) {
         std::cerr << failures << " scene graph test(s) failed\n";
         return 1;

@@ -11,6 +11,7 @@
 #include <gst/video/video-frame.h>
 
 #include <chrono>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
@@ -20,6 +21,7 @@
 #include <string>
 #include <string_view>
 #include <thread>
+#include <vector>
 
 namespace {
 
@@ -236,13 +238,11 @@ void test_automatic_camera_format_is_bounded_and_deterministic() {
         solin::media_engine::SceneOutputDefinition{
             .bus = solin::media_engine::OutputBus::media_windows,
             .default_scene_id = "scene-root",
-            .transition = "cut",
             .video_format = format,
         },
         solin::media_engine::SceneOutputDefinition{
             .bus = solin::media_engine::OutputBus::virtual_camera,
             .default_scene_id = "scene-root",
-            .transition = "cut",
             .video_format = virtual_camera_format,
         },
     };
@@ -373,6 +373,68 @@ void test_color_source_publishes_bounded_latest_d3d11_frames(
            "the registry releases the runtime after its last consumer");
 }
 
+void test_program_transitions_render_real_synthetic_frames(
+    solin::media_engine::SceneGraphRuntime& graph,
+    const std::shared_ptr<solin::media_engine::SceneRenderer>& renderer) {
+    using solin::media_engine::OutputBus;
+    using solin::media_engine::SceneTransitionKind;
+    constexpr auto transition_duration = 1'200U;
+    graph.hydrate(transition_snapshot(), 1'000U);
+    const auto red = wait_for_program_center(renderer, 0U, 5s);
+    expect(red.has_value() && near_channel(red->yuv[0], 63U, 12U) &&
+               near_channel(red->yuv[1], 102U, 15U) &&
+               near_channel(red->yuv[2], 240U, 15U),
+           "the synthetic Program transition starts on its red scene");
+    if (!red.has_value()) {
+        return;
+    }
+
+    const auto dissolve = graph.prepare(
+        OutputBus::virtual_camera, "scene-blue", 1U, "dissolve-blue", 1'001U,
+        {.kind = SceneTransitionKind::dissolve,
+         .duration_ms = transition_duration});
+    expect(dissolve.effective_transition.kind == SceneTransitionKind::dissolve &&
+               !dissolve.fallback_applied,
+           "the D3D11 renderer prepares Dissolve without a CUT fallback");
+    graph.take(dissolve, 1U, 1'002U);
+    std::this_thread::sleep_for(600ms);
+    const auto purple = wait_for_program_center(renderer, red->sequence, 500ms);
+    expect(purple.has_value() && near_channel(purple->yuv[0], 48U, 18U) &&
+               near_channel(purple->yuv[1], 171U, 24U) &&
+               near_channel(purple->yuv[2], 179U, 24U),
+           "Dissolve produces the expected real red/blue midpoint on Program");
+    std::this_thread::sleep_for(700ms);
+    const auto blue = wait_for_program_center(
+        renderer, purple.has_value() ? purple->sequence : red->sequence, 1s);
+    expect(blue.has_value() && near_channel(blue->yuv[0], 32U, 12U) &&
+               near_channel(blue->yuv[1], 240U, 15U) &&
+               near_channel(blue->yuv[2], 118U, 15U),
+           "Dissolve converges to the exact blue destination stream");
+    if (!blue.has_value()) {
+        return;
+    }
+
+    const auto fade = graph.prepare(
+        OutputBus::virtual_camera, "scene-red", 1U, "fade-red", 1'003U,
+        {.kind = SceneTransitionKind::fade_to_black,
+         .duration_ms = transition_duration});
+    expect(fade.effective_transition.kind == SceneTransitionKind::fade_to_black &&
+               !fade.fallback_applied,
+           "the D3D11 renderer prepares Fade through black without fallback");
+    graph.take(fade, 1U, 1'004U);
+    std::this_thread::sleep_for(600ms);
+    const auto black = wait_for_program_center(renderer, blue->sequence, 500ms);
+    expect(black.has_value() && near_channel(black->yuv[0], 16U, 10U) &&
+               near_channel(black->yuv[1], 128U, 12U) &&
+               near_channel(black->yuv[2], 128U, 12U),
+           "Fade through black produces a real black Program midpoint");
+    std::this_thread::sleep_for(700ms);
+    const auto final_red = wait_for_program_center(
+        renderer, black.has_value() ? black->sequence : blue->sequence, 1s);
+    expect(final_red.has_value() && final_red->bytes == red->bytes,
+           "the final Program frame is byte-identical to the red destination");
+}
+
 void test_scene_renderer_composes_nested_scene_to_shared_d3d11_frame(
     solin::media_engine::MediaRuntime& media_runtime) {
     const auto renderer = media_runtime.scene_renderer();
@@ -423,7 +485,7 @@ void test_scene_renderer_composes_nested_scene_to_shared_d3d11_frame(
         const auto prepare_elapsed = std::chrono::steady_clock::now() - prepare_started;
         expect(prepare_elapsed < 1s,
                "a warm-source scene prepares without waiting for the preroll timeout");
-        graph.take(preparation, "cut", 0U, 1U, 3U);
+        graph.take(preparation, 1U, 3U);
         std::shared_ptr<const solin::media_engine::SourceFrame> switched_frame;
         const auto switched_deadline = std::chrono::steady_clock::now() + 1s;
         while (std::chrono::steady_clock::now() < switched_deadline) {
@@ -450,7 +512,7 @@ void test_scene_renderer_composes_nested_scene_to_shared_d3d11_frame(
             const auto prepared = graph.prepare(
                 solin::media_engine::OutputBus::media_windows, target_scene, 1U,
                 request_id, mutation_sequence++);
-            graph.take(prepared, "cut", 0U, 1U, mutation_sequence++);
+            graph.take(prepared, 1U, mutation_sequence++);
             const auto return_deadline = std::chrono::steady_clock::now() + 1s;
             std::shared_ptr<const solin::media_engine::SourceFrame> returned;
             while (std::chrono::steady_clock::now() < return_deadline) {
@@ -528,6 +590,7 @@ void test_scene_renderer_composes_nested_scene_to_shared_d3d11_frame(
                        virtual_camera_frame->presentation_timestamp_ns,
                "virtual-camera transport preserves the rendered NV12 frame and timing");
     }
+    test_program_transitions_render_real_synthetic_frames(graph, renderer);
 }
 
 void test_frame_payload_outlives_media_runtime_and_registry_owners() {
@@ -651,6 +714,96 @@ void test_first_hardware_camera_publishes_its_exact_selected_format(
                    automatic_health.error_code.empty(),
                "automatic camera selection remains healthy after its first frame");
     }
+}
+
+[[nodiscard]] solin::media_engine::SceneHydrationSnapshot transition_snapshot() {
+    auto value = compositor_snapshot();
+    value.document_id = "gstreamer-transition-test";
+    value.sources = {
+        {.id = "color-red",
+         .kind = solin::media_engine::SceneSourceKind::color,
+         .enabled = true,
+         .configuration = solin::media_engine::ColorSourceConfiguration{"#FF0000FF"}},
+        {.id = "color-blue",
+         .kind = solin::media_engine::SceneSourceKind::color,
+         .enabled = true,
+         .configuration = solin::media_engine::ColorSourceConfiguration{"#0000FFFF"}},
+    };
+    const solin::media_engine::SceneLayerGeometry geometry{
+        .x = 0.0,
+        .y = 0.0,
+        .width = 1.0,
+        .height = 1.0,
+        .opacity = 1.0,
+        .fit_mode = "stretch",
+        .border_color = "#00000000",
+        .visible = true,
+    };
+    value.scenes = {
+        {.id = "scene-red",
+         .layers = {{.id = "red-layer",
+                     .source_id = "color-red",
+                     .geometry = geometry}}},
+        {.id = "scene-blue",
+         .layers = {{.id = "blue-layer",
+                     .source_id = "color-blue",
+                     .geometry = geometry}}},
+    };
+    value.outputs[0].default_scene_id = "scene-red";
+    value.outputs[1].default_scene_id = "scene-red";
+    value.active_scene_ids = {"scene-red", "scene-red"};
+    value.render_enabled = {false, true};
+    value.output_enabled = {false, true};
+    return value;
+}
+
+struct CenterNv12Frame final {
+    std::uint64_t sequence{0U};
+    std::array<std::uint8_t, 3U> yuv{};
+    std::vector<std::uint8_t> bytes{};
+};
+
+[[nodiscard]] std::optional<CenterNv12Frame> wait_for_program_center(
+    const std::shared_ptr<solin::media_engine::SceneRenderer>& renderer,
+    const std::uint64_t after_sequence, const std::chrono::milliseconds timeout) {
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (std::chrono::steady_clock::now() < deadline) {
+        std::optional<solin::media_engine::PackedVideoFrame> packed;
+        const auto sequence = renderer->visit_latest_frame(
+            solin::media_engine::OutputBus::virtual_camera, after_sequence,
+            [&packed](const solin::media_engine::VideoFrameView& frame) {
+                packed = solin::media_engine::copy_video_frame(frame);
+            });
+        if (sequence.has_value() && packed.has_value() &&
+            packed->pixel_format == solin::media_engine::VideoFramePixelFormat::nv12) {
+            const auto x = packed->width / 2U;
+            const auto y = packed->height / 2U;
+            const auto y_index = packed->plane_offsets[0] +
+                                 static_cast<std::size_t>(y) *
+                                     packed->plane_strides[0] +
+                                 x;
+            const auto uv_index = packed->plane_offsets[1] +
+                                  static_cast<std::size_t>(y / 2U) *
+                                      packed->plane_strides[1] +
+                                  static_cast<std::size_t>(x / 2U) * 2U;
+            if (uv_index + 1U < packed->bytes.size()) {
+                return CenterNv12Frame{
+                    .sequence = sequence.value(),
+                    .yuv = {packed->bytes[y_index], packed->bytes[uv_index],
+                            packed->bytes[uv_index + 1U]},
+                    .bytes = std::move(packed->bytes),
+                };
+            }
+        }
+        std::this_thread::sleep_for(5ms);
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]] bool near_channel(const std::uint8_t value, const std::uint8_t expected,
+                                const std::uint8_t tolerance) {
+    const auto difference = value > expected ? value - expected : expected - value;
+    return difference <= tolerance;
 }
 
 void test_rtsp_source_decodes_to_the_same_bounded_frame_contract(

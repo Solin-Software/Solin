@@ -100,6 +100,18 @@ def main() -> int:
         elif request.message_type == "prepare_scene":
             if mode == "ignore_prepare":
                 continue
+            if set(request.payload) != {"bus_id", "scene_id", "transition"} or set(
+                request.payload.get("transition", {})
+            ) != {"kind", "duration_ms"}:
+                _respond(
+                    request,
+                    "error",
+                    {
+                        "error_code": "invalid_prepare_payload",
+                        "error_message": "Prepare payload did not match protocol v3",
+                    },
+                )
+                continue
             if mode == "reject_prepare":
                 _respond(
                     request,
@@ -117,10 +129,32 @@ def main() -> int:
                     "bus_id": request.payload["bus_id"],
                     "scene_id": request.payload["scene_id"],
                     "preparation_token": f"prepared-{request.sequence}",
+                    "transition": (
+                        {"kind": "cut", "duration_ms": 0}
+                        if mode == "transition_fallback"
+                        else request.payload["transition"]
+                    ),
+                    "fallback_applied": mode == "transition_fallback",
+                    "fallback_reason": (
+                        "transition_pipeline_unavailable"
+                        if mode == "transition_fallback"
+                        else ""
+                    ),
                 },
             )
+        elif request.message_type == "take_prepared":
+            if set(request.payload) != {"bus_id", "scene_id", "preparation_token"}:
+                _respond(
+                    request,
+                    "error",
+                    {
+                        "error_code": "invalid_take_payload",
+                        "error_message": "Take payload did not match protocol v3",
+                    },
+                )
+                continue
+            _ack(request)
         elif request.message_type in {
-            "take_prepared",
             "preview_layer_geometry",
             "set_output_enabled",
             "set_render_enabled",

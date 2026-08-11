@@ -17,9 +17,12 @@ from solin.core.scenes.model import (
     SceneDefinition,
     SceneDocument,
     SceneLayer,
+    SceneTransitionPolicy,
     SolinContentConfig,
     SourceDefinition,
     SourceKind,
+    TransitionKind,
+    TransitionSpec,
     VideoColorRange,
     VideoColorSpace,
     VideoFormat,
@@ -181,6 +184,9 @@ def create_default_scene_document(
                     (ContentCategory.EXTERNAL_STREAM, CONTENT_SCENE_ID),
                 ),
             ),
+        ),
+        transition_policy=SceneTransitionPolicy(
+            default=TransitionSpec(TransitionKind.DISSOLVE, 350)
         ),
     )
 

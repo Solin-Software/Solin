@@ -10,6 +10,7 @@ from PySide6.QtWidgets import QApplication
 
 from solin.controllers.scene_runtime_controller import SceneRuntimeController
 from solin.core.foundation.runtime_paths import ProfilePaths
+from solin.core.scenes.model import TransitionKind
 from solin.core.scenes.presets import SceneSeedNames
 from solin.core.scenes.workspace import SceneWorkspaceService
 from solin.ui.qml.scenes import ScenesEditorWidget
@@ -96,6 +97,16 @@ def test_scenes_qml_editor_loads_with_the_real_workspace(tmp_path: Path) -> None
     assert float(profile_menu.property("y")) >= profile_button.height()
     profile_menu.close()
 
+    transition_button = root.findChild(QQuickItem, "scenesProgramTransitionButton")
+    transition_popover = root.findChild(QObject, "scenesProgramTransitionPopover")
+    assert transition_button is not None
+    assert transition_popover is not None
+    transition_button.clicked.emit()
+    QCoreApplication.processEvents()
+    assert transition_popover.property("visible") is True
+    assert transition_popover.property("parent").objectName() == "scenesWorkspace"
+    transition_popover.close()
+
     camera_scene_id = next(
         str(widget.bridge.scenesModel.get(row)["id"])
         for row in range(widget.bridge.scenesModel.rowCount())
@@ -137,6 +148,95 @@ def test_scenes_qml_editor_loads_with_the_real_workspace(tmp_path: Path) -> None
     widget.deleteLater()
     QCoreApplication.processEvents()
     controller.close()
+
+
+def test_transition_duration_fields_apply_uncommitted_text_and_persist(
+    tmp_path: Path,
+) -> None:
+    paths = _profile_paths(tmp_path)
+    workspace = SceneWorkspaceService(paths, seed_names=_seed_names())
+    controller = SceneRuntimeController(workspace, _Projection())
+    widget = ScenesEditorWidget(controller)
+    widget.resize(1280, 760)
+    widget.show()
+    QCoreApplication.processEvents()
+    root = widget._qml.rootObject()
+    assert root is not None
+
+    transition_button = root.findChild(QQuickItem, "scenesProgramTransitionButton")
+    transition_duration = root.findChild(
+        QQuickItem, "scenesProgramTransitionDuration"
+    )
+    transition_apply = root.findChild(QQuickItem, "scenesProgramTransitionApply")
+    assert transition_button is not None
+    assert transition_duration is not None
+    assert transition_apply is not None
+    transition_button.clicked.emit()
+    QCoreApplication.processEvents()
+
+    global_editor = transition_duration.property("contentItem")
+    global_unit = root.findChild(QQuickItem, "scenesProgramTransitionDuration-unit")
+    assert isinstance(global_editor, QQuickItem)
+    assert global_unit is not None
+    assert global_editor.property("selectByMouse") is True
+    assert global_editor.property("text") == "350"
+    assert global_unit.property("text") == "ms"
+    global_editor.forceActiveFocus()
+    QTest.keyClick(widget._qml, Qt.Key.Key_A, Qt.KeyboardModifier.ControlModifier)
+    QTest.keyClicks(widget._qml, "725")
+    QCoreApplication.processEvents()
+    assert transition_duration.property("value") == 350
+    assert global_editor.property("text") == "725"
+
+    transition_apply.clicked.emit()
+    assert _wait_until(lambda: widget.bridge.programTransitionDurationMs == 725)
+
+    scene_id = widget.bridge.selectedSceneId
+    widget.bridge.setSceneTransitionOverride(
+        scene_id,
+        TransitionKind.DISSOLVE.value,
+        -1,
+    )
+    duration_dialog = root.findChild(
+        QObject, "scenesTransitionOverrideDurationDialog"
+    )
+    override_duration = root.findChild(
+        QQuickItem, "scenesTransitionOverrideDuration"
+    )
+    override_apply = root.findChild(
+        QQuickItem, "scenesTransitionOverrideDurationApply"
+    )
+    assert duration_dialog is not None
+    assert override_duration is not None
+    assert override_apply is not None
+    duration_dialog.openFor(scene_id, TransitionKind.DISSOLVE.value, 725)
+    QCoreApplication.processEvents()
+
+    override_editor = override_duration.property("contentItem")
+    assert isinstance(override_editor, QQuickItem)
+    assert override_editor.property("selectByMouse") is True
+    override_editor.forceActiveFocus()
+    QTest.keyClick(widget._qml, Qt.Key.Key_A, Qt.KeyboardModifier.ControlModifier)
+    QTest.keyClicks(widget._qml, "825")
+    QCoreApplication.processEvents()
+    assert override_duration.property("value") == 725
+    assert override_editor.property("text") == "825"
+
+    override_apply.clicked.emit()
+    assert _wait_until(
+        lambda: controller.documents.effective_transition(scene_id).duration_ms == 825
+    )
+
+    widget.cleanup()
+    widget.deleteLater()
+    QCoreApplication.processEvents()
+    controller.close()
+
+    reopened_workspace = SceneWorkspaceService(paths, seed_names=_seed_names())
+    reopened_controller = SceneRuntimeController(reopened_workspace, _Projection())
+    assert reopened_controller.document.transition_policy.default.duration_ms == 725
+    assert reopened_controller.documents.effective_transition(scene_id).duration_ms == 825
+    reopened_controller.close()
 
 
 def test_scene_qml_sources_describe_both_reorder_ghosts_and_responsive_drawer() -> None:
@@ -184,6 +284,13 @@ def test_scene_qml_sources_describe_both_reorder_ghosts_and_responsive_drawer() 
     assert "root.bridge.updatePointer(cursorSource, Number(cursorShape))" in scene_panel
     assert "root.bridge.updatePointer(cursorSource, Number(cursorShape))" in source_panel
     assert "title: qsTr(\"Fit\")" in workspace
+    assert 'objectName: "scenesProgramTransitionButton"' in workspace
+    assert 'objectName: "scenesProgramTransitionPopover"' in workspace
+    assert 'title: qsTr("Transition override")' in workspace
+    assert 'text: qsTr("Use profile transition")' in workspace
+    assert 'text: qsTr("Fade through black")' in workspace
+    assert "setProgramTransition(" in workspace
+    assert "setSceneTransitionOverride(" in workspace
     assert "indicator: Item { visible: false }" in menu_item
     assert menu_item.count('root.checked ? "✓  "') == 1
     assert "indicator: Item { visible: false }" in (

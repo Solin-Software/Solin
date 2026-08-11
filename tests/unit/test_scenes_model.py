@@ -28,12 +28,16 @@ from solin.core.scenes.model import (
     LocalCameraConfig,
     OnvifPtzBinding,
     RtspCameraConfig,
+    SCHEMA_VERSION,
     SceneDocument,
     SceneLayer,
     SceneReferenceConfig,
+    SceneTransitionPolicy,
     SceneValidationError,
     SourceDefinition,
     SourceKind,
+    TransitionKind,
+    TransitionSpec,
     UnsupportedSceneSchemaError,
     VideoColorRange,
     VideoColorSpace,
@@ -89,6 +93,11 @@ def test_default_document_has_stable_sources_scenes_and_two_output_buses() -> No
         NO_SIGNAL_SCENE_ID,
     ]
     assert {route.bus_id for route in first.outputs} == set(BusId)
+    assert first.transition_policy.default == TransitionSpec(
+        TransitionKind.DISSOLVE,
+        350,
+    )
+    assert first.transition_policy.overrides == ()
     pip_scene = first.scene(CONTENT_CAMERA_PIP_SCENE_ID)
     assert [layer.source_id for layer in pip_scene.layers] == [
         CONTENT_SOURCE_ID,
@@ -103,6 +112,137 @@ def test_scene_document_round_trip_is_lossless() -> None:
 
     assert restored == document
     assert restored.to_record() == document.to_record()
+
+
+def test_transition_spec_enforces_cut_and_animated_duration_contracts() -> None:
+    assert TransitionSpec(TransitionKind.CUT, 0).duration_ms == 0
+    assert TransitionSpec(TransitionKind.DISSOLVE, 50).duration_ms == 50
+    assert TransitionSpec(TransitionKind.FADE_TO_BLACK, 10_000).duration_ms == 10_000
+
+    with pytest.raises(SceneValidationError, match="Cut transition duration"):
+        TransitionSpec(TransitionKind.CUT, 50)
+    with pytest.raises(SceneValidationError, match="between 50 and 10000"):
+        TransitionSpec(TransitionKind.DISSOLVE, 49)
+    with pytest.raises(SceneValidationError, match="between 50 and 10000"):
+        TransitionSpec(TransitionKind.FADE_TO_BLACK, 10_001)
+    with pytest.raises(SceneValidationError, match="must be an integer"):
+        TransitionSpec(TransitionKind.DISSOLVE, True)
+
+
+def test_transition_policy_round_trip_and_effective_resolution_are_typed() -> None:
+    policy = SceneTransitionPolicy(
+        default=TransitionSpec(TransitionKind.DISSOLVE, 350),
+        overrides=(
+            (CONTENT_SCENE_ID, TransitionSpec(TransitionKind.FADE_TO_BLACK, 500)),
+        ),
+    )
+
+    restored = SceneTransitionPolicy.from_record(policy.to_record())
+
+    assert restored == policy
+    assert restored.effective_for(CONTENT_SCENE_ID) == TransitionSpec(
+        TransitionKind.FADE_TO_BLACK,
+        500,
+    )
+    assert restored.effective_for(CAMERA_SCENE_ID) == TransitionSpec(
+        TransitionKind.DISSOLVE,
+        350,
+    )
+
+
+def test_scene_document_rejects_transition_override_for_missing_scene() -> None:
+    document = _document()
+
+    with pytest.raises(SceneValidationError, match="existing scenes"):
+        replace(
+            document,
+            transition_policy=SceneTransitionPolicy(
+                default=document.transition_policy.default,
+                overrides=(("missing-scene", TransitionSpec(TransitionKind.CUT, 0)),),
+            ),
+        )
+
+
+@pytest.mark.parametrize(
+    ("legacy_kind", "legacy_duration", "expected"),
+    [
+        ("cut", 0, TransitionSpec(TransitionKind.CUT, 0)),
+        ("fade", 0, TransitionSpec(TransitionKind.DISSOLVE, 50)),
+        ("fade", 650, TransitionSpec(TransitionKind.DISSOLVE, 650)),
+    ],
+)
+def test_schema_version_eight_migrates_program_transition_policy(
+    legacy_kind: str,
+    legacy_duration: int,
+    expected: TransitionSpec,
+) -> None:
+    record = _document().to_record()
+    record["schema_version"] = 8
+    record.pop("transition_policy")
+    for route in record["outputs"]:
+        route["transition"] = legacy_kind
+        route["transition_duration_ms"] = legacy_duration
+
+    restored = SceneDocument.from_record(record)
+
+    assert restored.transition_policy == SceneTransitionPolicy(default=expected)
+    assert all(
+        "transition" not in route and "transition_duration_ms" not in route
+        for route in restored.to_record()["outputs"]
+    )
+
+
+def test_schema_version_eight_uses_virtual_camera_as_transition_source_of_truth() -> None:
+    record = _document().to_record()
+    record["schema_version"] = 8
+    record.pop("transition_policy")
+    for route in record["outputs"]:
+        route["transition"] = (
+            "fade" if route["bus_id"] == BusId.VIRTUAL_CAMERA.value else "cut"
+        )
+        route["transition_duration_ms"] = (
+            425 if route["bus_id"] == BusId.VIRTUAL_CAMERA.value else 0
+        )
+
+    restored = SceneDocument.from_record(record)
+
+    assert restored.transition_policy.default == TransitionSpec(
+        TransitionKind.DISSOLVE,
+        425,
+    )
+
+
+@pytest.mark.parametrize(
+    ("legacy_kind", "legacy_duration"),
+    [
+        ("unknown", 0),
+        ("cut", 1),
+        ("fade", -1),
+        ("fade", 10_001),
+        ("fade", True),
+    ],
+)
+def test_schema_version_eight_rejects_invalid_legacy_transitions(
+    legacy_kind: str,
+    legacy_duration: object,
+) -> None:
+    record = _document().to_record()
+    record["schema_version"] = 8
+    record.pop("transition_policy")
+    for route in record["outputs"]:
+        route["transition"] = legacy_kind
+        route["transition_duration_ms"] = legacy_duration
+
+    with pytest.raises(SceneValidationError, match="(?i)legacy.*transition"):
+        SceneDocument.from_record(record)
+
+
+def test_current_schema_rejects_transition_fields_inside_output_route() -> None:
+    record = _document().to_record()
+    record["outputs"][0]["transition"] = "cut"
+
+    with pytest.raises(SceneValidationError, match="Unknown output route fields"):
+        SceneDocument.from_record(record)
 
 
 def test_schema_version_one_migrates_camera_frame_rates_without_mutating_input() -> None:
@@ -122,7 +262,7 @@ def test_schema_version_one_migrates_camera_frame_rates_without_mutating_input()
 
     restored_camera = restored.source(DEFAULT_CAMERA_SOURCE_ID).configuration
     assert isinstance(restored_camera, LocalCameraConfig)
-    assert restored.schema_version == 8
+    assert restored.schema_version == SCHEMA_VERSION
     assert restored_camera.fps_numerator == 0
     assert restored_camera.fps_denominator == 1
     assert record == original
@@ -177,7 +317,7 @@ def test_schema_version_two_infers_the_camera_media_type() -> None:
 
     restored_camera = restored.source(DEFAULT_CAMERA_SOURCE_ID).configuration
     assert isinstance(restored_camera, LocalCameraConfig)
-    assert restored.schema_version == 8
+    assert restored.schema_version == SCHEMA_VERSION
     assert restored_camera.media_type is CameraMediaType.JPEG
 
 
@@ -202,7 +342,7 @@ def test_schema_version_three_normalizes_legacy_camera_formats_outside_the_media
 
     restored_camera = restored.source(DEFAULT_CAMERA_SOURCE_ID).configuration
     assert isinstance(restored_camera, LocalCameraConfig)
-    assert restored.schema_version == 8
+    assert restored.schema_version == SCHEMA_VERSION
     assert restored_camera == LocalCameraConfig(device_id=restored_camera.device_id)
 
 
@@ -258,7 +398,7 @@ def test_schema_version_five_coalesces_duplicate_physical_camera_sources() -> No
 
     restored = SceneDocument.from_record(record)
 
-    assert restored.schema_version == 8
+    assert restored.schema_version == SCHEMA_VERSION
     assert all(source.id != duplicate["id"] for source in restored.sources)
     assert restored.scenes[0].layers[0].source_id == DEFAULT_CAMERA_SOURCE_ID
 
