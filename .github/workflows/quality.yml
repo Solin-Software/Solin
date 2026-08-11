@@ -104,6 +104,13 @@ jobs:
         if: ${{ steps.filter.outputs.run_quality == 'true' }}
         run: python scripts/typecheck.py
 
+      - name: Build and test native media-engine protocol
+        if: ${{ steps.filter.outputs.run_quality == 'true' }}
+        run: |
+          cmake -S native/media_engine -B build/native/media-engine-ci -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/native/media-engine-ci --parallel
+          ctest --test-dir build/native/media-engine-ci --output-on-failure
+
       - name: Pytest application suites
         if: ${{ steps.filter.outputs.run_quality == 'true' }}
         run: python -m pytest tests/contract tests/integration tests/e2e

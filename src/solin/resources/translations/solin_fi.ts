@@ -763,72 +763,6 @@
     </message>
   </context>
   <context>
-    <name>CameraPopup</name>
-    <message>
-      <location filename="../../widgets/camera_popup.py" line="+85" />
-      <location line="+221" />
-      <source>Camera</source>
-      <translation>Kamera</translation>
-    </message>
-    <message>
-      <location line="-206" />
-      <location line="+207" />
-      <source>Refresh</source>
-      <translation>Päivitä</translation>
-    </message>
-    <message>
-      <location line="-108" />
-      <source>Looking for cameras...</source>
-      <translation>Etsitään kameroita...</translation>
-    </message>
-    <message>
-      <location line="+13" />
-      <source>No cameras found</source>
-      <translation>Kameroita ei löytynyt</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>No cameras found.</source>
-      <translation>Kameroita ei löytynyt.</translation>
-    </message>
-    <message numerus="yes">
-      <location line="+10" />
-      <source>%n camera(s) found.</source>
-      <translation>
-        <numerusform>%n kamera löytyi.</numerusform>
-        <numerusform>%n kameraa löytyi.</numerusform>
-      </translation>
-    </message>
-    <message>
-      <location line="+30" />
-      <source>Stop Stream</source>
-      <translation>Pysäytä lähetys</translation>
-    </message>
-    <message>
-      <location line="+7" />
-      <source>Show Stream</source>
-      <translation>Näytä lähetys</translation>
-    </message>
-    <message>
-      <location line="+53" />
-      <source>Need help?</source>
-      <translation>Tarvitsetko apua?</translation>
-    </message>
-  </context>
-  <context>
-    <name>CameraSectionMixin</name>
-    <message>
-      <location filename="../../widgets/settings/camera_section.py" line="+15" />
-      <source>Camera</source>
-      <translation>Kamera</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>Shows a camera button in the live tools toolbar.</source>
-      <translation>Näyttää kamerapainikkeen suorien lähetysten työkalupalkissa.</translation>
-    </message>
-  </context>
-  <context>
     <name>HuePickerDialog</name>
     <message>
       <location filename="../../widgets/playlist/dialogs.py" line="+164" />
@@ -2258,11 +2192,6 @@ Manually added content, trims, framing and expanded state will be kept.</source>
       <location line="+20" />
       <source>Show Stream</source>
       <translation>Näytä lähetys</translation>
-    </message>
-    <message>
-      <location line="-19" />
-      <source>Project OBS virtual camera</source>
-      <translation>Heijasta OBS-virtuaalikamera</translation>
     </message>
     <message>
       <location line="+10" />

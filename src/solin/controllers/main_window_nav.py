@@ -23,4 +23,5 @@ NAV_LABELS = (
     ("nav_playlist_btn", QT_TRANSLATE_NOOP("MainWindow", "Playlists")),
     ("nav_cache_btn", QT_TRANSLATE_NOOP("MainWindow", "Saved Media")),
     ("nav_wifi_btn", QT_TRANSLATE_NOOP("MainWindow", "Receive via Wi-Fi")),
+    ("nav_scenes_btn", QT_TRANSLATE_NOOP("MainWindow", "Scenes")),
 )

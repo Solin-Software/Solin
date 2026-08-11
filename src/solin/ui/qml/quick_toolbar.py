@@ -8,12 +8,12 @@ Defines the toolbar bridge and its icon mapping for the shared SVG provider.
 from PySide6.QtCore import QObject, Property, Signal, Slot
 
 from solin.styles.icons import (
-    ICON_CAMERA,
     ICON_CHEVRON_DOWN,
     ICON_CHEVRON_LEFT,
     ICON_MONITOR,
     ICON_MUSIC,
     ICON_OBS,
+    ICON_CLAPPERBOARD,
     ICON_REMOTE_CONTROL,
     ICON_ZOOM,
 )
@@ -24,8 +24,8 @@ QUICK_TOOLBAR_ICON_SVGS: dict[str, object] = {
     "monitor": ICON_MONITOR,
     "background_song": ICON_MUSIC,
     "obs": ICON_OBS,
+    "scenes": ICON_CLAPPERBOARD,
     "zoom": ICON_ZOOM,
-    "camera": ICON_CAMERA,
     "remote_control": ICON_REMOTE_CONTROL,
     "chevron_down": ICON_CHEVRON_DOWN,
     "chevron_left": ICON_CHEVRON_LEFT,
@@ -46,8 +46,8 @@ class QuickToolbarBridge(QObject):
     monitorClicked = Signal()
     backgroundSongClicked = Signal()
     obsClicked = Signal()
+    scenesClicked = Signal()
     zoomClicked = Signal()
-    cameraClicked = Signal()
     remoteControlClicked = Signal()
     minimizeToggled = Signal()
     pointerEntered = Signal()
@@ -65,10 +65,10 @@ class QuickToolbarBridge(QObject):
         self._obs_visible: bool = False
         self._obs_icon_color: str = "484f58"
         self._obs_dot_visible: bool = False
+        self._scenes_visible: bool = False
+        self._scenes_icon_color: str = "484f58"
         self._zoom_visible: bool = False
         self._zoom_icon_color: str = "484f58"
-        self._camera_visible: bool = False
-        self._camera_icon_color: str = "484f58"
         self._remote_control_visible: bool = False
         self._remote_control_icon_color: str = "484f58"
         self._remote_control_badge: str = ""
@@ -83,8 +83,8 @@ class QuickToolbarBridge(QObject):
         self._monitor_tooltip: str = ""
         self._background_song_tooltip: str = ""
         self._obs_tooltip: str = ""
+        self._scenes_tooltip: str = ""
         self._zoom_tooltip: str = ""
-        self._camera_tooltip: str = ""
         self._remote_control_tooltip: str = ""
         self._minimize_tooltip: str = ""
         self._expand_tooltip: str = ""
@@ -106,12 +106,12 @@ class QuickToolbarBridge(QObject):
         return self._obs_icon_color
 
     @Property(str, notify=stateChanged)
-    def zoomIconColor(self) -> str:  # noqa: N802
-        return self._zoom_icon_color
+    def scenesIconColor(self) -> str:  # noqa: N802
+        return self._scenes_icon_color
 
     @Property(str, notify=stateChanged)
-    def cameraIconColor(self) -> str:  # noqa: N802
-        return self._camera_icon_color
+    def zoomIconColor(self) -> str:  # noqa: N802
+        return self._zoom_icon_color
 
     @Property(str, notify=stateChanged)
     def remoteControlIconColor(self) -> str:  # noqa: N802
@@ -127,6 +127,10 @@ class QuickToolbarBridge(QObject):
         return self._obs_visible
 
     @Property(bool, notify=stateChanged)
+    def scenesVisible(self) -> bool:  # noqa: N802
+        return self._scenes_visible
+
+    @Property(bool, notify=stateChanged)
     def backgroundSongVisible(self) -> bool:  # noqa: N802
         return self._background_song_visible
 
@@ -137,10 +141,6 @@ class QuickToolbarBridge(QObject):
     @Property(bool, notify=stateChanged)
     def zoomVisible(self) -> bool:  # noqa: N802
         return self._zoom_visible
-
-    @Property(bool, notify=stateChanged)
-    def cameraVisible(self) -> bool:  # noqa: N802
-        return self._camera_visible
 
     @Property(bool, notify=stateChanged)
     def remoteControlVisible(self) -> bool:  # noqa: N802
@@ -187,12 +187,12 @@ class QuickToolbarBridge(QObject):
         return self._obs_tooltip
 
     @Property(str, notify=tooltipsChanged)
-    def zoomTooltip(self) -> str:  # noqa: N802
-        return self._zoom_tooltip
+    def scenesTooltip(self) -> str:  # noqa: N802
+        return self._scenes_tooltip
 
     @Property(str, notify=tooltipsChanged)
-    def cameraTooltip(self) -> str:  # noqa: N802
-        return self._camera_tooltip
+    def zoomTooltip(self) -> str:  # noqa: N802
+        return self._zoom_tooltip
 
     @Property(str, notify=tooltipsChanged)
     def remoteControlTooltip(self) -> str:  # noqa: N802
@@ -221,12 +221,12 @@ class QuickToolbarBridge(QObject):
         self.obsClicked.emit()
 
     @Slot()
-    def onZoomClicked(self) -> None:  # noqa: N802
-        self.zoomClicked.emit()
+    def onScenesClicked(self) -> None:  # noqa: N802
+        self.scenesClicked.emit()
 
     @Slot()
-    def onCameraClicked(self) -> None:  # noqa: N802
-        self.cameraClicked.emit()
+    def onZoomClicked(self) -> None:  # noqa: N802
+        self.zoomClicked.emit()
 
     @Slot()
     def onRemoteControlClicked(self) -> None:  # noqa: N802
@@ -298,6 +298,17 @@ class QuickToolbarBridge(QObject):
             self._obs_dot_visible = visible
             self.stateChanged.emit()
 
+    def set_scenes_visible(self, visible: bool) -> None:
+        if self._scenes_visible != visible:
+            self._scenes_visible = visible
+            self.stateChanged.emit()
+
+    def set_scenes_icon_color(self, color: str) -> None:
+        color = color.lstrip("#")
+        if self._scenes_icon_color != color:
+            self._scenes_icon_color = color
+            self.stateChanged.emit()
+
     def set_zoom_visible(self, visible: bool) -> None:
         if self._zoom_visible != visible:
             self._zoom_visible = visible
@@ -307,17 +318,6 @@ class QuickToolbarBridge(QObject):
         color = color.lstrip("#")
         if self._zoom_icon_color != color:
             self._zoom_icon_color = color
-            self.stateChanged.emit()
-
-    def set_camera_visible(self, visible: bool) -> None:
-        if self._camera_visible != visible:
-            self._camera_visible = visible
-            self.stateChanged.emit()
-
-    def set_camera_icon_color(self, color: str) -> None:
-        color = color.lstrip("#")
-        if self._camera_icon_color != color:
-            self._camera_icon_color = color
             self.stateChanged.emit()
 
     def set_remote_control_visible(self, visible: bool) -> None:
@@ -372,6 +372,11 @@ class QuickToolbarBridge(QObject):
             self._obs_tooltip = text
             self.tooltipsChanged.emit()
 
+    def set_scenes_tooltip(self, text: str) -> None:
+        if self._scenes_tooltip != text:
+            self._scenes_tooltip = text
+            self.tooltipsChanged.emit()
+
     def set_background_song_tooltip(self, text: str) -> None:
         if self._background_song_tooltip != text:
             self._background_song_tooltip = text
@@ -388,8 +393,8 @@ class QuickToolbarBridge(QObject):
         self._monitor_tooltip = self.tr("Manage monitors")
         self._background_song_tooltip = self.tr("Background Song")
         self._obs_tooltip = self.tr("OBS Scenes")
+        self._scenes_tooltip = self.tr("Solin scenes")
         self._zoom_tooltip = self.tr("Zoom Settings")
-        self._camera_tooltip = self.tr("Camera")
         self._remote_control_tooltip = self.tr("Remote control")
         self._minimize_tooltip = self.tr("Minimize")
         self._expand_tooltip = self.tr("Expand toolbar")

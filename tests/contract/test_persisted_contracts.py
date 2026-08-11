@@ -89,9 +89,6 @@ EXPECTED_SETTINGS_KEYS = {
     "MEDIA_COUNTDOWN_AUTOMATIC_ENABLED": "media_countdown/automatic_enabled",
     "MEDIA_COUNTDOWN_LEAD_SECONDS": "media_countdown/lead_seconds",
     "MEDIA_COUNTDOWN_PRESENTATION": "media_countdown/presentation",
-    "CAMERA_ENABLED": "camera/enabled",
-    "CAMERA_BACKEND": "camera/backend",
-    "CAMERA_DEVICE_NAME": "camera/device_name",
     "OBS_ENABLED": "obs/enabled",
     "OBS_PORT": "obs/port",
     "OBS_PASSWORD": "obs/password",
@@ -235,6 +232,13 @@ def test_profile_registry_and_directory_layout_are_stable(
     )
     assert runtime.paths.talk_theme_assets_dir == (
         tmp_path / "profiles" / "main_hall" / "talk_theme_assets"
+    )
+    assert runtime.paths.scenes_file == (tmp_path / "profiles" / "main_hall" / "scenes.json")
+    assert runtime.paths.scenes_runtime_file == (
+        tmp_path / "profiles" / "main_hall" / "scenes_runtime.json"
+    )
+    assert runtime.paths.scenes_assets_dir == (
+        tmp_path / "profiles" / "main_hall" / "scenes_assets"
     )
     assert runtime.paths.profile_cache_dir == cache_dir / "profiles" / "main_hall"
     assert runtime.paths.thumb_cache_dir == (cache_dir / "profiles" / "main_hall" / "thumbs")

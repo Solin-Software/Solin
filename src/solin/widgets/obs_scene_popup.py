@@ -117,7 +117,6 @@ class OBSScenePopup(QWidget):
     scene_change_requested = Signal(str)
     return_scene_requested = Signal(str)
     stream_requested = Signal()
-    camera_stream_requested = Signal()
 
     _POP_MIN_W = 320
     _POP_MAX_W = 460
@@ -138,9 +137,6 @@ class OBSScenePopup(QWidget):
         self._is_recording = False
         self._stream_available = False
         self._stream_active = False
-        self._camera_stream_available = False
-        self._camera_stream_active = False
-        self._stream_kind = "obs"
         self._obs_service = None
         self._scenes: list[str] = []
         self._idle_scene = ""
@@ -675,71 +671,22 @@ class OBSScenePopup(QWidget):
 
     def set_stream_available(self, available: bool) -> None:
         self._stream_available = bool(available)
-        self._update_stream_kind()
+        self._stream_btn.setVisible(self._stream_available or self._stream_active)
         self._update_stream_button()
 
     def set_stream_active(self, active: bool) -> None:
         self._stream_active = bool(active)
-        self._update_stream_kind()
+        self._stream_btn.setVisible(self._stream_available or self._stream_active)
         self._update_stream_button()
-
-    def set_camera_stream_available(self, available: bool) -> None:
-        self._camera_stream_available = bool(available)
-        self._update_stream_kind()
-        self._update_stream_button()
-
-    def set_camera_stream_active(self, active: bool) -> None:
-        self._camera_stream_active = bool(active)
-        self._update_stream_kind()
-        self._update_stream_button()
-
-    def _update_stream_kind(self) -> None:
-        self._stream_kind = (
-            "obs"
-            if self._stream_available or self._stream_active
-            else "camera"
-        )
-        visible = (
-            self._stream_available
-            or self._stream_active
-            or self._camera_stream_available
-            or self._camera_stream_active
-        )
-        self._stream_btn.setVisible(visible)
 
     def _on_stream_clicked(self) -> None:
-        if self._stream_kind == "camera":
-            self.camera_stream_requested.emit()
-        else:
-            self.stream_requested.emit()
+        self.stream_requested.emit()
 
     def _update_stream_button(self) -> None:
         btn = getattr(self, "_stream_btn", None)
         if btn is None:
             return
-        if self._stream_kind == "camera":
-            camera_active = getattr(self, "_camera_stream_active", False)
-            if camera_active:
-                icon_color = PALETTE.danger
-                text = self.tr("Stop Stream")
-                tooltip = self.tr("Stop OBS virtual camera")
-                bg = qss_rgba(PALETTE.danger, 0.08)
-                border = qss_rgba(PALETTE.danger, 0.30)
-                hover_bg = qss_rgba(PALETTE.danger, 0.15)
-                hover_border = qss_rgba(PALETTE.danger, 0.45)
-                hover_color = PALETTE.danger
-                press_bg = qss_rgba(PALETTE.danger, 0.24)
-            else:
-                icon_color = PALETTE.accent_hover
-                text = self.tr("Show Stream")
-                tooltip = self.tr("Project OBS virtual camera")
-                bg = qss_rgba(PALETTE.accent, 0.08)
-                border = qss_rgba(PALETTE.accent, 0.28)
-                hover_bg = qss_rgba(PALETTE.accent, 0.15)
-                hover_border = qss_rgba(PALETTE.accent, 0.45)
-                hover_color = PALETTE.accent_hover
-                press_bg = qss_rgba(PALETTE.accent, 0.24)
-        elif self._stream_active:
+        if self._stream_active:
             icon_color = PALETTE.danger
             text = self.tr("Stop Stream")
             tooltip = self.tr("Stop OBS program stream")

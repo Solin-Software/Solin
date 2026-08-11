@@ -22,7 +22,6 @@ class MainWindowSignalSources:
     settings_widget: Any
     obs_service: Any
     ndi_service: Any
-    camera_service: Any
     auto_share_finished: Any
     media_countdown_automation: Any
 
@@ -174,9 +173,6 @@ class SignalConnectionController:
         settings.obs_stream_config_changed.connect(
             live_integrations.refresh_obs_stream_availability
         )
-        settings.camera_enabled_toggled.connect(
-            live_integrations.on_camera_settings_enabled_toggled
-        )
         settings.background_song_toggled.connect(
             handlers.background_song_service.set_enabled
         )
@@ -205,10 +201,6 @@ class SignalConnectionController:
         sources.ndi_service.frame_ready.connect(live_integrations.on_obs_ndi_frame)
         sources.ndi_service.error.connect(live_integrations.on_obs_ndi_error)
         sources.ndi_service.stopped.connect(live_integrations.on_obs_ndi_stopped)
-
-        sources.camera_service.frame_ready.connect(live_integrations.on_camera_frame)
-        sources.camera_service.error.connect(live_integrations.on_camera_error)
-        sources.camera_service.stopped.connect(live_integrations.on_camera_stopped)
 
         projection_bar.obs_scene_toggle_requested.connect(
             live_integrations.on_obs_scene_toggle

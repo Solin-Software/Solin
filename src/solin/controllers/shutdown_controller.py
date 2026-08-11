@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -26,10 +27,13 @@ class ShutdownServices:
     media_tree_runtime: Any
     media_controller: Any
     ndi: Any
-    camera: Any
     obs: Any
     zoom: Any
     ipc: Callable[[], Any | None]
+    scenes: Any | None = None
+    program_content: Any | None = None
+    content_frame_ingress: Any | None = None
+    scene_frame_egresses: tuple[Any, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,21 +56,40 @@ class ShutdownController:
 
     def __init__(self, dependencies: ShutdownDependencies) -> None:
         self._dependencies = dependencies
+        self._started = False
 
     def shutdown(self) -> None:
-        self.cancel_ui_preparation()
-        self.stop_remote_control()
-        self.stop_scheduled_automation()
-        self.close_projection_targets()
-        self.stop_remote_services()
-        self.stop_notifications()
-        self.cleanup_widgets()
-        self.stop_media_tree_runtime()
-        self.stop_media_services()
-        self.stop_conversion_threads()
-        self.close_ipc()
-        self.cleanup_jwl_temp_files()
-        self.cleanup_lazy_pages()
+        if self._started:
+            return
+        self._started = True
+        stages = (
+            ("cancel UI preparation", self.cancel_ui_preparation),
+            ("stop remote control", self.stop_remote_control),
+            ("stop scheduled automation", self.stop_scheduled_automation),
+            ("close projection targets", self.close_projection_targets),
+            ("stop remote services", self.stop_remote_services),
+            ("stop notifications", self.stop_notifications),
+            ("clean up widgets", self.cleanup_widgets),
+            ("stop media-tree runtime", self.stop_media_tree_runtime),
+            ("stop media services", self.stop_media_services),
+            ("stop conversion threads", self.stop_conversion_threads),
+            ("close IPC", self.close_ipc),
+            ("clean up temporary files", self.cleanup_jwl_temp_files),
+            ("clean up lazy pages", self.cleanup_lazy_pages),
+        )
+        for label, stage in stages:
+            started = time.monotonic()
+            try:
+                stage()
+            except Exception:  # noqa: BLE001 - every shutdown stage is isolated
+                log.warning("Application shutdown stage failed: %s", label, exc_info=True)
+            elapsed = time.monotonic() - started
+            if elapsed >= 2.0:
+                log.warning(
+                    "Application shutdown stage was slow: %s (%.3f s)",
+                    label,
+                    elapsed,
+                )
 
     def stop_scheduled_automation(self) -> None:
         self._dependencies.services.media_countdown_automation.shutdown()
@@ -107,10 +130,20 @@ class ShutdownController:
     def stop_media_services(self) -> None:
         services = self._dependencies.services
         services.projection_integrations.cleanup()
+        # Stop the scene data plane in reverse dependency order. Producers must
+        # stop before their consumers so no frame worker can be left waiting on
+        # a mapping/mutex that disappeared with the native engine.
+        if services.program_content is not None:
+            services.program_content.close()
+        if services.content_frame_ingress is not None:
+            services.content_frame_ingress.close()
+        for egress in services.scene_frame_egresses:
+            egress.close()
+        if services.scenes is not None:
+            services.scenes.close()
         services.background_song.shutdown()
         services.media_controller.stop()
         services.ndi.stop(wait=True)
-        services.camera.stop()
         services.obs.stop(wait=True)
         services.zoom.stop(wait=True)
 

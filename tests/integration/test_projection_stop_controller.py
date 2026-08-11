@@ -58,13 +58,9 @@ class _ProjectionIntegrationsStub:
 class _LiveIntegrationsStub:
     def __init__(self):
         self.obs_active = []
-        self.camera_active = []
 
     def set_obs_stream_active(self, active):
         self.obs_active.append(active)
-
-    def set_camera_stream_active(self, active):
-        self.camera_active.append(active)
 
 
 class _ProjectionWindowStub:
@@ -100,7 +96,6 @@ class _WindowStub:
         self._navigation = _NavigationStub(raises=nav_raises)
         self.media_ctrl = _ServiceStub()
         self._ndi_service = _ServiceStub()
-        self._camera_service = _ServiceStub()
         self.proj_bar = _ProjectionBarStub(visual_active=visual_active)
         self._projection_integrations = _ProjectionIntegrationsStub(auto_share=auto_share)
         self._live_integrations = _LiveIntegrationsStub()
@@ -120,7 +115,6 @@ def _controller(window):
             projection_bar=window.proj_bar,
             media_controller=window.media_ctrl,
             ndi_service=window._ndi_service,
-            camera_service=window._camera_service,
             projection_windows=window._all_windows,
             auto_share_configured=(
                 window._projection_integrations.auto_share_configured
@@ -134,9 +128,6 @@ def _controller(window):
                 window._projection_integrations.update_status
             ),
             set_obs_stream_active=window._live_integrations.set_obs_stream_active,
-            set_camera_stream_active=(
-                window._live_integrations.set_camera_stream_active
-            ),
         ),
     )
 
@@ -152,12 +143,10 @@ def test_stop_any_clears_projection_and_triggers_zoom_break_for_visual_state():
     assert window.media_ctrl.stopped == 1
     assert window._ndi_service.stopped == 1
     assert window._ndi_service.stopped_later == 0
-    assert window._camera_service.stopped == 1
     assert [projection_window.cleared for projection_window in window.windows] == [1, 1]
     assert window.proj_bar.deactivated == 1
     assert window.projection_session.state == {"type": "idle"}
     assert window._live_integrations.obs_active == [False]
-    assert window._live_integrations.camera_active == [False]
     assert window.projection_session.floating_preview_window.zoom_breaks == 1
     assert window._projection_integrations.statuses == [
         ((False,), {"sync_obs": True})

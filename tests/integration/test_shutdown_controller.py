@@ -56,9 +56,7 @@ class _ThreadStub:
 
 class _ProjectionSession:
     def __init__(self, events):
-        self.projection_windows = [
-            SimpleNamespace(close=lambda: events.append("projection"))
-        ]
+        self.projection_windows = [SimpleNamespace(close=lambda: events.append("projection"))]
         self._events = events
 
     def close_floating_preview(self):
@@ -96,7 +94,6 @@ def _dependencies(events=None):
             media_tree_runtime=_Recorder(events, "media-tree"),
             media_controller=_Recorder(events, "media"),
             ndi=_Recorder(events, "ndi"),
-            camera=_Recorder(events, "camera"),
             obs=_Recorder(events, "obs"),
             zoom=_Recorder(events, "zoom"),
             ipc=lambda: _Recorder(events, "ipc"),
@@ -182,7 +179,6 @@ def test_shutdown_runs_owned_cleanup_boundaries_in_order():
         "background-song.shutdown",
         "media.stop",
         "ndi.stop",
-        "camera.stop",
         "obs.stop",
         "zoom.stop",
         "ipc.close",
@@ -190,6 +186,56 @@ def test_shutdown_runs_owned_cleanup_boundaries_in_order():
     ]
     assert dependencies.projection_session.projection_windows == []
     assert dependencies.conversion_threads.active_count == 0
+
+
+def test_scene_data_plane_stops_in_reverse_dependency_order():
+    events = []
+    dependencies = _dependencies(events)
+    services = dependencies.services
+    dependencies = ShutdownDependencies(
+        projection_session=dependencies.projection_session,
+        timer_output=dependencies.timer_output,
+        services=ShutdownServices(
+            remote_control=services.remote_control,
+            remote_services=services.remote_services,
+            download_notifications=services.download_notifications,
+            playback_notifications=services.playback_notifications,
+            notifications=services.notifications,
+            projection_integrations=services.projection_integrations,
+            background_song=services.background_song,
+            media_countdown_automation=services.media_countdown_automation,
+            media_tree_runtime=services.media_tree_runtime,
+            media_controller=services.media_controller,
+            ndi=services.ndi,
+            obs=services.obs,
+            zoom=services.zoom,
+            ipc=services.ipc,
+            program_content=_Recorder(events, "program-content"),
+            content_frame_ingress=_Recorder(events, "content-ingress"),
+            scene_frame_egresses=(_Recorder(events, "scene-egress"),),
+            scenes=_Recorder(events, "scenes"),
+        ),
+        widget_providers=dependencies.widget_providers,
+        conversion_threads=dependencies.conversion_threads,
+        jwl_temp_files=dependencies.jwl_temp_files,
+        queue_pending_deletion=dependencies.queue_pending_deletion,
+        cleanup_lazy_pages=dependencies.cleanup_lazy_pages,
+    )
+
+    ShutdownController(dependencies).shutdown()
+
+    scene_events = [event for event in events if event.startswith((
+        "program-content.",
+        "content-ingress.",
+        "scene-egress.",
+        "scenes.",
+    ))]
+    assert scene_events == [
+        "program-content.close",
+        "content-ingress.close",
+        "scene-egress.close",
+        "scenes.close",
+    ]
 
 
 def test_remove_or_queue_tmp_file_queues_when_remove_fails(monkeypatch):
@@ -247,7 +293,6 @@ def test_shutdown_allows_deferred_resources_that_were_never_created():
             media_tree_runtime=services.media_tree_runtime,
             media_controller=services.media_controller,
             ndi=services.ndi,
-            camera=services.camera,
             obs=services.obs,
             zoom=services.zoom,
             ipc=lambda: None,
@@ -260,3 +305,23 @@ def test_shutdown_allows_deferred_resources_that_were_never_created():
     )
 
     ShutdownController(dependencies).shutdown()
+
+
+def test_shutdown_is_idempotent_and_one_failed_stage_does_not_skip_later_cleanup(
+    monkeypatch,
+):
+    events = []
+    controller = ShutdownController(_dependencies(events))
+
+    def fail_remote_control():
+        events.append("remote-control.failed")
+        raise RuntimeError("simulated shutdown failure")
+
+    monkeypatch.setattr(controller, "stop_remote_control", fail_remote_control)
+
+    controller.shutdown()
+    controller.shutdown()
+
+    assert events.count("remote-control.failed") == 1
+    assert events.count("lazy-pages") == 1
+    assert "ipc.close" in events

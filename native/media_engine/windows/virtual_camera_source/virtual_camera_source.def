@@ -1,0 +1,6 @@
+LIBRARY "solin-virtual-camera-source"
+
+EXPORTS
+    DllCanUnloadNow PRIVATE
+    DllGetClassObject PRIVATE
+    DllUnregisterServer PRIVATE

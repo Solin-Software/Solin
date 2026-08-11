@@ -3,7 +3,7 @@ import QtQuick
 // ─────────────────────────────────────────────────────────────────────────────
 // QuickAccessToolbar.qml
 //
-// Floating toolbar with monitor, OBS, camera, zoom buttons and a minimize
+// Floating toolbar with monitor, OBS, Solin scenes, Zoom, and a minimize
 // chevron.  Rendered entirely in QML for proper alpha compositing (no black-
 // corner artefacts over browser / web-engine content).
 //
@@ -195,30 +195,30 @@ Item {
                 }
             }
 
-            // ── Camera ───────────────────────────────────────────────
+            // ── Solin Scenes ─────────────────────────────────────────
             Item {
-                visible: bridge.cameraVisible
+                visible: bridge.scenesVisible
                 width: 30; height: 30
 
                 Rectangle {
                     anchors.fill: parent; radius: 15
-                    color: cameraMA.pressed
+                    color: scenesMA.pressed
                            ? root.toolbarPressed
-                           : cameraMA.containsMouse
+                           : scenesMA.containsMouse
                              ? root.toolbarHover : "transparent"
                 }
                 Image {
                     anchors.centerIn: parent
-                    source: "image://icons/camera/14/" + bridge.cameraIconColor
+                    source: "image://icons/scenes/14/" + bridge.scenesIconColor
                     sourceSize: Qt.size(14, 14)
                     cache: false
                 }
                 MouseArea {
-                    id: cameraMA; anchors.fill: parent
+                    id: scenesMA; anchors.fill: parent
                     hoverEnabled: true
-                    onEntered: root.beginButtonHover(cameraMA, bridge.cameraTooltip)
+                    onEntered: root.beginButtonHover(scenesMA, bridge.scenesTooltip)
                     onExited: root.endButtonHover()
-                    onClicked: bridge.onCameraClicked()
+                    onClicked: bridge.onScenesClicked()
                 }
             }
 

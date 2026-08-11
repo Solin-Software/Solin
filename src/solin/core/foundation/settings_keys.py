@@ -58,10 +58,6 @@ class SettingsKey:
     MEDIA_COUNTDOWN_LEAD_SECONDS: Final = "media_countdown/lead_seconds"
     MEDIA_COUNTDOWN_PRESENTATION: Final = "media_countdown/presentation"
 
-    CAMERA_ENABLED: Final = "camera/enabled"
-    CAMERA_BACKEND: Final = "camera/backend"
-    CAMERA_DEVICE_NAME: Final = "camera/device_name"
-
     OBS_ENABLED: Final = "obs/enabled"
     OBS_PORT: Final = "obs/port"
     OBS_PASSWORD: Final = "obs/password"

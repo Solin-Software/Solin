@@ -26,6 +26,38 @@ def test_watched_folder_file_store_copies_with_unique_name(tmp_path):
     assert not list(folder.glob(f"*{WATCHED_FOLDER_STAGING_SUFFIX}"))
 
 
+def test_watched_folder_publish_retries_transient_windows_file_lock(
+    tmp_path,
+    monkeypatch,
+):
+    staging = tmp_path / "staging"
+    destination = tmp_path / "destination"
+    staging.write_bytes(b"video")
+    destination.write_bytes(b"")
+    original_replace = os.replace
+    attempts = 0
+
+    def flaky_replace(source, target):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            error = PermissionError("transient scanner lock")
+            error.winerror = 5
+            raise error
+        original_replace(source, target)
+
+    monkeypatch.setattr(os, "replace", flaky_replace)
+    monkeypatch.setattr(
+        "solin.core.ingest.watched_folder_files.time.sleep",
+        lambda _delay: None,
+    )
+
+    WatchedFolderFileStore._publish_staging_file(staging, destination)
+
+    assert attempts == 2
+    assert destination.read_bytes() == b"video"
+
+
 def test_watched_folder_copy_transaction_reports_chunk_progress(tmp_path):
     source = tmp_path / "large.mp4"
     source.write_bytes(b"a" * (192 * 1024))

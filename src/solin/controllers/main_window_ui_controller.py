@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 
 from ..core.meetings.preparation import MeetingPreparationService
 from ..styles.icons import (
+    ICON_CLAPPERBOARD,
     ICON_MENU,
     ICON_NAV_BROWSER,
     ICON_NAV_CACHE,
@@ -45,6 +46,7 @@ from ..widgets.meetings.widget import MeetingsWidget
 from ..widgets.playlist.widget import PlaylistWidget
 from ..widgets.projection.bar import ProjectionBar
 from ..widgets.quick_access_toolbar import QuickAccessToolbar
+from ..widgets.deferred_scenes_widget import DeferredScenesWidget
 from ..widgets.deferred_talk_theme_widget import DeferredTalkThemeWidget
 from ..widgets.settings_widget import SettingsWidget
 from ..widgets.songs_widget import SongsWidget
@@ -84,6 +86,8 @@ class MainWindowUiContext:
     notifications: Any
     profile_paths: Any
     projection_session: Any
+    scene_runtime: Any
+    ptz_credentials: Any
     runtime_paths: Any
     media_cache_manager: Any
     media_tree_runtime: Any
@@ -92,12 +96,10 @@ class MainWindowUiContext:
     obs_service: Any
     ndi_service: Any
     zoom_service: Any
-    camera_service: Any
     app_settings: Any
     obs_settings: Any
     zoom_settings: Any
     auto_share_settings: Any
-    camera_settings: Any
     auto_key_settings: Any
     media_settings: Any
     playback_protection: Any
@@ -159,8 +161,6 @@ class MainWindowUiHandlers:
     quick_obs_scene_change: Callable[..., Any]
     quick_obs_return_scene_change: Callable[..., Any]
     project_obs_stream: Callable[..., Any]
-    project_camera_stream: Callable[..., Any]
-    camera_selection_changed: Callable[..., Any]
     profile_switch_requested: Callable[..., Any]
 
 
@@ -179,6 +179,7 @@ class MainWindowUiResources:
     talk_theme_widget: DeferredTalkThemeWidget
     playlist_widget: PlaylistWidget
     meetings_widget: MeetingsWidget
+    scenes_widget: DeferredScenesWidget
     quick_toolbar: QuickAccessToolbar
     sidebar_title_label: QLabel
     sidebar_subtitle_label: QLabel
@@ -197,6 +198,7 @@ class _PageResources:
     talk_theme_widget: DeferredTalkThemeWidget
     playlist_widget: PlaylistWidget
     meetings_widget: MeetingsWidget
+    scenes_widget: DeferredScenesWidget
 
 
 @dataclass(frozen=True, slots=True)
@@ -224,6 +226,7 @@ class MainWindowUiController:
         ICON_NAV_PLAYLIST,
         ICON_NAV_CACHE,
         ICON_NAV_WIFI,
+        ICON_CLAPPERBOARD,
     )
     _NAV_BUTTON_SPECS = tuple(
         (attr_name, icon, label, index)
@@ -239,6 +242,7 @@ class MainWindowUiController:
         "nav_songs_btn",
         "nav_clips_btn",
         "nav_theme_btn",
+        "nav_scenes_btn",
         "nav_cache_btn",
         "nav_wifi_btn",
     )
@@ -355,6 +359,7 @@ class MainWindowUiController:
                 5: pages.talk_theme_widget.preparation_handle,
                 6: pages.settings_widget.preparation_handle,
                 7: pages.playlist_widget.preparation_handle,
+                10: pages.scenes_widget.preparation_handle,
             },
         )
         preparation_ref["value"] = preparation
@@ -374,6 +379,7 @@ class MainWindowUiController:
             talk_theme_widget=pages.talk_theme_widget,
             playlist_widget=pages.playlist_widget,
             meetings_widget=pages.meetings_widget,
+            scenes_widget=pages.scenes_widget,
             quick_toolbar=quick_toolbar,
             sidebar_title_label=sidebar.title_label,
             sidebar_subtitle_label=sidebar.subtitle_label,
@@ -455,7 +461,6 @@ class MainWindowUiController:
             obs_settings=context.obs_settings,
             zoom_settings=context.zoom_settings,
             auto_share_settings=context.auto_share_settings,
-            camera_settings=context.camera_settings,
             auto_key_settings=context.auto_key_settings,
             media_settings=context.media_settings,
             playback_protection=context.playback_protection,
@@ -564,6 +569,13 @@ class MainWindowUiController:
             parent=context.parent,
         )
         timeline.mark("page_meetings_constructed")
+        scenes_widget = DeferredScenesWidget(
+            context.scene_runtime,
+            credentials=context.ptz_credentials,
+            notifications=context.notifications,
+            parent=context.parent,
+        )
+        timeline.mark("page_scenes_constructed")
         meetings_widget.set_watched_folder(watched_folder)
         settings_widget.meetings_auto_download_toggled.connect(
             meetings_widget.set_automatic_download_enabled
@@ -579,6 +591,7 @@ class MainWindowUiController:
         stack.addWidget(playlist_widget)
         stack.addWidget(lazy_pages.placeholder())
         stack.addWidget(lazy_pages.placeholder())
+        stack.addWidget(scenes_widget)
 
         return _PageResources(
             songs_widget=songs_widget,
@@ -588,6 +601,7 @@ class MainWindowUiController:
             talk_theme_widget=talk_theme_widget,
             playlist_widget=playlist_widget,
             meetings_widget=meetings_widget,
+            scenes_widget=scenes_widget,
         )
 
     def _build_sidebar(
@@ -703,20 +717,15 @@ class MainWindowUiController:
         toolbar = QuickAccessToolbar(
             context.obs_service,
             context.zoom_service,
-            context.camera_service,
             right_col,
             obs_settings=context.obs_settings,
-            camera_settings=context.camera_settings,
             background_song_service=context.background_song_service,
+            scene_runtime=context.scene_runtime,
         )
         toolbar.monitor_clicked.connect(handlers.monitor_manager_requested)
         toolbar.obs_scene_change.connect(handlers.quick_obs_scene_change)
         toolbar.obs_return_scene_change.connect(handlers.quick_obs_return_scene_change)
         toolbar.obs_stream_requested.connect(handlers.project_obs_stream)
-        toolbar.obs_camera_stream_requested.connect(handlers.project_camera_stream)
-        toolbar.camera_stream_requested.connect(handlers.project_camera_stream)
-        toolbar.camera_selection_changed.connect(handlers.camera_selection_changed)
-        toolbar.set_camera_enabled(settings_widget.get_camera_enabled())
         toolbar.show()
         toolbar.reposition()
         navigation.update_quick_toolbar_browser_style()

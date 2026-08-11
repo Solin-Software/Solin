@@ -38,6 +38,7 @@
 #define MyRegSubkey      "Software\Solin\Solin"
 #define MyPlaylistProgId "Solin.Playlist"
 #define MyPlaylistMime   "application/vnd.solin.playlist+zip"
+#define MyVirtualCameraClsid "{{9B035447-3D53-4CD7-A6FC-7CE7862D8830}"
 #ifndef MyDistDir
   #define MyDistDir      "..\..\..\build\main.dist"
 #endif
@@ -52,6 +53,10 @@
 
 #ifndef MyAppVersion
   #error MyAppVersion must be supplied by the build pipeline.
+#endif
+
+#ifndef MyArtifactSuffix
+  #define MyArtifactSuffix ""
 #endif
 
 ; =============================================================================
@@ -95,9 +100,14 @@ RestartApplications=no
     Copy(MyAppVersion, 1, RPos(".", MyAppVersion) - 1)
     
 OutputDir=..\..\..\build\installer_output
-OutputBaseFilename=Solin_Setup_{#MySetupFileVersion}
+OutputBaseFilename=Solin_Setup_{#MySetupFileVersion}{#MyArtifactSuffix}
 SetupIconFile=..\..\..\src\solin\resources\assets\icon.ico
 WizardStyle=modern
+
+#ifdef MySignToolName
+SignTool={#MySignToolName}
+SignedUninstaller=yes
+#endif
 
 ; ── Define o ícone no Painel de Controle (Adicionar/Remover Programas) ──
 UninstallDisplayIcon={app}\{#MyAppExeName}
@@ -123,6 +133,8 @@ VersionInfoProductVersion={#MyAppVersion}
 
 RestartIfNeededByRun=no
 ChangesAssociations=yes
+ArchitecturesAllowed=x64os
+ArchitecturesInstallIn64BitMode=x64os
 
 ; =============================================================================
 [Languages]
@@ -141,6 +153,9 @@ Name: "startupicon"; Description: "Start with Windows";     GroupDescription: "O
 [Files]
 ; ── 1. Copy build output (DRY: one line copies the entire app) ────────────────
 Source: "{#MyDistDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; The machine-wide COM server must live in an administrator-protected path even
+; when the user chooses a custom application directory.
+Source: "{#MyDistDir}\native\media-engine\virtual-camera\solin-virtual-camera-source.dll"; DestDir: "{commoncf64}\Solin\VirtualCamera"; Flags: ignoreversion restartreplace uninsrestartdelete; Check: IsAdminInstallMode
 
 ; ── 2. App icon (only if not already inside main.dist) ───────────────────────
 Source: "..\..\..\src\solin\resources\assets\icon.ico"; DestDir: "{app}\resources\assets"; Flags: ignoreversion
@@ -171,6 +186,13 @@ Name: "{autostartup}\{#MyAppName}";     Filename: "{app}\{#MyAppExeName}"; Tasks
 Root: HKA; Subkey: "{#MyRegSubkey}"; ValueType: string; ValueName: "InstallPath";  ValueData: "{app}";                   Flags: uninsdeletekey
 Root: HKA; Subkey: "{#MyRegSubkey}"; ValueType: string; ValueName: "Version";      ValueData: "{#MyAppVersion}";         Flags: uninsdeletevalue
 Root: HKA; Subkey: "{#MyRegSubkey}"; ValueType: string; ValueName: "InstallScope"; ValueData: "{code:GetInstallScope}";  Flags: uninsdeletevalue
+
+; Camera Frame Server runs as LocalService and needs a machine-wide 64-bit COM
+; registration. Per-user installs retain scene composition but do not expose the
+; Windows virtual-camera adapter.
+Root: HKLM64; Subkey: "Software\Classes\CLSID\{#MyVirtualCameraClsid}"; ValueType: string; ValueName: ""; ValueData: "Solin Virtual Camera Media Source"; Flags: uninsdeletekey; Check: IsAdminInstallMode
+Root: HKLM64; Subkey: "Software\Classes\CLSID\{#MyVirtualCameraClsid}\InprocServer32"; ValueType: string; ValueName: ""; ValueData: "{commoncf64}\Solin\VirtualCamera\solin-virtual-camera-source.dll"; Check: IsAdminInstallMode
+Root: HKLM64; Subkey: "Software\Classes\CLSID\{#MyVirtualCameraClsid}\InprocServer32"; ValueType: string; ValueName: "ThreadingModel"; ValueData: "Both"; Check: IsAdminInstallMode
 
 ; ── 1. Define o que é uma Imagem, Vídeo e Áudio para o Solin ──
 ; Imagem
@@ -653,6 +675,8 @@ end;
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   AppDir: String;
+  CameraSourcePath: String;
+  CameraCleanupExitCode: Integer;
 begin
   AppDir := ExpandConstant('{app}');
 
@@ -686,6 +710,28 @@ begin
 
     usUninstall:
     begin
+      // A system-lifetime Media Foundation camera survives application exits
+      // and reboots. Remove it before Inno deletes the COM source and its
+      // registration.
+      CameraSourcePath := ExpandConstant(
+        '{commoncf64}\Solin\VirtualCamera\solin-virtual-camera-source.dll'
+      );
+      if FileExists(CameraSourcePath) then
+      begin
+        if not ExecAndWaitResponsive(
+          ExpandConstant('{sys}\regsvr32.exe'),
+          '/s /u "' + CameraSourcePath + '"',
+          ExtractFileDir(CameraSourcePath),
+          SW_HIDE,
+          CameraCleanupExitCode
+        ) then
+          Log('Could not start virtual-camera cleanup during uninstall.')
+        else if CameraCleanupExitCode <> 0 then
+          Log('Virtual-camera cleanup returned exit code ' + IntToStr(CameraCleanupExitCode) + '.')
+        else
+          Log('Removed the persistent Solin virtual camera.');
+      end;
+
       // Remove QSettings keys (always HKCU — written by the Qt app)
       DeleteQSettingsKeys();
 

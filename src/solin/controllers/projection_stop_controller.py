@@ -16,7 +16,6 @@ class ProjectionStopContext:
     projection_bar: Any
     media_controller: Any
     ndi_service: Any
-    camera_service: Any
     projection_windows: Callable[[], list[Any]]
     auto_share_configured: Callable[[], bool]
 
@@ -28,17 +27,15 @@ class ProjectionStopHandlers:
     stop_browser_tab_projection: Callable[[], None]
     update_projection_status: Callable[..., None]
     set_obs_stream_active: Callable[[bool], None]
-    set_camera_stream_active: Callable[[bool], None]
 
 
 class ProjectionStopController:
-    """Stops active projection sessions while preserving OBS/camera edge cases."""
+    """Stops active projection sessions while preserving OBS stream edge cases."""
 
     _VISUAL_PROJECTION_TYPES = {
         "image",
         "timer",
         "obs_stream",
-        "camera_stream",
     }
 
     def __init__(
@@ -70,7 +67,6 @@ class ProjectionStopController:
     ) -> None:
         context = self._context
         was_obs_stream = self._session.state_type == "obs_stream"
-        was_camera_stream = self._session.state_type == "camera_stream"
         was_visual = self._was_visual_projection()
 
         self._session.set_tab_projection_active(False)
@@ -87,7 +83,6 @@ class ProjectionStopController:
             context.ndi_service.stop_later()
         else:
             context.ndi_service.stop()
-        context.camera_service.stop()
 
         for projection_window in context.projection_windows():
             projection_window.clear()
@@ -95,11 +90,10 @@ class ProjectionStopController:
         context.projection_bar.deactivate()
         self._handlers.update_projection_status(
             False,
-            sync_obs=not (was_obs_stream or was_camera_stream),
+            sync_obs=not was_obs_stream,
         )
         self._session.reset_state()
         self._handlers.set_obs_stream_active(False)
-        self._handlers.set_camera_stream_active(False)
 
         share_handling = context.auto_share_configured()
         floating_preview = self._session.floating_preview_window

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QColor, QImage
+from PySide6.QtMultimedia import QVideoFrame
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QVBoxLayout
 
@@ -166,6 +167,39 @@ def test_new_projection_cancels_pending_yearly_page_fade_out():
     assert view._yearly_widget._countdown_remaining is None
     assert view._yearly_opacity.opacity() == 1.0
     assert view._stack.currentIndex() != view._PAGE_IDLE_MEDIA
+
+
+def test_first_video_frame_switches_qt_projection_to_media_page():
+    """The playback pre-roll must not mark video visible before a frame exists."""
+    view = _ProjectionViewHarness()
+
+    view.begin_video()
+
+    assert view._is_showing_media is False
+
+    image = QImage(8, 8, QImage.Format.Format_RGB32)
+    image.fill(QColor("black"))
+    view.update_frame(QVideoFrame(image))
+
+    assert view._is_showing_media is True
+    assert view._stack.currentIndex() == view._PAGE_MEDIA
+
+
+def test_native_video_output_bypasses_qt_frame_materialization() -> None:
+    view = _ProjectionViewHarness()
+    image = QImage(8, 8, QImage.Format.Format_RGB32)
+    image.fill(QColor("black"))
+    view.begin_video()
+
+    view.set_native_output_active(True)
+    view.update_frame(QVideoFrame(image))
+
+    assert view._native_output_active
+    assert view._stack.currentIndex() == view._PAGE_MEDIA
+    assert view.display_label._video_frame is None
+
+    view.clear()
+    assert not view._native_output_active
 
 
 def test_new_untransformed_image_resets_zoom_before_clear_fade_finishes():

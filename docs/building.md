@@ -24,9 +24,65 @@ otherwise it uses the repository environment when available and then the
 `python` command. The installer recipe is
 `packaging/windows/installer/setup.iss` and requires Inno Setup 6.
 
+Build and test the native scene engine, its Media Foundation source, and the
+pinned GStreamer development runtime with one command:
+
+```text
+python scripts/build_native_engine.py --configuration Debug
+```
+
+The native source belongs in this repository so Python and C++ contracts change
+atomically; generated executables and DLLs do not. A source checkout therefore
+reports the scene engine as unavailable until this command succeeds. The local
+launcher discovers the resulting configuration under `build/native/` without a
+manual copy. Use the same Python environment that runs Solin, for example:
+
+```text
+.venv\Scripts\python scripts\build_native_engine.py --configuration Release
+.venv\Scripts\python main.py
+```
+
+The source DLL is packaged with every Windows build. The full installer
+registers it as a 64-bit machine COM component when the user selects a
+machine-wide installation. This elevation is required because Windows Camera
+Frame Server loads the source as `LocalService`; per-user and portable builds
+keep scene composition available but report the OS virtual-camera adapter as
+unavailable.
+
+For local virtual-camera testing, register the compiled source from an elevated
+terminal. Registration and removal are explicit so ordinary builds never
+modify the developer machine:
+
+```text
+.venv\Scripts\python scripts\manage_virtual_camera_source.py register --configuration Release --restart-frame-server
+.venv\Scripts\python scripts\manage_virtual_camera_source.py unregister --configuration Release
+```
+
+The registration command copies the selected build to a content-addressed
+development directory under the machine-wide Common Files location before
+writing the 64-bit COM registration. The Frame Server never loads a DLL from
+the writable repository tree. Once first started, the current-user virtual
+camera remains discoverable across Solin restarts and Windows reboots. The
+explicit restart option reloads a previously running Frame Server after the
+content-addressed DLL changes and interrupts any application currently using a
+camera. Omit it only when those applications cannot be interrupted, then close
+them and restart the service before testing the new build. The
+explicit unregister command removes that persistent device before deleting its
+development COM registration.
+
 The manual `Build Solin Windows` workflow builds the standalone application and
 full installer. Upgrade smoke testing additionally requires the URL of the
 previously distributed installer.
+
+The workflow signs by default. Diagnostic runs may explicitly disable signing;
+their files and uploaded artifacts receive an `unsigned-diagnostic` suffix. A
+build intended for distribution must keep `sign_windows_artifacts` enabled and
+provide the repository secrets
+`SOLIN_SIGNING_CERTIFICATE_BASE64` and
+`SOLIN_SIGNING_CERTIFICATE_PASSWORD`. The workflow signs and verifies the app,
+native sidecar, Media Foundation source DLL, and full installer. Inno Setup
+signs the embedded uninstaller through the same required signing command before
+the workflow produces checksums.
 
 ## macOS
 

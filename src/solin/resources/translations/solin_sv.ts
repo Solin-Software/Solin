@@ -763,72 +763,6 @@
     </message>
   </context>
   <context>
-    <name>CameraPopup</name>
-    <message>
-      <location filename="../../widgets/camera_popup.py" line="+85" />
-      <location line="+221" />
-      <source>Camera</source>
-      <translation>Kamera</translation>
-    </message>
-    <message>
-      <location line="-206" />
-      <location line="+207" />
-      <source>Refresh</source>
-      <translation>Uppdatera</translation>
-    </message>
-    <message>
-      <location line="-108" />
-      <source>Looking for cameras...</source>
-      <translation>Söker efter kameror...</translation>
-    </message>
-    <message>
-      <location line="+13" />
-      <source>No cameras found</source>
-      <translation>Inga kameror hittades</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>No cameras found.</source>
-      <translation>Inga kameror hittades.</translation>
-    </message>
-    <message numerus="yes">
-      <location line="+10" />
-      <source>%n camera(s) found.</source>
-      <translation>
-        <numerusform>%n kamera hittad.</numerusform>
-        <numerusform>%n kameror hittade.</numerusform>
-      </translation>
-    </message>
-    <message>
-      <location line="+90" />
-      <source>Need help?</source>
-      <translation>Behöver du hjälp?</translation>
-    </message>
-    <message>
-      <location line="-60" />
-      <source>Stop Stream</source>
-      <translation>Stoppa ström</translation>
-    </message>
-    <message>
-      <location line="+7" />
-      <source>Show Stream</source>
-      <translation>Visa ström</translation>
-    </message>
-  </context>
-  <context>
-    <name>CameraSectionMixin</name>
-    <message>
-      <location filename="../../widgets/settings/camera_section.py" line="+15" />
-      <source>Camera</source>
-      <translation>Kamera</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>Shows a camera button in the live tools toolbar.</source>
-      <translation>Visar en kameraknapp i verktygsfältet för liveverktyg.</translation>
-    </message>
-  </context>
-  <context>
     <name>HuePickerDialog</name>
     <message>
       <location filename="../../widgets/playlist/dialogs.py" line="+164" />
@@ -2236,11 +2170,6 @@ Manually added content, trims, framing and expanded state will be kept.</source>
       <location line="+20" />
       <source>Show Stream</source>
       <translation>Visa ström</translation>
-    </message>
-    <message>
-      <location line="-19" />
-      <source>Project OBS virtual camera</source>
-      <translation>Projicera virtuell OBS-kamera</translation>
     </message>
     <message>
       <location line="+10" />

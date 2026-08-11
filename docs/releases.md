@@ -34,7 +34,8 @@ Prepare a distributed version in a focused pull request:
 4. run lint, type checking, tests, and locale validation;
 5. verify the version in application, installer, and update metadata;
 6. merge the reviewed release preparation;
-7. run the required platform build workflows manually;
+7. run the required platform build workflows manually, keeping the default
+   Windows signing gate enabled for every distributed Windows build;
 8. run packaged startup and previous-version upgrade checks;
 9. publish the verified files through the existing distribution process;
 10. record the full source commit SHA with the distributed version.
@@ -52,3 +53,6 @@ temporary, and a successful run does not distribute a new version.
 Windows and macOS upgrade smoke tests require the URL of the previously
 distributed build. Do not keep an old URL as a workflow default: provide the
 correct predecessor or disable the upgrade smoke test for a diagnostic build.
+Unsigned Windows workflow output is diagnostic-only, uses an explicit
+`unsigned-diagnostic` artifact/file suffix, and must not enter the distribution
+process.

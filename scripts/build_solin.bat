@@ -76,6 +76,19 @@ echo   Compilando %APP_NAME% com Nuitka...
 echo  =========================================
 echo.
 
+echo  =========================================
+echo   Compilando e testando o motor nativo...
+echo  =========================================
+echo.
+
+"%PYTHON%" "%PROJECT_ROOT%scripts\build_native_engine.py" --configuration Release
+if %ERRORLEVEL% NEQ 0 (
+    echo.
+    echo  [ERRO] Compilacao do motor nativo falhou com codigo %ERRORLEVEL%.
+    pause
+    exit /b %ERRORLEVEL%
+)
+
 rmdir /s /q "%QML_MODULE_ROOT%" 2>nul
 
 "%PYTHON%" "%PROJECT_ROOT%scripts\compile_qml_cache.py" ^
@@ -123,6 +136,7 @@ if %ERRORLEVEL% NEQ 0 (
 	--include-module=websocket._core ^
 	--include-module=websocket._app ^
 	--include-package=ephem ^
+    --include-package=keyring ^
     --include-package=pywinauto ^
     --include-package=comtypes ^
     --include-package-data=pyqttoast ^
@@ -295,6 +309,29 @@ if not exist "%DIST%\Qt6MultimediaQuick.dll" (
 )
 
 echo  [OK] QML do app empacotado somente como cache .qmlc
+
+"%PYTHON%" "%PROJECT_ROOT%scripts\package_native_engine_windows.py" ^
+    --gstreamer-root "%PROJECT_ROOT%build\dependencies\gstreamer\msvc_x86_64" ^
+    --gstreamer-licenses "%PROJECT_ROOT%build\dependencies\gstreamer\msvc_x86_64\share\licenses" ^
+    --application-dir "%DIST%"
+if %ERRORLEVEL% NEQ 0 (
+    echo.
+    echo  [ERRO] Empacotamento do motor nativo falhou com codigo %ERRORLEVEL%.
+    pause
+    exit /b %ERRORLEVEL%
+)
+
+if not exist "%DIST%\native\media-engine\solin-media-engine.exe" (
+    echo  [ERRO] O motor nativo nao foi empacotado.
+    pause
+    exit /b 1
+)
+
+if not exist "%DIST%\native\media-engine\virtual-camera\solin-virtual-camera-source.dll" (
+    echo  [ERRO] A fonte de camera virtual nao foi empacotada.
+    pause
+    exit /b 1
+)
 
 echo.
 echo  [OK] Compilacao concluida. Saida em: %OUTPUT_DIR%

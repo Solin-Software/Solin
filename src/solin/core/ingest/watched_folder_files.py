@@ -8,6 +8,7 @@ import os
 import shutil
 from pathlib import Path
 import re
+import time
 from typing import Any, Protocol
 
 from solin.core.ingest.local_files import (
@@ -25,6 +26,8 @@ from solin.core.ingest.staging import WATCHED_FOLDER_STAGING_SUFFIX
 
 _DEFAULT_COPY_CHUNK_SIZE = 4 * 1024 * 1024
 _SAFE_OPERATION_ID = re.compile(r"[^A-Za-z0-9._-]+")
+_WINDOWS_PUBLISH_RETRY_DELAYS_SECONDS = (0.025, 0.05, 0.1, 0.2, 0.4)
+_WINDOWS_TRANSIENT_FILE_ERRORS = {5, 32, 33}
 
 
 class CancellationProbe(Protocol):
@@ -136,7 +139,7 @@ class WatchedFolderFileStore:
                 raise MediaOperationCancelled("Media copy cancelled")
             destination = self._reserve_unique_child_path(folder, source.name)
             try:
-                os.replace(staging, destination)
+                self._publish_staging_file(staging, destination)
             except OSError:
                 safe_remove(destination)
                 raise
@@ -229,6 +232,21 @@ class WatchedFolderFileStore:
                 continue
             os.close(descriptor)
             return destination
+
+    @staticmethod
+    def _publish_staging_file(staging: Path, destination: Path) -> None:
+        for delay in (*_WINDOWS_PUBLISH_RETRY_DELAYS_SECONDS, None):
+            try:
+                os.replace(staging, destination)
+                return
+            except PermissionError as error:
+                if (
+                    getattr(error, "winerror", None)
+                    not in _WINDOWS_TRANSIENT_FILE_ERRORS
+                    or delay is None
+                ):
+                    raise
+                time.sleep(delay)
 
     @staticmethod
     def _equivalent_destination(

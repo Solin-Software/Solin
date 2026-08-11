@@ -763,71 +763,6 @@
     </message>
   </context>
   <context>
-    <name>CameraPopup</name>
-    <message>
-      <location filename="../../widgets/camera_popup.py" line="+85" />
-      <location line="+221" />
-      <source>Camera</source>
-      <translation>摄像机</translation>
-    </message>
-    <message>
-      <location line="-206" />
-      <location line="+207" />
-      <source>Refresh</source>
-      <translation>刷新</translation>
-    </message>
-    <message>
-      <location line="-108" />
-      <source>Looking for cameras...</source>
-      <translation>正在搜索摄像机……</translation>
-    </message>
-    <message>
-      <location line="+13" />
-      <source>No cameras found</source>
-      <translation>未找到摄像机</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>No cameras found.</source>
-      <translation>未找到摄像机。</translation>
-    </message>
-    <message numerus="yes">
-      <location line="+10" />
-      <source>%n camera(s) found.</source>
-      <translation>
-        <numerusform>找到 %n 台摄像机。</numerusform>
-      </translation>
-    </message>
-    <message>
-      <location line="+90" />
-      <source>Need help?</source>
-      <translation>需要帮助吗？</translation>
-    </message>
-    <message>
-      <location line="-60" />
-      <source>Stop Stream</source>
-      <translation>停止串流</translation>
-    </message>
-    <message>
-      <location line="+7" />
-      <source>Show Stream</source>
-      <translation>显示串流</translation>
-    </message>
-  </context>
-  <context>
-    <name>CameraSectionMixin</name>
-    <message>
-      <location filename="../../widgets/settings/camera_section.py" line="+15" />
-      <source>Camera</source>
-      <translation>摄像机</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>Shows a camera button in the live tools toolbar.</source>
-      <translation>在直播工具栏中显示摄像机按钮。</translation>
-    </message>
-  </context>
-  <context>
     <name>HuePickerDialog</name>
     <message>
       <location filename="../../widgets/playlist/dialogs.py" line="+164" />
@@ -2234,11 +2169,6 @@ Manually added content, trims, framing and expanded state will be kept.</source>
       <location line="+20" />
       <source>Show Stream</source>
       <translation>显示串流</translation>
-    </message>
-    <message>
-      <location line="-19" />
-      <source>Project OBS virtual camera</source>
-      <translation>投影 OBS 虚拟摄像机</translation>
     </message>
     <message>
       <location line="+10" />

@@ -94,6 +94,30 @@ class ProfilePaths:
     def talk_theme_assets_dir(self) -> Path:
         return self.profile_dir / "talk_theme_assets"
 
+    @property
+    def scenes_file(self) -> Path:
+        return self.profile_dir / "scenes.json"
+
+    @property
+    def scene_profiles_catalog_file(self) -> Path:
+        return self.profile_dir / "scene_profiles.json"
+
+    @property
+    def scene_profiles_dir(self) -> Path:
+        return self.profile_dir / "scene_profiles"
+
+    @property
+    def scene_resources_file(self) -> Path:
+        return self.profile_dir / "scene_resources.json"
+
+    @property
+    def scenes_runtime_file(self) -> Path:
+        return self.profile_dir / "scenes_runtime.json"
+
+    @property
+    def scenes_assets_dir(self) -> Path:
+        return self.profile_dir / "scenes_assets"
+
     @classmethod
     def from_roots(
         cls,
@@ -139,6 +163,8 @@ class ProfilePaths:
             self.images_dir,
             self.embedded_dir,
             self.talk_theme_assets_dir,
+            self.scenes_assets_dir,
+            self.scene_profiles_dir,
             self.profile_cache_dir,
             self.thumb_cache_dir,
             self.meeting_thumb_cache_dir,

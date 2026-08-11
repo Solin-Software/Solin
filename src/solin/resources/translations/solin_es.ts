@@ -763,72 +763,6 @@
     </message>
   </context>
   <context>
-    <name>CameraPopup</name>
-    <message>
-      <location filename="../../widgets/camera_popup.py" line="+85" />
-      <location line="+221" />
-      <source>Camera</source>
-      <translation>Cámara</translation>
-    </message>
-    <message>
-      <location line="-206" />
-      <location line="+207" />
-      <source>Refresh</source>
-      <translation>Actualizar</translation>
-    </message>
-    <message>
-      <location line="-108" />
-      <source>Looking for cameras...</source>
-      <translation>Buscando cámaras...</translation>
-    </message>
-    <message>
-      <location line="+13" />
-      <source>No cameras found</source>
-      <translation>No se encontraron cámaras</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>No cameras found.</source>
-      <translation>No se encontraron cámaras.</translation>
-    </message>
-    <message numerus="yes">
-      <location line="+10" />
-      <source>%n camera(s) found.</source>
-      <translation>
-        <numerusform>Se ha encontrado %n cámara.</numerusform>
-        <numerusform>Se han encontrado %n cámaras.</numerusform>
-      </translation>
-    </message>
-    <message>
-      <location line="+30" />
-      <source>Stop Stream</source>
-      <translation>Detener transmisión</translation>
-    </message>
-    <message>
-      <location line="+7" />
-      <source>Show Stream</source>
-      <translation>Mostrar transmisión</translation>
-    </message>
-    <message>
-      <location line="+53" />
-      <source>Need help?</source>
-      <translation>¿Necesita ayuda?</translation>
-    </message>
-  </context>
-  <context>
-    <name>CameraSectionMixin</name>
-    <message>
-      <location filename="../../widgets/settings/camera_section.py" line="+15" />
-      <source>Camera</source>
-      <translation>Cámara</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>Shows a camera button in the live tools toolbar.</source>
-      <translation>Muestra un botón de cámara en la barra de herramientas de funciones en vivo.</translation>
-    </message>
-  </context>
-  <context>
     <name>HuePickerDialog</name>
     <message>
       <location filename="../../widgets/playlist/dialogs.py" line="+164" />
@@ -2236,11 +2170,6 @@ Manually added content, trims, framing and expanded state will be kept.</source>
       <location line="+20" />
       <source>Show Stream</source>
       <translation>Mostrar transmisión</translation>
-    </message>
-    <message>
-      <location line="-19" />
-      <source>Project OBS virtual camera</source>
-      <translation>Proyectar cámara virtual de OBS</translation>
     </message>
     <message>
       <location line="+10" />

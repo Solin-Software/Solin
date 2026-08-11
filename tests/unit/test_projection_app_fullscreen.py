@@ -165,6 +165,18 @@ def test_audio_frames_do_not_reach_app_fullscreen():
     assert overlay.frames == []
 
 
+def test_native_preview_avoids_materializing_qt_video_frames():
+    overlay = _Overlay(active=True)
+    bar = _bar(mode="video", audio=False, overlay=overlay)
+    bar._expanded = True
+    bar._native_output_active = True
+    frame = object()
+
+    bar._on_video_frame(frame)
+
+    assert overlay.frames == [frame]
+
+
 def test_recovery_feedback_is_mirrored_to_app_fullscreen():
     overlay = _Overlay(active=True)
     bar = _bar(mode="video", overlay=overlay)

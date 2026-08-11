@@ -13,17 +13,20 @@ from ..core.projection.image_framing import (
     IDENTITY_IMAGE_TRANSFORM,
     image_transform_from_values,
 )
-from ..core.media.formats import media_type_from_path
 from ..core.timer.models import MediaCountdownPresentation
 from ..projection.idle_source import IdleMediaSource
-from ..projection.window import (
-    FloatingPreviewWindow,
-    ProjectionWindow,
-    obs_media_engine_active,
-)
+from ..projection.window import FloatingPreviewWindow, ProjectionWindow
 
 
 def _no_object() -> Any | None:
+    return None
+
+
+def _false() -> bool:
+    return False
+
+
+def _nothing() -> None:
     return None
 
 
@@ -39,6 +42,8 @@ class ProjectionWindowContext:
     sync_projection_integrations: Callable[[], None]
     sync_obs_scene: Callable[[bool], None]
     yearly_text: Callable[[], tuple[str, str, str]]
+    content_frame_sink: Callable[[object], None]
+    refresh_program_content: Callable[[], None]
     set_projection_screen_count: Callable[[int], None]
     set_toolbar_screen_count: Callable[[int], None]
     monitor_popup: Callable[[], Any | None]
@@ -47,6 +52,9 @@ class ProjectionWindowContext:
     dialog_parent: Any | None = None
     timer_output: Callable[[], Any | None] = _no_object
     timer_bridge: Callable[[], Any | None] = _no_object
+    program_mirror_enabled: Callable[[], bool] = _false
+    program_content_requested: Callable[[], bool] = _false
+    native_outputs_changed: Callable[[], None] = _nothing
 
 
 class ProjectionWindowController:
@@ -122,21 +130,15 @@ class ProjectionWindowController:
 
         quote, ref, api_code = self._yearly_text()
         win.set_yearly_text(quote, ref, api_code)
+        if self._context.program_mirror_enabled():
+            return
         if self._session.idle_media_path:
-            if obs_media_engine_active():
-                # libobs composites the idle background itself (video → looping
-                # ffmpeg_source, image → image_source); no Qt decoder involved.
-                win.show_obs_idle_media(
-                    self._session.idle_media_path,
-                    media_type_from_path(self._session.idle_media_path),
-                )
-            else:
-                win.set_idle_active()
-                # Paint the most recent decoded frame right away so a hot-plugged
-                # or respawned surface is in sync from its very first frame instead
-                # of flashing black until the next frame arrives.
-                if self._idle_source is not None and self._idle_source.current_image is not None:
-                    win.update_idle_image(self._idle_source.current_image)
+            win.set_idle_active()
+            # Paint the most recent decoded frame right away so a hot-plugged or
+            # respawned surface is in sync from its very first frame instead of
+            # flashing black until the next frame arrives.
+            if self._idle_source is not None and self._idle_source.current_image is not None:
+                win.update_idle_image(self._idle_source.current_image)
         else:
             win.clear_idle()
         self.restore_state_to_window(win)
@@ -152,8 +154,10 @@ class ProjectionWindowController:
     def _distribute_idle_frame(self, image) -> None:
         """Fan a freshly decoded idle frame out to every surface (one decode, N
         paints — mirrors the normal-video distribute_frame pipeline)."""
-        for win in self.all_windows():
-            win.update_idle_image(image)
+        if not self._context.program_mirror_enabled():
+            for win in self.all_windows():
+                win.update_idle_image(image)
+        self._context.content_frame_sink(image)
 
     def _on_idle_visibility_changed(self, _visible: bool) -> None:
         """A surface showed/hid its idle page — re-evaluate decoder playback."""
@@ -165,6 +169,12 @@ class ProjectionWindowController:
         if self._idle_source is None:
             return
         any_visible = any(win.is_idle_visible() for win in self.all_windows())
+        if (
+            self._context.program_content_requested()
+            and self._session.state_type == "idle"
+            and self._session.idle_media_path
+        ):
+            any_visible = True
         self._idle_source.set_playing(any_visible)
 
     def _normalize_expired_state(self) -> None:
@@ -259,32 +269,29 @@ class ProjectionWindowController:
         self._session.set_idle_media_path(path)
 
         if path:
-            if obs_media_engine_active():
-                # libobs decodes/composites the idle file itself — no Qt decoder.
-                mtype = media_type_from_path(path)
-                for win in self.all_windows():
-                    win.show_obs_idle_media(path, mtype)
-            else:
-                # Activate surfaces *before* loading: a static image emits its
-                # single frame synchronously inside set_media(), so the surfaces
-                # must already be in idle-media mode to accept it. Decode happens
-                # once on the shared source; every surface paints the frames it
-                # fans out (see _distribute_idle_frame).
+            # Activate surfaces *before* loading: a static image emits its single
+            # frame synchronously inside set_media(), so the surfaces must already
+            # be in idle-media mode to accept it.  Decode happens once on the
+            # shared source; every surface paints the frames it fans out (see
+            # _distribute_idle_frame).
+            if not self._context.program_mirror_enabled():
                 for win in self.all_windows():
                     win.set_idle_active()
-                self._ensure_idle_source().set_media(path)
-                # Start the video decoder only if the idle screen is actually
-                # visible right now (not while a clip/image/timer is projected).
-                self._sync_idle_playback()
+            self._ensure_idle_source().set_media(path)
+            # Start the video decoder only if the idle screen is actually visible
+            # right now (it is not while a clip/image/timer is being projected).
+            self._sync_idle_playback()
         else:
             if self._idle_source is not None:
                 self._idle_source.clear()
-            for win in self.all_windows():
-                win.clear_idle()
+            if not self._context.program_mirror_enabled():
+                for win in self.all_windows():
+                    win.clear_idle()
 
         popup = self._context.monitor_popup()
         if popup is not None:
             popup._sync_idle_ui(path)
+        self._context.refresh_program_content()
 
     def on_floating_toggle(self, make_active: bool) -> None:
         if make_active:
@@ -293,6 +300,7 @@ class ProjectionWindowController:
         else:
             self._session.close_floating_preview()
 
+        self._context.native_outputs_changed()
         self._context.sync_projection_integrations()
         QTimer.singleShot(420, self._reopen_monitor_manager)
 
@@ -310,12 +318,14 @@ class ProjectionWindowController:
 
     def on_floating_respawn(self, saved_geo) -> None:
         self._session.floating_preview_window = None
+        self._context.native_outputs_changed()
         QTimer.singleShot(120, lambda: self.respawn_floating_silent(saved_geo))
 
     def respawn_floating_silent(self, saved_geo) -> None:
         if self._session.floating_preview_window is not None:
             return
         self._session.floating_preview_window = self.create_floating_window()
+        self._context.native_outputs_changed()
         QTimer.singleShot(0, lambda: (
             self._session.floating_preview_window.setGeometry(saved_geo)
             if self._session.floating_preview_window is not None else None
@@ -456,9 +466,12 @@ class ProjectionWindowController:
             bridge.refreshMonitors()
 
     def restore_state_to_window(self, win) -> None:
+        if self._context.program_mirror_enabled():
+            return
         state = self._session.state
         kind = state.get("type", "idle")
         if kind == "idle":
+            win.clear()
             return
         if kind == "video":
             if not state.get("is_audio", False):
@@ -486,6 +499,7 @@ class ProjectionWindowController:
     def _set_screen_count(self, count: int) -> None:
         self._context.set_projection_screen_count(count)
         self._context.set_toolbar_screen_count(count)
+        self._context.native_outputs_changed()
 
     def _reopen_monitor_manager(self) -> None:
         self.on_monitor_manager_requested(self._context.monitor_anchor())

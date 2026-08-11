@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QMenu,
     QSizePolicy,
+    QStackedLayout,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
@@ -90,6 +91,7 @@ from .controls import (
     projection_menu_style,
 )
 from .fullscreen import FullscreenVideoOverlay
+from .native_surface import NativeVideoSurface
 from .playlist import ProjectionPlaylistMixin, playback_order_has_pending_item
 from .preview import ImagePreviewWidget
 from solin.widgets.songs_widget import BufferedSlider
@@ -125,6 +127,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
     obs_scene_toggle_requested = Signal()    # usuário quer alternar entre cena de mídia e cena anterior
     set_as_idle_requested      = Signal(str) # path — usuário quer definir mídia como idle screen
     expanded_changed           = Signal(bool)
+    native_surface_requested   = Signal(object)
 
     _BAR_H = 48
 
@@ -168,6 +171,8 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._audio_cover_pixmap: QPixmap | None = None
         self._is_live_tab: bool = False   # True quando projetando aba ao vivo do browser
         self._fullscreen_overlay: FullscreenVideoOverlay | None = None
+        self._native_surface_request_active = False
+        self._native_output_active = False
         self._last_buffer_progress: tuple[int, int] = (0, 0)
         self._playback_recovering: bool = False
 
@@ -607,6 +612,10 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
     def _build_overlay_preview(self) -> None:
         from solin.bootstrap.startup_timeline import startup_timeline
 
+        self.preview_host = QWidget()
+        preview_layout = QStackedLayout(self.preview_host)
+        preview_layout.setContentsMargins(0, 0, 0, 0)
+        preview_layout.setStackingMode(QStackedLayout.StackingMode.StackAll)
         self.preview_content = ImagePreviewWidget()
         self.preview_content.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
@@ -620,7 +629,11 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
             self._on_image_constrain_to_frame_changed
         )
         self.preview_content.installEventFilter(self)
-        self.overlay_stack.addWidget(self.preview_content)   # index 0
+        self.native_video_surface = NativeVideoSurface()
+        self.native_video_surface.installEventFilter(self)
+        preview_layout.addWidget(self.preview_content)
+        preview_layout.addWidget(self.native_video_surface)
+        self.overlay_stack.addWidget(self.preview_host)   # index 0
         startup_timeline().mark("projection_overlay_preview_constructed")
 
     def _build_overlay_timer(self) -> None:
@@ -666,7 +679,11 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
                 self._update_overlay_geometry()
                 self.overlay.raise_()
         if (
-            obj is getattr(self, "preview_content", None)
+            obj
+            in (
+                getattr(self, "preview_content", None),
+                getattr(self, "native_video_surface", None),
+            )
             and event.type() == QEvent.Type.MouseButtonDblClick
             and getattr(event, "button", lambda: None)() == Qt.MouseButton.LeftButton
         ):
@@ -698,10 +715,10 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._ensure_overlay_ready()
         self._expanded = True
         self.expanded_changed.emit(True)
-        self._sync_frame_output()
         self._update_overlay_geometry()
         self.overlay.raise_()
         self.overlay.setVisible(True)
+        self._sync_native_surface_request()
         if self._mode == 'image' and self._image_pixmap:
             QTimer.singleShot(10, self._redraw_preview_image)
         elif self._mode == 'video' and self._is_audio:
@@ -711,10 +728,46 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         if not self._expanded:
             return
         self._expanded = False
+        self._sync_native_surface_request()
         self.overlay.setVisible(False)
         self._stop_wave_animation()
         self.expanded_changed.emit(False)
-        self._sync_frame_output()
+
+    def _native_surface_desired(self) -> bool:
+        return (
+            getattr(self, "_expanded", False)
+            and getattr(self, "_mode", None) == "video"
+            and not getattr(self, "_is_audio", False)
+            and hasattr(self, "native_video_surface")
+        )
+
+    def _sync_native_surface_request(self) -> None:
+        desired = self._native_surface_desired()
+        if desired == getattr(self, "_native_surface_request_active", False):
+            return
+        self._native_surface_request_active = desired
+        if not desired:
+            self.set_native_output_active(False)
+        self.native_surface_requested.emit(
+            self.native_video_surface if desired else None
+        )
+
+    def refresh_native_output_request(self) -> None:
+        if not self._native_surface_desired():
+            self._sync_native_surface_request()
+            return
+        self.native_surface_requested.emit(self.native_video_surface)
+
+    @Slot(bool)
+    def set_native_output_active(self, active: bool) -> None:
+        active = bool(active) and self._native_surface_desired()
+        self._native_output_active = active
+        surface = getattr(self, "native_video_surface", None)
+        if surface is None:
+            return
+        surface.setVisible(active)
+        if active:
+            surface.raise_()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -736,24 +789,13 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
             overlay.set_frame(frame)
         if not self._expanded:
             return
+        if getattr(self, "_native_output_active", False):
+            return
         img = frame.toImage()
         if img.isNull():
             return
         pixmap = QPixmap.fromImage(img)
         self.preview_content.setPixmap(pixmap)
-
-    def _sync_frame_output(self) -> None:
-        """Enable preview-frame emission only while an operator is watching.
-
-        The libobs engine only pays for frame copies when the preview is
-        expanded or the fullscreen overlay is active (and the media is video).
-        No-op on the Qt engine, which streams frames unconditionally.
-        """
-        setter = getattr(self.media, "set_frame_output_enabled", None)
-        if setter is None:
-            return
-        watching = self._expanded or self.app_fullscreen_active()
-        setter(watching and self._mode == "video" and not self._is_audio)
 
     # ── Conexões com MediaController ─────────────────────────────────────
 
@@ -849,13 +891,11 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         overlay = self._ensure_fullscreen_overlay()
         self._hydrate_fullscreen_overlay(overlay)
         overlay.show_fullscreen()
-        self._sync_frame_output()
 
     def exit_app_fullscreen(self) -> None:
         overlay = getattr(self, "_fullscreen_overlay", None)
         if overlay is not None:
             overlay.hide_fullscreen()
-        self._sync_frame_output()
 
     def _is_app_fullscreen_available(self) -> bool:
         return self._mode == "video" and not self._is_audio
@@ -965,6 +1005,8 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         if mode != "video":
             self.cancel_auto_share_playback_wait()
         self._mode = mode
+        if mode != "video":
+            self._sync_native_surface_request()
 
     def hide_add_to_destination_action(self) -> None:
         self._ensure_overlay_ready()
@@ -979,7 +1021,6 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._cancel_announcement_mode()
         self._enter_mode("video")
         self._is_audio = is_audio
-        self._sync_frame_output()
         self._image_pixmap = None
         self._stop_wave_animation()   # para animação da faixa anterior (se houver)
         self._last_buffer_progress = (0, 0)
@@ -1037,6 +1078,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
                     QTimer.singleShot(10, self._refresh_audio_cover_in_overlay)
             else:
                 self._collapse()
+        self._sync_native_surface_request()
 
         # Mostra botão de adicionar à playlist no overlay
         self.ov_add_destination_btn.setVisible(True)
@@ -1162,7 +1204,11 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         Chamado no ritmo entregue pelo motor nativo da aba ao vivo.
         Só renderiza se o overlay estiver expandido — sem custo quando minimizado.
         """
-        if not self._expanded or self.overlay_stack.currentIndex() != 0:
+        if (
+            not self._expanded
+            or self.overlay_stack.currentIndex() != 0
+            or getattr(self, "_native_output_active", False)
+        ):
             return
         if isinstance(frame, QImage):
             pixmap = QPixmap.fromImage(frame)

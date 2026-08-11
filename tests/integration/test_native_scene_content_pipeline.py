@@ -1,0 +1,298 @@
+from __future__ import annotations
+import sys
+import time
+from dataclasses import replace
+from pathlib import Path
+
+import pytest
+from PySide6.QtCore import QSize
+from PySide6.QtGui import QColor, QImage
+from PySide6.QtMultimedia import QVideoFrame, QVideoFrameFormat
+
+from solin.controllers.content_frame_ingress_controller import (
+    ContentFrameIngressController,
+)
+from solin.core.scenes.engine import SceneEngineSnapshot
+from solin.core.scenes.frame_channel import (
+    SharedMemoryBgraFrameSubscriber,
+    SharedMemoryVideoFrameSubscriber,
+    VideoFrame,
+)
+from solin.core.scenes.model import (
+    BusId,
+    CONTENT_SOURCE_ID,
+    SceneDefinition,
+    SceneDocument,
+    VideoPixelFormat,
+)
+from solin.core.scenes.native_engine import create_native_scene_engine
+from solin.core.scenes.presets import SceneSeedNames, create_default_scene_document
+
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _bgra_pixel(frame: VideoFrame, x: int, y: int) -> bytes:
+    offset = (y * frame.width + x) * 4
+    return frame.pixels[offset : offset + 4]
+
+
+def _wait_for_pixel(
+    subscriber: SharedMemoryBgraFrameSubscriber,
+    *,
+    x: int,
+    y: int,
+    expected: bytes,
+    timeout: float = 5.0,
+) -> VideoFrame | None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            candidate = subscriber.read_latest()
+        except TimeoutError:
+            candidate = None
+        if candidate is not None:
+            if _bgra_pixel(candidate, x, y) == expected:
+                return candidate
+        time.sleep(1 / 120)
+    return None
+
+
+def _wait_for_clean_aspect_transition(
+    subscriber: SharedMemoryBgraFrameSubscriber,
+    *,
+    previous_center: bytes,
+    previous_edge: bytes,
+    next_center: bytes,
+    next_edge: bytes,
+    timeout: float = 5.0,
+) -> VideoFrame:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            candidate = subscriber.read_latest()
+        except TimeoutError:
+            candidate = None
+        if candidate is None:
+            time.sleep(1 / 240)
+            continue
+        center = _bgra_pixel(candidate, candidate.width // 2, candidate.height // 2)
+        edge = _bgra_pixel(candidate, 0, candidate.height // 2)
+        if center == previous_center:
+            assert edge == previous_edge, (
+                "the previous raster was rendered with the next sample's geometry"
+            )
+        if center == next_center and edge == next_edge:
+            return candidate
+    raise AssertionError("the aspect-ratio transition did not reach its next frame")
+
+
+def _content_document() -> tuple[SceneDocument, SceneDefinition]:
+    document = create_default_scene_document(
+        SceneSeedNames(
+            content_source="Content",
+            default_camera_source="Camera",
+            no_signal_source="No signal",
+            content_scene="Content scene",
+            camera_scene="Camera scene",
+            content_camera_pip_scene="Content and camera",
+            no_signal_scene="No signal scene",
+            content_layer="Content",
+            camera_layer="Camera",
+            background_layer="Background",
+        ),
+        document_id="native-content-pipeline-smoke",
+        created_at="2026-01-01T00:00:00+00:00",
+    )
+    content_scene = next(
+        scene
+        for scene in document.scenes
+        if len(scene.layers) == 1 and scene.layers[0].source_id == CONTENT_SOURCE_ID
+    )
+    return (
+        replace(
+            document,
+            outputs=tuple(
+                replace(route, default_scene_id=content_scene.id)
+                for route in document.outputs
+            ),
+        ),
+        content_scene,
+    )
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows native media pipeline")
+def test_actual_size_content_reaches_composed_native_output(tmp_path) -> None:
+    engine = create_native_scene_engine(
+        tmp_path,
+        repository_root=REPOSITORY_ROOT,
+    )
+    if engine is None:
+        pytest.skip("Built native media engine is unavailable")
+
+    ingress = ContentFrameIngressController(
+        maximum_fps=30,
+        canvas_width=1920,
+        canvas_height=1080,
+    )
+    egress = SharedMemoryBgraFrameSubscriber(1920, 1080)
+    program_egress = SharedMemoryVideoFrameSubscriber(1920, 1080)
+    document, content_scene = _content_document()
+    image = QImage(1280, 720, QImage.Format.Format_ARGB32)
+    image.fill(QColor("#123456"))
+    latest = None
+    center_pixel = b""
+
+    try:
+        capabilities = engine.start(
+            session_id="native-content-smoke",
+            deadline_ms=10_000,
+        ).result(15)
+        if not capabilities.local_cameras and not capabilities.rtsp_cameras:
+            pytest.skip("Native GStreamer graph is unavailable")
+        snapshot = SceneEngineSnapshot(
+            session_id="native-content-smoke",
+            sequence=1,
+            document=document,
+            active_scenes=tuple(
+                (route.bus_id, content_scene.id) for route in document.outputs
+            ),
+            render_enabled=(
+                (BusId.MEDIA_WINDOWS, True),
+                (BusId.VIRTUAL_CAMERA, True),
+            ),
+            output_enabled=(
+                (BusId.MEDIA_WINDOWS, True),
+                (BusId.VIRTUAL_CAMERA, False),
+            ),
+            content_ingress=ingress.descriptor,
+            preview_egress=egress.descriptor,
+            program_egress=program_egress.descriptor,
+        )
+        acknowledged = engine.hydrate(
+            snapshot,
+            request_id="native-content-smoke-hydrate",
+            deadline_ms=10_000,
+        ).result(15)
+        assert acknowledged.applied
+
+        deadline = time.monotonic() + 8.0
+        while time.monotonic() < deadline:
+            ingress.submit_frame(image)
+            try:
+                candidate = egress.read_latest()
+            except TimeoutError:
+                candidate = None
+            if candidate is not None:
+                latest = candidate
+                offset = (
+                    (candidate.height // 2) * candidate.width
+                    + candidate.width // 2
+                ) * 4
+                center_pixel = candidate.pixels[offset : offset + 4]
+                if center_pixel == bytes((0x56, 0x34, 0x12, 0xFF)):
+                    break
+            time.sleep(1 / 60)
+
+        assert latest is not None
+        assert (latest.width, latest.height) == (1920, 1080)
+        assert center_pixel == bytes((0x56, 0x34, 0x12, 0xFF))
+
+        program_frame = None
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline:
+            ingress.submit_frame(image)
+            try:
+                program_frame = program_egress.read_latest()
+            except TimeoutError:
+                program_frame = None
+            if program_frame is not None:
+                break
+            time.sleep(1 / 60)
+        assert program_frame is not None
+        assert program_frame.pixel_format is VideoPixelFormat.NV12
+        assert (program_frame.width, program_frame.height) == (1920, 1080)
+        assert len(program_frame.pixels) == 1920 * 1080 * 3 // 2
+
+        four_by_three = QImage(800, 600, QImage.Format.Format_ARGB32)
+        four_by_three.fill(QColor("#20d020"))
+        ingress.submit_frame(four_by_three)
+        latest = _wait_for_pixel(
+            egress,
+            x=960,
+            y=540,
+            expected=bytes((0x20, 0xD0, 0x20, 0xFF)),
+        )
+        assert latest is not None
+        assert _bgra_pixel(latest, 239, 540) == bytes((0, 0, 0, 0xFF))
+        assert _bgra_pixel(latest, 240, 540) == bytes((0x20, 0xD0, 0x20, 0xFF))
+        assert _bgra_pixel(latest, 1679, 540) == bytes((0x20, 0xD0, 0x20, 0xFF))
+        assert _bgra_pixel(latest, 1680, 540) == bytes((0, 0, 0, 0xFF))
+
+        sixteen_by_nine = QImage(1280, 720, QImage.Format.Format_ARGB32)
+        sixteen_by_nine.fill(QColor("#d0d020"))
+        green = bytes((0x20, 0xD0, 0x20, 0xFF))
+        yellow = bytes((0x20, 0xD0, 0xD0, 0xFF))
+        black = bytes((0, 0, 0, 0xFF))
+        for _ in range(8):
+            ingress.submit_frame(sixteen_by_nine)
+            latest = _wait_for_clean_aspect_transition(
+                egress,
+                previous_center=green,
+                previous_edge=black,
+                next_center=yellow,
+                next_edge=yellow,
+            )
+            assert _bgra_pixel(latest, 1919, 540) == yellow
+
+            ingress.submit_frame(four_by_three)
+            latest = _wait_for_clean_aspect_transition(
+                egress,
+                previous_center=yellow,
+                previous_edge=yellow,
+                next_center=green,
+                next_edge=black,
+            )
+            assert _bgra_pixel(latest, 240, 540) == green
+
+        ingress.submit_frame(sixteen_by_nine)
+        latest = _wait_for_clean_aspect_transition(
+            egress,
+            previous_center=green,
+            previous_edge=black,
+            next_center=yellow,
+            next_edge=yellow,
+        )
+
+        nv12 = QVideoFrame(
+            QVideoFrameFormat(
+                QSize(1280, 720),
+                QVideoFrameFormat.PixelFormat.Format_NV12,
+            )
+        )
+        assert nv12.map(QVideoFrame.MapMode.WriteOnly)
+        nv12.bits(0)[:] = bytes((235,)) * nv12.mappedBytes(0)
+        nv12.bits(1)[:] = bytes((128,)) * nv12.mappedBytes(1)
+        nv12.unmap()
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline:
+            ingress.submit_frame(nv12)
+            try:
+                candidate = egress.read_latest()
+            except TimeoutError:
+                candidate = None
+            if candidate is not None:
+                offset = (
+                    (candidate.height // 2) * candidate.width
+                    + candidate.width // 2
+                ) * 4
+                center_pixel = candidate.pixels[offset : offset + 4]
+                if len(center_pixel) == 4 and min(center_pixel[:3]) >= 245:
+                    break
+            time.sleep(1 / 60)
+        assert min(center_pixel[:3]) >= 245
+    finally:
+        ingress.close()
+        egress.close()
+        program_egress.close()
+        engine.stop()
