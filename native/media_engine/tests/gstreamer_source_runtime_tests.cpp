@@ -10,6 +10,7 @@
 #include <gst/rtsp-server/rtsp-server.h>
 #include <gst/video/video-frame.h>
 
+#include <algorithm>
 #include <chrono>
 #include <array>
 #include <cstddef>
@@ -373,6 +374,19 @@ void test_color_source_publishes_bounded_latest_d3d11_frames(
            "the registry releases the runtime after its last consumer");
 }
 
+struct CenterNv12Frame final {
+    std::uint64_t sequence{0U};
+    std::array<std::uint8_t, 3U> yuv{};
+    std::vector<std::uint8_t> bytes{};
+};
+
+[[nodiscard]] solin::media_engine::SceneHydrationSnapshot transition_snapshot();
+[[nodiscard]] std::optional<CenterNv12Frame> wait_for_program_center(
+    const std::shared_ptr<solin::media_engine::SceneRenderer>& renderer,
+    std::uint64_t after_sequence, std::chrono::milliseconds timeout);
+[[nodiscard]] bool near_channel(std::uint8_t value, std::uint8_t expected,
+                                std::uint8_t tolerance);
+
 void test_program_transitions_render_real_synthetic_frames(
     solin::media_engine::SceneGraphRuntime& graph,
     const std::shared_ptr<solin::media_engine::SceneRenderer>& renderer) {
@@ -397,15 +411,32 @@ void test_program_transitions_render_real_synthetic_frames(
                !dissolve.fallback_applied,
            "the D3D11 renderer prepares Dissolve without a CUT fallback");
     graph.take(dissolve, 1U, 1'002U);
-    std::this_thread::sleep_for(600ms);
-    const auto purple = wait_for_program_center(renderer, red->sequence, 500ms);
+    auto last_sequence = red->sequence;
+    std::optional<CenterNv12Frame> purple;
+    std::uint32_t purple_distance = 1'000U;
+    const auto dissolve_midpoint_deadline =
+        std::chrono::steady_clock::now() + 900ms;
+    while (std::chrono::steady_clock::now() < dissolve_midpoint_deadline) {
+        const auto frame = wait_for_program_center(renderer, last_sequence, 50ms);
+        if (!frame.has_value()) {
+            continue;
+        }
+        last_sequence = frame->sequence;
+        const auto distance =
+            static_cast<std::uint32_t>(std::abs(static_cast<int>(frame->yuv[0]) - 48)) +
+            static_cast<std::uint32_t>(std::abs(static_cast<int>(frame->yuv[1]) - 171)) +
+            static_cast<std::uint32_t>(std::abs(static_cast<int>(frame->yuv[2]) - 179));
+        if (distance < purple_distance) {
+            purple_distance = distance;
+            purple = frame;
+        }
+    }
     expect(purple.has_value() && near_channel(purple->yuv[0], 48U, 18U) &&
                near_channel(purple->yuv[1], 171U, 24U) &&
                near_channel(purple->yuv[2], 179U, 24U),
            "Dissolve produces the expected real red/blue midpoint on Program");
-    std::this_thread::sleep_for(700ms);
-    const auto blue = wait_for_program_center(
-        renderer, purple.has_value() ? purple->sequence : red->sequence, 1s);
+    std::this_thread::sleep_for(400ms);
+    const auto blue = wait_for_program_center(renderer, last_sequence, 1s);
     expect(blue.has_value() && near_channel(blue->yuv[0], 32U, 12U) &&
                near_channel(blue->yuv[1], 240U, 15U) &&
                near_channel(blue->yuv[2], 118U, 15U),
@@ -422,17 +453,64 @@ void test_program_transitions_render_real_synthetic_frames(
                !fade.fallback_applied,
            "the D3D11 renderer prepares Fade through black without fallback");
     graph.take(fade, 1U, 1'004U);
-    std::this_thread::sleep_for(600ms);
-    const auto black = wait_for_program_center(renderer, blue->sequence, 500ms);
+    last_sequence = blue->sequence;
+    std::optional<CenterNv12Frame> black;
+    std::uint32_t black_distance = 1'000U;
+    const auto fade_midpoint_deadline = std::chrono::steady_clock::now() + 900ms;
+    while (std::chrono::steady_clock::now() < fade_midpoint_deadline) {
+        const auto frame = wait_for_program_center(renderer, last_sequence, 50ms);
+        if (!frame.has_value()) {
+            continue;
+        }
+        last_sequence = frame->sequence;
+        const auto distance =
+            static_cast<std::uint32_t>(std::abs(static_cast<int>(frame->yuv[0]) - 16)) +
+            static_cast<std::uint32_t>(std::abs(static_cast<int>(frame->yuv[1]) - 128)) +
+            static_cast<std::uint32_t>(std::abs(static_cast<int>(frame->yuv[2]) - 128));
+        if (distance < black_distance) {
+            black_distance = distance;
+            black = frame;
+        }
+    }
     expect(black.has_value() && near_channel(black->yuv[0], 16U, 10U) &&
                near_channel(black->yuv[1], 128U, 12U) &&
                near_channel(black->yuv[2], 128U, 12U),
            "Fade through black produces a real black Program midpoint");
-    std::this_thread::sleep_for(700ms);
-    const auto final_red = wait_for_program_center(
-        renderer, black.has_value() ? black->sequence : blue->sequence, 1s);
+    std::this_thread::sleep_for(400ms);
+    const auto final_red = wait_for_program_center(renderer, last_sequence, 1s);
     expect(final_red.has_value() && final_red->bytes == red->bytes,
            "the final Program frame is byte-identical to the red destination");
+    if (!final_red.has_value()) {
+        return;
+    }
+
+    last_sequence = final_red->sequence;
+    std::uint8_t minimum_dissolve_luma = 255U;
+    std::size_t sampled_frames = 0U;
+    for (std::uint64_t index = 0U; index < 20U; ++index) {
+        const auto target = index % 2U == 0U ? "scene-blue" : "scene-red";
+        const auto prepare_sequence = 2'000U + index * 2U;
+        const auto prepared = graph.prepare(
+            OutputBus::virtual_camera, target, 1U,
+            "continuity-" + std::to_string(index), prepare_sequence,
+            {.kind = SceneTransitionKind::dissolve, .duration_ms = 180U});
+        graph.take(prepared, 1U, prepare_sequence + 1U);
+        const auto deadline = std::chrono::steady_clock::now() + 240ms;
+        while (std::chrono::steady_clock::now() < deadline) {
+            const auto frame = wait_for_program_center(renderer, last_sequence, 40ms);
+            if (!frame.has_value()) {
+                continue;
+            }
+            last_sequence = frame->sequence;
+            minimum_dissolve_luma =
+                (std::min)(minimum_dissolve_luma, frame->yuv[0]);
+            ++sampled_frames;
+        }
+    }
+    expect(sampled_frames >= 100U,
+           "rapid real transitions expose enough Program frames for continuity checks");
+    expect(minimum_dissolve_luma >= 24U,
+           "Dissolve never publishes a transient black/blank Program frame");
 }
 
 void test_scene_renderer_composes_nested_scene_to_shared_d3d11_frame(
@@ -756,12 +834,6 @@ void test_first_hardware_camera_publishes_its_exact_selected_format(
     value.output_enabled = {false, true};
     return value;
 }
-
-struct CenterNv12Frame final {
-    std::uint64_t sequence{0U};
-    std::array<std::uint8_t, 3U> yuv{};
-    std::vector<std::uint8_t> bytes{};
-};
 
 [[nodiscard]] std::optional<CenterNv12Frame> wait_for_program_center(
     const std::shared_ptr<solin::media_engine::SceneRenderer>& renderer,

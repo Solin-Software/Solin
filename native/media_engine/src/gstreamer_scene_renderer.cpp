@@ -135,6 +135,38 @@ void connect_tee(GstElement* tee, GstElement* target) {
     gst_object_unref(target_pad);
 }
 
+struct ReadinessGate final {
+    GstElement* valve{nullptr};
+    GstElement* output_tee{nullptr};
+};
+
+[[nodiscard]] ReadinessGate add_readiness_gate(GstElement* pipeline,
+                                               GstElement* source_tee) {
+    auto* queue = add_element(pipeline, "queue");
+    auto* valve = add_element(pipeline, "valve");
+    auto* output_tee = add_element(pipeline, "tee");
+    g_object_set(queue, "max-size-buffers", 1U, "max-size-bytes", 0U,
+                 "max-size-time", static_cast<guint64>(0U), "leaky", 2, nullptr);
+    // Keep downstream clocks, sticky events, and state changes moving while
+    // withholding visual buffers. Appsinks ignore GAP events, so the previous
+    // Program frame remains visible until this graph is genuinely ready.
+    g_object_set(valve, "drop", TRUE, nullptr);
+    gst_util_set_object_arg(G_OBJECT(valve), "drop-mode", "transform-to-gap");
+    connect_tee(source_tee, queue);
+    require_link(queue, valve);
+    require_link(valve, output_tee);
+    return {.valve = valve, .output_tee = output_tee};
+}
+
+void open_readiness_gate(GstElement* valve) noexcept {
+    try {
+        if (valve != nullptr) {
+            g_object_set(valve, "drop", FALSE, nullptr);
+        }
+    } catch (...) {
+    }
+}
+
 [[nodiscard]] std::unique_ptr<GstCaps, decltype(&release_caps)> output_caps(
     const OutputVideoFormat& format) {
     auto* caps = gst_caps_new_simple(
@@ -328,7 +360,13 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
             source_bindings_.emplace(binding.source_id, binding.runtime);
         }
         auto* root_tee = build_scene(preparation.graph, true);
-        add_output_branch(root_tee);
+        const auto readiness = add_readiness_gate(pipeline_, root_tee);
+        output_readiness_valve_ = readiness.valve;
+        add_output_branch(readiness.output_tee);
+        if (sources_.empty()) {
+            output_ready_ = true;
+            open_readiness_gate(output_readiness_valve_);
+        }
         pipeline_ = pipeline.release();
         bus_ = gst_element_get_bus(pipeline_);
         if (bus_ == nullptr) {
@@ -500,6 +538,9 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
         }
         auto* compositor = add_live_compositor(pipeline_);
         g_object_set(compositor, "background", root ? 1 : 3, nullptr);
+        if (root) {
+            root_compositor_ = compositor;
+        }
         compositor_layers_.try_emplace(compositor);
         g_object_set(compositor, "emit-signals", TRUE, nullptr);
         g_signal_connect(compositor, "samples-selected",
@@ -736,6 +777,7 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
             if (compositor == compositor_layers_.end()) {
                 return;
             }
+            bool all_inputs_ready = !compositor->second.empty();
             for (auto& layer : compositor->second) {
                 const auto branch = layer_branches_.find(layer.key);
                 if (branch == layer_branches_.end()) {
@@ -746,6 +788,7 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
                         aggregator, GST_AGGREGATOR_PAD(layer.pad)),
                     &gst_sample_unref};
                 if (sample == nullptr) {
+                    all_inputs_ready = false;
                     continue;
                 }
                 auto* caps = gst_sample_get_caps(sample.get());
@@ -766,6 +809,10 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
                 apply_compositor_geometry(layer.pad, branch->second.geometry, width, height);
                 layer.selected_width = width;
                 layer.selected_height = height;
+            }
+            if (GST_ELEMENT(aggregator) == root_compositor_ && all_inputs_ready &&
+                !output_ready_.exchange(true)) {
+                open_readiness_gate(output_readiness_valve_);
             }
         } catch (...) {
             failed_.store(true);
@@ -998,6 +1045,8 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
     GStreamerD3d11DeviceLease device_{};
     GstElement* pipeline_{nullptr};
     GstBus* bus_{nullptr};
+    GstElement* root_compositor_{nullptr};
+    GstElement* output_readiness_valve_{nullptr};
     GstElement* direct_output_valve_{nullptr};
     std::map<std::string, SourceRuntime*, std::less<>> source_bindings_{};
     std::map<std::string, SourceInput, std::less<>> sources_{};
@@ -1007,6 +1056,7 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
     mutable std::mutex geometry_mutex_{};
     std::atomic_bool stopped_{false};
     std::atomic_bool failed_{false};
+    std::atomic_bool output_ready_{false};
     std::thread feeder_{};
     std::mutex feeder_mutex_{};
     std::condition_variable feeder_wakeup_{};
@@ -1171,6 +1221,10 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
         outgoing_pad_ = link_transition_input(outgoing_source_, compositor, 0U);
         incoming_pad_ = link_transition_input(incoming_source_, compositor, 1U);
         apply_weights({.outgoing = 1.0, .incoming = 0.0});
+        g_object_set(compositor, "emit-signals", TRUE, nullptr);
+        g_signal_connect(compositor, "samples-selected",
+                         G_CALLBACK(&PreparedGStreamerTransition::on_samples_selected),
+                         this);
 
         auto* caps_filter = add_element(pipeline.get(), "capsfilter");
         const auto caps = output_caps(format);
@@ -1179,11 +1233,13 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
                                      "Transition output caps are unavailable"};
         }
         g_object_set(caps_filter, "caps", caps.get(), nullptr);
-        auto* tee = add_element(pipeline.get(), "tee");
+        auto* source_tee = add_element(pipeline.get(), "tee");
         require_link(compositor, caps_filter);
-        require_link(caps_filter, tee);
-        add_gpu_output(tee);
-        add_cpu_output(tee);
+        require_link(caps_filter, source_tee);
+        const auto readiness = add_readiness_gate(pipeline.get(), source_tee);
+        output_readiness_valve_ = readiness.valve;
+        add_gpu_output(readiness.output_tee);
+        add_cpu_output(readiness.output_tee);
 
         pipeline_ = pipeline.release();
         bus_ = gst_element_get_bus(pipeline_);
@@ -1394,6 +1450,32 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
         g_object_set(incoming_pad_, "alpha", weights.incoming, nullptr);
     }
 
+    static void on_samples_selected(GstAggregator* aggregator, GstSegment*, guint64,
+                                    guint64, guint64, GstStructure*,
+                                    gpointer user_data) noexcept {
+        static_cast<PreparedGStreamerTransition*>(user_data)
+            ->mark_inputs_selected(aggregator);
+    }
+
+    void mark_inputs_selected(GstAggregator* aggregator) noexcept {
+        try {
+            std::unique_ptr<GstSample, decltype(&gst_sample_unref)> outgoing{
+                gst_aggregator_peek_next_sample(
+                    aggregator, GST_AGGREGATOR_PAD(outgoing_pad_)),
+                &gst_sample_unref};
+            std::unique_ptr<GstSample, decltype(&gst_sample_unref)> incoming{
+                gst_aggregator_peek_next_sample(
+                    aggregator, GST_AGGREGATOR_PAD(incoming_pad_)),
+                &gst_sample_unref};
+            if (outgoing != nullptr && incoming != nullptr &&
+                !output_ready_.exchange(true)) {
+                open_readiness_gate(output_readiness_valve_);
+                wakeup_.notify_all();
+            }
+        } catch (...) {
+        }
+    }
+
     void feed() noexcept {
         std::optional<std::chrono::steady_clock::time_point> started_at;
         while (!stopped_.load()) {
@@ -1413,7 +1495,7 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
             const bool have_incoming = incoming != nullptr &&
                                        push_frame(incoming_source_, incoming);
             if (start_requested_.load() && have_outgoing && have_incoming &&
-                !started_at.has_value()) {
+                output_ready_.load() && !started_at.has_value()) {
                 started_at = std::chrono::steady_clock::now();
             }
             if (started_at.has_value()) {
@@ -1444,6 +1526,12 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
     void release_transition_pipeline() noexcept {
         try {
             std::scoped_lock lock{pipeline_mutex_};
+            auto* pipeline = std::exchange(pipeline_, nullptr);
+            auto* bus = std::exchange(bus_, nullptr);
+            release_bus(bus);
+            // Stop and join GStreamer streaming callbacks before releasing the
+            // request-pad references used by samples-selected.
+            release_pipeline(pipeline);
             auto* outgoing_pad = std::exchange(outgoing_pad_, nullptr);
             auto* incoming_pad = std::exchange(incoming_pad_, nullptr);
             if (outgoing_pad != nullptr) {
@@ -1452,10 +1540,6 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
             if (incoming_pad != nullptr) {
                 gst_object_unref(incoming_pad);
             }
-            auto* pipeline = std::exchange(pipeline_, nullptr);
-            auto* bus = std::exchange(bus_, nullptr);
-            release_bus(bus);
-            release_pipeline(pipeline);
         } catch (...) {
         }
     }
@@ -1470,6 +1554,7 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
     std::shared_ptr<std::atomic_uint64_t> frame_sequence_{};
     GstElement* pipeline_{nullptr};
     GstBus* bus_{nullptr};
+    GstElement* output_readiness_valve_{nullptr};
     GstElement* outgoing_source_{nullptr};
     GstElement* incoming_source_{nullptr};
     GstPad* outgoing_pad_{nullptr};
@@ -1478,6 +1563,7 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
     std::atomic_bool start_requested_{false};
     std::atomic_bool stopped_{false};
     std::atomic_bool completed_{false};
+    std::atomic_bool output_ready_{false};
     std::thread feeder_{};
     std::mutex wakeup_mutex_{};
     std::condition_variable wakeup_{};
