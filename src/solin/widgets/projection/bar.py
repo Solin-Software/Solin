@@ -100,6 +100,77 @@ from solin.widgets.songs_widget import BufferedSlider
 # Keep ProjectionBar decoupled from PlaylistPanel internals while preserving timing.
 _ANIM_MS = 220
 
+
+class _ThemedVideoPreview(QWidget):
+    """Present video without letting the backend own the letterbox area."""
+
+    _DEFAULT_ASPECT_RATIO = 16 / 9
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setStyleSheet(f"background: {PALETTE.bg0};")
+        self._aspect_ratio = self._DEFAULT_ASPECT_RATIO
+        self._video_widget = QVideoWidget(self)
+        # The child always has the video's exact aspect ratio, so the multimedia
+        # backend has no letterbox pixels of its own to paint black.
+        self._video_widget.setAspectRatioMode(
+            Qt.AspectRatioMode.IgnoreAspectRatio
+        )
+        self._video_widget.setAttribute(
+            Qt.WidgetAttribute.WA_TransparentForMouseEvents,
+            True,
+        )
+
+    def set_frame(self, frame: QVideoFrame) -> None:
+        if not frame.isValid():
+            self.clear_frame()
+            return
+        viewport = frame.surfaceFormat().viewport()
+        frame_size = viewport.size() if viewport.isValid() else frame.size()
+        width = frame_size.width()
+        height = frame_size.height()
+        if frame.rotation().value in (90, 270):
+            width, height = height, width
+        if width > 0 and height > 0:
+            self._aspect_ratio = width / height
+            self._apply_video_geometry()
+        self._video_widget.videoSink().setVideoFrame(frame)
+
+    def clear_frame(self) -> None:
+        self._video_widget.videoSink().setVideoFrame(QVideoFrame())
+
+    def apply_theme(self) -> None:
+        self.setStyleSheet(f"background: {PALETTE.bg0};")
+        self.update()
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._apply_video_geometry()
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        self._apply_video_geometry()
+
+    def _apply_video_geometry(self) -> None:
+        available_width = max(0, self.width())
+        available_height = max(0, self.height())
+        if available_width == 0 or available_height == 0:
+            self._video_widget.setGeometry(0, 0, 0, 0)
+            return
+        target_width = available_width
+        target_height = round(target_width / self._aspect_ratio)
+        if target_height > available_height:
+            target_height = available_height
+            target_width = round(target_height * self._aspect_ratio)
+        self._video_widget.setGeometry(
+            (available_width - target_width) // 2,
+            (available_height - target_height) // 2,
+            target_width,
+            target_height,
+        )
+
+
 # Projection bar (bottom-right projection control)
 
 class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
@@ -626,12 +697,10 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
             self._on_image_constrain_to_frame_changed
         )
         self.preview_content.installEventFilter(self)
-        self.video_preview = QVideoWidget()
-        self.video_preview.setAspectRatioMode(Qt.AspectRatioMode.KeepAspectRatio)
+        self.video_preview = _ThemedVideoPreview()
         self.video_preview.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
-        self.video_preview.setStyleSheet("background: black;")
         self.video_preview.setVisible(False)
         self.video_preview.installEventFilter(self)
         preview_layout.addWidget(self.preview_content)
@@ -752,7 +821,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         if video_preview is not None:
             video_preview.setVisible(video_visible)
             if not video_visible:
-                video_preview.videoSink().setVideoFrame(QVideoFrame())
+                video_preview.clear_frame()
         if preview_content is not None:
             preview_content.setVisible(not video_visible)
 
@@ -761,7 +830,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
             return
         frame = self.media.video_sink.videoFrame()
         if frame.isValid():
-            self.video_preview.videoSink().setVideoFrame(frame)
+            self.video_preview.set_frame(frame)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -784,7 +853,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         if not self._expanded:
             return
         if self._video_preview_desired():
-            self.video_preview.videoSink().setVideoFrame(frame)
+            self.video_preview.set_frame(frame)
 
     # ── Conexões com MediaController ─────────────────────────────────────
 
@@ -1558,6 +1627,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         )
         self._overlay_body.setStyleSheet(f"background: {PALETTE.bg0};")
         self.preview_content.apply_theme()
+        self.video_preview.apply_theme()
         self.seek_slider.update()
         self._on_state_changed(self.media.player.playbackState())
         self._on_volume_slider(self.vol_slider.value())
