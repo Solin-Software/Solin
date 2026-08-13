@@ -48,6 +48,9 @@ def test_python_and_native_scene_schema_versions_match() -> None:
 
 def test_native_dependency_downloads_are_versioned_and_digest_pinned() -> None:
     cmake = _read("native/media_engine/CMakeLists.txt")
+    virtual_camera_cmake = _read(
+        "native/media_engine/cmake/SolinVirtualCameraFilter.cmake"
+    )
     bootstrap = _read("scripts/install_gstreamer_windows.ps1")
 
     assert "nlohmann/json/releases/download/v3.12.0/json.tar.xz" in cmake
@@ -59,6 +62,9 @@ def test_native_dependency_downloads_are_versioned_and_digest_pinned() -> None:
     )
     assert "/CURRENTUSER" in bootstrap
     assert "Get-FileHash" in bootstrap
+    assert "Windows-classic-samples/archive/d59e5f1" in virtual_camera_cmake
+    assert "libyuv/archive/eb6e7bb6" in virtual_camera_cmake
+    assert virtual_camera_cmake.count("URL_HASH SHA256=") == 2
 
 
 def test_windows_release_builds_and_packages_the_native_engine() -> None:
@@ -70,7 +76,8 @@ def test_windows_release_builds_and_packages_the_native_engine() -> None:
     assert "python scripts\\package_native_engine_windows.py" in workflow
     assert "-InstallType runtime" in workflow
     assert "native\\media-engine\\solin-media-engine.exe" in workflow
-    assert "solin-virtual-camera-source.dll" in workflow
+    assert "virtual-camera\\x64\\solin-virtual-camera.dll" in workflow
+    assert "virtual-camera\\x86\\solin-virtual-camera.dll" in workflow
     assert "SOLIN_MEDIA_ENGINE_ENABLE_GSTREAMER=ON" in build_script
     assert "GSTREAMER_PLUGIN_FILENAMES = (" in package_script
     assert '"gstd3d11.dll"' in package_script
@@ -78,7 +85,10 @@ def test_windows_release_builds_and_packages_the_native_engine() -> None:
     assert "_audit_plugin_licenses" in package_script
     assert "FORBIDDEN_GSTREAMER_FILENAMES" in package_script
     assert "FORBIDDEN_DEVELOPMENT_SUFFIXES" in package_script
-    assert "DEFAULT_VIRTUAL_CAMERA_SOURCE" in package_script
+    assert "DEFAULT_VIRTUAL_CAMERA_FILTER_X64" in package_script
+    assert "DEFAULT_VIRTUAL_CAMERA_FILTER_X86" in package_script
+    assert "PE_MACHINE_X64" in package_script
+    assert "PE_MACHINE_X86" in package_script
     assert "sign_windows_artifacts" in workflow
     assert "default: true" in workflow
     assert "SOLIN_INNO_SIGN_WRAPPER" in workflow
@@ -91,26 +101,43 @@ def test_windows_virtual_camera_registration_contract_is_consistent() -> None:
         "native/media_engine/include/solin/media_engine/windows_virtual_camera_contract.hpp"
     )
     installer = _read("packaging/windows/installer/setup.iss")
-    development_registration = _read("scripts/manage_virtual_camera_source.py")
+    patch_installer = _read("packaging/windows/installer/patch.iss")
+    registration_coordinator = _read(
+        "packaging/windows/installer/virtual_camera_registration.iss"
+    )
+    development_registration = _read("scripts/manage_virtual_camera_directshow.py")
     source_exports = _read(
-        "native/media_engine/windows/virtual_camera_source/virtual_camera_source.def"
+        "native/media_engine/windows/directshow_virtual_camera/solin_virtual_camera.def"
     )
     local_build = _read("scripts/build_solin.bat")
 
-    clsid = "9B035447-3D53-4CD7-A6FC-7CE7862D8830"
-    assert "0x9B035447" in contract
-    assert clsid in installer
+    clsid = "08AFA2E5-0293-4E56-9FE1-2A79DAE8E28F"
+    assert "0x08AFA2E5" in contract
     assert clsid in development_registration
-    assert "ThreadingModel" in installer and 'ValueData: "Both"' in installer
     assert "ArchitecturesAllowed=x64os" in installer
-    assert "{commoncf64}\\Solin\\VirtualCamera" in installer
+    assert "{localappdata}\\Solin\\VirtualCamera\\versions" in installer
+    assert "regserver 64bit" in installer
+    assert "regserver 32bit" in installer
+    assert "regserver 64bit" in patch_installer
+    assert "regserver 32bit" in patch_installer
+    assert "MinVersion=10.0.17763" in installer
+    assert "MinVersion=10.0.17763" in patch_installer
+    assert "CleanupObsoleteCameraVersions" in installer
+    assert "CleanupObsoleteCameraVersions" in patch_installer
+    assert "{commoncf64}" not in installer
+    assert "FrameServer" not in installer
     assert "SignedUninstaller=yes" in installer
     assert "SignTool={#MySignToolName}" in installer
-    assert "CommonFilesDir" in development_registration
-    assert "_stage_source" in development_registration
+    assert "LOCALAPPDATA" in development_registration
+    assert "_stage_filters" in development_registration
+    assert "System32" in development_registration
+    assert "SysWOW64" in development_registration
     assert "DllUnregisterServer" in source_exports
-    assert "regsvr32.exe" in installer
-    assert '"/s", "/u"' in development_registration
+    assert "regsvr32.exe" in registration_coordinator
+    assert "RollbackCameraRegistrationTransaction" in registration_coordinator
+    assert 'include "virtual_camera_registration.iss"' in installer
+    assert 'include "virtual_camera_registration.iss"' in patch_installer
+    assert 'command.append("/u")' in development_registration
     assert "scripts\\build_native_engine.py" in local_build
     assert "scripts\\package_native_engine_windows.py" in local_build
 

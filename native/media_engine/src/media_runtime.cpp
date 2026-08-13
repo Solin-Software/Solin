@@ -201,10 +201,10 @@ void release_device_list(GList* entries) noexcept {
             auto display_name = bounded_display_name(raw_display_name.get());
             const auto software_device =
                 is_windows_software_camera_device(device_id);
-            if (is_solin_virtual_camera_device(device_id, display_name)) {
+            if (is_solin_virtual_camera_device(device_id)) {
                 // Feeding Solin's own output back into its compositor creates a
-                // recursive frame-server dependency and can exhaust the Windows
-                // sample allocator. It is an output device, never a scene input.
+                // recursive graph and can exhaust the Windows sample allocator.
+                // It is an output device, never a scene input.
                 continue;
             }
             devices.push_back({

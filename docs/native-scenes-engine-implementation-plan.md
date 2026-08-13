@@ -23,7 +23,7 @@ The implementation uses:
 - GStreamer through its native C API as the media substrate for camera/RTSP acquisition,
   decode, caps negotiation, hardware acceleration, and queue primitives.
 - Direct3D 11 on Windows for GPU memory, composition, presentation, and shared textures.
-- Media Foundation for registration and publication of the Windows virtual camera.
+- DirectShow for per-user publication to x86 and x64 camera consumers on Windows x64.
 
 GStreamer is an implementation dependency, not the owner of the product model. Scene IDs,
 layer semantics, output assignments, transitions, automation, persistence, and recovery
@@ -215,8 +215,8 @@ flowchart LR
     PROGRAM --> PREVIEW["Bounded BGRA fallback egress"]
     PREVIEW --> FALLBACK["Editor / interactive / unsupported surfaces"]
     PROGRAM --> SHARE["Latest NV12 virtual-camera channel"]
-    SHARE --> MF["Media Foundation camera source"]
-    MF --> APPS["Camera-consuming apps"]
+    SHARE --> DS["DirectShow x86/x64 source filters"]
+    DS --> APPS["Camera-consuming apps"]
 ```
 
 ### UI process responsibilities
@@ -246,57 +246,43 @@ flowchart LR
 ### Virtual-camera component
 
 The compositor talks to a platform-neutral `VirtualCameraSink`; registration, discovery,
-and OS-specific publication live behind backend factories. Planned backends are Media
-Foundation on supported Windows versions, a separately packaged legacy adapter only if the
-compatibility matrix proves it necessary, `v4l2loopback` on Linux, and a signed CoreMediaIO
-camera extension on macOS. Platform lifecycle and installer work must not leak into the
-render graph.
+and OS-specific publication live behind backend factories. Windows uses one DirectShow
+source-filter implementation built twice so x86 and x64 consumers on Windows x64 see the
+same device. Linux `v4l2loopback` and a signed macOS CoreMediaIO camera extension remain
+future backends. Platform lifecycle and installer work do not leak into the render graph.
 
-`MFCreateVirtualCamera` registers a custom Media Foundation source. The implementation is
-split so camera-consuming applications do not load the whole scene engine:
+The Windows implementation is split so camera-consuming applications do not load the scene
+engine:
 
-- `solin-virtual-camera-source.dll`: minimal COM/Media Foundation media source loaded by the
-  Windows camera pipeline;
+- `solin-virtual-camera.dll`: a statically isolated DirectShow source filter with one capture
+  pin, built for x86 and x64;
 - a versioned shared-frame channel containing the latest ready NV12 frame plus monotonic
   timestamp and generation;
-- registration management isolated in a bounded helper process so a blocked Windows API
-  cannot stall the Qt app or native control loop;
-- system lifetime with current-user access so the device remains enumerable across Solin
-  restarts and Windows reboots; the persisted activation contract uses a stable versioned
-  broker rendezvous, while each producer generation publishes a new temporary frame mapping;
-- current-user camera access by default; the minimal COM source is still installed
-  machine-wide because Windows Frame Server loads it as a service, so source installation
-  and development registration require elevation even though ordinary runtime use does not.
+- exactly eight consumer profiles: NV12 and YUY2 at 1920x1080, 1280x720, 640x360, and
+  640x480, all progressive at 30 fps, with NV12 1920x1080 as the default;
+- per-consumer frame adaptation in the filter, preserving aspect ratio with centered limited-
+  range black bars and using box downscale or bilinear upscale;
+- per-user DirectShow registration in both WOW64 registry views, with versioned immutable
+  DLL locations so an open consumer can retain the previous version during an update.
 
-The source DLL executes under Frame Server rather than in the interactive Solin session.
-Consequently, a session-local mapping name is not the cross-process contract. The Windows
-backend uses a narrow DACL-authorized broker handshake:
-
-1. registration stores a stable, versioned pipe name and contract token as activation
-   attributes so already-open consumers can reconnect after the producer restarts;
-2. the source DLL validates those exact attributes and connects through a named pipe whose
-   DACL permits only Local Service and System;
-3. the broker uses that kernel-enforced service boundary plus a constant-time contract-token
-   check before returning the locator of an access-controlled, temporary file-backed
-   section; Local Service can open it read-only without either process receiving
-   `PROCESS_DUP_HANDLE` access to the other;
-4. the DLL reads the versioned triple buffer directly and serves the newest complete NV12
-   frame, retaining the last valid frame when the producer is temporarily late;
-5. generation changes invalidate old mappings and require a fresh handshake on the same
-   stable rendezvous.
+The private broker protocol is pointer-size-independent and derived from the current SID and
+session. The pipe rejects remote clients, permits only SYSTEM and the current user, and
+validates the connecting process token and session before returning a read-only backing-file
+locator. Multiple bounded pipe instances prevent one slow consumer from blocking another.
+Every filter reads the same latest-frame triple buffer without a video queue, repeats the
+latest frame when the producer is slower than 30 fps, samples the newest frame when it is
+faster, and reconnects after a generation change without graph renegotiation.
 
 The shared channel uses acquire/release sequence markers and read-only consumer mappings;
 there is no per-frame kernel mutex and no raw-frame JSON or pipe traffic. A future keyed
 DXGI shared-texture transport can implement the same sink contract, while shared memory
 remains the device-loss and compatibility path.
 
-Windows build 22000 is the minimum supported API level for `MFCreateVirtualCamera`. Camera
-privacy denial and missing/invalid registration must become separate user-facing states;
-that error-surface work remains open in Phase 5. The MF source registers in the video/capture
-categories used by legacy camera discovery. A second DirectShow source is not the default:
-DirectShow is a legacy API and would duplicate registration, lifetime, format-negotiation,
-and installer risk. It remains possible as an isolated backend consuming the same shared
-output if application testing finds a real gap.
+Windows 10 build 17763 (1809) is the minimum supported OS. Missing x86 registration, missing
+x64 registration, invalid registration, unsupported Windows, and unavailable cross-process
+transport remain distinct native diagnostics while the public application protocol exposes
+the existing boolean capability. DirectShow-only publication does not promise discovery by
+consumers that exclusively use Media Foundation or UWP capture APIs.
 
 ## Native media graph
 
@@ -499,8 +485,9 @@ These are regression guards, not optional refinements:
   texture ring remains a future optimization and must retain this RAM path as its
   compatibility/device-loss fallback. JSON and named-pipe messages remain control-only.
 - The virtual-camera publisher emits a heartbeat independently of frame changes. Once the
-  heartbeat is stale, the Frame Server source discards the last real image and serves the
-  branded standby frame, preventing a frozen privacy-sensitive frame after Solin exits.
+  heartbeat is stale for 1.5 seconds, the DirectShow filter discards the last real image and
+  serves the branded standby frame, preventing a frozen privacy-sensitive frame after Solin
+  exits.
 - One stable physical device ID maps to one source definition and one capture pipeline. Schema
   migration coalesces legacy duplicate definitions and retargets layers and PTZ bindings.
 - Canvas gestures use a coalesced, latest-wins `preview_layer_geometry` command to update the
@@ -520,18 +507,17 @@ These are regression guards, not optional refinements:
 ## Development and release contract
 
 - `python scripts/build_native_engine.py --configuration Release` bootstraps the pinned
-  development dependency when needed, configures CMake, builds the sidecar and camera-source
-  DLL, and runs native tests. A source checkout legitimately has no generated engine until
-  this command succeeds; the local launcher discovers its output under `build/native/`.
-- Testing the Windows virtual camera additionally requires one elevated registration command,
-  documented in `docs/building.md`. Ordinary application runs never mutate machine COM state.
-  The explicit development reload option restarts Windows Frame Server after a DLL change and
-  warns that active camera consumers will be interrupted.
+  development dependency when needed, configures CMake, builds the x64 sidecar plus x64
+  filter, builds the filter-only Win32 target, and runs both native test suites. A source
+  checkout legitimately has no generated engine until this command succeeds; the local
+  launcher discovers its output under `build/native/`.
+- Testing the Windows virtual camera requires one non-elevated per-user install command,
+  documented in `docs/building.md`. Ordinary application runs never mutate COM state.
 - Nuitka/Inno builds invoke the same native build, stage the private runtime, fail when the
-  sidecar or camera DLL is absent, and install/register the camera source only for a
-  machine-wide installation.
+  sidecar or either filter DLL is absent, and register the camera for the installing account
+  regardless of the application's installation scope.
 - Distributed Windows releases require Authenticode. The workflow signs and verifies the app,
-  native sidecar, camera-source DLL, Inno embedded uninstaller, and final installer. Explicitly
+  native sidecar, both filter DLLs, Inno embedded uninstaller, and final installer. Explicitly
   unsigned workflow runs are diagnostic artifacts and carry an `unsigned-diagnostic` suffix.
 
 ## Performance and reliability budgets
@@ -699,36 +685,33 @@ recover without feedback, black flashes, or a UI-thread stall.
 
 ### Phase 5 — Windows virtual camera
 
-- [x] Keep a platform-neutral virtual-camera sink contract: Media Foundation on supported
-  Windows, an optional signed legacy Windows adapter only when compatibility requires it,
-  and future Linux/macOS implementations without changes to scene composition.
-- [x] Implement the minimal Media Foundation source component with static CRT isolation,
-  synchronous demand-driven sample delivery, a bounded provided allocator, and correct
-  `IMFActivate` lifecycle. Release signing is a Phase 8 gate.
-- [x] Register the Media Foundation camera through `MFCreateVirtualCamera`, which publishes
-  it to Windows camera discovery, with NV12 and a YUY2 fallback for legacy consumers.
-  Validate a separate DirectShow filter only for measured compatibility gaps.
-- [x] Implement persistent current-user registration and producer start/stop in a bounded
-  helper process; preserve a stable activation contract across producer restarts and remove
-  the device explicitly during uninstall/development cleanup.
+- [x] Keep a platform-neutral virtual-camera sink contract with a DirectShow backend on
+  Windows and future Linux/macOS implementations without changes to scene composition.
+- [x] Implement one live DirectShow source filter with a capture pin, `IAMStreamConfig`,
+  `PIN_CATEGORY_CAPTURE`, low merit, static CRT isolation, and x86/x64 builds.
+- [x] Publish exactly eight progressive 30 fps NV12/YUY2 profiles and adapt any valid engine
+  NV12 input without changing or renegotiating the Program graph.
+- [x] Implement transactional persistent per-user registration in both WOW64 views, immutable
+  side-by-side deployment, rollback, and explicit uninstall/development cleanup.
 - [x] Implement D3D11-edge NV12 conversion, direct mapped-plane publication into a tightly
   packed versioned lock-free three-slot channel, timing metadata, and read-only consumers;
   no per-frame owning allocation exists between the GStreamer sink and that channel.
-- [x] Implement the DACL-authorized cross-session broker protocol and server with a
-  Local-Service/System DACL, constant-time contract-token validation, bounded I/O deadlines,
-  and a read-only temporary file-backed mapping; control only, never video bytes, traverses
-  its named pipe.
-- [x] Bind the broker activation attributes and mapping locator to the Media Foundation
-  source. An installed Local Service end-to-end test remains required below.
+- [x] Implement the DACL-authorized protocol-v3 broker with a current-user/System DACL,
+  SID/session validation, remote-client rejection, bounded parallel instances, I/O deadlines,
+  and a read-only temporary file-backed mapping; control only traverses its named pipe.
 - [x] Deliver a branded Solin standby frame after the producer heartbeat expires, reconnect
   in the background, retain the last valid frame only across short delivery gaps, and apply
-  bounded allocator backpressure without poisoning the Media Foundation stream.
-- [x] Surface privacy denial, unsupported Windows build, registration errors, and consumer
-  state separately.
-- [x] Test with multiple camera-consuming applications and repeated open/close cycles.
-- [x] Exercise `MFCreateVirtualCamera`, Frame Server/Local Service, `RequestSample`, and a
-  real Zoom consumer in an elevated development installation: branded standby, local camera,
-  and projected Solin media all reached the consumer. Automated elevated CI remains pending.
+  bounded allocator backpressure without poisoning the DirectShow stream.
+- [x] Surface unsupported Windows builds, architecture-specific registration failures,
+  cross-process transport failures, and consumer state separately.
+- [x] Exercise concurrent x86/x64-style broker clients, multiple filter instances, installed
+  graph activation, and repeated open/close cycles in automated harnesses.
+- [ ] Detect when Windows camera-privacy policy prevents Solin from capturing a physical
+  camera used by a scene, and surface a subtle error state on the affected source/layer with
+  actionable guidance. This concerns Solin's input capture only; failures in third-party
+  consumers opening the Solin virtual camera are outside the application's observable state.
+- [ ] Qualify installed x86/x64 graphs in OBS, Zoom, and Chrome on Windows 10 1809, Windows
+  10 22H2, and current Windows 11, including two simultaneous consumers and engine restart.
 
 Exit gate: a 30-minute call can repeatedly switch scenes and disconnect/reconnect cameras
 without freezing the consumer, leaking registrations, or requiring Solin restart.
@@ -763,13 +746,14 @@ without freezing the consumer, leaking registrations, or requiring Solin restart
 
 Minimum Windows matrix:
 
-- Windows 11 build 22000 and current supported Windows 11;
+- Windows 10 1809, Windows 10 22H2, and current supported Windows 11, all x64;
 - single and multiple GPUs where available;
 - Intel, NVIDIA, and AMD hardware decode paths plus software fallback;
 - 720p30, 1080p30, 1080p60, and a 4K source downscaled to 1080p;
 - local UVC camera, authenticated/unauthenticated RTSP, disconnect/reconnect, malformed stream;
 - one/two/three monitors, DPI 100–200%, hotplug and display reordering;
-- virtual-camera consumer opened before/after Solin, consumer restart, privacy disabled;
+- x86/x64 virtual-camera consumers opened before/after Solin, two simultaneous consumers,
+  output toggle, producer format change, consumer restart, and self-capture exclusion;
 - sidecar crash during hydrate, prepare, Take, output toggle, and shutdown;
 - corrupt/truncated/oversized/future-version configuration and runtime files.
 

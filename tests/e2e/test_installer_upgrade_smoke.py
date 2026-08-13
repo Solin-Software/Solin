@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import struct
 import subprocess
 import tempfile
 from pathlib import Path
@@ -23,6 +24,99 @@ pytestmark = pytest.mark.e2e
 
 _APP_EXE = "Solin.exe"
 _PROFILE_ID = "upgrade_profile"
+_CAMERA_CLSID = "{08AFA2E5-0293-4E56-9FE1-2A79DAE8E28F}"
+_VIDEO_INPUT_CATEGORY = "{860BB310-5D01-11D0-BD3B-00A0C911CE86}"
+_PE_MACHINES = {"x64": 0x8664, "x86": 0x014C}
+
+
+def _camera_registration(architecture: str) -> tuple[Path, str, str, bytes] | None:
+    import winreg
+
+    view = (
+        winreg.KEY_WOW64_64KEY
+        if architecture == "x64"
+        else winreg.KEY_WOW64_32KEY
+    )
+    class_path = f"Software\\Classes\\CLSID\\{_CAMERA_CLSID}\\InprocServer32"
+    category_path = (
+        "Software\\Classes\\CLSID\\"
+        f"{_VIDEO_INPUT_CATEGORY}\\Instance\\{_CAMERA_CLSID}"
+    )
+    try:
+        with winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER, class_path, 0, winreg.KEY_READ | view
+        ) as key:
+            dll_path = Path(winreg.QueryValueEx(key, "")[0])
+            threading_model = str(winreg.QueryValueEx(key, "ThreadingModel")[0])
+        with winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER, category_path, 0, winreg.KEY_READ | view
+        ) as key:
+            friendly_name = str(winreg.QueryValueEx(key, "FriendlyName")[0])
+            filter_data = winreg.QueryValueEx(key, "FilterData")[0]
+    except FileNotFoundError:
+        return None
+    return dll_path, threading_model, friendly_name, filter_data
+
+
+def _pe_machine(path: Path) -> int:
+    with path.open("rb") as binary:
+        if binary.read(2) != b"MZ":
+            return 0
+        binary.seek(0x3C)
+        offset = binary.read(4)
+        if len(offset) != 4:
+            return 0
+        binary.seek(struct.unpack("<I", offset)[0])
+        if binary.read(4) != b"PE\0\0":
+            return 0
+        machine = binary.read(2)
+        return struct.unpack("<H", machine)[0] if len(machine) == 2 else 0
+
+
+def _assert_camera_registered(env: dict[str, str]) -> None:
+    for architecture, machine in _PE_MACHINES.items():
+        registration = _camera_registration(architecture)
+        assert registration is not None, f"missing {architecture} camera registration"
+        dll_path, threading_model, friendly_name, filter_data = registration
+        assert dll_path.is_absolute() and dll_path.is_file()
+        assert _pe_machine(dll_path) == machine
+        assert threading_model.casefold() == "both"
+        assert friendly_name == "Solin Virtual Camera"
+        assert isinstance(filter_data, bytes) and filter_data
+        harness = path_from_env(
+            f"SOLIN_DIRECTSHOW_HARNESS_{architecture.upper()}",
+            purpose=f"{architecture} installed DirectShow graph verification",
+        )
+        verification = subprocess.run(  # noqa: S603 - trusted build harness
+            [str(harness), str(dll_path)],
+            cwd=harness.parent,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+        if verification.returncode != 0:
+            pytest.fail(
+                f"{architecture} installed DirectShow filter is not operational\n"
+                f"stdout:\n{verification.stdout}\n\nstderr:\n{verification.stderr}"
+            )
+
+
+def _assert_camera_absent() -> None:
+    for architecture in _PE_MACHINES:
+        assert _camera_registration(architecture) is None, (
+            f"stale {architecture} DirectShow registration remained after uninstall"
+        )
+
+
+def _camera_registration_paths() -> dict[str, Path]:
+    paths: dict[str, Path] = {}
+    for architecture in _PE_MACHINES:
+        registration = _camera_registration(architecture)
+        assert registration is not None
+        paths[architecture] = registration[0]
+    return paths
 
 
 def _require_windows_installer_opt_in() -> None:
@@ -62,11 +156,34 @@ def _run_installer(installer: Path, install_dir: Path, env: dict[str, str]) -> N
         pytest.fail(f"Installer did not produce {installed_exe}")
 
 
+def _run_rollback_injection(
+    installer: Path, install_dir: Path, env: dict[str, str]
+) -> None:
+    result = subprocess.run(  # noqa: S603 - trusted failure-injection artifact
+        [
+            str(installer),
+            "/VERYSILENT",
+            "/SUPPRESSMSGBOXES",
+            "/NORESTART",
+            "/CURRENTUSER",
+            f"/DIR={install_dir}",
+        ],
+        cwd=installer.parent,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=float(os.environ.get("SOLIN_E2E_INSTALLER_TIMEOUT", "240")),
+        check=False,
+    )
+    if result.returncode == 0:
+        pytest.fail("The x86 registration failure-injection installer succeeded")
+
+
 def _run_uninstaller(install_dir: Path, env: dict[str, str]) -> None:
     uninstallers = sorted(install_dir.glob("unins*.exe"))
     if not uninstallers:
-        return
-    subprocess.run(  # noqa: S603 - e2e runs installer-generated uninstaller
+        pytest.fail(f"Installer did not produce an uninstaller in {install_dir}")
+    result = subprocess.run(  # noqa: S603 - e2e runs installer-generated uninstaller
         [
             str(uninstallers[0]),
             "/VERYSILENT",
@@ -78,6 +195,8 @@ def _run_uninstaller(install_dir: Path, env: dict[str, str]) -> None:
         timeout=float(os.environ.get("SOLIN_E2E_INSTALLER_TIMEOUT", "240")),
         check=False,
     )
+    if result.returncode != 0:
+        pytest.fail(f"Uninstaller failed with exit code {result.returncode}")
 
 
 def _seed_qsettings() -> None:
@@ -110,23 +229,40 @@ def test_full_installer_upgrade_preserves_user_state() -> None:
         "SOLIN_NEW_INSTALLER",
         purpose="full installer upgrade smoke tests",
     )
+    rollback_installer = path_from_env(
+        "SOLIN_ROLLBACK_INSTALLER",
+        purpose="DirectShow registration rollback smoke tests",
+    )
+    if any(_camera_registration(architecture) is not None for architecture in _PE_MACHINES):
+        pytest.skip(
+            "The installer smoke requires both DirectShow registry views to be clean."
+        )
 
     with tempfile.TemporaryDirectory(prefix="solin-upgrade-e2e-") as temp_dir:
         temp_root = Path(temp_dir)
         install_dir = temp_root / "Install" / "Solin"
         env = isolated_app_env(temp_root)
+        installed = False
 
         try:
             _run_installer(old_installer, install_dir, env)
+            installed = True
             data_dir = temp_root / "AppData" / "Roaming" / "Solin" / "Solin"
             sentinels = seed_profile_user_state(data_dir, _PROFILE_ID)
             _seed_qsettings()
 
             _run_installer(new_installer, install_dir, env)
+            _assert_camera_registered(env)
+            registration_paths = _camera_registration_paths()
+            _run_rollback_injection(rollback_installer, install_dir, env)
+            assert _camera_registration_paths() == registration_paths
+            _assert_camera_registered(env)
             assert_profile_user_state_survived(sentinels)
             _assert_qsettings_survived()
             assert_process_survives_startup(install_dir / _APP_EXE, env=env)
         finally:
-            _run_uninstaller(install_dir, env)
+            if installed:
+                _run_uninstaller(install_dir, env)
+                _assert_camera_absent()
             cleanup_solin_test_registry(_PROFILE_ID)
             shutil.rmtree(install_dir, ignore_errors=True)

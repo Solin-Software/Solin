@@ -18,16 +18,13 @@ void expect(const bool condition, const char* const description) {
 
 void test_request_round_trip_and_strict_boundary() {
     solin::media_engine::VirtualCameraBrokerRequest request{};
-    for (std::size_t index = 0U; index < request.token.size(); ++index) {
-        request.token[index] = static_cast<std::uint8_t>(index + 1U);
-    }
     for (std::size_t index = 0U; index < request.nonce.size(); ++index) {
         request.nonce[index] = static_cast<std::uint8_t>(0xA0U + index);
     }
     const auto encoded =
         solin::media_engine::encode_virtual_camera_broker_request(request);
     expect(solin::media_engine::decode_virtual_camera_broker_request(encoded) == request,
-           "the broker request preserves its token and nonce");
+           "the broker request preserves its nonce");
     auto corrupted = encoded;
     corrupted[8U] = 0xFFU;
     try {
@@ -38,6 +35,22 @@ void test_request_round_trip_and_strict_boundary() {
         expect(std::string_view{error.what()} ==
                    "virtual_camera_broker_frame_invalid",
                "invalid requests have a stable boundary error");
+    }
+    corrupted = encoded;
+    corrupted[12U] = 1U;
+    try {
+        static_cast<void>(
+            solin::media_engine::decode_virtual_camera_broker_request(corrupted));
+        expect(false, "non-zero request reserved bytes should be rejected");
+    } catch (const std::invalid_argument&) {
+        expect(true, "request reserved bytes are validated");
+    }
+    try {
+        static_cast<void>(solin::media_engine::decode_virtual_camera_broker_request(
+            std::span<const std::uint8_t>{encoded}.first(encoded.size() - 1U)));
+        expect(false, "a truncated broker request should be rejected");
+    } catch (const std::invalid_argument&) {
+        expect(true, "request length is pointer-size-independent and strict");
     }
 }
 
@@ -59,6 +72,31 @@ void test_success_response_round_trip() {
     expect(solin::media_engine::decode_virtual_camera_broker_response(encoded) ==
                response,
            "the broker response preserves its path, layout, generation, and nonce");
+    auto corrupted = encoded;
+    corrupted[8U] = 4U;
+    try {
+        static_cast<void>(
+            solin::media_engine::decode_virtual_camera_broker_response(corrupted));
+        expect(false, "a future response protocol version should be rejected");
+    } catch (const std::invalid_argument&) {
+        expect(true, "response versions are decoded strictly");
+    }
+    corrupted = encoded;
+    corrupted[100U] = 1U;
+    try {
+        static_cast<void>(
+            solin::media_engine::decode_virtual_camera_broker_response(corrupted));
+        expect(false, "non-zero response reserved bytes should be rejected");
+    } catch (const std::invalid_argument&) {
+        expect(true, "response reserved bytes are validated");
+    }
+    try {
+        static_cast<void>(solin::media_engine::decode_virtual_camera_broker_response(
+            std::span<const std::uint8_t>{encoded}.first(encoded.size() - 1U)));
+        expect(false, "a truncated broker response should be rejected");
+    } catch (const std::invalid_argument&) {
+        expect(true, "response length is strict across pointer sizes");
+    }
 }
 
 void test_denial_response_contains_no_transport_metadata() {
@@ -71,24 +109,32 @@ void test_denial_response_contains_no_transport_metadata() {
     expect(decoded == response && decoded.mapping_file_path_utf8.empty() &&
                decoded.mapping_size == 0U,
            "a denied handshake discloses no frame transport path");
-}
-
-void test_token_comparison_checks_every_byte() {
-    solin::media_engine::VirtualCameraBrokerToken token{};
-    token.fill(0xAAU);
-    auto different = token;
-    different.back() ^= 0x01U;
-    expect(solin::media_engine::constant_time_token_equal(token, token) &&
-               !solin::media_engine::constant_time_token_equal(token, different),
-           "broker authentication compares the complete token");
+    auto corrupted =
+        solin::media_engine::encode_virtual_camera_broker_response(response);
+    corrupted[32U] = 1U;
+    try {
+        static_cast<void>(
+            solin::media_engine::decode_virtual_camera_broker_response(corrupted));
+        expect(false, "denial responses cannot carry hidden metadata");
+    } catch (const std::invalid_argument&) {
+        expect(true, "denial metadata is rejected at the protocol boundary");
+    }
 }
 
 } // namespace
 
 int main() {
-    test_request_round_trip_and_strict_boundary();
-    test_success_response_round_trip();
-    test_denial_response_contains_no_transport_metadata();
-    test_token_comparison_checks_every_byte();
+    const auto run = [](const char* const name, const auto& test) {
+        try {
+            test();
+        } catch (const std::exception& error) {
+            std::cerr << "FAILED: unexpected " << name
+                      << " exception: " << error.what() << '\n';
+            ++failures;
+        }
+    };
+    run("request", test_request_round_trip_and_strict_boundary);
+    run("success response", test_success_response_round_trip);
+    run("denial response", test_denial_response_contains_no_transport_metadata);
     return failures == 0 ? 0 : 1;
 }

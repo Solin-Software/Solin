@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import platform
 import shutil
+import struct
 import subprocess
 import sys
 from collections.abc import Sequence
@@ -14,6 +15,9 @@ SOURCE_DIRECTORY = REPOSITORY_ROOT / "native" / "media_engine"
 DEFAULT_BUILD_DIRECTORY = (
     REPOSITORY_ROOT / "build" / "native" / "media-engine-gstreamer"
 )
+DEFAULT_FILTER_X86_BUILD_DIRECTORY = (
+    REPOSITORY_ROOT / "build" / "native" / "directshow-filter-x86"
+)
 DEFAULT_GSTREAMER_ROOT = (
     REPOSITORY_ROOT / "build" / "dependencies" / "gstreamer" / "msvc_x86_64"
 )
@@ -21,6 +25,24 @@ DEFAULT_GSTREAMER_ROOT = (
 
 class NativeEngineBuildError(RuntimeError):
     pass
+
+
+def _pe_machine(path: Path) -> int:
+    try:
+        with path.open("rb") as binary:
+            if binary.read(2) != b"MZ":
+                return 0
+            binary.seek(0x3C)
+            offset = binary.read(4)
+            if len(offset) != 4:
+                return 0
+            binary.seek(struct.unpack("<I", offset)[0])
+            if binary.read(4) != b"PE\0\0":
+                return 0
+            machine = binary.read(2)
+            return struct.unpack("<H", machine)[0] if len(machine) == 2 else 0
+    except OSError:
+        return 0
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -33,6 +55,11 @@ def _parser() -> argparse.ArgumentParser:
         default="Release",
     )
     parser.add_argument("--build-dir", type=Path, default=DEFAULT_BUILD_DIRECTORY)
+    parser.add_argument(
+        "--filter-x86-build-dir",
+        type=Path,
+        default=DEFAULT_FILTER_X86_BUILD_DIRECTORY,
+    )
     parser.add_argument("--gstreamer-root", type=Path, default=DEFAULT_GSTREAMER_ROOT)
     parser.add_argument(
         "--skip-gstreamer-bootstrap",
@@ -96,6 +123,7 @@ def build_native_engine(
     *,
     configuration: str,
     build_directory: Path,
+    filter_x86_build_directory: Path,
     gstreamer_root: Path,
     bootstrap_gstreamer: bool,
     run_tests: bool,
@@ -110,6 +138,7 @@ def build_native_engine(
 
     cmake = _require_command("cmake")
     build_directory = build_directory.resolve()
+    filter_x86_build_directory = filter_x86_build_directory.resolve()
     gstreamer_root = gstreamer_root.resolve()
     if not _complete_gstreamer_development_root(gstreamer_root):
         if not bootstrap_gstreamer:
@@ -161,16 +190,66 @@ def build_native_engine(
             ]
         )
 
+    _run(
+        [
+            cmake,
+            "-S",
+            str(SOURCE_DIRECTORY),
+            "-B",
+            str(filter_x86_build_directory),
+            "-G",
+            "Visual Studio 17 2022",
+            "-A",
+            "Win32",
+            "-DSOLIN_VIRTUAL_CAMERA_FILTER_ONLY=ON",
+            "-DSOLIN_MEDIA_ENGINE_BUILD_TESTS=ON",
+        ]
+    )
+    filter_build_command = [
+        cmake,
+        "--build",
+        str(filter_x86_build_directory),
+        "--config",
+        configuration,
+        "--parallel",
+    ]
+    if jobs > 0:
+        filter_build_command.append(str(jobs))
+    _run(filter_build_command)
+    if run_tests:
+        _run(
+            [
+                ctest,
+                "--test-dir",
+                str(filter_x86_build_directory),
+                "--build-config",
+                configuration,
+                "--output-on-failure",
+            ]
+        )
+
     executable = build_directory / configuration / "solin-media-engine.exe"
     if not executable.is_file():
         raise NativeEngineBuildError(f"Native engine executable was not produced: {executable}")
-    virtual_camera_source = (
-        build_directory / configuration / "solin-virtual-camera-source.dll"
+    virtual_camera_filter_x64 = (
+        build_directory / configuration / "solin-virtual-camera.dll"
     )
-    if not virtual_camera_source.is_file():
+    virtual_camera_filter_x86 = (
+        filter_x86_build_directory / configuration / "solin-virtual-camera.dll"
+    )
+    if not virtual_camera_filter_x64.is_file() or _pe_machine(
+        virtual_camera_filter_x64
+    ) != 0x8664:
         raise NativeEngineBuildError(
-            "Native virtual-camera source was not produced: "
-            f"{virtual_camera_source}"
+            "Native x64 DirectShow filter is missing or has the wrong architecture: "
+            f"{virtual_camera_filter_x64}"
+        )
+    if not virtual_camera_filter_x86.is_file() or _pe_machine(
+        virtual_camera_filter_x86
+    ) != 0x014C:
+        raise NativeEngineBuildError(
+            "Native x86 DirectShow filter is missing or has the wrong architecture: "
+            f"{virtual_camera_filter_x86}"
         )
     return executable
 
@@ -181,6 +260,7 @@ def main(arguments: Sequence[str] | None = None) -> int:
         executable = build_native_engine(
             configuration=options.configuration,
             build_directory=options.build_dir,
+            filter_x86_build_directory=options.filter_x86_build_dir,
             gstreamer_root=options.gstreamer_root,
             bootstrap_gstreamer=not options.skip_gstreamer_bootstrap,
             run_tests=not options.skip_tests,
@@ -191,8 +271,9 @@ def main(arguments: Sequence[str] | None = None) -> int:
         return 1
     print(f"Native media engine ready: {executable}")
     print(
-        "Native virtual-camera source ready: "
-        f"{executable.with_name('solin-virtual-camera-source.dll')}"
+        "Native DirectShow filters ready: "
+        f"x64={executable.with_name('solin-virtual-camera.dll')}; "
+        f"x86={options.filter_x86_build_dir / options.configuration / 'solin-virtual-camera.dll'}"
     )
     return 0
 

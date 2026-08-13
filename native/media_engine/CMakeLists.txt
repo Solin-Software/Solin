@@ -4,7 +4,18 @@ project(solin_media_engine VERSION 0.1.0 LANGUAGES CXX)
 
 option(SOLIN_MEDIA_ENGINE_BUILD_TESTS "Build native media-engine tests" ON)
 option(SOLIN_MEDIA_ENGINE_ENABLE_GSTREAMER "Build the native GStreamer media substrate" OFF)
+option(SOLIN_VIRTUAL_CAMERA_FILTER_ONLY
+       "Build only the architecture-specific DirectShow filter and its tests" OFF)
 set(SOLIN_GSTREAMER_ROOT "" CACHE PATH "Pinned GStreamer MSVC installation root")
+
+if(SOLIN_VIRTUAL_CAMERA_FILTER_ONLY)
+    if(SOLIN_MEDIA_ENGINE_BUILD_TESTS)
+        enable_testing()
+    endif()
+    include(cmake/SolinVirtualCameraFilter.cmake)
+    solin_add_virtual_camera_filter()
+    return()
+endif()
 
 set(SOLIN_MEDIA_ENGINE_SOURCES
     include/solin/media_engine/control_protocol.hpp
@@ -58,18 +69,24 @@ set(SOLIN_MEDIA_ENGINE_SOURCES
     tests/source_registry_tests.cpp
     tests/video_frame_tests.cpp
     tests/virtual_camera_tests.cpp
+    tests/virtual_camera_output_tests.cpp
     tests/virtual_camera_broker_protocol_tests.cpp
     tests/virtual_camera_broker_tests.cpp
-    windows/virtual_camera_source/activation.cpp
-    windows/virtual_camera_source/activation.hpp
-    windows/virtual_camera_source/broker_client.cpp
-    windows/virtual_camera_source/broker_client.hpp
-    windows/virtual_camera_source/dllmain.cpp
-    windows/virtual_camera_source/media_source.cpp
-    windows/virtual_camera_source/media_source.hpp
-    windows/virtual_camera_source/media_stream.cpp
-    windows/virtual_camera_source/media_stream.hpp
+    tests/directshow_frame_adapter_tests.cpp
+    tests/directshow_frame_adapter_benchmark.cpp
+    tests/directshow_virtual_camera_tests.cpp
     include/solin/media_engine/windows_virtual_camera_contract.hpp
+    src/windows_virtual_camera_contract.cpp
+    windows/directshow_virtual_camera/broker_client.cpp
+    windows/directshow_virtual_camera/broker_client.hpp
+    windows/directshow_virtual_camera/filter.cpp
+    windows/directshow_virtual_camera/filter.hpp
+    windows/directshow_virtual_camera/frame_adapter.cpp
+    windows/directshow_virtual_camera/frame_adapter.hpp
+    windows/directshow_virtual_camera/media_profiles.cpp
+    windows/directshow_virtual_camera/media_profiles.hpp
+    windows/directshow_virtual_camera/module.cpp
+    windows/directshow_virtual_camera/standby_resources.h
 )
 
 find_program(SOLIN_CLANG_FORMAT_EXECUTABLE NAMES clang-format)
@@ -138,6 +155,7 @@ add_library(solin_media_engine_transport STATIC
     src/shared_video_frame_channel.cpp
     src/video_frame.cpp
     src/virtual_camera_broker_protocol.cpp
+    src/windows_virtual_camera_contract.cpp
 )
 target_include_directories(solin_media_engine_transport
     PUBLIC
@@ -181,74 +199,15 @@ target_link_libraries(
     PUBLIC solin_media_engine_scene solin_media_engine_transport
 )
 if(WIN32)
+    target_link_libraries(
+        solin_media_engine_transport PRIVATE advapi32 bcrypt ole32
+    )
     target_sources(solin_media_engine_outputs PRIVATE src/windows_virtual_camera_backend.cpp)
     target_link_libraries(
-        solin_media_engine_outputs PRIVATE advapi32 bcrypt mfplat mfuuid ole32
+        solin_media_engine_outputs PRIVATE advapi32 bcrypt ole32 oleaut32 strmiids
     )
-
-    add_library(solin_virtual_camera_source_transport STATIC
-        src/shared_video_frame_channel.cpp
-        src/video_frame.cpp
-        src/virtual_camera_broker_protocol.cpp
-    )
-    target_include_directories(solin_virtual_camera_source_transport
-        PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
-    )
-    target_compile_features(solin_virtual_camera_source_transport PUBLIC cxx_std_20)
-    target_link_libraries(
-        solin_virtual_camera_source_transport PRIVATE advapi32 ole32
-    )
-    set_property(TARGET solin_virtual_camera_source_transport PROPERTY
-        MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>"
-    )
-    target_compile_options(
-        solin_virtual_camera_source_transport PRIVATE /W4 /WX /permissive- /EHsc
-    )
-
-    add_library(solin-virtual-camera-source SHARED
-        windows/virtual_camera_source/activation.cpp
-        windows/virtual_camera_source/broker_client.cpp
-        windows/virtual_camera_source/dllmain.cpp
-        windows/virtual_camera_source/media_source.cpp
-        windows/virtual_camera_source/media_stream.cpp
-        windows/virtual_camera_source/standby_resources.rc
-        windows/virtual_camera_source/virtual_camera_source.def
-    )
-    target_include_directories(solin-virtual-camera-source
-        PRIVATE
-            ${CMAKE_CURRENT_SOURCE_DIR}/include
-            ${CMAKE_CURRENT_SOURCE_DIR}/windows/virtual_camera_source
-    )
-    target_compile_features(solin-virtual-camera-source PRIVATE cxx_std_20)
-    target_compile_definitions(
-        solin-virtual-camera-source PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX
-    )
-    set_property(TARGET solin-virtual-camera-source PROPERTY
-        MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>"
-    )
-    target_compile_options(
-        solin-virtual-camera-source PRIVATE /W4 /WX /wd4324 /permissive- /EHsc
-    )
-    target_link_options(
-        solin-virtual-camera-source PRIVATE /DYNAMICBASE /NXCOMPAT /CETCOMPAT
-    )
-    target_link_libraries(
-        solin-virtual-camera-source
-        PRIVATE
-            solin_virtual_camera_source_transport
-            bcrypt
-            evr
-            mfplat
-            mfsensorgroup
-            mfuuid
-            ole32
-            runtimeobject
-            user32
-            gdi32
-    )
-    set_target_properties(
-        solin-virtual-camera-source PROPERTIES PREFIX "" OUTPUT_NAME "solin-virtual-camera-source"
-    )
+    include(cmake/SolinVirtualCameraFilter.cmake)
+    solin_add_virtual_camera_filter()
 endif()
 
 add_executable(solin-media-engine
@@ -310,9 +269,6 @@ else()
 endif()
 
 install(TARGETS solin-media-engine RUNTIME DESTINATION bin)
-if(WIN32)
-    install(TARGETS solin-virtual-camera-source RUNTIME DESTINATION virtual-camera)
-endif()
 install(
     FILES third_party/nlohmann-json.LICENSE.MIT
     DESTINATION share/licenses/solin-media-engine
@@ -391,9 +347,6 @@ if(SOLIN_MEDIA_ENGINE_BUILD_TESTS)
             solin-media-engine-virtual-camera-tests
             PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
         )
-        target_link_libraries(
-            solin-media-engine-virtual-camera-tests PRIVATE mfplat
-        )
     endif()
     target_compile_features(
         solin-media-engine-virtual-camera-tests PRIVATE cxx_std_20
@@ -409,7 +362,17 @@ if(SOLIN_MEDIA_ENGINE_BUILD_TESTS)
             -Wall -Wextra -Wpedantic -Werror
         )
     endif()
-    add_test(NAME virtual-camera COMMAND solin-media-engine-virtual-camera-tests)
+    if(WIN32)
+        add_dependencies(solin-media-engine-virtual-camera-tests
+            solin-virtual-camera
+        )
+        add_test(NAME virtual-camera
+            COMMAND solin-media-engine-virtual-camera-tests
+                    $<TARGET_FILE:solin-virtual-camera>
+        )
+    else()
+        add_test(NAME virtual-camera COMMAND solin-media-engine-virtual-camera-tests)
+    endif()
     add_executable(solin-media-engine-virtual-camera-output-tests
         tests/virtual_camera_output_tests.cpp
     )
@@ -485,41 +448,6 @@ if(SOLIN_MEDIA_ENGINE_BUILD_TESTS)
         NAME virtual-camera-broker
         COMMAND solin-media-engine-virtual-camera-broker-tests
     )
-    if(WIN32)
-        add_executable(solin-media-engine-virtual-camera-source-tests
-            tests/virtual_camera_source_tests.cpp
-        )
-        target_include_directories(
-            solin-media-engine-virtual-camera-source-tests
-            PRIVATE
-                ${CMAKE_CURRENT_SOURCE_DIR}/include
-                ${CMAKE_CURRENT_SOURCE_DIR}/windows/virtual_camera_source
-        )
-        target_compile_features(
-            solin-media-engine-virtual-camera-source-tests PRIVATE cxx_std_20
-        )
-        target_compile_options(
-            solin-media-engine-virtual-camera-source-tests
-            PRIVATE /W4 /WX /permissive- /EHsc
-        )
-        target_compile_definitions(
-            solin-media-engine-virtual-camera-source-tests
-            PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX
-        )
-        target_link_libraries(
-            solin-media-engine-virtual-camera-source-tests
-            PRIVATE d3d11 mfplat mfuuid ole32
-        )
-        add_dependencies(
-            solin-media-engine-virtual-camera-source-tests
-            solin-virtual-camera-source
-        )
-        add_test(
-            NAME virtual-camera-source
-            COMMAND solin-media-engine-virtual-camera-source-tests
-                    $<TARGET_FILE:solin-virtual-camera-source>
-        )
-    endif()
     add_executable(solin-media-engine-shared-video-frame-channel-tests
         tests/shared_video_frame_channel_tests.cpp
     )

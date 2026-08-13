@@ -16,6 +16,7 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
+#include <objbase.h>
 #include <sddl.h>
 #endif
 
@@ -150,7 +151,8 @@ class LocalMemory final {
     return result;
 }
 
-[[nodiscard]] LocalMemory cross_session_file_security_descriptor() {
+[[nodiscard]] LocalMemory cross_process_file_security_descriptor(
+    const bool current_user_read_only = false) {
     const auto information = token_user_information();
     const auto* user = reinterpret_cast<const TOKEN_USER*>(information.data());
     LPWSTR raw_sid = nullptr;
@@ -158,7 +160,8 @@ class LocalMemory final {
         throw std::runtime_error("shared_video_frame_channel_security_unavailable");
     }
     const LocalMemory sid{raw_sid};
-    const auto sddl = std::wstring{L"D:P(A;;GA;;;SY)(A;;GR;;;LS)(A;;GA;;;"} +
+    const auto sddl = std::wstring{L"D:P(A;;GA;;;SY)(A;;"} +
+                      (current_user_read_only ? L"GR" : L"GA") + L";;;" +
                       static_cast<const wchar_t*>(sid.get()) + L")";
     PSECURITY_DESCRIPTOR raw_descriptor = nullptr;
     if (ConvertStringSecurityDescriptorToSecurityDescriptorW(
@@ -296,7 +299,7 @@ class WindowsSharedVideoFramePublisher final : public SharedVideoFramePublisher 
   public:
     explicit WindowsSharedVideoFramePublisher(
         SharedVideoFrameChannelConfiguration configuration,
-        const bool cross_session)
+        const bool cross_process)
         : configuration_(std::move(configuration)),
           slot_size_(aligned_slot_size(configuration_.layout.payload_size)),
           mapping_size_(mapping_size_for(configuration_.layout)) {
@@ -307,8 +310,8 @@ class WindowsSharedVideoFramePublisher final : public SharedVideoFramePublisher 
         }
         const auto high = static_cast<DWORD>(mapping_size_ >> 32U);
         const auto low = static_cast<DWORD>(mapping_size_ & 0xFFFFFFFFULL);
-        if (cross_session) {
-            create_cross_session_backing_file();
+        if (cross_process) {
+            create_cross_process_backing_file();
         }
         mapping_ = std::make_unique<UniqueHandle>(CreateFileMappingW(
             backing_file_ == nullptr ? INVALID_HANDLE_VALUE : backing_file_->get(),
@@ -395,12 +398,12 @@ class WindowsSharedVideoFramePublisher final : public SharedVideoFramePublisher 
         store_sequence(bytes(), kHeartbeatOffset, heartbeat_);
     }
 
-    void create_cross_session_backing_file() {
+    void create_cross_process_backing_file() {
         if (mapping_size_ >
             static_cast<std::uint64_t>((std::numeric_limits<LONGLONG>::max)())) {
             throw std::invalid_argument("shared_video_frame_channel_invalid");
         }
-        auto descriptor = cross_session_file_security_descriptor();
+        auto descriptor = cross_process_file_security_descriptor();
         SECURITY_ATTRIBUTES attributes{
             .nLength = sizeof(SECURITY_ATTRIBUTES),
             .lpSecurityDescriptor = descriptor.get(),
@@ -427,6 +430,15 @@ class WindowsSharedVideoFramePublisher final : public SharedVideoFramePublisher 
                 SetEndOfFile(file->get()) == FALSE) {
                 throw std::runtime_error(
                     "shared_video_frame_channel_file_unavailable");
+            }
+            auto read_only_descriptor =
+                cross_process_file_security_descriptor(true);
+            if (SetFileSecurityW(
+                    path.c_str(), DACL_SECURITY_INFORMATION,
+                    static_cast<PSECURITY_DESCRIPTOR>(
+                        read_only_descriptor.get())) == FALSE) {
+                throw std::runtime_error(
+                    "shared_video_frame_channel_security_unavailable");
             }
             backing_file_path_utf8_ = utf16_to_utf8(path);
             backing_file_ = std::move(file);
@@ -652,7 +664,7 @@ std::unique_ptr<SharedVideoFramePublisher> make_shared_video_frame_publisher(
 }
 
 std::unique_ptr<SharedVideoFramePublisher>
-make_cross_session_shared_video_frame_publisher(
+make_cross_process_shared_video_frame_publisher(
     const SharedVideoFrameChannelConfiguration& configuration) {
     validate_configuration(configuration);
 #ifdef _WIN32

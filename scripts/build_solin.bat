@@ -327,8 +327,14 @@ if not exist "%DIST%\native\media-engine\solin-media-engine.exe" (
     exit /b 1
 )
 
-if not exist "%DIST%\native\media-engine\virtual-camera\solin-virtual-camera-source.dll" (
-    echo  [ERRO] A fonte de camera virtual nao foi empacotada.
+if not exist "%DIST%\native\media-engine\virtual-camera\x64\solin-virtual-camera.dll" (
+    echo  [ERRO] O filtro DirectShow x64 nao foi empacotado.
+    pause
+    exit /b 1
+)
+
+if not exist "%DIST%\native\media-engine\virtual-camera\x86\solin-virtual-camera.dll" (
+    echo  [ERRO] O filtro DirectShow x86 nao foi empacotado.
     pause
     exit /b 1
 )

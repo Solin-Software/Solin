@@ -64,7 +64,7 @@ class SharedFrameVirtualCameraSinkImpl final : public SharedFrameVirtualCameraSi
         health_.state = VirtualCameraSinkState::starting;
         health_.error_code.clear();
         try {
-            publisher_ = make_cross_session_shared_video_frame_publisher({
+            publisher_ = make_cross_process_shared_video_frame_publisher({
                 .generation = generation_,
                 .layout = layout_,
             });
@@ -148,7 +148,7 @@ class SharedFrameVirtualCameraSinkImpl final : public SharedFrameVirtualCameraSi
                 .fps_denominator = configuration_.video_format.fps_denominator,
                 .process_local_mapping_handle = publisher_->native_mapping_handle(),
                 .mapping_size = publisher_->mapping_size(),
-                .cross_session_file_path_utf8 =
+                .cross_process_file_path_utf8 =
                     std::string{publisher_->backing_file_path_utf8()},
             };
         } catch (...) {
@@ -184,7 +184,7 @@ class UnavailableVirtualCameraBackend final : public VirtualCameraBackend {
 
 VirtualCameraBackendProbe probe_platform_virtual_camera() noexcept {
 #ifdef _WIN32
-    return probe_windows_media_foundation_virtual_camera();
+    return probe_windows_directshow_virtual_camera();
 #else
     return {};
 #endif
@@ -192,7 +192,7 @@ VirtualCameraBackendProbe probe_platform_virtual_camera() noexcept {
 
 std::unique_ptr<VirtualCameraBackend> make_platform_virtual_camera_backend() {
 #ifdef _WIN32
-    return make_windows_media_foundation_virtual_camera_backend();
+    return make_windows_directshow_virtual_camera_backend();
 #else
     return std::make_unique<UnavailableVirtualCameraBackend>();
 #endif

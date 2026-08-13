@@ -12,7 +12,6 @@ namespace solin::media_engine {
 
 enum class VirtualCameraBackendKind : std::uint8_t {
     unavailable,
-    windows_media_foundation,
     windows_directshow,
     linux_v4l2_loopback,
     macos_core_media_io,
@@ -21,9 +20,9 @@ enum class VirtualCameraBackendKind : std::uint8_t {
 struct VirtualCameraBackendProbe final {
     VirtualCameraBackendKind backend{VirtualCameraBackendKind::unavailable};
     bool platform_supported{false};
-    bool registration_api_available{false};
-    bool source_component_installed{false};
-    bool cross_session_transport_available{false};
+    bool filter_registered_x86{false};
+    bool filter_registered_x64{false};
+    bool cross_process_transport_available{false};
     bool operational{false};
     std::uint32_t operating_system_build{0U};
     std::string error_code{"virtual_camera_platform_unsupported"};
@@ -64,10 +63,10 @@ struct VirtualCameraFrameEndpoint final {
     std::uint32_t fps_denominator{0U};
     std::uintptr_t process_local_mapping_handle{0U};
     std::uint64_t mapping_size{0U};
-    std::string cross_session_file_path_utf8{};
+    std::string cross_process_file_path_utf8{};
 
     [[nodiscard]] explicit operator bool() const noexcept {
-        return generation != 0U && !cross_session_file_path_utf8.empty() &&
+        return generation != 0U && !cross_process_file_path_utf8.empty() &&
                mapping_size != 0U && fps_numerator != 0U &&
                fps_denominator != 0U;
     }

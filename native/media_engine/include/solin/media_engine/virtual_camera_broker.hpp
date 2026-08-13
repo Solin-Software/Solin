@@ -9,12 +9,11 @@
 
 namespace solin::media_engine {
 
-struct VirtualCameraBrokerActivation final {
+struct VirtualCameraBrokerEndpoint final {
     std::string pipe_name{};
-    VirtualCameraBrokerToken token{};
     std::uint16_t protocol_version{kVirtualCameraBrokerProtocolVersion};
 
-    bool operator==(const VirtualCameraBrokerActivation&) const = default;
+    bool operator==(const VirtualCameraBrokerEndpoint&) const = default;
 };
 
 struct VirtualCameraBrokerHealth final {
@@ -38,7 +37,7 @@ class VirtualCameraFrameBroker {
 
     virtual void start() = 0;
     virtual void stop() noexcept = 0;
-    [[nodiscard]] virtual VirtualCameraBrokerActivation activation() const = 0;
+    [[nodiscard]] virtual VirtualCameraBrokerEndpoint endpoint() const = 0;
     [[nodiscard]] virtual VirtualCameraBrokerHealth health() const = 0;
 
   protected:
@@ -51,6 +50,6 @@ make_virtual_camera_frame_broker(
 [[nodiscard]] std::unique_ptr<VirtualCameraFrameBroker>
 make_virtual_camera_frame_broker(
     std::shared_ptr<SharedFrameVirtualCameraSink> frame_sink,
-    VirtualCameraBrokerActivation activation);
+    VirtualCameraBrokerEndpoint endpoint);
 
 } // namespace solin::media_engine

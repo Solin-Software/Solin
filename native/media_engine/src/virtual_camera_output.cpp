@@ -20,8 +20,8 @@ namespace {
         throw std::invalid_argument("virtual_camera_output_bus_invalid");
     }
     auto video_format = output.video_format;
-    // The Windows Frame Server source has one canonical wire format. Renderer
-    // conversion happens before this boundary and never inside the COM source.
+    // Every platform backend receives the engine's canonical NV12/BT.709-limited
+    // wire format. Consumer-specific DirectShow adaptation stays in the filter.
     video_format.pixel_format = "nv12";
     video_format.color_space = "bt709";
     video_format.color_range = "limited";

@@ -56,6 +56,12 @@
   #error MyPatchVersion must be supplied by the build pipeline.
 #endif
 
+#ifndef MyArtifactSuffix
+  #define MyArtifactSuffix ""
+#endif
+
+#define MyVirtualCameraVersion MyPatchVersion
+
 ; =============================================================================
 [Setup]
 ; ── MUST be identical to setup.iss ───────────────────────────────────────────
@@ -76,7 +82,7 @@ DisableReadyPage=no
 DisableFinishedPage=no
 
 ; ── Keep original uninstaller — patch entries are appended to unins*.dat ──────
-; CreateUninstallRegKey=no
+CreateUninstallRegKey=no
 
 ; ── Define o nome limpo no Painel de Controle ────────────────────────────────
 UninstallDisplayName={#MyAppName}
@@ -95,8 +101,13 @@ RestartApplications=no
     Copy(MyPatchVersion, 1, RPos(".", MyPatchVersion) - 1)
     
 OutputDir=..\..\..\build\installer_output
-OutputBaseFilename=Solin_Patch_{#MyPatchFileVersion}
+OutputBaseFilename=Solin_Patch_{#MyPatchFileVersion}{#MyArtifactSuffix}
 SetupIconFile=..\..\..\src\solin\resources\assets\icon.ico
+
+#ifdef MySignToolName
+SignTool={#MySignToolName}
+SignedUninstaller=yes
+#endif
 
 ; ── Define o ícone no Painel de Controle (Adicionar/Remover Programas) ──
 UninstallDisplayIcon={app}\{#MyAppExeName}
@@ -113,6 +124,9 @@ ChangesAssociations=yes
 ; If the original install was machine-wide the user will be prompted to elevate.
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
+ArchitecturesAllowed=x64os
+ArchitecturesInstallIn64BitMode=x64os
+MinVersion=10.0.17763
 
 ; ── Versioning ────────────────────────────────────────────────────────────────
 VersionInfoVersion={#MyPatchVersion}
@@ -133,6 +147,10 @@ Name: "italian";    MessagesFile: "compiler:Languages\Italian.isl"
 ; ── Option A — Copy the full dist (simpler, ensures consistency) ──────────────
 Source: "{#MyDistDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\..\..\src\solin\resources\assets\playlist.ico"; DestDir: "{app}\resources\assets"; Flags: ignoreversion
+; Register the patch's immutable per-user DirectShow filters in both registry
+; views. Existing consumers may continue using the preceding version until exit.
+Source: "{#MyDistDir}\native\media-engine\virtual-camera\x64\solin-virtual-camera.dll"; DestDir: "{localappdata}\Solin\VirtualCamera\versions\{#MyPatchVersion}\x64"; Flags: ignoreversion regserver 64bit uninsrestartdelete
+Source: "{#MyDistDir}\native\media-engine\virtual-camera\x86\solin-virtual-camera.dll"; DestDir: "{localappdata}\Solin\VirtualCamera\versions\{#MyPatchVersion}\x86"; Flags: ignoreversion regserver 32bit uninsrestartdelete; BeforeInstall: MaybeInjectVirtualCameraX86RegistrationFailure
 
 ; =============================================================================
 [Registry]
@@ -371,6 +389,8 @@ begin
   CloseHandle(ExecInfo.hProcess);
 end;
 
+#include "virtual_camera_registration.iss"
+
 // ── Cached install info populated in InitializeSetup ─────────────────────────
 var
   GInstallPath:  String;  // full path to the existing install directory
@@ -528,6 +548,7 @@ function InitializeSetup(): Boolean;
 var
   InstalledVer: String;
 begin
+  CaptureCameraRegistrationState();
   Result := True;
 
   // 1. Locate the existing installation (populates GInstallPath / GInstallHive)
@@ -722,10 +743,14 @@ var
   UninstKey: String;
 begin
   if CurStep = ssInstall then
+  begin
     EnsureWebView2Runtime();
+    BeginCameraRegistrationTransaction();
+  end;
 
   if CurStep = ssPostInstall then
   begin
+    VerifyCameraRegistrationTransaction();
     // Update our own Version key in whichever hive the original install used
     RegWriteStringValue(GInstallHive, '{#MyRegSubkey}', 'Version', '{#MyPatchVersion}');
 
@@ -736,5 +761,10 @@ begin
     RegWriteStringValue(GInstallHive, UninstKey, 'DisplayVersion', '{#MyPatchVersion}');
 
     Log('Patch {#MyPatchVersion} applied successfully to: ' + GInstallPath);
+  end;
+  if CurStep = ssDone then
+  begin
+    CleanupObsoleteCameraVersions();
+    CommitCameraRegistrationTransaction();
   end;
 end;

@@ -84,11 +84,11 @@ class FakeVirtualCameraBackend final
         const override {
         return {
             .backend = solin::media_engine::VirtualCameraBackendKind::
-                windows_media_foundation,
+                windows_directshow,
             .platform_supported = true,
-            .registration_api_available = true,
-            .source_component_installed = true,
-            .cross_session_transport_available = true,
+            .filter_registered_x86 = true,
+            .filter_registered_x64 = true,
+            .cross_process_transport_available = true,
             .operational = true,
             .error_code = {},
         };

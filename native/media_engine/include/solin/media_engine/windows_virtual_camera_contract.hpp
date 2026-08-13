@@ -4,74 +4,23 @@
 
 #include <guiddef.h>
 
-#include <array>
-#include <cstdint>
+#include <string>
 
 namespace solin::media_engine::windows_virtual_camera {
 
-// System-lifetime cameras retain their activation attributes across process
-// restarts. The rendezvous contract must therefore be stable as well: a
-// per-process pipe or token leaves already-active consumers connected to a
-// producer that no longer exists.
-inline constexpr char kBrokerPipeNameUtf8[] =
-    R"(\\.\pipe\Solin.VirtualCamera.FrameBroker.v1)";
-inline constexpr wchar_t kBrokerPipeNameUtf16[] =
-    LR"(\\.\pipe\Solin.VirtualCamera.FrameBroker.v1)";
-inline constexpr std::array<std::uint8_t, 32U> kBrokerContractToken{
-    0xB7U, 0x2CU, 0x62U, 0xD8U, 0x8FU, 0x6EU, 0x43U, 0x75U,
-    0x9DU, 0x13U, 0x2BU, 0xA4U, 0xF1U, 0x6CU, 0x38U, 0x08U,
-    0x6AU, 0x59U, 0xC2U, 0x04U, 0x0FU, 0x71U, 0x4DU, 0x98U,
-    0xB3U, 0xAAU, 0x27U, 0xE5U, 0x15U, 0x44U, 0x90U, 0xCEU,
+inline constexpr wchar_t kFriendlyName[] = L"Solin Virtual Camera";
+
+inline constexpr GUID kDirectShowFilterClassId{
+    0x08AFA2E5,
+    0x0293,
+    0x4E56,
+    {0x9F, 0xE1, 0x2A, 0x79, 0xDA, 0xE8, 0xE2, 0x8F},
 };
 
-inline constexpr GUID kSourceClassId{
-    0x9B035447,
-    0x3D53,
-    0x4CD7,
-    {0xA6, 0xFC, 0x7C, 0xE7, 0x86, 0x2D, 0x88, 0x30},
-};
-
-inline constexpr GUID kBrokerPipeAttribute{
-    0xE0214430,
-    0x8AED,
-    0x4A71,
-    {0x98, 0x1D, 0xC4, 0x26, 0x9D, 0x66, 0x42, 0xFD},
-};
-
-inline constexpr GUID kBrokerTokenAttribute{
-    0x449ED309,
-    0x4837,
-    0x4FE8,
-    {0x8F, 0xB0, 0x7A, 0x9A, 0x38, 0xFD, 0x18, 0x8F},
-};
-
-inline constexpr GUID kFrameWidthAttribute{
-    0x84FDD5E4,
-    0x31A7,
-    0x4B0F,
-    {0xA9, 0x01, 0x94, 0xD5, 0x28, 0x1F, 0x2F, 0x0E},
-};
-
-inline constexpr GUID kFrameHeightAttribute{
-    0xB24D5D14,
-    0xE60C,
-    0x464D,
-    {0xB4, 0x3D, 0x14, 0xC3, 0xA1, 0x4D, 0x78, 0xA5},
-};
-
-inline constexpr GUID kFrameRateNumeratorAttribute{
-    0xD5D1D6BD,
-    0xB69C,
-    0x4E8D,
-    {0x91, 0xB2, 0x30, 0xF1, 0x57, 0x27, 0x30, 0x79},
-};
-
-inline constexpr GUID kFrameRateDenominatorAttribute{
-    0x6CBEC059,
-    0x874C,
-    0x4B04,
-    {0x9C, 0x9F, 0x2A, 0x06, 0x03, 0x3C, 0x52, 0x89},
-};
+[[nodiscard]] std::wstring current_user_broker_pipe_name();
+[[nodiscard]] std::string current_user_broker_pipe_name_utf8();
+[[nodiscard]] std::wstring current_user_sid_string();
+[[nodiscard]] unsigned long current_process_session_id();
 
 } // namespace solin::media_engine::windows_virtual_camera
 

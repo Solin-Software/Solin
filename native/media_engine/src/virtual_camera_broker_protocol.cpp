@@ -10,9 +10,9 @@ namespace solin::media_engine {
 namespace {
 
 constexpr std::array<std::uint8_t, 8U> kRequestMagic{
-    'S', 'L', 'N', 'B', 'R', 'K', '0', '2'};
+    'S', 'L', 'N', 'B', 'R', 'K', '0', '3'};
 constexpr std::array<std::uint8_t, 8U> kResponseMagic{
-    'S', 'L', 'N', 'B', 'R', 'P', '0', '2'};
+    'S', 'L', 'N', 'B', 'R', 'P', '0', '3'};
 
 template <typename Value, std::size_t Size>
 void write_little_endian(std::array<std::uint8_t, Size>& bytes,
@@ -59,8 +59,7 @@ encode_virtual_camera_broker_request(const VirtualCameraBrokerRequest& request) 
     write_little_endian(result, 8U, kVirtualCameraBrokerProtocolVersion);
     write_little_endian(result, 10U,
                         static_cast<std::uint16_t>(kVirtualCameraBrokerRequestSize));
-    std::copy(request.token.begin(), request.token.end(), result.begin() + 16U);
-    std::copy(request.nonce.begin(), request.nonce.end(), result.begin() + 48U);
+    std::copy(request.nonce.begin(), request.nonce.end(), result.begin() + 16U);
     return result;
 }
 
@@ -76,13 +75,16 @@ VirtualCameraBrokerRequest decode_virtual_camera_broker_request(
         throw std::invalid_argument("virtual_camera_broker_frame_invalid");
     }
     VirtualCameraBrokerRequest result{};
-    std::copy_n(bytes.begin() + 16U, result.token.size(), result.token.begin());
-    std::copy_n(bytes.begin() + 48U, result.nonce.size(), result.nonce.begin());
+    std::copy_n(bytes.begin() + 16U, result.nonce.size(), result.nonce.begin());
     return result;
 }
 
 std::array<std::uint8_t, kVirtualCameraBrokerResponseSize>
 encode_virtual_camera_broker_response(const VirtualCameraBrokerResponse& response) {
+    if (static_cast<std::uint32_t>(response.status) >
+        static_cast<std::uint32_t>(VirtualCameraBrokerStatus::shutting_down)) {
+        throw std::invalid_argument("virtual_camera_broker_response_invalid");
+    }
     if (response.status == VirtualCameraBrokerStatus::ok &&
         (response.mapping_file_path_utf8.empty() ||
          response.mapping_file_path_utf8.size() >
@@ -97,6 +99,13 @@ encode_virtual_camera_broker_response(const VirtualCameraBrokerResponse& respons
                                    response.layout.pixel_format) != response.layout)) {
         throw std::invalid_argument("virtual_camera_broker_response_invalid");
     }
+    if (response.status != VirtualCameraBrokerStatus::ok &&
+        (!response.mapping_file_path_utf8.empty() || response.mapping_size != 0U ||
+         response.generation != 0U ||
+         response.layout != PackedVideoFrameLayout{} ||
+         response.fps_numerator != 0U || response.fps_denominator != 0U)) {
+        throw std::invalid_argument("virtual_camera_broker_response_invalid");
+    }
     std::array<std::uint8_t, kVirtualCameraBrokerResponseSize> result{};
     std::copy(kResponseMagic.begin(), kResponseMagic.end(), result.begin());
     write_little_endian(result, 8U, kVirtualCameraBrokerProtocolVersion);
@@ -105,6 +114,9 @@ encode_virtual_camera_broker_response(const VirtualCameraBrokerResponse& respons
     write_little_endian(result, 12U,
                         static_cast<std::uint32_t>(response.status));
     std::copy(response.nonce.begin(), response.nonce.end(), result.begin() + 16U);
+    if (response.status != VirtualCameraBrokerStatus::ok) {
+        return result;
+    }
     write_little_endian(result, 32U, response.mapping_size);
     write_little_endian(result, 40U, response.generation);
     write_little_endian(result, 48U, response.layout.payload_size);
@@ -145,6 +157,10 @@ VirtualCameraBrokerResponse decode_virtual_camera_broker_response(
     };
     std::copy_n(bytes.begin() + 16U, result.nonce.size(), result.nonce.begin());
     if (result.status != VirtualCameraBrokerStatus::ok) {
+        if (!std::all_of(bytes.begin() + 32U, bytes.end(),
+                         [](const std::uint8_t value) { return value == 0U; })) {
+            throw std::invalid_argument("virtual_camera_broker_response_invalid");
+        }
         return result;
     }
     const auto path_length = read_little_endian<std::uint16_t>(bytes, 96U);
@@ -156,6 +172,10 @@ VirtualCameraBrokerResponse decode_virtual_camera_broker_response(
     result.mapping_file_path_utf8.assign(
         reinterpret_cast<const char*>(bytes.data() + 128U), path_length);
     if (result.mapping_file_path_utf8.find('\0') != std::string::npos) {
+        throw std::invalid_argument("virtual_camera_broker_response_invalid");
+    }
+    if (!std::all_of(bytes.begin() + 128U + path_length, bytes.end(),
+                     [](const std::uint8_t value) { return value == 0U; })) {
         throw std::invalid_argument("virtual_camera_broker_response_invalid");
     }
     const auto raw_format = read_little_endian<std::uint32_t>(bytes, 64U);
@@ -185,15 +205,6 @@ VirtualCameraBrokerResponse decode_virtual_camera_broker_response(
         throw std::invalid_argument("virtual_camera_broker_response_invalid");
     }
     return result;
-}
-
-bool constant_time_token_equal(const VirtualCameraBrokerToken& left,
-                               const VirtualCameraBrokerToken& right) noexcept {
-    std::uint8_t difference = 0U;
-    for (std::size_t index = 0U; index < left.size(); ++index) {
-        difference = static_cast<std::uint8_t>(difference | (left[index] ^ right[index]));
-    }
-    return difference == 0U;
 }
 
 } // namespace solin::media_engine

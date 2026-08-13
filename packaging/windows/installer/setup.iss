@@ -38,7 +38,6 @@
 #define MyRegSubkey      "Software\Solin\Solin"
 #define MyPlaylistProgId "Solin.Playlist"
 #define MyPlaylistMime   "application/vnd.solin.playlist+zip"
-#define MyVirtualCameraClsid "{{9B035447-3D53-4CD7-A6FC-7CE7862D8830}"
 #ifndef MyDistDir
   #define MyDistDir      "..\..\..\build\main.dist"
 #endif
@@ -58,6 +57,8 @@
 #ifndef MyArtifactSuffix
   #define MyArtifactSuffix ""
 #endif
+
+#define MyVirtualCameraVersion MyAppVersion
 
 ; =============================================================================
 [Setup]
@@ -135,6 +136,7 @@ RestartIfNeededByRun=no
 ChangesAssociations=yes
 ArchitecturesAllowed=x64os
 ArchitecturesInstallIn64BitMode=x64os
+MinVersion=10.0.17763
 
 ; =============================================================================
 [Languages]
@@ -153,9 +155,11 @@ Name: "startupicon"; Description: "Start with Windows";     GroupDescription: "O
 [Files]
 ; ── 1. Copy build output (DRY: one line copies the entire app) ────────────────
 Source: "{#MyDistDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-; The machine-wide COM server must live in an administrator-protected path even
-; when the user chooses a custom application directory.
-Source: "{#MyDistDir}\native\media-engine\virtual-camera\solin-virtual-camera-source.dll"; DestDir: "{commoncf64}\Solin\VirtualCamera"; Flags: ignoreversion restartreplace uninsrestartdelete; Check: IsAdminInstallMode
+; DirectShow consumers load architecture-matched in-process filters. Keep each
+; release immutable so an application holding the previous DLL never blocks an
+; update. DllRegisterServer scopes all COM/category writes to the current user.
+Source: "{#MyDistDir}\native\media-engine\virtual-camera\x64\solin-virtual-camera.dll"; DestDir: "{localappdata}\Solin\VirtualCamera\versions\{#MyAppVersion}\x64"; Flags: ignoreversion regserver 64bit uninsrestartdelete
+Source: "{#MyDistDir}\native\media-engine\virtual-camera\x86\solin-virtual-camera.dll"; DestDir: "{localappdata}\Solin\VirtualCamera\versions\{#MyAppVersion}\x86"; Flags: ignoreversion regserver 32bit uninsrestartdelete; BeforeInstall: MaybeInjectVirtualCameraX86RegistrationFailure
 
 ; ── 2. App icon (only if not already inside main.dist) ───────────────────────
 Source: "..\..\..\src\solin\resources\assets\icon.ico"; DestDir: "{app}\resources\assets"; Flags: ignoreversion
@@ -186,13 +190,6 @@ Name: "{autostartup}\{#MyAppName}";     Filename: "{app}\{#MyAppExeName}"; Tasks
 Root: HKA; Subkey: "{#MyRegSubkey}"; ValueType: string; ValueName: "InstallPath";  ValueData: "{app}";                   Flags: uninsdeletekey
 Root: HKA; Subkey: "{#MyRegSubkey}"; ValueType: string; ValueName: "Version";      ValueData: "{#MyAppVersion}";         Flags: uninsdeletevalue
 Root: HKA; Subkey: "{#MyRegSubkey}"; ValueType: string; ValueName: "InstallScope"; ValueData: "{code:GetInstallScope}";  Flags: uninsdeletevalue
-
-; Camera Frame Server runs as LocalService and needs a machine-wide 64-bit COM
-; registration. Per-user installs retain scene composition but do not expose the
-; Windows virtual-camera adapter.
-Root: HKLM64; Subkey: "Software\Classes\CLSID\{#MyVirtualCameraClsid}"; ValueType: string; ValueName: ""; ValueData: "Solin Virtual Camera Media Source"; Flags: uninsdeletekey; Check: IsAdminInstallMode
-Root: HKLM64; Subkey: "Software\Classes\CLSID\{#MyVirtualCameraClsid}\InprocServer32"; ValueType: string; ValueName: ""; ValueData: "{commoncf64}\Solin\VirtualCamera\solin-virtual-camera-source.dll"; Check: IsAdminInstallMode
-Root: HKLM64; Subkey: "Software\Classes\CLSID\{#MyVirtualCameraClsid}\InprocServer32"; ValueType: string; ValueName: "ThreadingModel"; ValueData: "Both"; Check: IsAdminInstallMode
 
 ; ── 1. Define o que é uma Imagem, Vídeo e Áudio para o Solin ──
 ; Imagem
@@ -404,6 +401,8 @@ begin
   CloseHandle(ExecInfo.hProcess);
 end;
 
+#include "virtual_camera_registration.iss"
+
 // ── Install scope ─────────────────────────────────────────────────────────────
 
 function GetInstallScope(Param: String): String;
@@ -476,6 +475,7 @@ end;
 
 function InitializeSetup(): Boolean;
 begin
+  CaptureCameraRegistrationState();
   Result := True;
   if IsAppRunning() then
   begin
@@ -621,7 +621,17 @@ end;
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssInstall then
+  begin
     EnsureWebView2Runtime();
+    BeginCameraRegistrationTransaction();
+  end;
+  if CurStep = ssPostInstall then
+    VerifyCameraRegistrationTransaction();
+  if CurStep = ssDone then
+  begin
+    CleanupObsoleteCameraVersions();
+    CommitCameraRegistrationTransaction();
+  end;
 end;
 
 // ── Uninstaller ───────────────────────────────────────────────────────────────
@@ -675,8 +685,8 @@ end;
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   AppDir: String;
-  CameraSourcePath: String;
-  CameraCleanupExitCode: Integer;
+  CameraFilterX64Path: String;
+  CameraFilterX86Path: String;
 begin
   AppDir := ExpandConstant('{app}');
 
@@ -710,27 +720,27 @@ begin
 
     usUninstall:
     begin
-      // A system-lifetime Media Foundation camera survives application exits
-      // and reboots. Remove it before Inno deletes the COM source and its
-      // registration.
-      CameraSourcePath := ExpandConstant(
-        '{commoncf64}\Solin\VirtualCamera\solin-virtual-camera-source.dll'
-      );
-      if FileExists(CameraSourcePath) then
-      begin
-        if not ExecAndWaitResponsive(
-          ExpandConstant('{sys}\regsvr32.exe'),
-          '/s /u "' + CameraSourcePath + '"',
-          ExtractFileDir(CameraSourcePath),
-          SW_HIDE,
-          CameraCleanupExitCode
-        ) then
-          Log('Could not start virtual-camera cleanup during uninstall.')
-        else if CameraCleanupExitCode <> 0 then
-          Log('Virtual-camera cleanup returned exit code ' + IntToStr(CameraCleanupExitCode) + '.')
-        else
-          Log('Removed the persistent Solin virtual camera.');
-      end;
+      // Unregister both DirectShow registry views before deleting the immutable
+      // version. The calls are idempotent with Inno's regserver bookkeeping.
+      CameraFilterX64Path := '';
+      if not RegQueryStringValue(
+        HKCU64, CameraClassKey(), '', CameraFilterX64Path
+      ) then
+        CameraFilterX64Path := CameraVersionedFilterPath('x64');
+      if FileExists(CameraFilterX64Path) and
+         not RunCameraRegsvr(CameraFilterX64Path, True, True) then
+        Log('x64 virtual-camera cleanup failed during uninstall.');
+      RemoveCameraRegistrationView(HKCU64);
+
+      CameraFilterX86Path := '';
+      if not RegQueryStringValue(
+        HKCU32, CameraClassKey(), '', CameraFilterX86Path
+      ) then
+        CameraFilterX86Path := CameraVersionedFilterPath('x86');
+      if FileExists(CameraFilterX86Path) and
+         not RunCameraRegsvr(CameraFilterX86Path, False, True) then
+        Log('x86 virtual-camera cleanup failed during uninstall.');
+      RemoveCameraRegistrationView(HKCU32);
 
       // Remove QSettings keys (always HKCU — written by the Qt app)
       DeleteQSettingsKeys();
@@ -771,6 +781,7 @@ begin
 
     usPostUninstall:
     begin
+      DelTree(ExpandConstant('{localappdata}\Solin\VirtualCamera'), True, True, True);
       // Inno Setup installer temp files left behind from interrupted installs
       DeleteTempFiles(AppDir);
 

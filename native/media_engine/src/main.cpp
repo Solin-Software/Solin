@@ -7,7 +7,6 @@
 #include "solin/media_engine/scene_snapshot.hpp"
 #include "solin/media_engine/virtual_camera_output.hpp"
 
-#include <charconv>
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
@@ -209,18 +208,6 @@ int run_self_test() {
     }
     return 0;
 }
-
-#ifdef _WIN32
-[[nodiscard]] std::optional<std::uintptr_t>
-parse_native_handle(const std::string_view value) noexcept {
-    std::uintptr_t result = 0U;
-    const auto parsed = std::from_chars(value.data(), value.data() + value.size(), result);
-    if (parsed.ec != std::errc{} || parsed.ptr != value.data() + value.size() || result == 0U) {
-        return std::nullopt;
-    }
-    return result;
-}
-#endif
 
 std::optional<std::string> process_generation_from_environment() {
 #ifdef _WIN32
@@ -468,18 +455,6 @@ int main(const int argc, const char* const argv[]) {
     if (argc == 2 && std::string_view{argv[1]} == "--self-test") {
         return run_self_test();
     }
-#ifdef _WIN32
-    if (argc == 4 && std::string_view{argv[1]} == "--virtual-camera-registration-host") {
-        const auto command_handle = parse_native_handle(argv[2]);
-        const auto status_handle = parse_native_handle(argv[3]);
-        if (!command_handle.has_value() || !status_handle.has_value()) {
-            return 64;
-        }
-        return solin::media_engine::run_windows_virtual_camera_registration_host(
-            command_handle.value(), status_handle.value());
-    }
-#endif
-
     if (argc == 1) {
         return run_protocol();
     }

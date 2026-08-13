@@ -69,14 +69,15 @@ class SharedVideoFrameReader {
 make_shared_video_frame_publisher(
     const SharedVideoFrameChannelConfiguration& configuration);
 
-// Uses an access-controlled temporary file so a Session 0 camera source can open
-// the same pages without either process requiring PROCESS_DUP_HANDLE.
+// Uses an access-controlled temporary file so out-of-process consumers running as
+// the same interactive user can map the pages without PROCESS_DUP_HANDLE.
 [[nodiscard]] std::unique_ptr<SharedVideoFramePublisher>
-make_cross_session_shared_video_frame_publisher(
+make_cross_process_shared_video_frame_publisher(
     const SharedVideoFrameChannelConfiguration& configuration);
 
-// The handle is borrowed and must remain valid for the lifetime of the reader. A broker
-// duplicates it into the camera-source process; raw video never crosses the control pipe.
+// The handle is borrowed and must remain valid for the lifetime of the reader. The
+// DirectShow client opens the broker-provided backing file read-only, creates this
+// mapping locally, and never transfers raw video through the control pipe.
 [[nodiscard]] std::unique_ptr<SharedVideoFrameReader>
 make_shared_video_frame_reader(std::uintptr_t native_mapping_handle,
                                std::uint64_t mapping_size);

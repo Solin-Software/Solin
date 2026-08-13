@@ -23,8 +23,16 @@ DEFAULT_ENGINE_EXECUTABLE = (
     / "Release"
     / "solin-media-engine.exe"
 )
-DEFAULT_VIRTUAL_CAMERA_SOURCE = (
-    DEFAULT_ENGINE_EXECUTABLE.parent / "solin-virtual-camera-source.dll"
+DEFAULT_VIRTUAL_CAMERA_FILTER_X64 = (
+    DEFAULT_ENGINE_EXECUTABLE.parent / "solin-virtual-camera.dll"
+)
+DEFAULT_VIRTUAL_CAMERA_FILTER_X86 = (
+    REPOSITORY_ROOT
+    / "build"
+    / "native"
+    / "directshow-filter-x86"
+    / "Release"
+    / "solin-virtual-camera.dll"
 )
 DEFAULT_GSTREAMER_ROOT = (
     REPOSITORY_ROOT / "build" / "dependencies" / "gstreamer-runtime" / "msvc_x86_64"
@@ -80,7 +88,18 @@ FORBIDDEN_GSTREAMER_FILENAMES = {
     "x265.dll",
 }
 FORBIDDEN_DEVELOPMENT_SUFFIXES = {".h", ".hpp", ".lib", ".pc"}
+ALLOWED_FILTER_IMPORTS = {
+    "advapi32.dll",
+    "bcrypt.dll",
+    "gdi32.dll",
+    "kernel32.dll",
+    "ole32.dll",
+    "oleaut32.dll",
+    "user32.dll",
+}
 WINDOWS_RENAME_RETRY_DELAYS_SECONDS = (0.05, 0.1, 0.2, 0.4)
+PE_MACHINE_X86 = 0x014C
+PE_MACHINE_X64 = 0x8664
 
 
 class NativeEnginePackagingError(RuntimeError):
@@ -93,9 +112,17 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--engine", type=Path, default=DEFAULT_ENGINE_EXECUTABLE)
     parser.add_argument(
-        "--virtual-camera-source",
+        "--virtual-camera-filter-x64",
         type=Path,
-        help="Source DLL; defaults to the directory containing --engine.",
+        help="x64 DirectShow filter; defaults to the directory containing --engine.",
+    )
+    parser.add_argument(
+        "--virtual-camera-filter-x86",
+        type=Path,
+        help=(
+            "x86 DirectShow filter; required with a custom --engine to prevent "
+            "mixing build configurations."
+        ),
     )
     parser.add_argument("--gstreamer-root", type=Path, default=DEFAULT_GSTREAMER_ROOT)
     parser.add_argument("--gstreamer-licenses", type=Path, default=DEFAULT_GSTREAMER_LICENSES)
@@ -104,9 +131,25 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _resolve_filter_sources(options: argparse.Namespace) -> tuple[Path, Path]:
+    filter_x64 = options.virtual_camera_filter_x64 or options.engine.with_name(
+        DEFAULT_VIRTUAL_CAMERA_FILTER_X64.name
+    )
+    filter_x86 = options.virtual_camera_filter_x86
+    if filter_x86 is None:
+        if options.engine != DEFAULT_ENGINE_EXECUTABLE:
+            raise NativeEnginePackagingError(
+                "A custom --engine requires --virtual-camera-filter-x86 from "
+                "the matching build configuration"
+            )
+        filter_x86 = DEFAULT_VIRTUAL_CAMERA_FILTER_X86
+    return filter_x64, filter_x86
+
+
 def _validate_inputs(
     engine: Path,
-    virtual_camera_source: Path,
+    virtual_camera_filter_x64: Path,
+    virtual_camera_filter_x86: Path,
     runtime_root: Path,
     licenses_root: Path,
     application_dir: Path,
@@ -115,9 +158,21 @@ def _validate_inputs(
         raise NativeEnginePackagingError("Windows packaging must run on Windows")
     if not engine.is_file():
         raise NativeEnginePackagingError(f"Native engine executable is missing: {engine}")
-    if not virtual_camera_source.is_file():
+    if not virtual_camera_filter_x64.is_file():
         raise NativeEnginePackagingError(
-            f"Native virtual-camera source is missing: {virtual_camera_source}"
+            f"Native x64 virtual-camera filter is missing: {virtual_camera_filter_x64}"
+        )
+    if not virtual_camera_filter_x86.is_file():
+        raise NativeEnginePackagingError(
+            f"Native x86 virtual-camera filter is missing: {virtual_camera_filter_x86}"
+        )
+    if _pe_machine(virtual_camera_filter_x64) != PE_MACHINE_X64:
+        raise NativeEnginePackagingError(
+            f"Virtual-camera x64 filter has the wrong PE architecture: {virtual_camera_filter_x64}"
+        )
+    if _pe_machine(virtual_camera_filter_x86) != PE_MACHINE_X86:
+        raise NativeEnginePackagingError(
+            f"Virtual-camera x86 filter has the wrong PE architecture: {virtual_camera_filter_x86}"
         )
     if not application_dir.is_dir() or not (application_dir / "Solin.exe").is_file():
         raise NativeEnginePackagingError(
@@ -144,6 +199,19 @@ def _read_c_string(data: bytes, offset: int) -> str | None:
         return data[offset:terminator].decode("ascii")
     except UnicodeDecodeError:
         return None
+
+
+def _pe_machine(path: Path) -> int:
+    try:
+        data = path.read_bytes()
+    except OSError:
+        return 0
+    if len(data) < 0x86 or data[:2] != b"MZ":
+        return 0
+    pe_offset = struct.unpack_from("<I", data, 0x3C)[0]
+    if pe_offset + 6 > len(data) or data[pe_offset : pe_offset + 4] != b"PE\0\0":
+        return 0
+    return struct.unpack_from("<H", data, pe_offset + 4)[0]
 
 
 def _pe_imports(path: Path) -> set[str]:
@@ -235,6 +303,25 @@ def _pe_imports(path: Path) -> set[str]:
     return imports
 
 
+def _validate_filter_imports(path: Path, architecture: str) -> None:
+    imports = _pe_imports(path)
+    if not imports:
+        raise NativeEnginePackagingError(
+            f"The {architecture} virtual-camera filter PE import table could not "
+            "be audited"
+        )
+    unexpected = sorted(
+        imported
+        for imported in imports
+        if imported.casefold() not in ALLOWED_FILTER_IMPORTS
+    )
+    if unexpected:
+        raise NativeEnginePackagingError(
+            f"The {architecture} virtual-camera filter imports dependencies outside "
+            f"the production allowlist: {', '.join(unexpected)}"
+        )
+
+
 def _copy_required_runtime_dlls(
     runtime_root: Path,
     destination: Path,
@@ -320,7 +407,6 @@ def _copy_runtime(
     runtime_root: Path,
     destination: Path,
     engine: Path,
-    virtual_camera_source: Path,
 ) -> dict[str, object]:
     plugin_root = runtime_root / "lib" / "gstreamer-1.0"
     plugins: list[Path] = []
@@ -341,7 +427,7 @@ def _copy_runtime(
     destination_scanner.parent.mkdir(parents=True)
     shutil.copy2(scanner, destination_scanner)
 
-    dependency_roots = [engine, virtual_camera_source, scanner, *plugins]
+    dependency_roots = [engine, scanner, *plugins]
     runtime_bin = runtime_root / "bin"
     (destination / "bin").mkdir(parents=True, exist_ok=True)
     for filename in GSTREAMER_RUNTIME_EXECUTABLES:
@@ -456,24 +542,29 @@ def _verify_staged_engine(engine_root: Path) -> None:
 def package_native_engine(
     *,
     engine: Path,
-    virtual_camera_source: Path,
+    virtual_camera_filter_x64: Path,
+    virtual_camera_filter_x86: Path,
     runtime_root: Path,
     licenses_root: Path,
     application_dir: Path,
     verify: bool,
 ) -> Path:
     engine = engine.resolve()
-    virtual_camera_source = virtual_camera_source.resolve()
+    virtual_camera_filter_x64 = virtual_camera_filter_x64.resolve()
+    virtual_camera_filter_x86 = virtual_camera_filter_x86.resolve()
     runtime_root = runtime_root.resolve()
     licenses_root = licenses_root.resolve()
     application_dir = application_dir.resolve()
     _validate_inputs(
         engine,
-        virtual_camera_source,
+        virtual_camera_filter_x64,
+        virtual_camera_filter_x86,
         runtime_root,
         licenses_root,
         application_dir,
     )
+    _validate_filter_imports(virtual_camera_filter_x64, "x64")
+    _validate_filter_imports(virtual_camera_filter_x86, "x86")
 
     native_directory = application_dir / "native"
     native_directory.mkdir(parents=True, exist_ok=True)
@@ -483,15 +574,20 @@ def package_native_engine(
         shutil.copy2(engine, staging / "solin-media-engine.exe")
         virtual_camera_directory = staging / "virtual-camera"
         virtual_camera_directory.mkdir()
+        (virtual_camera_directory / "x64").mkdir()
+        (virtual_camera_directory / "x86").mkdir()
         shutil.copy2(
-            virtual_camera_source,
-            virtual_camera_directory / "solin-virtual-camera-source.dll",
+            virtual_camera_filter_x64,
+            virtual_camera_directory / "x64" / "solin-virtual-camera.dll",
+        )
+        shutil.copy2(
+            virtual_camera_filter_x86,
+            virtual_camera_directory / "x86" / "solin-virtual-camera.dll",
         )
         runtime_manifest = _copy_runtime(
             runtime_root,
             staging / "gstreamer",
             engine,
-            virtual_camera_source,
         )
         shutil.copytree(licenses_root, staging / "gstreamer" / "share" / "licenses")
         _assert_release_payload_is_curated(staging / "gstreamer")
@@ -509,6 +605,22 @@ def package_native_engine(
             / "nlohmann-json.LICENSE.MIT",
             license_directory / "nlohmann-json.LICENSE.MIT",
         )
+        shutil.copy2(
+            REPOSITORY_ROOT
+            / "native"
+            / "media_engine"
+            / "third_party"
+            / "directshow-baseclasses.LICENSE",
+            license_directory / "directshow-baseclasses.LICENSE",
+        )
+        shutil.copy2(
+            REPOSITORY_ROOT
+            / "native"
+            / "media_engine"
+            / "third_party"
+            / "libyuv.LICENSE",
+            license_directory / "libyuv.LICENSE",
+        )
         if verify:
             _verify_staged_engine(staging)
         _replace_staging_directory(staging, destination)
@@ -520,15 +632,14 @@ def package_native_engine(
 
 def main(arguments: Sequence[str] | None = None) -> int:
     options = _parser().parse_args(arguments)
-    virtual_camera_source = (
-        options.virtual_camera_source
-        if options.virtual_camera_source is not None
-        else options.engine.with_name(DEFAULT_VIRTUAL_CAMERA_SOURCE.name)
-    )
     try:
+        virtual_camera_filter_x64, virtual_camera_filter_x86 = (
+            _resolve_filter_sources(options)
+        )
         destination = package_native_engine(
             engine=options.engine,
-            virtual_camera_source=virtual_camera_source,
+            virtual_camera_filter_x64=virtual_camera_filter_x64,
+            virtual_camera_filter_x86=virtual_camera_filter_x86,
             runtime_root=options.gstreamer_root,
             licenses_root=options.gstreamer_licenses,
             application_dir=options.application_dir,

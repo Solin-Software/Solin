@@ -23,14 +23,18 @@ Both feed a native `appsrc` and upload to the compositor's D3D11 device without 
 JSON pipe. Keyed D3D11 texture ingress remains the preferred future cross-process zero-copy
 path. The virtual-camera render branch converts on the shared D3D11 device, downloads a
 tightly packed NV12 edge frame, and publishes it through a separate lock-free, three-slot
-shared-memory channel. A Windows Media Foundation source consumes that channel through a
-cross-session broker which applies a scoped pipe ACL, validates the kernel-reported Local
-Service identity and per-camera token, and duplicates only a read-only mapping handle. The
-source serves a branded standby frame whenever no live producer heartbeat is available.
-The public virtual-camera capability is enabled only when the installed source and
-supported Windows API pass the runtime probe. On Windows, eligible preview and fullscreen
-media surfaces receive the same Program frame through engine-owned child windows and
-`d3d11videosink`; the frame remains D3D11-backed and does not cross back through Python. A
+shared-memory channel. A per-user DirectShow source filter consumes that channel through a
+private protocol-v3 broker. The broker derives its pipe from the current SID and session,
+rejects remote clients, validates the client's token and session, and reveals only a
+read-only file-backed transport locator. Each x86 or x64 consumer owns an independent output
+sample while reading the same latest frame. The filter adapts the producer's NV12 frame to
+eight fixed NV12/YUY2 30 fps profiles and serves a branded standby frame whenever the
+producer heartbeat is stale. The public virtual-camera capability is enabled only when both
+per-user filter registrations, x64 COM activation/device enumeration, cross-process
+transport, and the supported Windows version pass the runtime probe. On Windows, eligible
+preview and fullscreen media surfaces receive the same Program frame through engine-owned
+child windows and `d3d11videosink`; the frame remains D3D11-backed and does not cross back
+through Python. A
 fixed BGRA channel feeds the independent scene-editor Preview, while a demand-driven
 dynamic NV12/BGRA channel remains the bounded Program fallback for Qt-owned surfaces that
 cannot host the native presenter. Dynamic frames cross Python without conversion and are
@@ -99,9 +103,9 @@ composed GPU frame, or the last stable origin before the first composed frame, t
 visual continuity. Composed frames stay in bounded D3D11 or shared-memory latest-frame
 transports; they never traverse the JSON pipe. Hardware
 composition is advertised only when the runtime D3D11 compositor probe succeeds; individual
-layer features remain schema-bounded. Virtual-camera readiness is probe-driven: an unregistered source,
-unsupported Windows build, or failed Media Foundation initialization keeps that capability
-false and exposes a stable diagnostic code.
+layer features remain schema-bounded. Virtual-camera readiness is probe-driven: a missing or
+invalid x86/x64 DirectShow registration, unsupported Windows build, or unavailable
+cross-process transport keeps that capability false and exposes a stable diagnostic code.
 
 The build fetches the pinned nlohmann/json 3.12.0 release and verifies its SHA-256 digest.
 It is used only for low-frequency control messages, never for video frames.

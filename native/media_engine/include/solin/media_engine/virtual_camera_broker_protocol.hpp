@@ -10,15 +10,12 @@
 
 namespace solin::media_engine {
 
-inline constexpr std::uint16_t kVirtualCameraBrokerProtocolVersion = 2U;
-inline constexpr std::size_t kVirtualCameraBrokerTokenSize = 32U;
+inline constexpr std::uint16_t kVirtualCameraBrokerProtocolVersion = 3U;
 inline constexpr std::size_t kVirtualCameraBrokerNonceSize = 16U;
-inline constexpr std::size_t kVirtualCameraBrokerRequestSize = 64U;
+inline constexpr std::size_t kVirtualCameraBrokerRequestSize = 32U;
 inline constexpr std::size_t kVirtualCameraBrokerResponseSize = 640U;
 inline constexpr std::size_t kVirtualCameraBrokerMaximumPathBytes = 512U;
 
-using VirtualCameraBrokerToken =
-    std::array<std::uint8_t, kVirtualCameraBrokerTokenSize>;
 using VirtualCameraBrokerNonce =
     std::array<std::uint8_t, kVirtualCameraBrokerNonceSize>;
 
@@ -32,7 +29,6 @@ enum class VirtualCameraBrokerStatus : std::uint32_t {
 };
 
 struct VirtualCameraBrokerRequest final {
-    VirtualCameraBrokerToken token{};
     VirtualCameraBrokerNonce nonce{};
 
     bool operator==(const VirtualCameraBrokerRequest&) const = default;
@@ -59,9 +55,5 @@ decode_virtual_camera_broker_request(std::span<const std::uint8_t> bytes);
 encode_virtual_camera_broker_response(const VirtualCameraBrokerResponse& response);
 [[nodiscard]] VirtualCameraBrokerResponse
 decode_virtual_camera_broker_response(std::span<const std::uint8_t> bytes);
-
-[[nodiscard]] bool constant_time_token_equal(
-    const VirtualCameraBrokerToken& left,
-    const VirtualCameraBrokerToken& right) noexcept;
 
 } // namespace solin::media_engine

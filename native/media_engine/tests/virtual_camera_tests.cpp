@@ -8,12 +8,9 @@
 
 #ifdef _WIN32
 #include "windows_virtual_camera_backend.hpp"
-
-#include <mfapi.h>
-#include <mfidl.h>
-#include <wrl/client.h>
 #endif
 
+#include <filesystem>
 #include <iostream>
 
 namespace {
@@ -31,19 +28,19 @@ void test_probe_never_advertises_a_partial_backend() {
     const auto probe = solin::media_engine::probe_platform_virtual_camera();
 #ifdef _WIN32
     expect(probe.backend ==
-                   solin::media_engine::VirtualCameraBackendKind::windows_media_foundation &&
+                   solin::media_engine::VirtualCameraBackendKind::windows_directshow &&
                probe.platform_supported,
-           "Windows selects the Media Foundation backend contract");
+           "Windows selects the DirectShow backend contract");
 #else
     expect(probe.backend ==
                    solin::media_engine::VirtualCameraBackendKind::unavailable &&
                !probe.platform_supported,
            "an unimplemented platform returns the unavailable backend contract");
 #endif
-    expect(probe.operational ==
-               (probe.registration_api_available &&
-                probe.source_component_installed &&
-                probe.cross_session_transport_available),
+    expect(!probe.operational ||
+               (probe.platform_supported && probe.filter_registered_x86 &&
+                probe.filter_registered_x64 &&
+                probe.cross_process_transport_available),
            "the probe cannot advertise a partially installed camera backend");
     expect(probe.operational == probe.error_code.empty(),
            "operational state and the stable error code cannot disagree");
@@ -111,53 +108,44 @@ void test_shared_frame_sink_publishes_validated_latest_frames() {
            "stopping the sink invalidates its broker endpoint");
 }
 
-void test_persistent_registration_is_detected_without_restarting_it() {
-    Microsoft::WRL::ComPtr<IMFAttributes> attributes;
-    expect(SUCCEEDED(MFCreateAttributes(&attributes, 1U)) &&
-               attributes != nullptr,
-           "the registration test creates an attribute store");
-    if (attributes == nullptr) {
-        return;
-    }
-    expect(!solin::media_engine::windows_virtual_camera_is_registered(nullptr) &&
-               !solin::media_engine::windows_virtual_camera_is_registered(
-                   attributes.Get()),
-           "a new camera configuration is not mistaken for a registration");
-    expect(SUCCEEDED(attributes->SetString(
-               MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK,
-               L"solin-test-symbolic-link")) &&
-               solin::media_engine::windows_virtual_camera_is_registered(
-                   attributes.Get()),
-           "the Media Foundation symbolic link identifies a persistent registration");
-}
-
 void test_solin_output_device_cannot_be_selected_as_an_input() {
     constexpr std::string_view solin_device{
-        R"(\\?\swd#vcamdevapi#solin#{e5323777-f976-4f5b-9b55-b94699c46e44})"};
-    expect(solin::media_engine::is_windows_software_camera_device(solin_device),
-           "Windows 11 SWD virtual cameras are classified as software devices");
-    expect(solin::media_engine::is_solin_virtual_camera_device(
-               solin_device,
-               "Solin Virtual Camera (Câmera Virtual do Windows)"),
-           "the localized Windows suffix preserves Solin output identity");
+        "@device:sw:{860bb310-5d01-11d0-bd3b-00a0c911ce86}\\"
+        "{08AFA2E5-0293-4E56-9FE1-2A79DAE8E28F}"};
+    expect(solin::media_engine::is_solin_virtual_camera_device(solin_device),
+           "the exact DirectShow moniker CLSID identifies the Solin output");
     expect(!solin::media_engine::is_solin_virtual_camera_device(
-               R"(\\?\usb#vid_0000&pid_0000#camera)",
-               "Solin Virtual Camera (Câmera Virtual do Windows)"),
+               R"(\\?\usb#vid_0000&pid_0000#camera)"),
            "a hardware device is never hidden by display name alone");
     expect(!solin::media_engine::is_solin_virtual_camera_device(
-               "@device:sw:{camera}", "OBS Virtual Camera"),
+               "@device:sw:{camera}"),
            "third-party virtual cameras remain available as explicit inputs");
+    expect(solin::media_engine::is_solin_virtual_camera_device(solin_device),
+           "renaming cannot bypass CLSID-based feedback prevention");
 }
 
 #endif
 
 } // namespace
 
-int main() {
+int main(const int argument_count, char** arguments) {
     test_probe_never_advertises_a_partial_backend();
 #ifdef _WIN32
+    expect(argument_count == 2,
+           "the Windows probe regression requires the DirectShow filter path");
+    if (argument_count == 2) {
+        const std::filesystem::path filter_path{arguments[1]};
+        expect(solin::media_engine::windows_pe_dll_matches_architecture(
+                   filter_path, true),
+               "the x64 DirectShow DLL passes strict PE architecture validation");
+        expect(!solin::media_engine::windows_pe_dll_matches_architecture(
+                   filter_path, false),
+               "the x64 DirectShow DLL is rejected from the x86 registry view");
+        expect(!solin::media_engine::windows_pe_dll_matches_architecture(
+                   filter_path.parent_path() / "missing-filter.dll", true),
+               "a missing DLL fails PE validation closed");
+    }
     test_shared_frame_sink_publishes_validated_latest_frames();
-    test_persistent_registration_is_detected_without_restarting_it();
     test_solin_output_device_cannot_be_selected_as_an_input();
 #endif
     return failures == 0 ? 0 : 1;

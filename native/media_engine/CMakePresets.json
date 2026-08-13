@@ -16,6 +16,18 @@
         "CMAKE_INSTALL_PREFIX": "${sourceDir}/../../build/native/media_engine/install",
         "SOLIN_MEDIA_ENGINE_BUILD_TESTS": "ON"
       }
+    },
+    {
+      "name": "windows-directshow-win32",
+      "displayName": "Windows DirectShow filter Win32 (MSVC)",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "Win32",
+      "binaryDir": "${sourceDir}/../../build/native/directshow-filter-x86",
+      "cacheVariables": {
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/../../build/native/directshow-filter-x86/install",
+        "SOLIN_MEDIA_ENGINE_BUILD_TESTS": "ON",
+        "SOLIN_VIRTUAL_CAMERA_FILTER_ONLY": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -27,6 +39,16 @@
     {
       "name": "windows-msvc-release",
       "configurePreset": "windows-msvc",
+      "configuration": "Release"
+    },
+    {
+      "name": "windows-directshow-win32-debug",
+      "configurePreset": "windows-directshow-win32",
+      "configuration": "Debug"
+    },
+    {
+      "name": "windows-directshow-win32-release",
+      "configurePreset": "windows-directshow-win32",
       "configuration": "Release"
     }
   ],
@@ -42,6 +64,22 @@
     {
       "name": "windows-msvc-release",
       "configurePreset": "windows-msvc",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "windows-directshow-win32-debug",
+      "configurePreset": "windows-directshow-win32",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "windows-directshow-win32-release",
+      "configurePreset": "windows-directshow-win32",
       "configuration": "Release",
       "output": {
         "outputOnFailure": true
