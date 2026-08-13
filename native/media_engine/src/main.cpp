@@ -11,6 +11,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <limits>
+#include <map>
 #include <memory>
 #include <optional>
 #include <sstream>
@@ -18,6 +19,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #ifdef _WIN32
 #include "windows_virtual_camera_backend.hpp"
@@ -110,6 +112,65 @@ nlohmann::json graph_capabilities(const solin::media_engine::MediaRuntimeProbe& 
         {"virtual_camera", graph_available && probe.virtual_camera.operational},
         {"d3d11_shared_textures", false},
     };
+}
+
+struct PublishedSourceHealth final {
+    solin::media_engine::SourceRuntimeStatus status{
+        solin::media_engine::SourceRuntimeStatus::stopped};
+    std::string error_code{};
+
+    bool operator==(const PublishedSourceHealth&) const = default;
+};
+
+[[nodiscard]] std::string_view source_status_text(
+    const solin::media_engine::SourceRuntimeStatus status) noexcept {
+    using Status = solin::media_engine::SourceRuntimeStatus;
+    switch (status) {
+    case Status::starting:
+        return "starting";
+    case Status::ready:
+        return "ready";
+    case Status::degraded:
+        return "degraded";
+    case Status::failed:
+        return "failed";
+    case Status::stopped:
+        return "stopped";
+    }
+    return "failed";
+}
+
+[[nodiscard]] std::map<std::string, PublishedSourceHealth, std::less<>>
+active_source_health(const solin::media_engine::SceneGraphRuntime* graph) {
+    std::map<std::string, PublishedSourceHealth, std::less<>> result;
+    if (graph == nullptr) {
+        return result;
+    }
+    for (const auto& entry : graph->source_health_entries()) {
+        if (!entry.current || entry.consumer_count == 0U) {
+            continue;
+        }
+        result.insert_or_assign(entry.source_id,
+                                PublishedSourceHealth{
+                                    .status = entry.health.status,
+                                    .error_code = entry.health.error_code,
+                                });
+    }
+    return result;
+}
+
+[[nodiscard]] solin::media_engine::ControlEnvelope source_health_event(
+    const solin::media_engine::ControlEnvelope& request, const std::string_view source_id,
+    const PublishedSourceHealth& health) {
+    auto event = request;
+    event.message_type = "source_health";
+    event.payload = {
+        {"source_id", source_id},
+        {"status", source_status_text(health.status)},
+        {"error_code", health.error_code},
+        {"message", ""},
+    };
+    return event;
 }
 
 nlohmann::json
@@ -417,6 +478,7 @@ int run_protocol() {
                 },
         },
     };
+    std::map<std::string, PublishedSourceHealth, std::less<>> published_source_health;
     while (true) {
         const auto frame = solin::media_engine::read_frame(std::cin);
         if (frame.status == solin::media_engine::FrameReadStatus::clean_eof) {
@@ -434,6 +496,31 @@ int run_protocol() {
                     std::cout,
                     solin::media_engine::serialize_control_envelope(reply.response.value()))) {
                 return 74;
+            }
+            auto current_source_health = active_source_health(scene_graph.get());
+            std::vector<solin::media_engine::ControlEnvelope> source_events;
+            source_events.reserve(current_source_health.size() + published_source_health.size());
+            for (const auto& [source_id, health] : current_source_health) {
+                const auto previous = published_source_health.find(source_id);
+                if (previous == published_source_health.end() || previous->second != health) {
+                    source_events.push_back(source_health_event(request, source_id, health));
+                }
+            }
+            for (const auto& [source_id, _] : published_source_health) {
+                if (!current_source_health.contains(source_id)) {
+                    source_events.push_back(source_health_event(
+                        request, source_id,
+                        PublishedSourceHealth{
+                            .status = solin::media_engine::SourceRuntimeStatus::stopped,
+                        }));
+                }
+            }
+            published_source_health = std::move(current_source_health);
+            for (const auto& event : source_events) {
+                if (!solin::media_engine::write_frame(
+                        std::cout, solin::media_engine::serialize_control_envelope(event))) {
+                    return 74;
+                }
             }
             if (reply.should_stop) {
                 return 0;

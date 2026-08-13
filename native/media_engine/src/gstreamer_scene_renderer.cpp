@@ -981,9 +981,35 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
             for (auto& [_, source] : sources_) {
                 push_latest_frame(source);
             }
+            open_readiness_gate_when_sources_settle();
             std::unique_lock lock{feeder_mutex_};
             feeder_wakeup_.wait_for(lock, kFeederInterval,
                                     [this] { return stopped_.load(); });
+        }
+    }
+
+    void open_readiness_gate_when_sources_settle() noexcept {
+        if (output_ready_.load()) {
+            return;
+        }
+        try {
+            const auto settled = std::ranges::all_of(
+                sources_, [](const auto& item) {
+                    const auto& source = item.second;
+                    if (source.last_sequence != 0U) {
+                        return true;
+                    }
+                    const auto health = source.runtime->health();
+                    return health.status == SourceRuntimeStatus::failed ||
+                           health.status == SourceRuntimeStatus::stopped ||
+                           (health.status == SourceRuntimeStatus::degraded &&
+                            !health.error_code.empty());
+                });
+            if (settled && !output_ready_.exchange(true)) {
+                open_readiness_gate(output_readiness_valve_);
+            }
+        } catch (...) {
+            failed_.store(true);
         }
     }
 

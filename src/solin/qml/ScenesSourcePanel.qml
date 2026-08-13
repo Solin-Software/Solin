@@ -24,6 +24,7 @@ Rectangle {
     readonly property color accent: theme ? theme.accent : "#3b82f6"
     readonly property color accentTint: theme ? theme.accentTint : "#17335b"
     readonly property color danger: theme ? theme.danger : "#ef6a6a"
+    readonly property color warning: theme ? theme.warning : "#d29922"
     readonly property int rowHeight: 58
     readonly property int rowSpacing: 7
     readonly property int rowSlot: rowHeight + rowSpacing
@@ -196,6 +197,8 @@ Rectangle {
                 required property bool layerVisible
                 required property bool layerLocked
                 required property bool ptzAvailable
+                required property bool sourceWarning
+                required property string sourceWarningText
                 readonly property bool selected: root.bridge && root.bridge.selectedLayerId === layerId
                 property real previewOffsetY: root.previewOffset(index, layerId)
 
@@ -282,6 +285,39 @@ Rectangle {
                         }
                     }
 
+                    Item {
+                        objectName: "scenesSourceWarning-" + sourceRow.layerId
+                        visible: sourceRow.sourceWarning
+                        Layout.preferredWidth: visible ? 24 : 0
+                        Layout.fillHeight: true
+
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: 22
+                            height: 22
+                            radius: 11
+                            color: Qt.rgba(
+                                root.warning.r, root.warning.g, root.warning.b, 0.13)
+
+                            Image {
+                                anchors.centerIn: parent
+                                width: 13
+                                height: 13
+                                source: "image://sceneicons/warning/16/"
+                                    + root.iconHex(root.warning)
+                            }
+                        }
+
+                        MouseArea {
+                            id: warningMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                        }
+                        ToolTip.visible: warningMouse.containsMouse
+                        ToolTip.text: sourceRow.sourceWarningText
+                        ToolTip.delay: 350
+                    }
+
                     SourceAction {
                         iconName: sourceRow.layerVisible ? "eye" : "eye-off"
                         toolTipText: sourceRow.layerVisible ? qsTr("Hide source") : qsTr("Show source")
@@ -306,7 +342,7 @@ Rectangle {
                     id: rowMouse
                     anchors.fill: parent
                     anchors.leftMargin: 36
-                    anchors.rightMargin: 92
+                    anchors.rightMargin: sourceRow.sourceWarning ? 116 : 92
                     acceptedButtons: Qt.LeftButton | Qt.RightButton
                     activeFocusOnTab: true
                     hoverEnabled: true

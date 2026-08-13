@@ -27,6 +27,8 @@ from solin.core.scenes.engine import (
     SceneEngineSnapshot,
     SceneEngineStatus,
     ScenePreparation,
+    SourceHealthEvent,
+    SourceHealthStatus,
 )
 from solin.core.scenes.model import (
     BusId,
@@ -577,6 +579,42 @@ def test_projection_categories_are_explicit_and_unknown_types_fail_safe() -> Non
     assert content_category_for_projection({"type": "removed_projection_type"}) is (
         ContentCategory.EXTERNAL_STREAM
     )
+
+
+def test_source_health_is_retained_until_ready_or_stopped() -> None:
+    engine = _Engine()
+    _documents, runtime, controller = _runtime_controller(
+        engine,
+        _Projection(),
+        request_ids=("hydrate",),
+    )
+    controller.start_engine()
+    assert engine.listener is not None
+
+    failed = SourceHealthEvent(
+        source_id=DEFAULT_CAMERA_SOURCE_ID,
+        status=SourceHealthStatus.FAILED,
+        error_code="local_camera_stream_failed",
+    )
+    engine.listener(failed)
+    assert controller.source_health(DEFAULT_CAMERA_SOURCE_ID) == failed
+
+    ready = SourceHealthEvent(
+        source_id=DEFAULT_CAMERA_SOURCE_ID,
+        status=SourceHealthStatus.READY,
+    )
+    engine.listener(ready)
+    assert controller.source_health(DEFAULT_CAMERA_SOURCE_ID) == ready
+
+    engine.listener(
+        SourceHealthEvent(
+            source_id=DEFAULT_CAMERA_SOURCE_ID,
+            status=SourceHealthStatus.STOPPED,
+        )
+    )
+    assert controller.source_health(DEFAULT_CAMERA_SOURCE_ID) is None
+    controller.close()
+    runtime.close()
     assert content_category_for_projection({"type": "future_source"}) is (
         ContentCategory.EXTERNAL_STREAM
     )

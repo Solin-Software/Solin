@@ -12,7 +12,11 @@ from PySide6.QtGui import QImage
 
 from solin.controllers.scene_runtime_controller import SceneRuntimeController
 from solin.core.scenes.editor_geometry import crop_geometry, resize_rect, snap_move_rect
-from solin.core.scenes.engine import LocalCameraDevice, LocalVideoFormat
+from solin.core.scenes.engine import (
+    LocalCameraDevice,
+    LocalVideoFormat,
+    SourceHealthStatus,
+)
 from solin.core.scenes.model import (
     CONTENT_SOURCE_ID,
     BusId,
@@ -120,6 +124,7 @@ class ScenesBridge(QObject):
             (controller.preview_frame_changed, self._on_preview_frame),
             (controller.preview_egress_changed, self._runtime_changed),
             (controller.local_cameras_changed, self._runtime_changed),
+            (controller.source_health_changed, self._runtime_changed),
         )
         for signal, handler in self._controller_connections:
             signal.connect(handler)
@@ -1381,6 +1386,16 @@ class ScenesBridge(QObject):
             if isinstance(source.configuration, (LocalCameraConfig, RtspCameraConfig))
             else None
         )
+        health = self._controller.source_health(source.id)
+        source_warning = bool(
+            source.kind is SourceKind.LOCAL_CAMERA
+            and health is not None
+            and (
+                health.error_code
+                or health.status
+                in {SourceHealthStatus.DEGRADED, SourceHealthStatus.FAILED}
+            )
+        )
         return {
             "id": layer.id,
             "source_id": source.id,
@@ -1403,6 +1418,15 @@ class ScenesBridge(QObject):
             "ptz_available": bool(self._ptz_camera_ids_for_layer(layer.id)),
             "camera_keep_active": bool(
                 camera_configuration is not None and camera_configuration.keep_active
+            ),
+            "source_warning": source_warning,
+            "source_warning_text": (
+                self.tr(
+                    "Camera unavailable. Check its connection, privacy permissions, "
+                    "or whether another application is using it."
+                )
+                if source_warning
+                else ""
             ),
         }
 

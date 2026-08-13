@@ -41,6 +41,8 @@ class _LayerRole(IntEnum):
     OPACITY = ROTATION + 1
     COLOR = OPACITY + 1
     PTZ_AVAILABLE = COLOR + 1
+    SOURCE_WARNING = PTZ_AVAILABLE + 1
+    SOURCE_WARNING_TEXT = SOURCE_WARNING + 1
 
 
 _SCENE_ROLES = {
@@ -76,6 +78,8 @@ _LAYER_ROLES = {
     _LayerRole.OPACITY: QByteArray(b"layerOpacity"),
     _LayerRole.COLOR: QByteArray(b"sourceColor"),
     _LayerRole.PTZ_AVAILABLE: QByteArray(b"ptzAvailable"),
+    _LayerRole.SOURCE_WARNING: QByteArray(b"sourceWarning"),
+    _LayerRole.SOURCE_WARNING_TEXT: QByteArray(b"sourceWarningText"),
 }
 
 
@@ -242,6 +246,8 @@ class SceneLayerListModel(_MappingListModel):
                 _LayerRole.OPACITY: "opacity",
                 _LayerRole.COLOR: "color",
                 _LayerRole.PTZ_AVAILABLE: "ptz_available",
+                _LayerRole.SOURCE_WARNING: "source_warning",
+                _LayerRole.SOURCE_WARNING_TEXT: "source_warning_text",
             },
             parent,
         )

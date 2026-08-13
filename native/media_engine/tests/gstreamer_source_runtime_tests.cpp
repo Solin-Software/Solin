@@ -140,6 +140,38 @@ class TestRtspServer final {
     std::thread worker_{};
 };
 
+class FailedSourceRuntime final : public solin::media_engine::SourceRuntime {
+  public:
+    void start() override {}
+    void stop() noexcept override {}
+
+    [[nodiscard]] solin::media_engine::SourceRuntimeHealth health() const override {
+        return {
+            .status = solin::media_engine::SourceRuntimeStatus::failed,
+            .error_code = "local_camera_stream_failed",
+        };
+    }
+};
+
+class SelectiveFailureFactory final : public solin::media_engine::SourceRuntimeFactory {
+  public:
+    explicit SelectiveFailureFactory(
+        std::shared_ptr<solin::media_engine::SourceRuntimeFactory> delegate)
+        : delegate_(std::move(delegate)) {}
+
+    [[nodiscard]] std::shared_ptr<solin::media_engine::SourceRuntime>
+    create(const solin::media_engine::SceneSource& source,
+           const std::uint64_t generation) override {
+        if (source.id == "failed-camera") {
+            return std::make_shared<FailedSourceRuntime>();
+        }
+        return delegate_->create(source, generation);
+    }
+
+  private:
+    std::shared_ptr<solin::media_engine::SourceRuntimeFactory> delegate_{};
+};
+
 void test_automatic_camera_format_is_bounded_and_deterministic() {
     const solin::media_engine::LocalCameraDevice device{
         .device_id = "camera-test",
@@ -250,6 +282,39 @@ void test_automatic_camera_format_is_bounded_and_deterministic() {
     value.active_scene_ids = {"scene-root", "scene-root"};
     value.render_enabled = {true, false};
     value.output_enabled = {true, false};
+    return value;
+}
+
+[[nodiscard]] solin::media_engine::SceneHydrationSnapshot
+compositor_with_failed_camera_snapshot() {
+    auto value = compositor_snapshot();
+    value.document_id = "gstreamer-degraded-compositor-test";
+    value.sources.push_back({
+        .id = "failed-camera",
+        .kind = solin::media_engine::SceneSourceKind::local_camera,
+        .enabled = true,
+        .configuration = solin::media_engine::LocalCameraSourceConfiguration{
+            .device_id = "blocked-camera",
+        },
+    });
+    auto root = std::ranges::find(value.scenes, "scene-root",
+                                  &solin::media_engine::SceneGraphDefinition::id);
+    if (root != value.scenes.end()) {
+        root->layers.push_back({
+            .id = "failed-camera-layer",
+            .source_id = "failed-camera",
+            .geometry = {
+                .x = 0.7,
+                .y = 0.7,
+                .width = 0.25,
+                .height = 0.25,
+                .opacity = 1.0,
+                .fit_mode = "cover",
+                .border_color = "#00000000",
+                .visible = true,
+            },
+        });
+    }
     return value;
 }
 
@@ -671,6 +736,34 @@ void test_scene_renderer_composes_nested_scene_to_shared_d3d11_frame(
     test_program_transitions_render_real_synthetic_frames(graph, renderer);
 }
 
+void test_failed_source_does_not_block_healthy_compositor_layers(
+    solin::media_engine::MediaRuntime& media_runtime) {
+    const auto renderer = media_runtime.scene_renderer();
+    expect(renderer != nullptr, "the degraded-source test has a scene renderer");
+    if (renderer == nullptr) {
+        return;
+    }
+    auto factory = std::make_shared<SelectiveFailureFactory>(
+        media_runtime.source_runtime_factory());
+    solin::media_engine::SceneGraphRuntime graph{factory, renderer};
+    graph.hydrate(compositor_with_failed_camera_snapshot(), 1U);
+
+    std::shared_ptr<const solin::media_engine::SourceFrame> frame;
+    bool rendered_healthy_source = false;
+    const auto deadline = std::chrono::steady_clock::now() + 3s;
+    while (std::chrono::steady_clock::now() < deadline) {
+        frame = renderer->latest_frame(solin::media_engine::OutputBus::media_windows);
+        const auto sample = solin::media_engine::gstreamer_sample(frame);
+        if (sample && sample_center_is_test_color(sample.sample)) {
+            rendered_healthy_source = true;
+            break;
+        }
+        std::this_thread::sleep_for(10ms);
+    }
+    expect(frame != nullptr && rendered_healthy_source,
+           "a source that fails before its first frame does not hold back healthy layers");
+}
+
 void test_frame_payload_outlives_media_runtime_and_registry_owners() {
     solin::media_engine::GStreamerSampleLease sample;
     {
@@ -1029,6 +1122,7 @@ int main(const int argc, const char* const argv[]) {
             if (probe.d3d11_compositor) {
                 test_scene_renderer_composes_nested_scene_to_shared_d3d11_frame(
                     media_runtime);
+                test_failed_source_does_not_block_healthy_compositor_layers(media_runtime);
             }
             if (argc == 2 && std::string_view{argv[1]} == "--local-camera") {
                 test_first_hardware_camera_publishes_its_exact_selected_format(media_runtime);

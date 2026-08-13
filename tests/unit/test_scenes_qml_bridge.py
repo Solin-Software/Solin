@@ -10,7 +10,13 @@ from PySide6.QtTest import QSignalSpy
 
 from solin.controllers.scene_runtime_controller import SceneRuntimeController
 from solin.core.foundation.runtime_paths import ProfilePaths
-from solin.core.scenes.engine import LocalCameraDevice, LocalCameraDiscovery, LocalVideoFormat
+from solin.core.scenes.engine import (
+    LocalCameraDevice,
+    LocalCameraDiscovery,
+    LocalVideoFormat,
+    SourceHealthEvent,
+    SourceHealthStatus,
+)
 from solin.core.scenes.model import (
     BusId,
     CameraMediaType,
@@ -173,6 +179,40 @@ def _enable_default_camera_ptz(
     scene = controller.document.scenes[0]
     layer = scene.layers[0]
     return camera.id, layer.id
+
+
+def test_camera_source_health_surfaces_an_actionable_layer_warning(tmp_path: Path) -> None:
+    workspace, controller, bridge, _preview_store = _bridge(tmp_path)
+    camera_id = workspace.configured_cameras[0].id
+    controller._consume_engine_event(  # noqa: SLF001 - exercise the queued event boundary
+        SourceHealthEvent(
+            source_id=camera_id,
+            status=SourceHealthStatus.FAILED,
+            error_code="local_camera_stream_failed",
+        )
+    )
+
+    camera_record = next(
+        bridge.layersModel.get(row)
+        for row in range(bridge.layersModel.rowCount())
+        if bridge.layersModel.get(row)["source_id"] == camera_id
+    )
+    assert camera_record["source_warning"] is True
+    assert "privacy permissions" in str(camera_record["source_warning_text"])
+
+    controller._consume_engine_event(  # noqa: SLF001 - exercise the queued event boundary
+        SourceHealthEvent(source_id=camera_id, status=SourceHealthStatus.READY)
+    )
+    recovered_record = next(
+        bridge.layersModel.get(row)
+        for row in range(bridge.layersModel.rowCount())
+        if bridge.layersModel.get(row)["source_id"] == camera_id
+    )
+    assert recovered_record["source_warning"] is False
+    assert recovered_record["source_warning_text"] == ""
+    bridge.close()
+    controller.close()
+    workspace.close()
 
 
 def test_bridge_persists_shared_ptz_presets_and_scene_actions(tmp_path: Path) -> None:

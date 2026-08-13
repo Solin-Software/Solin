@@ -23,6 +23,7 @@ from solin.core.scenes.engine import (
     SceneEngineStatus,
     ScenePreparation,
     SourceHealthEvent,
+    SourceHealthStatus,
     scene_engine_graph_signature,
 )
 from solin.core.scenes.model import (
@@ -169,6 +170,7 @@ class SceneRuntimeController(QObject):
     transition_fallback = Signal(str)
     operational_state_changed = Signal()
     local_cameras_changed = Signal(object)
+    source_health_changed = Signal(str)
     preview_scene_changed = Signal(object)
     preview_frame_changed = Signal(str, object)
     preview_egress_changed = Signal(object)
@@ -219,6 +221,7 @@ class SceneRuntimeController(QObject):
         self._window_targets: tuple[OutputWindowTarget, ...] = ()
         self._window_scene_id: str | None = None
         self._local_cameras = _unavailable_local_cameras("engine_unavailable")
+        self._source_health: dict[str, SourceHealthEvent] = {}
         self._local_camera_request_id = ""
         self._local_camera_future: Future[LocalCameraDiscovery] | None = None
         self._suspended_media_session_id: int | None = None
@@ -281,6 +284,9 @@ class SceneRuntimeController(QObject):
     @property
     def local_cameras(self) -> LocalCameraDiscovery:
         return self._local_cameras
+
+    def source_health(self, source_id: str) -> SourceHealthEvent | None:
+        return self._source_health.get(source_id)
 
     @property
     def hydration_in_progress(self) -> bool:
@@ -839,6 +845,7 @@ class SceneRuntimeController(QObject):
         self._hydrate_in_flight = None
         self._hydrate_dirty = False
         self._engine_document_revision = 0
+        self._clear_source_health()
         self._observed_graph_record = scene_engine_graph_signature(self._documents.document)
         self._preview_geometry_in_flight = None
         self._queued_preview_geometry = None
@@ -875,6 +882,16 @@ class SceneRuntimeController(QObject):
             self._report_exception("event", RuntimeError("Invalid scene engine event"))
             return
         self.engine_event.emit(event)
+        if isinstance(event, SourceHealthEvent):
+            previous = self._source_health.get(event.source_id)
+            if event.status is SourceHealthStatus.STOPPED:
+                if previous is not None:
+                    self._source_health.pop(event.source_id, None)
+                    self.source_health_changed.emit(event.source_id)
+            elif previous != event:
+                self._source_health[event.source_id] = event
+                self.source_health_changed.emit(event.source_id)
+            return
         if not isinstance(event, EngineHealthEvent) or not self._engine_started:
             return
         health = event.health
@@ -900,6 +917,7 @@ class SceneRuntimeController(QObject):
             self._local_camera_future = None
             self._set_local_cameras(_unavailable_local_cameras("engine_not_ready"))
             self._set_engine_ready(False)
+            self._clear_source_health()
             self._set_applied_scenes(())
             self._hydrate_in_flight = None
             self._hydrate_dirty = False
@@ -1781,6 +1799,12 @@ class SceneRuntimeController(QObject):
             return
         self._last_engine_error_code = error_code
         self.operational_state_changed.emit()
+
+    def _clear_source_health(self) -> None:
+        source_ids = tuple(self._source_health)
+        self._source_health.clear()
+        for source_id in source_ids:
+            self.source_health_changed.emit(source_id)
 
     def _set_local_cameras(self, discovery: LocalCameraDiscovery) -> None:
         if discovery == self._local_cameras:

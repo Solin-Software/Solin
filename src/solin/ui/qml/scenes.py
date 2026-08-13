@@ -103,6 +103,7 @@ class ScenesEditorWidget(QWidget):
             "close": icons.ICON_CLOSE,
             "crosshair": icons.ICON_CROSSHAIR,
             "crop": icons.ICON_CROP,
+            "warning": icons.ICON_INFO_CIRCLE,
         }
         self.qml_load_handle = configure_qml_host(
             self._qml,

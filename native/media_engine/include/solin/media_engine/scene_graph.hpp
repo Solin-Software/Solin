@@ -92,6 +92,7 @@ class SceneGraphRuntime final {
     [[nodiscard]] bool output_enabled(OutputBus bus) const;
     [[nodiscard]] std::size_t pending_preparation_count() const noexcept;
     [[nodiscard]] std::shared_ptr<const CompiledSceneDocument> compiled_document() const;
+    [[nodiscard]] std::vector<SourceRegistryEntry> source_health_entries() const;
 
   private:
     class Impl;

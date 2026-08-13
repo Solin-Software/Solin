@@ -18,6 +18,7 @@ Item {
     readonly property color textMuted: theme ? theme.textMuted : "#768397"
     readonly property color accent: theme ? theme.accent : "#3b82f6"
     readonly property color danger: theme ? theme.danger : "#ef6a6a"
+    readonly property color warning: theme ? theme.warning : "#d29922"
     readonly property real outputAspect: bridge && bridge.outputHeight > 0
         ? bridge.outputWidth / bridge.outputHeight : 16 / 9
     property real guideX: -1
@@ -125,6 +126,8 @@ Item {
                     required property real cropTop
                     required property real cropRight
                     required property real cropBottom
+                    required property bool sourceWarning
+                    required property string sourceWarningText
 
                     readonly property bool selected: root.bridge && root.bridge.selectedLayerId === layerId
                     property real displayX: layerX
@@ -281,6 +284,41 @@ Item {
                             font.pixelSize: 9
                             elide: Text.ElideRight
                         }
+                    }
+
+                    Rectangle {
+                        id: sourceWarningBadge
+                        objectName: "scenesCanvasSourceWarning-" + layerBox.layerId
+                        visible: layerBox.sourceWarning
+                        anchors.right: parent.right
+                        anchors.top: parent.top
+                        anchors.margins: 6
+                        width: 24
+                        height: 24
+                        radius: 12
+                        color: Qt.rgba(
+                            root.warning.r, root.warning.g, root.warning.b, 0.16)
+                        border.width: 1
+                        border.color: Qt.rgba(
+                            root.warning.r, root.warning.g, root.warning.b, 0.38)
+                        z: 10
+
+                        Image {
+                            anchors.centerIn: parent
+                            width: 14
+                            height: 14
+                            source: "image://sceneicons/warning/16/"
+                                + root.iconHex(root.warning)
+                        }
+
+                        MouseArea {
+                            id: sourceWarningMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                        }
+                        ToolTip.visible: sourceWarningMouse.containsMouse
+                        ToolTip.text: layerBox.sourceWarningText
+                        ToolTip.delay: 350
                     }
 
                     MouseArea {

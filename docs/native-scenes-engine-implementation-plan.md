@@ -706,10 +706,13 @@ recover without feedback, black flashes, or a UI-thread stall.
   cross-process transport failures, and consumer state separately.
 - [x] Exercise concurrent x86/x64-style broker clients, multiple filter instances, installed
   graph activation, and repeated open/close cycles in automated harnesses.
-- [ ] Detect when Windows camera-privacy policy prevents Solin from capturing a physical
-  camera used by a scene, and surface a subtle error state on the affected source/layer with
-  actionable guidance. This concerns Solin's input capture only; failures in third-party
-  consumers opening the Solin virtual camera are outside the application's observable state.
+- [x] Surface a subtle source-scoped warning when Solin cannot start or sustain a physical
+  camera capture, with guidance covering connection, privacy permissions, and device
+  contention; clear it only after frame delivery recovers. A failed source is considered
+  settled for compositor readiness, so it cannot hold back healthy layers while reconnecting.
+  Media Foundation/GStreamer does not reliably distinguish those causes, and failures in
+  third-party consumers opening the Solin virtual camera remain outside the application's
+  observable state.
 - [ ] Qualify installed x86/x64 graphs in OBS, Zoom, and Chrome on Windows 10 1809, Windows
   10 22H2, and current Windows 11, including two simultaneous consumers and engine restart.
 

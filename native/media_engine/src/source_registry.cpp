@@ -252,6 +252,10 @@ class SourceRegistryState final {
     SourceRegistryLimits limits{};
     std::shared_ptr<SourceRuntimeFactory> factory{};
     std::map<std::string, CurrentSource, std::less<>> current_sources{};
+    // A runtime can fail before a lease exists (for example when Windows privacy
+    // hides a configured camera from Media Foundation). Keep that source-scoped
+    // failure observable across the transactional snapshot rollback.
+    std::map<std::string, CurrentSource, std::less<>> failed_runtime_starts{};
     std::map<SourceGenerationKey, std::shared_ptr<SourceRuntimeSlot>> runtimes{};
     std::deque<SourceGenerationKey> retained_idle_cameras{};
     std::mutex stop_mutex{};
@@ -629,8 +633,20 @@ SourceLease SourceRegistryUpdate::acquire(const std::string_view source_id,
     if (source == state_->next_sources.end()) {
         throw std::out_of_range("unknown source registry identity");
     }
-    auto acquired = acquire_runtime_slot(state_->registry, source->second,
-                                         std::string{consumer_id});
+    RuntimeAcquisition acquired;
+    try {
+        acquired = acquire_runtime_slot(state_->registry, source->second,
+                                        std::string{consumer_id});
+    } catch (...) {
+        std::scoped_lock lock{state_->registry->mutex};
+        state_->registry->failed_runtime_starts.insert_or_assign(source->first,
+                                                                  source->second);
+        throw;
+    }
+    {
+        std::scoped_lock lock{state_->registry->mutex};
+        state_->registry->failed_runtime_starts.erase(source->first);
+    }
     return SourceLease{state_->registry, std::move(acquired.slot),
                        std::move(acquired.consumer_id)};
 }
@@ -720,6 +736,9 @@ SourceRegistry::stage_snapshot(const SceneHydrationSnapshot& snapshot) {
     if (state_->closed) {
         throw std::logic_error("source registry is closed");
     }
+    std::erase_if(state_->failed_runtime_starts, [&next_sources](const auto& failure) {
+        return !next_sources.contains(failure.first);
+    });
     const bool same_document = state_->hydrated &&
                                snapshot.document_id == state_->document_id;
     if (same_document && snapshot.document_revision < state_->document_revision) {
@@ -782,8 +801,18 @@ SourceLease SourceRegistry::acquire(const std::string_view source_id,
         }
         selected = current->second;
     }
-    auto acquired =
-        acquire_runtime_slot(state_, selected, std::string{consumer_id});
+    RuntimeAcquisition acquired;
+    try {
+        acquired = acquire_runtime_slot(state_, selected, std::string{consumer_id});
+    } catch (...) {
+        std::scoped_lock lock{state_->mutex};
+        state_->failed_runtime_starts.insert_or_assign(selected.definition.id, selected);
+        throw;
+    }
+    {
+        std::scoped_lock lock{state_->mutex};
+        state_->failed_runtime_starts.erase(selected.definition.id);
+    }
     return SourceLease{state_, std::move(acquired.slot),
                        std::move(acquired.consumer_id)};
 }
@@ -830,6 +859,33 @@ std::vector<SourceRegistryEntry> SourceRegistry::entries() const {
                     .health = {},
                 },
                 .slot = slot,
+            });
+        }
+        for (const auto& [source_id, failure] : state_->failed_runtime_starts) {
+            const auto existing = std::ranges::find_if(
+                pending, [&source_id](const PendingEntry& item) {
+                    return item.entry.source_id == source_id && item.entry.current;
+                });
+            if (existing != pending.end()) {
+                existing->entry.enabled = failure.definition.enabled;
+                existing->entry.consumer_count = 1U;
+                existing->entry.health.status = SourceRuntimeStatus::failed;
+                existing->entry.health.error_code = "source_runtime_start_failed";
+                existing->slot.reset();
+                continue;
+            }
+            pending.push_back({
+                .entry = {
+                    .source_id = source_id,
+                    .generation = failure.generation,
+                    .enabled = failure.definition.enabled,
+                    .current = true,
+                    .consumer_count = 1U,
+                    .health = {
+                        .status = SourceRuntimeStatus::failed,
+                        .error_code = "source_runtime_start_failed",
+                    },
+                },
             });
         }
     }

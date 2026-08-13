@@ -774,7 +774,10 @@ class GStreamerSourceRuntime final : public SourceRuntime {
         std::scoped_lock lock{state_mutex_};
         health_.status =
             ever_ready_ ? SourceRuntimeStatus::degraded : SourceRuntimeStatus::starting;
-        health_.error_code.clear();
+        // Retain the last actionable error while reconnecting. Clearing it at the
+        // beginning of every retry made observers flicker between healthy and failed
+        // even though no frame had recovered yet. The first delivered frame is the
+        // authoritative recovery boundary and clears the error below.
     }
 
     void run() noexcept {

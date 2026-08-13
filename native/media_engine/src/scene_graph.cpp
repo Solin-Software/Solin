@@ -799,4 +799,8 @@ std::shared_ptr<const CompiledSceneDocument> SceneGraphRuntime::compiled_documen
     return impl_->document;
 }
 
+std::vector<SourceRegistryEntry> SceneGraphRuntime::source_health_entries() const {
+    return impl_->registry.entries();
+}
+
 } // namespace solin::media_engine

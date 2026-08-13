@@ -455,6 +455,46 @@ void test_creation_failure_does_not_poison_the_registry_cache() {
            "retry creates a clean source runtime");
 }
 
+void test_staged_creation_failure_remains_source_scoped_until_recovery() {
+    auto counters = std::make_shared<RuntimeCounters>();
+    auto factory = std::make_shared<FakeRuntimeFactory>(counters);
+    solin::media_engine::SourceRegistry registry{factory};
+    registry.replace_snapshot(snapshot(1U, color_source("#000000FF", true, "base")));
+    factory->fail_next();
+
+    {
+        auto update = registry.stage_snapshot(
+            snapshot(2U, color_source("#FFFFFFFF", true, "camera-source")));
+        expect_rejected(
+            [&update] {
+                static_cast<void>(update.acquire("camera-source", "renderer-consumer"));
+            },
+            "staged source creation failures are reported");
+    }
+    const auto failed_entries = registry.entries();
+    const auto failure = std::ranges::find(
+        failed_entries, "camera-source",
+        &solin::media_engine::SourceRegistryEntry::source_id);
+    expect(failure != failed_entries.end() && failure->current &&
+               failure->consumer_count == 1U &&
+               failure->health.status == solin::media_engine::SourceRuntimeStatus::failed &&
+               failure->health.error_code == "source_runtime_start_failed",
+           "an early staged failure remains observable with its source identity");
+
+    auto retry = registry.stage_snapshot(
+        snapshot(2U, color_source("#FFFFFFFF", true, "camera-source")));
+    auto lease = retry.acquire("camera-source", "renderer-consumer");
+    retry.commit();
+    const auto recovered_entries = registry.entries();
+    const auto recovered = std::ranges::find(
+        recovered_entries, "camera-source",
+        &solin::media_engine::SourceRegistryEntry::source_id);
+    expect(static_cast<bool>(lease) && recovered != recovered_entries.end() &&
+               recovered->health.status == solin::media_engine::SourceRuntimeStatus::ready &&
+               recovered->health.error_code.empty(),
+           "a successful retry clears the staged source failure");
+}
+
 void test_start_failure_stops_the_partial_runtime_and_allows_retry() {
     auto counters = std::make_shared<RuntimeCounters>();
     auto factory = std::make_shared<FakeRuntimeFactory>(counters);
@@ -740,6 +780,7 @@ int main() {
     test_idempotent_revisions_preserve_generations_and_conflicts_are_rejected();
     test_new_document_identity_resets_revision_order_and_reuses_stable_sources();
     test_creation_failure_does_not_poison_the_registry_cache();
+    test_staged_creation_failure_remains_source_scoped_until_recovery();
     test_start_failure_stops_the_partial_runtime_and_allows_retry();
     test_disabled_unknown_and_invalid_identifiers_are_rejected();
     test_concurrent_acquisition_still_creates_one_runtime();
