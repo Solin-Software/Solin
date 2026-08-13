@@ -667,6 +667,31 @@ minutes without an unbounded queue, deadlock, source duplication, or memory grow
 - [x] Present D3D11-backed frames into engine-owned child windows for physical media
   surfaces, with latest-frame/leaky queues, target-loss recovery, bounded shutdown, and no
   Python/QImage presentation path.
+- [ ] Move raw media-change transitions into the native D3D11 presentation path. Extend the
+  content-ingress control contract with an explicit monotonic media epoch, distinct from and
+  bound to the transport generation, plus a media-switch intent; ordinary frames from the
+  same media epoch must never restart the effect. When Program mirroring is disabled, retain
+  the last stable GPU frame, fade it to opaque black, commit the incoming media epoch at
+  black, wait for its first valid frame within a bounded deadline, and fade it in without
+  per-pixel work or frame materialization in Python/Qt. The state machine must be
+  latest-request-wins, cancel cleanly on Stop, output reassignment,
+  target loss, engine restart, or device loss, and fall back to the existing Qt transition
+  only when native presentation is unavailable. Scope the media-output fade to the ownership
+  switch requested by toggling `Show in media windows`: fade the current raw-media or Program
+  owner to black, atomically change the render bus at black, wait for the new owner's first
+  valid frame within the same bounded policy, and fade it in. While Program owns the surface,
+  no media-output fade is applied. Its already-rendered scene transitions remain authoritative
+  regardless of whether a scene change was automatic or manual, and content frames, playback
+  state, or scene revisions must never start an additional effect.
+  Keep the expanded in-app player outside this contract: it continues to show the original
+  `QVideoFrame` and does not drive physical-output transitions. Gate completion on raw-mode
+  video-to-video, video-to-image, image-to-video, raw-media-to-Program,
+  Program-to-raw-media, replay, rapid next/previous and mirror toggles, delayed first frame,
+  decode failure, and multi-monitor tests, plus P50/P95 CPU and frame-time benchmarks against
+  the current native-present and Qt-fallback paths. This removes the Qt opacity cost during
+  the effect; it does not claim a steady-state CPU reduction while decoded frames still cross
+  the shared-memory ingress. The separate keyed-texture ingress gate is what can remove that
+  steady-state copy/upload path.
 - [x] Present the expanded in-app player by forwarding the original QtMultimedia
   `QVideoFrame` to a `QVideoWidget` in the same process. Expanding the player neither
   materializes a `QImage`/`QPixmap` per frame nor starts the Media Windows compositor.
