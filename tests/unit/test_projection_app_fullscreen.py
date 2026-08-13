@@ -165,16 +165,36 @@ def test_audio_frames_do_not_reach_app_fullscreen():
     assert overlay.frames == []
 
 
-def test_native_preview_avoids_materializing_qt_video_frames():
+def test_expanded_preview_forwards_the_original_video_frame_without_materializing_it():
     overlay = _Overlay(active=True)
     bar = _bar(mode="video", audio=False, overlay=overlay)
     bar._expanded = True
-    bar._native_output_active = True
-    frame = object()
+
+    class _Frame:
+        def toImage(self):
+            raise AssertionError("the expanded preview must not materialize a QImage")
+
+    class _Sink:
+        def __init__(self):
+            self.frames = []
+
+        def setVideoFrame(self, frame):
+            self.frames.append(frame)
+
+    class _VideoPreview:
+        def __init__(self):
+            self.sink = _Sink()
+
+        def videoSink(self):
+            return self.sink
+
+    bar.video_preview = _VideoPreview()
+    frame = _Frame()
 
     bar._on_video_frame(frame)
 
     assert overlay.frames == [frame]
+    assert bar.video_preview.sink.frames == [frame]
 
 
 def test_recovery_feedback_is_mirrored_to_app_fullscreen():

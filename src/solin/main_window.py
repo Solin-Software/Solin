@@ -974,9 +974,6 @@ class MainWindow(QWidget):
             program_output.video_format.width,
             program_output.video_format.height,
         )
-        projection_bar = getattr(self, "proj_bar", None)
-        if projection_bar is not None:
-            projection_bar.refresh_native_output_request()
         self._reconcile_native_scene_surfaces()
 
     def _on_scene_frame_egress_descriptor_changed(self, _descriptor) -> None:
@@ -999,15 +996,6 @@ class MainWindow(QWidget):
             if self._native_fallback_mirror_required
             else None
         )
-
-    def _on_projection_native_surface_requested(self, surface) -> None:
-        if (
-            surface is not None
-            and getattr(self, "_native_projection_preview_surface", None) is None
-        ):
-            self._native_window_output_suppressed = False
-        self._native_projection_preview_surface = surface
-        self._reconcile_native_scene_surfaces()
 
     @staticmethod
     def _native_window_target(
@@ -1033,8 +1021,6 @@ class MainWindow(QWidget):
         self._reconcile_native_scene_surfaces()
 
     def _reconcile_native_scene_surfaces(self) -> None:
-        projection_bar = getattr(self, "proj_bar", None)
-        preview_surface = getattr(self, "_native_projection_preview_surface", None)
         mirror_enabled = self._program_mirror_enabled()
         render_bus = (
             BusId.VIRTUAL_CAMERA if mirror_enabled else BusId.MEDIA_WINDOWS
@@ -1055,19 +1041,6 @@ class MainWindow(QWidget):
         physical_native = supported and (mirror_enabled or raw_video)
         physical_windows = tuple(self.projection_session.projection_windows)
         targets: list[OutputWindowTarget] = []
-
-        if projection_bar is not None:
-            projection_bar.set_native_output_active(
-                supported and preview_surface is not None
-            )
-        if supported and preview_surface is not None:
-            targets.append(
-                self._native_window_target(
-                    preview_surface,
-                    "projection-preview",
-                    render_bus,
-                )
-            )
 
         for index, window in enumerate(physical_windows):
             set_native_active = getattr(window, "set_native_output_active", None)
@@ -1123,7 +1096,6 @@ class MainWindow(QWidget):
     def _on_native_scene_engine_ready_changed(self, ready: bool) -> None:
         if ready:
             self._native_window_output_suppressed = False
-            self.proj_bar.refresh_native_output_request()
         self._reconcile_native_scene_surfaces()
 
     def _on_native_scene_engine_error(self, _message: str) -> None:
@@ -1183,8 +1155,6 @@ class MainWindow(QWidget):
             return
         self._media_mirror_was_enabled = mirror_enabled
         self._reconcile_native_scene_surfaces()
-        if hasattr(self, "proj_bar"):
-            self.proj_bar.refresh_native_output_request()
         if mirror_enabled:
             self._program_content.refresh()
             return
@@ -1413,10 +1383,6 @@ class MainWindow(QWidget):
         self._ui_preparation.completed.connect(self._on_ui_preparation_completed)
         self.right_col = resources.right_col
         self.proj_bar = resources.projection_bar
-        self._native_projection_preview_surface = None
-        self.proj_bar.native_surface_requested.connect(
-            self._on_projection_native_surface_requested
-        )
         self.scene_runtime.engine_ready_changed.connect(
             self._on_native_scene_engine_ready_changed
         )

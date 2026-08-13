@@ -31,11 +31,14 @@ sample while reading the same latest frame. The filter adapts the producer's NV1
 eight fixed NV12/YUY2 30 fps profiles and serves a branded standby frame whenever the
 producer heartbeat is stale. The public virtual-camera capability is enabled only when both
 per-user filter registrations, x64 COM activation/device enumeration, cross-process
-transport, and the supported Windows version pass the runtime probe. On Windows, eligible
-preview and fullscreen media surfaces receive the same Program frame through engine-owned
-child windows and `d3d11videosink`; the frame remains D3D11-backed and does not cross back
-through Python. A
-fixed BGRA channel feeds the independent scene-editor Preview, while a demand-driven
+transport, and the supported Windows version pass the runtime probe. On Windows, physical
+media surfaces render through engine-owned child windows and `d3d11videosink`; frames remain
+D3D11-backed and do not cross back through Python. The expanded in-app player remains in
+the Qt process and forwards the original QtMultimedia `QVideoFrame` to a `QVideoWidget`, so
+opening it does not start a native scene-compositor output or materialize a `QImage` per
+frame. A fixed BGRA channel feeds the independent scene-editor Preview. That compatibility
+path samples the newest composed frame at no more than 30 fps and wraps the receiving owned
+bytes in an immutable `QImage` without another full-frame copy. A demand-driven
 dynamic NV12/BGRA channel remains the bounded Program fallback for Qt-owned surfaces that
 cannot host the native presenter. Dynamic frames cross Python without conversion and are
 materialized only on the receiving Qt thread, so shutdown never waits on a Qt Multimedia

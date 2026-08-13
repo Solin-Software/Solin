@@ -316,6 +316,31 @@ if(SOLIN_MEDIA_ENGINE_BUILD_TESTS)
         )
     endif()
     add_test(NAME frame-channel COMMAND solin-media-engine-frame-channel-tests)
+    add_executable(solin-media-engine-frame-channel-output-tests
+        tests/frame_channel_output_tests.cpp
+    )
+    target_link_libraries(
+        solin-media-engine-frame-channel-output-tests
+        PRIVATE solin_media_engine_outputs
+    )
+    target_compile_features(
+        solin-media-engine-frame-channel-output-tests PRIVATE cxx_std_20
+    )
+    if(MSVC)
+        target_compile_options(
+            solin-media-engine-frame-channel-output-tests
+            PRIVATE /W4 /WX /permissive- /EHsc
+        )
+    else()
+        target_compile_options(
+            solin-media-engine-frame-channel-output-tests PRIVATE
+            -Wall -Wextra -Wpedantic -Werror
+        )
+    endif()
+    add_test(
+        NAME frame-channel-output
+        COMMAND solin-media-engine-frame-channel-output-tests
+    )
     add_executable(solin-media-engine-video-frame-tests
         tests/video_frame_tests.cpp
     )

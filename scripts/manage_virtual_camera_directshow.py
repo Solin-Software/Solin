@@ -169,7 +169,7 @@ def _stage_filters(x64: Path, x86: Path) -> tuple[Path, Path]:
             destination / "x64" / FILTER_FILENAME,
             destination / "x86" / FILTER_FILENAME,
         )
-    except Exception:
+    except Exception:  # noqa: BLE001 - staged artifact cleanup boundary
         shutil.rmtree(temporary, ignore_errors=True)
         raise
 
@@ -285,7 +285,7 @@ def install_filters(x64: Path, x86: Path) -> tuple[Path, Path]:
             raise VirtualCameraRegistrationError(
                 "dual-architecture registration verification failed"
             )
-    except Exception as registration_error:
+    except Exception as registration_error:  # noqa: BLE001 - registration rollback boundary
         rollback_errors: list[str] = []
         for architecture, previous in (
             ("x86", previous_x86),

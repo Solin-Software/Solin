@@ -222,10 +222,14 @@ def video_frame_to_image(frame: VideoFrame) -> QImage:
 def _bgra_frame_image(frame: VideoFrame) -> QImage:
     if frame.pixel_format is not VideoPixelFormat.BGRA:
         return QImage()
+    # PySide retains the immutable Python buffer for the lifetime of the QImage's
+    # shared data. The frame-channel read already produced the owning bytes object,
+    # so a second full-frame copy here only burns memory bandwidth. Qt Quick treats
+    # preview images as read-only and keeps the shared data alive while uploading it.
     return QImage(
         frame.pixels,
         frame.width,
         frame.height,
         frame.width * 4,
         QImage.Format.Format_ARGB32,
-    ).copy()
+    )

@@ -661,10 +661,15 @@ minutes without an unbounded queue, deadlock, source duplication, or memory grow
   latest-frame channels. Preview uses fixed BGRA for the editor; the demand-driven Program
   fallback preserves native NV12/BGRA frames until the receiving Qt thread. Mapped
   GStreamer planes copy directly into the final slot without an owning staging frame, and
-  video never traverses the JSON control pipe.
-- [x] Present D3D11-backed Program frames directly into engine-owned child windows for the
-  expanded preview and fullscreen media surfaces, with latest-frame/leaky queues, target-loss
-  recovery, bounded shutdown, and no Python/QImage presentation path.
+  video never traverses the JSON control pipe. The BGRA compatibility path samples the
+  latest editor frame at no more than 30 fps and uses its immutable receiving bytes directly
+  as the `QImage` backing store, avoiding a second full-frame CPU copy.
+- [x] Present D3D11-backed frames into engine-owned child windows for physical media
+  surfaces, with latest-frame/leaky queues, target-loss recovery, bounded shutdown, and no
+  Python/QImage presentation path.
+- [x] Present the expanded in-app player by forwarding the original QtMultimedia
+  `QVideoFrame` to a `QVideoWidget` in the same process. Expanding the player neither
+  materializes a `QImage`/`QPixmap` per frame nor starts the Media Windows compositor.
 - [x] Keep raw/offscreen Solin content ingress separate from composed Preview and Program
   egress, and keep rendering demand independent from physical destination state.
 - [x] Mirror Program containing a camera, PIP, or acyclic scene reference into existing

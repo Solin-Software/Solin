@@ -3,6 +3,7 @@
 #include "solin/media_engine/scene_renderer.hpp"
 #include "solin/media_engine/scene_snapshot.hpp"
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 
@@ -11,7 +12,9 @@ namespace solin::media_engine {
 class FrameChannelOutputController final {
   public:
     FrameChannelOutputController(std::shared_ptr<SceneRenderer> renderer,
-                                 OutputBus bus);
+                                 OutputBus bus,
+                                 std::optional<std::uint32_t>
+                                     maximum_frames_per_second = std::nullopt);
     ~FrameChannelOutputController();
 
     FrameChannelOutputController(const FrameChannelOutputController&) = delete;

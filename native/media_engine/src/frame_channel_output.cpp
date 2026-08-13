@@ -46,10 +46,17 @@ namespace {
 
 class FrameChannelOutputController::Impl final {
   public:
-    Impl(std::shared_ptr<SceneRenderer> renderer, const OutputBus bus)
-        : renderer_(std::move(renderer)), bus_(bus) {
+    Impl(std::shared_ptr<SceneRenderer> renderer, const OutputBus bus,
+         const std::optional<std::uint32_t> maximum_frames_per_second)
+        : renderer_(std::move(renderer)), bus_(bus),
+          maximum_frames_per_second_(maximum_frames_per_second) {
         if (renderer_ == nullptr) {
             throw std::invalid_argument("frame_channel_output_renderer_required");
+        }
+        if (maximum_frames_per_second_.has_value() &&
+            (maximum_frames_per_second_.value() == 0U ||
+             maximum_frames_per_second_.value() > 1'000'000'000U)) {
+            throw std::invalid_argument("frame_channel_output_cadence_invalid");
         }
     }
 
@@ -116,17 +123,33 @@ class FrameChannelOutputController::Impl final {
         auto unique_writer = make_frame_channel_writer(channel_.value());
         std::shared_ptr<FrameChannelWriter> next_writer{std::move(unique_writer)};
         const auto interval = pump_interval(format_);
+        const auto minimum_publication_interval =
+            maximum_frames_per_second_.has_value()
+                ? std::chrono::nanoseconds{
+                      (1'000'000'000ULL +
+                       maximum_frames_per_second_.value() - 1U) /
+                      maximum_frames_per_second_.value()}
+                : std::chrono::nanoseconds::zero();
         pump_ = std::jthread(
             [renderer = renderer_, writer = next_writer, bus = bus_,
-             interval](const std::stop_token stop_token) {
+             interval, minimum_publication_interval](
+                const std::stop_token stop_token) {
                 std::uint64_t last_sequence = 0U;
+                auto next_publication_at = std::chrono::steady_clock::time_point::min();
                 while (!stop_token.stop_requested()) {
+                    const auto now = std::chrono::steady_clock::now();
+                    if (now < next_publication_at) {
+                        std::this_thread::sleep_for(interval);
+                        continue;
+                    }
                     std::exception_ptr failure;
+                    bool published = false;
                     if (auto sequence = renderer->visit_latest_frame(
                             bus, last_sequence,
-                            [&writer, &failure](const VideoFrameView& frame) {
+                            [&writer, &failure, &published](
+                                const VideoFrameView& frame) {
                                 try {
-                                    static_cast<void>(writer->publish(frame));
+                                    published = writer->publish(frame);
                                 } catch (...) {
                                     failure = std::current_exception();
                                 }
@@ -136,6 +159,25 @@ class FrameChannelOutputController::Impl final {
                     }
                     if (failure != nullptr) {
                         return;
+                    }
+                    if (published && minimum_publication_interval.count() > 0) {
+                        const auto published_at = std::chrono::steady_clock::now();
+                        if (next_publication_at ==
+                            std::chrono::steady_clock::time_point::min()) {
+                            next_publication_at =
+                                published_at + minimum_publication_interval;
+                        } else {
+                            const auto following_deadline =
+                                next_publication_at + minimum_publication_interval;
+                            // Preserve the rational average through ordinary
+                            // scheduler jitter, but rebase after a full missed
+                            // interval so a stalled reader never emits a catch-up
+                            // burst.
+                            next_publication_at =
+                                published_at >= following_deadline
+                                    ? published_at + minimum_publication_interval
+                                    : following_deadline;
+                        }
                     }
                     std::this_thread::sleep_for(interval);
                 }
@@ -154,6 +196,7 @@ class FrameChannelOutputController::Impl final {
 
     std::shared_ptr<SceneRenderer> renderer_{};
     OutputBus bus_{OutputBus::media_windows};
+    std::optional<std::uint32_t> maximum_frames_per_second_{};
     std::mutex mutex_{};
     std::optional<FrameChannelConfiguration> channel_{};
     OutputVideoFormat format_{};
@@ -163,8 +206,10 @@ class FrameChannelOutputController::Impl final {
 };
 
 FrameChannelOutputController::FrameChannelOutputController(
-    std::shared_ptr<SceneRenderer> renderer, const OutputBus bus)
-    : impl_(std::make_unique<Impl>(std::move(renderer), bus)) {}
+    std::shared_ptr<SceneRenderer> renderer, const OutputBus bus,
+    const std::optional<std::uint32_t> maximum_frames_per_second)
+    : impl_(std::make_unique<Impl>(std::move(renderer), bus,
+                                  maximum_frames_per_second)) {}
 
 FrameChannelOutputController::~FrameChannelOutputController() = default;
 

@@ -30,6 +30,7 @@
 namespace {
 
 constexpr std::string_view kVersion = SOLIN_MEDIA_ENGINE_VERSION;
+constexpr std::uint32_t kEditorPreviewMaximumFramesPerSecond = 30U;
 
 nlohmann::json local_camera_payload(const solin::media_engine::MediaRuntime& media_runtime) {
     const auto snapshot = media_runtime.local_cameras();
@@ -322,7 +323,8 @@ int run_protocol() {
         if (renderer != nullptr) {
             preview_output =
                 std::make_unique<solin::media_engine::FrameChannelOutputController>(
-                    renderer, solin::media_engine::OutputBus::media_windows);
+                    renderer, solin::media_engine::OutputBus::media_windows,
+                    kEditorPreviewMaximumFramesPerSecond);
             program_output =
                 std::make_unique<solin::media_engine::FrameChannelOutputController>(
                     renderer, solin::media_engine::OutputBus::virtual_camera);
