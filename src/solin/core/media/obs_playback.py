@@ -22,7 +22,10 @@ buffers internally) while the download populates the cache.
 Scope notes (documented, not silently dropped):
 * Cover-art / title metadata: libobs' ffmpeg_source exposes no tags, so these are
   read from the file directly with mutagen (pure-Python, no Qt) — see _MetadataProbe.
-* Live-stream custom reconnect is delegated to ffmpeg_source's own buffering.
+* Live-stream drops are recovered here: the poll detects a remote
+  ENDED-before-duration or a mid-playback ERROR, emits ``playback_interrupted``/
+  ``playback_recovery_changed`` and re-opens the stream at the saved position, on
+  top of ffmpeg_source's own internal buffering.
 """
 
 from __future__ import annotations
@@ -55,6 +58,10 @@ _OBS_STATE_ERROR = 7
 
 _POLL_INTERVAL_MS = 100
 _FRAME_INTERVAL_MS = 33  # ~30 fps preview-frame emission when enabled
+_RECONNECT_INTERVAL_MS = 3000  # delay before re-opening a dropped remote stream
+# A remote stream that ENDs this far short of its known duration is treated as a
+# connection drop (recover), not a genuine end-of-media.
+_REMOTE_DROP_MARGIN_MS = 1500
 
 
 class _ObsAudioOutput:
@@ -317,10 +324,31 @@ class ObsMediaController(QObject):
         self._duration_emitted = False
         self._last_state = PlaybackState.StoppedState
         self._ended_emitted = False
+        # Playback speed (ffmpeg_source "speed_percent") is remembered so it
+        # survives a source swap — the stream→local handoff and a reconnect both
+        # rebuild the source and would otherwise silently revert to 100%.
+        self._speed_percent = 100
+        # Song Announcement Mode defers the disruptive stream→local swap until the
+        # gate clears (see set_local_switch_deferred).
+        self._local_switch_deferred = False
+        self._pending_local_switch: str | None = None
 
         self._poll = QTimer(self)
         self._poll.setInterval(_POLL_INTERVAL_MS)
         self._poll.timeout.connect(self._on_poll)
+
+        # Live-stream recovery: a remote drop (ENDED before the known duration, or
+        # a mid-playback ERROR) is detected in the poll and recovered by re-opening
+        # the stream at the saved position.
+        self._reconnect_timer = QTimer(self)
+        self._reconnect_timer.setSingleShot(True)
+        self._reconnect_timer.setInterval(_RECONNECT_INTERVAL_MS)
+        self._reconnect_timer.timeout.connect(self._do_reconnect)
+        self._reconnect_attempts = 0
+        self._stream_recovering = False
+        self._last_playback_error = ""
+        self._last_known_position = 0
+        self._remote_playback_started = False
 
         # Gated preview-frame output: the libobs raw callback buffers the latest
         # composited frame (on the graphics thread); a timer emits it as a
@@ -369,7 +397,7 @@ class ObsMediaController(QObject):
 
     @property
     def is_recovering(self) -> bool:
-        return False
+        return self._stream_recovering
 
     @property
     def is_playing(self) -> bool:
@@ -408,6 +436,8 @@ class ObsMediaController(QObject):
             self.error_occurred.emit(str(exc))
             return
 
+        self._reconnect_timer.stop()
+        self._reset_reconnect_state()
         self._teardown_source()
         url = request.source
         self._request = request
@@ -418,9 +448,16 @@ class ObsMediaController(QObject):
         self._duration_ms = 0
         self._duration_emitted = False
         self._ended_emitted = False
+        self._last_known_position = 0
+        self._remote_playback_started = False
+        self._pending_local_switch = None
         self.buffer_progress.emit(0, 0)
 
         is_remote = MediaCacheManager.is_remote(url)
+        if is_remote and self._cache_manager is not None:
+            # Cancel any background prefetch for this URL so it can't race the
+            # engine's own download into the same cache path.
+            self._cache_manager.cancel_prefetch(url)
         if not is_remote:
             self._local_path = url
             self._stream_persist = False
@@ -469,6 +506,8 @@ class ObsMediaController(QObject):
 
     def stop(self) -> None:
         self._poll.stop()
+        self._reconnect_timer.stop()
+        self._reset_reconnect_state()
         self._downloader.cancel()
         self._metadata_probe.stop()
         self._teardown_source()
@@ -480,6 +519,9 @@ class ObsMediaController(QObject):
         self._duration_ms = 0
         self._duration_emitted = False
         self._ended_emitted = False
+        self._last_known_position = 0
+        self._remote_playback_started = False
+        self._pending_local_switch = None
         self.buffer_progress.emit(0, 0)
         self.playback_source_changed.emit(False)
         self._emit_state(PlaybackState.StoppedState)
@@ -503,6 +545,9 @@ class ObsMediaController(QObject):
     def seek(self, ms: int) -> None:
         if self._source is None:
             return
+        # Seeking away from the end re-arms end-of-media so auto-advance still
+        # fires if the operator scrubs back and plays through again.
+        self._ended_emitted = False
         relative = max(0, int(ms))
         if self._playback_range is None:
             self._source.media_time = relative
@@ -521,10 +566,26 @@ class ObsMediaController(QObject):
         # ffmpeg_source expects an integer "speed_percent"; libobs resets any
         # value outside 1..200 back to 100, so clamp here.
         speed_percent = max(1, min(200, round(rate * 100)))
+        # Remember it so it survives a source swap (stream→local handoff, reconnect).
+        self._speed_percent = speed_percent
         try:
             self._source.update(self._runtime.ob.OBSData({"speed_percent": speed_percent}))
         except Exception:  # noqa: BLE001 - optional feature, libobs boundary
             log.debug("Could not set libobs playback speed", exc_info=True)
+
+    def set_local_switch_deferred(self, deferred: bool) -> None:
+        """Defer the stream→local swap (Song Announcement Mode).
+
+        Rebuilding the libobs source mid-announcement restarts/perturbs playback,
+        so a download that finishes during the gate is held and only applied —
+        from the current position — once the gate clears.
+        """
+        self._local_switch_deferred = bool(deferred)
+        if not deferred and self._pending_local_switch is not None:
+            local_path = self._pending_local_switch
+            self._pending_local_switch = None
+            # The cache was already notified when the download finished.
+            self._perform_local_switch(local_path, notify_cache=False)
 
     def set_frame_output_enabled(self, enabled: bool) -> None:
         """Request/stop emission of preview frames via ``frame_ready``.
@@ -613,6 +674,10 @@ class ObsMediaController(QObject):
 
     def _create_source(self, settings: dict) -> None:
         ob = self._runtime.ob
+        # Carry the remembered speed onto the fresh source so a swap (handoff /
+        # reconnect) doesn't silently revert to 100%.
+        if self._speed_percent != 100:
+            settings = {**settings, "speed_percent": self._speed_percent}
         try:
             source = ob.Source.create("ffmpeg_source", f"solin-media-{self._session_id}", settings)
         except Exception as exc:  # noqa: BLE001 - source creation boundary
@@ -625,8 +690,16 @@ class ObsMediaController(QObject):
         # so mute it now — otherwise a fraction of a second of wrong-position audio
         # (and video) blips out before the seek lands. Lifted in _resolve_trim.
         request = self._request
+        # Only pre-roll-mute while the trim range is still unresolved (first play).
+        # On a source swap after the range is known (stream→local handoff,
+        # reconnect) the clip is already mid-playback, so re-muting here would
+        # leave it permanently silent — the poll won't re-run _resolve_trim
+        # (duration already emitted) to lift it.
         self._trim_muted = bool(
-            request is not None and request.trim is not None and request.trim.custom
+            request is not None
+            and request.trim is not None
+            and request.trim.custom
+            and self._playback_range is None
         )
         if self._trim_muted:
             try:
@@ -698,6 +771,7 @@ class ObsMediaController(QObject):
 
     def shutdown(self) -> None:
         self._poll.stop()
+        self._reconnect_timer.stop()
         self._stop_frame_output()
         self._teardown_source()
         if self._channel is not None:
@@ -723,6 +797,42 @@ class ObsMediaController(QObject):
             duration = int(source.media_duration)
             position = max(0, int(source.media_time))
         except Exception:  # noqa: BLE001 - libobs boundary
+            return
+
+        is_remote = MediaCacheManager.is_remote(self._current_url)
+        if position > 0:
+            self._last_known_position = position
+        if is_remote and (position > 0 or duration > 0):
+            self._remote_playback_started = True
+
+        # While recovering, suppress normal signals until a fresh source is
+        # healthy (reset + resume) or it drops again (schedule another attempt).
+        if self._stream_recovering:
+            healthy = obs_state in (_OBS_STATE_PLAYING, _OBS_STATE_BUFFERING) and (
+                duration > 0 or position > 0
+            )
+            if healthy:
+                self._reset_reconnect_state()
+            else:
+                if (
+                    obs_state in (_OBS_STATE_ENDED, _OBS_STATE_ERROR)
+                    and not self._reconnect_timer.isActive()
+                ):
+                    self._reconnect_attempts += 1
+                    self._reconnect_timer.start()
+                return
+
+        # A remote drop surfaces as ENDED-before-duration or a mid-playback ERROR.
+        # Recover it instead of emitting a misleading Stopped/ended state.
+        if obs_state == _OBS_STATE_ENDED and self._is_unexpected_remote_end(duration):
+            self._schedule_reconnect("The media stream was interrupted.")
+            return
+        if (
+            obs_state == _OBS_STATE_ERROR
+            and is_remote
+            and self._remote_playback_started
+        ):
+            self._schedule_reconnect("The media stream was interrupted.")
             return
 
         if duration > 0 and not self._duration_emitted:
@@ -802,15 +912,79 @@ class ObsMediaController(QObject):
         # playback position and state.
         if self._source is None or not self._current_url:
             return
+        if self._local_switch_deferred:
+            # Song Announcement Mode: hold the disruptive swap until the gate
+            # clears; still surface the offline badge + cache notification now.
+            self._pending_local_switch = local_path
+            if self._cache_manager and self._stream_persist:
+                self._cache_manager.notify_cached(self._current_url)
+            self.playback_source_changed.emit(self._stream_persist)
+            return
+        self._perform_local_switch(local_path, notify_cache=True)
+
+    def _perform_local_switch(self, local_path: str, *, notify_cache: bool) -> None:
+        if self._source is None or not self._current_url:
+            return
+        # A local file is now available, so any in-flight stream recovery is moot:
+        # cancel it (and its pending timer) before rebuilding on the local source,
+        # otherwise a queued reconnect could later re-stream over this file.
+        self._reset_reconnect_state()
         position = self._media_time()
         self._local_path = local_path
         self._teardown_source()
         self._play_local(local_path)
         if self._source is not None and position:
             self._source.media_time = position
-        if self._cache_manager and self._stream_persist:
+        # ffmpeg_source exposes no tags; re-probe the now-local file so remote
+        # cover-art/title finally surface (mutagen can't read a URL).
+        self._metadata_probe.probe(local_path)
+        if notify_cache and self._cache_manager and self._stream_persist:
             self._cache_manager.notify_cached(self._current_url)
         self.playback_source_changed.emit(self._stream_persist)
+
+    # ── Live-stream reconnect ─────────────────────────────────────────────
+
+    def _is_unexpected_remote_end(self, duration: int) -> bool:
+        """True when a remote source reported ENDED well before its duration —
+        i.e. the connection dropped rather than the media genuinely finishing."""
+        if not MediaCacheManager.is_remote(self._current_url):
+            return False
+        if duration <= 0:
+            return False
+        position = max(self._last_known_position, self._media_time())
+        return position + _REMOTE_DROP_MARGIN_MS < duration
+
+    def _schedule_reconnect(self, detail: str) -> None:
+        self._last_playback_error = detail or "The media stream was interrupted."
+        if not self._stream_recovering:
+            self._stream_recovering = True
+            self.playback_recovery_changed.emit(True)
+            self.playback_interrupted.emit(self._current_url, self._last_playback_error)
+        self._reconnect_attempts += 1
+        self._reconnect_timer.start()
+
+    def _do_reconnect(self) -> None:
+        if not self._current_url or not MediaCacheManager.is_remote(self._current_url):
+            return
+        saved_pos = max(self._last_known_position, self._media_time())
+        if self._playback_range is not None:
+            saved_pos = max(
+                self._playback_range.start_ms,
+                min(saved_pos, self._playback_range.end_ms - 1),
+            )
+        self._teardown_source()
+        self._play_stream(self._current_url)
+        if self._source is not None and saved_pos:
+            self._source.media_time = saved_pos
+
+    def _reset_reconnect_state(self) -> None:
+        was_recovering = self._stream_recovering
+        self._reconnect_attempts = 0
+        self._last_playback_error = ""
+        self._stream_recovering = False
+        self._reconnect_timer.stop()
+        if was_recovering:
+            self.playback_recovery_changed.emit(False)
 
     def _on_download_error(self, msg: str) -> None:
         log.warning("Downloader warning: %s", msg)

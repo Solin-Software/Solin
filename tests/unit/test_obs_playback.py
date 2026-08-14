@@ -1157,3 +1157,336 @@ def test_player_shim_reflects_state(monkeypatch, tmp_path):
     # and cover_art_changed, so the shim no longer needs QtMultimedia at all.
     assert not hasattr(controller.player, "metaData")
     controller.shutdown()
+
+
+# ── parity hardening: handoff, speed, seek re-arm, metadata, prefetch ─────────
+
+
+def test_trimmed_remote_clip_not_remuted_after_cache_handoff(monkeypatch, tmp_path):
+    """A trimmed remote clip must not go permanently silent when the background
+    download completes and the source is rebuilt: the range is already resolved,
+    so the pre-roll mute must NOT be re-applied (it would never be lifted)."""
+    controller, runtime, downloader, registry = _make(
+        monkeypatch, auto_download=True, tmp_path=tmp_path
+    )
+    controller.start_playback(
+        MediaPlaybackRequest(
+            "https://cdn.example/clip.mp4",
+            trim=MediaTrim(
+                start_trim_ticks=10_000 * 10_000,
+                end_trim_ticks=20_000 * 10_000,
+                base_duration_ticks=120_000 * 10_000,
+            ),
+        )
+    )
+    streaming = registry[-1]
+    assert streaming.muted is True  # pre-roll mute while streaming
+    streaming.media_duration = 120_000
+    streaming.media_time = 10_000
+    controller._on_poll()  # resolves the trim range → lifts the pre-roll mute
+    assert streaming.muted is False
+
+    local = tmp_path / "clip.mp4"
+    local.write_bytes(b"complete")
+    streaming.media_time = 45_000  # mid-playback
+    downloader.finished.emit(str(local))
+
+    new_source = registry[-1]
+    assert new_source is not streaming
+    assert controller._trim_muted is False
+    assert new_source.muted is False  # NOT re-muted → audible
+    assert new_source.volume == 1.0
+    assert new_source.media_time == 45_000  # position preserved
+    controller.shutdown()
+
+
+def test_playback_speed_survives_stream_to_local_handoff(monkeypatch, tmp_path):
+    controller, runtime, downloader, registry = _make(
+        monkeypatch, auto_download=True, tmp_path=tmp_path
+    )
+    controller.start_playback(MediaPlaybackRequest("https://cdn.example/song.mp3"))
+    streaming = registry[-1]
+    controller.set_playback_rate(1.5)
+    assert streaming.updates == [{"speed_percent": 150}]
+
+    local = tmp_path / "song.mp3"
+    local.write_bytes(b"complete")
+    downloader.finished.emit(str(local))
+
+    new_source = registry[-1]
+    assert new_source is not streaming
+    # The fresh local source is created already at 150% — not silently 100%.
+    assert new_source.settings.get("speed_percent") == 150
+    controller.shutdown()
+
+
+def test_seek_rearms_media_ended(monkeypatch, tmp_path):
+    controller, runtime, downloader, registry = _make(monkeypatch, tmp_path=tmp_path)
+    local = tmp_path / "clip.mp4"
+    local.write_bytes(b"x")
+    ended: list[bool] = []
+    controller.media_ended.connect(lambda: ended.append(True))
+    controller.start_playback(MediaPlaybackRequest(str(local)))
+    source = registry[-1]
+    source.media_duration = 3000
+    source.media_state = 6  # ended
+    controller._on_poll()
+    assert ended == [True]
+
+    controller.seek(0)  # scrub back
+    source.media_state = 6
+    controller._on_poll()
+    assert ended == [True, True]  # auto-advance re-arms
+    controller.shutdown()
+
+
+def test_download_finished_reprobes_metadata_for_remote_cover(monkeypatch, tmp_path):
+    controller, runtime, downloader, registry = _make(
+        monkeypatch, auto_download=True, tmp_path=tmp_path
+    )
+    controller.start_playback(MediaPlaybackRequest("https://cdn.example/song.mp3"))
+    controller._metadata_probe.probed.clear()  # drop the initial remote-URL probe
+
+    local = tmp_path / "song.mp3"
+    local.write_bytes(b"complete")
+    downloader.finished.emit(str(local))
+
+    # The now-local file is re-probed so remote cover/title finally surface.
+    assert controller._metadata_probe.probed == [str(local)]
+    controller.shutdown()
+
+
+class _SpyCache:
+    """Records the cache-manager calls the engine makes. is_remote stays on the
+    real class (the engine calls MediaCacheManager.is_remote directly)."""
+
+    def __init__(self) -> None:
+        self.cancelled: list[str] = []
+        self.notified: list[str] = []
+
+    def cancel_prefetch(self, url: str) -> None:
+        self.cancelled.append(url)
+
+    def notify_cached(self, url: str) -> None:
+        self.notified.append(url)
+
+
+def test_remote_playback_cancels_prefetch(monkeypatch, tmp_path):
+    controller, runtime, downloader, registry = _make(
+        monkeypatch, auto_download=True, tmp_path=tmp_path
+    )
+    spy = _SpyCache()
+    controller._cache_manager = spy
+
+    controller.start_playback(MediaPlaybackRequest("https://cdn.example/song.mp3"))
+
+    assert spy.cancelled == ["https://cdn.example/song.mp3"]
+    controller.shutdown()
+
+
+def test_local_playback_does_not_cancel_prefetch(monkeypatch, tmp_path):
+    controller, runtime, downloader, registry = _make(monkeypatch, tmp_path=tmp_path)
+    spy = _SpyCache()
+    controller._cache_manager = spy
+    local = tmp_path / "clip.mp4"
+    local.write_bytes(b"x")
+
+    controller.start_playback(MediaPlaybackRequest(str(local)))
+
+    assert spy.cancelled == []  # local sources have no prefetch to cancel
+    controller.shutdown()
+
+
+def test_obs_controller_has_no_video_sink(monkeypatch, tmp_path):
+    """The playlist live-thumb guard relies on this: the libobs engine renders
+    via an OBS Display, not a QVideoSink."""
+    controller, _runtime, _downloader, _registry = _make(monkeypatch, tmp_path=tmp_path)
+    assert getattr(controller, "video_sink", None) is None
+    controller.shutdown()
+
+
+# ── deferred local switch (Song Announcement Mode) ───────────────────────────
+
+
+def test_deferred_switch_holds_swap_until_gate_clears(monkeypatch, tmp_path):
+    controller, runtime, downloader, registry = _make(
+        monkeypatch, auto_download=True, tmp_path=tmp_path
+    )
+    source_changed: list[bool] = []
+    controller.playback_source_changed.connect(source_changed.append)
+    controller.start_playback(MediaPlaybackRequest("https://cdn.example/song.mp3"))
+    streaming = registry[-1]
+    streaming.media_time = 8000
+
+    controller.set_local_switch_deferred(True)
+    local = tmp_path / "song.mp3"
+    local.write_bytes(b"complete")
+    downloader.finished.emit(str(local))
+
+    # Still on the streamed source — the disruptive swap is held.
+    assert registry[-1] is streaming
+    assert controller._fake_program.media_sources[-1] is streaming
+    assert source_changed[-1] is True  # offline badge already shown
+
+    # Gate clears → the pending swap is applied from the current position.
+    controller.set_local_switch_deferred(False)
+    new_source = registry[-1]
+    assert new_source is not streaming
+    assert new_source.settings["local_file"] == str(local)
+    assert new_source.media_time == 8000
+    controller.shutdown()
+
+
+# ── live-stream reconnect ────────────────────────────────────────────────────
+
+
+def _start_remote_playing(controller, registry, *, duration=120_000, position=30_000):
+    controller.start_playback(MediaPlaybackRequest("https://cdn.example/song.mp3"))
+    source = registry[-1]
+    source.media_duration = duration
+    source.media_time = position
+    source.media_state = 1  # playing
+    controller._on_poll()  # marks remote-started + records last position
+    return source
+
+
+def test_remote_drop_before_end_schedules_reconnect_not_media_ended(monkeypatch, tmp_path):
+    controller, runtime, downloader, registry = _make(
+        monkeypatch, auto_download=True, tmp_path=tmp_path
+    )
+    ended: list[bool] = []
+    interrupted: list[tuple[str, str]] = []
+    recovery: list[bool] = []
+    controller.media_ended.connect(lambda: ended.append(True))
+    controller.playback_interrupted.connect(lambda u, m: interrupted.append((u, m)))
+    controller.playback_recovery_changed.connect(recovery.append)
+
+    source = _start_remote_playing(controller, registry)
+    source.media_state = 6  # ENDED well before the known duration → a drop
+    controller._on_poll()
+
+    assert ended == []  # NOT treated as a genuine end
+    assert controller.is_recovering is True
+    assert recovery == [True]
+    assert interrupted and interrupted[0][0] == "https://cdn.example/song.mp3"
+    assert controller._reconnect_timer.isActive()
+    controller.shutdown()
+
+
+def test_reconnect_reopens_stream_at_saved_position(monkeypatch, tmp_path):
+    controller, runtime, downloader, registry = _make(
+        monkeypatch, auto_download=True, tmp_path=tmp_path
+    )
+    source = _start_remote_playing(controller, registry, position=42_000)
+    source.media_state = 6
+    controller._on_poll()  # schedule reconnect
+    count = len(registry)
+
+    controller._do_reconnect()  # what the timer would call
+
+    new_source = registry[-1]
+    assert len(registry) == count + 1
+    assert new_source is not source
+    assert new_source.settings == {
+        "is_local_file": False,
+        "input": "https://cdn.example/song.mp3",
+    }
+    assert new_source.media_time == 42_000  # resumes where it dropped
+    controller.shutdown()
+
+
+def test_recovery_resets_when_stream_returns_healthy(monkeypatch, tmp_path):
+    controller, runtime, downloader, registry = _make(
+        monkeypatch, auto_download=True, tmp_path=tmp_path
+    )
+    recovery: list[bool] = []
+    controller.playback_recovery_changed.connect(recovery.append)
+    source = _start_remote_playing(controller, registry)
+    source.media_state = 6
+    controller._on_poll()  # enter recovery
+    controller._do_reconnect()
+
+    healed = registry[-1]
+    healed.media_state = 1  # playing again
+    healed.media_duration = 120_000
+    healed.media_time = 30_000
+    controller._on_poll()  # detect healthy → reset
+
+    assert controller.is_recovering is False
+    assert recovery == [True, False]
+    controller.shutdown()
+
+
+def test_remote_error_midplayback_reconnects(monkeypatch, tmp_path):
+    controller, runtime, downloader, registry = _make(
+        monkeypatch, auto_download=True, tmp_path=tmp_path
+    )
+    errors: list[str] = []
+    controller.error_occurred.connect(errors.append)
+    source = _start_remote_playing(controller, registry)
+    source.media_state = 7  # error mid-playback
+
+    controller._on_poll()
+
+    assert errors == []  # not a hard failure — recover instead
+    assert controller.is_recovering is True
+    controller.shutdown()
+
+
+def test_remote_end_at_full_duration_is_genuine(monkeypatch, tmp_path):
+    controller, runtime, downloader, registry = _make(
+        monkeypatch, auto_download=True, tmp_path=tmp_path
+    )
+    ended: list[bool] = []
+    controller.media_ended.connect(lambda: ended.append(True))
+    source = _start_remote_playing(controller, registry, position=119_900)
+    source.media_state = 6  # reached the end → a genuine end, not a drop
+
+    controller._on_poll()
+
+    assert ended == [True]
+    assert controller.is_recovering is False
+    controller.shutdown()
+
+
+def test_download_finishing_during_recovery_cancels_reconnect(monkeypatch, tmp_path):
+    """If the cache download completes while a dropped stream is recovering, the
+    switch to the local file must cancel recovery so a queued reconnect can't
+    later re-stream over the finished file."""
+    controller, runtime, downloader, registry = _make(
+        monkeypatch, auto_download=True, tmp_path=tmp_path
+    )
+    recovery: list[bool] = []
+    controller.playback_recovery_changed.connect(recovery.append)
+    source = _start_remote_playing(controller, registry)
+    source.media_state = 6
+    controller._on_poll()  # enter recovery, reconnect timer armed
+    assert controller.is_recovering is True
+    assert controller._reconnect_timer.isActive()
+
+    local = tmp_path / "song.mp3"
+    local.write_bytes(b"complete")
+    downloader.finished.emit(str(local))  # download beats the reconnect timer
+
+    assert controller.is_recovering is False
+    assert controller._reconnect_timer.isActive() is False
+    assert recovery == [True, False]
+    assert registry[-1].settings["local_file"] == str(local)
+    controller.shutdown()
+
+
+def test_local_error_still_fails_hard(monkeypatch, tmp_path):
+    controller, runtime, downloader, registry = _make(monkeypatch, tmp_path=tmp_path)
+    local = tmp_path / "clip.mp4"
+    local.write_bytes(b"x")
+    errors: list[str] = []
+    controller.error_occurred.connect(errors.append)
+    controller.start_playback(MediaPlaybackRequest(str(local)))
+    source = registry[-1]
+    source.media_state = 7  # error on a local file → no reconnect
+
+    controller._on_poll()
+
+    assert errors == ["Playback failed."]
+    assert controller.is_recovering is False
+    controller.shutdown()
