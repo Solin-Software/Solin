@@ -2,21 +2,12 @@ import os
 import logging
 import sys
 
-_QT_LOGGING_RULES = (
-    "qt.qpa.mime=false",
-    "qt.multimedia.ffmpeg=false",
+from solin.core.foundation.qt_logging import (
+    configure_qt_logging_rules,
+    install_qt_message_handler,
 )
 
-
-def _configure_qt_logging_rules() -> None:
-    existing = os.environ.get("QT_LOGGING_RULES", "")
-    entries = [entry.strip() for entry in existing.split(";") if entry.strip()]
-    configured = set(entries)
-    entries.extend(rule for rule in _QT_LOGGING_RULES if rule not in configured)
-    os.environ["QT_LOGGING_RULES"] = ";".join(entries)
-
-
-_configure_qt_logging_rules()
+configure_qt_logging_rules()
 
 
 def _configure_qt_gl_integration() -> None:
@@ -49,30 +40,7 @@ _configure_qt_gl_integration()
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import Qt, QCoreApplication, QTimer
 
-
-def _install_qt_message_filter() -> None:
-    """Drop the high-volume, benign ``QQuickWidget cannot be used as a native
-    child widget`` warning.
-
-    It fires because the app's native host windows (the single native top-level,
-    the native cursor hosts) sit above QML content — the message is harmless, but
-    it is emitted in a tight loop, and writing that flood to an *interactive
-    terminal* back-pressures the GUI thread enough to wedge startup on the splash
-    (redirected output is unaffected — which is why it "only hangs in a
-    terminal"). Every other Qt message passes straight through to stderr.
-    """
-    from PySide6.QtCore import qInstallMessageHandler
-
-    def _handler(_mode, _context, message: str) -> None:
-        if "cannot be used as a native child widget" in message:
-            return
-        if sys.stderr is not None:  # packaged/windowed apps may have no stderr
-            sys.stderr.write(message + "\n")
-
-    qInstallMessageHandler(_handler)
-
-
-_install_qt_message_filter()
+install_qt_message_handler()
 
 # Apenas constantes puras — sem dependência de caminhos ou QApplication.
 from solin.bootstrap.config import default_app_config
