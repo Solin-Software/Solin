@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import io
+import zipfile
 from datetime import date
 
 import solin.core.meetings.publication_worker as worker_module
@@ -156,3 +158,64 @@ def test_missing_baseline_downloads_watchtower_source_even_when_checksum_matches
 
     assert len(downloads) == 1
     assert parsed == ["wt"]
+
+
+def test_missing_asset_rematerializes_from_the_local_jwpub_before_downloading(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    monday = date(2026, 5, 25)
+    issue = mwb_issue_for_week(monday)
+    checksums = JwpubChecksumStore(tmp_path / "checksums.json")
+    checksums.save("mwb", "T", issue, "current")
+    worker = JwpubWorker(tmp_path / "jwpub", checksums)
+    archive = worker._cache.jwpub_path("mwb", "T", issue)
+    inner = io.BytesIO()
+    with zipfile.ZipFile(inner, "w") as contents:
+        contents.writestr("publication.db", b"sqlite")
+        contents.writestr("images/image.jpg", b"image")
+        contents.writestr("images/healthy.jpg", b"archive version")
+    with zipfile.ZipFile(archive, "w") as outer:
+        outer.writestr("contents", inner.getvalue())
+    extract_dir = worker._cache.extract_dir("mwb", "T", issue)
+    extract_dir.mkdir(parents=True)
+    (extract_dir / "publication.db").write_bytes(b"sqlite")
+    healthy_path = extract_dir / "images" / "healthy.jpg"
+    healthy_path.parent.mkdir(parents=True)
+    healthy_path.write_bytes(b"currently presented")
+    missing_path = extract_dir / "images" / "image.jpg"
+    materialized: list[object] = []
+
+    monkeypatch.setattr(
+        worker_module,
+        "resolve_jwpub_archive",
+        lambda *_args: JwpubMediaInfo(
+            "https://example.invalid/publication.jwpub",
+            "current",
+        ),
+    )
+    monkeypatch.setattr(
+        worker,
+        "_parse_mwb",
+        lambda *_args: materialized.append(worker._ensure_extract("mwb", "T", issue)),
+    )
+    monkeypatch.setattr(worker, "_revalidate_wt", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        worker,
+        "_download",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("A local JWPUB must be reused before downloading")
+        ),
+    )
+
+    worker.load_week(
+        monday,
+        language="T",
+        materialize_cached_publications=frozenset({"mwb"}),
+        persisted_source_checksums={"mwb": "current"},
+        repair_cache_paths=(str(missing_path),),
+    )
+
+    assert materialized == [extract_dir]
+    assert missing_path.read_bytes() == b"image"
+    assert healthy_path.read_bytes() == b"currently presented"

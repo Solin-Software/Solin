@@ -60,6 +60,7 @@ class _WeekLoadRequest:
     known_wt_issue: str
     persisted_source_checksums: dict[str, str]
     order: int
+    repair_cache_paths: tuple[str, ...] = ()
 
 
 # ── JwpubService — vive na main thread, gerencia o worker thread ──────────────
@@ -88,10 +89,11 @@ class JwpubService(QObject):
     error_sig = Signal(str, str, str)
     context_progress = Signal(str, str, int, str, bool, int)
     context_error = Signal(str, str, str, str, bool, int)
+    context_load_finished = Signal(str, str, bool, int)
     media_resolved = Signal(str, object)  # request_id, resolved metadata
 
     # Sinais internos para o worker (despacham para a worker thread)
-    _sig_load_week = Signal(object, bool, str, bool, int, object, str, object)
+    _sig_load_week = Signal(object, bool, str, bool, int, object, str, object, object)
     _sig_set_lang = Signal(str)
     _sig_set_sign_language = Signal(bool)
     _sig_resolve = Signal(str, str, int, int, int, str, str, bool)
@@ -211,6 +213,7 @@ class JwpubService(QObject):
         materialize_cached_publications: Collection[str] | None = None,
         known_wt_issue: str = "",
         persisted_source_checksums: Mapping[str, str] | None = None,
+        repair_cache_paths: Collection[str] | None = None,
     ):
         language = (language_code or self._lang).strip() or "T"
         is_sign = self._is_sign_language if is_sign_language is None else bool(is_sign_language)
@@ -218,6 +221,23 @@ class JwpubService(QObject):
         pending = self._pending_loads.get(key)
         if pending is not None:
             pending.priority = max(pending.priority, int(priority))
+            pending.materialize_cached_publications |= frozenset(
+                str(pub_type)
+                for pub_type in (materialize_cached_publications or ())
+                if pub_type in {"mwb", "wt"}
+            )
+            pending.repair_cache_paths = tuple(
+                sorted(
+                    {
+                        *pending.repair_cache_paths,
+                        *(
+                            str(path)
+                            for path in (repair_cache_paths or ())
+                            if isinstance(path, (str, os.PathLike)) and str(path)
+                        ),
+                    }
+                )
+            )
             return
         if self._active_load_key == key:
             return
@@ -256,6 +276,13 @@ class JwpubService(QObject):
                 if pub_type in {"mwb", "wt"}
             },
             next(self._load_order),
+            tuple(
+                sorted(
+                    str(path)
+                    for path in (repair_cache_paths or ())
+                    if isinstance(path, (str, os.PathLike)) and str(path)
+                )
+            ),
         )
         self._dispatch_week_load()
 
@@ -312,6 +339,7 @@ class JwpubService(QObject):
             request.materialize_cached_publications,
             request.known_wt_issue,
             request.persisted_source_checksums,
+            request.repair_cache_paths,
         )
 
     def get_week_data(
@@ -517,6 +545,12 @@ class JwpubService(QObject):
         )
         if self._active_load_key == key:
             self._active_load_key = None
+        self.context_load_finished.emit(
+            monday_text,
+            language,
+            is_sign_language,
+            generation,
+        )
         self._dispatch_week_load()
 
     def _check_complete(self, key: str, wd: meeting_models.WeekData):

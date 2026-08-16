@@ -124,7 +124,7 @@ class JwpubWorker(QObject):
 
     # ── Load week ─────────────────────────────────────────────────────────────
 
-    @Slot(object, bool, str, bool, int, object, str, object)
+    @Slot(object, bool, str, bool, int, object, str, object, object)
     def load_week(
         self,
         monday: date,
@@ -135,6 +135,7 @@ class JwpubWorker(QObject):
         materialize_cached_publications: object = None,
         known_wt_issue: str = "",
         persisted_source_checksums: object = None,
+        repair_cache_paths: object = None,
     ):
         """
         Entry point: carrega MWB + WT para a semana dada.
@@ -172,6 +173,17 @@ class JwpubWorker(QObject):
         )
         mwb_source_checksum = str(persisted_checksums.get("mwb") or "")
         wt_source_checksum = str(persisted_checksums.get("wt") or "")
+        repair_paths = (
+            repair_cache_paths
+            if isinstance(repair_cache_paths, Iterable)
+            and not isinstance(repair_cache_paths, (str, bytes))
+            else ()
+        )
+        self._cache.repair_extracts_for_sources(
+            source
+            for source in repair_paths
+            if isinstance(source, (str, PathLike))
+        )
         try:
             mwb_served = False
             wt_served: Optional[str] = None
@@ -208,7 +220,7 @@ class JwpubWorker(QObject):
         """Fase 1 (SWR): renderiza o MWB do cache local sem rede. True se servido."""
         issue = mwb_issue_for_week(monday)
         lang = self._lang
-        if not self._cache.is_cached("mwb", lang, issue):
+        if not self._cache.can_materialize("mwb", lang, issue):
             return False
         self._parse_mwb(
             self._new_week_data(
@@ -248,7 +260,7 @@ class JwpubWorker(QObject):
             # API inalcançável, ou a publicação não existe para esta semana/idioma.
             if served or not materialize_cached:
                 return  # já mostramos o cache — nada a fazer
-            if self._cache.is_cached("mwb", lang, issue):
+            if self._cache.can_materialize("mwb", lang, issue):
                 log.warning("mwb %s: API unreachable, falling back to cached copy", issue)
                 self._parse_mwb(
                     self._new_week_data(
@@ -374,7 +386,7 @@ class JwpubWorker(QObject):
         """
         lang = self._lang
         for issue in watchtower_issue_candidates(monday):
-            if not self._cache.is_cached("w", lang, issue):
+            if not self._cache.can_materialize("w", lang, issue):
                 continue
             wd = self._new_week_data(
                 monday,
@@ -494,7 +506,7 @@ class JwpubWorker(QObject):
         had_api = _had_api_response
 
         for issue in candidates:
-            is_cached = self._cache.is_cached("w", lang, issue)
+            is_cached = self._cache.can_materialize("w", lang, issue)
             archive_info = resolve_jwpub_archive("w", lang, issue)
             url = archive_info.download_url
             checksum = archive_info.checksum
@@ -661,7 +673,7 @@ class JwpubWorker(QObject):
 
         if cache_only:
             for cand in [issue] if issue == "0" else [issue, "0"]:
-                if self._cache.is_cached(pub, lang, cand):
+                if self._cache.can_materialize(pub, lang, cand):
                     if cand != issue:
                         ref.issue = cand
                     return self._parse_ref_items(pub, lang, cand, ref), False
@@ -674,13 +686,13 @@ class JwpubWorker(QObject):
             fallback_info = resolve_jwpub_archive(pub, lang, "0")
             fallback_url = fallback_info.download_url
             fallback_checksum = fallback_info.checksum
-            if fallback_url or self._cache.is_cached(pub, lang, "0"):
+            if fallback_url or self._cache.can_materialize(pub, lang, "0"):
                 url = fallback_url
                 checksum = fallback_checksum
                 issue = "0"
                 ref.issue = "0"
 
-        is_cached = self._cache.is_cached(pub, lang, issue)
+        is_cached = self._cache.can_materialize(pub, lang, issue)
         if not url and not is_cached:
             return [], False
 
@@ -770,10 +782,9 @@ class JwpubWorker(QObject):
                 progress=lambda pct: self._emit_progress(key, pub_ui, pct),
                 cancelled=self._cancelled.is_set,
             )
-            # New .jwpub on disk — wipe the stale extract dir so the next
-            # _ensure_extract() call unpacks the fresh content instead of
-            # returning the old x_<issue> directory.
-            self._cache.invalidate_extract(pub, lang, issue)
+            # Keep the currently presented files available until a complete
+            # replacement has been extracted in staging.
+            self._cache.mark_extract_stale(pub, lang, issue)
             return True
         except JwpubArchiveDownloadError as exc:
             if emit_error:
@@ -789,9 +800,8 @@ class JwpubWorker(QObject):
             return False
 
     def _ensure_extract(self, pub: str, lang: str, issue: str) -> Optional[Path]:
-        ep = self._cache.extract_dir(pub, lang, issue)
-        if ep.exists() and any(ep.glob("*.db")):
-            return ep
+        if self._cache.is_cached(pub, lang, issue):
+            return self._cache.extract_dir(pub, lang, issue)
         return self._cache.extract(pub, lang, issue)
 
 

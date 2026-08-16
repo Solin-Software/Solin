@@ -273,6 +273,7 @@ class MeetingTreeController(QObject):
     markerEditRequested = Signal(str)
     syncStateChanged = Signal()
     canonicalStateChanged = Signal()
+    canonicalMediaRecoveryRequested = Signal(str, str)  # tree_key, missing local source
     storageSaved = Signal(str)  # tree_key
     storageSaveFailed = Signal(str, str)  # tree_key, error message
     _syncSaveCompleted = Signal(str, int, object, object)
@@ -328,6 +329,7 @@ class MeetingTreeController(QObject):
         self._canonical_reset_generation = 0
         self._hidden_canonical_media: dict[str, Node] = {}
         self._canonical_restore_available = False
+        self._canonical_media_recovery_requests: set[str] = set()
         self._sync_identity: MeetingSyncIdentity | None = None
         self._sync_root = ""
         self._sync_folder = ""
@@ -3639,11 +3641,15 @@ class MeetingTreeController(QObject):
         }:
             return
         if state.availability == MediaAvailability.MISSING:
+            self._request_canonical_media_recovery(node)
             self._request_jw_resolution(
                 node,
                 allow_generated=bool(node.get("meeting_generated")),
             )
             return
+        recovery_requests = getattr(self, "_canonical_media_recovery_requests", None)
+        if isinstance(recovery_requests, set):
+            recovery_requests.discard(self._canonical_media_recovery_key(node)[0])
         ref = node.get("media_ref") or {}
         media_type = node.get("media_type") or self._media_type_from_ref(ref)
         if media_type == "image":
@@ -3681,6 +3687,38 @@ class MeetingTreeController(QObject):
                     purpose="thumb",
                     source_signature=thumbnail_source_fingerprint(thumbnail_url),
                 )
+
+    def _request_canonical_media_recovery(self, node: Node) -> None:
+        """Ask the meeting coordinator to rebuild missing official local media."""
+
+        if self._sync_enabled or not self._tree_key:
+            return
+        canonical = self._canonical_counterpart(node)
+        if canonical is None or canonical.get("type") != "media":
+            return
+        request_key = self._canonical_media_recovery_key(node)
+        recovery_scope, source = request_key
+        if recovery_scope in self._canonical_media_recovery_requests:
+            return
+        self._canonical_media_recovery_requests.add(recovery_scope)
+        log.info(
+            "Canonical meeting media missing; requesting recovery tree=%s source=%s",
+            self._tree_key,
+            source or recovery_scope,
+        )
+        self.canonicalMediaRecoveryRequested.emit(
+            self._tree_key,
+            source,
+        )
+
+    def _canonical_media_recovery_key(self, node: Node) -> tuple[str, str]:
+        source = self._url_for_node(node)
+        source_key = str(node.get("meeting_source_key") or node.get("id") or "")
+        if source and not source.startswith(("http://", "https://")):
+            for parent in Path(source).parents:
+                if parent.name.startswith("x_"):
+                    return os.path.normcase(os.path.abspath(parent)), source
+        return source or source_key, source
 
     def _request_jw_resolution(
         self,
