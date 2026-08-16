@@ -700,7 +700,8 @@ minutes without an unbounded queue, deadlock, source duplication, or memory grow
 - [x] Mirror Program containing a camera, PIP, or acyclic scene reference into existing
   Solin media windows without recapturing the window or virtual camera.
 - [x] Remove the competing Qt camera capture/projection service and its obsolete settings,
-  toolbar action, and `camera_stream` state.
+  toolbar action, and `camera_stream` state from the Windows scene path, while retaining the
+  legacy QCamera capture and configuration behind the Linux/macOS platform gate.
 - [ ] Add keyed D3D11/DXGI shared-texture egress for the Qt Quick scene editor, retaining
   fixed BGRA shared memory as the device-loss, adapter-mismatch, and compatibility path.
   The GPU route must negotiate consumer readiness and adapter identity before publication,
