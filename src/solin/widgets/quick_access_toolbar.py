@@ -21,7 +21,8 @@ from PySide6.QtGui import QColor, QCursor, QFontMetrics, QGuiApplication, QRegio
 from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtWidgets import QWidget
 
-from solin.core.integrations.automation.settings import OBSSettingsStore
+from solin.core.integrations.automation.settings import CameraSettingsStore, OBSSettingsStore
+from solin.core.integrations.camera_options import CameraOption
 from solin.core.remote_control.security import RemoteSessionInfo
 from solin.ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
 from solin.ui.macos_layer import apply_corner_radius
@@ -146,6 +147,9 @@ class QuickAccessToolbar(QQuickWidget):
     obs_scene_change = Signal(str)
     obs_return_scene_change = Signal(str)
     obs_stream_requested = Signal()
+    obs_camera_stream_requested = Signal()
+    camera_stream_requested = Signal()
+    camera_selection_changed = Signal(object)
     remote_session_disconnect_requested = Signal(str)
     remote_sessions_disconnect_all_requested = Signal()
 
@@ -158,6 +162,8 @@ class QuickAccessToolbar(QQuickWidget):
         obs_settings: OBSSettingsStore,
         background_song_service=None,
         scene_runtime: SceneRuntimeController | None = None,
+        camera_service=None,
+        camera_settings: CameraSettingsStore | None = None,
     ):
         super().__init__(parent)
         self._obs = obs_service
@@ -165,10 +171,14 @@ class QuickAccessToolbar(QQuickWidget):
         self._obs_settings = obs_settings
         self._background_song = background_song_service
         self._scene_runtime = scene_runtime
+        self._camera = camera_service
+        self._camera_settings = camera_settings
         self._minimized = False
         self._obs_connected = False
         self._screen_count = 0
         self._zoom_connected = False
+        self._camera_enabled = False
+        self._camera_stream_active = False
         self._remote_enabled = False
         self._remote_running = False
         self._remote_runtime_message = ""
@@ -180,6 +190,7 @@ class QuickAccessToolbar(QQuickWidget):
         self._obs_scenes: list[str] = []
         self._obs_stream_available = False
         self._obs_stream_active = False
+        self._obs_camera_stream_available = False
         self._qml_pointer_depth = 0
         self._anchor_parent = parent
         self._anchor_window = parent.window() if parent is not None else None
@@ -212,6 +223,7 @@ class QuickAccessToolbar(QQuickWidget):
         self._bridge.obsClicked.connect(self._on_obs_clicked)
         self._bridge.scenesClicked.connect(self._on_solin_scenes_clicked)
         self._bridge.zoomClicked.connect(self._on_zoom_clicked)
+        self._bridge.cameraClicked.connect(self._on_camera_clicked)
         self._bridge.remoteControlClicked.connect(self._on_remote_control_clicked)
         self._bridge.minimizeToggled.connect(self._toggle_minimize)
         self._bridge.pointerEntered.connect(self._begin_qml_pointer_cursor)
@@ -278,6 +290,7 @@ class QuickAccessToolbar(QQuickWidget):
 
         # ── OBS Scene Popup ───────────────────────────────────────────────
         self._scene_popup = None
+        self._camera_panel = None
 
         # ── Solin Scene Popup ─────────────────────────────────────────────
         self._solin_scene_popup = None
@@ -297,6 +310,7 @@ class QuickAccessToolbar(QQuickWidget):
                 self._ensure_zoom_panel,
                 self._ensure_scene_popup,
                 self._ensure_solin_scene_popup,
+                self._ensure_camera_panel,
                 self._ensure_remote_sessions_popup,
             ),
             self,
@@ -461,11 +475,31 @@ class QuickAccessToolbar(QQuickWidget):
         popup.scene_change_requested.connect(self.obs_scene_change)
         popup.return_scene_requested.connect(self.obs_return_scene_change)
         popup.stream_requested.connect(self.obs_stream_requested)
+        popup.camera_stream_requested.connect(self.obs_camera_stream_requested)
         popup.set_obs_service(self._obs)
         popup.set_stream_available(self._obs_stream_available)
         popup.set_stream_active(self._obs_stream_active)
+        popup.set_camera_stream_available(self._obs_camera_stream_available)
+        popup.set_camera_stream_active(self._camera_stream_active)
         self._scene_popup = popup
         return popup
+
+    def _ensure_camera_panel(self):
+        if self._camera_panel is not None:
+            return self._camera_panel
+        if self._camera is None or self._camera_settings is None:
+            return None
+        from solin.widgets.camera_popup import CameraPopup
+
+        panel = CameraPopup(self._camera, self._camera_settings, self)
+        panel.stream_requested.connect(self.camera_stream_requested)
+        panel.camera_changed.connect(self.camera_selection_changed)
+        panel.set_stream_active(self._camera_stream_active)
+        known_cameras = self._camera.known_cameras()
+        if known_cameras:
+            panel.populate(known_cameras)
+        self._camera_panel = panel
+        return panel
 
     def _ensure_solin_scene_popup(self):
         if self._solin_scene_popup is not None:
@@ -532,6 +566,27 @@ class QuickAccessToolbar(QQuickWidget):
         self._zoom_sharing = bool(sharing)
         if self._zoom_panel is not None:
             self._zoom_panel.set_sharing(sharing)
+
+    def set_camera_enabled(self, enabled: bool) -> None:
+        self._camera_enabled = bool(
+            enabled and self._camera is not None and self._camera_settings is not None
+        )
+        self._bridge.set_camera_visible(self._camera_enabled)
+        self._bridge.set_camera_icon_color(
+            _icon_hex(PALETTE.text_muted if self._camera_enabled else PALETTE.text_dim)
+        )
+        self._update_separator()
+        self._reposition()
+
+    def set_camera_stream_active(self, active: bool) -> None:
+        self._camera_stream_active = bool(active)
+        self._bridge.set_camera_icon_color(
+            _icon_hex(PALETTE.accent if active else PALETTE.text_muted)
+        )
+        if self._camera_panel is not None:
+            self._camera_panel.set_stream_active(active)
+        if self._scene_popup is not None:
+            self._scene_popup.set_camera_stream_active(active)
 
     def set_remote_control_status(
         self,
@@ -684,6 +739,28 @@ class QuickAccessToolbar(QQuickWidget):
         if self._scene_popup is not None:
             self._scene_popup.set_stream_active(active)
 
+    def set_obs_camera_stream_available(self, available: bool) -> None:
+        self._obs_camera_stream_available = bool(available)
+        if self._scene_popup is not None:
+            self._scene_popup.set_camera_stream_available(available)
+
+    def current_camera_option(self) -> CameraOption | None:
+        if self._camera_panel is not None:
+            return self._camera_panel.selected_camera()
+        if self._camera is None or self._camera_settings is None:
+            return None
+        saved_backend = self._camera_settings.backend()
+        saved_name = self._camera_settings.device_name()
+        cameras = self._camera.known_cameras()
+        return next(
+            (
+                option
+                for option in cameras
+                if option.backend.value == saved_backend and option.name == saved_name
+            ),
+            cameras[0] if cameras else None,
+        )
+
     def reposition(self):
         self._reposition()
 
@@ -700,12 +777,17 @@ class QuickAccessToolbar(QQuickWidget):
             self.set_obs_connected(True)
         if self._zoom_connected:
             self.set_zoom_connected(True)
+        self.set_camera_enabled(self._camera_enabled)
+        if self._camera_stream_active:
+            self.set_camera_stream_active(True)
         if self._background_song_panel is not None:
             self._background_song_panel.apply_theme()
         if self._zoom_panel is not None:
             self._zoom_panel.apply_theme()
         if self._scene_popup is not None:
             self._scene_popup.apply_theme()
+        if self._camera_panel is not None:
+            self._camera_panel.apply_theme()
         if self._solin_scene_popup is not None:
             self._solin_scene_popup.apply_theme()
         if self._remote_sessions_popup is not None:
@@ -853,6 +935,7 @@ class QuickAccessToolbar(QQuickWidget):
             self._bridge._obs_visible
             or self._bridge._scenes_visible
             or self._bridge._zoom_visible
+            or self._bridge._camera_visible
         )
         self._bridge.set_separator_visible(visible)
 
@@ -866,6 +949,8 @@ class QuickAccessToolbar(QQuickWidget):
         if self._bridge._obs_visible:
             items.append(30)
         if self._bridge._scenes_visible:
+            items.append(30)
+        if self._bridge._camera_visible:
             items.append(30)
         if self._bridge._zoom_visible:
             items.append(30)
@@ -1058,6 +1143,14 @@ class QuickAccessToolbar(QQuickWidget):
         if popup is not None:
             popup.show_above(self._active_surface())
 
+    def _on_camera_clicked(self) -> None:
+        hide_themed_tooltip()
+        if not self._camera_enabled:
+            return
+        panel = self._ensure_camera_panel()
+        if panel is not None:
+            panel.show_above(self._active_surface())
+
     def _on_background_song_clicked(self):
         hide_themed_tooltip()
         if not self._background_song_panel or not self._background_song:
@@ -1085,5 +1178,7 @@ class QuickAccessToolbar(QQuickWidget):
             self._bridge.update_translations()
             self._sync_background_song_state()
             self._sync_solin_scene_state()
+            if self._camera_panel is not None:
+                self._camera_panel.apply_theme()
             self._sync_remote_control_state()
         super().changeEvent(event)

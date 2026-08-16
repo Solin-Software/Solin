@@ -34,6 +34,7 @@ class ShutdownServices:
     program_content: Any | None = None
     content_frame_ingress: Any | None = None
     scene_frame_egresses: tuple[Any, ...] = ()
+    camera: Any | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -144,6 +145,8 @@ class ShutdownController:
         services.background_song.shutdown()
         services.media_controller.stop()
         services.ndi.stop(wait=True)
+        if services.camera is not None:
+            services.camera.stop()
         services.obs.stop(wait=True)
         services.zoom.stop(wait=True)
 

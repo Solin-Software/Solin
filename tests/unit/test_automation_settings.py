@@ -7,6 +7,7 @@ from solin.core.foundation.settings_keys import SettingsKey
 from solin.core.foundation.settings_store import SettingsStore
 from solin.core.integrations.automation.settings import (
     AutoShareSettingsStore,
+    CameraSettingsStore,
     OBSSettingsStore,
     ZoomSettingsStore,
 )
@@ -140,18 +141,27 @@ def test_auto_share_settings_defaults_missing_click_position():
         settings.clear()
 
 
-def test_zoom_settings_read_defaults_and_saved_values():
+def test_zoom_and_camera_settings_read_defaults_and_saved_values():
     profile_settings = _profile_settings()
     settings = _settings(profile_settings)
     zoom = ZoomSettingsStore(settings)
+    camera = CameraSettingsStore(settings)
     settings.clear()
     try:
         assert zoom.is_enabled() is False
         assert zoom.show_participants() is True
+        assert camera.is_enabled() is False
+        assert camera.backend() == ""
+        assert camera.device_name() == ""
         zoom.set_enabled(True)
         zoom.set_show_participants(False)
+        camera.set_enabled(True)
+        camera.set_device("dshow", "Cam")
 
         assert zoom.is_enabled() is True
         assert zoom.show_participants() is False
+        assert camera.is_enabled() is True
+        assert camera.backend() == "dshow"
+        assert camera.device_name() == "Cam"
     finally:
         settings.clear()

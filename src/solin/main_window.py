@@ -274,6 +274,7 @@ class MainWindow(QWidget):
         self._zoom_settings = profile_settings_bundle.zoom
         self._auto_share_settings = profile_settings_bundle.auto_share
         self._auto_key_settings = profile_settings_bundle.auto_key
+        self._camera_settings = profile_settings_bundle.camera
         self._media_settings = profile_settings_bundle.media
         self._browser_settings = profile_settings_bundle.browser
         self._projection_playback_settings = profile_settings_bundle.projection_playback
@@ -466,6 +467,12 @@ class MainWindow(QWidget):
         # OBS/DistroAV NDI program stream receiver
         self._ndi_service = service_factories.ndi_receiver(self)
 
+        self._camera_service = (
+            service_factories.camera(self)
+            if service_factories.camera is not None
+            else None
+        )
+
         # Zoom Meetings integration
         self._zoom_service = service_factories.zoom(self._zoom_settings, self)
 
@@ -528,10 +535,12 @@ class MainWindow(QWidget):
                 obs_service=self._obs_service,
                 ndi_service=self._ndi_service,
                 zoom_service=self._zoom_service,
+                camera_service=self._camera_service,
                 app_settings=self._app_settings,
                 obs_settings=self._obs_settings,
                 zoom_settings=self._zoom_settings,
                 auto_share_settings=self._auto_share_settings,
+                camera_settings=self._camera_settings,
                 auto_key_settings=self._auto_key_settings,
                 media_settings=self._media_settings,
                 playback_protection=self.playback_protection,
@@ -633,6 +642,10 @@ class MainWindow(QWidget):
                     self._live_integrations.on_quick_obs_return_scene_change(scene_name)
                 ),
                 project_obs_stream=lambda: self._live_integrations.project_obs_ndi_stream(),
+                project_camera_stream=lambda: self._live_integrations.project_camera_stream(),
+                camera_selection_changed=(
+                    lambda option: self._live_integrations.on_camera_selection_changed(option)
+                ),
                 profile_switch_requested=self._profile_switch.request_switch,
             ),
             media_info_queue_factory=media_info_queue_factory,
@@ -744,6 +757,7 @@ class MainWindow(QWidget):
                 projection_bar=self.proj_bar,
                 media_controller=self.media_ctrl,
                 ndi_service=self._ndi_service,
+                camera_service=self._camera_service,
                 projection_windows=self._raw_projection_windows,
                 playlist_edit_is_temp=lambda: getattr(
                     self.playlist_widget, "is_temporary_edit", False
@@ -776,6 +790,7 @@ class MainWindow(QWidget):
                 projection_bar=self.proj_bar,
                 media_controller=self.media_ctrl,
                 ndi_service=self._ndi_service,
+                camera_service=self._camera_service,
                 projection_windows=self._raw_projection_windows,
                 auto_share_configured=(self._projection_integrations.auto_share_configured),
             ),
@@ -784,6 +799,9 @@ class MainWindow(QWidget):
                 update_projection_status=(self._projection_integrations.update_status),
                 set_obs_stream_active=lambda active: self._live_integrations.set_obs_stream_active(
                     active
+                ),
+                set_camera_stream_active=lambda active: (
+                    self._live_integrations.set_camera_stream_active(active)
                 ),
             ),
         )
@@ -811,6 +829,8 @@ class MainWindow(QWidget):
                 translate=self.tr,
                 playback_protection=self.playback_protection,
                 content_frame_sink=self._program_content.submit_frame,
+                camera_settings=self._camera_settings,
+                camera_service=self._camera_service,
             ),
             LiveIntegrationHandlers(
                 stop_projection=self._projection_stop.stop_projection,
@@ -824,6 +844,7 @@ class MainWindow(QWidget):
                 projection_bar=self.proj_bar,
                 media_controller=self.media_ctrl,
                 ndi_service=self._ndi_service,
+                camera_service=self._camera_service,
                 projection_windows=self._raw_projection_windows,
                 translate=self.tr,
                 playback_protection=self.playback_protection,
@@ -860,6 +881,7 @@ class MainWindow(QWidget):
                 settings_widget=self.settings_widget,
                 obs_service=self._obs_service,
                 ndi_service=self._ndi_service,
+                camera_service=self._camera_service,
                 auto_share_finished=self._auto_share_finished,
                 media_countdown_automation=self._media_countdown_automation,
             ),
@@ -931,6 +953,7 @@ class MainWindow(QWidget):
                     media_tree_runtime=self.media_tree_runtime,
                     media_controller=self.media_ctrl,
                     ndi=self._ndi_service,
+                    camera=self._camera_service,
                     obs=self._obs_service,
                     zoom=self._zoom_service,
                     ipc=lambda: self._ipc_controller,

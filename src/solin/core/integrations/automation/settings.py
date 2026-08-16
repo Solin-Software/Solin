@@ -194,3 +194,25 @@ class AutoShareSettingsStore(_ProfilePrefsSettings):
         self.settings.set_value(SettingsKey.SHARE_CLICK_X, int(x), sync=False)
         self.settings.set_value(SettingsKey.SHARE_CLICK_Y, int(y), sync=False)
         self.settings.sync()
+
+
+@dataclass(frozen=True, slots=True)
+class CameraSettingsStore(_ProfilePrefsSettings):
+    """Persisted configuration for the legacy Linux/macOS camera workflow."""
+
+    def is_enabled(self) -> bool:
+        return bool(self.settings.value(SettingsKey.CAMERA_ENABLED, False, bool))
+
+    def set_enabled(self, enabled: bool) -> None:
+        self.settings.set_value(SettingsKey.CAMERA_ENABLED, bool(enabled))
+
+    def backend(self) -> str:
+        return self.settings.string(SettingsKey.CAMERA_BACKEND)
+
+    def device_name(self) -> str:
+        return self.settings.string(SettingsKey.CAMERA_DEVICE_NAME)
+
+    def set_device(self, backend: str, name: str) -> None:
+        self.settings.set_value(SettingsKey.CAMERA_BACKEND, backend, sync=False)
+        self.settings.set_value(SettingsKey.CAMERA_DEVICE_NAME, name, sync=False)
+        self.settings.sync()

@@ -9,6 +9,7 @@ from solin.ui.controls import NoScrollComboBox
 from solin.widgets.settings.about_section import AboutSectionMixin
 from solin.widgets.settings.auto_keys_section import AutoKeysSectionMixin
 from solin.widgets.settings.auto_share_section import AutoShareSectionMixin
+from solin.widgets.settings.camera_section import CameraSectionMixin
 from solin.widgets.settings.language_section import LanguageSectionMixin
 from solin.widgets.settings.layout_helpers import SettingsLayoutMixin
 from solin.widgets.settings.media_section import MediaSectionMixin
@@ -350,6 +351,12 @@ def test_settings_widget_uses_auto_share_section_mixin():
         SettingsWidget._refresh_autoshare_accessibility_status
         is AutoShareSectionMixin._refresh_autoshare_accessibility_status
     )
+
+
+def test_settings_widget_uses_camera_section_mixin():
+    assert issubclass(SettingsWidget, CameraSectionMixin)
+    assert SettingsWidget._build_camera_card is CameraSectionMixin._build_camera_card
+    assert SettingsWidget.get_camera_enabled is CameraSectionMixin.get_camera_enabled
 
 
 def test_settings_widget_uses_zoom_section_mixin():

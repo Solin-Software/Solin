@@ -6,6 +6,7 @@ from ..core.ingest.watched_folder_settings import WatchedFolderSettingsStore
 from ..core.integrations.automation.settings import (
     AutoKeySettingsStore,
     AutoShareSettingsStore,
+    CameraSettingsStore,
     OBSSettingsStore,
     ZoomSettingsStore,
 )
@@ -33,6 +34,7 @@ class MainWindowProfileSettings:
     zoom: ZoomSettingsStore
     auto_share: AutoShareSettingsStore
     auto_key: AutoKeySettingsStore
+    camera: CameraSettingsStore | None
     projection_playback: ProjectionPlaybackSettingsStore
     meeting_schedule: MeetingScheduleSettingsStore
     media_countdown: MediaCountdownSettingsStore

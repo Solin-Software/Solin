@@ -22,6 +22,7 @@ class TimerProjectionContext:
     translate: Callable[[str], str]
     playback_protection: Any
     program_content: Any
+    camera_service: Any | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,6 +129,8 @@ class TimerProjectionController:
         self._handlers.stop_browser_tab_projection()
         context.media_controller.stop()
         context.ndi_service.stop()
+        if context.camera_service is not None:
+            context.camera_service.stop()
 
 
 __all__ = [

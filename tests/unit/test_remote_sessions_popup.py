@@ -147,6 +147,7 @@ def test_remote_toolbar_control_keeps_the_maximum_pill_within_its_fixed_surface(
         _separator_visible=True,
         _obs_visible=True,
         _scenes_visible=True,
+        _camera_visible=False,
         _zoom_visible=True,
         _remote_control_visible=True,
     )

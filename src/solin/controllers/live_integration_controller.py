@@ -10,6 +10,7 @@ from PySide6.QtCore import Slot
 from PySide6.QtGui import QImage
 
 from ..core.foundation.constants import MEMORIZE_PRE_MEDIA_SCENE
+from ..core.integrations.camera_options import CameraOption
 
 log = logging.getLogger(__name__)
 
@@ -33,6 +34,8 @@ class LiveIntegrationContext:
     playback_protection: Any
     content_frame_sink: Callable[[object], None]
     platform: str = sys.platform
+    camera_settings: Any | None = None
+    camera_service: Any | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,7 +48,7 @@ class LiveIntegrationHandlers:
 
 
 class LiveIntegrationController:
-    """Owns OBS, NDI, Zoom, and quick-toolbar integration callbacks."""
+    """Owns OBS, NDI, legacy-camera, Zoom, and toolbar integration callbacks."""
 
     def __init__(
         self,
@@ -137,11 +140,56 @@ class LiveIntegrationController:
         available = self._context.obs_settings.ndi_stream_configured()
         toolbar.set_obs_stream_available(available)
         toolbar.set_obs_stream_active(self._session.state_type == "obs_stream")
+        self.refresh_obs_camera_stream_availability()
 
     def set_obs_stream_active(self, active: bool) -> None:
         toolbar = self._context.quick_toolbar()
         if toolbar is not None:
             toolbar.set_obs_stream_active(active)
+
+    def selected_camera_option(self) -> CameraOption | None:
+        context = self._context
+        if context.camera_service is None or context.camera_settings is None:
+            return None
+        toolbar = context.quick_toolbar()
+        if toolbar is not None:
+            option = toolbar.current_camera_option()
+            if option is not None:
+                return option
+        return context.camera_service.find_saved(
+            context.camera_settings.backend(),
+            context.camera_settings.device_name(),
+        )
+
+    def refresh_obs_camera_stream_availability(self) -> None:
+        context = self._context
+        toolbar = context.quick_toolbar()
+        if toolbar is None:
+            return
+        if context.camera_service is None or context.camera_settings is None:
+            return
+        available = (
+            context.camera_settings.is_enabled()
+            and not context.obs_settings.ndi_enabled()
+            and bool((option := self.selected_camera_option()) and option.is_virtual)
+        )
+        toolbar.set_obs_camera_stream_available(available)
+
+    def set_camera_stream_active(self, active: bool) -> None:
+        toolbar = self._context.quick_toolbar()
+        if toolbar is not None:
+            toolbar.set_camera_stream_active(active)
+
+    def on_camera_settings_enabled_toggled(self, enabled: bool) -> None:
+        toolbar = self._context.quick_toolbar()
+        if toolbar is not None:
+            toolbar.set_camera_enabled(enabled)
+        self.refresh_obs_camera_stream_availability()
+        if not enabled and self._session.state_type == "camera_stream":
+            self._handlers.stop_projection()
+
+    def on_camera_selection_changed(self, _option: CameraOption | None) -> None:
+        self.refresh_obs_camera_stream_availability()
 
     def on_quick_obs_scene_change(self, scene_name: str) -> None:
         self._context.obs_service.request_scene_change(scene_name)
@@ -183,6 +231,8 @@ class LiveIntegrationController:
         except Exception:  # noqa: BLE001 - native browser projection cleanup boundary
             log.debug("Failed to stop browser tab projection before OBS stream", exc_info=True)
         context.media_controller.stop()
+        if context.camera_service is not None:
+            context.camera_service.stop()
         context.projection_bar.set_playlist([])
         for win in context.projection_windows():
             win.clear()
@@ -200,6 +250,75 @@ class LiveIntegrationController:
         )
         self.set_obs_stream_active(True)
         context.ndi_service.start(source, max_fps=30)
+
+    def project_camera_stream(self) -> None:
+        context = self._context
+        if context.camera_service is None or context.camera_settings is None:
+            return
+        if self._session.state_type == "camera_stream":
+            self._handlers.stop_projection()
+            return
+        if not context.playback_protection.allow_manual_projection_change():
+            return
+        if not context.camera_settings.is_enabled():
+            context.notifications.warning(context.translate("Camera is not enabled."))
+            return
+
+        option = self.selected_camera_option()
+        if option is None:
+            context.notifications.warning(context.translate("No camera selected."))
+            return
+
+        self._session.set_tab_projection_active(False)
+        try:
+            self._handlers.stop_browser_tab_projection()
+        except Exception:  # noqa: BLE001 - native browser projection cleanup boundary
+            log.debug("Failed to stop browser tab projection before camera stream", exc_info=True)
+        context.media_controller.stop()
+        context.ndi_service.stop()
+        context.camera_service.stop()
+        context.projection_bar.set_playlist([])
+        for window in context.projection_windows():
+            window.clear()
+        title = context.translate("Camera")
+        context.projection_bar.activate_live_stream(
+            title,
+            keep_expanded=context.projection_bar.is_expanded(),
+        )
+        self._session.set_state({"type": "camera_stream", "title": title})
+        self._handlers.update_projection_status(
+            True,
+            title,
+            auto_keys_media=False,
+            sync_obs=False,
+        )
+        self.set_camera_stream_active(True)
+        context.camera_service.start(option)
+
+    @Slot(QImage)
+    def on_camera_frame(self, frame: QImage) -> None:
+        if self._session.state_type != "camera_stream":
+            return
+        context = self._context
+        for window in context.projection_windows():
+            if hasattr(window, "show_image_from_qimage"):
+                window.show_image_from_qimage(frame, cache_pixmap=False)
+        context.projection_bar.update_tab_live_preview(frame)
+        context.content_frame_sink(frame)
+
+    def on_camera_error(self, message: str) -> None:
+        if self._session.state_type != "camera_stream":
+            return
+        context = self._context
+        context.notifications.error(
+            message,
+            title=context.translate("Camera error"),
+            dedupe_key=f"camera:{message}",
+        )
+        self._handlers.stop_projection()
+
+    def on_camera_stopped(self) -> None:
+        self.set_camera_stream_active(False)
 
     @Slot(QImage)
     def on_obs_ndi_frame(self, frame: QImage) -> None:

@@ -143,6 +143,8 @@ class MainWindowUiContext:
     jw_songs_store: Any
     jwpub_service_factory: Callable[[QObject], Any]
     memorial_service_factory: Callable[[QObject], Any]
+    camera_service: Any | None = None
+    camera_settings: Any | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -162,6 +164,8 @@ class MainWindowUiHandlers:
     quick_obs_return_scene_change: Callable[..., Any]
     project_obs_stream: Callable[..., Any]
     profile_switch_requested: Callable[..., Any]
+    project_camera_stream: Callable[..., Any] | None = None
+    camera_selection_changed: Callable[..., Any] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -461,6 +465,7 @@ class MainWindowUiController:
             obs_settings=context.obs_settings,
             zoom_settings=context.zoom_settings,
             auto_share_settings=context.auto_share_settings,
+            camera_settings=context.camera_settings,
             auto_key_settings=context.auto_key_settings,
             media_settings=context.media_settings,
             playback_protection=context.playback_protection,
@@ -721,11 +726,23 @@ class MainWindowUiController:
             obs_settings=context.obs_settings,
             background_song_service=context.background_song_service,
             scene_runtime=context.scene_runtime,
+            camera_service=context.camera_service,
+            camera_settings=context.camera_settings,
         )
         toolbar.monitor_clicked.connect(handlers.monitor_manager_requested)
         toolbar.obs_scene_change.connect(handlers.quick_obs_scene_change)
         toolbar.obs_return_scene_change.connect(handlers.quick_obs_return_scene_change)
         toolbar.obs_stream_requested.connect(handlers.project_obs_stream)
+        if (
+            context.camera_service is not None
+            and context.camera_settings is not None
+            and handlers.project_camera_stream is not None
+            and handlers.camera_selection_changed is not None
+        ):
+            toolbar.obs_camera_stream_requested.connect(handlers.project_camera_stream)
+            toolbar.camera_stream_requested.connect(handlers.project_camera_stream)
+            toolbar.camera_selection_changed.connect(handlers.camera_selection_changed)
+            toolbar.set_camera_enabled(settings_widget.get_camera_enabled())
         toolbar.show()
         toolbar.reposition()
         navigation.update_quick_toolbar_browser_style()

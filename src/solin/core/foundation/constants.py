@@ -62,6 +62,11 @@ elif sys.platform.startswith("linux"):
 else:
     APP_PLATFORM: str = sys.platform
 
+# The native scenes engine supersedes the legacy Qt camera workflow on Windows.
+# Keep that workflow available only while the scenes engine is unavailable on
+# the other supported desktop platforms.
+LEGACY_CAMERA_SUPPORTED: bool = APP_PLATFORM in {"linux", "macos"}
+
 # ── Arquivos temporários de stream (cache OFF) ─────────────────────────────────
 # Prefixo obrigatório em todo tempfile e lockfile gerado pelo Solin.
 # A limpeza de órfãos na inicialização filtra EXCLUSIVAMENTE por este prefixo,
