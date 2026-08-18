@@ -1131,6 +1131,11 @@
       <source>Receive via Wi-Fi</source>
       <translation>Wi-Fiで受信</translation>
     </message>
+    <message>
+      <location filename="../../controllers/main_window_nav.py" line="30" />
+      <source>Library</source>
+      <translation>ライブラリー</translation>
+    </message>
   </context>
   <context>
     <name>MediaCard</name>
@@ -7755,6 +7760,277 @@ Add one when you are ready.</source>
     <message>
       <source>Name</source>
       <translation>氏名</translation>
+    </message>
+  </context>
+  <context>
+    <name>LibraryWidget</name>
+    <message>
+      <location filename="../../widgets/library_widget.py" line="+218" />
+      <location line="+18" />
+      <location line="+249" />
+      <source>Songs</source>
+      <translation>歌</translation>
+    </message>
+    <message>
+      <location line="-262" />
+      <location line="+14" />
+      <location line="+248" />
+      <source>Original Songs</source>
+      <translation>オリジナルソング</translation>
+    </message>
+    <message>
+      <location line="-257" />
+      <location line="+10" />
+      <location line="+702" />
+      <source>Downloads</source>
+      <translation>ダウンロード</translation>
+    </message>
+    <message>
+      <location line="-706" />
+      <source>Library</source>
+      <translation>ライブラリー</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Refresh</source>
+      <translation>更新</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Play all (in order)</source>
+      <translation>すべて再生（順次）</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Play in random order</source>
+      <translation>シャッフル再生</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Video songs</source>
+      <translation>動画ソング</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Audio songs</source>
+      <translation>音声ソング</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>All</source>
+      <translation>すべて</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Videos</source>
+      <translation>動画</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Audio</source>
+      <translation>オーディオ</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Images</source>
+      <translation>画像</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Delete selected downloads</source>
+      <translation>選択したダウンロードを削除</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <location line="+687" />
+      <source>No downloaded media found.</source>
+      <translation>ダウンロード済みメディアがありません。</translation>
+    </message>
+    <message>
+      <location line="-470" />
+      <source>Loading songs…</source>
+      <translation>歌を読み込んでいます…</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Loading clips…</source>
+      <translation>ミュージックビデオを読み込んでいます…</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Error loading songs. Check your connection.</source>
+      <translation>歌の読み込みエラー。接続を確認してください。</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Error loading clips. Check your connection.</source>
+      <translation>クリップの読み込みエラー。接続を確認してください。</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>No songs match your search.</source>
+      <translation>検索に一致する歌はありません。</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>No clips match your search.</source>
+      <translation>検索に一致するミュージックビデオはありません。</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Search songs…</source>
+      <translation>歌を検索…</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Search music videos…</source>
+      <translation>ミュージックビデオを検索…</translation>
+    </message>
+    <message>
+      <location line="+178" />
+      <source>Download all music videos</source>
+      <translation>全てのミュージックビデオをダウンロード</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Download all audio songs</source>
+      <translation>すべての音声の歌をダウンロード</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Download all video songs</source>
+      <translation>すべてのビデオの歌をダウンロード</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Download {count} music videos for offline playback?</source>
+      <translation>オフライン再生用にミュージックビデオを{count}本ダウンロードしますか？</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Download {count} audio songs for offline playback?</source>
+      <translation>オフライン再生用に{count}曲の音声の歌をダウンロードしますか？</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Download {count} video songs for offline playback?</source>
+      <translation>オフライン再生用に{count}本のビデオの歌をダウンロードしますか？</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>All music videos downloaded</source>
+      <translation>全てのミュージックビデオをダウンロードしました</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>All audio songs downloaded</source>
+      <translation>すべての音声の歌をダウンロードしました</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>All video songs downloaded</source>
+      <translation>すべてのビデオの歌をダウンロード済み</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Could not finish downloading all music videos.</source>
+      <translation>全てのミュージックビデオをダウンロードできませんでした。</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Could not finish downloading all audio songs.</source>
+      <translation>すべての音声の歌をダウンロードできませんでした。</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Could not finish downloading all video songs.</source>
+      <translation>すべてのビデオの歌のダウンロードを完了できませんでした。</translation>
+    </message>
+    <message>
+      <location line="+19" />
+      <source>Cancel downloads</source>
+      <translation>ダウンロードをキャンセル</translation>
+    </message>
+    <message>
+      <location line="+52" />
+      <source>Download failed</source>
+      <translation>ダウンロードに失敗しました</translation>
+    </message>
+    <message>
+      <location line="+27" />
+      <location line="+147" />
+      <source>Loading downloaded media…</source>
+      <translation>ダウンロード済みメディアを読み込んでいます…</translation>
+    </message>
+    <message>
+      <location line="-47" />
+      <source>Could not read downloaded media.</source>
+      <translation>ダウンロード済みメディアを読み取れませんでした。</translation>
+    </message>
+    <message>
+      <location line="+38" />
+      <source>{size} · {count} files</source>
+      <translation>{size} · {count}ファイル</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>{count} selected</source>
+      <translation>{count}件選択</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Could not load downloaded media. Try again.</source>
+      <translation>ダウンロード済みメディアを読み込めませんでした。もう一度お試しください。</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>No downloaded media matches these filters.</source>
+      <translation>このフィルターに一致するダウンロード済みメディアはありません。</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Manage media available offline</source>
+      <translation>オフラインで利用できるメディアを管理</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Search downloaded media…</source>
+      <translation>ダウンロード済みメディアを検索…</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <source>Deselect visible</source>
+      <translation>表示項目の選択を解除</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Select visible</source>
+      <translation>表示項目を選択</translation>
+    </message>
+    <message>
+      <location line="+50" />
+      <source>Confirm deletion</source>
+      <translation>削除の確認</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Delete {count} downloaded files from this computer?</source>
+      <translation>このコンピューターからダウンロード済みファイルを{count}件削除しますか？</translation>
+    </message>
+    <message>
+      <location line="+49" />
+      <source>Delete error</source>
+      <translation>削除エラー</translation>
+    </message>
+    <message>
+      <location filename="../../widgets/library_widget.py" line="248" />
+      <source>Delete</source>
+      <translation>削除</translation>
+    </message>
+    <message>
+      <location filename="../../widgets/library_widget.py" line="250" />
+      <source>Clear selection</source>
+      <translation>選択を解除</translation>
     </message>
   </context>
 </TS>

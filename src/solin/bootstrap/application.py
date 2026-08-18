@@ -374,6 +374,7 @@ def _build_main_window_runtime(
     from solin.core.media.profile_store import ProfileMediaStore
     from solin.core.media.thumbnail_store import ThumbnailStore
     from solin.core.media.cache_scan import CacheScanSessionFactory
+    from solin.core.media.cache_delete import CacheDeletionSessionFactory
     from solin.core.jw.clip_fetch import ClipFetchThreadFactory
     from solin.core.jw.catalog_service import JWMediaCatalogService
     from solin.core.jw.jwpub_import_thread import JwpubImportThreadFactory
@@ -443,6 +444,7 @@ def _build_main_window_runtime(
     )
     clip_fetch_thread_factory = ClipFetchThreadFactory()
     cache_scan_session_factory = CacheScanSessionFactory()
+    cache_deletion_session_factory = CacheDeletionSessionFactory()
     qr_generation_session_factory = QrGenerationSessionFactory()
     playlist_thumbnail_store = ThumbnailStore(profile_paths.thumb_cache_dir)
     meeting_thumbnail_store = ThumbnailStore(
@@ -497,6 +499,7 @@ def _build_main_window_runtime(
             document_conversion_service,
             clip_fetch_thread_factory,
             cache_scan_session_factory,
+            cache_deletion_session_factory,
             qr_generation_session_factory,
             playlist_thumbnail_store,
             meeting_thumbnail_store,

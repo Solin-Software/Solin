@@ -1132,6 +1132,11 @@
       <source>Receive via Wi-Fi</source>
       <translation>Ricevi via Wi-Fi</translation>
     </message>
+    <message>
+      <location filename="../../controllers/main_window_nav.py" line="30" />
+      <source>Library</source>
+      <translation>Libreria</translation>
+    </message>
   </context>
   <context>
     <name>MediaCard</name>
@@ -7760,6 +7765,277 @@ Aggiungine uno quando vuoi.</translation>
     <message>
       <source>Name</source>
       <translation>Nome</translation>
+    </message>
+  </context>
+  <context>
+    <name>LibraryWidget</name>
+    <message>
+      <location filename="../../widgets/library_widget.py" line="+218" />
+      <location line="+18" />
+      <location line="+249" />
+      <source>Songs</source>
+      <translation>Cantici</translation>
+    </message>
+    <message>
+      <location line="-262" />
+      <location line="+14" />
+      <location line="+248" />
+      <source>Original Songs</source>
+      <translation>Canzoni</translation>
+    </message>
+    <message>
+      <location line="-257" />
+      <location line="+10" />
+      <location line="+702" />
+      <source>Downloads</source>
+      <translation>Download</translation>
+    </message>
+    <message>
+      <location line="-706" />
+      <source>Library</source>
+      <translation>Libreria</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Refresh</source>
+      <translation>Aggiorna</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Play all (in order)</source>
+      <translation>Riproduci tutti (in ordine)</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Play in random order</source>
+      <translation>Riproduci in ordine casuale</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Video songs</source>
+      <translation>Canzoni video</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Audio songs</source>
+      <translation>Canzoni audio</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>All</source>
+      <translation>Tutti</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Videos</source>
+      <translation>Video</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Audio</source>
+      <translation>Audio</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Images</source>
+      <translation>Immagini</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Delete selected downloads</source>
+      <translation>Elimina i download selezionati</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <location line="+687" />
+      <source>No downloaded media found.</source>
+      <translation>Nessun contenuto scaricato trovato.</translation>
+    </message>
+    <message>
+      <location line="-470" />
+      <source>Loading songs…</source>
+      <translation>Caricamento dei cantici…</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Loading clips…</source>
+      <translation>Caricamento dei video musicali…</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Error loading songs. Check your connection.</source>
+      <translation>Errore nel caricamento dei cantici. Controlla la connessione.</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Error loading clips. Check your connection.</source>
+      <translation>Errore nel caricamento dei clip. Controlla la connessione.</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>No songs match your search.</source>
+      <translation>Nessun cantico corrisponde alla ricerca.</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>No clips match your search.</source>
+      <translation>Nessun video musicale corrisponde alla ricerca.</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Search songs…</source>
+      <translation>Cerca cantici…</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Search music videos…</source>
+      <translation>Cerca video musicali…</translation>
+    </message>
+    <message>
+      <location line="+178" />
+      <source>Download all music videos</source>
+      <translation>Scarica tutti i video musicali</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Download all audio songs</source>
+      <translation>Scarica tutti i cantici audio</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Download all video songs</source>
+      <translation>Scarica tutti i cantici video</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Download {count} music videos for offline playback?</source>
+      <translation>Scaricare {count} video musicali per la riproduzione offline?</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Download {count} audio songs for offline playback?</source>
+      <translation>Scaricare {count} cantici audio per la riproduzione offline?</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Download {count} video songs for offline playback?</source>
+      <translation>Scaricare {count} cantici video per la riproduzione offline?</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>All music videos downloaded</source>
+      <translation>Tutti i video musicali sono stati scaricati</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>All audio songs downloaded</source>
+      <translation>Tutti i cantici audio sono stati scaricati</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>All video songs downloaded</source>
+      <translation>Tutti i cantici video sono stati scaricati</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Could not finish downloading all music videos.</source>
+      <translation>Impossibile completare il download di tutti i video musicali.</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Could not finish downloading all audio songs.</source>
+      <translation>Impossibile completare il download di tutti i cantici audio.</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Could not finish downloading all video songs.</source>
+      <translation>Non è stato possibile completare il download di tutti i cantici video.</translation>
+    </message>
+    <message>
+      <location line="+19" />
+      <source>Cancel downloads</source>
+      <translation>Annulla download</translation>
+    </message>
+    <message>
+      <location line="+52" />
+      <source>Download failed</source>
+      <translation>Download non riuscito</translation>
+    </message>
+    <message>
+      <location line="+27" />
+      <location line="+147" />
+      <source>Loading downloaded media…</source>
+      <translation>Caricamento dei contenuti scaricati…</translation>
+    </message>
+    <message>
+      <location line="-47" />
+      <source>Could not read downloaded media.</source>
+      <translation>Impossibile leggere i contenuti scaricati.</translation>
+    </message>
+    <message>
+      <location line="+38" />
+      <source>{size} · {count} files</source>
+      <translation>{size} · {count} file</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>{count} selected</source>
+      <translation>{count} selezionati</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Could not load downloaded media. Try again.</source>
+      <translation>Impossibile caricare i contenuti scaricati. Riprova.</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>No downloaded media matches these filters.</source>
+      <translation>Nessun contenuto scaricato corrisponde a questi filtri.</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Manage media available offline</source>
+      <translation>Gestisci i contenuti disponibili offline</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Search downloaded media…</source>
+      <translation>Cerca nei contenuti scaricati…</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <source>Deselect visible</source>
+      <translation>Deseleziona visibili</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Select visible</source>
+      <translation>Seleziona visibili</translation>
+    </message>
+    <message>
+      <location line="+50" />
+      <source>Confirm deletion</source>
+      <translation>Conferma eliminazione</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Delete {count} downloaded files from this computer?</source>
+      <translation>Eliminare {count} file scaricati da questo computer?</translation>
+    </message>
+    <message>
+      <location line="+49" />
+      <source>Delete error</source>
+      <translation>Errore di eliminazione</translation>
+    </message>
+    <message>
+      <location filename="../../widgets/library_widget.py" line="248" />
+      <source>Delete</source>
+      <translation>Elimina</translation>
+    </message>
+    <message>
+      <location filename="../../widgets/library_widget.py" line="250" />
+      <source>Clear selection</source>
+      <translation>Cancella selezione</translation>
     </message>
   </context>
 </TS>

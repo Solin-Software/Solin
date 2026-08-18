@@ -7,7 +7,7 @@ from PySide6.QtCore import QCoreApplication, QObject, Signal
 
 from solin.core.media.cache import MediaCacheManager
 from solin.core.i18n.strings import tr_offline_queued
-from solin.ui.qml.media_library import MediaLibraryModel
+from solin.ui.qml.library import MediaCatalogModel
 
 
 class FakeDownloader(QObject):
@@ -167,7 +167,7 @@ class MediaCacheManagerQueueTests(unittest.TestCase):
         self.assertEqual(self.mgr.batch_counts("batch"), (0, 0, 0, 1))
 
 
-class MediaLibraryModelQueueTests(unittest.TestCase):
+class MediaCatalogModelQueueTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls._app = QCoreApplication.instance() or QCoreApplication([])
@@ -188,21 +188,40 @@ class MediaLibraryModelQueueTests(unittest.TestCase):
     def test_model_exposes_queued_state_and_tooltip(self):
         active_url = "https://cdn.example/active.mp4"
         queued_url = "https://cdn.example/queued.mp4"
-        model = MediaLibraryModel(self.mgr)
+        model = MediaCatalogModel(self.mgr)
         try:
-            model.set_items([
-                {"url": queued_url, "title": "Queued", "duration": 1},
-            ], audio_mode=False)
+            model.set_items(
+                [
+                    {"url": queued_url, "title": "Queued", "duration": 1},
+                ],
+                audio_mode=False,
+            )
 
             self.mgr.prefetch(active_url)
             self.mgr.prefetch(queued_url)
             index = model.index(0, 0)
 
-            self.assertTrue(model.data(index, MediaLibraryModel.CloudQueuedRole))
+            self.assertTrue(model.data(index, MediaCatalogModel.CloudQueuedRole))
             self.assertEqual(
-                model.data(index, MediaLibraryModel.CloudTooltipRole),
+                model.data(index, MediaCatalogModel.CloudTooltipRole),
                 tr_offline_queued(),
             )
+        finally:
+            model.cleanup()
+
+    def test_model_exposes_determinate_download_progress(self):
+        url = "https://cdn.example/progress.mp4"
+        model = MediaCatalogModel(self.mgr)
+        try:
+            model.set_items(
+                [{"url": url, "title": "Progress", "duration": 1}],
+                audio_mode=False,
+            )
+            self.mgr.prefetch(url)
+            FakeDownloader.created[-1].progress.emit(25, 100)
+
+            progress = model.data(model.index(0, 0), MediaCatalogModel.CloudProgressRole)
+            self.assertEqual(progress, 0.25)
         finally:
             model.cleanup()
 

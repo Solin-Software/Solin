@@ -1131,6 +1131,11 @@
       <source>Receive via Wi-Fi</source>
       <translation>Terima melalui Wi-Fi</translation>
     </message>
+    <message>
+      <location filename="../../controllers/main_window_nav.py" line="30" />
+      <source>Library</source>
+      <translation>Pustaka</translation>
+    </message>
   </context>
   <context>
     <name>MediaCard</name>
@@ -7755,6 +7760,277 @@ Tambahkan saat Anda siap.</translation>
     <message>
       <source>Name</source>
       <translation>Nama</translation>
+    </message>
+  </context>
+  <context>
+    <name>LibraryWidget</name>
+    <message>
+      <location filename="../../widgets/library_widget.py" line="+218" />
+      <location line="+18" />
+      <location line="+249" />
+      <source>Songs</source>
+      <translation>Lagu-Lagu</translation>
+    </message>
+    <message>
+      <location line="-262" />
+      <location line="+14" />
+      <location line="+248" />
+      <source>Original Songs</source>
+      <translation>Lagu Baru</translation>
+    </message>
+    <message>
+      <location line="-257" />
+      <location line="+10" />
+      <location line="+702" />
+      <source>Downloads</source>
+      <translation>Unduhan</translation>
+    </message>
+    <message>
+      <location line="-706" />
+      <source>Library</source>
+      <translation>Pustaka</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Refresh</source>
+      <translation>Segarkan</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Play all (in order)</source>
+      <translation>Putar semua (berurutan)</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Play in random order</source>
+      <translation>Putar secara acak</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Video songs</source>
+      <translation>Lagu video</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Audio songs</source>
+      <translation>Lagu audio</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>All</source>
+      <translation>Semua</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Videos</source>
+      <translation>Video</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Audio</source>
+      <translation>Audio</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Images</source>
+      <translation>Gambar</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Delete selected downloads</source>
+      <translation>Hapus unduhan yang dipilih</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <location line="+687" />
+      <source>No downloaded media found.</source>
+      <translation>Media unduhan tidak ditemukan.</translation>
+    </message>
+    <message>
+      <location line="-470" />
+      <source>Loading songs…</source>
+      <translation>Memuat lagu…</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Loading clips…</source>
+      <translation>Memuat video musik…</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Error loading songs. Check your connection.</source>
+      <translation>Kesalahan saat memuat lagu. Periksa koneksi Anda.</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Error loading clips. Check your connection.</source>
+      <translation>Kesalahan saat memuat klip. Periksa koneksi Anda.</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>No songs match your search.</source>
+      <translation>Tidak ada lagu yang cocok dengan pencarian.</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>No clips match your search.</source>
+      <translation>Tidak ada video musik yang cocok dengan pencarian.</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Search songs…</source>
+      <translation>Cari lagu…</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Search music videos…</source>
+      <translation>Cari video musik…</translation>
+    </message>
+    <message>
+      <location line="+178" />
+      <source>Download all music videos</source>
+      <translation>Unduh semua video musik</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Download all audio songs</source>
+      <translation>Download semua lagu audio</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Download all video songs</source>
+      <translation>Unduh semua lagu video</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Download {count} music videos for offline playback?</source>
+      <translation>Unduh {count} video musik untuk diputar secara offline?</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Download {count} audio songs for offline playback?</source>
+      <translation>Download {count} lagu audio untuk diputar secara offline?</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Download {count} video songs for offline playback?</source>
+      <translation>Unduh {count} lagu video untuk diputar offline?</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>All music videos downloaded</source>
+      <translation>Semua video musik telah diunduh</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>All audio songs downloaded</source>
+      <translation>Semua lagu audio sudah didownload</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>All video songs downloaded</source>
+      <translation>Semua lagu video sudah diunduh</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Could not finish downloading all music videos.</source>
+      <translation>Tidak dapat menyelesaikan pengunduhan semua video musik.</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Could not finish downloading all audio songs.</source>
+      <translation>Tidak dapat menyelesaikan download semua lagu audio.</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Could not finish downloading all video songs.</source>
+      <translation>Tidak dapat menyelesaikan pengunduhan semua lagu video.</translation>
+    </message>
+    <message>
+      <location line="+19" />
+      <source>Cancel downloads</source>
+      <translation>Batalkan unduhan</translation>
+    </message>
+    <message>
+      <location line="+52" />
+      <source>Download failed</source>
+      <translation>Gagal mengunduh</translation>
+    </message>
+    <message>
+      <location line="+27" />
+      <location line="+147" />
+      <source>Loading downloaded media…</source>
+      <translation>Memuat media unduhan…</translation>
+    </message>
+    <message>
+      <location line="-47" />
+      <source>Could not read downloaded media.</source>
+      <translation>Media unduhan tidak dapat dibaca.</translation>
+    </message>
+    <message>
+      <location line="+38" />
+      <source>{size} · {count} files</source>
+      <translation>{size} · {count} file</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>{count} selected</source>
+      <translation>{count} dipilih</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Could not load downloaded media. Try again.</source>
+      <translation>Media unduhan tidak dapat dimuat. Coba lagi.</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>No downloaded media matches these filters.</source>
+      <translation>Tidak ada media unduhan yang cocok dengan filter ini.</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Manage media available offline</source>
+      <translation>Kelola media yang tersedia offline</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Search downloaded media…</source>
+      <translation>Cari media unduhan…</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <source>Deselect visible</source>
+      <translation>Batalkan pilihan yang terlihat</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Select visible</source>
+      <translation>Pilih yang terlihat</translation>
+    </message>
+    <message>
+      <location line="+50" />
+      <source>Confirm deletion</source>
+      <translation>Konfirmasi penghapusan</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Delete {count} downloaded files from this computer?</source>
+      <translation>Hapus {count} file unduhan dari komputer ini?</translation>
+    </message>
+    <message>
+      <location line="+49" />
+      <source>Delete error</source>
+      <translation>Kesalahan saat menghapus</translation>
+    </message>
+    <message>
+      <location filename="../../widgets/library_widget.py" line="248" />
+      <source>Delete</source>
+      <translation>Hapus</translation>
+    </message>
+    <message>
+      <location filename="../../widgets/library_widget.py" line="250" />
+      <source>Clear selection</source>
+      <translation>Hapus pilihan</translation>
     </message>
   </context>
 </TS>

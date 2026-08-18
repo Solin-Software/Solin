@@ -12,14 +12,16 @@ def test_parse_runtime_args_handles_profile_flags_and_existing_files(tmp_path):
     media_file = tmp_path / "clip.mp4"
     media_file.write_bytes(b"")
 
-    runtime_args = parse_runtime_args([
-        "solin",
-        "--profile",
-        "profile-1",
-        "--create-profile",
-        str(media_file),
-        str(tmp_path / "missing.mp4"),
-    ])
+    runtime_args = parse_runtime_args(
+        [
+            "solin",
+            "--profile",
+            "profile-1",
+            "--create-profile",
+            str(media_file),
+            str(tmp_path / "missing.mp4"),
+        ]
+    )
 
     assert runtime_args.requested_profile_id == "profile-1"
     assert runtime_args.create_profile is True
@@ -30,11 +32,13 @@ def test_parse_runtime_args_supports_profile_equals_form(tmp_path):
     csv_file = tmp_path / "poll.csv"
     csv_file.write_bytes(b"")
 
-    runtime_args = parse_runtime_args([
-        "solin",
-        "--profile=profile-2",
-        str(csv_file),
-    ])
+    runtime_args = parse_runtime_args(
+        [
+            "solin",
+            "--profile=profile-2",
+            str(csv_file),
+        ]
+    )
 
     assert runtime_args.requested_profile_id == "profile-2"
     assert runtime_args.create_profile is False
@@ -83,9 +87,7 @@ def test_build_main_window_runtime_wires_services_to_stable_window_host(monkeypa
     media = SimpleNamespace(
         cache_manager=media_cache_manager,
         create_playback=lambda settings, projection=True: (
-            pending_media_controllers.pop(0)
-            if settings is media_settings
-            else None
+            pending_media_controllers.pop(0) if settings is media_settings else None
         ),
         create_info_queue=object(),
         create_info_service=object(),
@@ -133,6 +135,7 @@ def test_build_main_window_runtime_wires_services_to_stable_window_host(monkeypa
             document_conversion_service,
             clip_fetch_thread_factory,
             cache_scan_session_factory,
+            cache_deletion_session_factory,
             qr_generation_session_factory,
             playlist_thumbnail_store,
             meeting_thumbnail_store,
@@ -157,12 +160,8 @@ def test_build_main_window_runtime_wires_services_to_stable_window_host(monkeypa
             self.background_media_controller = received_background_media_controller
             self.media_info_queue_factory = received_media_info_queue_factory
             self.media_info_service_factory = received_media_info_service_factory
-            self.browser_download_service_factory = (
-                received_browser_download_service_factory
-            )
-            self.browser_image_fetch_service_factory = (
-                received_browser_image_fetch_service_factory
-            )
+            self.browser_download_service_factory = received_browser_download_service_factory
+            self.browser_image_fetch_service_factory = received_browser_image_fetch_service_factory
             self.media_settings = received_profile_settings_bundle.media
             self.font_manager = received_font_manager
             self.jw_catalog_service_factory = received_jw_catalog_service_factory
@@ -182,6 +181,7 @@ def test_build_main_window_runtime_wires_services_to_stable_window_host(monkeypa
             self.document_conversion_service = document_conversion_service
             self.clip_fetch_thread_factory = clip_fetch_thread_factory
             self.cache_scan_session_factory = cache_scan_session_factory
+            self.cache_deletion_session_factory = cache_deletion_session_factory
             self.qr_generation_session_factory = qr_generation_session_factory
             self.playlist_thumbnail_store = playlist_thumbnail_store
             self.meeting_thumbnail_store = meeting_thumbnail_store
@@ -207,23 +207,19 @@ def test_build_main_window_runtime_wires_services_to_stable_window_host(monkeypa
     monkeypatch.setattr(
         main,
         "QTimer",
-        SimpleNamespace(
-            singleShot=lambda ms, callback: events.append(("timer", ms)) or callback()
-        ),
+        SimpleNamespace(singleShot=lambda ms, callback: events.append(("timer", ms)) or callback()),
     )
     monkeypatch.setattr(
         main,
         "_build_main_window_profile_settings",
         lambda received_settings: (
-            events.append(("profile_settings_bundle", received_settings))
-            or profile_settings_bundle
+            events.append(("profile_settings_bundle", received_settings)) or profile_settings_bundle
         ),
     )
     monkeypatch.setattr(
         main,
         "_build_main_window_service_factories",
-        lambda *args: events.append(("service_factories", args))
-        or service_factories,
+        lambda *args: events.append(("service_factories", args)) or service_factories,
     )
 
     window_host = object()
@@ -254,14 +250,8 @@ def test_build_main_window_runtime_wires_services_to_stable_window_host(monkeypa
     assert window.media_settings is media_settings
     assert window.media_info_queue_factory is media.create_info_queue
     assert window.media_info_service_factory is media.create_info_service
-    assert (
-        window.browser_download_service_factory
-        is media.create_browser_download_service
-    )
-    assert (
-        window.browser_image_fetch_service_factory
-        is media.create_browser_image_fetch_service
-    )
+    assert window.browser_download_service_factory is media.create_browser_download_service
+    assert window.browser_image_fetch_service_factory is media.create_browser_image_fetch_service
     assert all(controller.parent is window for controller in created_media_controllers)
     assert window.font_manager is font_manager
     assert callable(window.jw_catalog_service_factory)
@@ -276,45 +266,22 @@ def test_build_main_window_runtime_wires_services_to_stable_window_host(monkeypa
     assert str(window.playlist_repository.path) == "playlists.json"
     assert callable(window.queue_pending_deletion)
     assert str(window.meeting_tree_store.path) == profile_paths.meeting_trees_file
-    assert (
-        window.meeting_linked_folder_sync.__class__.__name__
-        == "MeetingLinkedFolderSync"
-    )
+    assert window.meeting_linked_folder_sync.__class__.__name__ == "MeetingLinkedFolderSync"
     assert str(window.profile_media_store.embedded_dir) == "embedded"
     assert str(window.profile_media_store.images_dir) == "images"
-    assert (
-        window.jwpub_import_thread_factory.__class__.__name__
-        == "JwpubImportThreadFactory"
-    )
-    assert (
-        window.document_conversion_service.__class__.__name__
-        == "DocumentConversionService"
-    )
+    assert window.jwpub_import_thread_factory.__class__.__name__ == "JwpubImportThreadFactory"
+    assert window.document_conversion_service.__class__.__name__ == "DocumentConversionService"
     assert str(window.document_conversion_service.pdf_pages_dir) == "profile_pdf_pages"
     assert str(window.document_conversion_service.pptx_pages_dir) == "profile_pptx_pages"
     assert str(window.document_conversion_service.docx_pages_dir) == "profile_docx_pages"
-    assert (
-        window.clip_fetch_thread_factory.__class__.__name__
-        == "ClipFetchThreadFactory"
-    )
-    assert (
-        window.cache_scan_session_factory.__class__.__name__
-        == "CacheScanSessionFactory"
-    )
-    assert (
-        window.qr_generation_session_factory.__class__.__name__
-        == "QrGenerationSessionFactory"
-    )
+    assert window.clip_fetch_thread_factory.__class__.__name__ == "ClipFetchThreadFactory"
+    assert window.cache_scan_session_factory.__class__.__name__ == "CacheScanSessionFactory"
+    assert window.cache_deletion_session_factory.__class__.__name__ == "CacheDeletionSessionFactory"
+    assert window.qr_generation_session_factory.__class__.__name__ == "QrGenerationSessionFactory"
     assert str(window.playlist_thumbnail_store.root) == "profile_thumbs"
     assert str(window.meeting_thumbnail_store.root) == "profile_meeting_thumbs"
-    assert (
-        window.watched_folder_file_store.__class__.__name__
-        == "WatchedFolderFileStore"
-    )
-    assert (
-        window.watched_folder_playlist_store.__class__.__name__
-        == "WatchedFolderPlaylistStore"
-    )
+    assert window.watched_folder_file_store.__class__.__name__ == "WatchedFolderFileStore"
+    assert window.watched_folder_playlist_store.__class__.__name__ == "WatchedFolderPlaylistStore"
     assert callable(window.wifi_receive_server_factory)
     assert callable(window.watched_folder_watcher_factory)
     assert callable(window.playlist_cleanup_queue_factory)
@@ -327,8 +294,8 @@ def test_build_main_window_runtime_wires_services_to_stable_window_host(monkeypa
         (
             "service_factories",
             (
-                    "lang",
-                    runtime_paths,
+                "lang",
+                runtime_paths,
                 profile_settings_bundle,
                 jwpub_checksum_store,
                 installation_settings,
@@ -421,6 +388,7 @@ def test_build_main_window_runtime_does_not_mutate_native_window_lifecycle(monke
             document_conversion_service,
             clip_fetch_thread_factory,
             cache_scan_session_factory,
+            cache_deletion_session_factory,
             qr_generation_session_factory,
             playlist_thumbnail_store,
             meeting_thumbnail_store,
@@ -445,12 +413,8 @@ def test_build_main_window_runtime_does_not_mutate_native_window_lifecycle(monke
             self.background_media_controller = received_background_media_controller
             self.media_info_queue_factory = received_media_info_queue_factory
             self.media_info_service_factory = received_media_info_service_factory
-            self.browser_download_service_factory = (
-                received_browser_download_service_factory
-            )
-            self.browser_image_fetch_service_factory = (
-                received_browser_image_fetch_service_factory
-            )
+            self.browser_download_service_factory = received_browser_download_service_factory
+            self.browser_image_fetch_service_factory = received_browser_image_fetch_service_factory
             self.media_settings = received_profile_settings_bundle.media
             self.font_manager = received_font_manager
             self.jw_catalog_service_factory = received_jw_catalog_service_factory
@@ -470,6 +434,7 @@ def test_build_main_window_runtime_does_not_mutate_native_window_lifecycle(monke
             self.document_conversion_service = document_conversion_service
             self.clip_fetch_thread_factory = clip_fetch_thread_factory
             self.cache_scan_session_factory = cache_scan_session_factory
+            self.cache_deletion_session_factory = cache_deletion_session_factory
             self.qr_generation_session_factory = qr_generation_session_factory
             self.playlist_thumbnail_store = playlist_thumbnail_store
             self.meeting_thumbnail_store = meeting_thumbnail_store
@@ -495,23 +460,19 @@ def test_build_main_window_runtime_does_not_mutate_native_window_lifecycle(monke
     monkeypatch.setattr(
         main,
         "QTimer",
-        SimpleNamespace(
-            singleShot=lambda ms, callback: events.append(("timer", ms)) or callback()
-        ),
+        SimpleNamespace(singleShot=lambda ms, callback: events.append(("timer", ms)) or callback()),
     )
     monkeypatch.setattr(
         main,
         "_build_main_window_profile_settings",
         lambda received_settings: (
-            events.append(("profile_settings_bundle", received_settings))
-            or profile_settings_bundle
+            events.append(("profile_settings_bundle", received_settings)) or profile_settings_bundle
         ),
     )
     monkeypatch.setattr(
         main,
         "_build_main_window_service_factories",
-        lambda *args: events.append(("service_factories", args))
-        or service_factories,
+        lambda *args: events.append(("service_factories", args)) or service_factories,
     )
 
     window_host = object()
@@ -538,8 +499,8 @@ def test_build_main_window_runtime_does_not_mutate_native_window_lifecycle(monke
         (
             "service_factories",
             (
-                    "lang",
-                    runtime_paths,
+                "lang",
+                runtime_paths,
                 profile_settings_bundle,
                 jwpub_checksum_store,
                 installation_settings,
@@ -630,10 +591,7 @@ def test_relaunch_with_profile_persists_target_profile_starts_new_process_and_qu
         profile_flow,
         "QProcess",
         SimpleNamespace(
-            startDetached=lambda program, args, cwd: launches.append(
-                (program, args, cwd)
-            )
-            or True
+            startDetached=lambda program, args, cwd: launches.append((program, args, cwd)) or True
         ),
     )
     monkeypatch.setattr(profile_flow.sys, "executable", "python.exe")
@@ -803,10 +761,7 @@ def test_relaunch_to_profile_creator_persists_bootstrap_language_and_quits(
         profile_flow,
         "QProcess",
         SimpleNamespace(
-            startDetached=lambda program, args, cwd: launches.append(
-                (program, args, cwd)
-            )
-            or True
+            startDetached=lambda program, args, cwd: launches.append((program, args, cwd)) or True
         ),
     )
     monkeypatch.setattr(profile_flow.sys, "executable", "python.exe")

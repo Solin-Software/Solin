@@ -92,7 +92,7 @@ from .controls import (
 from .fullscreen import FullscreenVideoOverlay
 from .playlist import ProjectionPlaylistMixin, playback_order_has_pending_item
 from .preview import ImagePreviewWidget
-from solin.widgets.songs_widget import BufferedSlider
+from solin.widgets.common.buffered_slider import BufferedSlider
 
 
 # Keep ProjectionBar decoupled from PlaylistPanel internals while preserving timing.

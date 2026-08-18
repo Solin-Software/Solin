@@ -6,7 +6,7 @@ from PySide6.QtCore import QCoreApplication
 
 from solin.core.media.cache import MediaCacheManager
 from solin.core.media.download_storage import cached_path_for
-from solin.widgets.media_library_widget import MediaLibraryWidget
+from solin.widgets.library_widget import LibraryWidget
 
 
 def _app():
@@ -15,25 +15,29 @@ def _app():
 
 def _fake_library(
     *,
+    section: str,
     audio_mode: bool,
     items: list[dict],
     cache_manager: MediaCacheManager,
     supports_audio: bool = True,
 ):
+    catalogs = {
+        "songs": SimpleNamespace(items=[], audio_mode=audio_mode),
+        "clips": SimpleNamespace(items=[], audio_mode=False),
+    }
+    catalogs[section].items = items
     fake = SimpleNamespace(
-        kind="songs",
-        _audio_mode=audio_mode,
-        items=items,
+        _active_section=section,
+        _catalogs=catalogs,
         _cache_manager=cache_manager,
-        bridge=SimpleNamespace(supports_audio=supports_audio),
         tr=lambda text: text,
     )
-    fake._ordered_items = lambda values: MediaLibraryWidget._ordered_items(fake, values)
-    fake._download_all_mode = lambda: MediaLibraryWidget._download_all_mode(fake)
+    fake._ordered_items = lambda current: LibraryWidget._ordered_items(fake, current)
+    fake._songs_support_audio = lambda: supports_audio
     return fake
 
 
-def test_pending_download_all_urls_uses_audio_mode_items(tmp_path):
+def test_pending_download_urls_uses_audio_mode_items(tmp_path):
     _app()
     cache_manager = MediaCacheManager(
         tmp_path,
@@ -47,6 +51,7 @@ def test_pending_download_all_urls_uses_audio_mode_items(tmp_path):
         handle.write(cached_url)
 
     library = _fake_library(
+        section="songs",
         audio_mode=True,
         cache_manager=cache_manager,
         items=[
@@ -58,7 +63,7 @@ def test_pending_download_all_urls_uses_audio_mode_items(tmp_path):
         ],
     )
 
-    pending = MediaLibraryWidget._pending_download_all_urls(library)
+    pending = LibraryWidget._pending_download_urls(library, "songs")
 
     assert pending == [
         "https://cdn.example/song-001.mp3",
@@ -66,29 +71,54 @@ def test_pending_download_all_urls_uses_audio_mode_items(tmp_path):
     ]
 
 
-def test_download_all_text_changes_with_media_mode(tmp_path):
+def test_pending_download_urls_supports_music_video_catalog(tmp_path):
+    cache_manager = MediaCacheManager(
+        tmp_path,
+        downloader_factory=lambda _parent: None,
+    )
+    library = _fake_library(
+        section="clips",
+        audio_mode=False,
+        cache_manager=cache_manager,
+        items=[
+            {"title": "One", "url": "https://cdn.example/one.mp4"},
+            {"title": "Two", "url": "https://cdn.example/two.mp3"},
+        ],
+    )
+
+    assert LibraryWidget._pending_download_urls(library, "clips") == [
+        "https://cdn.example/one.mp4",
+        "https://cdn.example/two.mp3",
+    ]
+
+
+def test_download_all_text_changes_with_collection_and_media_mode(tmp_path):
     cache_manager = MediaCacheManager(
         tmp_path,
         downloader_factory=lambda _parent: None,
     )
     audio_library = _fake_library(
+        section="songs",
         audio_mode=True,
         items=[],
         cache_manager=cache_manager,
     )
-    video_library = _fake_library(
+    clips_library = _fake_library(
+        section="clips",
         audio_mode=False,
         items=[],
         cache_manager=cache_manager,
     )
 
-    assert MediaLibraryWidget._download_all_title(audio_library) == "Download all audio songs"
-    assert MediaLibraryWidget._download_all_title(video_library) == "Download all video songs"
     assert (
-        MediaLibraryWidget._download_all_confirm_text(audio_library, "audio", 3)
-        == "Download 3 audio songs for offline playback?"
+        LibraryWidget._download_all_title(audio_library, "songs", "audio")
+        == "Download all audio songs"
     )
     assert (
-        MediaLibraryWidget._download_all_complete_text(audio_library, "audio")
-        == "All audio songs downloaded"
+        LibraryWidget._download_all_title(clips_library, "clips", "clips")
+        == "Download all music videos"
+    )
+    assert (
+        LibraryWidget._download_all_confirmation(clips_library, "clips", "clips", 3)
+        == "Download 3 music videos for offline playback?"
     )

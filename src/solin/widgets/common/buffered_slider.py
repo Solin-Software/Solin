@@ -4,9 +4,13 @@ from PySide6.QtCore import QEvent, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QLinearGradient, QPainter, QPen
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
-from solin.styles.theme import PALETTE, current_theme_scheme, slider_handle_border, slider_handle_fill
+from solin.styles.theme import (
+    PALETTE,
+    current_theme_scheme,
+    slider_handle_border,
+    slider_handle_fill,
+)
 from solin.ui.themed_tooltip import install_themed_tooltip
-from .media_library_widget import MediaLibraryWidget
 
 
 class BufferedSlider(QWidget):
@@ -29,21 +33,21 @@ class BufferedSlider(QWidget):
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         install_themed_tooltip(self)
 
-    def setRange(self, min_val, max_val):
+    def setRange(self, min_val, max_val):  # noqa: N802
         self._min = min_val
         self._max = max_val
         self.update()
 
-    def setValue(self, value):
+    def setValue(self, value):  # noqa: N802
         if not self._dragging:
             self._value = max(self._min, min(self._max, value))
             self.update()
 
-    def setBufferedRatio(self, ratio):
+    def setBufferedRatio(self, ratio):  # noqa: N802
         self._buffered = max(0.0, min(1.0, ratio))
         self.update()
 
-    def setReconnectActive(self, active):
+    def setReconnectActive(self, active):  # noqa: N802
         active = bool(active)
         if self._reconnect_active == active:
             return
@@ -55,7 +59,7 @@ class BufferedSlider(QWidget):
             self._reconnect_phase = 0.0
         self.update()
 
-    def isSliderDown(self):
+    def isSliderDown(self):  # noqa: N802
         return self._dragging
 
     def value(self):
@@ -69,44 +73,44 @@ class BufferedSlider(QWidget):
         self.setReconnectActive(False)
         self.update()
 
-    def paintEvent(self, _event):
-        p = QPainter(self)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    def paintEvent(self, _event):  # noqa: N802
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         if not self.isEnabled():
-            p.setOpacity(0.52)
-        w, h = self.width(), self.height()
-        track_h = 4
-        y = (h - track_h) // 2
-        p.setPen(Qt.PenStyle.NoPen)
+            painter.setOpacity(0.52)
+        width, height = self.width(), self.height()
+        track_height = 4
+        y = (height - track_height) // 2
+        painter.setPen(Qt.PenStyle.NoPen)
         dark = current_theme_scheme() == "dark"
-        p.setBrush(QColor(60, 60, 65) if dark else QColor(PALETTE.border_muted))
-        p.drawRoundedRect(0, y, w, track_h, 2, 2)
+        painter.setBrush(QColor(60, 60, 65) if dark else QColor(PALETTE.border_muted))
+        painter.drawRoundedRect(0, y, width, track_height, 2, 2)
         if self._buffered > 0 and self._max > 0:
-            p.setBrush(QColor(110, 110, 120) if dark else QColor(PALETTE.border_strong))
-            p.drawRoundedRect(0, y, int(w * self._buffered), track_h, 2, 2)
-        prog_w = None
+            painter.setBrush(QColor(110, 110, 120) if dark else QColor(PALETTE.border_strong))
+            painter.drawRoundedRect(0, y, int(width * self._buffered), track_height, 2, 2)
+        progress_width = None
         if self._max > 0 and self._value >= self._min:
             ratio = (self._value - self._min) / (self._max - self._min)
-            prog_w = int(w * ratio)
-            p.setBrush(QColor(100, 160, 255) if dark else QColor(PALETTE.accent))
-            p.drawRoundedRect(0, y, prog_w, track_h, 2, 2)
+            progress_width = int(width * ratio)
+            painter.setBrush(QColor(100, 160, 255) if dark else QColor(PALETTE.accent))
+            painter.drawRoundedRect(0, y, progress_width, track_height, 2, 2)
 
         if self._reconnect_active:
-            self._paint_reconnect_overlay(p, w, y, track_h)
+            self._paint_reconnect_overlay(painter, width, y, track_height)
 
-        if prog_w is not None and self._should_draw_handle():
+        if progress_width is not None and self._should_draw_handle():
             if dark:
-                p.setBrush(QColor(220, 230, 255))
-                p.setPen(QPen(QColor(100, 160, 255), 1))
+                painter.setBrush(QColor(220, 230, 255))
+                painter.setPen(QPen(QColor(100, 160, 255), 1))
             else:
-                p.setBrush(QColor(slider_handle_fill()))
-                p.setPen(QPen(QColor(slider_handle_border()), 1))
-            p.drawEllipse(prog_w - 6, h // 2 - 6, 12, 12)
+                painter.setBrush(QColor(slider_handle_fill()))
+                painter.setPen(QPen(QColor(slider_handle_border()), 1))
+            painter.drawEllipse(progress_width - 6, height // 2 - 6, 12, 12)
 
     def _should_draw_handle(self) -> bool:
         return self.isEnabled()
 
-    def changeEvent(self, event):
+    def changeEvent(self, event):  # noqa: N802
         if event.type() == QEvent.Type.EnabledChange:
             if not self.isEnabled():
                 self._dragging = False
@@ -118,12 +122,12 @@ class BufferedSlider(QWidget):
             self.update()
         super().changeEvent(event)
 
-    def showEvent(self, event):
+    def showEvent(self, event):  # noqa: N802
         super().showEvent(event)
         if self._reconnect_active:
             self._reconnect_timer.start()
 
-    def hideEvent(self, event):
+    def hideEvent(self, event):  # noqa: N802
         super().hideEvent(event)
         self._reconnect_timer.stop()
 
@@ -131,13 +135,11 @@ class BufferedSlider(QWidget):
         self._reconnect_phase = (self._reconnect_phase + 0.024) % 1.0
         self.update()
 
-    def _paint_reconnect_overlay(self, painter, width, y, track_h):
-        pulse = 0.35 + 0.25 * (
-            math.sin(self._reconnect_phase * math.tau) + 1.0
-        )
+    def _paint_reconnect_overlay(self, painter, width, y, track_height):
+        pulse = 0.35 + 0.25 * (math.sin(self._reconnect_phase * math.tau) + 1.0)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QColor(148, 163, 184, int(28 + 36 * pulse)))
-        painter.drawRoundedRect(0, y - 1, width, track_h + 2, 3, 3)
+        painter.drawRoundedRect(0, y - 1, width, track_height + 2, 3, 3)
 
         span = max(28, int(width * 0.22))
         x = int((width + span) * self._reconnect_phase) - span
@@ -146,50 +148,26 @@ class BufferedSlider(QWidget):
         sheen.setColorAt(0.5, QColor(226, 232, 240, 110))
         sheen.setColorAt(1.0, QColor(226, 232, 240, 0))
         painter.setBrush(sheen)
-        painter.drawRoundedRect(0, y - 1, width, track_h + 2, 3, 3)
+        painter.drawRoundedRect(0, y - 1, width, track_height + 2, 3, 3)
 
-    def mousePressEvent(self, event):
+    def mousePressEvent(self, event):  # noqa: N802
         if event.button() == Qt.MouseButton.LeftButton:
             self._dragging = True
             self._seek_to(event.position().x())
 
-    def mouseMoveEvent(self, event):
+    def mouseMoveEvent(self, event):  # noqa: N802
         if self._dragging:
             self._seek_to(event.position().x())
 
-    def mouseReleaseEvent(self, event):
+    def mouseReleaseEvent(self, event):  # noqa: N802
         if event.button() == Qt.MouseButton.LeftButton:
             self._dragging = False
             self._seek_to(event.position().x())
 
-    def _seek_to(self, px):
+    def _seek_to(self, pixels):
         if self._max <= 0:
             return
-        ratio = max(0.0, min(1.0, px / self.width()))
+        ratio = max(0.0, min(1.0, pixels / self.width()))
         self._value = int(self._min + ratio * (self._max - self._min))
         self.update()
         self.sliderMoved.emit(self._value)
-
-
-class SongsWidget(MediaLibraryWidget):
-    def __init__(
-        self,
-        lang_manager,
-        cache_manager,
-        songs_store,
-        jw_cache_dir,
-        media_ctrl=None,
-        *,
-        defer_qml: bool = False,
-        parent=None,
-    ):
-        super().__init__(
-            "songs",
-            lang_manager,
-            cache_manager,
-            media_ctrl,
-            songs_store=songs_store,
-            jw_cache_dir=jw_cache_dir,
-            defer_qml=defer_qml,
-            parent=parent,
-        )

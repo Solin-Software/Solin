@@ -1132,6 +1132,11 @@
       <source>Receive via Wi-Fi</source>
       <translation>Ontvangen via wifi</translation>
     </message>
+    <message>
+      <location filename="../../controllers/main_window_nav.py" line="30" />
+      <source>Library</source>
+      <translation>Bibliotheek</translation>
+    </message>
   </context>
   <context>
     <name>MediaCard</name>
@@ -7760,6 +7765,277 @@ Voeg er een toe wanneer u wilt.</translation>
     <message>
       <source>Name</source>
       <translation>Naam</translation>
+    </message>
+  </context>
+  <context>
+    <name>LibraryWidget</name>
+    <message>
+      <location filename="../../widgets/library_widget.py" line="+218" />
+      <location line="+18" />
+      <location line="+249" />
+      <source>Songs</source>
+      <translation>Liederen</translation>
+    </message>
+    <message>
+      <location line="-262" />
+      <location line="+14" />
+      <location line="+248" />
+      <source>Original Songs</source>
+      <translation>Original songs</translation>
+    </message>
+    <message>
+      <location line="-257" />
+      <location line="+10" />
+      <location line="+702" />
+      <source>Downloads</source>
+      <translation>Downloads</translation>
+    </message>
+    <message>
+      <location line="-706" />
+      <source>Library</source>
+      <translation>Bibliotheek</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Refresh</source>
+      <translation>Vernieuwen</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Play all (in order)</source>
+      <translation>Alles afspelen (in volgorde)</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Play in random order</source>
+      <translation>In willekeurige volgorde afspelen</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Video songs</source>
+      <translation>Videoliederen</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Audio songs</source>
+      <translation>Audioliederen</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>All</source>
+      <translation>Alles</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Videos</source>
+      <translation>Video's</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Audio</source>
+      <translation>Audio</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Images</source>
+      <translation>Afbeeldingen</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Delete selected downloads</source>
+      <translation>Geselecteerde downloads verwijderen</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <location line="+687" />
+      <source>No downloaded media found.</source>
+      <translation>Geen gedownloade media gevonden.</translation>
+    </message>
+    <message>
+      <location line="-470" />
+      <source>Loading songs…</source>
+      <translation>Liederen laden…</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Loading clips…</source>
+      <translation>Muziekvideo's laden…</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Error loading songs. Check your connection.</source>
+      <translation>Fout bij laden van liederen. Controleer je verbinding.</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Error loading clips. Check your connection.</source>
+      <translation>Fout bij het laden van clips. Controleer je verbinding.</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>No songs match your search.</source>
+      <translation>Geen liederen gevonden voor deze zoekopdracht.</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>No clips match your search.</source>
+      <translation>Geen muziekvideo's gevonden voor deze zoekopdracht.</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Search songs…</source>
+      <translation>Liederen zoeken…</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Search music videos…</source>
+      <translation>Muziekvideo's zoeken…</translation>
+    </message>
+    <message>
+      <location line="+178" />
+      <source>Download all music videos</source>
+      <translation>Alle muziekvideo's downloaden</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Download all audio songs</source>
+      <translation>Alle audioliederen downloaden</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Download all video songs</source>
+      <translation>Alle videoliederen downloaden</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Download {count} music videos for offline playback?</source>
+      <translation>{count} muziekvideo's downloaden voor offline afspelen?</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Download {count} audio songs for offline playback?</source>
+      <translation>{count} audioliederen downloaden voor offline afspelen?</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Download {count} video songs for offline playback?</source>
+      <translation>{count} videoliederen downloaden om offline af te spelen?</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>All music videos downloaded</source>
+      <translation>Alle muziekvideo's zijn gedownload</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>All audio songs downloaded</source>
+      <translation>Alle audioliederen zijn gedownload</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>All video songs downloaded</source>
+      <translation>Alle videoliederen gedownload</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Could not finish downloading all music videos.</source>
+      <translation>Het downloaden van alle muziekvideo's kon niet worden voltooid.</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Could not finish downloading all audio songs.</source>
+      <translation>Het downloaden van alle audioliederen kon niet worden voltooid.</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Could not finish downloading all video songs.</source>
+      <translation>Het downloaden van alle videoliederen kon niet worden voltooid.</translation>
+    </message>
+    <message>
+      <location line="+19" />
+      <source>Cancel downloads</source>
+      <translation>Downloads annuleren</translation>
+    </message>
+    <message>
+      <location line="+52" />
+      <source>Download failed</source>
+      <translation>Download mislukt</translation>
+    </message>
+    <message>
+      <location line="+27" />
+      <location line="+147" />
+      <source>Loading downloaded media…</source>
+      <translation>Gedownloade media laden…</translation>
+    </message>
+    <message>
+      <location line="-47" />
+      <source>Could not read downloaded media.</source>
+      <translation>Gedownloade media konden niet worden gelezen.</translation>
+    </message>
+    <message>
+      <location line="+38" />
+      <source>{size} · {count} files</source>
+      <translation>{size} · {count} bestanden</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>{count} selected</source>
+      <translation>{count} geselecteerd</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Could not load downloaded media. Try again.</source>
+      <translation>Gedownloade media konden niet worden geladen. Probeer het opnieuw.</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>No downloaded media matches these filters.</source>
+      <translation>Geen gedownloade media komen overeen met deze filters.</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Manage media available offline</source>
+      <translation>Offline beschikbare media beheren</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Search downloaded media…</source>
+      <translation>Gedownloade media zoeken…</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <source>Deselect visible</source>
+      <translation>Zichtbare deselecteren</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Select visible</source>
+      <translation>Zichtbare selecteren</translation>
+    </message>
+    <message>
+      <location line="+50" />
+      <source>Confirm deletion</source>
+      <translation>Verwijderen bevestigen</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Delete {count} downloaded files from this computer?</source>
+      <translation>{count} gedownloade bestanden van deze computer verwijderen?</translation>
+    </message>
+    <message>
+      <location line="+49" />
+      <source>Delete error</source>
+      <translation>Fout bij verwijderen</translation>
+    </message>
+    <message>
+      <location filename="../../widgets/library_widget.py" line="248" />
+      <source>Delete</source>
+      <translation>Verwijderen</translation>
+    </message>
+    <message>
+      <location filename="../../widgets/library_widget.py" line="250" />
+      <source>Clear selection</source>
+      <translation>Selectie wissen</translation>
     </message>
   </context>
 </TS>

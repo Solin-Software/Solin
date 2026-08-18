@@ -28,16 +28,17 @@ def _slot(name):
 
 
 def _signal_namespace(prefix, *names):
-    return SimpleNamespace(**{
-        name: _Signal(f"{prefix}.{name}") for name in names
-    })
+    return SimpleNamespace(**{name: _Signal(f"{prefix}.{name}") for name in names})
 
 
 class _WindowStub:
     def __init__(self):
-        self.songs_widget = _signal_namespace("songs", "project_video_signal")
+        self.library_widget = _signal_namespace(
+            "library",
+            "project_media_signal",
+            "play_cached_media_signal",
+        )
         self.meetings_widget = _signal_namespace("meetings", "project_media")
-        self.clips_widget = _signal_namespace("clips", "project_video_signal")
         self.timer_widget = _signal_namespace(
             "timer",
             "project_timer_signal",
@@ -126,9 +127,7 @@ class _WindowStub:
             "countdown_requested",
             "automatic_stop_requested",
         )
-        self._media_countdown_automation.reload_schedule = _slot(
-            "media_countdown_reload_schedule"
-        )
+        self._media_countdown_automation.reload_schedule = _slot("media_countdown_reload_schedule")
         self._auto_share_finished = _Signal("auto_share_finished")
 
         self._playlist_imports = SimpleNamespace(
@@ -169,6 +168,7 @@ class _WindowStub:
 
         self._media_projection = SimpleNamespace(
             on_sjjm_project=_slot("on_sjjm_project"),
+            on_cache_play=_slot("on_cache_play"),
             on_meeting_media_project=_slot("on_meeting_media_project"),
             on_song_project=_slot("on_song_project"),
             on_playlist_project=_slot("on_playlist_project"),
@@ -196,9 +196,8 @@ class _WindowStub:
 
 def _sources(window):
     return MainWindowSignalSources(
-        songs_widget=window.songs_widget,
+        library_widget=window.library_widget,
         meetings_widget=window.meetings_widget,
-        clips_widget=window.clips_widget,
         timer_widget=window.timer_widget,
         talk_theme_widget=window.talk_theme_widget,
         playlist_widget=window.playlist_widget,
@@ -244,8 +243,11 @@ def test_connect_signals_wires_expected_signal_graph():
 
     total_connections = sum(len(signal.connected) for signal in _Signal.registry)
     assert total_connections == 53
-    assert window.songs_widget.project_video_signal.connected == [
-        window._media_projection.on_sjjm_project
+    assert window.library_widget.project_media_signal.connected == [
+        controller._project_library_media
+    ]
+    assert window.library_widget.play_cached_media_signal.connected == [
+        window._media_projection.on_cache_play
     ]
     assert window.settings_widget.watched_folder_changed.connected == [
         window.playlist_widget.set_watched_folder,
@@ -255,12 +257,8 @@ def test_connect_signals_wires_expected_signal_graph():
         window._projection_targets.apply_yearly_text,
         window.proj_bar.set_yearly_text,
     ]
-    assert window.proj_bar.stop_requested.connected == [
-        window._projection_stop.stop_any
-    ]
-    assert window.proj_bar.seek_requested.connected == [
-        window.playback_protection.request_seek
-    ]
+    assert window.proj_bar.stop_requested.connected == [window._projection_stop.stop_any]
+    assert window.proj_bar.seek_requested.connected == [window.playback_protection.request_seek]
     assert window.proj_bar.source_duration_discovered.connected == [
         window.playlist_widget.record_source_duration
     ]
@@ -277,10 +275,7 @@ def test_connect_signals_wires_expected_signal_graph():
     assert window._media_countdown_automation.countdown_requested.connected == [
         window._timer_projection.start_automatic_timer
     ]
-    assert (
-        window.talk_theme_projection_handler
-        is window._media_projection.project_generated_image
-    )
+    assert window.talk_theme_projection_handler is window._media_projection.project_generated_image
     assert window._media_countdown_automation.automatic_stop_requested.connected == [
         window._projection_stop.stop_any
     ]
@@ -302,9 +297,7 @@ def test_screen_changes_refresh_timer_output_and_monitor_bridge():
     window = _WindowStub()
     timer_output = SimpleNamespace(on_screens_changed=_slot("timer_screens_changed"))
     refresh_calls = []
-    timer_bridge = SimpleNamespace(
-        refreshMonitors=lambda: refresh_calls.append("refresh")
-    )
+    timer_bridge = SimpleNamespace(refreshMonitors=lambda: refresh_calls.append("refresh"))
     controller = SignalConnectionController(
         _sources(window),
         _handlers(

@@ -178,9 +178,8 @@ _ICON_NAMES = frozenset(
         "ICON_PLAY_SHUFFLE",
         "ICON_CHEVRON_DOWN",
         "ICON_CHEVRON_UP",
-        "ICON_NAV_SONGS",
+        "ICON_NAV_LIBRARY",
         "ICON_NAV_BROWSER",
-        "ICON_NAV_CLIPS",
         "ICON_NAV_TIMER",
         "ICON_NAV_SETTINGS",
         "ICON_MONITOR",
@@ -202,7 +201,6 @@ _ICON_NAMES = frozenset(
         "ICON_AUTO_DOWNLOAD",
         "JS_SVG_IMAGE",
         "JS_SVG_VIDEO",
-        "ICON_NAV_CACHE",
         "ICON_NAV_WIFI",
         "ICON_NAV_MEETINGS",
         "ICON_HOME",
@@ -600,26 +598,20 @@ def _build_icon_svg(name: str) -> str:
             '<polyline points="6,15 12,9 18,15"/>'
             "</svg>"
         )
-    elif name == "ICON_NAV_SONGS":
+    elif name == "ICON_NAV_LIBRARY":
         return (
             '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
-            ' stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
-            '<path d="M9 18V5l12-2v13"/>'
-            '<circle cx="6" cy="18" r="3"/>'
-            '<circle cx="18" cy="16" r="3"/>'
+            ' stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'
+            '<rect x="2.5" y="5" width="5" height="15" rx="1"/>'
+            '<path d="M4.2 8h1.6M4.2 17h1.6"/>'
+            '<rect x="9" y="3.5" width="5" height="16.5" rx="1"/>'
+            '<path d="M10.7 7h1.6M10.7 17h1.6"/>'
+            '<g transform="rotate(-10 18 12)"><rect x="15.5" y="3.5" width="5" height="16.5" rx="1"/>'
+            '<path d="M17.2 7h1.6M17.2 17h1.6"/></g>'
             "</svg>"
         )
     elif name == "ICON_NAV_BROWSER":
         return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M4 7c4 2 12 2 16 0M4 17c4-2 12-2 16 0"/><path d="M12 2c5 3 5 17 0 20m0-20c-5 3-5 17 0 20"/></svg>'
-    elif name == "ICON_NAV_CLIPS":
-        return (
-            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
-            ' stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
-            '<path d="M3 18v-6a9 9 0 0 1 18 0v6"/>'
-            '<path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3z"/>'
-            '<path d="M3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/>'
-            "</svg>"
-        )
     elif name == "ICON_NAV_TIMER":
         return (
             '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
@@ -861,15 +853,6 @@ def _build_icon_svg(name: str) -> str:
             '<line x1="8" y1="21" x2="16" y2="21"/>'
             '<line x1="12" y1="17" x2="12" y2="21"/>'
             '<polygon points="10,7.5 10,13.5 16.5,10.5" fill="white" stroke="none"/>'
-            "</svg>"
-        )
-    elif name == "ICON_NAV_CACHE":
-        return (
-            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
-            ' stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
-            '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>'
-            '<polyline points="7 10 12 15 17 10"/>'
-            '<line x1="12" y1="15" x2="12" y2="3"/>'
             "</svg>"
         )
     elif name == "ICON_NAV_WIFI":

@@ -24,7 +24,7 @@ _PLACEHOLDER: Final = re.compile(r"\{[A-Za-z][A-Za-z0-9_]*\}")
 # completed in each locale. Contexts are explicit because Qt translations are
 # context-sensitive; arbitrary cross-context lookup would be unpredictable.
 _SHARED_TRANSLATION_CONTEXTS: Final = {
-    "Audio": "CacheManagerWidget",
+    "Audio": "LibraryWidget",
     "Browser": "MainWindow",
     "Choose a meeting": "MediaDestinationDialog",
     "Choose a playlist": "MediaDestinationDialog",

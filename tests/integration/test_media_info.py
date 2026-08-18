@@ -9,6 +9,8 @@ from types import SimpleNamespace
 import zlib
 
 import pytest
+from PySide6.QtCore import QObject, Signal
+from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QApplication
 
 from solin.core.media.info_queue import MediaInfoFailure, MediaInfoFailureKind
@@ -1191,3 +1193,80 @@ def test_media_info_service_owns_queue_created_by_injected_factory(tmp_path):
 
     assert queues == [service._queue]
     assert service._queue.parent() is service
+
+
+class _MediaInfoServiceQueueStub(QObject):
+    info_ready = Signal(int, QPixmap, str)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.cache: dict[int, tuple[QPixmap, str]] = {}
+        self.requests: list[tuple[int, str, str, bool, bool]] = []
+        self.invalidated: list[int] = []
+
+    def request(
+        self,
+        index,
+        path,
+        media_type,
+        *,
+        require_thumbnail,
+        require_title,
+    ):
+        self.requests.append((index, path, media_type, require_thumbnail, require_title))
+
+    def get_cached(self, index):
+        return self.cache.get(index, (None, ""))
+
+    def invalidate(self, index):
+        self.invalidated.append(index)
+        self.cache.pop(index, None)
+
+    def clear(self):
+        self.cache.clear()
+
+
+def test_media_info_service_reemits_cached_title_without_thumbnail():
+    queue = _MediaInfoServiceQueueStub()
+    service = MediaInfoService(lambda parent: queue)
+    ready: list[tuple[str, str]] = []
+    service.info_ready.connect(lambda path, _pixmap, title: ready.append((path, title)))
+    path = "C:/media/song.m4a"
+    service.request(path, "audio", require_thumbnail=False)
+    queue.cache[0] = (QPixmap(), "Metadata title")
+    ready.clear()
+
+    service.request(path, "audio", require_thumbnail=False)
+
+    assert ready == [(path, "Metadata title")]
+    assert len(queue.requests) == 1
+    assert queue.invalidated == []
+
+
+def test_media_info_service_upgrades_cached_title_to_thumbnail_request():
+    queue = _MediaInfoServiceQueueStub()
+    service = MediaInfoService(lambda parent: queue)
+    path = "C:/media/video.mp4"
+    service.request(path, "video", require_thumbnail=False)
+    queue.cache[0] = (QPixmap(), "Metadata title")
+
+    service.request(path, "video", require_thumbnail=True)
+
+    assert queue.invalidated == [0]
+    assert queue.requests[-1] == (0, path, "video", True, True)
+
+
+def test_media_info_service_bounds_metadata_retention():
+    queue = _MediaInfoServiceQueueStub()
+    service = MediaInfoService(lambda parent: queue, capacity=2)
+
+    service.request("C:/media/one.mp4")
+    service.request("C:/media/two.mp4")
+    service.request("C:/media/three.mp4")
+
+    assert queue.invalidated == [0]
+    assert service.get_cached("C:/media/one.mp4") == (None, "")
+    assert set(service._path_to_idx) == {
+        "C:/media/two.mp4",
+        "C:/media/three.mp4",
+    }
