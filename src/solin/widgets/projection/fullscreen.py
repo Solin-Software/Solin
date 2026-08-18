@@ -49,7 +49,7 @@ from solin.styles.icons import (
 from solin.styles.theme import PALETTE, qss_rgba
 from solin.ui.themed_tooltip import install_themed_tooltip
 from solin.widgets.common.themed_slider import ThemedHorizontalSlider
-from solin.widgets.songs_widget import BufferedSlider
+from solin.widgets.common.buffered_slider import BufferedSlider
 
 from .controls import SPEED_CHOICES, icon_button, projection_menu_style
 

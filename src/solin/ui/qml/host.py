@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, cast
 
-from PySide6.QtGui import QColor, QSurfaceFormat
+from PySide6.QtCore import QEvent, QObject, Qt
+from PySide6.QtGui import QColor, QMouseEvent, QSurfaceFormat
+from PySide6.QtQuick import QQuickItem
 from PySide6.QtQuickControls2 import QQuickStyle
 from PySide6.QtQuickWidgets import QQuickWidget
 
@@ -12,6 +14,45 @@ from solin.styles.theme import PALETTE, QML_THEME
 from solin.ui.qml.loader import QmlLoadHandle
 
 _QML_CONTROLS_STYLE = "Basic"
+
+
+class _TextFocusDismissFilter(QObject):
+    """Dismiss marked QML text focus when a pointer press lands outside it."""
+
+    def __init__(self, widget: QQuickWidget) -> None:
+        super().__init__(widget)
+
+    def eventFilter(self, watched, event):  # noqa: N802 - Qt override
+        widget = self.parent()
+        if (
+            isinstance(widget, QQuickWidget)
+            and watched is widget
+            and event.type() == QEvent.Type.MouseButtonPress
+        ):
+            self._dismiss_if_outside(widget, event)
+        return False
+
+    @classmethod
+    def _dismiss_if_outside(cls, widget: QQuickWidget, event: QMouseEvent) -> None:
+        focus_item = widget.quickWindow().activeFocusItem()
+        boundary = cls._focus_boundary(focus_item)
+        if boundary is None:
+            return
+        local_point = boundary.mapFromScene(event.position())
+        if boundary.contains(local_point):
+            return
+        root = widget.rootObject()
+        if isinstance(root, QQuickItem):
+            root.forceActiveFocus(Qt.FocusReason.MouseFocusReason)
+
+    @staticmethod
+    def _focus_boundary(item: QQuickItem | None) -> QQuickItem | None:
+        current = item
+        while isinstance(current, QQuickItem):
+            if bool(current.property("dismissTextFocusBoundary")):
+                return current
+            current = current.parentItem()
+        return None
 
 
 def current_qml_theme() -> dict[str, Any]:
@@ -36,7 +77,7 @@ def apply_qml_theme(
         widget.setClearColor(
             clear_color if isinstance(clear_color, QColor) else QColor(clear_color)
         )
-    elif widget.clearColor().isValid():
+    else:
         widget.setClearColor(QColor(PALETTE.bg0))
 
 
@@ -52,6 +93,7 @@ def configure_qml_host(
     resize_to_root: bool = True,
     alpha_buffer_size: int = 8,
     defer_load: bool = False,
+    dismiss_text_focus_on_pointer_press: bool = False,
 ) -> QmlLoadHandle:
     configure_qml_controls_style()
     surface_format = QSurfaceFormat()
@@ -59,6 +101,10 @@ def configure_qml_host(
     widget.setFormat(surface_format)
     widget.setClearColor(clear_color if isinstance(clear_color, QColor) else QColor(clear_color))
     widget.setMouseTracking(mouse_tracking)
+    if dismiss_text_focus_on_pointer_press:
+        focus_filter = _TextFocusDismissFilter(widget)
+        widget.installEventFilter(focus_filter)
+        cast(Any, widget)._qml_text_focus_dismiss_filter = focus_filter
     if accept_drops is not None:
         widget.setAcceptDrops(accept_drops)
 

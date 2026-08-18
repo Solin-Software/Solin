@@ -10,7 +10,10 @@ from .cache_listing import scan_cached_media_items
 
 
 class _CacheScanWorker(QObject):
+    batch_ready = Signal(list)
     results_ready = Signal(list)
+    failed = Signal(str)
+    completed = Signal()
 
     def __init__(self, media_cache_dir: str | Path) -> None:
         super().__init__()
@@ -21,18 +24,26 @@ class _CacheScanWorker(QObject):
         self._cancelled = True
 
     def run(self) -> None:
-        self.results_ready.emit(
-            scan_cached_media_items(
+        try:
+            items = scan_cached_media_items(
                 self._media_cache_dir,
                 is_cancelled=lambda: self._cancelled,
+                on_batch=self.batch_ready.emit,
             )
-        )
+        except OSError as exc:
+            self.failed.emit(str(exc))
+        else:
+            self.results_ready.emit(items)
+        finally:
+            self.completed.emit()
 
 
 class CacheScanSession(QObject):
     """Own one cancellable cache scan thread."""
 
+    batch_ready = Signal(list)
     results_ready = Signal(list)
+    failed = Signal(str)
     finished = Signal()
 
     def __init__(self, media_cache_dir: str | Path, parent=None) -> None:
@@ -40,9 +51,11 @@ class CacheScanSession(QObject):
         self._worker = _CacheScanWorker(media_cache_dir)
         self._thread = QThread(self)
         self._worker.moveToThread(self._thread)
+        self._worker.batch_ready.connect(self.batch_ready.emit)
         self._worker.results_ready.connect(self.results_ready.emit)
-        self._worker.results_ready.connect(self._worker.deleteLater)
-        self._worker.results_ready.connect(self._thread.quit)
+        self._worker.failed.connect(self.failed.emit)
+        self._worker.completed.connect(self._worker.deleteLater)
+        self._worker.completed.connect(self._thread.quit)
         self._thread.started.connect(self._worker.run)
         self._thread.finished.connect(self.finished.emit)
         self._thread.finished.connect(self._thread.deleteLater)

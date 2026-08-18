@@ -7,7 +7,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
-from solin.widgets.songs_widget import BufferedSlider
+from solin.widgets.common.buffered_slider import BufferedSlider
 
 
 _APP = QApplication.instance() or QApplication([])

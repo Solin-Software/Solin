@@ -2716,14 +2716,14 @@ class MediaInfoQueue(QObject):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# MediaInfoService — API baseada em path (para CacheManagerWidget, etc.)
+# MediaInfoService — API baseada em path para inventários de mídia
 # ─────────────────────────────────────────────────────────────────────────────
 
 class MediaInfoService(QObject):
     """
     Serviço de extração de info com API baseada em path/url (em vez de índice).
-    Usado por widgets que gerenciam arquivos por path (CacheManagerWidget,
-    CacheMediaWidget) e não por índice de playlist.
+    Usado por superfícies que gerenciam arquivos por path, como a seção de
+    downloads da Biblioteca, e não por índice de playlist.
 
     Sinal:
       info_ready(path, pixmap, title)
@@ -2735,34 +2735,70 @@ class MediaInfoService(QObject):
         self,
         queue_factory: Callable[[QObject], MediaInfoQueue],
         parent=None,
+        *,
+        capacity: int = 256,
     ) -> None:
         super().__init__(parent)
+        self._capacity = max(1, int(capacity))
         self._path_to_idx: dict[str, int] = {}
         self._idx_to_path: dict[int, str] = {}
         self._next_idx    = 0
         self._queue = queue_factory(self)
         self._queue.info_ready.connect(self._on_queue_ready)
 
-    def request(self, path: str, media_type: str = "video"):
+    def request(
+        self,
+        path: str,
+        media_type: str = "video",
+        *,
+        require_thumbnail: bool = True,
+        require_title: bool = True,
+    ):
         """Idempotente: re-emite imediatamente se já extraído."""
         if path in self._path_to_idx:
-            idx = self._path_to_idx[path]
+            idx = self._path_to_idx.pop(path)
+            self._path_to_idx[path] = idx
             px, title = self._queue.get_cached(idx)
-            if px is not None and not px.isNull():
+            thumbnail_ready = not require_thumbnail or (px is not None and not px.isNull())
+            title_ready = not require_title or bool(title)
+            if px is not None and thumbnail_ready and title_ready:
                 self.info_ready.emit(path, px, title)
-            elif px is None:
-                self._queue.request(idx, path, media_type)
+                return
+            if px is not None:
+                self._queue.invalidate(idx)
+            self._queue.request(
+                idx,
+                path,
+                media_type,
+                require_thumbnail=require_thumbnail,
+                require_title=require_title,
+            )
             return
         idx = self._next_idx; self._next_idx += 1
         self._path_to_idx[path] = idx
         self._idx_to_path[idx]  = path
-        self._queue.request(idx, path, media_type)
+        self._trim_cache()
+        self._queue.request(
+            idx,
+            path,
+            media_type,
+            require_thumbnail=require_thumbnail,
+            require_title=require_title,
+        )
 
     def get_cached(self, path: str) -> "tuple[QPixmap | None, str]":
-        idx = self._path_to_idx.get(path)
+        idx = self._path_to_idx.pop(path, None)
         if idx is None:
             return None, ""
+        self._path_to_idx[path] = idx
         return self._queue.get_cached(idx)
+
+    def _trim_cache(self) -> None:
+        while len(self._path_to_idx) > self._capacity:
+            stale_path = next(iter(self._path_to_idx))
+            stale_idx = self._path_to_idx.pop(stale_path)
+            self._idx_to_path.pop(stale_idx, None)
+            self._queue.invalidate(stale_idx)
 
     def clear(self):
         self._path_to_idx.clear(); self._idx_to_path.clear()

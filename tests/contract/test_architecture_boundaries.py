@@ -474,7 +474,7 @@ def test_qml_presentation_adapters_live_under_ui_qml():
         PROJECT_ROOT / "src" / "solin" / "ui" / "qml" / "loader.py",
         PROJECT_ROOT / "src" / "solin" / "ui" / "qml" / "jw_media_catalog.py",
         PROJECT_ROOT / "src" / "solin" / "ui" / "qml" / "jw_songs.py",
-        PROJECT_ROOT / "src" / "solin" / "ui" / "qml" / "media_library.py",
+        PROJECT_ROOT / "src" / "solin" / "ui" / "qml" / "library.py",
         PROJECT_ROOT / "src" / "solin" / "ui" / "qml" / "meeting_detail.py",
         PROJECT_ROOT / "src" / "solin" / "ui" / "qml" / "media_tree" / "model.py",
         PROJECT_ROOT / "src" / "solin" / "ui" / "qml" / "playlist" / "bridge.py",
@@ -490,17 +490,16 @@ def test_qml_presentation_adapters_live_under_ui_qml():
         if path.exists():
             violations.append(f"{path.relative_to(PROJECT_ROOT)} still exists")
 
-    media_library_widget = PROJECT_ROOT / "src" / "solin" / "widgets" / "media_library_widget.py"
-    widget_source = media_library_widget.read_text(encoding="utf-8")
+    library_widget = PROJECT_ROOT / "src" / "solin" / "widgets" / "library_widget.py"
+    widget_source = library_widget.read_text(encoding="utf-8")
     for fragment in (
-        "class MediaLibraryBridge",
-        "class MediaLibraryIconProvider",
-        "class MediaLibraryModel",
+        "class LibraryBridge",
+        "class LibraryIconProvider",
+        "class MediaCatalogModel",
+        "class DownloadedMediaModel",
     ):
         if fragment in widget_source:
-            violations.append(
-                f"{media_library_widget.relative_to(PROJECT_ROOT)} contains {fragment}"
-            )
+            violations.append(f"{library_widget.relative_to(PROJECT_ROOT)} contains {fragment}")
 
     timer_window = PROJECT_ROOT / "src" / "solin" / "projection" / "timer_window.py"
     if "class ClockRenderBridge" in timer_window.read_text(encoding="utf-8"):

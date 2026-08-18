@@ -7,13 +7,16 @@ def test_cache_scan_worker_delegates_directory_and_cancellation(monkeypatch):
     calls = []
     results = []
 
-    def scan(media_cache_dir, *, is_cancelled):
+    def scan(media_cache_dir, *, is_cancelled, on_batch):
         calls.append((media_cache_dir, is_cancelled()))
+        on_batch(["cached-item"])
         return ["cached-item"]
 
     monkeypatch.setattr(cache_scan, "scan_cached_media_items", scan)
     worker = cache_scan._CacheScanWorker("cache/media")
     worker.results_ready.connect(results.append)
+    batches = []
+    worker.batch_ready.connect(batches.append)
 
     worker.run()
     worker.cancel()
@@ -24,6 +27,7 @@ def test_cache_scan_worker_delegates_directory_and_cancellation(monkeypatch):
         ("cache/media", True),
     ]
     assert results == [["cached-item"], ["cached-item"]]
+    assert batches == [["cached-item"], ["cached-item"]]
 
 
 def test_cache_scan_factory_creates_owned_session():
