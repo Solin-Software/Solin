@@ -135,9 +135,28 @@ def test_qml_pointer_cursor_state_handles_out_of_order_sibling_exit():
 
 def test_fade_in_removes_opacity_effect_after_animation():
     widget = QWidget()
+    try:
+        helpers.fade_in(widget, duration=1)
 
-    helpers.fade_in(widget, duration=1)
+        assert isinstance(widget.graphicsEffect(), QGraphicsOpacityEffect)
 
-    assert isinstance(widget.graphicsEffect(), QGraphicsOpacityEffect)
+        assert _wait_for(lambda: widget.graphicsEffect() is None)
+    finally:
+        widget.deleteLater()
 
-    assert _wait_for(lambda: widget.graphicsEffect() is None)
+
+def test_fade_in_safely_replaces_an_active_animation():
+    widget = QWidget()
+    try:
+        helpers.fade_in(widget, duration=1000)
+        first_effect = widget.graphicsEffect()
+        assert isinstance(first_effect, QGraphicsOpacityEffect)
+
+        helpers.fade_in(widget, duration=1)
+        second_effect = widget.graphicsEffect()
+        assert isinstance(second_effect, QGraphicsOpacityEffect)
+        assert second_effect is not first_effect
+
+        assert _wait_for(lambda: widget.graphicsEffect() is None)
+    finally:
+        widget.deleteLater()

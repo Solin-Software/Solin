@@ -13,13 +13,12 @@ def load_browser_widget_type():
 
     return BrowserWidget
 
+
 if TYPE_CHECKING:
     from solin.core.foundation.runtime_paths import ProfilePaths
     from solin.ui.qr_generation import QrGenerationSessionFactory
     from solin.core.jw.jwpub_import_thread import JwpubImportThreadFactory
     from solin.core.media.browser_downloads import BrowserDownloadService
-    from solin.core.media.cache import MediaCacheManager
-    from solin.core.media.cache_scan import CacheScanSessionFactory
     from solin.core.media.profile_store import ProfileMediaStore
     from solin.core.ingest.wifi_server import WifiReceiveServer
     from solin.core.network.browser_images import BrowserImageFetchService
@@ -38,11 +37,9 @@ class LazyPageContext:
     notifications: Any
     profile_paths: ProfilePaths
     browser_settings: BrowserZoomSettings
-    media_cache_manager: MediaCacheManager
     profile_media_store: ProfileMediaStore
     jwpub_import_thread_factory: JwpubImportThreadFactory
     document_conversion_service: DocumentConversionService
-    cache_scan_session_factory: CacheScanSessionFactory
     qr_generation_session_factory: QrGenerationSessionFactory
     wifi_receive_server_factory: Callable[[QObject], WifiReceiveServer]
     browser_download_service_factory: Callable[[], BrowserDownloadService]
@@ -61,7 +58,6 @@ class LazyPageHandlers:
     stop_projection: Callable[[], None]
     project_tab_frame: Callable[..., None]
     browser_media_destination: Callable[..., None]
-    play_cached_media: Callable[..., None]
     wifi_media_received: Callable[..., None]
     wifi_add_single: Callable[..., None]
     wifi_add_all: Callable[..., None]
@@ -72,8 +68,7 @@ class LazyPageController:
     """Owns lazy page state, creation, lifecycle, and signal wiring."""
 
     BROWSER_INDEX = 2
-    CACHE_INDEX = 8
-    WIFI_INDEX = 9
+    WIFI_INDEX = 7
 
     def __init__(
         self,
@@ -83,23 +78,17 @@ class LazyPageController:
         self._context = context
         self._handlers = handlers
         self._browser_widget = None
-        self._cache_manager_widget = None
         self._wifi_receive_widget = None
         self._browser_preparation = None
         self._browser_widget_type = None
         self._browser_installed: Callable[[], None] = lambda: None
         self._browser_requested = False
         self._browser_signals_connected = False
-        self._cache_signals_connected = False
         self._wifi_signals_connected = False
 
     @property
     def browser_widget(self):
         return self._browser_widget
-
-    @property
-    def cache_manager_widget(self):
-        return self._cache_manager_widget
 
     @property
     def wifi_receive_widget(self):
@@ -113,17 +102,13 @@ class LazyPageController:
     def ensure_page(self, index: int) -> None:
         if index == self.BROWSER_INDEX:
             self._request_browser_widget()
-        elif index == self.CACHE_INDEX:
-            self.ensure_cache_manager_widget()
         elif index == self.WIFI_INDEX:
             self.ensure_wifi_receive_widget()
 
     def set_browser_preparation(self, preparation) -> None:
         self._browser_preparation = preparation
         preparation.completed.connect(self._materialize_requested_browser)
-        preparation.failed.connect(
-            lambda _message: self._materialize_requested_browser()
-        )
+        preparation.failed.connect(lambda _message: self._materialize_requested_browser())
 
     def set_browser_widget_type(self, widget_type) -> None:
         self._browser_widget_type = widget_type
@@ -148,7 +133,6 @@ class LazyPageController:
 
         for widget in (
             self._browser_widget,
-            self._cache_manager_widget,
             self._wifi_receive_widget,
         ):
             if widget is None:
@@ -190,24 +174,6 @@ class LazyPageController:
             return
         self._replace_stack_widget(self.BROWSER_INDEX, browser)
         self._browser_installed()
-
-    def ensure_cache_manager_widget(self):
-        if self._cache_manager_widget is not None:
-            return self._cache_manager_widget
-
-        from ..widgets.cache_manager_widget import CacheManagerWidget
-
-        context = self._context
-        self._cache_manager_widget = CacheManagerWidget(
-            context.lang_manager,
-            context.media_cache_manager,
-            cache_scan_session_factory=context.cache_scan_session_factory,
-            media_info_service_factory=context.media_info_service_factory,
-            parent=context.parent,
-        )
-        self._replace_stack_widget(self.CACHE_INDEX, self._cache_manager_widget)
-        self._connect_cache_manager_signals()
-        return self._cache_manager_widget
 
     def ensure_wifi_receive_widget(self):
         if self._wifi_receive_widget is not None:
@@ -271,14 +237,6 @@ class LazyPageController:
     def _project_browser_video(self, url: str, title: str) -> None:
         item = {"url": url, "title": title, "type": "video"}
         self._handlers.project_video(url, title, [item], None)
-
-    def _connect_cache_manager_signals(self) -> None:
-        cache_manager = self._cache_manager_widget
-        if self._cache_signals_connected or cache_manager is None:
-            return
-
-        cache_manager.play_media_requested.connect(self._handlers.play_cached_media)
-        self._cache_signals_connected = True
 
     def _connect_wifi_receive_signals(self) -> None:
         wifi_receive = self._wifi_receive_widget

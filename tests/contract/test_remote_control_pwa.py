@@ -304,7 +304,7 @@ def test_stale_play_recovery_is_bounded_and_revalidates_the_catalog_origin() -> 
     assert "function refreshedPlayCommand(fields)" in app
     assert "candidate.id === collectionId && candidate.kind === source" in app
     assert 'node.kind !== "media" || !node.available' in app
-    assert "solin-remote-shell-v16" in service_worker
+    assert "solin-remote-shell-v17" in service_worker
 
 
 def test_stale_play_recovery_behavior() -> None:

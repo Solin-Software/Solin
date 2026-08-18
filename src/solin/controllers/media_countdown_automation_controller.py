@@ -32,19 +32,19 @@ _BLOCKED_RECHECK_MS = 1_000
 _MISSED_STATUS_SECONDS = 60
 _TR_CONTEXT = "MediaCountdownAutomation"
 _STARTED_MESSAGE = QT_TRANSLATE_NOOP(
-    _TR_CONTEXT,
+    "MediaCountdownAutomation",
     "Countdown started automatically for {time}.",
 )
 _IN_USE_MESSAGE = QT_TRANSLATE_NOOP(
-    _TR_CONTEXT,
+    "MediaCountdownAutomation",
     "The countdown did not start because the media window remained in use.",
 )
 _NO_WINDOW_MESSAGE = QT_TRANSLATE_NOOP(
-    _TR_CONTEXT,
+    "MediaCountdownAutomation",
     "The countdown did not start because no media window was available.",
 )
 _AUTOMATION_UNAVAILABLE_MESSAGE = QT_TRANSLATE_NOOP(
-    _TR_CONTEXT,
+    "MediaCountdownAutomation",
     "The countdown did not start because automatic projection remained unavailable.",
 )
 class MeetingScheduleSource(Protocol):

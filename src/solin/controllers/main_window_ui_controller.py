@@ -21,19 +21,16 @@ from ..styles.icons import (
     ICON_CLAPPERBOARD,
     ICON_MENU,
     ICON_NAV_BROWSER,
-    ICON_NAV_CACHE,
-    ICON_NAV_CLIPS,
+    ICON_NAV_LIBRARY,
     ICON_NAV_MEETINGS,
     ICON_NAV_PLAYLIST,
     ICON_NAV_SETTINGS,
-    ICON_NAV_SONGS,
     ICON_NAV_THEME,
     ICON_NAV_TIMER,
     ICON_NAV_WIFI,
     make_icon,
 )
 from ..styles.theme import PALETTE
-from ..widgets.clips_widget import ClipsWidget
 from ..widgets.common.collapsible_sidebar import (
     CollapsibleSidebarFrame,
     SIDEBAR_EXPANDED_WIDTH,
@@ -43,13 +40,13 @@ from ..widgets.common.profile_avatar_button import ProfileAvatarButton
 from ..widgets.common.sidebar_button import SidebarButton
 from ..ui.media_info import MediaInfoQueue, MediaInfoService
 from ..widgets.meetings.widget import MeetingsWidget
+from ..widgets.library_widget import LibraryWidget
 from ..widgets.playlist.widget import PlaylistWidget
 from ..widgets.projection.bar import ProjectionBar
 from ..widgets.quick_access_toolbar import QuickAccessToolbar
 from ..widgets.deferred_scenes_widget import DeferredScenesWidget
 from ..widgets.deferred_talk_theme_widget import DeferredTalkThemeWidget
 from ..widgets.settings_widget import SettingsWidget
-from ..widgets.songs_widget import SongsWidget
 from ..widgets.timer_widget import TimerWidget
 from .lazy_page_controller import (
     LazyPageContext,
@@ -59,7 +56,8 @@ from .lazy_page_controller import (
 from .main_window_nav import (
     COLLAPSE_SIDEBAR_SOURCE,
     EXPAND_SIDEBAR_SOURCE,
-    NAV_LABELS,
+    NAV_ITEMS,
+    MainPage,
     SIDEBAR_SUBTITLE_SOURCE,
     SIDEBAR_TITLE_SOURCE,
     SWITCH_PROFILE_SOURCE,
@@ -130,6 +128,7 @@ class MainWindowUiContext:
     document_conversion_service: Any
     clip_fetch_thread_factory: Any
     cache_scan_session_factory: Any
+    cache_deletion_session_factory: Any
     qr_generation_session_factory: Any
     playlist_thumbnail_store: Any
     meeting_thumbnail_store: Any
@@ -154,7 +153,6 @@ class MainWindowUiHandlers:
     stop_projection: Callable[..., Any]
     project_tab_frame: Callable[..., Any]
     browser_media_destination: Callable[..., Any]
-    play_cached_media: Callable[..., Any]
     wifi_media_received: Callable[..., Any]
     wifi_add_single: Callable[..., Any]
     wifi_add_all: Callable[..., Any]
@@ -176,10 +174,9 @@ class MainWindowUiResources:
     preparation: UiPreparationCoordinator
     right_col: QWidget
     projection_bar: ProjectionBar
-    songs_widget: SongsWidget
+    library_widget: LibraryWidget
     settings_widget: SettingsWidget
     timer_widget: TimerWidget
-    clips_widget: ClipsWidget
     talk_theme_widget: DeferredTalkThemeWidget
     playlist_widget: PlaylistWidget
     meetings_widget: MeetingsWidget
@@ -195,10 +192,9 @@ class MainWindowUiResources:
 
 @dataclass(frozen=True, slots=True)
 class _PageResources:
-    songs_widget: SongsWidget
+    library_widget: LibraryWidget
     settings_widget: SettingsWidget
     timer_widget: TimerWidget
-    clips_widget: ClipsWidget
     talk_theme_widget: DeferredTalkThemeWidget
     playlist_widget: PlaylistWidget
     meetings_widget: MeetingsWidget
@@ -220,34 +216,28 @@ class MainWindowUiController:
     """Builds the main-window widget tree from explicit UI dependencies."""
 
     _NAV_BUTTON_ICONS = (
-        ICON_NAV_SONGS,
+        ICON_NAV_LIBRARY,
         ICON_NAV_MEETINGS,
         ICON_NAV_BROWSER,
-        ICON_NAV_CLIPS,
         ICON_NAV_TIMER,
         ICON_NAV_THEME,
         ICON_NAV_SETTINGS,
         ICON_NAV_PLAYLIST,
-        ICON_NAV_CACHE,
         ICON_NAV_WIFI,
         ICON_CLAPPERBOARD,
     )
     _NAV_BUTTON_SPECS = tuple(
-        (attr_name, icon, label, index)
-        for index, ((attr_name, label), icon) in enumerate(
-            zip(NAV_LABELS, _NAV_BUTTON_ICONS, strict=True)
-        )
+        (attr_name, icon, label, int(page))
+        for (attr_name, label, page), icon in zip(NAV_ITEMS, _NAV_BUTTON_ICONS, strict=True)
     )
     _SIDEBAR_LAYOUT_ORDER = (
         "nav_meetings_btn",
         "nav_browser_btn",
         "nav_timer_btn",
         "nav_playlist_btn",
-        "nav_songs_btn",
-        "nav_clips_btn",
+        "nav_library_btn",
         "nav_theme_btn",
         "nav_scenes_btn",
-        "nav_cache_btn",
         "nav_wifi_btn",
     )
 
@@ -303,9 +293,7 @@ class MainWindowUiController:
                 else None
             ),
         )
-        lazy_pages.set_browser_installed_callback(
-            navigation.update_quick_toolbar_browser_style
-        )
+        lazy_pages.set_browser_installed_callback(navigation.update_quick_toolbar_browser_style)
 
         pages = self._build_pages(stack, lazy_pages)
         sidebar = self._build_sidebar(navigation, nav_buttons)
@@ -357,13 +345,12 @@ class MainWindowUiController:
             on_demand_tasks={
                 -1: projection_bar.overlay_preparation_handle,
                 -2: quick_toolbar.preparation_handle,
-                0: pages.songs_widget.qml_load_handle,
-                3: pages.clips_widget.qml_load_handle,
-                4: pages.timer_widget.qml_load_handle,
-                5: pages.talk_theme_widget.preparation_handle,
-                6: pages.settings_widget.preparation_handle,
-                7: pages.playlist_widget.preparation_handle,
-                10: pages.scenes_widget.preparation_handle,
+                int(MainPage.LIBRARY): pages.library_widget.qml_load_handle,
+                int(MainPage.TIMER): pages.timer_widget.qml_load_handle,
+                int(MainPage.TALK_THEME): pages.talk_theme_widget.preparation_handle,
+                int(MainPage.SETTINGS): pages.settings_widget.preparation_handle,
+                int(MainPage.PLAYLISTS): pages.playlist_widget.preparation_handle,
+                int(MainPage.SCENES): pages.scenes_widget.preparation_handle,
             },
         )
         preparation_ref["value"] = preparation
@@ -376,10 +363,9 @@ class MainWindowUiController:
             preparation=preparation,
             right_col=right_col,
             projection_bar=projection_bar,
-            songs_widget=pages.songs_widget,
+            library_widget=pages.library_widget,
             settings_widget=pages.settings_widget,
             timer_widget=pages.timer_widget,
-            clips_widget=pages.clips_widget,
             talk_theme_widget=pages.talk_theme_widget,
             playlist_widget=pages.playlist_widget,
             meetings_widget=pages.meetings_widget,
@@ -410,12 +396,10 @@ class MainWindowUiController:
                 notifications=context.notifications,
                 profile_paths=context.profile_paths,
                 browser_settings=context.browser_settings,
-                media_cache_manager=context.media_cache_manager,
                 playback_protection=context.playback_protection,
                 profile_media_store=context.profile_media_store,
                 jwpub_import_thread_factory=context.jwpub_import_thread_factory,
                 document_conversion_service=context.document_conversion_service,
-                cache_scan_session_factory=context.cache_scan_session_factory,
                 qr_generation_session_factory=context.qr_generation_session_factory,
                 wifi_receive_server_factory=context.wifi_receive_server_factory,
                 browser_download_service_factory=(self._browser_download_service_factory),
@@ -429,7 +413,6 @@ class MainWindowUiController:
                 stop_projection=handlers.stop_projection,
                 project_tab_frame=handlers.project_tab_frame,
                 browser_media_destination=handlers.browser_media_destination,
-                play_cached_media=handlers.play_cached_media,
                 wifi_media_received=handlers.wifi_media_received,
                 wifi_add_single=handlers.wifi_add_single,
                 wifi_add_all=handlers.wifi_add_all,
@@ -446,16 +429,19 @@ class MainWindowUiController:
 
         timeline = startup_timeline()
         context = self._context
-        songs_widget = SongsWidget(
+        library_widget = LibraryWidget(
             context.lang_manager,
             context.media_cache_manager,
             context.jw_songs_store,
             context.runtime_paths.cache_dir,
-            context.media_controller,
+            context.clip_fetch_thread_factory,
+            context.cache_scan_session_factory,
+            context.cache_deletion_session_factory,
+            self._media_info_service_factory,
             defer_qml=True,
             parent=context.parent,
         )
-        timeline.mark("page_songs_constructed")
+        timeline.mark("page_library_constructed")
         settings_widget = SettingsWidget(
             context.lang_manager,
             context.screen_manager,
@@ -489,16 +475,6 @@ class MainWindowUiController:
             parent=context.parent,
         )
         timeline.mark("page_timer_constructed")
-        clips_widget = ClipsWidget(
-            context.lang_manager,
-            context.media_cache_manager,
-            context.runtime_paths.cache_dir,
-            context.clip_fetch_thread_factory,
-            context.media_controller,
-            defer_qml=True,
-            parent=context.parent,
-        )
-        timeline.mark("page_clips_constructed")
         talk_theme_widget = DeferredTalkThemeWidget(
             context.lang_manager,
             profile_paths=context.profile_paths,
@@ -586,23 +562,20 @@ class MainWindowUiController:
             meetings_widget.set_automatic_download_enabled
         )
 
-        stack.addWidget(songs_widget)
+        stack.addWidget(library_widget)
         stack.addWidget(meetings_widget)
         stack.addWidget(lazy_pages.placeholder())
-        stack.addWidget(clips_widget)
         stack.addWidget(timer_widget)
         stack.addWidget(talk_theme_widget)
         stack.addWidget(settings_widget)
         stack.addWidget(playlist_widget)
         stack.addWidget(lazy_pages.placeholder())
-        stack.addWidget(lazy_pages.placeholder())
         stack.addWidget(scenes_widget)
 
         return _PageResources(
-            songs_widget=songs_widget,
+            library_widget=library_widget,
             settings_widget=settings_widget,
             timer_widget=timer_widget,
-            clips_widget=clips_widget,
             talk_theme_widget=talk_theme_widget,
             playlist_widget=playlist_widget,
             meetings_widget=meetings_widget,
@@ -668,7 +641,7 @@ class MainWindowUiController:
             expand_tooltip=context.translate(EXPAND_SIDEBAR_SOURCE),
             parent=sidebar,
         )
-        navigation.switch_page(1)
+        navigation.switch_page(int(MainPage.MEETINGS))
         return _SidebarResources(
             frame=sidebar,
             title_label=title_label,

@@ -974,11 +974,15 @@
 }
 
 .media-name {
+  display: -webkit-box;
   overflow: hidden;
   font-size: 12px;
   font-weight: 700;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .media-detail {

@@ -6,7 +6,6 @@ from solin.controllers.lazy_page_controller import (
     LazyPageHandlers,
 )
 from solin.core.foundation.runtime_paths import ProfilePaths
-from solin.core.media.cache import MediaCacheManager
 
 
 class _WidgetStub:
@@ -19,7 +18,7 @@ class _WidgetStub:
 
 class _StackStub:
     def __init__(self):
-        self._widgets = [_WidgetStub() for _ in range(10)]
+        self._widgets = [_WidgetStub() for _ in range(8)]
         self._current_widget = self._widgets[0]
 
     def widget(self, index):
@@ -53,27 +52,18 @@ class _WindowStub:
         self.stack = _StackStub()
         self.lang = object()
         self.notifications = object()
-        self.media_cache_manager = MediaCacheManager(
-            "cache/media",
-            downloader_factory=lambda _parent: None,
-        )
         self.media_info_queue_factory = lambda _parent: object()
         self.media_info_service_factory = lambda _parent: object()
         self.browser_download_service = object()
-        self.browser_download_service_factory = (
-            lambda: self.browser_download_service
-        )
+        self.browser_download_service_factory = lambda: self.browser_download_service
         self.browser_image_fetch_service = object()
-        self.browser_image_fetch_service_factory = (
-            lambda: self.browser_image_fetch_service
-        )
+        self.browser_image_fetch_service_factory = lambda: self.browser_image_fetch_service
         self.projection_aspect_ratio_provider = lambda: object()
         self.browser_settings = object()
         self.playback_protection = object()
         self.profile_media_store = object()
         self.jwpub_import_thread_factory = object()
         self.document_conversion_service = object()
-        self.cache_scan_session_factory = object()
         self.qr_generation_session_factory = object()
         self.wifi_receive_server_factory = lambda _parent: object()
         self.profile_paths = ProfilePaths.from_roots(
@@ -137,19 +127,13 @@ def _controller(window, *, project_video=None):
             notifications=window.notifications,
             profile_paths=window.profile_paths,
             browser_settings=window.browser_settings,
-            media_cache_manager=window.media_cache_manager,
             profile_media_store=window.profile_media_store,
             jwpub_import_thread_factory=window.jwpub_import_thread_factory,
             document_conversion_service=window.document_conversion_service,
-            cache_scan_session_factory=window.cache_scan_session_factory,
             qr_generation_session_factory=window.qr_generation_session_factory,
             wifi_receive_server_factory=window.wifi_receive_server_factory,
-            browser_download_service_factory=(
-                window.browser_download_service_factory
-            ),
-            browser_image_fetch_service_factory=(
-                window.browser_image_fetch_service_factory
-            ),
+            browser_download_service_factory=(window.browser_download_service_factory),
+            browser_image_fetch_service_factory=(window.browser_image_fetch_service_factory),
             projection_aspect_ratio_provider=window.projection_aspect_ratio_provider,
             media_info_service_factory=window.media_info_service_factory,
             playback_protection=window.playback_protection,
@@ -160,7 +144,6 @@ def _controller(window, *, project_video=None):
             stop_projection=lambda: None,
             project_tab_frame=lambda *_args: None,
             browser_media_destination=lambda *_args: None,
-            play_cached_media=lambda *_args: None,
             wifi_media_received=lambda *_args: None,
             wifi_add_single=lambda *_args: None,
             wifi_add_all=lambda *_args: None,
@@ -175,7 +158,6 @@ def test_lazy_page_controller_owns_lazy_widget_state():
     controller = _controller(window)
 
     assert controller.browser_widget is None
-    assert controller.cache_manager_widget is None
     assert controller.wifi_receive_widget is None
     assert not hasattr(controller, "_window")
 
@@ -188,7 +170,7 @@ def test_lazy_page_controller_replaces_stack_placeholder_in_place():
     replacement = _WidgetStub()
     controller._replace_stack_widget(LazyPageController.BROWSER_INDEX, replacement)
 
-    assert window.stack.count() == 10
+    assert window.stack.count() == 8
     assert window.stack.widget(LazyPageController.BROWSER_INDEX) is replacement
     assert old_widget.deleted is True
 
@@ -208,7 +190,7 @@ def test_lazy_page_controller_preserves_selected_page_when_replacing_placeholder
 def test_lazy_page_controller_reveals_browser_when_selected_qt_placeholder_is_replaced():
     window = _WindowStub()
     window.stack = QStackedWidget()
-    for _index in range(10):
+    for _index in range(8):
         window.stack.addWidget(QWidget())
     controller = _controller(window)
     placeholder = window.stack.widget(LazyPageController.BROWSER_INDEX)
@@ -273,37 +255,30 @@ def test_lazy_page_controller_routes_known_stack_indices(monkeypatch):
     )
     monkeypatch.setattr(
         controller,
-        "ensure_cache_manager_widget",
-        lambda: calls.append("cache"),
-    )
-    monkeypatch.setattr(
-        controller,
         "ensure_wifi_receive_widget",
         lambda: calls.append("wifi"),
     )
 
     controller.ensure_page(LazyPageController.BROWSER_INDEX)
-    controller.ensure_page(LazyPageController.CACHE_INDEX)
     controller.ensure_page(LazyPageController.WIFI_INDEX)
     controller.ensure_page(999)
 
-    assert calls == ["browser", "cache", "wifi"]
+    assert calls == ["browser", "wifi"]
 
 
 def test_lazy_page_controller_applies_theme_to_materialized_pages_only(monkeypatch):
     window = _WindowStub()
     controller = _controller(window)
     browser = _ThemeAwareWidgetStub()
-    cache = _ThemeAwareWidgetStub()
+    wifi = _ThemeAwareWidgetStub()
     controller._browser_widget = browser
-    controller._cache_manager_widget = cache
+    controller._wifi_receive_widget = wifi
 
     def fail_if_materialized():
         raise AssertionError("apply_theme should not materialize lazy pages")
 
     for name in (
         "ensure_browser_widget",
-        "ensure_cache_manager_widget",
         "ensure_wifi_receive_widget",
     ):
         monkeypatch.setattr(controller, name, fail_if_materialized)
@@ -312,9 +287,8 @@ def test_lazy_page_controller_applies_theme_to_materialized_pages_only(monkeypat
 
     assert browser.theme_applied is True
     assert browser.updated is True
-    assert cache.theme_applied is True
-    assert cache.updated is True
-    assert controller.wifi_receive_widget is None
+    assert wifi.theme_applied is True
+    assert wifi.updated is True
 
 
 def test_lazy_page_controller_builds_owned_browser_with_deferred_native_tabs(monkeypatch):
@@ -419,53 +393,10 @@ def test_lazy_page_controller_builds_wifi_with_injected_jwpub_factory(monkeypatc
     assert wifi is controller.wifi_receive_widget
     assert wifi.lang_manager is window.lang
     assert wifi.notifications is window.notifications
-    assert (
-        wifi.document_conversion_service
-        is window.document_conversion_service
-    )
+    assert wifi.document_conversion_service is window.document_conversion_service
     assert wifi.profile_media_store is window.profile_media_store
-    assert (
-        wifi.jwpub_import_thread_factory
-        is window.jwpub_import_thread_factory
-    )
-    assert (
-        wifi.qr_generation_session_factory
-        is window.qr_generation_session_factory
-    )
+    assert wifi.jwpub_import_thread_factory is window.jwpub_import_thread_factory
+    assert wifi.qr_generation_session_factory is window.qr_generation_session_factory
     assert wifi.wifi_receive_server_factory is window.wifi_receive_server_factory
     assert wifi.media_info_service_factory is window.media_info_service_factory
     assert wifi.parent is window
-
-
-def test_lazy_page_controller_builds_cache_with_injected_scan_factory(monkeypatch):
-    import solin.widgets.cache_manager_widget as cache_module
-
-    class _CacheFactory:
-        def __init__(
-            self,
-            lang_manager,
-            media_cache_manager,
-            *,
-            cache_scan_session_factory,
-            media_info_service_factory,
-            parent,
-        ):
-            self.lang_manager = lang_manager
-            self.media_cache_manager = media_cache_manager
-            self.cache_scan_session_factory = cache_scan_session_factory
-            self.media_info_service_factory = media_info_service_factory
-            self.parent = parent
-
-    window = _WindowStub()
-    controller = _controller(window)
-    monkeypatch.setattr(cache_module, "CacheManagerWidget", _CacheFactory)
-    monkeypatch.setattr(controller, "_connect_cache_manager_signals", lambda: None)
-
-    cache = controller.ensure_cache_manager_widget()
-
-    assert cache is controller.cache_manager_widget
-    assert cache.lang_manager is window.lang
-    assert cache.media_cache_manager is window.media_cache_manager
-    assert cache.cache_scan_session_factory is window.cache_scan_session_factory
-    assert cache.media_info_service_factory is window.media_info_service_factory
-    assert cache.parent is window

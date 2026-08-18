@@ -18,6 +18,9 @@ AVATAR_COLORS: tuple[tuple[str, str], ...] = (
     ("#6e40c9", "#d2a8ff"),
 )
 
+_FADE_ANIMATION_OBJECT_NAME = "_solin_fade_in_animation"
+_FADE_EFFECT_OBJECT_NAME = "_solin_fade_in_effect"
+
 
 def avatar_colors(avatar_key: str) -> tuple[str, str]:
     """Return deterministic gradient colors for a stable avatar key."""
@@ -37,25 +40,35 @@ def initials(name: str) -> str:
 
 def fade_in(widget: QWidget, duration: int = 300) -> None:
     """Fade in a widget with a short cubic opacity animation."""
+    previous_effect = widget.graphicsEffect()
+    if (
+        previous_effect is not None
+        and previous_effect.objectName() == _FADE_EFFECT_OBJECT_NAME
+    ):
+        previous_animation = previous_effect.findChild(
+            QPropertyAnimation,
+            _FADE_ANIMATION_OBJECT_NAME,
+        )
+        if previous_animation is not None:
+            previous_animation.stop()
+
     effect = QGraphicsOpacityEffect(widget)
-    effect.setObjectName("_solin_fade_in_effect")
+    effect.setObjectName(_FADE_EFFECT_OBJECT_NAME)
     widget.setGraphicsEffect(effect)
-    anim = QPropertyAnimation(effect, b"opacity", widget)
+    anim = QPropertyAnimation(effect, b"opacity", effect)
+    anim.setObjectName(_FADE_ANIMATION_OBJECT_NAME)
     anim.setDuration(duration)
     anim.setStartValue(0.0)
     anim.setEndValue(1.0)
     anim.setEasingCurve(QEasingCurve.Type.OutCubic)
 
     def cleanup_effect() -> None:
-        current = widget.graphicsEffect()
-        if current is effect or (
-            current is not None
-            and current.objectName() == "_solin_fade_in_effect"
-        ):
-            widget.setGraphicsEffect(None)
+        if widget.graphicsEffect() is effect:
+            effect.setEnabled(False)
+            effect.deleteLater()
 
     anim.finished.connect(cleanup_effect)
-    anim.start(QPropertyAnimation.DeletionPolicy.DeleteWhenStopped)
+    anim.start()
 
 
 def make_rounded_thumb(

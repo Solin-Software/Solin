@@ -147,7 +147,6 @@ fi
     --include-data-dir="${QML_QT_DIR}=PySide6/qml" \
     "${qml_binary_args[@]}" \
     --include-data-files="src/solin/resources/translations/*.qm=solin/resources/translations/" \
-    --include-data-files="${SIDEVIEW_NATIVE}=sideview/libsideview_native.so" \
     --enable-plugin=pyside6 \
     --include-qt-plugins=platforms,platformthemes,imageformats,multimedia,position,xcbglintegrations \
     main.py

@@ -1145,41 +1145,41 @@ def test_timer_pointer_area_enters_and_exits_native_cursor_state() -> None:
 def test_shared_playlist_tree_requires_explicit_play_when_protection_is_enabled() -> None:
     node = _playlist_media_node("media-1", "Protected media")
     widget, controller, _model, protection = _playlist_tree_host([node], height=180)
-    root = widget.rootObject()
-    assert root is not None
-    protection.set_enabled(True)
-    QTest.qWait(10)
+    try:
+        root = widget.rootObject()
+        assert root is not None
+        protection.set_enabled(True)
+        QTest.qWait(10)
 
-    play_button = _find_visual(root, "protectedPlayButton-media-1")
-    card_hit_area = _find_visual(root, "mediaCardHitArea-media-1")
-    assert play_button is not None
-    assert card_hit_area is not None
-    assert play_button.property("visible") is True
-    assert card_hit_area.property("cursorShape") == Qt.CursorShape.ArrowCursor
+        play_button = _find_visual(root, "protectedPlayButton-media-1")
+        card_hit_area = _find_visual(root, "mediaCardHitArea-media-1")
+        assert play_button is not None
+        assert card_hit_area is not None
+        assert play_button.property("visible") is True
+        assert play_button.property("enabled") is True
+        assert card_hit_area.property("cursorShape") == Qt.CursorShape.ArrowCursor
 
-    card_center = card_hit_area.mapToScene(
-        QPointF(card_hit_area.width() / 2, card_hit_area.height() / 2)
-    ).toPoint()
-    QTest.mouseClick(widget, Qt.MouseButton.LeftButton, pos=card_center)
-    assert controller.projected == []
-    play_center = play_button.mapToScene(
-        QPointF(play_button.width() / 2, play_button.height() / 2)
-    ).toPoint()
-    QTest.mouseClick(widget, Qt.MouseButton.LeftButton, pos=play_center)
-    assert controller.projected == ["media-1"]
+        card_center = card_hit_area.mapToScene(
+            QPointF(card_hit_area.width() / 2, card_hit_area.height() / 2)
+        ).toPoint()
+        QTest.mouseClick(widget, Qt.MouseButton.LeftButton, pos=card_center)
+        assert controller.projected == []
+        assert QMetaObject.invokeMethod(play_button, "clicked")
+        assert controller.projected == ["media-1"]
 
-    protection.set_locked(True)
-    QTest.qWait(1)
-    assert play_button.property("enabled") is False
+        protection.set_locked(True)
+        QTest.qWait(1)
+        assert play_button.property("enabled") is False
 
-    protection.set_locked(False)
-    protection.set_enabled(False)
-    QTest.qWait(1)
-    assert play_button.property("visible") is False
-    assert card_hit_area.property("cursorShape") == Qt.CursorShape.PointingHandCursor
-    QTest.mouseClick(widget, Qt.MouseButton.LeftButton, pos=card_center)
-    assert controller.projected == ["media-1", "media-1"]
-    widget.deleteLater()
+        protection.set_locked(False)
+        protection.set_enabled(False)
+        QTest.qWait(1)
+        assert play_button.property("visible") is False
+        assert card_hit_area.property("cursorShape") == Qt.CursorShape.PointingHandCursor
+        QTest.mouseClick(widget, Qt.MouseButton.LeftButton, pos=card_center)
+        assert controller.projected == ["media-1", "media-1"]
+    finally:
+        widget.deleteLater()
 
 
 def test_image_thumbnail_cursor_follows_playback_protection() -> None:

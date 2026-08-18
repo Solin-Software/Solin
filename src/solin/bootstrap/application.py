@@ -2,24 +2,17 @@ import os
 import logging
 import sys
 
-_QT_LOGGING_RULES = (
-    "qt.qpa.mime=false",
-    "qt.multimedia.ffmpeg=false",
+from solin.core.foundation.qt_logging import (
+    configure_qt_logging_rules,
+    install_qt_message_handler,
 )
 
-
-def _configure_qt_logging_rules() -> None:
-    existing = os.environ.get("QT_LOGGING_RULES", "")
-    entries = [entry.strip() for entry in existing.split(";") if entry.strip()]
-    configured = set(entries)
-    entries.extend(rule for rule in _QT_LOGGING_RULES if rule not in configured)
-    os.environ["QT_LOGGING_RULES"] = ";".join(entries)
-
-
-_configure_qt_logging_rules()
+configure_qt_logging_rules()
 
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import Qt, QCoreApplication, QTimer
+
+install_qt_message_handler()
 
 # Apenas constantes puras — sem dependência de caminhos ou QApplication.
 from solin.bootstrap.config import default_app_config
@@ -359,6 +352,7 @@ def _build_main_window_runtime(
     from solin.core.media.profile_store import ProfileMediaStore
     from solin.core.media.thumbnail_store import ThumbnailStore
     from solin.core.media.cache_scan import CacheScanSessionFactory
+    from solin.core.media.cache_delete import CacheDeletionSessionFactory
     from solin.core.jw.clip_fetch import ClipFetchThreadFactory
     from solin.core.jw.catalog_service import JWMediaCatalogService
     from solin.core.jw.jwpub_import_thread import JwpubImportThreadFactory
@@ -430,6 +424,7 @@ def _build_main_window_runtime(
     )
     clip_fetch_thread_factory = ClipFetchThreadFactory()
     cache_scan_session_factory = CacheScanSessionFactory()
+    cache_deletion_session_factory = CacheDeletionSessionFactory()
     qr_generation_session_factory = QrGenerationSessionFactory()
     playlist_thumbnail_store = ThumbnailStore(profile_paths.thumb_cache_dir)
     meeting_thumbnail_store = ThumbnailStore(
@@ -486,6 +481,7 @@ def _build_main_window_runtime(
             document_conversion_service,
             clip_fetch_thread_factory,
             cache_scan_session_factory,
+            cache_deletion_session_factory,
             qr_generation_session_factory,
             playlist_thumbnail_store,
             meeting_thumbnail_store,

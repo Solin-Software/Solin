@@ -93,6 +93,7 @@ from .controllers.signal_connection_controller import (
     MainWindowSignalSources,
     SignalConnectionController,
 )
+from .controllers.main_window_nav import MainPage
 from .controllers.timer_engine import TimerEngine
 from .controllers.timer_monitor_controller import TimerMonitorController
 from .controllers.timer_output_controller import TimerOutputController
@@ -160,6 +161,7 @@ if TYPE_CHECKING:
     from .core.meetings.linked_folder_sync import MeetingLinkedFolderSync
     from .core.media.browser_downloads import BrowserDownloadService
     from .core.media.cache_scan import CacheScanSessionFactory
+    from .core.media.cache_delete import CacheDeletionSessionFactory
     from .core.network.browser_images import BrowserImageFetchService
     from .core.scenes.engine import SceneEngine
     from .core.scenes.ptz import PtzCredentialVault, PtzRecallExecutor
@@ -209,6 +211,7 @@ class MainWindow(QWidget):
         document_conversion_service: DocumentConversionService,
         clip_fetch_thread_factory: ClipFetchThreadFactory,
         cache_scan_session_factory: CacheScanSessionFactory,
+        cache_deletion_session_factory: CacheDeletionSessionFactory,
         qr_generation_session_factory: QrGenerationSessionFactory,
         playlist_thumbnail_store: ThumbnailStore,
         meeting_thumbnail_store: ThumbnailStore,
@@ -575,6 +578,7 @@ class MainWindow(QWidget):
                 document_conversion_service=document_conversion_service,
                 clip_fetch_thread_factory=clip_fetch_thread_factory,
                 cache_scan_session_factory=cache_scan_session_factory,
+                cache_deletion_session_factory=cache_deletion_session_factory,
                 qr_generation_session_factory=qr_generation_session_factory,
                 playlist_thumbnail_store=playlist_thumbnail_store,
                 meeting_thumbnail_store=meeting_thumbnail_store,
@@ -607,14 +611,6 @@ class MainWindow(QWidget):
                         title,
                         kind,
                         can_play,
-                    )
-                ),
-                play_cached_media=lambda path, media_type, original_url="", display_title="": (
-                    self._media_projection.on_cache_play(
-                        path,
-                        media_type,
-                        original_url,
-                        display_title,
                     )
                 ),
                 wifi_media_received=lambda path, original_name: (
@@ -668,7 +664,7 @@ class MainWindow(QWidget):
                 translate=self.tr,
             ),
             PlaylistImportHandlers(
-                switch_to_playlist=lambda: self._navigation.switch_page(7),
+                switch_to_playlist=lambda: self._navigation.switch_page(int(MainPage.PLAYLISTS)),
             ),
         )
         self._media_destinations = MediaDestinationController(
@@ -710,7 +706,7 @@ class MainWindow(QWidget):
                 translate=self.tr,
             ),
             OpenMediaHandlers(
-                switch_to_playlist=lambda: self._navigation.switch_page(7),
+                switch_to_playlist=lambda: self._navigation.switch_page(int(MainPage.PLAYLISTS)),
                 project_media_at_index=lambda *args, **kwargs: (
                     self._media_projection.project_media_at_index(*args, **kwargs)
                 ),
@@ -867,9 +863,8 @@ class MainWindow(QWidget):
         )
         self._signal_connections = SignalConnectionController(
             MainWindowSignalSources(
-                songs_widget=self.songs_widget,
+                library_widget=self.library_widget,
                 meetings_widget=self.meetings_widget,
-                clips_widget=self.clips_widget,
                 timer_widget=self.timer_widget,
                 talk_theme_widget=self.talk_theme_widget,
                 playlist_widget=self.playlist_widget,
@@ -968,7 +963,7 @@ class MainWindow(QWidget):
                 widget_providers=(
                     lambda: self.settings_widget,
                     lambda: self.meetings_widget,
-                    lambda: self._lazy_pages.cache_manager_widget,
+                    lambda: self.library_widget,
                     lambda: self._lazy_pages.wifi_receive_widget,
                     lambda: self.playlist_widget,
                     lambda: self.timer_widget,
@@ -1348,7 +1343,7 @@ class MainWindow(QWidget):
         )
 
     def _open_meeting_schedule_settings(self) -> None:
-        self._navigation.switch_page(6)
+        self._navigation.switch_page(int(MainPage.SETTINGS))
         self.settings_widget.focus_meeting_schedule()
 
     @staticmethod
@@ -1417,10 +1412,9 @@ class MainWindow(QWidget):
             self._on_scene_preview_demand_changed
         )
         self._reconcile_native_scene_surfaces()
-        self.songs_widget = resources.songs_widget
+        self.library_widget = resources.library_widget
         self.settings_widget = resources.settings_widget
         self.timer_widget = resources.timer_widget
-        self.clips_widget = resources.clips_widget
         self.talk_theme_widget = resources.talk_theme_widget
         self.playlist_widget = resources.playlist_widget
         self.meetings_widget = resources.meetings_widget
@@ -1454,8 +1448,7 @@ class MainWindow(QWidget):
                 button.apply_theme()
 
         for widget in (
-            getattr(self, "songs_widget", None),
-            getattr(self, "clips_widget", None),
+            getattr(self, "library_widget", None),
             getattr(self, "settings_widget", None),
             getattr(self, "timer_widget", None),
             getattr(self, "talk_theme_widget", None),
@@ -1554,7 +1547,7 @@ class MainWindow(QWidget):
         paths: list[str],
         open_after: bool,
     ) -> None:
-        self._navigation.switch_page(7)
+        self._navigation.switch_page(int(MainPage.PLAYLISTS))
         self.playlist_widget.import_native_playlists(paths, open_after=open_after)
 
     def _project_media_at_index(

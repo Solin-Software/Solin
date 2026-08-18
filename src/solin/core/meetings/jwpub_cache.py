@@ -6,13 +6,19 @@ import json
 import logging
 import os
 import shutil
+import tempfile
 import threading
+import uuid
 import zipfile
+from collections.abc import Iterable
 from pathlib import Path
 
 from solin.core.storage.json_repository import JsonFileRepository
 
 log = logging.getLogger(__name__)
+
+_EXTRACTION_MARKER = ".solin-extraction-complete"
+_EXTRACTION_STALE_MARKER = ".solin-extraction-stale"
 
 
 class JwpubCache:
@@ -30,7 +36,19 @@ class JwpubCache:
 
     def is_cached(self, pub: str, lang: str, issue: str) -> bool:
         extract_path = self.extract_dir(pub, lang, issue)
-        return extract_path.exists() and any(extract_path.glob("*.db"))
+        if not extract_path.exists() or not any(extract_path.glob("*.db")):
+            return False
+        if (extract_path / _EXTRACTION_STALE_MARKER).is_file():
+            return False
+        return (
+            (extract_path / _EXTRACTION_MARKER).is_file()
+            or not self.jwpub_path(pub, lang, issue).is_file()
+        )
+
+    def can_materialize(self, pub: str, lang: str, issue: str) -> bool:
+        """Return whether a publication can be rebuilt without a download."""
+
+        return self.is_cached(pub, lang, issue) or self.jwpub_path(pub, lang, issue).is_file()
 
     def db_path(self, pub: str, lang: str, issue: str) -> Path | None:
         extract_path = self.extract_dir(pub, lang, issue)
@@ -44,33 +62,175 @@ class JwpubCache:
         A missing directory is a no-op. Filesystem errors are logged and kept
         local because cache invalidation must never crash the meeting workflow.
         """
+        self._remove_extract_dir(self.extract_dir(pub, lang, issue))
+
+    def mark_extract_stale(self, pub: str, lang: str, issue: str) -> None:
+        """Require a fresh extraction without removing files currently in use."""
+
         extract_path = self.extract_dir(pub, lang, issue)
-        if not extract_path.exists():
+        if not extract_path.is_dir():
             return
         try:
-            shutil.rmtree(extract_path)
+            (extract_path / _EXTRACTION_STALE_MARKER).touch(exist_ok=True)
+        except OSError as exc:
+            log.warning("JwpubCache: could not mark extract stale %s: %s", extract_path, exc)
+
+    def repair_extract_for_source(self, source: str | os.PathLike[str]) -> bool:
+        """Restore missing files from the owning archive without removing live files."""
+
+        return self.repair_extracts_for_sources((source,)) > 0
+
+    def repair_extracts_for_sources(
+        self,
+        sources: Iterable[str | os.PathLike[str]],
+    ) -> int:
+        """Repair each affected extraction once and return the successful count."""
+
+        owners = {
+            owner
+            for source in sources
+            if (owner := self._extract_owner_for_source(source)) is not None
+        }
+        return sum(self._repair_extract(extract_path, jwpub) for extract_path, jwpub in owners)
+
+    def _repair_extract(self, extract_path: Path, jwpub: Path) -> bool:
+        if not jwpub.is_file():
+            self._mark_path_stale(extract_path)
+            return False
+
+        staging_path = self._stage_extract(jwpub, extract_path)
+        if staging_path is None:
+            self._mark_path_stale(extract_path)
+            return False
+        try:
+            if not extract_path.exists():
+                os.replace(staging_path, extract_path)
+                staging_path = None
+                return True
+
+            for staged in staging_path.rglob("*"):
+                relative = staged.relative_to(staging_path)
+                if relative.name in {_EXTRACTION_MARKER, _EXTRACTION_STALE_MARKER}:
+                    continue
+                destination = extract_path / relative
+                if staged.is_dir():
+                    destination.mkdir(parents=True, exist_ok=True)
+                elif not destination.exists():
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    os.replace(staged, destination)
+            (extract_path / _EXTRACTION_MARKER).touch(exist_ok=True)
+            (extract_path / _EXTRACTION_STALE_MARKER).unlink(missing_ok=True)
+            log.info("JwpubCache: repaired missing files in %s", extract_path)
+            return True
+        except OSError as exc:
+            log.error("JwpubCache: could not repair extract dir %s: %s", extract_path, exc)
+            self._mark_path_stale(extract_path)
+            return False
+        finally:
+            if staging_path is not None and staging_path.exists():
+                self._cleanup_tree(staging_path, "repair staging dir")
+
+    def _extract_owner_for_source(
+        self,
+        source: str | os.PathLike[str],
+    ) -> tuple[Path, Path] | None:
+        try:
+            relative = Path(source).resolve().relative_to(self._root.resolve())
+        except (OSError, ValueError):
+            return None
+        if len(relative.parts) < 2 or not relative.parts[1].startswith("x_"):
+            return None
+        publication_dir = self._root / relative.parts[0]
+        extract_path = publication_dir / relative.parts[1]
+        issue = relative.parts[1][2:]
+        return extract_path, publication_dir / f"{publication_dir.name}_{issue}.jwpub"
+
+    def _mark_path_stale(self, extract_path: Path) -> None:
+        if not extract_path.is_dir():
+            return
+        try:
+            (extract_path / _EXTRACTION_STALE_MARKER).touch(exist_ok=True)
+        except OSError as exc:
+            log.warning("JwpubCache: could not mark extract stale %s: %s", extract_path, exc)
+
+    @staticmethod
+    def _remove_tree(path: Path) -> None:
+        try:
+            shutil.rmtree(path)
+        except FileNotFoundError:
+            return
+
+    def _remove_extract_dir(self, extract_path: Path) -> bool:
+        if not extract_path.exists():
+            return False
+        try:
+            self._remove_tree(extract_path)
             log.debug("JwpubCache: invalidated extract dir %s", extract_path)
+            return True
         except OSError as exc:
             log.error(
                 "JwpubCache: could not remove extract dir %s: %s",
                 extract_path,
                 exc,
             )
+            return False
 
     def extract(self, pub: str, lang: str, issue: str) -> Path | None:
         jwpub = self.jwpub_path(pub, lang, issue)
         if not jwpub.exists():
             return None
         extract_path = self.extract_dir(pub, lang, issue)
-        extract_path.mkdir(exist_ok=True)
+        extract_path.parent.mkdir(parents=True, exist_ok=True)
+        staging_path = self._stage_extract(jwpub, extract_path)
+        if staging_path is None:
+            return None
+        previous_path: Path | None = None
+        try:
+            if extract_path.exists():
+                previous_path = extract_path.parent / (
+                    f".{extract_path.name}.previous-{uuid.uuid4().hex}"
+                )
+                os.replace(extract_path, previous_path)
+            os.replace(staging_path, extract_path)
+            staging_path = None
+            return extract_path
+        except OSError as exc:
+            log.error("Extract failed %s: %s", jwpub, exc)
+            if previous_path is not None and previous_path.exists() and not extract_path.exists():
+                try:
+                    os.replace(previous_path, extract_path)
+                except OSError as restore_exc:
+                    log.error(
+                        "JwpubCache: could not restore extract dir %s: %s",
+                        extract_path,
+                        restore_exc,
+                    )
+            return None
+        finally:
+            if staging_path is not None and staging_path.exists():
+                self._cleanup_tree(staging_path, "extraction staging dir")
+            if (
+                previous_path is not None
+                and previous_path.exists()
+                and extract_path.exists()
+            ):
+                self._cleanup_tree(previous_path, "previous extract dir")
+
+    def _stage_extract(self, jwpub: Path, extract_path: Path) -> Path | None:
+        staging_path = Path(
+            tempfile.mkdtemp(prefix=f".{extract_path.name}.", dir=extract_path.parent)
+        )
         try:
             with zipfile.ZipFile(jwpub, "r") as outer:
                 if "contents" not in outer.namelist():
-                    return None
+                    raise RuntimeError("publication archive has no contents payload")
                 inner_bytes = outer.read("contents")
             with zipfile.ZipFile(io.BytesIO(inner_bytes), "r") as inner:
-                _safe_extract_all(inner, extract_path)
-            return extract_path
+                _safe_extract_all(inner, staging_path)
+            if not any(staging_path.glob("*.db")):
+                raise RuntimeError("publication has no database")
+            (staging_path / _EXTRACTION_MARKER).touch(exist_ok=False)
+            return staging_path
         except (
             EOFError,
             NotImplementedError,
@@ -80,7 +240,14 @@ class JwpubCache:
             zipfile.LargeZipFile,
         ) as exc:
             log.error("Extract failed %s: %s", jwpub, exc)
+            self._cleanup_tree(staging_path, "failed extraction staging dir")
             return None
+
+    def _cleanup_tree(self, path: Path, label: str) -> None:
+        try:
+            self._remove_tree(path)
+        except OSError as exc:
+            log.warning("JwpubCache: could not clean %s %s: %s", label, path, exc)
 
 
 def _safe_extract_all(archive: zipfile.ZipFile, target_dir: Path) -> None:

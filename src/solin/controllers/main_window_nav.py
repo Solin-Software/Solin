@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from enum import IntEnum
+
 from PySide6.QtCore import QT_TRANSLATE_NOOP
 
 MAIN_WINDOW_TR_CONTEXT = "MainWindow"
@@ -12,16 +14,28 @@ SWITCH_PROFILE_SOURCE = QT_TRANSLATE_NOOP("MainWindow", "Switch profile")
 COLLAPSE_SIDEBAR_SOURCE = QT_TRANSLATE_NOOP("MainWindow", "Collapse sidebar")
 EXPAND_SIDEBAR_SOURCE = QT_TRANSLATE_NOOP("MainWindow", "Expand sidebar")
 
-NAV_LABELS = (
-    ("nav_songs_btn", QT_TRANSLATE_NOOP("MainWindow", "Songs")),
-    ("nav_meetings_btn", QT_TRANSLATE_NOOP("MainWindow", "Meetings")),
-    ("nav_browser_btn", QT_TRANSLATE_NOOP("MainWindow", "Browser")),
-    ("nav_clips_btn", QT_TRANSLATE_NOOP("MainWindow", "Original Songs")),
-    ("nav_timer_btn", QT_TRANSLATE_NOOP("MainWindow", "Timer")),
-    ("nav_theme_btn", QT_TRANSLATE_NOOP("MainWindow", "Talk theme")),
-    ("nav_settings_btn", QT_TRANSLATE_NOOP("MainWindow", "Settings")),
-    ("nav_playlist_btn", QT_TRANSLATE_NOOP("MainWindow", "Playlists")),
-    ("nav_cache_btn", QT_TRANSLATE_NOOP("MainWindow", "Saved Media")),
-    ("nav_wifi_btn", QT_TRANSLATE_NOOP("MainWindow", "Receive via Wi-Fi")),
-    ("nav_scenes_btn", QT_TRANSLATE_NOOP("MainWindow", "Scenes")),
+class MainPage(IntEnum):
+    LIBRARY = 0
+    MEETINGS = 1
+    BROWSER = 2
+    TIMER = 3
+    TALK_THEME = 4
+    SETTINGS = 5
+    PLAYLISTS = 6
+    WIFI = 7
+    SCENES = 8
+
+
+NAV_ITEMS = (
+    ("nav_library_btn", QT_TRANSLATE_NOOP("MainWindow", "Library"), MainPage.LIBRARY),
+    ("nav_meetings_btn", QT_TRANSLATE_NOOP("MainWindow", "Meetings"), MainPage.MEETINGS),
+    ("nav_browser_btn", QT_TRANSLATE_NOOP("MainWindow", "Browser"), MainPage.BROWSER),
+    ("nav_timer_btn", QT_TRANSLATE_NOOP("MainWindow", "Timer"), MainPage.TIMER),
+    ("nav_theme_btn", QT_TRANSLATE_NOOP("MainWindow", "Talk theme"), MainPage.TALK_THEME),
+    ("nav_settings_btn", QT_TRANSLATE_NOOP("MainWindow", "Settings"), MainPage.SETTINGS),
+    ("nav_playlist_btn", QT_TRANSLATE_NOOP("MainWindow", "Playlists"), MainPage.PLAYLISTS),
+    ("nav_wifi_btn", QT_TRANSLATE_NOOP("MainWindow", "Receive via Wi-Fi"), MainPage.WIFI),
+    ("nav_scenes_btn", QT_TRANSLATE_NOOP("MainWindow", "Scenes"), MainPage.SCENES),
 )
+
+NAV_LABELS = tuple((attribute, label) for attribute, label, _page in NAV_ITEMS)

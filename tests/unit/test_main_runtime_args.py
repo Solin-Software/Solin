@@ -143,6 +143,7 @@ def test_build_main_window_runtime_wires_services_to_stable_window_host(monkeypa
             document_conversion_service,
             clip_fetch_thread_factory,
             cache_scan_session_factory,
+            cache_deletion_session_factory,
             qr_generation_session_factory,
             playlist_thumbnail_store,
             meeting_thumbnail_store,
@@ -192,6 +193,7 @@ def test_build_main_window_runtime_wires_services_to_stable_window_host(monkeypa
             self.document_conversion_service = document_conversion_service
             self.clip_fetch_thread_factory = clip_fetch_thread_factory
             self.cache_scan_session_factory = cache_scan_session_factory
+            self.cache_deletion_session_factory = cache_deletion_session_factory
             self.qr_generation_session_factory = qr_generation_session_factory
             self.playlist_thumbnail_store = playlist_thumbnail_store
             self.meeting_thumbnail_store = meeting_thumbnail_store
@@ -306,6 +308,7 @@ def test_build_main_window_runtime_wires_services_to_stable_window_host(monkeypa
     assert str(window.document_conversion_service.docx_pages_dir) == "profile_docx_pages"
     assert window.clip_fetch_thread_factory.__class__.__name__ == "ClipFetchThreadFactory"
     assert window.cache_scan_session_factory.__class__.__name__ == "CacheScanSessionFactory"
+    assert window.cache_deletion_session_factory.__class__.__name__ == "CacheDeletionSessionFactory"
     assert window.qr_generation_session_factory.__class__.__name__ == "QrGenerationSessionFactory"
     assert str(window.playlist_thumbnail_store.root) == "profile_thumbs"
     assert str(window.meeting_thumbnail_store.root) == "profile_meeting_thumbs"
@@ -431,6 +434,7 @@ def test_build_main_window_runtime_does_not_mutate_native_window_lifecycle(monke
             document_conversion_service,
             clip_fetch_thread_factory,
             cache_scan_session_factory,
+            cache_deletion_session_factory,
             qr_generation_session_factory,
             playlist_thumbnail_store,
             meeting_thumbnail_store,
@@ -480,6 +484,7 @@ def test_build_main_window_runtime_does_not_mutate_native_window_lifecycle(monke
             self.document_conversion_service = document_conversion_service
             self.clip_fetch_thread_factory = clip_fetch_thread_factory
             self.cache_scan_session_factory = cache_scan_session_factory
+            self.cache_deletion_session_factory = cache_deletion_session_factory
             self.qr_generation_session_factory = qr_generation_session_factory
             self.playlist_thumbnail_store = playlist_thumbnail_store
             self.meeting_thumbnail_store = meeting_thumbnail_store

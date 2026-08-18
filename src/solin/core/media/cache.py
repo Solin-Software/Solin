@@ -8,6 +8,7 @@ separadamente: ativo mostra progresso; queued mostra espera sem spinner falso.
 from __future__ import annotations
 
 import os
+import stat
 from pathlib import Path
 from PySide6.QtCore import QObject, Signal, Slot
 
@@ -21,6 +22,40 @@ from .qt_contracts import PrefetchDownloader, PrefetchDownloaderFactory
 from .download_storage import completed_cached_path, is_remote_url, is_url_cached
 
 
+def remove_cached_entry(
+    media_cache_dir: str | os.PathLike[str],
+    path: str | os.PathLike[str],
+) -> bool:
+    """Safely remove one regular cache file and its completion sidecar."""
+
+    if not path:
+        return False
+    cache_root = os.path.normcase(os.path.abspath(os.fspath(media_cache_dir)))
+    media_path = os.path.normcase(os.path.abspath(os.fspath(path)))
+    try:
+        inside_cache = os.path.commonpath((cache_root, media_path)) == cache_root
+    except ValueError:
+        inside_cache = False
+    if not inside_cache or media_path == cache_root:
+        raise ValueError("Cached media path is outside the media cache directory")
+
+    existing_targets: list[str] = []
+    # Remove the sidecar first so a sidecar permission failure cannot leave a
+    # deleted media file represented as a failed, stale row in the UI.
+    for target in (f"{media_path}.done", media_path):
+        try:
+            mode = os.lstat(target).st_mode
+        except FileNotFoundError:
+            continue
+        if stat.S_ISLNK(mode) or not stat.S_ISREG(mode):
+            raise ValueError("Cached media targets must be regular files")
+        existing_targets.append(target)
+
+    for target in existing_targets:
+        os.remove(target)
+    return bool(existing_targets)
+
+
 class MediaCacheManager(QObject):
     """Owns the application media-cache queue on the Qt main thread."""
 
@@ -29,6 +64,7 @@ class MediaCacheManager(QObject):
     cache_changed      = Signal(str)
     # caminho local removido do cache (arquivo principal; .done também é removido)
     cache_removed      = Signal(str)
+    _cache_removed_requested = Signal(str)
     # progresso do prefetch: (url, bytes_baixados, bytes_total)
     prefetch_progress  = Signal(str, int, int)
     # erro no prefetch: (url, mensagem)
@@ -50,6 +86,7 @@ class MediaCacheManager(QObject):
         parent=None,
     ) -> None:
         super().__init__(parent)
+        self._cache_removed_requested.connect(self.cache_removed.emit)
         self.media_cache_dir = Path(media_cache_dir)
         self._prefetch_queue = MediaPrefetchQueue(self)
         self._downloaders: dict[str, PrefetchDownloader] = {}
@@ -141,21 +178,17 @@ class MediaCacheManager(QObject):
         Retorna True se o arquivo principal ou o marcador foram removidos.
         Centralizar esse fluxo evita UIs com estado stale após exclusão manual.
         """
-        if not path:
-            return False
-
-        removed = False
-        for target in (path, path + ".done"):
-            try:
-                if os.path.isfile(target):
-                    os.remove(target)
-                    removed = True
-            except OSError:
-                raise
+        removed = remove_cached_entry(self.media_cache_dir, path)
 
         if removed:
             self.cache_removed.emit(path)
         return removed
+
+    def notify_cache_removed_threadsafe(self, path: str) -> None:
+        """Publish a worker-thread cache removal on this object's Qt thread."""
+
+        if path:
+            self._cache_removed_requested.emit(path)
 
     # ── Slots internos ────────────────────────────────────────────────────
 

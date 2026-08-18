@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 
 from solin.core.foundation.constants import IS_DEV
+from solin.core.foundation.qt_logging import mark_qt_file_logging_ready
 
 LOG_LEVEL_ENV_VAR = "SOLIN_LOG_LEVEL"
 LOG_FILENAME = "solin.log"
@@ -67,6 +68,7 @@ def configure_logging(
         else:
             existing.setLevel(resolved_level)
             existing.setFormatter(formatter)
+            mark_qt_file_logging_ready()
             return log_path
 
     handler = logging.handlers.RotatingFileHandler(
@@ -83,5 +85,6 @@ def configure_logging(
     for noisy_logger in ("PIL", "urllib3", "requests", "fontTools"):
         logging.getLogger(noisy_logger).setLevel(logging.WARNING)
 
+    mark_qt_file_logging_ready()
     logging.getLogger(__name__).debug("Logging configured at %s", log_path)
     return log_path

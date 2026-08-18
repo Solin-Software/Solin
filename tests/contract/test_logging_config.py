@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 
+from solin.core.foundation import logging_config
 from solin.core.foundation.logging_config import (
     LOG_FILENAME,
     LOG_HANDLER_NAME,
@@ -38,3 +39,19 @@ def test_configure_logging_is_idempotent_without_force(tmp_path):
 
     assert _solin_handlers() == first_handlers
     assert first_handlers[0].level == logging.WARNING
+
+
+def test_configure_logging_notifies_qt_router_after_file_handler_exists(
+    tmp_path,
+    monkeypatch,
+):
+    events: list[str] = []
+    monkeypatch.setattr(
+        logging_config,
+        "mark_qt_file_logging_ready",
+        lambda: events.append("ready"),
+    )
+
+    configure_logging(tmp_path, level="INFO", force=True)
+
+    assert events == ["ready"]

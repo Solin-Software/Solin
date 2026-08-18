@@ -41,10 +41,7 @@ def _controller(window):
             set_window_title=window.setWindowTitle,
             sidebar_title_label=window._sidebar_title_lbl,
             sidebar_subtitle_label=window._sidebar_subtitle_lbl,
-            nav_buttons={
-                attr: getattr(window, attr)
-                for attr, _source_text in NAV_LABELS
-            },
+            nav_buttons={attr: getattr(window, attr) for attr, _source_text in NAV_LABELS},
             translate=window.tr,
         )
     )
@@ -59,9 +56,9 @@ def test_retranslate_ui_updates_window_and_sidebar_texts():
     assert window.title == "tr:Solin"
     assert window._sidebar_title_lbl.text == "tr:Solin"
     assert window._sidebar_subtitle_lbl.text == "tr:Audio & Video"
-    assert window.nav_songs_btn.label == "tr:Songs"
+    assert window.nav_library_btn.label == "tr:Library"
     assert window.nav_wifi_btn.label == "tr:Receive via Wi-Fi"
-    assert window.nav_songs_btn.updated is True
+    assert window.nav_library_btn.updated is True
 
 
 def test_change_language_retranslates_window_and_sidebar_texts():
