@@ -57,7 +57,7 @@ def isolated_app_env(temp_root: Path) -> dict[str, str]:
     env["XDG_CACHE_HOME"] = str(xdg_cache_dir)
     env.setdefault(
         "QT_LOGGING_RULES",
-        "qt.qpa.mime=false;qt.multimedia.ffmpeg=false",
+        "qt.qpa.mime=false",
     )
     return env
 
