@@ -55,6 +55,65 @@ def test_jwpub_cache_rejects_archive_members_outside_extract_dir(tmp_path):
     assert not (tmp_path / "escape.db").exists()
 
 
+def test_jwpub_cache_keeps_the_last_complete_extract_when_replacement_fails(tmp_path):
+    cache = JwpubCache(tmp_path)
+    jwpub_path = cache.jwpub_path("mwb", "T", "20260600")
+
+    inner_bytes = io.BytesIO()
+    with zipfile.ZipFile(inner_bytes, "w") as inner:
+        inner.writestr("sample.db", b"first")
+    with zipfile.ZipFile(jwpub_path, "w") as outer:
+        outer.writestr("contents", inner_bytes.getvalue())
+    extract_dir = cache.extract("mwb", "T", "20260600")
+
+    with zipfile.ZipFile(jwpub_path, "w") as outer:
+        outer.writestr("unexpected", b"broken")
+
+    assert cache.extract("mwb", "T", "20260600") is None
+    assert extract_dir is not None
+    assert (extract_dir / "sample.db").read_bytes() == b"first"
+    assert cache.is_cached("mwb", "T", "20260600") is True
+
+
+def test_jwpub_cache_repairs_only_missing_files_without_removing_live_files(tmp_path):
+    cache = JwpubCache(tmp_path)
+    jwpub_path = cache.jwpub_path("wcg", "T", "0")
+    inner_bytes = io.BytesIO()
+    with zipfile.ZipFile(inner_bytes, "w") as inner:
+        inner.writestr("publication.db", b"sqlite")
+        inner.writestr("images/missing.jpg", b"restored")
+        inner.writestr("images/healthy.jpg", b"archive version")
+    with zipfile.ZipFile(jwpub_path, "w") as outer:
+        outer.writestr("contents", inner_bytes.getvalue())
+    extract_dir = cache.extract_dir("wcg", "T", "0")
+    extract_dir.mkdir(parents=True)
+    (extract_dir / "publication.db").write_bytes(b"sqlite")
+    healthy = extract_dir / "images" / "healthy.jpg"
+    healthy.parent.mkdir(parents=True)
+    healthy.write_bytes(b"currently presented")
+    missing = extract_dir / "images" / "missing.jpg"
+
+    assert cache.repair_extract_for_source(missing) is True
+
+    assert missing.read_bytes() == b"restored"
+    assert healthy.read_bytes() == b"currently presented"
+    assert cache.is_cached("wcg", "T", "0") is True
+    assert not any(path.name.startswith(".x_0.") for path in jwpub_path.parent.iterdir())
+
+
+def test_stale_extract_stays_on_disk_until_replacement_is_ready(tmp_path):
+    cache = JwpubCache(tmp_path)
+    extract_dir = cache.extract_dir("mwb", "T", "20260600")
+    extract_dir.mkdir(parents=True)
+    presented = extract_dir / "publication.db"
+    presented.write_bytes(b"currently presented")
+
+    cache.mark_extract_stale("mwb", "T", "20260600")
+
+    assert presented.read_bytes() == b"currently presented"
+    assert cache.is_cached("mwb", "T", "20260600") is False
+
+
 def test_jwpub_checksum_store_persists_and_compares_values(tmp_path):
     path = tmp_path / "checksums.json"
     store = JwpubChecksumStore(path)

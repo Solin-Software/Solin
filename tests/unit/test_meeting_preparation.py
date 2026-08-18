@@ -33,6 +33,7 @@ class _PublicationService(QObject):
     cbs_ready = Signal(str, object)
     context_progress = Signal(str, str, int, str, bool, int)
     context_error = Signal(str, str, str, str, bool, int)
+    context_load_finished = Signal(str, str, bool, int)
 
     def __init__(self) -> None:
         super().__init__()
@@ -696,6 +697,217 @@ def test_language_context_change_retires_obsolete_jobs(monkeypatch, tmp_path) ->
         assert cache.cancel_calls == [
             "meeting:2026-05-25:T:spoken",
         ]
+    finally:
+        service.shutdown(wait_ms=1000)
+
+
+def test_recovery_keeps_confirmed_tree_visible_while_publication_refs_load(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    service, publication, store, _cache = _service(monkeypatch, tmp_path)
+    key = MeetingPreparationKey(date(2026, 5, 25), "T")
+    tree_key = "mwb:2026-05-25:T:20260500"
+    canonical = [
+        {
+            "id": "section-lac",
+            "type": "section",
+            "meeting_generated": True,
+            "meeting_source_key": "section:mwb:lac",
+            "children": [
+                {
+                    "id": "book",
+                    "type": "subsection",
+                    "meeting_generated": True,
+                    "meeting_source_key": "subsection:wcg:book",
+                    "children": [
+                        {
+                            "id": f"book-image-{index}",
+                            "type": "media",
+                            "meeting_generated": True,
+                            "meeting_source_key": f"media:wcg:image:{index}",
+                            "media_ref": {
+                                "file_path": f"C:/cache/wcg_T/x_0/image-{index}.jpg"
+                            },
+                            "children": [],
+                        }
+                        for index in range(5)
+                    ],
+                }
+            ],
+        }
+    ]
+    original = store.save(
+        tree_key,
+        canonical,
+        "confirmed-hash",
+        canonical_nodes=canonical,
+        source_checksum="confirmed-checksum",
+    )
+    published: list[MeetingTreeSnapshot] = []
+    service.tree_changed.connect(
+        lambda _key, _pub_type, snapshot: published.append(snapshot)
+    )
+    monkeypatch.setattr(
+        service._builder,
+        "build_midweek",
+        lambda week: [] if week.cbs_status == "loading" else canonical,
+    )
+
+    try:
+        service.recover_missing_canonical_media(
+            key,
+            "mwb",
+            "C:/cache/wcg_T/x_0/image-1.jpg",
+        )
+        service._flush_canonical_media_recoveries()
+        generation = int(publication.loads[0]["generation"])
+        partial = _week_data(
+            generation,
+            with_media=False,
+            source_checksum="confirmed-checksum",
+            cbs_status="loading",
+        )
+
+        publication.mwb_ready.emit(key.monday.isoformat(), partial)
+
+        current = store.find_snapshot("mwb", key.monday, "T")
+        assert current is not None
+        assert current.revision == original.revision
+        assert current.nodes == original.nodes
+        assert current.canonical_nodes == original.canonical_nodes
+        assert published == []
+
+        partial.cbs_status = "ready"
+        publication.cbs_ready.emit(key.monday.isoformat(), partial)
+
+        completed = store.find_snapshot("mwb", key.monday, "T")
+        assert completed is not None
+        assert completed.revision == original.revision + 1
+        assert {node["id"] for node in iter_nodes(completed.nodes)} == {
+            node["id"] for node in iter_nodes(original.nodes)
+        }
+        assert completed.canonical_nodes == original.canonical_nodes
+        assert published == [completed]
+    finally:
+        service.shutdown(wait_ms=1000)
+
+
+def test_missing_canonical_media_recovery_materializes_only_the_affected_publication(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    service, publication, store, _cache = _service(monkeypatch, tmp_path)
+    key = MeetingPreparationKey(date(2026, 5, 25), "T")
+    missing_path = "C:/cache/jwpub/mwb_T/x_20260500/image.jpg"
+    for pub_type, issue in (("mwb", "20260500"), ("wt", "20260400")):
+        canonical = [
+            {
+                "id": f"{pub_type}-section",
+                "type": "section",
+                "meeting_generated": True,
+                "meeting_source_key": f"section:{pub_type}:official",
+                "children": [],
+            }
+        ]
+        store.save(
+            f"{pub_type}:{key.monday.isoformat()}:T:{issue}",
+            canonical,
+            "hash",
+            canonical_nodes=canonical,
+        )
+
+    try:
+        service.recover_missing_canonical_media(key, "mwb", missing_path)
+        service._flush_canonical_media_recoveries()
+
+        assert publication.loads == [
+            {
+                "monday": key.monday,
+                "force": False,
+                "language_code": "T",
+                "is_sign_language": False,
+                "generation": 1,
+                "priority": int(MeetingPreparationPriority.INTERACTIVE),
+                "materialize_cached_publications": frozenset({"mwb"}),
+                "known_wt_issue": "20260400",
+                "persisted_source_checksums": {"mwb": "", "wt": ""},
+                "repair_cache_paths": (missing_path,),
+            }
+        ]
+    finally:
+        service.shutdown(wait_ms=1000)
+
+
+def test_recovery_waiting_on_unchanged_startup_runs_when_the_load_finishes(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    service, publication, store, _cache = _service(monkeypatch, tmp_path)
+    key = MeetingPreparationKey(date(2026, 5, 25), "T")
+    missing_path = "C:/cache/jwpub/mwb_T/x_20260500/image.jpg"
+    for pub_type, issue in (("mwb", "20260500"), ("wt", "20260400")):
+        canonical = [
+            {
+                "id": f"{pub_type}-section",
+                "type": "section",
+                "meeting_generated": True,
+                "meeting_source_key": f"section:{pub_type}:official",
+                "children": [],
+            }
+        ]
+        store.save(
+            f"{pub_type}:{key.monday.isoformat()}:T:{issue}",
+            canonical,
+            "hash",
+            canonical_nodes=canonical,
+        )
+
+    try:
+        service.ensure_week(MeetingPreparationRequest(key=key))
+        generation = int(publication.loads[0]["generation"])
+        service.recover_missing_canonical_media(key, "mwb", missing_path)
+        service._flush_canonical_media_recoveries()
+
+        assert len(publication.loads) == 1
+
+        publication.context_load_finished.emit(
+            key.monday.isoformat(),
+            key.language_code,
+            key.is_sign_language,
+            generation,
+        )
+
+        assert len(publication.loads) == 2
+        assert publication.loads[1]["materialize_cached_publications"] == frozenset(
+            {"mwb"}
+        )
+        assert publication.loads[1]["repair_cache_paths"] == (missing_path,)
+    finally:
+        service.shutdown(wait_ms=1000)
+
+
+def test_missing_canonical_media_events_are_batched_into_one_recovery(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    service, publication, _store, _cache = _service(monkeypatch, tmp_path)
+    key = MeetingPreparationKey(date(2026, 5, 25), "T")
+    first = "C:/cache/jwpub/wcg_T/x_0/images/first.jpg"
+    second = "C:/cache/jwpub/wcg_T/x_0/images/second.jpg"
+    try:
+        service.recover_missing_canonical_media(key, "mwb", first)
+        service.recover_missing_canonical_media(key, "mwb", second)
+
+        assert publication.loads == []
+
+        _spin_until(lambda: len(publication.loads) == 1)
+
+        assert len(publication.loads) == 1
+        assert publication.loads[0]["materialize_cached_publications"] == frozenset(
+            {"mwb", "wt"}
+        )
+        assert publication.loads[0]["repair_cache_paths"] == (first, second)
     finally:
         service.shutdown(wait_ms=1000)
 

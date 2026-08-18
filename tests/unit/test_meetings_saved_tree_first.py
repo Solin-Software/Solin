@@ -259,6 +259,31 @@ def test_detail_save_invalidates_cached_saved_snapshot_before_next_open() -> Non
     assert store.calls == [("week", monday, "T", False)]
 
 
+def test_missing_canonical_media_recovery_is_sent_to_preparation_service() -> None:
+    calls: list[tuple[MeetingPreparationKey, str, str]] = []
+    widget = SimpleNamespace(
+        _preparation=SimpleNamespace(
+            recover_missing_canonical_media=lambda key, pub_type, source: calls.append(
+                (key, pub_type, source)
+            )
+        )
+    )
+
+    MeetingsWidget._on_canonical_media_recovery_requested(
+        widget,
+        "mwb:2026-05-25:T:20260500",
+        "C:/cache/jwpub/mwb_T/x_20260500/image.jpg",
+    )
+
+    assert calls == [
+        (
+            MeetingPreparationKey(date(2026, 5, 25), "T"),
+            "mwb",
+            "C:/cache/jwpub/mwb_T/x_20260500/image.jpg",
+        )
+    ]
+
+
 def test_show_detail_observes_tree_saved_during_detail_construction(monkeypatch) -> None:
     monday = date(2026, 5, 25)
     old_snapshot = _snapshot("mwb", title="Before constructor save")
@@ -303,6 +328,7 @@ def test_show_detail_observes_tree_saved_during_detail_construction(monkeypatch)
             widget,
             tree_key,
         ),
+        _on_canonical_media_recovery_requested=lambda _tree_key, _source_path: None,
         _on_detail_back=lambda: None,
         project_media=lambda _media: None,
         _stack=SimpleNamespace(addWidget=lambda detail: added.append(detail)),

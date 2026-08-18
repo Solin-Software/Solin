@@ -182,6 +182,7 @@ class StudyDetailView(QWidget):
         jw_songs_store: JWSongsStore,
         saved_snapshot: MeetingTreeSnapshot,
         meeting_tree_saved_handler: Callable[[str], None] | None = None,
+        canonical_media_recovery_handler: Callable[[str, str], None] | None = None,
         watched_folder: str = "",
         parent=None,
     ):
@@ -197,6 +198,7 @@ class StudyDetailView(QWidget):
         self._jw_catalog_thumbnail_session_factory = jw_catalog_thumbnail_session_factory
         self._jw_songs_store = jw_songs_store
         self._meeting_tree_saved_handler = meeting_tree_saved_handler
+        self._canonical_media_recovery_handler = canonical_media_recovery_handler
         self._saved_snapshot = saved_snapshot
         self._watched_folder = watched_folder
         self._disposed = False
@@ -230,6 +232,10 @@ class StudyDetailView(QWidget):
         self.controller.storageSaved.connect(self.meeting_tree_saved.emit)
         if self._meeting_tree_saved_handler is not None:
             self.controller.storageSaved.connect(self._meeting_tree_saved_handler)
+        if self._canonical_media_recovery_handler is not None:
+            self.controller.canonicalMediaRecoveryRequested.connect(
+                self._canonical_media_recovery_handler
+            )
         self.controller.storageSaveFailed.connect(self._on_storage_save_failed)
         self.controller.set_sync_root(self._watched_folder)
         loaded_snapshot = self.controller.load_saved_tree(
@@ -1221,6 +1227,9 @@ class MeetingsWidget(QWidget):
             jw_catalog_thumbnail_session_factory=(self._jw_catalog_thumbnail_session_factory),
             jw_songs_store=self._jw_songs_store,
             meeting_tree_saved_handler=self._on_detail_tree_saved,
+            canonical_media_recovery_handler=(
+                self._on_canonical_media_recovery_requested
+            ),
             saved_snapshot=saved_snapshot,
             watched_folder=self._watched_folder,
         )
@@ -1247,6 +1256,25 @@ class MeetingsWidget(QWidget):
         )
         if key.monday == self._monday:
             self._refresh_overview_cards(self._monday)
+
+    @Slot(str, str)
+    def _on_canonical_media_recovery_requested(
+        self,
+        tree_key: str,
+        source_path: str,
+    ) -> None:
+        parsed = parse_meeting_tree_key(tree_key)
+        if parsed is None or parsed.pub_type not in {"mwb", "wt"}:
+            return
+        self._preparation.recover_missing_canonical_media(
+            MeetingPreparationKey(
+                parsed.monday,
+                parsed.language,
+                parsed.is_sign_language,
+            ),
+            parsed.pub_type,
+            source_path,
+        )
 
     def _open_memorial_detail(self):
         md = self._memorial_svc.get_data()
