@@ -574,6 +574,15 @@ class SceneEngine(Protocol):
         deadline_ms: int,
     ) -> Future[SceneEngineAck]: ...
 
+    def set_window_targets(
+        self,
+        targets: tuple[OutputWindowTarget, ...],
+        *,
+        request_id: str,
+        sequence: int,
+        deadline_ms: int,
+    ) -> Future[SceneEngineAck]: ...
+
     def stop(self) -> None: ...
 
 

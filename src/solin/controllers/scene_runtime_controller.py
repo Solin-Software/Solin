@@ -148,6 +148,14 @@ class _PendingLayerPreview:
     layer: SceneLayer
 
 
+@dataclass(frozen=True, slots=True)
+class _PendingWindowTargets:
+    request_id: str
+    sequence: int
+    document_revision: int
+    targets: tuple[OutputWindowTarget, ...]
+
+
 def content_category_for_projection(state: Mapping[str, Any]) -> ContentCategory:
     state_type = str(state.get("type", "idle"))
     return _CATEGORY_BY_PROJECTION_TYPE.get(
@@ -219,7 +227,6 @@ class SceneRuntimeController(QObject):
         self._program_egress: FrameChannelDescriptor | None = None
         self._preview_scene_id: str | None = None
         self._window_targets: tuple[OutputWindowTarget, ...] = ()
-        self._window_scene_id: str | None = None
         self._local_cameras = _unavailable_local_cameras("engine_unavailable")
         self._source_health: dict[str, SourceHealthEvent] = {}
         self._local_camera_request_id = ""
@@ -427,7 +434,6 @@ class SceneRuntimeController(QObject):
         )
         preview_required = (
             self._preview_egress is not None
-            or any(target.bus_id is BusId.MEDIA_WINDOWS for target in self._window_targets)
         )
         program_required = (
             activation.runtime.state.output(BusId.VIRTUAL_CAMERA).enabled
@@ -542,42 +548,33 @@ class SceneRuntimeController(QObject):
     def set_window_targets(
         self,
         targets: tuple[OutputWindowTarget, ...],
-        *,
-        scene_id: str | None = None,
     ) -> None:
         if not isinstance(targets, tuple) or not all(
             isinstance(target, OutputWindowTarget) for target in targets
         ):
             raise TypeError("Window targets must be an immutable target tuple")
-        preview_targets = tuple(
-            target for target in targets if target.bus_id is BusId.MEDIA_WINDOWS
-        )
-        if preview_targets and scene_id is None:
-            raise ValueError("Preview window targets require a scene")
-        if not preview_targets and scene_id is not None:
-            raise ValueError("A window scene requires a preview target")
-        if scene_id is not None:
-            self._documents.document.scene(scene_id)
-        targets_changed = targets != self._window_targets
-        scene_changed = scene_id != self._window_scene_id
-        if not targets_changed and not scene_changed:
+        if targets == self._window_targets:
             return
         self._window_targets = targets
-        self._window_scene_id = scene_id
-        if not targets_changed:
-            # A presenter already attached to this bus follows the normal
-            # prepare/Take hot path. Rehydrating the complete graph here would
-            # rebuild outputs, race the pending Take, and add visible latency to
-            # every Program cut.
-            self._reconcile_desired(prepare=True)
+        if (
+            self._engine is None
+            or not self._engine_ready
+            or self._hydrate_in_flight is not None
+            or not self._applied_scenes
+        ):
+            desired = self._resolve_desired_scenes()
+            if desired != self._desired_scenes:
+                self._desired_scenes = desired
+                self.desired_scenes_changed.emit(desired)
+            self._last_destination_enabled = self._destination_enabled()
+            self._last_render_enabled = self._render_enabled()
+            self._hydrate_if_ready()
             return
-        desired = self._resolve_desired_scenes()
-        if desired != self._desired_scenes:
-            self._desired_scenes = desired
-            self.desired_scenes_changed.emit(desired)
-        self._last_destination_enabled = self._destination_enabled()
-        self._last_render_enabled = self._render_enabled()
-        self._hydrate_if_ready()
+        # Window ownership is output topology, not graph state. Raw media
+        # targets consume the canonical Solin content source directly; Program
+        # targets follow the already committed Program render bus.
+        self._reconcile_engine_outputs()
+        self._dispatch_window_targets()
 
     @Slot(object)
     def set_preview_egress(
@@ -850,7 +847,6 @@ class SceneRuntimeController(QObject):
         self._preview_geometry_in_flight = None
         self._queued_preview_geometry = None
         self._preview_scene_id = self._profile_preview_scene_id
-        self._window_scene_id = None
         self._suspended_media_session_id = None
         self._desired_scenes = self._resolve_desired_scenes()
         self._last_destination_enabled = self._destination_enabled()
@@ -1065,6 +1061,23 @@ class SceneRuntimeController(QObject):
         )
         self._track_future(future, "preview_geometry", context)
 
+    def _dispatch_window_targets(self) -> None:
+        if self._engine is None or not self._engine_ready:
+            return
+        context = _PendingWindowTargets(
+            request_id=self._request_id_factory(),
+            sequence=self._next_sequence(),
+            document_revision=self._engine_document_revision,
+            targets=self._window_targets,
+        )
+        future = self._engine.set_window_targets(
+            context.targets,
+            request_id=context.request_id,
+            sequence=context.sequence,
+            deadline_ms=_TAKE_DEADLINE_MS,
+        )
+        self._track_future(future, "window_targets", context)
+
     def _prepare_take(self, bus_id: BusId, scene_id: str) -> None:
         if self._engine is None:
             return
@@ -1264,6 +1277,8 @@ class SceneRuntimeController(QObject):
                 self._handle_output_ack("output", context, result)
             elif operation == "render":
                 self._handle_output_ack("render", context, result)
+            elif operation == "window_targets":
+                self._handle_window_targets_ack(context, result)
             elif operation == "local_cameras":
                 self._handle_local_cameras(context, result)
             elif operation == "ptz":
@@ -1530,6 +1545,20 @@ class SceneRuntimeController(QObject):
             return
         self._set_last_engine_error_code("")
 
+    def _handle_window_targets_ack(self, context: object, result: object) -> None:
+        if not isinstance(context, _PendingWindowTargets):
+            raise RuntimeError("Invalid window targets context")
+        ack = self._validated_ack(
+            result,
+            request_id=context.request_id,
+            sequence=context.sequence,
+            document_revision=context.document_revision,
+        )
+        if not ack.applied:
+            self._report_rejection("window_targets", ack)
+            return
+        self._set_last_engine_error_code("")
+
     def _handle_local_cameras(self, context: object, result: object) -> None:
         if not isinstance(context, str):
             raise RuntimeError("Invalid local camera discovery context")
@@ -1745,7 +1774,7 @@ class SceneRuntimeController(QObject):
         ):
             category = ContentCategory.IDLE
         program_scene = self._runtime.resolve_scene(BusId.VIRTUAL_CAMERA, category)
-        media_scene = self._window_scene_id or self._preview_scene_id or program_scene
+        media_scene = self._preview_scene_id or program_scene
         return (
             (BusId.MEDIA_WINDOWS, media_scene),
             (BusId.VIRTUAL_CAMERA, program_scene),
@@ -1765,9 +1794,6 @@ class SceneRuntimeController(QObject):
         preview_required = (
             self._preview_scene_id is not None
             or self._preview_egress is not None
-            or any(
-                target.bus_id is BusId.MEDIA_WINDOWS for target in self._window_targets
-            )
         )
         program_required = (
             destination.output(BusId.VIRTUAL_CAMERA).enabled

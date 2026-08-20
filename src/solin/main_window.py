@@ -145,6 +145,16 @@ from .ui.window_focus import raise_projection_window
 
 
 _STARTUP_SCREEN_SETTLE_MS = 900
+
+
+def _use_native_media_presentation(
+    *,
+    supported: bool,
+    mirror_enabled: bool,
+    raw_video: bool,
+) -> bool:
+    """Keep every media surface on the same native routing policy."""
+    return supported and (mirror_enabled or raw_video)
 log = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
@@ -1045,26 +1055,24 @@ class MainWindow(QWidget):
         )
         state = self.projection_session.state
         raw_video = state.get("type") == "video" and not state.get("is_audio", False)
-        scene_id = (
-            self.scene_runtime.desired_scene(BusId.VIRTUAL_CAMERA)
-            if mirror_enabled
-            else self.scene_documents.direct_content_scene_id
-        )
         supported = (
             sys.platform == "win32"
             and self.scene_runtime.engine_ready
-            and scene_id is not None
             and not self._native_window_output_suppressed
         )
-        physical_native = supported and (mirror_enabled or raw_video)
+        native_presentation = _use_native_media_presentation(
+            supported=supported,
+            mirror_enabled=mirror_enabled,
+            raw_video=raw_video,
+        )
         physical_windows = tuple(self.projection_session.projection_windows)
         targets: list[OutputWindowTarget] = []
 
         for index, window in enumerate(physical_windows):
             set_native_active = getattr(window, "set_native_output_active", None)
             if callable(set_native_active):
-                set_native_active(physical_native)
-            if physical_native:
+                set_native_active(native_presentation)
+            if native_presentation:
                 surface = window.native_video_surface
                 targets.append(
                     self._native_window_target(
@@ -1079,8 +1087,7 @@ class MainWindow(QWidget):
             set_native_active = getattr(window, "set_native_output_active", None)
             if callable(set_native_active):
                 auxiliary_native = (
-                    supported
-                    and mirror_enabled
+                    native_presentation
                     and hasattr(window, "native_video_surface")
                 )
                 set_native_active(auxiliary_native)
@@ -1103,10 +1110,7 @@ class MainWindow(QWidget):
             for window in fallback_windows
         )
         if targets:
-            self.scene_runtime.set_window_targets(
-                tuple(targets),
-                scene_id=scene_id if render_bus is BusId.MEDIA_WINDOWS else None,
-            )
+            self.scene_runtime.set_window_targets(tuple(targets))
         else:
             self.scene_runtime.set_window_targets(())
         self._reconcile_scene_media_egress()

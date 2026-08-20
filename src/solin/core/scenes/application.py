@@ -13,9 +13,6 @@ from solin.core.scenes.model import (
     NO_SIGNAL_SOURCE_ID,
     BusId,
     CameraPreset,
-    Crop,
-    FitMode,
-    NormalizedRect,
     RecallPtzPresetAction,
     SceneDefinition,
     SceneDocument,
@@ -27,7 +24,6 @@ from solin.core.scenes.model import (
     new_identity,
     utc_now_iso,
 )
-from solin.core.scenes.presets import CONTENT_SCENE_ID
 
 log = logging.getLogger(__name__)
 
@@ -611,43 +607,6 @@ class SceneDocumentService:
         if not assigned or assigned[0] is None or any(value != assigned[0] for value in assigned):
             return None
         return assigned[0]
-
-    @property
-    def direct_content_scene_id(self) -> str | None:
-        """Return the canonical, visually unmodified Solin-content scene."""
-
-        source = next(
-            (candidate for candidate in self._document.sources if candidate.id == CONTENT_SOURCE_ID),
-            None,
-        )
-        scene = next(
-            (candidate for candidate in self._document.scenes if candidate.id == CONTENT_SCENE_ID),
-            None,
-        )
-        if (
-            source is None
-            or source.kind is not SourceKind.SOLIN_CONTENT
-            or not source.enabled
-            or scene is None
-            or len(scene.layers) != 1
-        ):
-            return None
-        layer = scene.layers[0]
-        if (
-            layer.source_id != CONTENT_SOURCE_ID
-            or layer.rect != NormalizedRect()
-            or layer.crop != Crop()
-            or layer.rotation_degrees != 0.0
-            or layer.fit_mode is not FitMode.CONTAIN
-            or layer.opacity != 1.0
-            or not layer.visible
-            or layer.mirror_x
-            or layer.mirror_y
-            or layer.border_width != 0.0
-            or layer.corner_radius != 0.0
-        ):
-            return None
-        return scene.id
 
     @property
     def program_automation_configured(self) -> bool:

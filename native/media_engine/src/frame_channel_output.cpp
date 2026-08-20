@@ -2,8 +2,8 @@
 
 #include "solin/media_engine/frame_channel.hpp"
 
-#include <algorithm>
 #include <chrono>
+#include <condition_variable>
 #include <cstdint>
 #include <exception>
 #include <memory>
@@ -16,16 +16,7 @@
 namespace solin::media_engine {
 namespace {
 
-[[nodiscard]] std::chrono::microseconds pump_interval(
-    const OutputVideoFormat& format) noexcept {
-    if (format.fps_numerator == 0U || format.fps_denominator == 0U) {
-        return std::chrono::milliseconds{4};
-    }
-    const auto frame_duration_us =
-        1'000'000ULL * format.fps_denominator / format.fps_numerator;
-    return std::chrono::microseconds{
-        std::clamp<std::uint64_t>(frame_duration_us / 4U, 1'000U, 4'000U)};
-}
+constexpr auto kFrameWaitWatchdog = std::chrono::seconds{1};
 
 [[nodiscard]] bool valid_configuration(
     const FrameChannelConfiguration& channel,
@@ -122,7 +113,6 @@ class FrameChannelOutputController::Impl final {
         }
         auto unique_writer = make_frame_channel_writer(channel_.value());
         std::shared_ptr<FrameChannelWriter> next_writer{std::move(unique_writer)};
-        const auto interval = pump_interval(format_);
         const auto minimum_publication_interval =
             maximum_frames_per_second_.has_value()
                 ? std::chrono::nanoseconds{
@@ -132,14 +122,18 @@ class FrameChannelOutputController::Impl final {
                 : std::chrono::nanoseconds::zero();
         pump_ = std::jthread(
             [renderer = renderer_, writer = next_writer, bus = bus_,
-             interval, minimum_publication_interval](
+             minimum_publication_interval](
                 const std::stop_token stop_token) {
                 std::uint64_t last_sequence = 0U;
                 auto next_publication_at = std::chrono::steady_clock::time_point::min();
+                std::mutex cadence_mutex;
+                std::condition_variable_any cadence_wakeup;
                 while (!stop_token.stop_requested()) {
                     const auto now = std::chrono::steady_clock::now();
                     if (now < next_publication_at) {
-                        std::this_thread::sleep_for(interval);
+                        std::unique_lock lock{cadence_mutex};
+                        static_cast<void>(cadence_wakeup.wait_until(
+                            lock, stop_token, next_publication_at, [] { return false; }));
                         continue;
                     }
                     std::exception_ptr failure;
@@ -179,7 +173,10 @@ class FrameChannelOutputController::Impl final {
                                     : following_deadline;
                         }
                     }
-                    std::this_thread::sleep_for(interval);
+                    const auto deadline =
+                        std::chrono::steady_clock::now() + kFrameWaitWatchdog;
+                    static_cast<void>(renderer->wait_for_frame(
+                        bus, last_sequence, stop_token, deadline));
                 }
             });
         writer_ = std::move(next_writer);

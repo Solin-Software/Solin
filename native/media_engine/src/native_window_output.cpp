@@ -318,14 +318,30 @@ class NativeWindowOutputController::Impl final {
 
     ~Impl() { shutdown(); }
 
-    [[nodiscard]] bool configure(const std::vector<OutputWindowConfiguration>& targets) noexcept {
+    [[nodiscard]] bool configure(
+        const std::vector<OutputWindowConfiguration>& targets,
+        std::optional<SourceLease> content_source) noexcept {
         try {
             std::scoped_lock lock{mutex_};
-            if (targets_ == targets) {
+            const auto content_required = std::ranges::any_of(
+                targets, [](const auto& target) {
+                    return target.visible && target.bus == OutputBus::media_windows;
+                });
+            if (content_required && !content_source.has_value()) {
+                return false;
+            }
+            const auto current_generation = content_source_.has_value()
+                                                ? content_source_->generation()
+                                                : 0U;
+            const auto next_generation = content_source.has_value()
+                                             ? content_source->generation()
+                                             : 0U;
+            if (targets_ == targets && current_generation == next_generation) {
                 return !desired_enabled_ || worker_running_.load() || targets_.empty();
             }
             stop_locked();
             targets_ = targets;
+            content_source_ = std::move(content_source);
             return !desired_enabled_ || targets_.empty() || start_locked();
         } catch (...) {
             return false;
@@ -352,6 +368,7 @@ class NativeWindowOutputController::Impl final {
             desired_enabled_ = false;
             stop_locked();
             targets_.clear();
+            content_source_.reset();
         } catch (...) {
         }
     }
@@ -369,9 +386,13 @@ class NativeWindowOutputController::Impl final {
         }
         std::promise<bool> started;
         auto started_future = started.get_future();
+        auto* content_runtime = content_source_.has_value()
+                                    ? &content_source_->runtime()
+                                    : nullptr;
         worker_ =
-            std::jthread([renderer = renderer_, targets = targets_, started = std::move(started),
-                          running = &worker_running_](const std::stop_token stop_token) mutable {
+            std::jthread([renderer = renderer_, targets = targets_, content_runtime,
+                          started = std::move(started), running = &worker_running_](
+                             const std::stop_token stop_token) mutable {
                 std::vector<std::unique_ptr<NativeTargetPipeline>> pipelines;
                 const auto rebuild_pipelines = [&targets, &pipelines] {
                     std::vector<std::unique_ptr<NativeTargetPipeline>> next;
@@ -416,10 +437,10 @@ class NativeWindowOutputController::Impl final {
                         continue;
                     }
                     std::array<std::shared_ptr<const SourceFrame>, 2U> frames{};
-                    for (std::size_t index = 0U; index < frames.size(); ++index) {
-                        const auto bus = static_cast<OutputBus>(index);
-                        frames[index] = renderer->latest_frame(bus);
-                    }
+                    frames[static_cast<std::size_t>(OutputBus::media_windows)] =
+                        content_runtime == nullptr ? nullptr : content_runtime->latest_frame();
+                    frames[static_cast<std::size_t>(OutputBus::virtual_camera)] =
+                        renderer->latest_frame(OutputBus::virtual_camera);
                     for (std::size_t index = 0U; index < frames.size(); ++index) {
                         const auto& frame = frames[index];
                         if (frame == nullptr || frame->sequence <= last_sequences[index]) {
@@ -437,7 +458,31 @@ class NativeWindowOutputController::Impl final {
                         recover_pipelines();
                         continue;
                     }
-                    std::this_thread::sleep_for(2ms);
+                    const auto has_content_target = std::ranges::any_of(
+                        pipelines, [](const auto& pipeline) {
+                            return pipeline->bus() == OutputBus::media_windows;
+                        });
+                    const auto has_program_target = std::ranges::any_of(
+                        pipelines, [](const auto& pipeline) {
+                            return pipeline->bus() == OutputBus::virtual_camera;
+                        });
+                    const auto mixed_routes = has_content_target && has_program_target;
+                    const auto deadline = std::chrono::steady_clock::now() +
+                                          (mixed_routes ? 16ms : 100ms);
+                    if (has_content_target && content_runtime != nullptr) {
+                        static_cast<void>(content_runtime->wait_for_frame(
+                            last_sequences[static_cast<std::size_t>(
+                                OutputBus::media_windows)],
+                            stop_token, deadline));
+                    } else if (has_program_target) {
+                        static_cast<void>(renderer->wait_for_frame(
+                            OutputBus::virtual_camera,
+                            last_sequences[static_cast<std::size_t>(
+                                OutputBus::virtual_camera)],
+                            stop_token, deadline));
+                    } else {
+                        std::this_thread::sleep_until(deadline);
+                    }
                 }
                 running->store(false);
             });
@@ -462,6 +507,7 @@ class NativeWindowOutputController::Impl final {
     std::shared_ptr<SceneRenderer> renderer_{};
     std::mutex mutex_{};
     std::vector<OutputWindowConfiguration> targets_{};
+    std::optional<SourceLease> content_source_{};
     bool desired_enabled_{false};
     std::atomic_bool worker_running_{false};
     std::jthread worker_{};
@@ -473,8 +519,9 @@ NativeWindowOutputController::NativeWindowOutputController(std::shared_ptr<Scene
 NativeWindowOutputController::~NativeWindowOutputController() = default;
 
 bool NativeWindowOutputController::configure(
-    const std::vector<OutputWindowConfiguration>& targets) noexcept {
-    return impl_->configure(targets);
+    const std::vector<OutputWindowConfiguration>& targets,
+    std::optional<SourceLease> content_source) noexcept {
+    return impl_->configure(targets, std::move(content_source));
 }
 
 bool NativeWindowOutputController::set_enabled(const bool enabled) noexcept {

@@ -7,6 +7,7 @@
 #include "solin/media_engine/scene_snapshot.hpp"
 #include "solin/media_engine/virtual_camera_output.hpp"
 
+#include <algorithm>
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
@@ -174,6 +175,26 @@ active_source_health(const solin::media_engine::SceneGraphRuntime* graph) {
     return event;
 }
 
+[[nodiscard]] bool configure_native_window_targets(
+    solin::media_engine::SceneGraphRuntime& graph,
+    solin::media_engine::NativeWindowOutputController& output,
+    const std::vector<solin::media_engine::OutputWindowConfiguration>& targets,
+    const std::uint64_t sequence) {
+    std::optional<solin::media_engine::SourceLease> content_source;
+    const auto content_required = std::ranges::any_of(
+        targets, [](const auto& target) {
+            return target.visible &&
+                   target.bus == solin::media_engine::OutputBus::media_windows;
+        });
+    if (content_required) {
+        content_source.emplace(graph.acquire_source(
+            solin::media_engine::kSolinContentSourceId,
+            "native-window-output-" + std::to_string(sequence)));
+    }
+    return output.configure(targets, std::move(content_source)) &&
+           output.set_enabled(!targets.empty());
+}
+
 nlohmann::json
 hydrate_scene_graph(solin::media_engine::SceneGraphRuntime* graph,
                     solin::media_engine::FrameChannelOutputController* preview_output,
@@ -208,8 +229,8 @@ hydrate_scene_graph(solin::media_engine::SceneGraphRuntime* graph,
                                 "The Program frame output could not be started");
         }
         if (native_window_output != nullptr &&
-            (!native_window_output->configure(snapshot.window_targets) ||
-             !native_window_output->set_enabled(!snapshot.window_targets.empty()))) {
+            !configure_native_window_targets(*graph, *native_window_output,
+                                             snapshot.window_targets, sequence)) {
             return rejected_ack("native_window_output_failed",
                                 "The native window output could not be started");
         }
@@ -476,6 +497,32 @@ int run_protocol() {
                         return applied_ack();
                     } catch (const solin::media_engine::SceneGraphError& error) {
                         return rejected_ack(error.error_code(), error.what());
+                    }
+                },
+            .set_window_targets =
+                [&scene_graph, &native_window_output](
+                    const nlohmann::json& raw_targets,
+                    const std::uint64_t document_revision,
+                    const std::uint64_t sequence) {
+                    static_cast<void>(document_revision);
+                    if (scene_graph == nullptr || native_window_output == nullptr) {
+                        return rejected_ack("media_graph_unavailable",
+                                            "The native media graph is not enabled");
+                    }
+                    try {
+                        const auto targets =
+                            solin::media_engine::parse_output_window_targets(raw_targets);
+                        if (!configure_native_window_targets(
+                                *scene_graph, *native_window_output, targets, sequence)) {
+                            return rejected_ack("native_window_output_failed",
+                                                "The native window output could not be updated");
+                        }
+                        return applied_ack();
+                    } catch (const solin::media_engine::SceneGraphError& error) {
+                        return rejected_ack(error.error_code(), error.what());
+                    } catch (const std::runtime_error&) {
+                        return rejected_ack("invalid_window_targets",
+                                            "The native window targets were rejected");
                     }
                 },
         },

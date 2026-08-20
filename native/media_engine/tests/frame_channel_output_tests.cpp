@@ -4,6 +4,7 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -100,6 +101,25 @@ class AdvancingRenderer final : public solin::media_engine::SceneRenderer {
         }
     }
 
+    [[nodiscard]] bool wait_for_frame(
+        const solin::media_engine::OutputBus bus, std::uint64_t,
+        const std::stop_token stop_token,
+        const std::chrono::steady_clock::time_point deadline) const noexcept override {
+        if (bus != bus_) {
+            return false;
+        }
+        const auto cadence_deadline =
+            std::chrono::steady_clock::now() + std::chrono::milliseconds{8};
+        const auto effective_deadline =
+            deadline < cadence_deadline ? deadline : cadence_deadline;
+        std::mutex mutex;
+        std::condition_variable_any wakeup;
+        std::unique_lock lock{mutex};
+        static_cast<void>(wakeup.wait_until(
+            lock, stop_token, effective_deadline, [] { return false; }));
+        return !stop_token.stop_requested();
+    }
+
     void shutdown() noexcept override {}
 
   private:
@@ -138,7 +158,7 @@ class TestFrameChannel final {
   public:
     TestFrameChannel() {
         constexpr std::size_t header_size = 128U;
-        constexpr std::size_t slot_header_size = 64U;
+        constexpr std::size_t slot_header_size = 128U;
         constexpr std::size_t frame_bytes = 16U;
         constexpr std::size_t slot_size = slot_header_size + frame_bytes;
         constexpr std::size_t mapping_size = header_size + 3U * slot_size;
@@ -158,9 +178,12 @@ class TestFrameChannel final {
                                       mapping_name_.c_str());
         const auto mutex_name = L"Local\\SolinFrameMutex." + mapping_name_;
         mutex_ = CreateMutexW(nullptr, FALSE, mutex_name.c_str());
+        const auto event_name = L"Local\\SolinFrameEvent." + mapping_name_;
+        event_ = CreateEventW(nullptr, FALSE, FALSE, event_name.c_str());
         view_ = static_cast<std::uint8_t*>(MapViewOfFile(
             mapping_, FILE_MAP_ALL_ACCESS, 0U, 0U, mapping_size));
-        if (mapping_ == nullptr || mutex_ == nullptr || view_ == nullptr) {
+        if (mapping_ == nullptr || mutex_ == nullptr || event_ == nullptr ||
+            view_ == nullptr) {
             close();
             throw std::runtime_error("test_frame_channel_unavailable");
         }
@@ -168,7 +191,7 @@ class TestFrameChannel final {
         constexpr std::array<std::uint8_t, 8U> magic{'S', 'L', 'N', 'F',
                                                      'R', 'M', '0', '1'};
         std::memcpy(view_, magic.data(), magic.size());
-        write_value<std::uint16_t>(view_, 8U, 3U);
+        write_value<std::uint16_t>(view_, 8U, 4U);
         write_value<std::uint16_t>(view_, 10U,
                                    static_cast<std::uint16_t>(header_size));
         write_value<std::uint32_t>(view_, 12U, 3U);
@@ -222,6 +245,10 @@ class TestFrameChannel final {
             static_cast<void>(CloseHandle(mutex_));
             mutex_ = nullptr;
         }
+        if (event_ != nullptr) {
+            static_cast<void>(CloseHandle(event_));
+            event_ = nullptr;
+        }
         if (mapping_ != nullptr) {
             static_cast<void>(CloseHandle(mapping_));
             mapping_ = nullptr;
@@ -231,6 +258,7 @@ class TestFrameChannel final {
     std::string mapping_token_{};
     HANDLE mapping_{nullptr};
     HANDLE mutex_{nullptr};
+    HANDLE event_{nullptr};
     std::uint8_t* view_{nullptr};
 };
 

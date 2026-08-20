@@ -154,8 +154,8 @@ void test_direct_nv12_copy_honors_source_strides() {
     }
     DirectShowFrameAdapter adapter{profile};
     std::vector<std::uint8_t> output(profile.sample_size());
-    expect(adapter.adapt(fixture.view(), output),
-           "a padded NV12 producer frame is accepted");
+    expect(adapter.write_direct_nv12(fixture.view(), output),
+            "an exact padded NV12 producer frame writes directly");
     bool rows_match = true;
     for (std::uint32_t row = 0U; row < profile.height; ++row) {
         rows_match = rows_match &&
@@ -169,6 +169,14 @@ void test_direct_nv12_copy_honors_source_strides() {
                                     static_cast<std::ptrdiff_t>(row) * stride);
     }
     expect(rows_match, "direct NV12 copy strips source row padding");
+
+    fixture.width -= 2U;
+    expect(!adapter.write_direct_nv12(fixture.view(), output),
+           "the direct path rejects frames that require scaling");
+    DirectShowFrameAdapter yuy2_adapter{kMediaProfiles[6U]};
+    fixture.width = profile.width;
+    expect(!yuy2_adapter.write_direct_nv12(fixture.view(), output),
+           "the direct path rejects profiles that require conversion");
 }
 
 void test_scaling_preserves_aspect_and_uses_limited_black() {

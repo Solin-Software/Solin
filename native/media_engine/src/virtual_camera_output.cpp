@@ -1,6 +1,5 @@
 #include "solin/media_engine/virtual_camera_output.hpp"
 
-#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <memory>
@@ -32,17 +31,7 @@ namespace {
     };
 }
 
-[[nodiscard]] std::chrono::microseconds pump_interval(
-    const OutputVideoFormat& format) noexcept {
-    if (format.fps_numerator == 0U || format.fps_denominator == 0U) {
-        return std::chrono::milliseconds{4};
-    }
-    const auto frame_duration_us =
-        1'000'000ULL * format.fps_denominator / format.fps_numerator;
-    const auto interval_us =
-        std::clamp<std::uint64_t>(frame_duration_us / 4U, 1'000U, 4'000U);
-    return std::chrono::microseconds{interval_us};
-}
+constexpr auto kHeartbeatInterval = std::chrono::milliseconds{500};
 
 } // namespace
 
@@ -158,22 +147,32 @@ class VirtualCameraOutputController::Impl final {
         }
         std::shared_ptr<VirtualCameraSink> next_sink{std::move(unique_sink)};
         next_sink->start();
-        const auto interval = pump_interval(configuration_->video_format);
         pump_ = std::jthread(
-            [renderer = renderer_, sink = next_sink,
-             interval](const std::stop_token stop_token) {
+            [renderer = renderer_, sink = next_sink](
+                const std::stop_token stop_token) {
                 std::uint64_t last_sequence = 0U;
+                auto next_heartbeat =
+                    std::chrono::steady_clock::now() + kHeartbeatInterval;
                 while (!stop_token.stop_requested()) {
+                    bool published = false;
                     if (auto sequence = renderer->visit_latest_frame(
                             OutputBus::virtual_camera, last_sequence,
-                            [&sink](const VideoFrameView& frame) {
-                                static_cast<void>(sink->publish(frame));
+                            [&sink, &published](const VideoFrameView& frame) {
+                                published = sink->publish(frame);
                             });
                         sequence.has_value()) {
                         last_sequence = sequence.value();
                     }
-                    sink->heartbeat();
-                    std::this_thread::sleep_for(interval);
+                    const auto now = std::chrono::steady_clock::now();
+                    if (published) {
+                        next_heartbeat = now + kHeartbeatInterval;
+                    } else if (now >= next_heartbeat) {
+                        sink->heartbeat();
+                        next_heartbeat = now + kHeartbeatInterval;
+                    }
+                    static_cast<void>(renderer->wait_for_frame(
+                        OutputBus::virtual_camera, last_sequence, stop_token,
+                        next_heartbeat));
                 }
             });
         sink_ = std::move(next_sink);

@@ -224,21 +224,11 @@ class VideoDisplayWidget(QWidget):
       • Receives QImage via set_image() — stored and painted the same way.
       • Keeps a QPixmap copy for faster subsequent paints (no CPU re-scale).
 
-    Smoothstep transitions:
-      • Every new image/video start is faded in using a smoothstep curve
-        driven by a QTimer at 60 fps for a polished cinematic feel.
-
     Zoom/pan transform (images only):
       • set_image_transform(zoom, norm_x, norm_y) applies an offset on top
         of the centred fit-to-widget base rect.
       • Uses a time-based premium easing curve so projector motion stays smooth.
     """
-
-    # ── Smoothstep helper ─────────────────────────────────────────────────
-    @staticmethod
-    def _smoothstep(t: float) -> float:
-        t = max(0.0, min(1.0, t))
-        return t * t * (3.0 - 2.0 * t)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -257,12 +247,6 @@ class VideoDisplayWidget(QWidget):
         self._cached_widget_size: QSize = QSize()
         self._cached_src_size: QSize = QSize()
         self._cached_dst_rect: QRectF = QRectF()
-
-        # ── Smoothstep fade-in state ──────────────────────────────────────
-        self._fade_t: float = 1.0        # 0.0 → 1.0 progress
-        self._fade_timer = QTimer(self)
-        self._fade_timer.setInterval(16)  # ~60 fps
-        self._fade_timer.timeout.connect(self._on_fade_tick)
 
         # ── Zoom/pan transform (images only) ─────────────────────────────
         self._image_transform = ProjectionTransformAnimation()
@@ -289,7 +273,6 @@ class VideoDisplayWidget(QWidget):
         initial_transform: ImageTransform | None = None,
     ) -> None:
         """Display a static QImage (replaces any active video)."""
-        coming_from_black = (self._mode == "black")
         self._video_frame = None
         self._video_image = None
         self._static_image = image
@@ -302,12 +285,6 @@ class VideoDisplayWidget(QWidget):
             transform.norm_y,
             animate=False,
         )
-        # Only trigger smoothstep fade-in on the very first frame (from black).
-        # Live-tab projections can update very frequently — restarting the fade every
-        # call would keep _fade_t perpetually near 0 and the screen stays black.
-        if coming_from_black:
-            self._fade_t = 0.0
-            self._fade_timer.start()
         self._paint_pending = True
         self.update()
 
@@ -317,8 +294,6 @@ class VideoDisplayWidget(QWidget):
         self._video_image = None
         self._static_image = None
         self._mode = "black"
-        self._fade_timer.stop()
-        self._fade_t = 1.0
         # Reset transform without animation
         self._image_transform.reset()
         self._transform_timer.stop()
@@ -355,17 +330,6 @@ class VideoDisplayWidget(QWidget):
         """
         self._image_transform.reset()
         self._transform_timer.stop()
-
-    # ── Fade-in tick ─────────────────────────────────────────────────────
-
-    def _on_fade_tick(self):
-        self._fade_t += 0.045   # ~22 frames for full fade ≈ 360 ms
-        if self._fade_t >= 1.0:
-            self._fade_t = 1.0
-            self._fade_timer.stop()
-        if not self._paint_pending:
-            self._paint_pending = True
-            self.update()
 
     # ── Transform animation tick ──────────────────────────────────────────
 
@@ -431,11 +395,6 @@ class VideoDisplayWidget(QWidget):
             painter.end()
             return
 
-        # ── Apply smoothstep opacity for fade-in ─────────────────────────
-        opacity = self._smoothstep(self._fade_t)
-        if opacity < 1.0:
-            painter.setOpacity(opacity)
-
         # ── Base fit-to-widget rect ───────────────────────────────────────
         base = self._ensure_dst_rect(img_to_draw.width(), img_to_draw.height())
 
@@ -474,8 +433,9 @@ class BaseProjectionView(QWidget):
 
     This base owns the 4-page ``QStackedWidget`` and **all** content
     behaviour — media/video, circular timer, yearly text and custom idle
-    media — together with the fade animations that transition
-    between them.  Subclasses are responsible only for *window-level* chrome
+    media. Media changes are deliberately immediate until the native GPU
+    transition owns them; timer and idle-page animations remain local here.
+    Subclasses are responsible only for *window-level* chrome
     (fullscreen placement vs. resizable 16:9 floating frame) and must call
     :meth:`_build_projection_stack` exactly once from their ``__init__``.
 
@@ -494,7 +454,7 @@ class BaseProjectionView(QWidget):
     _PAGE_YEARLY     = 2
     _PAGE_IDLE_MEDIA = 3
 
-    _MEDIA_FADE_DURATION_MS = 200
+    _YEARLY_TIMER_EXIT_FADE_DURATION_MS = 200
     _YEARLY_FADE_IN_DURATION_MS = 500
 
     def _build_projection_stack(self, layout) -> None:
@@ -519,15 +479,6 @@ class BaseProjectionView(QWidget):
         media_layout.addWidget(self.display_label)
         media_layout.addWidget(self.native_video_surface)
         self._stack.addWidget(self._media_host)   # index 0
-
-        # Opacity / fade effect on the media label
-        self._media_opacity = QGraphicsOpacityEffect(self.display_label)
-        self._media_opacity.setOpacity(1.0)
-        self.display_label.setGraphicsEffect(self._media_opacity)
-        self._media_anim = QPropertyAnimation(self._media_opacity, b"opacity")
-        self._media_anim.setDuration(self._MEDIA_FADE_DURATION_MS)
-        self._media_anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
-        self._media_fade_out_connected = False
 
         # Page 1 — live circular timer
         self._proj_timer = CircularTimerWidget()
@@ -678,7 +629,6 @@ class BaseProjectionView(QWidget):
             self.display_label.clear()
             self._stop_all_anims()
             self._is_showing_media = True
-            self._media_opacity.setOpacity(1.0)
             self._stack.setCurrentIndex(self._PAGE_MEDIA)
             self.native_video_surface.raise_()
 
@@ -700,11 +650,7 @@ class BaseProjectionView(QWidget):
         if not self._is_showing_media:
             self._stop_all_anims()
             self._is_showing_media = True
-            self._media_opacity.setOpacity(0.0)
             self._stack.setCurrentIndex(self._PAGE_MEDIA)
-            self._media_anim.setStartValue(0.0)
-            self._media_anim.setEndValue(1.0)
-            self._media_anim.start()
 
     def show_image_from_url_data(
         self,
@@ -758,13 +704,7 @@ class BaseProjectionView(QWidget):
         if not self._is_showing_media:
             self._stop_all_anims()
             self._is_showing_media = True
-            # Use smoothstep easing curve for the overlay opacity animation
-            self._media_anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
-            self._media_opacity.setOpacity(0.0)
             self._stack.setCurrentIndex(self._PAGE_MEDIA)
-            self._media_anim.setStartValue(0.0)
-            self._media_anim.setEndValue(1.0)
-            self._media_anim.start()
         else:
             self._stack.setCurrentIndex(self._PAGE_MEDIA)
 
@@ -785,8 +725,7 @@ class BaseProjectionView(QWidget):
     # ── Idle / clear transitions ──────────────────────────────────────────
 
     def clear(self) -> None:
-        """Return to idle screen: fade out media (if active), then fade in the
-        active idle page (custom media page 3 if set, else yeartext page 2)."""
+        """Return media to the active idle page without a CPU composited fade."""
         # Immediately stop accepting video frames — this is the earliest possible
         # point to cut off the pipeline, before any async frames already queued
         # in the Qt event loop can reach update_frame().
@@ -804,7 +743,7 @@ class BaseProjectionView(QWidget):
             self._start_yearly_fade(
                 start=self._yearly_opacity.opacity(),
                 end=0.0,
-                duration_ms=self._MEDIA_FADE_DURATION_MS,
+                duration_ms=self._YEARLY_TIMER_EXIT_FADE_DURATION_MS,
             )
             return
 
@@ -821,13 +760,9 @@ class BaseProjectionView(QWidget):
         self._current_pixmap = None
 
         if self._is_showing_media:
-            # Fade out media label
             self._is_showing_media = False
-            self._media_anim.setStartValue(self._media_opacity.opacity())
-            self._media_anim.setEndValue(0.0)
-            self._media_anim.finished.connect(self._on_media_fade_out_done)
-            self._media_fade_out_connected = True
-            self._media_anim.start()
+            self.display_label.clear()
+            self._switch_to_idle_immediately()
         else:
             # Coming from timer — switch to idle with fade-in
             self._switch_to_idle_with_fade()
@@ -852,15 +787,6 @@ class BaseProjectionView(QWidget):
         self._clear_timer_presentation()
         self._switch_to_idle_with_fade()
 
-    def _on_media_fade_out_done(self) -> None:
-        """Media faded out — now switch to the idle page and fade it in."""
-        if self._media_fade_out_connected:
-            self._media_anim.finished.disconnect(self._on_media_fade_out_done)
-            self._media_fade_out_connected = False
-        self.display_label.clear()   # VideoDisplayWidget.clear() → go black
-        self._media_opacity.setOpacity(1.0)
-        self._switch_to_idle_with_fade()
-
     def _switch_to_idle_with_fade(self) -> None:
         """Switch to the idle screen (custom media page 3 if set, else yeartext page 2)."""
         if self._has_idle_media:
@@ -878,18 +804,22 @@ class BaseProjectionView(QWidget):
                 duration_ms=self._YEARLY_FADE_IN_DURATION_MS,
             )
 
+    def _switch_to_idle_immediately(self) -> None:
+        if self._has_idle_media:
+            self._idle_media_opacity.setOpacity(1.0)
+            self._stack.setCurrentIndex(self._PAGE_IDLE_MEDIA)
+        else:
+            self._yearly_opacity.setOpacity(1.0)
+            self._stack.setCurrentIndex(self._PAGE_YEARLY)
+
     def _stop_all_anims(self) -> None:
         """Stop all animations and disconnect callbacks safely."""
         for anim in (
-            self._media_anim,
             self._yearly_anim,
             self._timer_anim,
             self._idle_media_anim,
         ):
             anim.stop()
-        if self._media_fade_out_connected:
-            self._media_anim.finished.disconnect(self._on_media_fade_out_done)
-            self._media_fade_out_connected = False
 
     # ── Custom idle media API ─────────────────────────────────────────────
 

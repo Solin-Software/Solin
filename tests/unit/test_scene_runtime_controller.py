@@ -157,6 +157,9 @@ class _Engine:
         self.takes: list[tuple[str, ScenePreparation]] = []
         self.outputs: list[tuple[str, BusId, bool]] = []
         self.renders: list[tuple[str, BusId, bool]] = []
+        self.window_target_updates: list[
+            tuple[str, tuple[OutputWindowTarget, ...]]
+        ] = []
         self.preview_geometries = []
         self.cancelled: list[str] = []
         self.stopped = False
@@ -334,6 +337,19 @@ class _Engine:
     ) -> Future[SceneEngineAck]:
         assert deadline_ms > 0
         self.renders.append((request_id, bus_id, enabled))
+        revision = self.snapshots[-1][1].document.revision
+        return _completed(self._ack(request_id, sequence, revision))
+
+    def set_window_targets(
+        self,
+        targets: tuple[OutputWindowTarget, ...],
+        *,
+        request_id: str,
+        sequence: int,
+        deadline_ms: int,
+    ) -> Future[SceneEngineAck]:
+        assert deadline_ms > 0
+        self.window_target_updates.append((request_id, targets))
         revision = self.snapshots[-1][1].document.revision
         return _completed(self._ack(request_id, sequence, revision))
 
@@ -1017,6 +1033,7 @@ def test_auto_switch_resolves_transition_for_each_destination_scene() -> None:
             "take-content-preview",
             "prepare-content-program",
             "take-content-program",
+            "attach-window",
             "prepare-default-preview",
             "take-default-preview",
             "prepare-default-program",
@@ -1030,6 +1047,18 @@ def test_auto_switch_resolves_transition_for_each_destination_scene() -> None:
     controller.start_engine()
 
     projection.set_type("image")
+    target = OutputWindowTarget(
+        bus_id=BusId.MEDIA_WINDOWS,
+        target_id="automatic-media-window",
+        screen_id="primary",
+        native_handle=123,
+        x=0,
+        y=0,
+        width=1280,
+        height=720,
+        device_pixel_ratio=1.0,
+    )
+    controller.set_window_targets((target,))
     projection.set_type("idle")
 
     program_transitions = [
@@ -1046,7 +1075,14 @@ def test_auto_switch_resolves_transition_for_each_destination_scene() -> None:
         (CONTENT_SCENE_ID, TransitionSpec(TransitionKind.FADE_TO_BLACK, 700)),
         (CAMERA_SCENE_ID, TransitionSpec(TransitionKind.DISSOLVE, 350)),
     ]
-    assert preview_transitions == [TransitionSpec(TransitionKind.CUT, 0)] * 2
+    # Raw media windows consume the content source directly. They do not pin
+    # or otherwise mutate the editor Preview scene route.
+    assert preview_transitions == [
+        TransitionSpec(TransitionKind.CUT, 0),
+        TransitionSpec(TransitionKind.CUT, 0),
+    ]
+    assert len(engine.snapshots) == 1
+    assert [targets for _request_id, targets in engine.window_target_updates] == [(target,)]
     controller.close()
 
 
@@ -1188,12 +1224,16 @@ def test_editor_preview_remains_independent_while_program_is_mirrored() -> None:
     controller.close()
 
 
-def test_native_window_target_uses_the_media_scene_and_is_hydrated_atomically() -> None:
+def test_native_window_target_updates_without_rehydrating_the_scene_graph() -> None:
     engine = _Engine()
     _documents, _runtime, controller = _runtime_controller(
         engine,
         _Projection(),
-        request_ids=("initial-hydrate", "window-hydrate", "clear-hydrate"),
+        request_ids=(
+            "initial-hydrate",
+            "attach-window",
+            "clear-window",
+        ),
     )
     target = OutputWindowTarget(
         bus_id=BusId.MEDIA_WINDOWS,
@@ -1208,29 +1248,28 @@ def test_native_window_target_uses_the_media_scene_and_is_hydrated_atomically() 
     )
     controller.start_engine()
 
-    controller.set_window_targets((target,), scene_id=CONTENT_SCENE_ID)
+    controller.set_window_targets((target,))
 
-    snapshot = engine.snapshots[-1][1]
-    assert snapshot.window_targets == (target,)
-    assert controller.desired_scene(BusId.MEDIA_WINDOWS) == CONTENT_SCENE_ID
-    assert dict(snapshot.render_enabled)[BusId.MEDIA_WINDOWS]
-    assert not dict(snapshot.output_enabled)[BusId.MEDIA_WINDOWS]
+    assert len(engine.snapshots) == 1
+    assert engine.window_target_updates[-1] == ("attach-window", (target,))
+    assert controller.desired_scene(BusId.MEDIA_WINDOWS) == CAMERA_SCENE_ID
+    assert not engine.renders
 
     controller.set_window_targets(())
 
-    snapshot = engine.snapshots[-1][1]
-    assert snapshot.window_targets == ()
+    assert len(engine.snapshots) == 1
+    assert engine.window_target_updates[-1] == ("clear-window", ())
     assert controller.desired_scene(BusId.MEDIA_WINDOWS) == CAMERA_SCENE_ID
-    assert not dict(snapshot.render_enabled)[BusId.MEDIA_WINDOWS]
+    assert not engine.renders
     controller.close()
 
 
-def test_native_window_target_requires_an_explicit_valid_scene() -> None:
+def test_raw_native_window_target_is_independent_from_authored_scenes() -> None:
     engine = _Engine()
     _documents, _runtime, controller = _runtime_controller(
         engine,
         _Projection(),
-        request_ids=(),
+        request_ids=("initial-hydrate", "attach-window"),
     )
     target = OutputWindowTarget(
         bus_id=BusId.MEDIA_WINDOWS,
@@ -1244,11 +1283,11 @@ def test_native_window_target_requires_an_explicit_valid_scene() -> None:
         device_pixel_ratio=1.0,
     )
 
-    with pytest.raises(ValueError, match="require a scene"):
-        controller.set_window_targets((target,))
-    with pytest.raises(ValueError, match="requires a preview target"):
-        controller.set_window_targets((), scene_id=CONTENT_SCENE_ID)
+    controller.start_engine()
+    controller.set_window_targets((target,))
 
+    assert engine.window_target_updates == [("attach-window", (target,))]
+    assert controller.desired_scene(BusId.MEDIA_WINDOWS) == CAMERA_SCENE_ID
     controller.close()
 
 
@@ -1257,7 +1296,7 @@ def test_program_window_target_uses_program_without_an_editor_scene() -> None:
     _documents, _runtime, controller = _runtime_controller(
         engine,
         _Projection(),
-        request_ids=("initial-hydrate", "program-window-hydrate"),
+        request_ids=("initial-hydrate", "program-render", "program-window"),
     )
     target = OutputWindowTarget(
         bus_id=BusId.VIRTUAL_CAMERA,
@@ -1274,23 +1313,21 @@ def test_program_window_target_uses_program_without_an_editor_scene() -> None:
 
     controller.set_window_targets((target,))
 
-    snapshot = engine.snapshots[-1][1]
-    assert snapshot.window_targets == (target,)
-    assert dict(snapshot.render_enabled)[BusId.VIRTUAL_CAMERA]
+    assert len(engine.snapshots) == 1
+    assert engine.window_target_updates == [("program-window", (target,))]
+    assert engine.renders[-1] == ("program-render", BusId.VIRTUAL_CAMERA, True)
     assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
     controller.close()
 
 
-def test_native_window_scene_change_uses_prepare_take_without_rehydration() -> None:
+def test_duplicate_native_window_target_update_is_a_noop() -> None:
     engine = _Engine()
     _documents, _runtime, controller = _runtime_controller(
         engine,
         _Projection(),
         request_ids=(
             "initial-hydrate",
-            "window-hydrate",
-            "retarget-prepare",
-            "retarget-take",
+            "attach-window",
         ),
     )
     target = OutputWindowTarget(
@@ -1305,15 +1342,14 @@ def test_native_window_scene_change_uses_prepare_take_without_rehydration() -> N
         device_pixel_ratio=1.0,
     )
     controller.start_engine()
-    controller.set_window_targets((target,), scene_id=CONTENT_SCENE_ID)
+    controller.set_window_targets((target,))
     snapshot_count = len(engine.snapshots)
+    update_count = len(engine.window_target_updates)
 
-    controller.set_window_targets((target,), scene_id=CAMERA_SCENE_ID)
+    controller.set_window_targets((target,))
 
     assert len(engine.snapshots) == snapshot_count
-    assert engine.preparations[-1][1:3] == (BusId.MEDIA_WINDOWS, CAMERA_SCENE_ID)
-    assert engine.takes[-1][1].scene_id == CAMERA_SCENE_ID
-    assert controller.applied_scene(BusId.MEDIA_WINDOWS) == CAMERA_SCENE_ID
+    assert len(engine.window_target_updates) == update_count
     controller.close()
 
 

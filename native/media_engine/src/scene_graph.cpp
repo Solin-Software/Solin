@@ -803,4 +803,17 @@ std::vector<SourceRegistryEntry> SceneGraphRuntime::source_health_entries() cons
     return impl_->registry.entries();
 }
 
+SourceLease SceneGraphRuntime::acquire_source(const std::string_view source_id,
+                                              const std::string_view consumer_id) {
+    std::scoped_lock lock{impl_->mutex};
+    if (impl_->closed || impl_->document == nullptr) {
+        throw SceneGraphError{"media_graph_stopped", "The scene graph is stopped"};
+    }
+    try {
+        return impl_->registry.acquire(source_id, consumer_id);
+    } catch (const std::exception& error) {
+        map_source_failure(error);
+    }
+}
+
 } // namespace solin::media_engine

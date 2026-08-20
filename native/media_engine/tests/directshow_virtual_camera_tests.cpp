@@ -544,7 +544,7 @@ int wmain(const int argument_count, wchar_t** arguments) {
         live_publisher;
     try {
         const auto live_layout = solin::media_engine::packed_video_frame_layout(
-            4U, 2U, solin::media_engine::VideoFramePixelFormat::nv12);
+            640U, 360U, solin::media_engine::VideoFramePixelFormat::nv12);
         live_publisher =
             solin::media_engine::make_cross_process_shared_video_frame_publisher(
                 {.generation = 77U, .layout = live_layout});
@@ -673,7 +673,7 @@ int wmain(const int argument_count, wchar_t** arguments) {
         std::vector<CapturedSample> samples;
         if (SUCCEEDED(result)) {
             samples = capture_renderer->wait_for_samples(
-                6U, std::chrono::milliseconds{1500});
+                55U, std::chrono::milliseconds{3000});
             result = control.get()->Stop();
         }
         const auto capture_elapsed = std::chrono::steady_clock::now() -
@@ -681,10 +681,10 @@ int wmain(const int argument_count, wchar_t** arguments) {
         if (SUCCEEDED(result)) {
             const auto expected_size =
                 static_cast<LONG>(expected_profiles[2].sample_size);
-            if (samples.size() < 6U || samples[0].length != expected_size ||
+            if (samples.size() < 55U || samples[0].length != expected_size ||
                 !samples[0].sync_point || !samples[0].discontinuity ||
                 samples[0].start != 0 ||
-                capture_elapsed < std::chrono::milliseconds{150}) {
+                capture_elapsed < std::chrono::milliseconds{1800}) {
                 result = E_FAIL;
             }
             for (std::size_t index = 1U;
@@ -708,9 +708,26 @@ int wmain(const int argument_count, wchar_t** arguments) {
                  !samples[live_index].discontinuity)) {
                 result = E_FAIL;
             }
+            auto standby_index = samples.size();
             for (std::size_t index = live_index + 1U;
-                 SUCCEEDED(result) && index < samples.size(); ++index) {
+                 index < samples.size(); ++index) {
+                if (samples[index].checksum == samples[0].checksum) {
+                    standby_index = index;
+                    break;
+                }
                 if (samples[index].checksum != samples[live_index].checksum) {
+                    result = E_FAIL;
+                    break;
+                }
+            }
+            if (SUCCEEDED(result) &&
+                (standby_index == samples.size() ||
+                 !samples[standby_index].discontinuity)) {
+                result = E_FAIL;
+            }
+            for (std::size_t index = standby_index + 1U;
+                 SUCCEEDED(result) && index < samples.size(); ++index) {
+                if (samples[index].checksum != samples[0].checksum) {
                     result = E_FAIL;
                 }
             }

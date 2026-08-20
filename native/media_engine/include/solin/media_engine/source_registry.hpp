@@ -2,9 +2,11 @@
 
 #include "solin/media_engine/scene_snapshot.hpp"
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <stop_token>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -75,6 +77,14 @@ class SourceRuntime {
     [[nodiscard]] virtual SourceRuntimeHealth health() const = 0;
     [[nodiscard]] virtual std::shared_ptr<const SourceFrame> latest_frame() const {
         return {};
+    }
+    [[nodiscard]] virtual bool wait_for_frame(
+        std::uint64_t after_sequence, std::stop_token stop_token,
+        std::chrono::steady_clock::time_point deadline) const noexcept {
+        static_cast<void>(after_sequence);
+        static_cast<void>(stop_token);
+        static_cast<void>(deadline);
+        return false;
     }
 
   protected:

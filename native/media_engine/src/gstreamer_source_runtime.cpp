@@ -8,6 +8,7 @@
 #include <condition_variable>
 #include <cstdint>
 #include <exception>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <stdexcept>
@@ -22,9 +23,44 @@
 #include <gst/d3d11/gstd3d11.h>
 #include <gst/gst.h>
 #include <gst/video/video-info.h>
+#include <gst/video/gstvideometa.h>
 #endif
 
 namespace solin::media_engine {
+
+std::uint64_t GStreamerFrameSignal::revision() const noexcept {
+    return revision_.load(std::memory_order_acquire);
+}
+
+void GStreamerFrameSignal::notify() noexcept {
+    revision_.fetch_add(1U, std::memory_order_release);
+    wakeup_.notify_all();
+}
+
+std::uint64_t
+GStreamerFrameSignal::wait_after(const std::uint64_t revision) const noexcept {
+    try {
+        std::unique_lock lock{mutex_};
+        wakeup_.wait(lock, [this, revision] {
+            return revision_.load(std::memory_order_acquire) != revision;
+        });
+    } catch (...) {
+    }
+    return revision_.load(std::memory_order_acquire);
+}
+
+bool GStreamerFrameSignal::wait_after(
+    const std::uint64_t revision, const std::stop_token stop_token,
+    const std::chrono::steady_clock::time_point deadline) const noexcept {
+    try {
+        std::unique_lock lock{mutex_};
+        return wakeup_.wait_until(lock, stop_token, deadline, [this, revision] {
+            return revision_.load(std::memory_order_acquire) != revision;
+        });
+    } catch (...) {
+        return false;
+    }
+}
 
 #ifdef SOLIN_MEDIA_ENGINE_HAS_GSTREAMER
 namespace {
@@ -32,7 +68,6 @@ namespace {
 using namespace std::chrono_literals;
 
 constexpr auto kBusPollInterval = 100ms;
-constexpr auto kContentPollInterval = 4ms;
 constexpr auto kContentFrameInterval = 33'333'333ns;
 constexpr auto kInitialReconnectDelay = 250ms;
 constexpr auto kMaximumReconnectDelay = 4'000ms;
@@ -335,11 +370,16 @@ class GStreamerSourceRuntime final : public SourceRuntime {
     GStreamerSourceRuntime(SceneSource source, const std::uint64_t,
                            std::shared_ptr<void> runtime_lifetime,
                            std::shared_ptr<GStreamerD3d11DeviceManager> d3d11_manager,
+                           std::shared_ptr<GStreamerFrameSignal> frame_signal,
                            LocalCameraFormatResolver camera_format_resolver)
         : source_(std::move(source)), runtime_lifetime_(std::move(runtime_lifetime)),
           d3d11_manager_(std::move(d3d11_manager)), d3d11_device_(d3d11_manager_->acquire()),
           use_d3d11_(d3d11_device_ != nullptr),
+          frame_signal_(std::move(frame_signal)),
           camera_format_resolver_(std::move(camera_format_resolver)) {
+        if (frame_signal_ == nullptr) {
+            throw std::invalid_argument("GStreamer frame signal is required");
+        }
         if (source_.kind == SceneSourceKind::solin_content) {
             if (!source_.frame_channel.has_value()) {
                 throw std::runtime_error("content_ingress_unavailable");
@@ -394,6 +434,9 @@ class GStreamerSourceRuntime final : public SourceRuntime {
             lifecycle_ = RuntimeLifecycle::stopping;
         }
         stop_requested_.store(true);
+        if (frame_channel_reader_ != nullptr) {
+            frame_channel_reader_->wake();
+        }
         reconnect_wakeup_.notify_all();
         if (worker_.joinable()) {
             worker_.join();
@@ -404,6 +447,7 @@ class GStreamerSourceRuntime final : public SourceRuntime {
             health_.status = SourceRuntimeStatus::stopped;
             health_.error_code.clear();
         }
+        frame_signal_->notify();
         {
             std::scoped_lock lock{lifecycle_mutex_};
             lifecycle_ = RuntimeLifecycle::stopped;
@@ -419,6 +463,24 @@ class GStreamerSourceRuntime final : public SourceRuntime {
     [[nodiscard]] std::shared_ptr<const SourceFrame> latest_frame() const override {
         std::scoped_lock lock{state_mutex_};
         return latest_frame_;
+    }
+
+    [[nodiscard]] bool wait_for_frame(
+        const std::uint64_t after_sequence, const std::stop_token stop_token,
+        const std::chrono::steady_clock::time_point deadline) const noexcept override {
+        const auto ready = [this, after_sequence] {
+            const auto frame = latest_frame();
+            return frame != nullptr && frame->sequence > after_sequence;
+        };
+        if (ready()) {
+            return true;
+        }
+        const auto revision = frame_signal_->revision();
+        if (ready()) {
+            return true;
+        }
+        static_cast<void>(frame_signal_->wait_after(revision, stop_token, deadline));
+        return ready();
     }
 
   private:
@@ -591,83 +653,95 @@ class GStreamerSourceRuntime final : public SourceRuntime {
         if (content_appsrc_ == nullptr || frame_channel_reader_ == nullptr) {
             throw std::runtime_error("content_ingress_unavailable");
         }
-        auto frame = frame_channel_reader_->read_latest();
-        if (frame.has_value()) {
-            auto pixels = std::make_unique<std::vector<std::uint8_t>>(std::move(frame->bytes));
-            auto* replacement = gst_buffer_new_wrapped_full(
-                GST_MEMORY_FLAG_READONLY, pixels->data(), pixels->size(), 0U, pixels->size(),
-                pixels.get(),
-                [](gpointer value) { delete static_cast<std::vector<std::uint8_t>*>(value); });
-            if (replacement == nullptr) {
-                throw std::runtime_error("content ingress buffer allocation failed");
-            }
-            static_cast<void>(pixels.release());
-            if (content_frame_caps_ == nullptr || content_frame_width_ != frame->width ||
-                content_frame_height_ != frame->height ||
-                content_frame_pixel_format_ != frame->pixel_format) {
-                if (content_canonical_caps_filter_ == nullptr) {
-                    gst_buffer_unref(replacement);
-                    throw std::runtime_error("content canonical caps are unavailable");
-                }
-                const auto canonical_caps =
-                    exact_raw_caps(use_d3d11_, frame->width, frame->height);
-                if (canonical_caps == nullptr) {
-                    gst_buffer_unref(replacement);
-                    throw std::runtime_error("content canonical caps could not be created");
-                }
-                g_object_set(content_canonical_caps_filter_, "caps", canonical_caps.get(),
-                             nullptr);
-                const auto* pixel_format =
-                    frame->pixel_format == VideoFramePixelFormat::nv12 ? "NV12" : "BGRA";
-                auto* replacement_caps =
-                    gst_caps_new_simple("video/x-raw", "format", G_TYPE_STRING, pixel_format,
-                                        "pixel-aspect-ratio", GST_TYPE_FRACTION, 1, 1,
-                                        "width", G_TYPE_INT, static_cast<gint>(frame->width),
-                                        "height", G_TYPE_INT, static_cast<gint>(frame->height),
-                                        "framerate", GST_TYPE_FRACTION, 0, 1, nullptr);
-                if (replacement_caps == nullptr) {
-                    gst_buffer_unref(replacement);
-                    throw std::runtime_error("content ingress caps could not be created");
-                }
-                if (frame->pixel_format == VideoFramePixelFormat::nv12) {
-                    gst_caps_set_simple(replacement_caps, "colorimetry", G_TYPE_STRING, "bt709",
-                                        nullptr);
-                }
-                if (content_frame_caps_ != nullptr) {
-                    gst_caps_unref(content_frame_caps_);
-                }
-                content_frame_caps_ = replacement_caps;
-                content_frame_width_ = frame->width;
-                content_frame_height_ = frame->height;
-                content_frame_pixel_format_ = frame->pixel_format;
-            }
-            if (content_frame_buffer_ != nullptr) {
-                gst_buffer_unref(content_frame_buffer_);
-            }
-            content_frame_buffer_ = replacement;
-            content_discontinuity_pending_ =
-                last_content_sequence_ == 0U || frame->sequence != last_content_sequence_ + 1U;
-            last_content_sequence_ = frame->sequence;
-        }
-        if (content_frame_buffer_ == nullptr || content_frame_caps_ == nullptr) {
+        auto frame_lease = frame_channel_reader_->read_latest(content_pipeline_sequence_);
+        if (!frame_lease.has_value()) {
             return;
         }
-        const auto now = monotonic_nanoseconds();
-        if (!frame.has_value() && last_content_push_ns_ != 0U &&
-            now - last_content_push_ns_ <
-                static_cast<std::uint64_t>(kContentFrameInterval.count())) {
-            return;
+        const auto frame = frame_lease->frame();
+        GstBuffer* buffer = nullptr;
+        if (use_d3d11_) {
+            auto lifetime =
+                std::make_unique<FrameChannelFrameLease>(std::move(frame_lease.value()));
+            buffer = gst_buffer_new_wrapped_full(
+                GST_MEMORY_FLAG_READONLY,
+                const_cast<std::uint8_t*>(lifetime->frame().bytes.data()),
+                lifetime->frame().bytes.size(), 0U, lifetime->frame().bytes.size(),
+                lifetime.get(), [](gpointer value) {
+                    delete static_cast<FrameChannelFrameLease*>(value);
+                });
+            if (buffer != nullptr) {
+                static_cast<void>(lifetime.release());
+            }
+        } else {
+            buffer = gst_buffer_new_memdup(frame.bytes.data(), frame.bytes.size());
         }
-        auto* buffer = gst_buffer_copy(content_frame_buffer_);
         if (buffer == nullptr) {
             throw std::runtime_error("content ingress buffer allocation failed");
+        }
+        const auto video_format = frame.pixel_format == VideoFramePixelFormat::nv12
+                                      ? GST_VIDEO_FORMAT_NV12
+                                      : GST_VIDEO_FORMAT_BGRA;
+        const auto plane_count = frame.pixel_format == VideoFramePixelFormat::nv12 ? 2U : 1U;
+        gsize plane_offsets[GST_VIDEO_MAX_PLANES]{};
+        gint plane_strides[GST_VIDEO_MAX_PLANES]{};
+        for (guint index = 0U; index < plane_count; ++index) {
+            if (frame.plane_strides[index] >
+                static_cast<std::uint32_t>((std::numeric_limits<gint>::max)())) {
+                gst_buffer_unref(buffer);
+                throw std::runtime_error("content ingress stride is invalid");
+            }
+            plane_offsets[index] = static_cast<gsize>(frame.plane_offsets[index]);
+            plane_strides[index] = static_cast<gint>(frame.plane_strides[index]);
+        }
+        if (gst_buffer_add_video_meta_full(
+                buffer, GST_VIDEO_FRAME_FLAG_NONE, video_format, frame.width, frame.height,
+                plane_count, plane_offsets, plane_strides) == nullptr) {
+            gst_buffer_unref(buffer);
+            throw std::runtime_error("content ingress video metadata allocation failed");
+        }
+        if (content_frame_caps_ == nullptr || content_frame_width_ != frame.width ||
+            content_frame_height_ != frame.height ||
+            content_frame_pixel_format_ != frame.pixel_format) {
+            if (content_canonical_caps_filter_ == nullptr) {
+                gst_buffer_unref(buffer);
+                throw std::runtime_error("content canonical caps are unavailable");
+            }
+            const auto canonical_caps = exact_raw_caps(use_d3d11_, frame.width, frame.height);
+            if (canonical_caps == nullptr) {
+                gst_buffer_unref(buffer);
+                throw std::runtime_error("content canonical caps could not be created");
+            }
+            g_object_set(content_canonical_caps_filter_, "caps", canonical_caps.get(), nullptr);
+            const auto* pixel_format =
+                frame.pixel_format == VideoFramePixelFormat::nv12 ? "NV12" : "BGRA";
+            auto* replacement_caps = gst_caps_new_simple(
+                "video/x-raw", "format", G_TYPE_STRING, pixel_format,
+                "pixel-aspect-ratio", GST_TYPE_FRACTION, 1, 1, "width", G_TYPE_INT,
+                static_cast<gint>(frame.width), "height", G_TYPE_INT,
+                static_cast<gint>(frame.height), "framerate", GST_TYPE_FRACTION, 0, 1,
+                nullptr);
+            if (replacement_caps == nullptr) {
+                gst_buffer_unref(buffer);
+                throw std::runtime_error("content ingress caps could not be created");
+            }
+            if (frame.pixel_format == VideoFramePixelFormat::nv12) {
+                gst_caps_set_simple(replacement_caps, "colorimetry", G_TYPE_STRING,
+                                    "bt709", nullptr);
+            }
+            if (content_frame_caps_ != nullptr) {
+                gst_caps_unref(content_frame_caps_);
+            }
+            content_frame_caps_ = replacement_caps;
+            content_frame_width_ = frame.width;
+            content_frame_height_ = frame.height;
+            content_frame_pixel_format_ = frame.pixel_format;
         }
         GST_BUFFER_PTS(buffer) = GST_CLOCK_TIME_NONE;
         GST_BUFFER_DTS(buffer) = GST_CLOCK_TIME_NONE;
         GST_BUFFER_DURATION(buffer) = static_cast<GstClockTime>(kContentFrameInterval.count());
-        if (content_discontinuity_pending_) {
+        if (last_content_sequence_ == 0U ||
+            frame.sequence != last_content_sequence_ + 1U) {
             GST_BUFFER_FLAG_SET(buffer, GST_BUFFER_FLAG_DISCONT);
-            content_discontinuity_pending_ = false;
         }
         auto* sample = gst_sample_new(buffer, content_frame_caps_, nullptr, nullptr);
         gst_buffer_unref(buffer);
@@ -679,14 +753,11 @@ class GStreamerSourceRuntime final : public SourceRuntime {
         if (flow != GST_FLOW_OK) {
             throw std::runtime_error("content ingress rejected a frame");
         }
-        last_content_push_ns_ = now;
+        content_pipeline_sequence_ = frame.sequence;
+        last_content_sequence_ = frame.sequence;
     }
 
     void release_content_frame() noexcept {
-        if (content_frame_buffer_ != nullptr) {
-            gst_buffer_unref(content_frame_buffer_);
-            content_frame_buffer_ = nullptr;
-        }
         if (content_frame_caps_ != nullptr) {
             gst_caps_unref(content_frame_caps_);
             content_frame_caps_ = nullptr;
@@ -694,13 +765,14 @@ class GStreamerSourceRuntime final : public SourceRuntime {
         content_frame_width_ = 0U;
         content_frame_height_ = 0U;
         content_frame_pixel_format_ = VideoFramePixelFormat::bgra;
-        last_content_push_ns_ = 0U;
-        content_discontinuity_pending_ = true;
+        content_pipeline_sequence_ = 0U;
+        last_content_sequence_ = 0U;
     }
 
     [[nodiscard]] GstElement* build_pipeline() {
         content_appsrc_ = nullptr;
         content_canonical_caps_filter_ = nullptr;
+        content_pipeline_sequence_ = 0U;
         auto* raw_pipeline = gst_pipeline_new(nullptr);
         if (raw_pipeline == nullptr) {
             throw std::runtime_error("source pipeline could not be created");
@@ -765,19 +837,26 @@ class GStreamerSourceRuntime final : public SourceRuntime {
     }
 
     void publish_failure(const char* error_code) {
-        std::scoped_lock lock{state_mutex_};
-        health_.status = ever_ready_ ? SourceRuntimeStatus::degraded : SourceRuntimeStatus::failed;
-        health_.error_code = error_code;
+        {
+            std::scoped_lock lock{state_mutex_};
+            health_.status =
+                ever_ready_ ? SourceRuntimeStatus::degraded : SourceRuntimeStatus::failed;
+            health_.error_code = error_code;
+        }
+        frame_signal_->notify();
     }
 
     void publish_attempt_started() {
-        std::scoped_lock lock{state_mutex_};
-        health_.status =
-            ever_ready_ ? SourceRuntimeStatus::degraded : SourceRuntimeStatus::starting;
-        // Retain the last actionable error while reconnecting. Clearing it at the
-        // beginning of every retry made observers flicker between healthy and failed
-        // even though no frame had recovered yet. The first delivered frame is the
-        // authoritative recovery boundary and clears the error below.
+        {
+            std::scoped_lock lock{state_mutex_};
+            health_.status =
+                ever_ready_ ? SourceRuntimeStatus::degraded : SourceRuntimeStatus::starting;
+            // Retain the last actionable error while reconnecting. Clearing it at the
+            // beginning of every retry made observers flicker between healthy and failed
+            // even though no frame had recovered yet. The first delivered frame is the
+            // authoritative recovery boundary and clears the error below.
+        }
+        frame_signal_->notify();
     }
 
     void run() noexcept {
@@ -823,12 +902,21 @@ class GStreamerSourceRuntime final : public SourceRuntime {
                     if (source_.kind == SceneSourceKind::solin_content) {
                         push_content_frame();
                     }
-                    const auto poll_interval = source_.kind == SceneSourceKind::solin_content
-                                                   ? kContentPollInterval
-                                                   : kBusPollInterval;
-                    auto* message = gst_bus_timed_pop_filtered(
-                        bus.get(), static_cast<GstClockTime>(poll_interval.count()) * GST_MSECOND,
-                        static_cast<GstMessageType>(GST_MESSAGE_ERROR | GST_MESSAGE_EOS));
+                    GstMessage* message = nullptr;
+                    if (source_.kind == SceneSourceKind::solin_content) {
+                        static_cast<void>(
+                            frame_channel_reader_->wait_for_frame(kBusPollInterval));
+                        message = gst_bus_pop_filtered(
+                            bus.get(), static_cast<GstMessageType>(GST_MESSAGE_ERROR |
+                                                                  GST_MESSAGE_EOS));
+                    } else {
+                        message = gst_bus_timed_pop_filtered(
+                            bus.get(),
+                            static_cast<GstClockTime>(kBusPollInterval.count()) *
+                                GST_MSECOND,
+                            static_cast<GstMessageType>(GST_MESSAGE_ERROR |
+                                                        GST_MESSAGE_EOS));
+                    }
                     if (message == nullptr) {
                         const auto current_sequence = frame_sequence_.load();
                         const auto last_frame = last_frame_received_ns_.load();
@@ -836,7 +924,11 @@ class GStreamerSourceRuntime final : public SourceRuntime {
                                                    ? last_frame
                                                    : attempt_started;
                         const auto now = monotonic_nanoseconds();
-                        if (reference <= now &&
+                        const auto retained_content_frame =
+                            source_.kind == SceneSourceKind::solin_content &&
+                            content_pipeline_sequence_ != 0U &&
+                            current_sequence > sequence_before_attempt;
+                        if (!retained_content_frame && reference <= now &&
                             now - reference > static_cast<std::uint64_t>(frame_timeout().count())) {
                             pipeline_failed = true;
                             publish_failure("source_frame_timeout");
@@ -984,6 +1076,7 @@ class GStreamerSourceRuntime final : public SourceRuntime {
                 health_.dropped_frames = dropped_frames_total_.load();
             }
             last_frame_received_ns_.store(received_at);
+            frame_signal_->notify();
             return GST_FLOW_OK;
         } catch (const std::exception&) {
             return GST_FLOW_ERROR;
@@ -1010,18 +1103,17 @@ class GStreamerSourceRuntime final : public SourceRuntime {
     std::shared_ptr<GStreamerD3d11DeviceManager> d3d11_manager_{};
     std::shared_ptr<GstD3D11Device> d3d11_device_{};
     bool use_d3d11_{false};
+    std::shared_ptr<GStreamerFrameSignal> frame_signal_{};
     LocalCameraFormatResolver camera_format_resolver_{};
     std::unique_ptr<FrameChannelReader> frame_channel_reader_{};
     GstAppSrc* content_appsrc_{nullptr};
     GstElement* content_canonical_caps_filter_{nullptr};
-    GstBuffer* content_frame_buffer_{nullptr};
     GstCaps* content_frame_caps_{nullptr};
     std::uint32_t content_frame_width_{0U};
     std::uint32_t content_frame_height_{0U};
     VideoFramePixelFormat content_frame_pixel_format_{VideoFramePixelFormat::bgra};
     std::uint64_t last_content_sequence_{0U};
-    std::uint64_t last_content_push_ns_{0U};
-    bool content_discontinuity_pending_{true};
+    std::uint64_t content_pipeline_sequence_{0U};
     std::mutex reconnect_mutex_{};
     std::condition_variable reconnect_wakeup_{};
 };
@@ -1032,6 +1124,7 @@ class GStreamerSourceRuntimeFactory final : public SourceRuntimeFactory {
                                   LocalCameraFormatResolver camera_format_resolver)
         : runtime_lifetime_(std::move(runtime_lifetime)),
           d3d11_manager_(std::make_shared<GStreamerD3d11DeviceManager>(allow_d3d11)),
+          frame_signal_(std::make_shared<GStreamerFrameSignal>()),
           camera_format_resolver_(std::move(camera_format_resolver)) {
         if (runtime_lifetime_ == nullptr) {
             throw std::invalid_argument("GStreamer runtime lifetime is required");
@@ -1046,7 +1139,7 @@ class GStreamerSourceRuntimeFactory final : public SourceRuntimeFactory {
             throw std::runtime_error("source_runtime_not_implemented");
         }
         return std::make_shared<GStreamerSourceRuntime>(source, generation, runtime_lifetime_,
-                                                        d3d11_manager_,
+                                                        d3d11_manager_, frame_signal_,
                                                         camera_format_resolver_);
     }
 
@@ -1056,9 +1149,14 @@ class GStreamerSourceRuntimeFactory final : public SourceRuntimeFactory {
 
     bool invalidate_d3d11_device() noexcept { return d3d11_manager_->invalidate(); }
 
+    [[nodiscard]] std::shared_ptr<GStreamerFrameSignal> frame_signal() const noexcept {
+        return frame_signal_;
+    }
+
   private:
     std::shared_ptr<void> runtime_lifetime_{};
     std::shared_ptr<GStreamerD3d11DeviceManager> d3d11_manager_{};
+    std::shared_ptr<GStreamerFrameSignal> frame_signal_{};
     LocalCameraFormatResolver camera_format_resolver_{};
 };
 
@@ -1098,6 +1196,12 @@ gstreamer_d3d11_device(std::shared_ptr<SourceRuntimeFactory> factory) noexcept {
     return {.factory = std::move(factory), .owner = owner, .device = owner.get()};
 }
 
+std::shared_ptr<GStreamerFrameSignal>
+gstreamer_frame_signal(std::shared_ptr<SourceRuntimeFactory> factory) noexcept {
+    const auto* typed = dynamic_cast<const GStreamerSourceRuntimeFactory*>(factory.get());
+    return typed == nullptr ? nullptr : typed->frame_signal();
+}
+
 bool invalidate_gstreamer_d3d11_device(std::shared_ptr<SourceRuntimeFactory> factory) noexcept {
     auto* typed = dynamic_cast<GStreamerSourceRuntimeFactory*>(factory.get());
     return typed != nullptr && typed->invalidate_d3d11_device();
@@ -1121,6 +1225,11 @@ GStreamerSampleLease gstreamer_sample(std::shared_ptr<const SourceFrame> frame) 
 GStreamerD3d11DeviceLease
 gstreamer_d3d11_device(std::shared_ptr<SourceRuntimeFactory> factory) noexcept {
     return {.factory = std::move(factory), .owner = nullptr, .device = nullptr};
+}
+
+std::shared_ptr<GStreamerFrameSignal>
+gstreamer_frame_signal(std::shared_ptr<SourceRuntimeFactory>) noexcept {
+    return {};
 }
 
 bool invalidate_gstreamer_d3d11_device(std::shared_ptr<SourceRuntimeFactory>) noexcept {

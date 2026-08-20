@@ -2,8 +2,12 @@
 
 #include "solin/media_engine/source_registry.hpp"
 
+#include <atomic>
+#include <condition_variable>
+#include <cstdint>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string_view>
 
@@ -23,6 +27,24 @@ class GStreamerSamplePayload : public SourceFramePayload {
 
   protected:
     GStreamerSamplePayload() = default;
+};
+
+// One process-local activity signal is shared by all runtimes created by a
+// factory and every compositor graph consuming them. It carries no pixels and
+// no queue: consumers wake, then read the latest frame from their own sources.
+class GStreamerFrameSignal final {
+  public:
+    [[nodiscard]] std::uint64_t revision() const noexcept;
+    void notify() noexcept;
+    [[nodiscard]] std::uint64_t wait_after(std::uint64_t revision) const noexcept;
+    [[nodiscard]] bool wait_after(
+        std::uint64_t revision, std::stop_token stop_token,
+        std::chrono::steady_clock::time_point deadline) const noexcept;
+
+  private:
+    std::atomic_uint64_t revision_{0U};
+    mutable std::mutex mutex_{};
+    mutable std::condition_variable_any wakeup_{};
 };
 
 [[nodiscard]] std::shared_ptr<SourceRuntimeFactory>
@@ -58,6 +80,8 @@ struct GStreamerD3d11DeviceLease final {
 gstreamer_sample(std::shared_ptr<const SourceFrame> frame) noexcept;
 [[nodiscard]] GStreamerD3d11DeviceLease
 gstreamer_d3d11_device(std::shared_ptr<SourceRuntimeFactory> factory) noexcept;
+[[nodiscard]] std::shared_ptr<GStreamerFrameSignal>
+gstreamer_frame_signal(std::shared_ptr<SourceRuntimeFactory> factory) noexcept;
 [[nodiscard]] bool
 invalidate_gstreamer_d3d11_device(std::shared_ptr<SourceRuntimeFactory> factory) noexcept;
 

@@ -15,10 +15,13 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <condition_variable>
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <ranges>
+#include <stop_token>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -451,6 +454,8 @@ struct CenterNv12Frame final {
     std::uint64_t after_sequence, std::chrono::milliseconds timeout);
 [[nodiscard]] bool near_channel(std::uint8_t value, std::uint8_t expected,
                                 std::uint8_t tolerance);
+void test_route_change_cannot_be_lost_before_graph_wait_registration(
+    const std::shared_ptr<solin::media_engine::SceneRenderer>& renderer);
 
 void test_program_transitions_render_real_synthetic_frames(
     solin::media_engine::SceneGraphRuntime& graph,
@@ -585,6 +590,7 @@ void test_scene_renderer_composes_nested_scene_to_shared_d3d11_frame(
     if (renderer == nullptr) {
         return;
     }
+    test_route_change_cannot_be_lost_before_graph_wait_registration(renderer);
     solin::media_engine::SceneGraphRuntime graph{
         media_runtime.source_runtime_factory(), renderer};
     graph.hydrate(compositor_snapshot(), 1U);
@@ -960,9 +966,84 @@ void test_first_hardware_camera_publishes_its_exact_selected_format(
                 };
             }
         }
-        std::this_thread::sleep_for(5ms);
+        static_cast<void>(renderer->wait_for_frame(
+            solin::media_engine::OutputBus::virtual_camera, after_sequence,
+            std::stop_token{}, deadline));
     }
     return std::nullopt;
+}
+
+class RouteChangeRaceGraph final
+    : public solin::media_engine::PreparedSceneRenderGraph {
+  public:
+    [[nodiscard]] bool wait_for_frame(
+        std::uint64_t, const std::stop_token stop_token,
+        const std::chrono::steady_clock::time_point deadline) const noexcept override {
+        std::unique_lock lock{mutex_};
+        wait_entered_ = true;
+        wakeup_.notify_all();
+        wakeup_.wait(lock, [this] { return allow_wait_registration_; });
+        const auto wake_generation = wake_generation_;
+        static_cast<void>(wakeup_.wait_until(
+            lock, stop_token, deadline,
+            [this, wake_generation] {
+                return wake_generation_ != wake_generation;
+            }));
+        return false;
+    }
+
+    void wake_frame_waiters() noexcept override {
+        std::scoped_lock lock{mutex_};
+        ++wake_generation_;
+        wakeup_.notify_all();
+    }
+
+    [[nodiscard]] bool wait_until_entered(
+        const std::chrono::milliseconds timeout) const {
+        std::unique_lock lock{mutex_};
+        return wakeup_.wait_for(lock, timeout,
+                                [this] { return wait_entered_; });
+    }
+
+    void allow_wait_registration() noexcept {
+        std::scoped_lock lock{mutex_};
+        allow_wait_registration_ = true;
+        wakeup_.notify_all();
+    }
+
+  private:
+    mutable std::mutex mutex_{};
+    mutable std::condition_variable_any wakeup_{};
+    mutable bool wait_entered_{false};
+    mutable bool allow_wait_registration_{false};
+    mutable std::uint64_t wake_generation_{0U};
+};
+
+void test_route_change_cannot_be_lost_before_graph_wait_registration(
+    const std::shared_ptr<solin::media_engine::SceneRenderer>& renderer) {
+    using solin::media_engine::OutputBus;
+    auto outgoing = std::make_shared<RouteChangeRaceGraph>();
+    auto incoming = std::make_shared<RouteChangeRaceGraph>();
+    renderer->commit_hydration({nullptr, outgoing}, {false, true}, 1U);
+
+    std::chrono::steady_clock::duration elapsed{};
+    std::thread waiter{[&] {
+        const auto started = std::chrono::steady_clock::now();
+        static_cast<void>(renderer->wait_for_frame(
+            OutputBus::virtual_camera, 0U, std::stop_token{}, started + 600ms));
+        elapsed = std::chrono::steady_clock::now() - started;
+    }};
+    const auto entered = outgoing->wait_until_entered(1s);
+    expect(entered, "the route-race fixture entered the outgoing graph wait");
+    if (entered) {
+        renderer->commit_take(OutputBus::virtual_camera, incoming, nullptr, 2U);
+    }
+    // Reproduce the critical ordering: the outgoing graph observes its own wake
+    // before it registers the generation on which it is about to block.
+    outgoing->allow_wait_registration();
+    waiter.join();
+    expect(elapsed < 200ms,
+           "a route change interrupts an outgoing graph wait without waiting for the heartbeat deadline");
 }
 
 [[nodiscard]] bool near_channel(const std::uint8_t value, const std::uint8_t expected,

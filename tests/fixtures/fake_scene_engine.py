@@ -158,6 +158,7 @@ def main() -> int:
             "preview_layer_geometry",
             "set_output_enabled",
             "set_render_enabled",
+            "set_window_targets",
         }:
             _ack(request)
         elif request.message_type == "list_local_cameras":

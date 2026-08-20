@@ -195,24 +195,37 @@ HRESULT DirectShowCapturePin::FillBuffer(IMediaSample* sample) {
 
     BYTE* bytes = nullptr;
     auto result = sample->GetPointer(&bytes);
+    const auto sample_size = profile_.sample_size();
     if (FAILED(result) || bytes == nullptr ||
-        sample->GetSize() < static_cast<LONG>(last_output_.size())) {
+        sample->GetSize() < static_cast<LONG>(sample_size)) {
         return FAILED(result) ? result : VFW_E_BUFFER_OVERFLOW;
     }
+    const std::span<std::uint8_t> sample_output{bytes, sample_size};
 
     struct VisitState final {
         std::uint64_t generation_before{0U};
         std::uint64_t visited_sequence{0U};
+        bool direct{false};
         bool adapted{false};
         bool frame_changed{false};
     } visit_state;
     const auto generation_before = provider_.generation();
     visit_state.generation_before = generation_before;
     const auto visited = provider_.visit_live_frame(
-        [this, &visit_state](const VideoFrameView& frame) {
+        [this, &visit_state, sample_output](const VideoFrameView& frame) {
+            visit_state.direct = false;
             visit_state.adapted = false;
             visit_state.frame_changed = false;
             visit_state.visited_sequence = frame.sequence;
+            if (adapter_->write_direct_nv12(frame, sample_output)) {
+                visit_state.direct = true;
+                visit_state.adapted = true;
+                visit_state.frame_changed =
+                    !have_last_input_sequence_ ||
+                    visit_state.generation_before != last_generation_ ||
+                    frame.sequence != last_input_sequence_;
+                return;
+            }
             if (have_last_input_sequence_ &&
                 visit_state.generation_before == last_generation_ &&
                 frame.sequence == last_input_sequence_) {
@@ -226,30 +239,42 @@ HRESULT DirectShowCapturePin::FillBuffer(IMediaSample* sample) {
     bool discontinuity = first_sample_ || cadence_discontinuity ||
                          generation != last_generation_;
     const auto stable_live_frame = visited && visit_state.adapted &&
-                                   generation != 0U &&
-                                   generation_before == generation;
+                                    generation != 0U &&
+                                    generation_before == generation;
+    // The reader validates the slot marker after the callback. A concurrent
+    // overwrite makes `visited` false, so the fallback below replaces any
+    // partially copied sample before it can leave the filter.
+    const auto sample_written_directly =
+        stable_live_frame && visit_state.direct;
     if (!stable_live_frame) {
-        if (generation == 0U || !last_frame_was_live_) {
+        if (generation == 0U || !last_frame_was_live_ ||
+            last_frame_was_direct_) {
             if (!adapter_->write_standby(last_output_)) {
                 return E_FAIL;
             }
             discontinuity = discontinuity || last_frame_was_live_;
             last_frame_was_live_ = false;
+            last_frame_was_direct_ = false;
             have_last_input_sequence_ = false;
         }
     } else {
         if (visit_state.frame_changed) {
-            last_output_.swap(staging_output_);
+            if (!visit_state.direct) {
+                last_output_.swap(staging_output_);
+            }
             last_input_sequence_ = visit_state.visited_sequence;
             have_last_input_sequence_ = true;
         }
         discontinuity = discontinuity || !last_frame_was_live_ ||
                         generation_before != generation;
         last_frame_was_live_ = true;
+        last_frame_was_direct_ = visit_state.direct;
     }
     last_generation_ = generation;
-    std::memcpy(bytes, last_output_.data(), last_output_.size());
-    sample->SetActualDataLength(static_cast<LONG>(last_output_.size()));
+    if (!sample_written_directly) {
+        std::memcpy(bytes, last_output_.data(), sample_size);
+    }
+    sample->SetActualDataLength(static_cast<LONG>(sample_size));
     auto start = frame_time(frame_index_);
     auto end = frame_time(frame_index_ + 1U);
     ++frame_index_;
@@ -322,6 +347,7 @@ HRESULT DirectShowCapturePin::OnThreadCreate() {
     last_generation_ = 0U;
     last_input_sequence_ = 0U;
     last_frame_was_live_ = false;
+    last_frame_was_direct_ = false;
     have_last_input_sequence_ = false;
     first_sample_ = true;
     return S_OK;

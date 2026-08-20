@@ -159,16 +159,26 @@ window. Solin produces an offscreen frame channel that the sidecar consumes. Thi
 feedback when a media window itself displays a scene containing Solin content.
 
 The current Windows transport is a versioned shared-memory video channel whose slots carry
-either native NV12 planes or packed BGRA. NV12 `QVideoFrame` input is sampled and copied
-directly from its mapped planes; it does not pass through `QImage`, color conversion, or a
-1920×1080 staging canvas. Static images and formats that cannot be mapped as NV12 use BGRA.
+either native NV12 planes or packed BGRA. NV12 `QVideoFrame` input is sampled and bulk-copied
+once per mapped plane; each source stride and plane offset is preserved and described to
+GStreamer with `GstVideoMeta`. It does not pass through `QImage`, color conversion, a
+row-by-row Python loop, or a 1920×1080 staging canvas. Static images and formats that cannot
+be mapped as NV12 use BGRA.
 A keyed D3D11 shared texture remains the preferred future transport, with the current channel
 retained as the device-loss and compatibility fallback.
 
 The producer increments a generation whenever capacity, device, or transport changes. The
 engine rejects stale generations. The channel is a versioned three-slot latest-frame
-mapping protected by bounded cross-process synchronization. Each slot carries the actual
-frame size within that stable capacity, so a 720p source is copied as 720p and scaled by D3D11
+mapping protected by bounded cross-process synchronization. Protocol v4 gives every slot a
+cross-process lease. The D3D11 ingress wraps the leased SHM span directly in a `GstBuffer` and
+releases the lease after upload consumes it; system-memory fallback makes an owned copy.
+The producer attempts the control mutex with a zero timeout, chooses another free slot, or
+drops the new frame when all three slots are leased. A reader crash is distinguished from PID
+reuse with the recorded process creation time, allowing abandoned leases to be reclaimed.
+Named auto-reset frame events replace the former 4 ms content poll, and composed-output
+events replace the Python Preview/Program 60 Hz poll. Each slot carries the actual
+frame size, strides, and plane offsets within that stable capacity, so a 720p source is copied
+as 720p and scaled by D3D11
 rather than expanded into a 1080p CPU canvas. Continuous Qt video is sampled before surface
 materialization and coalesced to at most 30 fps. Accepted NV12 planes are mapped, copied, and
 released inside the delivery callback; BGRA fallback and static content are handed to the
@@ -219,12 +229,47 @@ flowchart LR
     DS --> APPS["Camera-consuming apps"]
 ```
 
+### Windows steady-state frame flow
+
+```mermaid
+flowchart LR
+    QT["QMediaPlayer: decode, seek, trim, speed, cache, reconnect, audio"] --> SINK["Single QVideoSink"]
+    SINK --> MAP["Public QVideoFrame map: NV12"]
+    MAP --> SHM["Protocol-v4 three-slot SHM: one bulk copy per Qt plane"]
+    SHM --> APP["Leased GstBuffer: no SHM-to-owned copy"]
+    APP --> UP["One D3D11 upload"]
+    CAMERA["Native camera / RTSP D3D11 sources"] --> GPU["Canonical source textures"]
+    UP --> GPU
+    GPU --> RAWPRESENT["Raw media windows: direct D3D11 presenter"]
+    GPU --> COMP["One D3D11 Program compositor"]
+    COMP --> PROGPRESENT["Program mirror: D3D11 presenter"]
+    COMP --> EDITOR["Editor BGRA fallback, only while subscribed"]
+    COMP -->|"only with active camera consumer"| READBACK["NV12 edge conversion + one readback"]
+    READBACK --> VSHM["Virtual-camera triple buffer"]
+    VSHM --> DS["DirectShow exact NV12: direct IMediaSample fill"]
+    DS --> CONSUMER["Zoom / OBS / other consumer"]
+    COMP -. "future shared texture" .-> EDITOR
+    GPU -. "future GPU fade state machine" .-> COMP
+```
+
+The output workers are demand-driven. A disabled Preview, presenter, or virtual camera owns
+no polling cadence, and the virtual-camera readback valve opens only while its destination is
+enabled. Raw media-window targets lease `solin.content.current` directly and never depend on,
+activate, or render an authored scene; editing the Content scene therefore cannot disable the
+GPU presenter or leak scene layers into a raw media window. Program targets consume the
+already-transitioned Program bus. Media-window switching is Cut for now; image/video and Program-display fades belong
+to one future compositor state machine operating on canonical GPU textures. Ordinary decoded
+frames never restart that transition. Qt private ABI (`QVideoFramePrivate` and private texture
+interfaces) is outside this contract.
+
 ### UI process responsibilities
 
 - Persist and validate scene documents and small live state.
 - Convert projection state into a content category.
 - Resolve the automatic/manual desired Program scene and independent destination enablement.
 - Issue asynchronous start, hydrate, prepare, Take, cancel, and output commands.
+- Update native window targets independently from graph hydration; target attachment must
+  never commit a scene or replace Program's automatic/manual transition.
 - Run PTZ control outside the render path.
 - Supervise the sidecar, sanitize errors, and replay the latest complete snapshot after a
   restart.
@@ -237,8 +282,9 @@ flowchart LR
 - Maintain one source pipeline per unique source, irrespective of consumer count.
 - Compile validated scene snapshots into render graphs.
 - Prepare resources before Take and atomically switch on a frame boundary.
-- Present Program directly into platform-native child surfaces when supported, without a
-  Python/QImage readback, and keep bounded BGRA egress for editor and compatibility fallback.
+- Present either the canonical raw-content source or Program directly into platform-native
+  child surfaces when supported, without a Python/QImage readback or an unnecessary raw-mode
+  scene composition, and keep bounded BGRA egress for editor and compatibility fallback.
 - Produce the latest virtual-camera frame.
 - Emit bounded health events and metrics.
 - Exit on parent loss and support clean stop with a deadline.
@@ -555,6 +601,9 @@ hardware matrix or soak gates:
 
 The full release measurement remains open because it still requires the lowest supported host,
 observed virtual-camera CPU/latency instrumentation, reconnect cases, and the 30-minute soak.
+The reproducible process-CPU harness and its interpretation limits are documented in
+[`docs/native-media-performance.md`](native-media-performance.md); it supplies CPU evidence but
+does not close the GPU, frame-latency, reconnect, or soak gates.
 
 Track:
 
@@ -666,7 +715,13 @@ minutes without an unbounded queue, deadlock, source duplication, or memory grow
   as the `QImage` backing store, avoiding a second full-frame CPU copy.
 - [x] Present D3D11-backed frames into engine-owned child windows for physical media
   surfaces, with latest-frame/leaky queues, target-loss recovery, bounded shutdown, and no
-  Python/QImage presentation path.
+  Python/QImage presentation path. Raw targets acquire the canonical Solin-content source
+  independently of the editable scene document and bypass the scene compositor; Program
+  targets consume the already-transitioned Program bus. Source/render events wake the
+  presenter, with only a low-rate bounded deadline retained for window health and shutdown.
+- [x] Remove the legacy Qt/QPainter opacity fades from raw image/video media changes and
+  media-to-idle switching. Those paths Cut until the native GPU media-transition state
+  machine below owns the effect; timer/yearly/idle-page animations remain independent.
 - [ ] Move raw media-change transitions into the native D3D11 presentation path. Extend the
   content-ingress control contract with an explicit monotonic media epoch, distinct from and
   bound to the transport generation, plus a media-switch intent; ordinary frames from the
@@ -675,8 +730,9 @@ minutes without an unbounded queue, deadlock, source duplication, or memory grow
   black, wait for its first valid frame within a bounded deadline, and fade it in without
   per-pixel work or frame materialization in Python/Qt. The state machine must be
   latest-request-wins, cancel cleanly on Stop, output reassignment,
-  target loss, engine restart, or device loss, and fall back to the existing Qt transition
-  only when native presentation is unavailable. Scope the media-output fade to the ownership
+  target loss, engine restart, or device loss, and fall back to an immediate Cut when native
+  presentation is unavailable; never restore the per-frame Qt opacity path. Scope the
+  media-output fade to the ownership
   switch requested by toggling `Show in media windows`: fade the current raw-media or Program
   owner to black, atomically change the render bus at black, wait for the new owner's first
   valid frame within the same bounded policy, and fade it in. While Program owns the surface,
@@ -688,8 +744,9 @@ minutes without an unbounded queue, deadlock, source duplication, or memory grow
   video-to-video, video-to-image, image-to-video, raw-media-to-Program,
   Program-to-raw-media, replay, rapid next/previous and mirror toggles, delayed first frame,
   decode failure, and multi-monitor tests, plus P50/P95 CPU and frame-time benchmarks against
-  the current native-present and Qt-fallback paths. This removes the Qt opacity cost during
-  the effect; it does not claim a steady-state CPU reduction while decoded frames still cross
+  the current native-present and Qt-fallback paths. The current Qt opacity cost is already
+  removed; this gate restores the visual effect on the GPU. It does not claim a steady-state
+  CPU reduction while decoded frames still cross
   the shared-memory ingress. The separate keyed-texture ingress gate is what can remove that
   steady-state copy/upload path.
 - [x] Present the expanded in-app player by forwarding the original QtMultimedia
@@ -708,8 +765,12 @@ minutes without an unbounded queue, deadlock, source duplication, or memory grow
   replay the first/static frame after attachment, reject stale generations without using the
   current sequence as a discard baseline, and stop polling while no frame or consumer exists.
 - [x] Arbitrate raw Solin projection and Program mirroring so only one producer owns a media
-  window surface at a time; keep the raw content renderer alive for Program ingress.
+  window surface at a time; raw mode leases the canonical content source directly and Program
+  mode follows the Program bus without reconfiguring either route's scene state.
 - [x] Validate hotplug, DPI, geometry, fullscreen, target loss, and source loss behavior.
+- [x] Apply target attachment/removal through the dedicated `set_window_targets` output
+  command. Initial/restart hydration remains the SSOT replay, but a hot target change never
+  hydrates the graph or races Program `prepare_scene`/`take_prepared` with an implicit Cut.
 
 Exit gate: hotplug/reorder monitors and change DPI while playing content; the correct windows
 recover without feedback, black flashes, or a UI-thread stall.

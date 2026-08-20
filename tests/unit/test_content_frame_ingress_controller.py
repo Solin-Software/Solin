@@ -24,6 +24,7 @@ from solin.core.scenes.engine import (
     FrameChannelTransport,
     FrameProducerKind,
 )
+from solin.core.scenes.frame_channel import FRAME_CHANNEL_SLOT_HEADER_SIZE
 from solin.core.scenes.model import VideoColorRange, VideoColorSpace, VideoPixelFormat
 
 
@@ -91,6 +92,32 @@ class _BlockingClosePublisher(_Publisher):
         super().close()
 
 
+class _BackpressuredPublisher(_Publisher):
+    def __init__(self, width: int, height: int, generation: int) -> None:
+        super().__init__(width, height, generation)
+        self.attempts = 0
+
+    def publish(
+        self,
+        pixels: Buffer,
+        *,
+        frame_width: int,
+        frame_height: int,
+        presentation_timestamp_ns: int = 0,
+        duration_ns: int = 0,
+    ) -> int:
+        self.attempts += 1
+        if self.attempts == 1:
+            raise TimeoutError("bounded frame channel is busy")
+        return super().publish(
+            pixels,
+            frame_width=frame_width,
+            frame_height=frame_height,
+            presentation_timestamp_ns=presentation_timestamp_ns,
+            duration_ns=duration_ns,
+        )
+
+
 def test_content_ingress_converts_qt_images_to_bounded_bgra_frames() -> None:
     publishers: list[_Publisher] = []
 
@@ -121,6 +148,32 @@ def test_content_ingress_converts_qt_images_to_bounded_bgra_frames() -> None:
     assert descriptors == []
     assert publishers[0].frames == [bytes([0x33, 0x22, 0x11, 0xFF]) * 4]
     controller.close()
+    assert publishers[0].closed
+
+
+def test_content_ingress_drops_backpressured_images_without_replacing_channel() -> None:
+    publishers: list[_BackpressuredPublisher] = []
+
+    def create_publisher(width: int, height: int) -> _BackpressuredPublisher:
+        publisher = _BackpressuredPublisher(width, height, len(publishers) + 1)
+        publishers.append(publisher)
+        return publisher
+
+    controller = ContentFrameIngressController(
+        publisher_factory=create_publisher,
+        maximum_fps=60,
+        canvas_width=2,
+        canvas_height=2,
+    )
+    image = QImage(2, 2, QImage.Format.Format_ARGB32)
+    controller.submit_frame(image)
+    assert _wait_for(lambda: publishers[0].attempts == 1)
+    controller.submit_frame(image)
+    assert publishers[0].published.wait(1.0)
+
+    controller.close()
+
+    assert len(publishers) == 1
     assert publishers[0].closed
 
 
@@ -354,7 +407,11 @@ def test_content_ingress_publishes_nv12_planes_without_bgra_materialization() ->
         )
     )
     assert frame.map(QVideoFrame.MapMode.WriteOnly)
-    frame.bits(0)[:20] = bytes(range(20))
+    first_stride = frame.bytesPerLine(0)
+    second_stride = frame.bytesPerLine(1)
+    first_plane_size = first_stride + 4
+    second_plane_size = 4
+    frame.bits(0)[:first_plane_size] = bytes(range(first_plane_size))
     frame.bits(1)[:4] = bytes((101, 102, 103, 104))
     frame.unmap()
 
@@ -366,15 +423,23 @@ def test_content_ingress_publishes_nv12_planes_without_bgra_materialization() ->
         assert sequence == 1
         slot = 128
         assert struct.unpack_from("<QIIII", attached.buf, slot + 40) == (
-            12,
+            first_plane_size + second_plane_size,
             4,
             2,
-            4,
+            first_stride,
             2,
         )
-        assert bytes(attached.buf[slot + 64 : slot + 76]) == bytes(
-            (0, 1, 2, 3, 16, 17, 18, 19, 101, 102, 103, 104)
-        )
+        assert struct.unpack_from("<I", attached.buf, slot + 80)[0] == second_stride
+        assert struct.unpack_from("<Q", attached.buf, slot + 88)[0] == first_plane_size
+        assert bytes(
+            attached.buf[
+                slot + FRAME_CHANNEL_SLOT_HEADER_SIZE :
+                slot
+                + FRAME_CHANNEL_SLOT_HEADER_SIZE
+                + first_plane_size
+                + second_plane_size
+            ]
+        ) == bytes(range(first_plane_size)) + bytes((101, 102, 103, 104))
     finally:
         attached.close()
         controller.close()

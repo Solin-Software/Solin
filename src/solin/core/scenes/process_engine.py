@@ -17,11 +17,13 @@ from uuid import uuid4
 
 from solin.core.scenes.engine import (
     DEFAULT_ENGINE_STARTUP_DEADLINE_MS,
+    MAXIMUM_OUTPUT_WINDOW_TARGETS,
     EngineHealthEvent,
     FrameChannelDescriptor,
     LocalCameraDevice,
     LocalCameraDiscovery,
     LocalVideoFormat,
+    OutputWindowTarget,
     SceneEngineAck,
     SceneEngineCapabilities,
     SceneEngineEvent,
@@ -344,19 +346,7 @@ class SubprocessSceneEngine:
             "preview_egress": _frame_channel_record(snapshot.preview_egress),
             "program_egress": _frame_channel_record(snapshot.program_egress),
             "window_targets": [
-                {
-                    "bus_id": target.bus_id.value,
-                    "target_id": target.target_id,
-                    "screen_id": target.screen_id,
-                    "native_handle": target.native_handle,
-                    "x": target.x,
-                    "y": target.y,
-                    "width": target.width,
-                    "height": target.height,
-                    "device_pixel_ratio": target.device_pixel_ratio,
-                    "visible": target.visible,
-                }
-                for target in snapshot.window_targets
+                _window_target_record(target) for target in snapshot.window_targets
             ],
         }
         return self._request(
@@ -551,6 +541,40 @@ class SubprocessSceneEngine:
             document_revision=document_revision,
             deadline_ms=deadline_ms,
             payload={"bus_id": bus_id.value, "enabled": enabled},
+            converter=_ack_from_envelope,
+        )
+
+    def set_window_targets(
+        self,
+        targets: tuple[OutputWindowTarget, ...],
+        *,
+        request_id: str,
+        sequence: int,
+        deadline_ms: int,
+    ) -> Future[SceneEngineAck]:
+        if (
+            not isinstance(targets, tuple)
+            or len(targets) > MAXIMUM_OUTPUT_WINDOW_TARGETS
+            or not all(isinstance(target, OutputWindowTarget) for target in targets)
+        ):
+            return _failed_future(TypeError("Invalid window targets"))
+        target_ids = tuple(target.target_id for target in targets)
+        if len(target_ids) != len(set(target_ids)):
+            return _failed_future(ValueError("Window target ids must be unique"))
+        with self._lock:
+            document_revision = self._document_revision
+        return self._request(
+            message_type="set_window_targets",
+            expected_message_type="ack",
+            request_id=request_id,
+            sequence=sequence,
+            document_revision=document_revision,
+            deadline_ms=deadline_ms,
+            payload={
+                "window_targets": [
+                    _window_target_record(target) for target in targets
+                ]
+            },
             converter=_ack_from_envelope,
         )
 
@@ -1330,6 +1354,21 @@ def _frame_channel_record(descriptor: FrameChannelDescriptor | None) -> object:
         "pixel_format": descriptor.pixel_format.value,
         "color_space": descriptor.color_space.value,
         "color_range": descriptor.color_range.value,
+    }
+
+
+def _window_target_record(target: OutputWindowTarget) -> dict[str, object]:
+    return {
+        "bus_id": target.bus_id.value,
+        "target_id": target.target_id,
+        "screen_id": target.screen_id,
+        "native_handle": target.native_handle,
+        "x": target.x,
+        "y": target.y,
+        "width": target.width,
+        "height": target.height,
+        "device_pixel_ratio": target.device_pixel_ratio,
+        "visible": target.visible,
     }
 
 

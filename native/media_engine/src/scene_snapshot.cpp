@@ -26,7 +26,6 @@ constexpr std::size_t kMaximumScenes = 256U;
 constexpr std::size_t kMaximumLayersPerScene = 128U;
 constexpr std::size_t kMaximumCameraPresets = 512U;
 constexpr std::size_t kMaximumWindowTargets = 32U;
-constexpr std::string_view kContentSourceId = "solin.content.current";
 constexpr std::string_view kNoSignalSourceId = "solin.source.no-signal";
 
 struct ParsedScene {
@@ -822,7 +821,7 @@ parse_scene_hydration_snapshot(const Json& payload,
         }
         result.sources.push_back(std::move(source));
     }
-    const auto content_source = source_kind_by_id.find(std::string{kContentSourceId});
+    const auto content_source = source_kind_by_id.find(std::string{kSolinContentSourceId});
     const auto no_signal_source = source_kind_by_id.find(std::string{kNoSignalSourceId});
     if (content_source_count != 1U || content_source == source_kind_by_id.end() ||
         content_source->second != SceneSourceKind::solin_content ||
@@ -948,7 +947,7 @@ parse_scene_hydration_snapshot(const Json& payload,
     if (!content_ingress.is_null()) {
         result.content_ingress = parse_frame_channel(content_ingress, "solin_offscreen");
         const auto source = std::ranges::find_if(result.sources, [](const SceneSource& candidate) {
-            return candidate.id == kContentSourceId;
+            return candidate.id == kSolinContentSourceId;
         });
         source->frame_channel = result.content_ingress;
     }
@@ -960,21 +959,27 @@ parse_scene_hydration_snapshot(const Json& payload,
     if (!program_egress.is_null()) {
         result.program_egress = parse_frame_channel(program_egress, "native_compositor");
     }
-    require_array_size(payload.at("window_targets"), kMaximumWindowTargets, "window targets");
-    std::unordered_set<std::string> window_target_ids;
-    result.window_targets.reserve(payload.at("window_targets").size());
-    for (const auto& raw_target : payload.at("window_targets")) {
-        auto target = parse_window_target(raw_target);
-        if (!window_target_ids.insert(target.target_id).second) {
-            invalid("duplicate window target id");
-        }
-        result.window_targets.push_back(std::move(target));
-    }
+    result.window_targets = parse_output_window_targets(payload.at("window_targets"));
     return result;
 }
 
 SceneLayerDefinition parse_scene_layer_definition(const Json& value) {
     return parse_layer(value);
+}
+
+std::vector<OutputWindowConfiguration> parse_output_window_targets(const Json& value) {
+    require_array_size(value, kMaximumWindowTargets, "window targets");
+    std::unordered_set<std::string> target_ids;
+    std::vector<OutputWindowConfiguration> result;
+    result.reserve(value.size());
+    for (const auto& raw_target : value) {
+        auto target = parse_window_target(raw_target);
+        if (!target_ids.insert(target.target_id).second) {
+            invalid("duplicate window target id");
+        }
+        result.push_back(std::move(target));
+    }
+    return result;
 }
 
 } // namespace solin::media_engine

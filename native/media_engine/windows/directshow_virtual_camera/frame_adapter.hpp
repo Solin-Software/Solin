@@ -14,6 +14,9 @@ class DirectShowFrameAdapter final {
     explicit DirectShowFrameAdapter(DirectShowMediaProfile profile);
 
     [[nodiscard]] const DirectShowMediaProfile& profile() const noexcept;
+    [[nodiscard]] bool write_direct_nv12(
+        const VideoFrameView& source,
+        std::span<std::uint8_t> destination) const noexcept;
     [[nodiscard]] bool adapt(const VideoFrameView& source,
                              std::span<std::uint8_t> destination) noexcept;
     [[nodiscard]] bool write_standby(

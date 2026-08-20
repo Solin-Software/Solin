@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ctypes
+from ctypes import wintypes
 import struct
 import sys
 import threading
@@ -20,19 +21,25 @@ from solin.core.scenes.model import VideoColorRange, VideoColorSpace, VideoPixel
 
 
 FRAME_CHANNEL_MAGIC = b"SLNFRM01"
-FRAME_CHANNEL_VERSION = 3
+FRAME_CHANNEL_VERSION = 4
 FRAME_CHANNEL_HEADER_SIZE = 128
-FRAME_CHANNEL_SLOT_HEADER_SIZE = 64
+FRAME_CHANNEL_SLOT_HEADER_SIZE = 128
 FRAME_CHANNEL_SLOT_COUNT = 3
 FRAME_CHANNEL_PIXEL_FORMAT_BGRA = 1
 FRAME_CHANNEL_PIXEL_FORMAT_NV12 = 2
 FRAME_CHANNEL_MUTEX_PREFIX = "Local\\SolinFrameMutex."
+FRAME_CHANNEL_EVENT_PREFIX = "Local\\SolinFrameEvent."
 MAXIMUM_SHARED_MEMORY_FRAME_BYTES = 3840 * 2160 * 4
 
 _PUBLISHED_SEQUENCE_OFFSET = 56
 _SLOT_MARKER_OFFSET = 0
 _SLOT_METADATA_OFFSET = 8
 _SLOT_PAYLOAD_SIZE_OFFSET = 40
+_SLOT_LEASE_COUNT_OFFSET = 64
+_SLOT_LEASE_OWNER_PID_OFFSET = 68
+_SLOT_LEASE_OWNER_CREATION_TIME_OFFSET = 72
+_SLOT_SECOND_PLANE_STRIDE_OFFSET = 80
+_SLOT_SECOND_PLANE_OFFSET_OFFSET = 88
 _MAXIMUM_SEQUENCE = (2**63 - 1) // 2
 
 
@@ -53,7 +60,7 @@ class VideoFrame:
 
 
 class SharedMemoryVideoFramePublisher:
-    """Own a bounded latest-frame channel for packed BGRA or NV12 video."""
+    """Own a bounded latest-frame channel for BGRA or NV12 video planes."""
 
     def __init__(
         self,
@@ -104,9 +111,13 @@ class SharedMemoryVideoFramePublisher:
         self._sequence = 0
         self._closed = False
         process_mutex: _WindowsNamedMutex | None = None
+        frame_event: _WindowsAutoResetEvent | None = None
         try:
             process_mutex = _WindowsNamedMutex(
                 f"{FRAME_CHANNEL_MUTEX_PREFIX}{self._memory.name}"
+            )
+            frame_event = _WindowsAutoResetEvent(
+                f"{FRAME_CHANNEL_EVENT_PREFIX}{self._memory.name}"
             )
             descriptor = FrameChannelDescriptor(
                 channel_id=channel_id or f"solin-content-{uuid4().hex}",
@@ -135,11 +146,14 @@ class SharedMemoryVideoFramePublisher:
                     process_mutex.close()
                 except OSError:
                     pass
+            if frame_event is not None:
+                frame_event.close()
             self._buffer.release()
             self._memory.close()
             self._memory.unlink()
             raise
         self._process_mutex = process_mutex
+        self._frame_event = frame_event
         self._descriptor = descriptor
 
     @property
@@ -230,7 +244,13 @@ class SharedMemoryVideoFramePublisher:
                 if normalized.nbytes < required:
                     raise ValueError("Video frame size is smaller than its declared layout")
                 normalized_planes.append(normalized)
-            payload_size = row_bytes * sum(plane_rows)
+            plane_sizes = tuple(
+                stride * (rows - 1) + row_bytes
+                for stride, rows in zip(plane_strides, plane_rows, strict=True)
+            )
+            payload_size = sum(plane_sizes)
+            if payload_size > self._frame_bytes:
+                raise ValueError("Video frame layout exceeds the channel capacity")
             timestamp = _non_negative_u64(
                 presentation_timestamp_ns,
                 "frame presentation timestamp",
@@ -241,9 +261,10 @@ class SharedMemoryVideoFramePublisher:
                     raise RuntimeError("Frame channel publisher is closed")
                 if self._sequence >= _MAXIMUM_SEQUENCE:
                     raise OverflowError("Frame channel sequence is exhausted")
-                with self._process_mutex:
+                self._process_mutex.acquire(timeout_ms=0)
+                try:
                     sequence = self._sequence + 1
-                    slot_index = (sequence - 1) % FRAME_CHANNEL_SLOT_COUNT
+                    slot_index = self._select_write_slot(sequence)
                     slot_offset = FRAME_CHANNEL_HEADER_SIZE + slot_index * self._slot_size
                     marker_offset = slot_offset + _SLOT_MARKER_OFFSET
                     struct.pack_into("<Q", self._buffer, marker_offset, sequence * 2 - 1)
@@ -263,32 +284,44 @@ class SharedMemoryVideoFramePublisher:
                         payload_size,
                         frame_width,
                         frame_height,
-                        row_bytes,
+                        plane_strides[0],
                         (
                             FRAME_CHANNEL_PIXEL_FORMAT_BGRA
                             if pixel_format is VideoPixelFormat.BGRA
                             else FRAME_CHANNEL_PIXEL_FORMAT_NV12
                         ),
                     )
+                    second_plane_stride = (
+                        plane_strides[1]
+                        if pixel_format is VideoPixelFormat.NV12
+                        else 0
+                    )
+                    second_plane_offset = (
+                        plane_sizes[0]
+                        if pixel_format is VideoPixelFormat.NV12
+                        else 0
+                    )
+                    struct.pack_into(
+                        "<I",
+                        self._buffer,
+                        slot_offset + _SLOT_SECOND_PLANE_STRIDE_OFFSET,
+                        second_plane_stride,
+                    )
+                    struct.pack_into(
+                        "<Q",
+                        self._buffer,
+                        slot_offset + _SLOT_SECOND_PLANE_OFFSET_OFFSET,
+                        second_plane_offset,
+                    )
                     payload_offset = slot_offset + FRAME_CHANNEL_SLOT_HEADER_SIZE
                     target = payload_offset
-                    for plane, stride, rows in zip(
+                    for plane, plane_size in zip(
                         normalized_planes,
-                        plane_strides,
-                        plane_rows,
+                        plane_sizes,
                         strict=True,
                     ):
-                        plane_size = row_bytes * rows
-                        if stride == row_bytes:
-                            self._buffer[target : target + plane_size] = plane[:plane_size]
-                            target += plane_size
-                            continue
-                        for row in range(rows):
-                            source_offset = row * stride
-                            self._buffer[target : target + row_bytes] = plane[
-                                source_offset : source_offset + row_bytes
-                            ]
-                            target += row_bytes
+                        self._buffer[target : target + plane_size] = plane[:plane_size]
+                        target += plane_size
                     struct.pack_into("<Q", self._buffer, marker_offset, sequence * 2)
                     struct.pack_into(
                         "<Q",
@@ -297,7 +330,10 @@ class SharedMemoryVideoFramePublisher:
                         sequence,
                     )
                     self._sequence = sequence
-                    return sequence
+                finally:
+                    self._process_mutex.release()
+                self._frame_event.set()
+                return sequence
         finally:
             released: set[int] = set()
             for plane in (*normalized_planes, *frame_planes):
@@ -318,6 +354,10 @@ class SharedMemoryVideoFramePublisher:
             except OSError as error:
                 close_error = error
             finally:
+                try:
+                    self._frame_event.close()
+                except OSError as error:
+                    close_error = close_error or error
                 self._buffer.release()
                 self._memory.close()
                 self._memory.unlink()
@@ -338,6 +378,11 @@ class SharedMemoryVideoFramePublisher:
 
     def _initialize_mapping(self, generation: int) -> None:
         self._buffer[:FRAME_CHANNEL_HEADER_SIZE] = bytes(FRAME_CHANNEL_HEADER_SIZE)
+        for slot_index in range(FRAME_CHANNEL_SLOT_COUNT):
+            slot_offset = FRAME_CHANNEL_HEADER_SIZE + slot_index * self._slot_size
+            self._buffer[
+                slot_offset : slot_offset + FRAME_CHANNEL_SLOT_HEADER_SIZE
+            ] = bytes(FRAME_CHANNEL_SLOT_HEADER_SIZE)
         struct.pack_into(
             "<8sHHIIIIIQQQ",
             self._buffer,
@@ -354,6 +399,33 @@ class SharedMemoryVideoFramePublisher:
             self._slot_size,
             self._mapping_size,
         )
+
+    def _select_write_slot(self, sequence: int) -> int:
+        preferred = (sequence - 1) % FRAME_CHANNEL_SLOT_COUNT
+        for attempt in range(FRAME_CHANNEL_SLOT_COUNT):
+            slot_index = (preferred + attempt) % FRAME_CHANNEL_SLOT_COUNT
+            slot_offset = FRAME_CHANNEL_HEADER_SIZE + slot_index * self._slot_size
+            lease_count, owner_pid, owner_creation_time = struct.unpack_from(
+                "<IIQ",
+                self._buffer,
+                slot_offset + _SLOT_LEASE_COUNT_OFFSET,
+            )
+            if lease_count and not _windows_process_identity_is_alive(
+                owner_pid,
+                owner_creation_time,
+            ):
+                struct.pack_into(
+                    "<IIQ",
+                    self._buffer,
+                    slot_offset + _SLOT_LEASE_COUNT_OFFSET,
+                    0,
+                    0,
+                    0,
+                )
+                lease_count = 0
+            if lease_count == 0:
+                return slot_index
+        raise TimeoutError("All frame channel slots are leased")
 
 
 class SharedMemoryBgraFramePublisher(SharedMemoryVideoFramePublisher):
@@ -432,9 +504,13 @@ class _SharedMemoryFrameSubscriber:
         self._last_sequence = 0
         self._closed = False
         process_mutex: _WindowsNamedMutex | None = None
+        frame_event: _WindowsAutoResetEvent | None = None
         try:
             process_mutex = _WindowsNamedMutex(
                 f"{FRAME_CHANNEL_MUTEX_PREFIX}{self._memory.name}"
+            )
+            frame_event = _WindowsAutoResetEvent(
+                f"{FRAME_CHANNEL_EVENT_PREFIX}{self._memory.name}"
             )
             self._descriptor = FrameChannelDescriptor(
                 channel_id=channel_id or f"solin-media-output-{uuid4().hex}",
@@ -463,11 +539,14 @@ class _SharedMemoryFrameSubscriber:
                     process_mutex.close()
                 except OSError:
                     pass
+            if frame_event is not None:
+                frame_event.close()
             self._buffer.release()
             self._memory.close()
             self._memory.unlink()
             raise
         self._process_mutex = process_mutex
+        self._frame_event = frame_event
 
     @property
     def descriptor(self) -> FrameChannelDescriptor:
@@ -485,16 +564,29 @@ class _SharedMemoryFrameSubscriber:
                     return None
                 if sequence > _MAXIMUM_SEQUENCE:
                     raise RuntimeError("Frame channel sequence is invalid")
-                slot_index = (sequence - 1) % FRAME_CHANNEL_SLOT_COUNT
-                slot_offset = (
-                    FRAME_CHANNEL_HEADER_SIZE + slot_index * self._slot_size
-                )
+                slot_offset = None
+                for slot_index in range(FRAME_CHANNEL_SLOT_COUNT):
+                    candidate = FRAME_CHANNEL_HEADER_SIZE + slot_index * self._slot_size
+                    if struct.unpack_from("<QQ", self._buffer, candidate) == (
+                        sequence * 2,
+                        sequence,
+                    ):
+                        slot_offset = candidate
+                        break
+                if slot_offset is None:
+                    return None
                 marker, frame_sequence, timestamp, duration, produced = struct.unpack_from(
                     "<QQQQQ", self._buffer, slot_offset
                 )
                 payload_size, width, height, stride, pixel_format = struct.unpack_from(
                     "<QIIII", self._buffer, slot_offset + _SLOT_PAYLOAD_SIZE_OFFSET
                 )
+                second_stride = struct.unpack_from(
+                    "<I", self._buffer, slot_offset + _SLOT_SECOND_PLANE_STRIDE_OFFSET
+                )[0]
+                second_offset = struct.unpack_from(
+                    "<Q", self._buffer, slot_offset + _SLOT_SECOND_PLANE_OFFSET_OFFSET
+                )[0]
                 bgra = pixel_format == FRAME_CHANNEL_PIXEL_FORMAT_BGRA
                 nv12 = pixel_format == FRAME_CHANNEL_PIXEL_FORMAT_NV12
                 row_bytes = width * (4 if bgra else 1)
@@ -508,6 +600,8 @@ class _SharedMemoryFrameSubscriber:
                     or not 1 <= height <= self._height
                     or (nv12 and (width % 2 != 0 or height % 2 != 0))
                     or stride != row_bytes
+                    or second_stride != (row_bytes if nv12 else 0)
+                    or second_offset != (row_bytes * height if nv12 else 0)
                     or not (bgra or (self._dynamic_pixel_format and nv12))
                     or payload_size != expected_payload_size
                 ):
@@ -530,6 +624,12 @@ class _SharedMemoryFrameSubscriber:
                     pixels=pixels,
                 )
 
+    def wait_for_frame(self, timeout_ms: int) -> bool:
+        return self._frame_event.wait(timeout_ms)
+
+    def wake(self) -> None:
+        self._frame_event.set()
+
     def close(self) -> None:
         with self._lock:
             if self._closed:
@@ -541,6 +641,10 @@ class _SharedMemoryFrameSubscriber:
             except OSError as error:
                 close_error = error
             finally:
+                try:
+                    self._frame_event.close()
+                except OSError as error:
+                    close_error = close_error or error
                 self._buffer.release()
                 self._memory.close()
                 self._memory.unlink()
@@ -549,6 +653,11 @@ class _SharedMemoryFrameSubscriber:
 
     def _initialize_mapping(self, generation: int) -> None:
         self._buffer[:FRAME_CHANNEL_HEADER_SIZE] = bytes(FRAME_CHANNEL_HEADER_SIZE)
+        for slot_index in range(FRAME_CHANNEL_SLOT_COUNT):
+            slot_offset = FRAME_CHANNEL_HEADER_SIZE + slot_index * self._slot_size
+            self._buffer[
+                slot_offset : slot_offset + FRAME_CHANNEL_SLOT_HEADER_SIZE
+            ] = bytes(FRAME_CHANNEL_SLOT_HEADER_SIZE)
         struct.pack_into(
             "<8sHHIIIIIQQQ",
             self._buffer,
@@ -619,6 +728,68 @@ class SharedMemoryVideoFrameSubscriber(_SharedMemoryFrameSubscriber):
         )
 
 
+class _WindowsAutoResetEvent:
+    _WAIT_OBJECT_0 = 0
+    _WAIT_TIMEOUT = 0x102
+
+    def __init__(self, name: str) -> None:
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        create_event = kernel32.CreateEventW
+        create_event.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_bool,
+            ctypes.c_bool,
+            ctypes.c_wchar_p,
+        ]
+        create_event.restype = ctypes.c_void_p
+        wait = kernel32.WaitForSingleObject
+        wait.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+        wait.restype = ctypes.c_uint32
+        set_event = kernel32.SetEvent
+        set_event.argtypes = [ctypes.c_void_p]
+        set_event.restype = ctypes.c_bool
+        close_handle = kernel32.CloseHandle
+        close_handle.argtypes = [ctypes.c_void_p]
+        close_handle.restype = ctypes.c_bool
+        handle = create_event(None, False, False, name)
+        if not handle:
+            raise OSError(ctypes.get_last_error(), "Could not create frame channel event")
+        self._handle: int | None = handle
+        self._wait = wait
+        self._set_event = set_event
+        self._close_handle = close_handle
+
+    def wait(self, timeout_ms: int) -> bool:
+        if (
+            isinstance(timeout_ms, bool)
+            or not isinstance(timeout_ms, int)
+            or not 0 <= timeout_ms < 0xFFFFFFFF
+        ):
+            raise ValueError("Frame channel event timeout is invalid")
+        handle = self._handle
+        if handle is None:
+            return False
+        result = self._wait(handle, timeout_ms)
+        if result == self._WAIT_OBJECT_0:
+            return True
+        if result == self._WAIT_TIMEOUT:
+            return False
+        raise OSError(ctypes.get_last_error(), "Could not wait for frame channel event")
+
+    def set(self) -> None:
+        handle = self._handle
+        if handle is not None and not self._set_event(handle):
+            raise OSError(ctypes.get_last_error(), "Could not signal frame channel event")
+
+    def close(self) -> None:
+        handle = self._handle
+        if handle is None:
+            return
+        self._handle = None
+        if not self._close_handle(handle):
+            raise OSError(ctypes.get_last_error(), "Could not close frame channel event")
+
+
 class _WindowsNamedMutex:
     _WAIT_OBJECT_0 = 0
     _WAIT_ABANDONED = 0x80
@@ -648,15 +819,25 @@ class _WindowsNamedMutex:
         self._close_handle = close_handle
 
     def __enter__(self) -> _WindowsNamedMutex:
+        self.acquire(timeout_ms=self._WAIT_BUDGET_MS)
+        return self
+
+    def acquire(self, *, timeout_ms: int) -> None:
+        if isinstance(timeout_ms, bool) or not isinstance(timeout_ms, int) or timeout_ms < 0:
+            raise ValueError("Frame channel mutex timeout must be non-negative")
         handle = self._handle
         if handle is None:
             raise RuntimeError("Frame channel mutex is closed")
-        result = self._wait(handle, self._WAIT_BUDGET_MS)
+        result = self._wait(handle, timeout_ms)
         if result == self._WAIT_TIMEOUT:
             raise TimeoutError("Timed out acquiring frame channel mutex")
         if result not in (self._WAIT_OBJECT_0, self._WAIT_ABANDONED):
             raise OSError(ctypes.get_last_error(), "Could not acquire frame channel mutex")
-        return self
+
+    def release(self) -> None:
+        handle = self._handle
+        if handle is not None and not self._release(handle):
+            raise OSError(ctypes.get_last_error(), "Could not release frame channel mutex")
 
     def __exit__(
         self,
@@ -665,9 +846,7 @@ class _WindowsNamedMutex:
         traceback: TracebackType | None,
     ) -> None:
         del exc_type, exc_value, traceback
-        handle = self._handle
-        if handle is not None and not self._release(handle):
-            raise OSError(ctypes.get_last_error(), "Could not release frame channel mutex")
+        self.release()
 
     def close(self) -> None:
         handle = self._handle
@@ -676,6 +855,63 @@ class _WindowsNamedMutex:
         self._handle = None
         if not self._close_handle(handle):
             raise OSError(ctypes.get_last_error(), "Could not close frame channel mutex")
+
+
+def _windows_process_identity_is_alive(
+    process_id: int,
+    expected_creation_time: int,
+) -> bool:
+    if sys.platform != "win32" or process_id <= 0:
+        return False
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    open_process = kernel32.OpenProcess
+    open_process.argtypes = [ctypes.c_uint32, ctypes.c_bool, ctypes.c_uint32]
+    open_process.restype = ctypes.c_void_p
+    wait = kernel32.WaitForSingleObject
+    wait.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+    wait.restype = ctypes.c_uint32
+    close_handle = kernel32.CloseHandle
+    close_handle.argtypes = [ctypes.c_void_p]
+    close_handle.restype = ctypes.c_bool
+    get_process_times = kernel32.GetProcessTimes
+    get_process_times.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(wintypes.FILETIME),
+        ctypes.POINTER(wintypes.FILETIME),
+        ctypes.POINTER(wintypes.FILETIME),
+        ctypes.POINTER(wintypes.FILETIME),
+    ]
+    get_process_times.restype = ctypes.c_bool
+    handle = open_process(
+        0x00100000 | 0x1000,  # SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION
+        False,
+        process_id,
+    )
+    if not handle:
+        # Access denial is not proof that the process exited. Only an invalid PID
+        # is safe to reclaim; every other failure keeps the slot leased.
+        return ctypes.get_last_error() != 87  # ERROR_INVALID_PARAMETER
+    try:
+        if wait(handle, 0) != 0x102:  # WAIT_TIMEOUT means still running.
+            return False
+        if expected_creation_time == 0:
+            return True
+        creation = wintypes.FILETIME()
+        exit_time = wintypes.FILETIME()
+        kernel_time = wintypes.FILETIME()
+        user_time = wintypes.FILETIME()
+        if not get_process_times(
+            handle,
+            ctypes.byref(creation),
+            ctypes.byref(exit_time),
+            ctypes.byref(kernel_time),
+            ctypes.byref(user_time),
+        ):
+            return True
+        actual_creation_time = (creation.dwHighDateTime << 32) | creation.dwLowDateTime
+        return actual_creation_time == expected_creation_time
+    finally:
+        close_handle(handle)
 
 
 def _non_negative_u64(value: int, field_name: str) -> int:

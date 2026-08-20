@@ -71,6 +71,7 @@ class DirectShowCapturePin final : public CSourceStream,
     std::uint64_t last_generation_{0U};
     std::uint64_t last_input_sequence_{0U};
     bool last_frame_was_live_{false};
+    bool last_frame_was_direct_{false};
     bool have_last_input_sequence_{false};
     bool first_sample_{true};
 };

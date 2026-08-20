@@ -185,6 +185,18 @@ class FakeRenderer final : public solin::media_engine::SceneRenderer {
         return frame.sequence;
     }
 
+    [[nodiscard]] bool wait_for_frame(
+        solin::media_engine::OutputBus, std::uint64_t,
+        const std::stop_token stop_token,
+        const std::chrono::steady_clock::time_point deadline) const noexcept override {
+        std::mutex mutex;
+        std::condition_variable_any wakeup;
+        std::unique_lock lock{mutex};
+        static_cast<void>(wakeup.wait_until(
+            lock, stop_token, deadline, [] { return false; }));
+        return false;
+    }
+
     void shutdown() noexcept override {}
 };
 

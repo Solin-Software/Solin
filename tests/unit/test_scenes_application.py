@@ -28,7 +28,6 @@ from solin.core.scenes.model import (
 )
 from solin.core.scenes.presets import (
     CAMERA_SCENE_ID,
-    CONTENT_CAMERA_PIP_SCENE_ID,
     CONTENT_SCENE_ID,
     SceneSeedNames,
     create_default_scene_document,
@@ -353,27 +352,6 @@ def test_program_roles_must_be_different() -> None:
 
     with pytest.raises(SceneConflictError, match="must be different"):
         service.set_program_media_scene(CAMERA_SCENE_ID)
-
-
-def test_direct_content_scene_is_independent_from_the_program_media_role() -> None:
-    service = _service()
-
-    service.set_program_media_scene(CONTENT_CAMERA_PIP_SCENE_ID)
-
-    assert service.program_media_scene_id == CONTENT_CAMERA_PIP_SCENE_ID
-    assert service.direct_content_scene_id == CONTENT_SCENE_ID
-
-    content_scene = service.document.scene(CONTENT_SCENE_ID)
-    content_layer = content_scene.layers[0]
-    service.update_scene(
-        CONTENT_SCENE_ID,
-        replace(
-            content_scene,
-            layers=(replace(content_layer, opacity=0.8),),
-        ),
-    )
-
-    assert service.direct_content_scene_id is None
 
 
 def test_program_roles_can_be_removed_independently() -> None:

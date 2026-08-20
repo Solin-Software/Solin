@@ -58,6 +58,58 @@ def _wait_for_pixel(
     return None
 
 
+def _wait_for_red_center(
+    subscriber: SharedMemoryBgraFrameSubscriber,
+    *,
+    timeout: float = 5.0,
+) -> VideoFrame | None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            candidate = subscriber.read_latest()
+        except TimeoutError:
+            candidate = None
+        if candidate is not None:
+            blue, green, red, alpha = _bgra_pixel(
+                candidate,
+                candidate.width // 2,
+                candidate.height // 2,
+            )
+            if red >= 220 and green <= 35 and blue <= 35 and alpha == 255:
+                return candidate
+        time.sleep(1 / 120)
+    return None
+
+
+def _padded_red_nv12_frame() -> QVideoFrame:
+    width = 1278
+    height = 720
+    frame = QVideoFrame(
+        QVideoFrameFormat(
+            QSize(width, height),
+            QVideoFrameFormat.PixelFormat.Format_NV12,
+        )
+    )
+    assert frame.map(QVideoFrame.MapMode.WriteOnly)
+    try:
+        y_stride = frame.bytesPerLine(0)
+        uv_stride = frame.bytesPerLine(1)
+        assert y_stride > width
+        y_plane = frame.bits(0)
+        uv_plane = frame.bits(1)
+        y_row = bytes((81,)) * width
+        uv_row = bytes((90, 240)) * (width // 2)
+        for row in range(height):
+            start = row * y_stride
+            y_plane[start : start + width] = y_row
+        for row in range(height // 2):
+            start = row * uv_stride
+            uv_plane[start : start + width] = uv_row
+    finally:
+        frame.unmap()
+    return frame
+
+
 def _wait_for_clean_aspect_transition(
     subscriber: SharedMemoryBgraFrameSubscriber,
     *,
@@ -197,6 +249,17 @@ def test_actual_size_content_reaches_composed_native_output(tmp_path) -> None:
         assert latest is not None
         assert (latest.width, latest.height) == (1920, 1080)
         assert center_pixel == bytes((0x56, 0x34, 0x12, 0xFF))
+
+        # Qt commonly aligns NV12 rows beyond the visible width. This exercises
+        # the production ingress contract end-to-end: preserve both strides,
+        # bulk-copy each plane once, and let GstVideoMeta describe the padding.
+        padded_nv12 = _padded_red_nv12_frame()
+        padded_output = None
+        padded_deadline = time.monotonic() + 5.0
+        while padded_output is None and time.monotonic() < padded_deadline:
+            ingress.submit_frame(padded_nv12)
+            padded_output = _wait_for_red_center(egress, timeout=0.05)
+        assert padded_output is not None
 
         program_frame = None
         deadline = time.monotonic() + 5.0

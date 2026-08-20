@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import struct
 import sys
 from multiprocessing import shared_memory
@@ -93,6 +94,37 @@ def test_shared_memory_channel_rejects_mismatched_or_late_frames() -> None:
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows shared-memory backend")
+def test_shared_memory_publisher_skips_leased_slots_and_drops_when_full() -> None:
+    pixels = bytes(range(16))
+    with SharedMemoryBgraFramePublisher(2, 2) as publisher:
+        attached = shared_memory.SharedMemory(
+            name=publisher.descriptor.handle_token,
+            create=False,
+        )
+        try:
+            slot_size = FRAME_CHANNEL_SLOT_HEADER_SIZE + len(pixels)
+            first_slot = FRAME_CHANNEL_HEADER_SIZE
+            struct.pack_into("<II", attached.buf, first_slot + 64, 1, os.getpid())
+
+            sequence = publisher.publish(pixels)
+
+            second_slot = FRAME_CHANNEL_HEADER_SIZE + slot_size
+            assert sequence == 1
+            assert struct.unpack_from("<QQ", attached.buf, second_slot) == (2, 1)
+
+            for slot_index in range(FRAME_CHANNEL_SLOT_COUNT):
+                slot = FRAME_CHANNEL_HEADER_SIZE + slot_index * slot_size
+                struct.pack_into("<II", attached.buf, slot + 64, 1, os.getpid())
+            with pytest.raises(TimeoutError, match="slots are leased"):
+                publisher.publish(pixels)
+
+            struct.pack_into("<IIQ", attached.buf, first_slot + 64, 1, 0, 0)
+            assert publisher.publish(pixels) == 2
+        finally:
+            attached.close()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows shared-memory backend")
 def test_shared_memory_channel_accepts_frames_smaller_than_its_capacity() -> None:
     with SharedMemoryBgraFramePublisher(4, 4) as publisher:
         sequence = publisher.publish(
@@ -127,6 +159,9 @@ def test_shared_memory_subscriber_reads_native_compositor_frames() -> None:
         create=False,
     )
     try:
+        assert not subscriber.wait_for_frame(0)
+        subscriber.wake()
+        assert subscriber.wait_for_frame(10)
         pixels = bytes(reversed(range(16)))
         sequence = 1
         slot = FRAME_CHANNEL_HEADER_SIZE

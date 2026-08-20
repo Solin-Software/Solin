@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import threading
-import time
 from typing import Protocol
 
 from PySide6.QtCore import QObject, QSize, Signal
@@ -20,7 +19,7 @@ from solin.core.scenes.model import VideoPixelFormat
 
 
 log = logging.getLogger(__name__)
-_POLL_INTERVAL_SECONDS = 1.0 / 60.0
+_FRAME_WAIT_TIMEOUT_MS = 1_000
 
 
 class _FrameSubscriber(Protocol):
@@ -28,6 +27,10 @@ class _FrameSubscriber(Protocol):
     def descriptor(self) -> FrameChannelDescriptor: ...
 
     def read_latest(self) -> VideoFrame | None: ...
+
+    def wait_for_frame(self, timeout_ms: int) -> bool: ...
+
+    def wake(self) -> None: ...
 
     def close(self) -> None: ...
 
@@ -49,6 +52,7 @@ class _SceneFrameEgressController(QObject):
         super().__init__(parent)
         self._condition = threading.Condition()
         self._subscriber: _FrameSubscriber | None = None
+        self._retired_subscribers: list[_FrameSubscriber] = []
         self._closed = False
         self._configure_locked(width, height)
         self._worker = threading.Thread(
@@ -85,9 +89,11 @@ class _SceneFrameEgressController(QObject):
                 replacement.close()
                 return
             self._subscriber = replacement
+            if current is not None:
+                self._retired_subscribers.append(current)
             self._condition.notify_all()
         if current is not None:
-            current.close()
+            current.wake()
         self.descriptor_changed.emit(
             None if replacement is None else replacement.descriptor
         )
@@ -98,13 +104,19 @@ class _SceneFrameEgressController(QObject):
                 return
             self._closed = True
             subscriber = self._subscriber
+            subscribers_to_close = list(self._retired_subscribers)
+            if subscriber is not None:
+                subscribers_to_close.append(subscriber)
             self._subscriber = None
+            self._retired_subscribers.clear()
             self._condition.notify_all()
+        for item in subscribers_to_close:
+            item.wake()
         self._worker.join(timeout=2.0)
         if self._worker.is_alive():
             log.warning("Scene frame egress did not stop within its shutdown budget")
-        if subscriber is not None:
-            subscriber.close()
+        for item in subscribers_to_close:
+            item.close()
 
     def _configure_locked(self, width: int, height: int) -> None:
         try:
@@ -119,28 +131,47 @@ class _SceneFrameEgressController(QObject):
         raise NotImplementedError
 
     def _run(self) -> None:
-        next_poll_at = 0.0
         while True:
             failed_subscriber: _FrameSubscriber | None = None
             with self._condition:
+                retired_subscribers = self._retired_subscribers
+                self._retired_subscribers = []
                 if self._closed:
                     return
                 subscriber = self._subscriber
-                if subscriber is None:
+                if subscriber is None and not retired_subscribers:
                     self._condition.wait()
                     continue
-                remaining = next_poll_at - time.monotonic()
-                if remaining > 0:
-                    self._condition.wait(timeout=remaining)
-                    continue
+            for retired in retired_subscribers:
                 try:
-                    frame = subscriber.read_latest()
-                except Exception:  # noqa: BLE001 - native frame boundary
-                    log.warning("Could not read the native media-window frame", exc_info=True)
-                    frame = None
+                    retired.close()
+                except OSError:
+                    log.debug("Could not close retired scene frame transport", exc_info=True)
+            if subscriber is None:
+                continue
+            try:
+                signaled = subscriber.wait_for_frame(_FRAME_WAIT_TIMEOUT_MS)
+            except Exception:  # noqa: BLE001 - native frame boundary
+                log.warning("Could not wait for the native media-window frame", exc_info=True)
+                signaled = False
+                with self._condition:
                     if self._subscriber is subscriber:
                         self._subscriber = None
                         failed_subscriber = subscriber
+            frame = None
+            if signaled:
+                with self._condition:
+                    if self._closed:
+                        return
+                    if self._subscriber is not subscriber:
+                        continue
+                    try:
+                        frame = subscriber.read_latest()
+                    except Exception:  # noqa: BLE001 - native frame boundary
+                        log.warning("Could not read the native media-window frame", exc_info=True)
+                        if self._subscriber is subscriber:
+                            self._subscriber = None
+                            failed_subscriber = subscriber
             if failed_subscriber is not None:
                 try:
                     failed_subscriber.close()
@@ -151,7 +182,6 @@ class _SceneFrameEgressController(QObject):
                 payload = self._prepare_payload(frame)
                 if payload is not None:
                     self.frame_ready.emit(payload)
-            next_poll_at = time.monotonic() + _POLL_INTERVAL_SECONDS
 
 
 class SceneFrameEgressController(_SceneFrameEgressController):

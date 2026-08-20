@@ -10,6 +10,7 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <stop_token>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -117,6 +118,15 @@ class PreparedSceneRenderGraph {
         static_cast<void>(visitor);
         return std::nullopt;
     }
+    [[nodiscard]] virtual bool wait_for_frame(
+        std::uint64_t after_sequence, std::stop_token stop_token,
+        std::chrono::steady_clock::time_point deadline) const noexcept {
+        static_cast<void>(after_sequence);
+        static_cast<void>(stop_token);
+        static_cast<void>(deadline);
+        return false;
+    }
+    virtual void wake_frame_waiters() noexcept {}
     virtual void start_transition() noexcept {}
     virtual void stop() noexcept {}
     virtual void set_direct_output_enabled(bool enabled) noexcept {
@@ -188,6 +198,15 @@ class SceneRenderer {
         static_cast<void>(after_sequence);
         static_cast<void>(visitor);
         return std::nullopt;
+    }
+    [[nodiscard]] virtual bool wait_for_frame(
+        OutputBus bus, std::uint64_t after_sequence, std::stop_token stop_token,
+        std::chrono::steady_clock::time_point deadline) const noexcept {
+        static_cast<void>(bus);
+        static_cast<void>(after_sequence);
+        static_cast<void>(stop_token);
+        static_cast<void>(deadline);
+        return false;
     }
     virtual void shutdown() noexcept = 0;
 

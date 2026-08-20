@@ -464,6 +464,19 @@ ProtocolReply ControlSession::handle(const ControlEnvelope& request) {
         validate_ack_payload(payload);
         return {.response = response_for(request, "ack", std::move(payload))};
     }
+    if (request.message_type == "set_window_targets") {
+        if (!has_exact_fields(request.payload, {"window_targets"}) ||
+            !request.payload.at("window_targets").is_array()) {
+            throw std::runtime_error("invalid window targets payload");
+        }
+        auto payload = services_.set_window_targets
+                           ? services_.set_window_targets(
+                                 request.payload.at("window_targets"),
+                                 request.document_revision, request.sequence)
+                           : unavailable_ack();
+        validate_ack_payload(payload);
+        return {.response = response_for(request, "ack", std::move(payload))};
+    }
     if (request.message_type == "prepare_scene") {
         if (!has_exact_fields(request.payload, {"bus_id", "scene_id", "transition"}) ||
             !request.payload.at("transition").is_object() ||

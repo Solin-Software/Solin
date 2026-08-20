@@ -215,6 +215,27 @@ const DirectShowMediaProfile& DirectShowFrameAdapter::profile() const noexcept {
     return profile_;
 }
 
+bool DirectShowFrameAdapter::write_direct_nv12(
+    const VideoFrameView& source,
+    const std::span<std::uint8_t> destination) const noexcept {
+    try {
+        if (profile_.pixel_format != DirectShowPixelFormat::nv12 ||
+            source.pixel_format != VideoFramePixelFormat::nv12 ||
+            source.width != profile_.width || source.height != profile_.height ||
+            !plane_covers_rows(source.planes[0], source.plane_strides[0],
+                               source.height, source.width) ||
+            !plane_covers_rows(source.planes[1], source.plane_strides[1],
+                               source.height / 2U, source.width) ||
+            destination.size() != profile_.sample_size()) {
+            return false;
+        }
+        copy_nv12(source, profile_, destination);
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
 bool DirectShowFrameAdapter::adapt(
     const VideoFrameView& source,
     const std::span<std::uint8_t> destination) noexcept {
@@ -229,9 +250,7 @@ bool DirectShowFrameAdapter::adapt(
             destination.size() != profile_.sample_size()) {
             return false;
         }
-        if (profile_.pixel_format == DirectShowPixelFormat::nv12 &&
-            source.width == profile_.width && source.height == profile_.height) {
-            copy_nv12(source, profile_, destination);
+        if (write_direct_nv12(source, destination)) {
             return true;
         }
         if (!write_nv12(source, scaled_nv12_)) {

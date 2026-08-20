@@ -2,8 +2,10 @@
 
 #include "solin/media_engine/scene_renderer.hpp"
 #include "solin/media_engine/scene_snapshot.hpp"
+#include "solin/media_engine/source_registry.hpp"
 
 #include <memory>
+#include <optional>
 #include <vector>
 
 namespace solin::media_engine {
@@ -16,7 +18,9 @@ class NativeWindowOutputController final {
     NativeWindowOutputController(const NativeWindowOutputController&) = delete;
     NativeWindowOutputController& operator=(const NativeWindowOutputController&) = delete;
 
-    [[nodiscard]] bool configure(const std::vector<OutputWindowConfiguration>& targets) noexcept;
+    [[nodiscard]] bool configure(
+        const std::vector<OutputWindowConfiguration>& targets,
+        std::optional<SourceLease> content_source = std::nullopt) noexcept;
     [[nodiscard]] bool set_enabled(bool enabled) noexcept;
     void shutdown() noexcept;
 

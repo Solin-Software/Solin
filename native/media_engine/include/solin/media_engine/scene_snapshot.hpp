@@ -4,12 +4,15 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <variant>
 #include <vector>
 
 #include <nlohmann/json.hpp>
 
 namespace solin::media_engine {
+
+inline constexpr std::string_view kSolinContentSourceId = "solin.content.current";
 
 enum class OutputBus : std::uint8_t {
     media_windows = 0U,
@@ -193,5 +196,8 @@ parse_scene_hydration_snapshot(const nlohmann::json& payload,
 
 [[nodiscard]] SceneLayerDefinition
 parse_scene_layer_definition(const nlohmann::json& value);
+
+[[nodiscard]] std::vector<OutputWindowConfiguration>
+parse_output_window_targets(const nlohmann::json& value);
 
 } // namespace solin::media_engine

@@ -54,6 +54,8 @@ struct ControlSessionServices {
         set_output_enabled{};
     std::function<nlohmann::json(std::string_view, bool, std::uint64_t, std::uint64_t)>
         set_render_enabled{};
+    std::function<nlohmann::json(const nlohmann::json&, std::uint64_t, std::uint64_t)>
+        set_window_targets{};
 };
 
 [[nodiscard]] ControlEnvelope parse_control_envelope(std::string_view payload);

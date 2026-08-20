@@ -120,7 +120,7 @@ def test_clearing_yearly_timer_fades_whole_page_before_restoring_idle():
     assert view._stack.currentIndex() == view._PAGE_YEARLY
     assert view._yearly_widget._countdown_remaining == 55
     assert view._yearly_timer_exit_pending is True
-    assert view._yearly_anim.duration() == view._media_anim.duration()
+    assert view._yearly_anim.duration() == view._YEARLY_TIMER_EXIT_FADE_DURATION_MS
 
     QTest.qWait((view._yearly_anim.duration() // 2) + 20)
     assert 0.0 < view._yearly_opacity.opacity() < 1.0
@@ -202,7 +202,7 @@ def test_native_video_output_bypasses_qt_frame_materialization() -> None:
     assert not view._native_output_active
 
 
-def test_new_untransformed_image_resets_zoom_before_clear_fade_finishes():
+def test_new_untransformed_image_resets_zoom_after_immediate_clear():
     view = _ProjectionViewHarness()
     image = QImage(160, 90, QImage.Format.Format_RGB32)
     image.fill(QColor("white"))
@@ -213,3 +213,20 @@ def test_new_untransformed_image_resets_zoom_before_clear_fade_finishes():
     view.show_image_from_qimage(image, cache_pixmap=False)
 
     assert view.display_label._image_transform.current == IDENTITY_IMAGE_TRANSFORM
+
+
+def test_media_changes_do_not_install_or_run_a_cpu_opacity_fade() -> None:
+    view = _ProjectionViewHarness()
+    image = QImage(160, 90, QImage.Format.Format_RGB32)
+    image.fill(QColor("white"))
+
+    view.show_image_from_qimage(image)
+
+    assert view._stack.currentIndex() == view._PAGE_MEDIA
+    assert view.display_label.graphicsEffect() is None
+    assert not hasattr(view.display_label, "_fade_timer")
+
+    view.clear()
+
+    assert not view._is_showing_media
+    assert view._stack.currentIndex() == view._PAGE_YEARLY

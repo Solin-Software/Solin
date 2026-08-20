@@ -79,6 +79,10 @@ build\native\media-engine-gstreamer\Release\solin-virtual-camera-frame-adapter-b
 
 CTest fails the Release build if any measured P95 exceeds the budget.
 
+For process-level measurements of the complete current media route, including reproducible
+fixture generation, explicit one-second CPU buckets, and provenance requirements, see
+[Native media performance measurements](native-media-performance.md).
+
 The manual `Build Solin Windows` workflow builds the standalone application and
 full installer. Upgrade smoke testing additionally requires the URL of the
 previously distributed installer.

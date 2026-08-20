@@ -169,6 +169,11 @@ class ContentFrameIngressController(QObject):
                 if frame is not None:
                     try:
                         self._publish(frame)
+                    except TimeoutError:
+                        # Slot leases and the cross-process mutex are deliberately
+                        # non-blocking. Keep the channel and let the next latest
+                        # frame supersede this one.
+                        pass
                     except FrameChannelUnavailableError:
                         log.info("Native content frame transport is unavailable on this platform")
                         self.descriptor_changed.emit(None)

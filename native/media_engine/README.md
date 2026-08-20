@@ -17,23 +17,36 @@ temporary resources after completion. The editor Preview always cuts immediately
 renderer builds one bounded BGRA/D3D11 pipeline per output, shares leaf sources and nested
 scene nodes inside each pipeline, and implements crop, contain/cover/stretch fit, mirroring,
 rotation, placement, and opacity. Solin content enters through a
-versioned, three-slot latest-frame video channel. Qt video stays in NV12 and is copied plane
-for plane without `QImage` conversion; static and unsupported formats use the BGRA path.
-Both feed a native `appsrc` and upload to the compositor's D3D11 device without using the
-JSON pipe. Keyed D3D11 texture ingress remains the preferred future cross-process zero-copy
-path. The virtual-camera render branch converts on the shared D3D11 device, downloads a
+versioned, three-slot latest-frame video channel. Qt video stays in NV12 and is bulk-copied
+once per plane without `QImage` conversion or Python row loops. Protocol v4 preserves the
+source strides and offsets, and `GstVideoMeta` describes that layout to the upload path;
+static and unsupported formats use the BGRA path.
+Protocol v4 leases individual slots while D3D11 upload consumes them, so the normal Windows
+path wraps the SHM payload directly in `appsrc` without a second owned-pixel copy. The Qt
+producer takes the control mutex with a zero timeout, chooses another unleased slot, or drops
+the frame; it never waits for the engine. Auto-reset frame events and a process-local source
+activity signal wake the source, compositor, and output workers without 1–4 ms polling. The
+system-memory fallback still copies before releasing its slot. Keyed D3D11 texture ingress
+remains the preferred future cross-process zero-copy path. The virtual-camera render branch
+converts on the shared D3D11 device, downloads a
 tightly packed NV12 edge frame, and publishes it through a separate lock-free, three-slot
 shared-memory channel. A per-user DirectShow source filter consumes that channel through a
 private protocol-v3 broker. The broker derives its pipe from the current SID and session,
 rejects remote clients, validates the client's token and session, and reveals only a
 read-only file-backed transport locator. Each x86 or x64 consumer owns an independent output
-sample while reading the same latest frame. The filter adapts the producer's NV12 frame to
+sample while reading the same latest frame. An exact-size NV12 consumer is filled directly
+from the validated stable SHM span; staging remains only for scaling, letterboxing, and YUY2
+conversion. The filter adapts the producer's NV12 frame to
 eight fixed NV12/YUY2 30 fps profiles and serves a branded standby frame whenever the
 producer heartbeat is stale. The public virtual-camera capability is enabled only when both
 per-user filter registrations, x64 COM activation/device enumeration, cross-process
 transport, and the supported Windows version pass the runtime probe. On Windows, physical
 media surfaces render through engine-owned child windows and `d3d11videosink`; frames remain
-D3D11-backed and do not cross back through Python. The expanded in-app player remains in
+D3D11-backed and do not cross back through Python. Raw-media targets acquire the canonical
+`solin.content.current` runtime directly, independently of editable scenes, and bypass scene
+composition. Program-mirror targets consume the already-transitioned Program bus. Both routes
+are latest-frame/event-driven, with a bounded low-rate deadline only for window health and
+shutdown. The expanded in-app player remains in
 the Qt process and forwards the original QtMultimedia `QVideoFrame` to a `QVideoWidget`, so
 opening it does not start a native scene-compositor output or materialize a `QImage` per
 frame. A fixed BGRA channel feeds the independent scene-editor Preview. That compatibility
@@ -96,7 +109,8 @@ payload. The maximum accepted control frame is 8 MiB. Video frames never use thi
 The semantic protocol is versioned and rejects unknown envelope fields, duplicate JSON
 keys, invalid identities, stale sessions, mismatched process generations, and expired
 deadlines. Local-camera discovery, immutable scene-graph hydration, transactional
-preparation, cancellation, output state, rendered Program transitions, media-window egress,
+preparation, cancellation, output state, hot native-window target updates, rendered Program
+transitions, media-window egress,
 and Windows virtual-camera publication are available. Protocol version 3 binds Cut,
 Dissolve, or Fade through black to `prepare_scene`; `take_prepared` consumes the resulting
 token without accepting replacement effect parameters. If an animated effect cannot be

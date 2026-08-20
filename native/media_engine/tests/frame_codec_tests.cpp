@@ -176,6 +176,7 @@ void test_control_session_dispatches_validated_graph_commands() {
     bool geometry_previewed = false;
     bool output_changed = false;
     bool render_changed = false;
+    bool window_targets_changed = false;
     solin::media_engine::ControlSession session{
         "generation-1",
         {
@@ -271,6 +272,17 @@ void test_control_session_dispatches_validated_graph_commands() {
                                       const std::uint64_t sequence) {
                 render_changed = bus == "media_windows" && enabled && revision == 7U &&
                                  sequence == 6U;
+                return nlohmann::json{
+                    {"applied", true},
+                    {"error_code", ""},
+                    {"error_message", ""},
+                };
+            },
+            .set_window_targets = [&window_targets_changed](
+                                      const nlohmann::json& targets,
+                                      const std::uint64_t revision,
+                                      const std::uint64_t sequence) {
+                window_targets_changed = targets.empty() && revision == 7U && sequence == 7U;
                 return nlohmann::json{
                     {"applied", true},
                     {"error_code", ""},
@@ -379,6 +391,17 @@ void test_control_session_dispatches_validated_graph_commands() {
     expect(render_changed && render_reply.response.has_value() &&
                render_reply.response->payload.at("applied").get<bool>(),
            "render state is dispatched independently from destination state");
+
+    auto window_targets = hello_envelope();
+    window_targets.message_type = "set_window_targets";
+    window_targets.request_id = "window-targets-request";
+    window_targets.sequence = 7U;
+    window_targets.document_revision = 7U;
+    window_targets.payload = {{"window_targets", nlohmann::json::array()}};
+    const auto window_targets_reply = session.handle(window_targets);
+    expect(window_targets_changed && window_targets_reply.response.has_value() &&
+               window_targets_reply.response->payload.at("applied").get<bool>(),
+           "window targets are updated without hydrating the scene graph");
 }
 
 void test_transition_contract_rejects_invalid_and_legacy_payloads() {

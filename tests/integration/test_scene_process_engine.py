@@ -123,13 +123,21 @@ def test_subprocess_engine_executes_the_scene_command_lifecycle() -> None:
         sequence=5,
         deadline_ms=1000,
     ).result(2)
+    window_targets = engine.set_window_targets(
+        (),
+        request_id="window-targets-1",
+        sequence=6,
+        deadline_ms=1000,
+    ).result(2)
 
     assert taken.applied
     assert preview.applied
     assert output.document_revision == snapshot.document.revision
+    assert window_targets.applied
+    assert window_targets.document_revision == snapshot.document.revision
     metrics = engine.metrics
-    assert metrics.request_count >= 7
-    assert metrics.latency_sample_count >= 7
+    assert metrics.request_count >= 8
+    assert metrics.latency_sample_count >= 8
     assert 0 <= metrics.latency_p50_ms <= metrics.latency_p95_ms <= metrics.latency_maximum_ms
     engine.stop()
     _wait_until(lambda: engine.health.status is SceneEngineStatus.STOPPED)
