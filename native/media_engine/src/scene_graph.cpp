@@ -581,9 +581,10 @@ ScenePreparationReceipt SceneGraphRuntime::prepare(
                               "The scene preparation request already exists"};
     }
     const auto index = bus_index(bus);
-    const auto effective_request = bus == OutputBus::media_windows
-                                       ? SceneTransitionSpec{}
-                                       : transition;
+    const auto effective_request =
+        bus == OutputBus::media_windows || !impl_->outputs_enabled[index]
+            ? SceneTransitionSpec{}
+            : transition;
     auto prepared = impl_->prepare_graph(
         bus, scene_id, document_revision, request_id, impl_->document,
         impl_->applied_snapshot->outputs[index], effective_request);

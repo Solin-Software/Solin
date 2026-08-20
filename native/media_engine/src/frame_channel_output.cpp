@@ -120,10 +120,12 @@ class FrameChannelOutputController::Impl final {
                        maximum_frames_per_second_.value() - 1U) /
                       maximum_frames_per_second_.value()}
                 : std::chrono::nanoseconds::zero();
-        pump_ = std::jthread(
-            [renderer = renderer_, writer = next_writer, bus = bus_,
-             minimum_publication_interval](
-                const std::stop_token stop_token) {
+        set_system_memory_output_enabled_locked(true);
+        try {
+            pump_ = std::jthread(
+                [renderer = renderer_, writer = next_writer, bus = bus_,
+                 minimum_publication_interval](
+                    const std::stop_token stop_token) {
                 std::uint64_t last_sequence = 0U;
                 auto next_publication_at = std::chrono::steady_clock::time_point::min();
                 std::mutex cadence_mutex;
@@ -178,7 +180,11 @@ class FrameChannelOutputController::Impl final {
                     static_cast<void>(renderer->wait_for_frame(
                         bus, last_sequence, stop_token, deadline));
                 }
-            });
+                });
+        } catch (...) {
+            set_system_memory_output_enabled_locked(false);
+            throw;
+        }
         writer_ = std::move(next_writer);
         return true;
     }
@@ -189,6 +195,16 @@ class FrameChannelOutputController::Impl final {
             pump_.join();
         }
         writer_.reset();
+        set_system_memory_output_enabled_locked(false);
+    }
+
+    void set_system_memory_output_enabled_locked(const bool enabled) noexcept {
+        if (system_memory_output_enabled_ == enabled) {
+            return;
+        }
+        renderer_->set_system_memory_output_enabled(
+            bus_, SystemMemoryOutputConsumer::frame_channel, enabled);
+        system_memory_output_enabled_ = enabled;
     }
 
     std::shared_ptr<SceneRenderer> renderer_{};
@@ -198,6 +214,7 @@ class FrameChannelOutputController::Impl final {
     std::optional<FrameChannelConfiguration> channel_{};
     OutputVideoFormat format_{};
     bool desired_enabled_{false};
+    bool system_memory_output_enabled_{false};
     std::shared_ptr<FrameChannelWriter> writer_{};
     std::jthread pump_{};
 };

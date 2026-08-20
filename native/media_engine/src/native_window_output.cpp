@@ -439,8 +439,16 @@ class NativeWindowOutputController::Impl final {
                     std::array<std::shared_ptr<const SourceFrame>, 2U> frames{};
                     frames[static_cast<std::size_t>(OutputBus::media_windows)] =
                         content_runtime == nullptr ? nullptr : content_runtime->latest_frame();
+                    auto program_frame =
+                        renderer->latest_gpu_frame(OutputBus::virtual_camera);
+                    if (program_frame == nullptr) {
+                        // Device recovery and non-D3D builds retain the existing
+                        // system-memory route as a bounded compatibility fallback.
+                        program_frame =
+                            renderer->latest_frame(OutputBus::virtual_camera);
+                    }
                     frames[static_cast<std::size_t>(OutputBus::virtual_camera)] =
-                        renderer->latest_frame(OutputBus::virtual_camera);
+                        std::move(program_frame);
                     for (std::size_t index = 0U; index < frames.size(); ++index) {
                         const auto& frame = frames[index];
                         if (frame == nullptr || frame->sequence <= last_sequences[index]) {
@@ -466,16 +474,15 @@ class NativeWindowOutputController::Impl final {
                         pipelines, [](const auto& pipeline) {
                             return pipeline->bus() == OutputBus::virtual_camera;
                         });
-                    const auto mixed_routes = has_content_target && has_program_target;
                     const auto deadline = std::chrono::steady_clock::now() +
-                                          (mixed_routes ? 16ms : 100ms);
+                                          (has_program_target ? 16ms : 100ms);
                     if (has_content_target && content_runtime != nullptr) {
                         static_cast<void>(content_runtime->wait_for_frame(
                             last_sequences[static_cast<std::size_t>(
                                 OutputBus::media_windows)],
                             stop_token, deadline));
                     } else if (has_program_target) {
-                        static_cast<void>(renderer->wait_for_frame(
+                        static_cast<void>(renderer->wait_for_gpu_frame(
                             OutputBus::virtual_camera,
                             last_sequences[static_cast<std::size_t>(
                                 OutputBus::virtual_camera)],

@@ -58,6 +58,11 @@ struct CompiledSceneGraph;
 
 using VideoFrameVisitor = std::function<void(const VideoFrameView&)>;
 
+enum class SystemMemoryOutputConsumer : std::uint8_t {
+    frame_channel = 0U,
+    virtual_camera = 1U,
+};
+
 struct SceneRenderSourceBinding {
     std::string source_id{};
     std::uint64_t generation{0U};
@@ -126,10 +131,21 @@ class PreparedSceneRenderGraph {
         static_cast<void>(deadline);
         return false;
     }
+    [[nodiscard]] virtual bool wait_for_gpu_frame(
+        std::uint64_t after_sequence, std::stop_token stop_token,
+        std::chrono::steady_clock::time_point deadline) const noexcept {
+        static_cast<void>(after_sequence);
+        static_cast<void>(stop_token);
+        static_cast<void>(deadline);
+        return false;
+    }
     virtual void wake_frame_waiters() noexcept {}
     virtual void start_transition() noexcept {}
     virtual void stop() noexcept {}
     virtual void set_direct_output_enabled(bool enabled) noexcept {
+        static_cast<void>(enabled);
+    }
+    virtual void set_rendering_enabled(bool enabled) noexcept {
         static_cast<void>(enabled);
     }
     [[nodiscard]] virtual bool is_transition_output() const noexcept { return false; }
@@ -189,8 +205,13 @@ class SceneRenderer {
                              std::uint64_t sequence) noexcept = 0;
     virtual void set_output_enabled(OutputBus bus, bool enabled,
                                     std::uint64_t sequence) noexcept = 0;
+    virtual void set_system_memory_output_enabled(
+        OutputBus bus, SystemMemoryOutputConsumer consumer,
+        bool enabled) noexcept = 0;
     [[nodiscard]] virtual std::shared_ptr<const SourceFrame>
     latest_frame(OutputBus bus) const noexcept = 0;
+    [[nodiscard]] virtual std::shared_ptr<const SourceFrame>
+    latest_gpu_frame(OutputBus bus) const noexcept = 0;
     [[nodiscard]] virtual std::optional<std::uint64_t>
     visit_latest_frame(OutputBus bus, std::uint64_t after_sequence,
                        const VideoFrameVisitor& visitor) const noexcept {
@@ -201,6 +222,16 @@ class SceneRenderer {
     }
     [[nodiscard]] virtual bool wait_for_frame(
         OutputBus bus, std::uint64_t after_sequence, std::stop_token stop_token,
+        std::chrono::steady_clock::time_point deadline) const noexcept {
+        static_cast<void>(bus);
+        static_cast<void>(after_sequence);
+        static_cast<void>(stop_token);
+        static_cast<void>(deadline);
+        return false;
+    }
+    [[nodiscard]] virtual bool wait_for_gpu_frame(
+        OutputBus bus, std::uint64_t after_sequence,
+        std::stop_token stop_token,
         std::chrono::steady_clock::time_point deadline) const noexcept {
         static_cast<void>(bus);
         static_cast<void>(after_sequence);

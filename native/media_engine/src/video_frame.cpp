@@ -152,6 +152,12 @@ void copy_video_frame_pixels(const VideoFrameView& frame,
         const auto rows = plane_rows(layout, plane);
         auto* output = destination.data() + layout.plane_offsets[plane];
         const auto* input = frame.planes[plane].data();
+        if (frame.plane_strides[plane] >= 0 && stride == row_bytes) {
+            std::memcpy(output, input,
+                        static_cast<std::size_t>(
+                            checked_multiply(row_bytes, rows)));
+            continue;
+        }
         for (std::uint32_t row = 0U; row < rows; ++row) {
             const auto source_row = frame.plane_strides[plane] >= 0
                                         ? row

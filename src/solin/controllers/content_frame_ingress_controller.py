@@ -6,7 +6,7 @@ import time
 from collections.abc import Buffer, Callable
 from typing import Any, Protocol
 
-from PySide6.QtCore import QObject, QSize, Qt, Signal
+from PySide6.QtCore import QObject, QSize, Qt, Signal, Slot
 from PySide6.QtGui import QImage
 from PySide6.QtMultimedia import QVideoFrame, QVideoFrameFormat
 
@@ -86,7 +86,9 @@ class ContentFrameIngressController(QObject):
         self._publisher_lock = threading.Lock()
         self._worker_stopped = threading.Event()
         self._pending_frame: QImage | None = None
+        self._retained_image: QImage | None = None
         self._next_video_materialization_at = 0.0
+        self._enabled = True
         self._closed = False
         self._publisher: _FramePublisher | None = self._create_publisher()
         self._worker = threading.Thread(
@@ -102,6 +104,26 @@ class ContentFrameIngressController(QObject):
             publisher = self._publisher
             return publisher.descriptor if publisher is not None else None
 
+    @property
+    def enabled(self) -> bool:
+        with self._condition:
+            return self._enabled and not self._closed
+
+    @Slot(bool)
+    def set_enabled(self, enabled: bool) -> None:
+        enabled = bool(enabled)
+        with self._condition:
+            if self._closed or self._enabled == enabled:
+                return
+            self._enabled = enabled
+            self._next_video_materialization_at = 0.0
+            self._pending_frame = (
+                QImage(self._retained_image)
+                if enabled and self._retained_image is not None
+                else None
+            )
+            self._condition.notify_all()
+
     def submit_frame(self, frame: object) -> None:
         if isinstance(frame, QVideoFrame):
             if not frame.isValid():
@@ -112,7 +134,8 @@ class ContentFrameIngressController(QObject):
             # surface readback and was a major part of projected-video CPU use.
             with self._condition:
                 now = time.monotonic()
-                if self._closed:
+                self._retained_image = None
+                if self._closed or not self._enabled:
                     return
                 next_deadline = _advance_video_deadline(
                     self._next_video_materialization_at,
@@ -130,6 +153,9 @@ class ContentFrameIngressController(QObject):
         with self._condition:
             if self._closed:
                 return
+            self._retained_image = QImage(owned_frame)
+            if not self._enabled:
+                return
             self._pending_frame = owned_frame
             self._condition.notify()
 
@@ -139,6 +165,7 @@ class ContentFrameIngressController(QObject):
                 return
             self._closed = True
             self._pending_frame = None
+            self._retained_image = None
             self._condition.notify_all()
         # Do not call Thread.join() from the Qt close event. A QVideoFrame can
         # finish its Python target while the native multimedia thread is still

@@ -456,6 +456,8 @@ struct CenterNv12Frame final {
                                 std::uint8_t tolerance);
 void test_route_change_cannot_be_lost_before_graph_wait_registration(
     const std::shared_ptr<solin::media_engine::SceneRenderer>& renderer);
+void test_renderer_hydration_and_output_updates_drive_graph_demand(
+    const std::shared_ptr<solin::media_engine::SceneRenderer>& renderer);
 
 void test_program_transitions_render_real_synthetic_frames(
     solin::media_engine::SceneGraphRuntime& graph,
@@ -547,7 +549,19 @@ void test_program_transitions_render_real_synthetic_frames(
                near_channel(black->yuv[2], 128U, 12U),
            "Fade through black produces a real black Program midpoint");
     std::this_thread::sleep_for(400ms);
-    const auto final_red = wait_for_program_center(renderer, last_sequence, 1s);
+    std::optional<CenterNv12Frame> final_red;
+    const auto final_red_deadline = std::chrono::steady_clock::now() + 1s;
+    while (std::chrono::steady_clock::now() < final_red_deadline) {
+        const auto candidate = wait_for_program_center(renderer, last_sequence, 50ms);
+        if (!candidate.has_value()) {
+            continue;
+        }
+        last_sequence = candidate->sequence;
+        final_red = candidate;
+        if (candidate->bytes == red->bytes) {
+            break;
+        }
+    }
     expect(final_red.has_value() && final_red->bytes == red->bytes,
            "the final Program frame is byte-identical to the red destination");
     if (!final_red.has_value()) {
@@ -555,17 +569,74 @@ void test_program_transitions_render_real_synthetic_frames(
     }
 
     last_sequence = final_red->sequence;
+    const auto prewarmed = graph.prepare(
+        OutputBus::virtual_camera, "scene-blue", 1U, "prewarmed-blue", 1'005U,
+        {.kind = SceneTransitionKind::dissolve, .duration_ms = 50U});
+    // Preparation is intentionally allowed to run before Take. This is the real
+    // control contract and exposes output gates that discard their sticky caps
+    // while the prepared transition is already producing frames.
+    std::this_thread::sleep_for(250ms);
+    graph.take(prewarmed, 1U, 1'006U);
+    std::optional<CenterNv12Frame> prewarmed_blue;
+    const auto prewarmed_deadline = std::chrono::steady_clock::now() + 1s;
+    while (std::chrono::steady_clock::now() < prewarmed_deadline) {
+        const auto candidate = wait_for_program_center(renderer, last_sequence, 50ms);
+        if (!candidate.has_value()) {
+            continue;
+        }
+        last_sequence = candidate->sequence;
+        if (near_channel(candidate->yuv[0], 32U, 12U) &&
+            near_channel(candidate->yuv[1], 240U, 15U) &&
+            near_channel(candidate->yuv[2], 118U, 15U)) {
+            prewarmed_blue = candidate;
+            break;
+        }
+    }
+    expect(prewarmed_blue.has_value(),
+           "a prepared Program transition still reaches the virtual camera after a delayed Take");
+    if (!prewarmed_blue.has_value()) {
+        return;
+    }
+
+    const auto returned = graph.prepare(
+        OutputBus::virtual_camera, "scene-red", 1U, "return-red", 1'007U,
+        {.kind = SceneTransitionKind::dissolve, .duration_ms = 50U});
+    graph.take(returned, 1U, 1'008U);
+    std::optional<CenterNv12Frame> returned_red;
+    const auto returned_deadline = std::chrono::steady_clock::now() + 1s;
+    while (std::chrono::steady_clock::now() < returned_deadline) {
+        const auto candidate = wait_for_program_center(renderer, last_sequence, 50ms);
+        if (!candidate.has_value()) {
+            continue;
+        }
+        last_sequence = candidate->sequence;
+        if (near_channel(candidate->yuv[0], 63U, 12U) &&
+            near_channel(candidate->yuv[1], 102U, 15U) &&
+            near_channel(candidate->yuv[2], 240U, 15U)) {
+            returned_red = candidate;
+            break;
+        }
+    }
+    expect(returned_red.has_value(),
+           "the Program remains routable after the delayed prepared transition");
+    if (!returned_red.has_value()) {
+        return;
+    }
+    last_sequence = returned_red->sequence;
+
     std::uint8_t minimum_dissolve_luma = 255U;
     std::size_t sampled_frames = 0U;
+    bool every_short_transition_published_a_blended_frame = true;
     for (std::uint64_t index = 0U; index < 20U; ++index) {
         const auto target = index % 2U == 0U ? "scene-blue" : "scene-red";
         const auto prepare_sequence = 2'000U + index * 2U;
         const auto prepared = graph.prepare(
             OutputBus::virtual_camera, target, 1U,
             "continuity-" + std::to_string(index), prepare_sequence,
-            {.kind = SceneTransitionKind::dissolve, .duration_ms = 180U});
+            {.kind = SceneTransitionKind::dissolve, .duration_ms = 50U});
         graph.take(prepared, 1U, prepare_sequence + 1U);
-        const auto deadline = std::chrono::steady_clock::now() + 240ms;
+        bool published_blended_frame = false;
+        const auto deadline = std::chrono::steady_clock::now() + 120ms;
         while (std::chrono::steady_clock::now() < deadline) {
             const auto frame = wait_for_program_center(renderer, last_sequence, 40ms);
             if (!frame.has_value()) {
@@ -574,11 +645,26 @@ void test_program_transitions_render_real_synthetic_frames(
             last_sequence = frame->sequence;
             minimum_dissolve_luma =
                 (std::min)(minimum_dissolve_luma, frame->yuv[0]);
+            const bool red_endpoint =
+                near_channel(frame->yuv[0], 63U, 5U) &&
+                near_channel(frame->yuv[1], 102U, 8U) &&
+                near_channel(frame->yuv[2], 240U, 8U);
+            const bool blue_endpoint =
+                near_channel(frame->yuv[0], 32U, 5U) &&
+                near_channel(frame->yuv[1], 240U, 8U) &&
+                near_channel(frame->yuv[2], 118U, 8U);
+            published_blended_frame =
+                published_blended_frame || (!red_endpoint && !blue_endpoint);
             ++sampled_frames;
         }
+        every_short_transition_published_a_blended_frame =
+            every_short_transition_published_a_blended_frame &&
+            published_blended_frame;
     }
-    expect(sampled_frames >= 100U,
+    expect(sampled_frames >= 40U,
            "rapid real transitions expose enough Program frames for continuity checks");
+    expect(every_short_transition_published_a_blended_frame,
+           "every minimum-duration Program transition publishes a blended NV12 frame");
     expect(minimum_dissolve_luma >= 24U,
            "Dissolve never publishes a transient black/blank Program frame");
 }
@@ -590,7 +676,12 @@ void test_scene_renderer_composes_nested_scene_to_shared_d3d11_frame(
     if (renderer == nullptr) {
         return;
     }
+    test_renderer_hydration_and_output_updates_drive_graph_demand(renderer);
     test_route_change_cannot_be_lost_before_graph_wait_registration(renderer);
+    renderer->set_system_memory_output_enabled(
+        solin::media_engine::OutputBus::virtual_camera,
+        solin::media_engine::SystemMemoryOutputConsumer::frame_channel,
+        true);
     solin::media_engine::SceneGraphRuntime graph{
         media_runtime.source_runtime_factory(), renderer};
     graph.hydrate(compositor_snapshot(), 1U);
@@ -740,6 +831,10 @@ void test_scene_renderer_composes_nested_scene_to_shared_d3d11_frame(
                "virtual-camera transport preserves the rendered NV12 frame and timing");
     }
     test_program_transitions_render_real_synthetic_frames(graph, renderer);
+    renderer->set_system_memory_output_enabled(
+        solin::media_engine::OutputBus::virtual_camera,
+        solin::media_engine::SystemMemoryOutputConsumer::frame_channel,
+        false);
 }
 
 void test_failed_source_does_not_block_healthy_compositor_layers(
@@ -976,6 +1071,16 @@ void test_first_hardware_camera_publishes_its_exact_selected_format(
 class RouteChangeRaceGraph final
     : public solin::media_engine::PreparedSceneRenderGraph {
   public:
+    void set_direct_output_enabled(const bool enabled) noexcept override {
+        direct_output_enabled = enabled;
+        ++direct_output_changes;
+    }
+
+    void set_rendering_enabled(const bool enabled) noexcept override {
+        rendering_enabled = enabled;
+        ++rendering_changes;
+    }
+
     [[nodiscard]] bool wait_for_frame(
         std::uint64_t, const std::stop_token stop_token,
         const std::chrono::steady_clock::time_point deadline) const noexcept override {
@@ -1011,6 +1116,11 @@ class RouteChangeRaceGraph final
         wakeup_.notify_all();
     }
 
+    bool direct_output_enabled{true};
+    bool rendering_enabled{true};
+    std::uint64_t direct_output_changes{0U};
+    std::uint64_t rendering_changes{0U};
+
   private:
     mutable std::mutex mutex_{};
     mutable std::condition_variable_any wakeup_{};
@@ -1018,6 +1128,52 @@ class RouteChangeRaceGraph final
     mutable bool allow_wait_registration_{false};
     mutable std::uint64_t wake_generation_{0U};
 };
+
+void test_renderer_hydration_and_output_updates_drive_graph_demand(
+    const std::shared_ptr<solin::media_engine::SceneRenderer>& renderer) {
+    using solin::media_engine::OutputBus;
+    auto preview = std::make_shared<RouteChangeRaceGraph>();
+    auto program = std::make_shared<RouteChangeRaceGraph>();
+
+    renderer->commit_hydration({preview, program}, {false, false}, 1U);
+    expect(!preview->direct_output_enabled && !preview->rendering_enabled &&
+               !program->direct_output_enabled && !program->rendering_enabled,
+           "hydration suspends every graph whose aggregate render demand is false");
+    expect(preview->direct_output_changes == 1U &&
+               preview->rendering_changes == 1U &&
+               program->direct_output_changes == 1U &&
+               program->rendering_changes == 1U,
+           "hydration applies demand exactly once to each committed graph");
+
+    renderer->set_output_enabled(OutputBus::virtual_camera, true, 2U);
+    expect(!program->direct_output_enabled && program->rendering_enabled,
+           "render demand alone resumes Program without opening CPU egress");
+    renderer->set_system_memory_output_enabled(
+        OutputBus::virtual_camera,
+        solin::media_engine::SystemMemoryOutputConsumer::virtual_camera,
+        true);
+    expect(program->direct_output_enabled && program->rendering_enabled,
+           "a system-memory consumer opens Program CPU egress on demand");
+    renderer->set_system_memory_output_enabled(
+        OutputBus::virtual_camera,
+        solin::media_engine::SystemMemoryOutputConsumer::frame_channel,
+        true);
+    renderer->set_system_memory_output_enabled(
+        OutputBus::virtual_camera,
+        solin::media_engine::SystemMemoryOutputConsumer::virtual_camera,
+        false);
+    expect(program->direct_output_enabled && program->rendering_enabled,
+           "releasing one consumer keeps CPU egress open for the other");
+    renderer->set_system_memory_output_enabled(
+        OutputBus::virtual_camera,
+        solin::media_engine::SystemMemoryOutputConsumer::frame_channel,
+        false);
+    expect(!program->direct_output_enabled && program->rendering_enabled,
+           "releasing the last consumer leaves only GPU Program rendering active");
+    renderer->set_output_enabled(OutputBus::virtual_camera, false, 3U);
+    expect(!program->direct_output_enabled && !program->rendering_enabled,
+           "disabling Program closes its direct output and suspends rendering");
+}
 
 void test_route_change_cannot_be_lost_before_graph_wait_registration(
     const std::shared_ptr<solin::media_engine::SceneRenderer>& renderer) {

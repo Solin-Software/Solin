@@ -262,6 +262,56 @@ def test_content_ingress_throttles_video_before_materializing_qt_surfaces() -> N
     own_frame.assert_called_once_with(frame)
 
 
+def test_content_ingress_drops_video_before_mapping_when_disabled() -> None:
+    controller = ContentFrameIngressController(
+        publisher_factory=lambda width, height: _Publisher(width, height, 1),
+        maximum_fps=60,
+        canvas_width=2,
+        canvas_height=2,
+    )
+    frame = QVideoFrame(QImage(2, 2, QImage.Format.Format_ARGB32))
+    controller.set_enabled(False)
+
+    with (
+        patch.object(controller, "_publish_video_frame") as publish_video,
+        patch(
+            "solin.controllers.content_frame_ingress_controller._owned_frame"
+        ) as own_frame,
+    ):
+        controller.submit_frame(frame)
+
+    publish_video.assert_not_called()
+    own_frame.assert_not_called()
+    controller.close()
+
+
+def test_content_ingress_replays_retained_static_image_when_enabled() -> None:
+    publishers: list[_Publisher] = []
+
+    def create_publisher(width: int, height: int) -> _Publisher:
+        publisher = _Publisher(width, height, len(publishers) + 1)
+        publishers.append(publisher)
+        return publisher
+
+    controller = ContentFrameIngressController(
+        publisher_factory=create_publisher,
+        maximum_fps=60,
+        canvas_width=2,
+        canvas_height=2,
+    )
+    image = QImage(2, 2, QImage.Format.Format_ARGB32)
+    image.fill(QColor("#112233"))
+    controller.set_enabled(False)
+
+    controller.submit_frame(image)
+    assert not publishers[0].published.wait(0.05)
+
+    controller.set_enabled(True)
+    assert publishers[0].published.wait(1.0)
+    assert publishers[0].frames == [bytes([0x33, 0x22, 0x11, 0xFF]) * 4]
+    controller.close()
+
+
 def test_video_sampling_accepts_2997_fps_jitter_without_exceeding_30_fps() -> None:
     interval = 1 / 30
     deadline = 0.0

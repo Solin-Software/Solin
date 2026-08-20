@@ -29,12 +29,15 @@ from solin.core.scenes.engine import (
 from solin.core.scenes.model import (
     AUTOMATIC_MEDIA_CATEGORIES,
     BusId,
+    CONTENT_SOURCE_ID,
     ContentCategory,
     OutputMode,
     PtzBinding,
     SceneDocument,
     SceneLayer,
+    SceneReferenceConfig,
     SceneValidationError,
+    SourceKind,
     TransitionKind,
     TransitionSpec,
     new_identity,
@@ -164,6 +167,41 @@ def content_category_for_projection(state: Mapping[str, Any]) -> ContentCategory
     )
 
 
+def _scene_uses_content_source(document: SceneDocument, scene_id: str) -> bool:
+    sources = {source.id: source for source in document.sources}
+    scenes = {scene.id: scene for scene in document.scenes}
+    visited: set[str] = set()
+
+    def visit(candidate_id: str) -> bool:
+        if candidate_id in visited:
+            return False
+        visited.add(candidate_id)
+        scene = scenes[candidate_id]
+        for layer in scene.layers:
+            if (
+                not layer.visible
+                or layer.opacity <= 0.0
+                or layer.rect.width <= 0.0
+                or layer.rect.height <= 0.0
+            ):
+                continue
+            source = sources[layer.source_id]
+            if not source.enabled:
+                continue
+            if source.id == CONTENT_SOURCE_ID:
+                return True
+            if source.kind is not SourceKind.SCENE_REFERENCE:
+                continue
+            configuration = source.configuration
+            if isinstance(configuration, SceneReferenceConfig) and visit(
+                configuration.target_scene_id
+            ):
+                return True
+        return False
+
+    return visit(scene_id)
+
+
 class SceneRuntimeController(QObject):
     """Reconciles desired, pending, and applied state without blocking Qt."""
 
@@ -178,6 +216,7 @@ class SceneRuntimeController(QObject):
     transition_fallback = Signal(str)
     operational_state_changed = Signal()
     local_cameras_changed = Signal(object)
+    content_ingress_demand_changed = Signal(bool)
     source_health_changed = Signal(str)
     preview_scene_changed = Signal(object)
     preview_frame_changed = Signal(str, object)
@@ -240,6 +279,7 @@ class SceneRuntimeController(QObject):
         self._moving_camera_bindings: dict[str, PtzBinding] = {}
         self._last_destination_enabled = self._destination_enabled()
         self._last_render_enabled = self._render_enabled()
+        self._last_content_ingress_required = self._content_ingress_required()
         self._async_result.connect(self._consume_async_result)
         self._async_engine_event.connect(self._consume_engine_event)
         self._unsubscribe_document = self._documents.subscribe(self._on_document_changed)
@@ -289,11 +329,24 @@ class SceneRuntimeController(QObject):
         return self._engine_ready
 
     @property
+    def native_window_routing_ready(self) -> bool:
+        """Whether native windows can bind to a fully applied scene graph."""
+        return (
+            self._engine_ready
+            and not self.hydration_in_progress
+            and len(self._applied_scenes) == len(BusId)
+        )
+
+    @property
     def local_cameras(self) -> LocalCameraDiscovery:
         return self._local_cameras
 
     def source_health(self, source_id: str) -> SourceHealthEvent | None:
         return self._source_health.get(source_id)
+
+    @property
+    def content_ingress_required(self) -> bool:
+        return self._content_ingress_required()
 
     @property
     def hydration_in_progress(self) -> bool:
@@ -496,6 +549,7 @@ class SceneRuntimeController(QObject):
         if scene_id == self._preview_scene_id:
             return
         self._preview_scene_id = scene_id
+        self._reconcile_content_ingress_demand()
         self._reconcile_engine_outputs()
         self._reconcile_desired(prepare=True)
         # Preview demand is independent from the resolved Media bus scene.  If
@@ -556,6 +610,7 @@ class SceneRuntimeController(QObject):
         if targets == self._window_targets:
             return
         self._window_targets = targets
+        self._reconcile_content_ingress_demand()
         if (
             self._engine is None
             or not self._engine_ready
@@ -591,6 +646,7 @@ class SceneRuntimeController(QObject):
         self._preview_egress = descriptor
         self.preview_egress_changed.emit(descriptor)
         self._last_render_enabled = self._render_enabled()
+        self._reconcile_content_ingress_demand()
         self._hydrate_if_ready()
 
     @Slot(object)
@@ -607,6 +663,7 @@ class SceneRuntimeController(QObject):
             raise TypeError("Invalid program egress descriptor")
         self._program_egress = descriptor
         self._last_render_enabled = self._render_enabled()
+        self._reconcile_content_ingress_demand()
         self._hydrate_if_ready()
 
     def refresh_local_cameras(self) -> Future[LocalCameraDiscovery] | None:
@@ -851,6 +908,7 @@ class SceneRuntimeController(QObject):
         self._desired_scenes = self._resolve_desired_scenes()
         self._last_destination_enabled = self._destination_enabled()
         self._last_render_enabled = self._render_enabled()
+        self._reconcile_content_ingress_demand()
         self._set_applied_scenes(())
         self.scene_profiles_changed.emit(change)
         self.document_changed.emit(self._documents.document)
@@ -922,10 +980,12 @@ class SceneRuntimeController(QObject):
     def _reconcile_desired(self, *, prepare: bool) -> None:
         desired = self._resolve_desired_scenes()
         if desired == self._desired_scenes:
+            self._reconcile_content_ingress_demand()
             return
         previous = dict(self._desired_scenes)
         self._desired_scenes = desired
         self.desired_scenes_changed.emit(desired)
+        self._reconcile_content_ingress_demand()
         if not prepare or not self._engine_ready:
             return
         if self._hydrate_in_flight is not None or not self._applied_scenes:
@@ -942,6 +1002,7 @@ class SceneRuntimeController(QObject):
         renders = self._render_enabled()
         previous_renders = dict(self._last_render_enabled)
         self._last_render_enabled = renders
+        self._reconcile_content_ingress_demand()
         if self._engine is None or not self._engine_ready:
             return
         if self._hydrate_in_flight is not None or not self._applied_scenes:
@@ -1713,12 +1774,13 @@ class SceneRuntimeController(QObject):
         self._hydrate_in_flight = None
         should_retry = self._hydrate_dirty
         self._hydrate_dirty = False
-        self.operational_state_changed.emit()
         self._dispatch_preview_geometry()
         if self._preview_geometry_in_flight is not None:
             self._hydrate_dirty = should_retry
         elif should_retry:
             self._hydrate_if_ready()
+            return
+        self.operational_state_changed.emit()
 
     def _finish_preview_geometry(
         self,
@@ -1807,6 +1869,29 @@ class SceneRuntimeController(QObject):
             (BusId.MEDIA_WINDOWS, preview_required),
             (BusId.VIRTUAL_CAMERA, program_required),
         )
+
+    def _content_ingress_required(self) -> bool:
+        if any(
+            target.visible and target.bus_id is BusId.MEDIA_WINDOWS
+            for target in self._window_targets
+        ):
+            return True
+        desired = dict(self._desired_scenes)
+        return any(
+            enabled
+            and _scene_uses_content_source(
+                self._documents.document,
+                desired[bus_id],
+            )
+            for bus_id, enabled in self._render_enabled()
+        )
+
+    def _reconcile_content_ingress_demand(self) -> None:
+        required = self._content_ingress_required()
+        if required == self._last_content_ingress_required:
+            return
+        self._last_content_ingress_required = required
+        self.content_ingress_demand_changed.emit(required)
 
     def _next_sequence(self) -> int:
         self._sequence += 1

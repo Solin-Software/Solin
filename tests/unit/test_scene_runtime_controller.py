@@ -1264,6 +1264,46 @@ def test_native_window_target_updates_without_rehydrating_the_scene_graph() -> N
     controller.close()
 
 
+def test_content_ingress_demand_follows_visible_routes_and_scene_sources() -> None:
+    projection = _Projection()
+    engine = _Engine()
+    _documents, _runtime, controller = _runtime_controller(
+        engine,
+        projection,
+        request_ids=(),
+    )
+    changes: list[bool] = []
+    controller.content_ingress_demand_changed.connect(changes.append)
+    assert not controller.content_ingress_required
+
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
+    assert not controller.content_ingress_required
+
+    projection.set_type("video")
+    assert controller.content_ingress_required
+
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, False)
+    assert not controller.content_ingress_required
+
+    target = OutputWindowTarget(
+        bus_id=BusId.MEDIA_WINDOWS,
+        target_id="raw-media-window",
+        screen_id="primary",
+        native_handle=123,
+        x=0,
+        y=0,
+        width=1280,
+        height=720,
+        device_pixel_ratio=1.0,
+    )
+    controller.set_window_targets((target,))
+    assert controller.content_ingress_required
+    controller.set_window_targets(())
+    assert not controller.content_ingress_required
+    assert changes == [True, False, True, False]
+    controller.close()
+
+
 def test_raw_native_window_target_is_independent_from_authored_scenes() -> None:
     engine = _Engine()
     _documents, _runtime, controller = _runtime_controller(
@@ -1404,6 +1444,7 @@ def test_runtime_coalesces_hydration_changes_while_one_request_is_in_flight() ->
     )
     controller.start_engine()
     assert controller.hydration_in_progress
+    assert not controller.native_window_routing_ready
 
     documents.rename_scene(CAMERA_SCENE_ID, "Camera wide")
     documents.rename_scene(CAMERA_SCENE_ID, "Camera overview")
@@ -1415,12 +1456,15 @@ def test_runtime_coalesces_hydration_changes_while_one_request_is_in_flight() ->
     )
 
     assert len(engine.snapshots) == 2
+    assert controller.hydration_in_progress
+    assert not controller.native_window_routing_ready
     assert engine.snapshots[1][1].document.revision == documents.document.revision
     second_request, second_snapshot = engine.snapshots[1]
     engine.hydrations[1].set_result(
         engine._ack(second_request, second_snapshot.sequence, second_snapshot.document.revision)
     )
     assert not controller.hydration_in_progress
+    assert controller.native_window_routing_ready
     assert controller.applied_scenes == controller.desired_scenes
     controller.close()
 

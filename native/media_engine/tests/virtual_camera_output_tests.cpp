@@ -1,5 +1,6 @@
 #include "solin/media_engine/virtual_camera_output.hpp"
 
+#include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <cstdint>
@@ -154,8 +155,29 @@ class FakeRenderer final : public solin::media_engine::SceneRenderer {
         static_cast<void>(sequence);
     }
 
+    void set_system_memory_output_enabled(
+        const solin::media_engine::OutputBus bus,
+        const solin::media_engine::SystemMemoryOutputConsumer consumer,
+        const bool enabled) noexcept override {
+        if (bus == solin::media_engine::OutputBus::virtual_camera &&
+            consumer == solin::media_engine::SystemMemoryOutputConsumer::
+                            virtual_camera) {
+            system_memory_output_enabled_.store(enabled);
+        }
+    }
+
+    [[nodiscard]] bool system_memory_output_enabled() const noexcept {
+        return system_memory_output_enabled_.load();
+    }
+
     [[nodiscard]] std::shared_ptr<const solin::media_engine::SourceFrame>
     latest_frame(const solin::media_engine::OutputBus bus) const noexcept override {
+        static_cast<void>(bus);
+        return {};
+    }
+
+    [[nodiscard]] std::shared_ptr<const solin::media_engine::SourceFrame>
+    latest_gpu_frame(const solin::media_engine::OutputBus bus) const noexcept override {
         static_cast<void>(bus);
         return {};
     }
@@ -198,6 +220,9 @@ class FakeRenderer final : public solin::media_engine::SceneRenderer {
     }
 
     void shutdown() noexcept override {}
+
+  private:
+    std::atomic_bool system_memory_output_enabled_{false};
 };
 
 void test_controller_normalizes_and_pumps_the_virtual_camera_bus() {
@@ -222,6 +247,8 @@ void test_controller_normalizes_and_pumps_the_virtual_camera_bus() {
            "a virtual-camera output route configures without side effects");
     expect(controller.set_enabled(true),
            "enabling the output starts the selected platform backend");
+    expect(renderer->system_memory_output_enabled(),
+           "the virtual camera requests system-memory compositor output");
     {
         std::unique_lock lock{state->mutex};
         static_cast<void>(state->wakeup.wait_for(lock, 1s, [state] {
@@ -237,6 +264,8 @@ void test_controller_normalizes_and_pumps_the_virtual_camera_bus() {
     }
     expect(controller.set_enabled(false),
            "disabling the output stops the platform backend");
+    expect(!renderer->system_memory_output_enabled(),
+           "the virtual camera releases system-memory compositor output");
     expect(controller.health().state ==
                solin::media_engine::VirtualCameraSinkState::stopped,
            "the controller reports a stopped sink after disable");

@@ -149,12 +149,12 @@ _STARTUP_SCREEN_SETTLE_MS = 900
 
 def _use_native_media_presentation(
     *,
-    supported: bool,
+    native_window_routing_ready: bool,
     mirror_enabled: bool,
     raw_video: bool,
 ) -> bool:
     """Keep every media surface on the same native routing policy."""
-    return supported and (mirror_enabled or raw_video)
+    return native_window_routing_ready and (mirror_enabled or raw_video)
 log = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
@@ -332,6 +332,12 @@ class MainWindow(QWidget):
             width=program_output.video_format.width,
             height=program_output.video_format.height,
             parent=self,
+        )
+        self.scene_runtime.content_ingress_demand_changed.connect(
+            self._on_content_ingress_demand_changed
+        )
+        self._on_content_ingress_demand_changed(
+            self.scene_runtime.content_ingress_required
         )
         self._obs_scene_session = ObsSceneSession()
         self._monitor_popup = None
@@ -1055,13 +1061,13 @@ class MainWindow(QWidget):
         )
         state = self.projection_session.state
         raw_video = state.get("type") == "video" and not state.get("is_audio", False)
-        supported = (
+        native_window_routing_ready = (
             sys.platform == "win32"
-            and self.scene_runtime.engine_ready
+            and self.scene_runtime.native_window_routing_ready
             and not self._native_window_output_suppressed
         )
         native_presentation = _use_native_media_presentation(
-            supported=supported,
+            native_window_routing_ready=native_window_routing_ready,
             mirror_enabled=mirror_enabled,
             raw_video=raw_video,
         )
@@ -1165,6 +1171,17 @@ class MainWindow(QWidget):
     def _program_content_requested(self) -> bool:
         state = self.scene_live.state
         return any(state.output(bus_id).enabled for bus_id in BusId)
+
+    def _on_content_ingress_demand_changed(self, required: bool) -> None:
+        self._content_frame_ingress.set_enabled(required)
+        if not required:
+            return
+        self._program_content.refresh()
+        if self.projection_session.state_type != "video":
+            return
+        frame = self.media_ctrl.video_sink.videoFrame()
+        if frame.isValid():
+            self._program_content.submit_frame(frame)
 
     def _raw_projection_windows(self) -> list:
         if self._program_mirror_enabled():
@@ -1407,6 +1424,9 @@ class MainWindow(QWidget):
         self.proj_bar = resources.projection_bar
         self.scene_runtime.engine_ready_changed.connect(
             self._on_native_scene_engine_ready_changed
+        )
+        self.scene_runtime.operational_state_changed.connect(
+            self._reconcile_native_scene_surfaces
         )
         self.scene_runtime.engine_error.connect(self._on_native_scene_engine_error)
         self.scene_runtime.desired_scenes_changed.connect(

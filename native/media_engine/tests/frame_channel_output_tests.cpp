@@ -68,8 +68,28 @@ class AdvancingRenderer final : public solin::media_engine::SceneRenderer {
     void set_output_enabled(solin::media_engine::OutputBus, bool,
                             std::uint64_t) noexcept override {}
 
+    void set_system_memory_output_enabled(
+        const solin::media_engine::OutputBus bus,
+        const solin::media_engine::SystemMemoryOutputConsumer consumer,
+        const bool enabled) noexcept override {
+        if (bus == bus_ &&
+            consumer == solin::media_engine::SystemMemoryOutputConsumer::
+                            frame_channel) {
+            system_memory_output_enabled_.store(enabled);
+        }
+    }
+
+    [[nodiscard]] bool system_memory_output_enabled() const noexcept {
+        return system_memory_output_enabled_.load();
+    }
+
     [[nodiscard]] std::shared_ptr<const solin::media_engine::SourceFrame>
     latest_frame(solin::media_engine::OutputBus) const noexcept override {
+        return {};
+    }
+
+    [[nodiscard]] std::shared_ptr<const solin::media_engine::SourceFrame>
+    latest_gpu_frame(solin::media_engine::OutputBus) const noexcept override {
         return {};
     }
 
@@ -125,6 +145,7 @@ class AdvancingRenderer final : public solin::media_engine::SceneRenderer {
   private:
     solin::media_engine::OutputBus bus_{solin::media_engine::OutputBus::media_windows};
     mutable std::atomic_uint64_t next_sequence_{0U};
+    std::atomic_bool system_memory_output_enabled_{false};
 };
 
 void test_zero_cadence_is_rejected() {
@@ -298,10 +319,14 @@ void test_preview_publication_samples_latest_frames_at_thirty_fps() {
     expect(controller.configure(channel.configuration(), preview_output()),
            "the capped editor channel configures");
     expect(controller.set_enabled(true), "the capped editor channel starts");
+    expect(renderer->system_memory_output_enabled(),
+           "a running frame channel requests system-memory output");
     expect(wait_for_first_frame(channel),
            "the cadence limiter publishes the first available frame immediately");
     std::this_thread::sleep_for(450ms);
     controller.shutdown();
+    expect(!renderer->system_memory_output_enabled(),
+           "stopping a frame channel releases system-memory output demand");
     const auto published = channel.published_sequence();
     expect(published >= 8U,
            "the editor channel continues publishing near its selected cadence");
@@ -318,10 +343,14 @@ void test_uncapped_frame_channel_preserves_existing_behavior() {
     expect(controller.configure(channel.configuration(), preview_output()),
            "the uncapped frame channel configures");
     expect(controller.set_enabled(true), "the uncapped frame channel starts");
+    expect(renderer->system_memory_output_enabled(),
+           "an uncapped frame channel requests system-memory output");
     expect(wait_for_first_frame(channel),
            "the uncapped frame channel publishes its first frame");
     std::this_thread::sleep_for(450ms);
     controller.shutdown();
+    expect(!renderer->system_memory_output_enabled(),
+           "an uncapped frame channel releases system-memory output demand");
     const auto published = channel.published_sequence();
     if (published <= 16U) {
         std::cerr << "Observed uncapped publications: " << published << '\n';

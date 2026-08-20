@@ -4,6 +4,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <string_view>
+#include <vector>
 
 namespace {
 
@@ -98,11 +99,34 @@ void test_frame_views_copy_padded_and_inverted_planes_without_an_intermediate() 
            "negative-stride frame views are normalized without a staging frame");
 }
 
+void test_tightly_packed_nv12_planes_copy_as_one_payload_per_plane() {
+    using solin::media_engine::VideoFramePixelFormat;
+    const std::vector<std::uint8_t> y{
+        1U, 2U, 3U, 4U, 5U, 6U, 7U, 8U,
+    };
+    const std::vector<std::uint8_t> uv{9U, 10U, 11U, 12U};
+    const solin::media_engine::VideoFrameView view{
+        .width = 4U,
+        .height = 2U,
+        .pixel_format = VideoFramePixelFormat::nv12,
+        .planes = {std::span<const std::uint8_t>{y},
+                   std::span<const std::uint8_t>{uv}},
+        .plane_strides = {4, 4},
+    };
+    const auto copied = solin::media_engine::copy_video_frame(view);
+    const std::vector<std::uint8_t> expected{
+        1U, 2U, 3U, 4U, 5U, 6U, 7U, 8U, 9U, 10U, 11U, 12U,
+    };
+    expect(copied.bytes == expected,
+           "tightly packed NV12 copies both contiguous planes exactly");
+}
+
 } // namespace
 
 int main() {
     test_canonical_layouts();
     test_invalid_layouts_and_payloads_are_rejected();
     test_frame_views_copy_padded_and_inverted_planes_without_an_intermediate();
+    test_tightly_packed_nv12_planes_copy_as_one_payload_per_plane();
     return failures == 0 ? 0 : 1;
 }

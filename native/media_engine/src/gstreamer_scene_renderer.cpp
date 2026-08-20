@@ -40,6 +40,7 @@ namespace {
 using namespace std::chrono_literals;
 
 constexpr auto kPrepareTimeout = 3s;
+constexpr auto kTransitionStartTimeout = 500ms;
 constexpr std::uint32_t kMaximumOutputDimension = 3'840U;
 constexpr std::uint64_t kMaximumOutputPixels = 3'840ULL * 2'160ULL;
 constexpr std::uint32_t kMaximumOutputFramesPerSecond = 60U;
@@ -164,6 +165,16 @@ void open_readiness_gate(GstElement* valve) noexcept {
         }
     } catch (...) {
     }
+}
+
+void configure_demand_gate(GstElement* valve) {
+    // A prepared graph may run for several frames before Take. Keep CAPS,
+    // SEGMENT, and other sticky events negotiated while suppressing buffers, so
+    // enabling a real consumer never depends on upstream resending negotiation.
+    // This gate remains ahead of conversion/download, therefore closed demand
+    // still performs no CPU frame work.
+    g_object_set(valve, "drop", TRUE, nullptr);
+    gst_util_set_object_arg(G_OBJECT(valve), "drop-mode", "transform-to-gap");
 }
 
 [[nodiscard]] std::unique_ptr<GstCaps, decltype(&release_caps)> output_caps(
@@ -415,8 +426,16 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
         if (feeder_.joinable()) {
             feeder_.join();
         }
-        auto* pipeline = std::exchange(pipeline_, nullptr);
-        auto* bus = std::exchange(bus_, nullptr);
+        GstElement* pipeline = nullptr;
+        GstBus* bus = nullptr;
+        {
+            std::scoped_lock lock{pipeline_mutex_};
+            pipeline = std::exchange(pipeline_, nullptr);
+            bus = std::exchange(bus_, nullptr);
+            direct_output_valve_ = nullptr;
+            output_readiness_valve_ = nullptr;
+            root_compositor_ = nullptr;
+        }
         if (bus != nullptr) {
             gst_bus_set_sync_handler(bus, nullptr, nullptr, nullptr);
         }
@@ -482,6 +501,7 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
             {
                 std::scoped_lock lock{frame_mutex_};
                 ++frame_wakeup_generation_;
+                ++gpu_frame_wakeup_generation_;
             }
             frame_wakeup_.notify_all();
         } catch (...) {
@@ -505,11 +525,82 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
 
     void set_direct_output_enabled(const bool enabled) noexcept override {
         try {
-            if (direct_output_valve_ != nullptr) {
-                g_object_set(direct_output_valve_, "drop", enabled ? FALSE : TRUE,
+            bool replay_retained_frame = false;
+            {
+                std::scoped_lock lock{pipeline_mutex_};
+                if (stopped_.load() || direct_output_valve_ == nullptr) {
+                    return;
+                }
+                const bool previously_enabled =
+                    direct_output_enabled_.exchange(enabled);
+                g_object_set(direct_output_valve_, "drop",
+                             enabled ? FALSE : TRUE,
                              nullptr);
+                replay_retained_frame = enabled && !previously_enabled;
+            }
+            if (replay_retained_frame) {
+                // Static images and paused video may not emit another producer
+                // notification after demand opens. Re-submit the retained latest
+                // source frames so the newly negotiated egress gets its first
+                // sample without polling or decoding twice.
+                source_replay_requested_.store(true);
+                source_frame_signal_->notify();
             }
         } catch (...) {
+        }
+    }
+
+    [[nodiscard]] bool wait_for_gpu_frame(
+        const std::uint64_t after_sequence, const std::stop_token stop_token,
+        const std::chrono::steady_clock::time_point deadline) const noexcept override {
+        try {
+            std::unique_lock lock{frame_mutex_};
+            const auto ready = [&] {
+                return stopped_.load() || failed_.load() ||
+                       (latest_gpu_frame_ != nullptr &&
+                        latest_gpu_frame_->sequence > after_sequence);
+            };
+            if (ready()) {
+                return latest_gpu_frame_ != nullptr &&
+                       latest_gpu_frame_->sequence > after_sequence;
+            }
+            const auto wakeup_generation = gpu_frame_wakeup_generation_;
+            static_cast<void>(frame_wakeup_.wait_until(
+                lock, stop_token, deadline, [&] {
+                    return ready() ||
+                           gpu_frame_wakeup_generation_ != wakeup_generation;
+                }));
+            return latest_gpu_frame_ != nullptr &&
+                   latest_gpu_frame_->sequence > after_sequence;
+        } catch (...) {
+            return false;
+        }
+    }
+
+    void set_rendering_enabled(const bool enabled) noexcept override {
+        try {
+            std::scoped_lock lock{pipeline_mutex_};
+            if (stopped_.load() || rendering_enabled_.load() == enabled) {
+                return;
+            }
+            auto* pipeline = pipeline_;
+            if (pipeline == nullptr ||
+                gst_element_set_state(
+                    pipeline, enabled ? GST_STATE_PLAYING : GST_STATE_PAUSED) ==
+                    GST_STATE_CHANGE_FAILURE) {
+                failed_.store(true);
+                wake_frame_waiters();
+                return;
+            }
+            rendering_enabled_.store(enabled);
+            // A disabled feeder deliberately ignores source notifications. Wake it
+            // once on resume so the latest retained source frame is submitted even
+            // when the producer itself is paused or static.
+            source_replay_requested_.store(enabled);
+            source_frame_signal_->notify();
+        } catch (...) {
+            failed_.store(true);
+            wake_frame_waiters();
         }
     }
 
@@ -902,6 +993,7 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
             g_object_set(gpu_caps_filter, "caps", gpu_caps.get(), nullptr);
             if (bus_id_ == OutputBus::virtual_camera) {
                 direct_output_valve_ = add_element(pipeline_, "valve");
+                configure_demand_gate(direct_output_valve_);
                 require_link(queue, direct_output_valve_);
                 require_link(direct_output_valve_, convert);
             } else {
@@ -1007,14 +1099,13 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
                 std::scoped_lock lock{frame_mutex_};
                 if (gpu_tap) {
                     latest_gpu_frame_ = std::move(frame);
+                    ++gpu_frame_wakeup_generation_;
                 } else {
                     latest_frame_ = std::move(frame);
                     ++frame_wakeup_generation_;
                 }
             }
-            if (!gpu_tap) {
-                frame_wakeup_.notify_all();
-            }
+            frame_wakeup_.notify_all();
             return GST_FLOW_OK;
         } catch (...) {
             return GST_FLOW_ERROR;
@@ -1040,8 +1131,13 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
                 wake_frame_waiters();
                 break;
             }
+            if (!rendering_enabled_.load()) {
+                source_revision = source_frame_signal_->wait_after(source_revision);
+                continue;
+            }
+            const bool replay_sources = source_replay_requested_.exchange(false);
             for (auto& [_, source] : sources_) {
-                push_latest_frame(source);
+                push_latest_frame(source, replay_sources);
             }
             open_readiness_gate_when_sources_settle();
             source_revision = source_frame_signal_->wait_after(source_revision);
@@ -1073,11 +1169,11 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
         }
     }
 
-    void push_latest_frame(SourceInput& source) noexcept {
+    void push_latest_frame(SourceInput& source, const bool replay) noexcept {
         try {
             auto frame = source.runtime->latest_frame();
             if (frame == nullptr ||
-                (frame->stream_epoch == source.last_stream_epoch &&
+                (!replay && frame->stream_epoch == source.last_stream_epoch &&
                  frame->sequence == source.last_sequence)) {
                 return;
             }
@@ -1140,8 +1236,12 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
     std::map<LayerKey, LayerBranch> layer_branches_{};
     std::map<GstElement*, std::vector<CompositorLayerState>> compositor_layers_{};
     mutable std::mutex geometry_mutex_{};
+    mutable std::mutex pipeline_mutex_{};
     std::atomic_bool stopped_{false};
     std::atomic_bool failed_{false};
+    std::atomic_bool rendering_enabled_{true};
+    std::atomic_bool direct_output_enabled_{false};
+    std::atomic_bool source_replay_requested_{false};
     std::atomic_bool output_ready_{false};
     std::thread feeder_{};
     std::shared_ptr<std::atomic_uint64_t> frame_sequence_{};
@@ -1150,6 +1250,7 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
     mutable std::mutex frame_mutex_{};
     mutable std::condition_variable_any frame_wakeup_{};
     std::uint64_t frame_wakeup_generation_{0U};
+    std::uint64_t gpu_frame_wakeup_generation_{0U};
     std::shared_ptr<const SourceFrame> latest_frame_{};
     std::shared_ptr<const SourceFrame> latest_gpu_frame_{};
 };
@@ -1206,8 +1307,37 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
     }
 
     void set_direct_output_enabled(const bool enabled) noexcept override {
+        try {
+            system_memory_output_enabled_.store(enabled);
+            if (completed_.load()) {
+                if (incoming_ != nullptr) {
+                    incoming_->set_direct_output_enabled(enabled);
+                }
+                return;
+            }
+            bool completed = false;
+            {
+                std::scoped_lock lock{pipeline_mutex_};
+                completed = completed_.load();
+                if (!completed && !stopped_.load() &&
+                    cpu_output_valve_ != nullptr) {
+                    g_object_set(cpu_output_valve_, "drop",
+                                 enabled ? FALSE : TRUE, nullptr);
+                }
+            }
+            if (completed && incoming_ != nullptr) {
+                incoming_->set_direct_output_enabled(enabled);
+            }
+        } catch (...) {
+        }
+    }
+
+    void set_rendering_enabled(const bool enabled) noexcept override {
+        if (!enabled) {
+            stop();
+        }
         if (incoming_ != nullptr) {
-            incoming_->set_direct_output_enabled(enabled);
+            incoming_->set_rendering_enabled(enabled);
         }
     }
 
@@ -1217,6 +1347,8 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
             outgoing_control_.reset();
         }
         incoming_->set_direct_output_enabled(false);
+        start_requires_system_memory_output_.store(
+            system_memory_output_enabled_.load());
         start_requested_.store(true);
         wakeup_.notify_all();
     }
@@ -1317,11 +1449,46 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
         }
     }
 
+    [[nodiscard]] bool wait_for_gpu_frame(
+        const std::uint64_t after_sequence, const std::stop_token stop_token,
+        const std::chrono::steady_clock::time_point deadline) const noexcept override {
+        try {
+            if (completed_.load()) {
+                return incoming_ != nullptr &&
+                       incoming_->wait_for_gpu_frame(after_sequence, stop_token,
+                                                     deadline);
+            }
+            if (const auto frame = latest_gpu_frame();
+                frame != nullptr && frame->sequence > after_sequence) {
+                return true;
+            }
+            std::unique_lock lock{frame_mutex_};
+            const auto wakeup_generation = gpu_frame_wakeup_generation_;
+            static_cast<void>(frame_wakeup_.wait_until(
+                lock, stop_token, deadline, [&] {
+                    return stopped_.load() || completed_.load() ||
+                           gpu_frame_wakeup_generation_ != wakeup_generation ||
+                           (latest_gpu_frame_ != nullptr &&
+                            latest_gpu_frame_->sequence > after_sequence);
+                }));
+            if (latest_gpu_frame_ != nullptr &&
+                latest_gpu_frame_->sequence > after_sequence) {
+                return true;
+            }
+            lock.unlock();
+            const auto frame = latest_gpu_frame();
+            return frame != nullptr && frame->sequence > after_sequence;
+        } catch (...) {
+            return false;
+        }
+    }
+
     void wake_frame_waiters() noexcept override {
         try {
             {
                 std::scoped_lock lock{frame_mutex_};
                 ++frame_wakeup_generation_;
+                ++gpu_frame_wakeup_generation_;
             }
             frame_wakeup_.notify_all();
         } catch (...) {
@@ -1442,6 +1609,8 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
 
     void add_cpu_output(GstElement* tee) {
         auto* queue = add_element(pipeline_, "queue");
+        cpu_output_valve_ = add_element(pipeline_, "valve");
+        configure_demand_gate(cpu_output_valve_);
         auto* convert = add_element(pipeline_, "d3d11convert");
         auto* gpu_caps_filter = add_element(pipeline_, "capsfilter");
         const std::unique_ptr<GstCaps, decltype(&release_caps)> gpu_caps{
@@ -1464,7 +1633,8 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
         g_object_set(cpu_caps_filter, "caps", cpu_caps.get(), nullptr);
         configure_sink(queue, sink, &PreparedGStreamerTransition::on_cpu_sample);
         connect_tee(tee, queue);
-        require_link(queue, convert);
+        require_link(queue, cpu_output_valve_);
+        require_link(cpu_output_valve_, convert);
         require_link(convert, gpu_caps_filter);
         require_link(gpu_caps_filter, download);
         require_link(download, cpu_caps_filter);
@@ -1536,14 +1706,14 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
                 std::scoped_lock lock{frame_mutex_};
                 if (gpu) {
                     latest_gpu_frame_ = std::move(frame);
+                    gpu_output_ready_.store(true);
+                    ++gpu_frame_wakeup_generation_;
                 } else {
                     latest_frame_ = std::move(frame);
                     ++frame_wakeup_generation_;
                 }
             }
-            if (!gpu) {
-                frame_wakeup_.notify_all();
-            }
+            frame_wakeup_.notify_all();
             return GST_FLOW_OK;
         } catch (...) {
             return GST_FLOW_ERROR;
@@ -1614,9 +1784,56 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
         }
     }
 
+    struct OutputPublicationCheckpoint final {
+        std::uint64_t gpu{0U};
+        std::uint64_t cpu{0U};
+    };
+
+    [[nodiscard]] OutputPublicationCheckpoint
+    output_publication_checkpoint() const noexcept {
+        try {
+            std::scoped_lock lock{frame_mutex_};
+            return {
+                .gpu = gpu_frame_wakeup_generation_,
+                .cpu = frame_wakeup_generation_,
+            };
+        } catch (...) {
+            return {};
+        }
+    }
+
+    [[nodiscard]] bool wait_for_output_after(
+        const OutputPublicationCheckpoint checkpoint, const bool require_cpu,
+        const std::chrono::steady_clock::time_point deadline) noexcept {
+        try {
+            std::unique_lock lock{frame_mutex_};
+            const auto delivered = [&] {
+                return gpu_frame_wakeup_generation_ > checkpoint.gpu &&
+                       (!require_cpu ||
+                        frame_wakeup_generation_ > checkpoint.cpu);
+            };
+            static_cast<void>(frame_wakeup_.wait_until(
+                lock, deadline,
+                [this, &delivered] { return stopped_.load() || delivered(); }));
+            return delivered();
+        } catch (...) {
+            return false;
+        }
+    }
+
     void feed() noexcept {
         std::optional<std::chrono::steady_clock::time_point> started_at;
+        std::optional<std::chrono::steady_clock::time_point> start_requested_at;
+        bool body_frame_delivered = false;
+        const auto delivery_timeout = (std::max)(
+            frame_interval_ * 4,
+            std::chrono::duration_cast<std::chrono::nanoseconds>(250ms));
         while (!stopped_.load()) {
+            const auto iteration_started_at = std::chrono::steady_clock::now();
+            const bool start_requested = start_requested_.load();
+            if (start_requested && !start_requested_at.has_value()) {
+                start_requested_at = iteration_started_at;
+            }
             auto* error = gst_bus_pop_filtered(bus_, GST_MESSAGE_ERROR);
             if (error != nullptr) {
                 gst_message_unref(error);
@@ -1628,31 +1845,79 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
                     : (outgoing_ == nullptr ? nullptr
                                             : outgoing_->latest_gpu_frame());
             const auto incoming = incoming_->latest_gpu_frame();
+            auto progress = 0.0;
+            bool terminal_frame = false;
+            bool body_frame = false;
+            if (started_at.has_value()) {
+                const auto elapsed = std::chrono::steady_clock::now() - *started_at;
+                const auto duration = std::chrono::milliseconds{transition_.duration_ms};
+                progress = std::chrono::duration<double>(elapsed).count() /
+                           std::chrono::duration<double>(duration).count();
+                terminal_frame = progress >= 1.0;
+                body_frame = !body_frame_delivered && progress >= 0.25;
+                if (terminal_frame && body_frame) {
+                    // A required egress that fell behind must observe the body of
+                    // the effect before the destination is promoted. Holding a
+                    // single midpoint has a fixed deadline, so device failure
+                    // cannot stall control indefinitely.
+                    const auto delivery_deadline =
+                        *started_at + duration + delivery_timeout;
+                    if (std::chrono::steady_clock::now() < delivery_deadline) {
+                        progress = 0.5;
+                        terminal_frame = false;
+                    }
+                }
+                apply_weights(scene_transition_weights(transition_, progress));
+            }
+            const bool require_cpu =
+                start_requires_system_memory_output_.load() &&
+                system_memory_output_enabled_.load();
+            const bool gpu_output_ready = gpu_output_ready_.load();
+            const bool synchronize_output =
+                started_at.has_value() ||
+                (start_requested && gpu_output_ready);
+            const auto publication_checkpoint =
+                synchronize_output ? output_publication_checkpoint()
+                                   : OutputPublicationCheckpoint{};
             const bool have_outgoing = outgoing != nullptr &&
                                        push_frame(outgoing_source_, outgoing);
             const bool have_incoming = incoming != nullptr &&
                                        push_frame(incoming_source_, incoming);
-            if (start_requested_.load() && have_outgoing && have_incoming &&
-                output_ready_.load() && !started_at.has_value()) {
+            if (start_requested && have_outgoing && have_incoming &&
+                output_ready_.load() && gpu_output_ready &&
+                !started_at.has_value()) {
                 started_at = std::chrono::steady_clock::now();
             }
-            if (started_at.has_value()) {
-                const auto elapsed = std::chrono::steady_clock::now() - *started_at;
-                const auto duration = std::chrono::milliseconds{transition_.duration_ms};
-                const auto progress =
-                    std::chrono::duration<double>(elapsed).count() /
-                    std::chrono::duration<double>(duration).count();
-                apply_weights(scene_transition_weights(transition_, progress));
-                if (progress >= 1.0) {
+            if (synchronize_output && have_outgoing && have_incoming) {
+                const auto delivered = wait_for_output_after(
+                    publication_checkpoint, require_cpu,
+                    std::chrono::steady_clock::now() + delivery_timeout);
+                body_frame_delivered =
+                    body_frame_delivered || (body_frame && delivered);
+                if (terminal_frame && delivered) {
                     break;
                 }
             }
+            if (terminal_frame) {
+                break;
+            }
+            if (!started_at.has_value() && start_requested_at.has_value() &&
+                std::chrono::steady_clock::now() - *start_requested_at >=
+                    kTransitionStartTimeout) {
+                // Readiness is a publication barrier, not ownership of Program.
+                // If an egress/device cannot acknowledge the prepared effect,
+                // promote the already prepared destination as a bounded Cut;
+                // its demand gate has retained sticky negotiation and can resume
+                // independently. Never retain the previous Program forever.
+                break;
+            }
             std::unique_lock lock{wakeup_mutex_};
-            wakeup_.wait_for(lock, frame_interval_,
-                             [this] { return stopped_.load(); });
+            wakeup_.wait_until(lock, iteration_started_at + frame_interval_,
+                               [this] { return stopped_.load(); });
         }
         if (!stopped_.load()) {
-            incoming_->set_direct_output_enabled(true);
+            incoming_->set_direct_output_enabled(
+                system_memory_output_enabled_.load());
             outgoing_.reset();
             frozen_outgoing_gpu_.reset();
             frozen_outgoing_cpu_.reset();
@@ -1667,6 +1932,8 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
             std::scoped_lock lock{pipeline_mutex_};
             auto* pipeline = std::exchange(pipeline_, nullptr);
             auto* bus = std::exchange(bus_, nullptr);
+            cpu_output_valve_ = nullptr;
+            output_readiness_valve_ = nullptr;
             release_bus(bus);
             // Stop and join GStreamer streaming callbacks before releasing the
             // request-pad references used by samples-selected.
@@ -1694,6 +1961,7 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
     GstElement* pipeline_{nullptr};
     GstBus* bus_{nullptr};
     GstElement* output_readiness_valve_{nullptr};
+    GstElement* cpu_output_valve_{nullptr};
     GstElement* outgoing_source_{nullptr};
     GstElement* incoming_source_{nullptr};
     GstPad* outgoing_pad_{nullptr};
@@ -1703,6 +1971,9 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
     std::atomic_bool stopped_{false};
     std::atomic_bool completed_{false};
     std::atomic_bool output_ready_{false};
+    std::atomic_bool system_memory_output_enabled_{false};
+    std::atomic_bool start_requires_system_memory_output_{false};
+    std::atomic_bool gpu_output_ready_{false};
     std::thread feeder_{};
     std::mutex wakeup_mutex_{};
     std::condition_variable wakeup_{};
@@ -1710,6 +1981,7 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
     mutable std::mutex frame_mutex_{};
     mutable std::condition_variable_any frame_wakeup_{};
     std::uint64_t frame_wakeup_generation_{0U};
+    std::uint64_t gpu_frame_wakeup_generation_{0U};
     std::shared_ptr<const SourceFrame> latest_frame_{};
     std::shared_ptr<const SourceFrame> latest_gpu_frame_{};
 };
@@ -1800,9 +2072,9 @@ class GStreamerSceneRenderer final : public SceneRenderer {
                     ++route_generation_[index];
                     route_wait_cancellation_[index] = std::stop_source{};
                 }
-                if (active_[bus_index(OutputBus::virtual_camera)] != nullptr) {
-                    active_[bus_index(OutputBus::virtual_camera)]
-                        ->set_direct_output_enabled(true);
+                for (std::size_t index = 0U; index < active_.size(); ++index) {
+                    set_graph_enabled(active_[index], enabled_[index],
+                                      system_memory_output_required(index));
                 }
             }
             for (auto& cancellation : previous_route_waits) {
@@ -1830,11 +2102,17 @@ class GStreamerSceneRenderer final : public SceneRenderer {
                 const auto index = bus_index(bus);
                 previous = active_[index];
                 previous_route_wait = route_wait_cancellation_[index];
-                if (render_output != nullptr) {
+                if (render_output != nullptr && enabled_[index]) {
+                    render_output->set_direct_output_enabled(
+                        system_memory_output_required(index));
                     render_output->start_transition();
                     active_[index] = std::move(render_output);
                 } else {
-                    target_graph->set_direct_output_enabled(true);
+                    if (render_output != nullptr) {
+                        render_output->stop();
+                    }
+                    set_graph_enabled(target_graph, enabled_[index],
+                                      system_memory_output_required(index));
                     active_[index] = std::move(target_graph);
                 }
                 ++route_generation_[index];
@@ -1867,7 +2145,8 @@ class GStreamerSceneRenderer final : public SceneRenderer {
                     active = std::move(target);
                 }
                 if (active != nullptr && !active->is_transition_output()) {
-                    active->set_direct_output_enabled(enabled);
+                    set_graph_enabled(active, enabled,
+                                      system_memory_output_required(index));
                 }
                 wake_graph = active;
                 ++route_generation_[index];
@@ -1878,6 +2157,34 @@ class GStreamerSceneRenderer final : public SceneRenderer {
                 wake_graph->wake_frame_waiters();
             }
             route_wakeup_.notify_all();
+        } catch (...) {
+        }
+    }
+
+    void set_system_memory_output_enabled(
+        const OutputBus bus, const SystemMemoryOutputConsumer consumer,
+        const bool enabled) noexcept override {
+        try {
+            std::shared_ptr<PreparedSceneRenderGraph> graph;
+            bool output_required = false;
+            {
+                std::scoped_lock lock{mutex_};
+                const auto index = bus_index(bus);
+                const auto mask = static_cast<std::uint8_t>(
+                    1U << static_cast<std::uint8_t>(consumer));
+                if (enabled) {
+                    system_memory_output_consumers_[index] |= mask;
+                } else {
+                    system_memory_output_consumers_[index] &=
+                        static_cast<std::uint8_t>(~mask);
+                }
+                graph = active_[index];
+                output_required = enabled_[index] &&
+                                  system_memory_output_required(index);
+            }
+            if (graph != nullptr) {
+                graph->set_direct_output_enabled(output_required);
+            }
         } catch (...) {
         }
     }
@@ -1894,6 +2201,23 @@ class GStreamerSceneRenderer final : public SceneRenderer {
                 graph = active_[bus_index(bus)];
             }
             return graph == nullptr ? nullptr : graph->latest_frame();
+        } catch (...) {
+            return {};
+        }
+    }
+
+    [[nodiscard]] std::shared_ptr<const SourceFrame>
+    latest_gpu_frame(const OutputBus bus) const noexcept override {
+        try {
+            std::shared_ptr<PreparedSceneRenderGraph> graph;
+            {
+                std::scoped_lock lock{mutex_};
+                if (!enabled_[bus_index(bus)]) {
+                    return {};
+                }
+                graph = active_[bus_index(bus)];
+            }
+            return graph == nullptr ? nullptr : graph->latest_gpu_frame();
         } catch (...) {
             return {};
         }
@@ -1923,6 +2247,53 @@ class GStreamerSceneRenderer final : public SceneRenderer {
         const OutputBus bus, const std::uint64_t after_sequence,
         const std::stop_token stop_token,
         const std::chrono::steady_clock::time_point deadline) const noexcept override {
+        return wait_for_rendered_frame(bus, after_sequence, stop_token,
+                                       deadline, false);
+    }
+
+    [[nodiscard]] bool wait_for_gpu_frame(
+        const OutputBus bus, const std::uint64_t after_sequence,
+        const std::stop_token stop_token,
+        const std::chrono::steady_clock::time_point deadline) const noexcept override {
+        return wait_for_rendered_frame(bus, after_sequence, stop_token,
+                                       deadline, true);
+    }
+
+    void shutdown() noexcept override {
+        if (closed_.exchange(true)) {
+            return;
+        }
+        std::array<std::shared_ptr<PreparedSceneRenderGraph>, 2U> active;
+        std::array<std::stop_source, 2U> route_waits;
+        try {
+            std::scoped_lock lock{mutex_};
+            active.swap(active_);
+            enabled_ = {};
+            system_memory_output_consumers_ = {};
+            route_waits = route_wait_cancellation_;
+            for (auto& generation : route_generation_) {
+                ++generation;
+            }
+        } catch (...) {
+            return;
+        }
+        for (auto& cancellation : route_waits) {
+            static_cast<void>(cancellation.request_stop());
+        }
+        route_wakeup_.notify_all();
+        for (auto& graph : active) {
+            if (graph != nullptr) {
+                graph->stop();
+            }
+        }
+    }
+
+  private:
+    [[nodiscard]] bool wait_for_rendered_frame(
+        const OutputBus bus, const std::uint64_t after_sequence,
+        const std::stop_token stop_token,
+        const std::chrono::steady_clock::time_point deadline,
+        const bool gpu_frame) const noexcept {
         try {
             std::shared_ptr<PreparedSceneRenderGraph> graph;
             std::stop_token route_stop_token;
@@ -1960,42 +2331,39 @@ class GStreamerSceneRenderer final : public SceneRenderer {
                 route_stop_token, [&combined_cancellation] {
                     static_cast<void>(combined_cancellation.request_stop());
                 }};
-            return graph->wait_for_frame(after_sequence,
-                                         combined_cancellation.get_token(), deadline);
+            return gpu_frame
+                       ? graph->wait_for_gpu_frame(
+                             after_sequence, combined_cancellation.get_token(),
+                             deadline)
+                       : graph->wait_for_frame(
+                             after_sequence, combined_cancellation.get_token(),
+                             deadline);
         } catch (...) {
             return false;
         }
     }
 
-    void shutdown() noexcept override {
-        if (closed_.exchange(true)) {
+    static void set_graph_enabled(
+        const std::shared_ptr<PreparedSceneRenderGraph>& graph,
+        const bool enabled,
+        const bool system_memory_output_enabled) noexcept {
+        if (graph == nullptr) {
             return;
         }
-        std::array<std::shared_ptr<PreparedSceneRenderGraph>, 2U> active;
-        std::array<std::stop_source, 2U> route_waits;
-        try {
-            std::scoped_lock lock{mutex_};
-            active.swap(active_);
-            enabled_ = {};
-            route_waits = route_wait_cancellation_;
-            for (auto& generation : route_generation_) {
-                ++generation;
-            }
-        } catch (...) {
+        if (enabled) {
+            graph->set_rendering_enabled(true);
+            graph->set_direct_output_enabled(system_memory_output_enabled);
             return;
         }
-        for (auto& cancellation : route_waits) {
-            static_cast<void>(cancellation.request_stop());
-        }
-        route_wakeup_.notify_all();
-        for (auto& graph : active) {
-            if (graph != nullptr) {
-                graph->stop();
-            }
-        }
+        graph->set_direct_output_enabled(false);
+        graph->set_rendering_enabled(false);
     }
 
-  private:
+    [[nodiscard]] bool
+    system_memory_output_required(const std::size_t index) const noexcept {
+        return system_memory_output_consumers_[index] != 0U;
+    }
+
     std::shared_ptr<SourceRuntimeFactory> source_factory_{};
     std::shared_ptr<GStreamerFrameSignal> source_frame_signal_{};
     std::array<std::shared_ptr<std::atomic_uint64_t>, 2U> frame_sequences_{
@@ -2009,6 +2377,7 @@ class GStreamerSceneRenderer final : public SceneRenderer {
     std::array<std::stop_source, 2U> route_wait_cancellation_{};
     std::array<std::shared_ptr<PreparedSceneRenderGraph>, 2U> active_{};
     std::array<bool, 2U> enabled_{};
+    std::array<std::uint8_t, 2U> system_memory_output_consumers_{};
 };
 
 } // namespace
