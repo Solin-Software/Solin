@@ -3,6 +3,7 @@
 #include "solin/media_engine/source_registry.hpp"
 #include "solin/media_engine/shared_video_frame_channel.hpp"
 #include "solin/media_engine/virtual_camera.hpp"
+#include "gstreamer_frame_transition.hpp"
 #include "gstreamer_source_runtime.hpp"
 
 #include <gst/d3d11/gstd3d11memory.h>
@@ -1175,6 +1176,44 @@ void test_renderer_hydration_and_output_updates_drive_graph_demand(
            "disabling Program closes its direct output and suspends rendering");
 }
 
+void test_ephemeral_transition_graph_retries_until_output(
+    solin::media_engine::MediaRuntime& media_runtime) {
+    const auto factory = media_runtime.source_runtime_factory();
+    solin::media_engine::SourceRegistry registry{factory};
+    registry.replace_snapshot(color_snapshot());
+    auto lease = registry.acquire("color-1", "transition-readiness-test");
+    const auto frame = wait_for_frame(lease.runtime(), 5s);
+    expect(frame != nullptr, "the transition readiness fixture has a GPU frame");
+    if (frame == nullptr) {
+        return;
+    }
+    for (std::size_t attempt = 0U; attempt < 5U; ++attempt) {
+        auto device = solin::media_engine::gstreamer_d3d11_device(frame);
+        const bool d3d11 =
+            frame->memory == solin::media_engine::SourceFrameMemory::d3d11 &&
+            device != nullptr;
+        solin::media_engine::GStreamerFrameTransitionPipeline transition{
+            d3d11, std::move(device), frame->width, frame->height};
+        std::uint64_t revision = 0U;
+        std::unique_ptr<GstSample, decltype(&gst_sample_unref)> output{
+            nullptr, &gst_sample_unref};
+        const auto deadline = std::chrono::steady_clock::now() + 1s;
+        while (std::chrono::steady_clock::now() < deadline && output == nullptr) {
+            expect(transition.render(frame, frame, {.outgoing = 0.5, .incoming = 0.5}),
+                   "the ephemeral transition accepts a synchronized retry");
+            auto candidate = transition.output_after(revision);
+            if (candidate.sample != nullptr) {
+                revision = candidate.revision;
+                output.reset(candidate.sample);
+                break;
+            }
+            std::this_thread::sleep_for(16ms);
+        }
+        expect(output != nullptr,
+               "each fresh transition graph acknowledges output under startup races");
+    }
+}
+
 void test_route_change_cannot_be_lost_before_graph_wait_registration(
     const std::shared_ptr<solin::media_engine::SceneRenderer>& renderer) {
     using solin::media_engine::OutputBus;
@@ -1354,6 +1393,7 @@ int main(const int argc, const char* const argv[]) {
         const auto probe = media_runtime.initialize();
         expect(probe.initialized, "the pinned GStreamer runtime initializes");
         if (probe.initialized) {
+            test_ephemeral_transition_graph_retries_until_output(media_runtime);
             test_color_source_publishes_bounded_latest_d3d11_frames(media_runtime);
             test_rtsp_source_decodes_to_the_same_bounded_frame_contract(media_runtime);
             if (probe.d3d11_compositor) {

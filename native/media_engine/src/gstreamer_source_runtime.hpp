@@ -80,6 +80,8 @@ struct GStreamerD3d11DeviceLease final {
 gstreamer_sample(std::shared_ptr<const SourceFrame> frame) noexcept;
 [[nodiscard]] GStreamerD3d11DeviceLease
 gstreamer_d3d11_device(std::shared_ptr<SourceRuntimeFactory> factory) noexcept;
+[[nodiscard]] std::shared_ptr<GstD3D11Device>
+gstreamer_d3d11_device(const std::shared_ptr<const SourceFrame>& frame) noexcept;
 [[nodiscard]] std::shared_ptr<GStreamerFrameSignal>
 gstreamer_frame_signal(std::shared_ptr<SourceRuntimeFactory> factory) noexcept;
 [[nodiscard]] bool

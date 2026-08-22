@@ -151,10 +151,10 @@ def _use_native_media_presentation(
     *,
     native_window_routing_ready: bool,
     mirror_enabled: bool,
-    raw_video: bool,
+    raw_visual: bool,
 ) -> bool:
     """Keep every media surface on the same native routing policy."""
-    return native_window_routing_ready and (mirror_enabled or raw_video)
+    return native_window_routing_ready and (mirror_enabled or raw_visual)
 log = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
@@ -329,6 +329,7 @@ class MainWindow(QWidget):
             self.font_manager,
             self._content_frame_ingress.submit_frame,
             self._current_yearly_projection_text,
+            media_epoch_sink=self._content_frame_ingress.set_media_epoch,
             width=program_output.video_format.width,
             height=program_output.video_format.height,
             parent=self,
@@ -1052,6 +1053,9 @@ class MainWindow(QWidget):
         )
 
     def _on_projection_state_changed_for_native(self) -> None:
+        self._content_frame_ingress.set_media_epoch(
+            self.projection_session.session_id
+        )
         self._reconcile_native_scene_surfaces()
 
     def _reconcile_native_scene_surfaces(self) -> None:
@@ -1060,7 +1064,15 @@ class MainWindow(QWidget):
             BusId.VIRTUAL_CAMERA if mirror_enabled else BusId.MEDIA_WINDOWS
         )
         state = self.projection_session.state
-        raw_video = state.get("type") == "video" and not state.get("is_audio", False)
+        raw_visual = state.get("type") in {
+            "idle",
+            "video",
+            "image",
+            "browser",
+            "timer",
+            "obs_stream",
+            "camera_stream",
+        } and not (state.get("type") == "video" and state.get("is_audio", False))
         native_window_routing_ready = (
             sys.platform == "win32"
             and self.scene_runtime.native_window_routing_ready
@@ -1069,7 +1081,7 @@ class MainWindow(QWidget):
         native_presentation = _use_native_media_presentation(
             native_window_routing_ready=native_window_routing_ready,
             mirror_enabled=mirror_enabled,
-            raw_video=raw_video,
+            raw_visual=raw_visual,
         )
         physical_windows = tuple(self.projection_session.projection_windows)
         targets: list[OutputWindowTarget] = []
@@ -1186,7 +1198,11 @@ class MainWindow(QWidget):
     def _raw_projection_windows(self) -> list:
         if self._program_mirror_enabled():
             return []
-        return self.projection_session.all_windows()
+        return [
+            window
+            for window in self.projection_session.all_windows()
+            if not getattr(window, "_native_output_active", False)
+        ]
 
     def _on_scene_window_route_changed(self, _state) -> None:
         mirror_enabled = self._program_mirror_enabled()
@@ -1202,7 +1218,7 @@ class MainWindow(QWidget):
     def _restore_raw_projection_windows(self) -> None:
         if self._program_mirror_enabled() or getattr(self, "_closing", False):
             return
-        for window in self.projection_session.all_windows():
+        for window in self._raw_projection_windows():
             self._projection_targets.apply_full_state_to_window(window)
 
     def _start_deferred_startup(self) -> None:

@@ -360,15 +360,6 @@ class MediaProjectionController:
         if announce:
             context.projection_bar.begin_announcement_mode()
 
-        start_paused = not is_audio and not announce and context.start_videos_paused()
-        context.media_controller.start_playback(
-            self._playback_request(
-                media_item or {"url": url},
-                source=url,
-                autoplay=not (start_paused or wait_for_auto_share),
-            )
-        )
-
         self._session.set_state(
             {
                 "type": "video",
@@ -376,6 +367,14 @@ class MediaProjectionController:
                 "title": title,
                 "origin": self._projection_origin(media_item),
             }
+        )
+        start_paused = not is_audio and not announce and context.start_videos_paused()
+        context.media_controller.start_playback(
+            self._playback_request(
+                media_item or {"url": url},
+                source=url,
+                autoplay=not (start_paused or wait_for_auto_share),
+            )
         )
         self._handlers.update_projection_status(
             True,
@@ -531,9 +530,8 @@ class MediaProjectionController:
 
     def distribute_frame(self, frame) -> None:
         context = self._context
-        if not context.projection_bar.is_video_mode():
-            return
-        if context.projection_bar.is_audio_mode():
+        state = self._session.state
+        if state.get("type") != "video" or state.get("is_audio", False):
             return
         context.content_frame_sink(frame)
         for projection_window in context.projection_windows():
@@ -757,8 +755,6 @@ class MediaProjectionController:
         context.ndi_service.stop()
         if context.camera_service is not None:
             context.camera_service.stop()
-        context.content_frame_sink(image)
-
         if playlist is not None:
             if playback_order is None:
                 context.projection_bar.set_playlist(
@@ -799,6 +795,7 @@ class MediaProjectionController:
         if fingerprint:
             state["fingerprint"] = fingerprint
         self._session.set_state(state)
+        context.content_frame_sink(image)
         activate_options: dict[str, Any] = {
             "image_data": data,
             "keep_expanded": keep_expanded,

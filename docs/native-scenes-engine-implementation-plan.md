@@ -169,7 +169,7 @@ retained as the device-loss and compatibility fallback.
 
 The producer increments a generation whenever capacity, device, or transport changes. The
 engine rejects stale generations. The channel is a versioned three-slot latest-frame
-mapping protected by bounded cross-process synchronization. Protocol v4 gives every slot a
+mapping protected by bounded cross-process synchronization. Protocol v5 gives every slot a
 cross-process lease. The D3D11 ingress wraps the leased SHM span directly in a `GstBuffer` and
 releases the lease after upload consumes it; system-memory fallback makes an owned copy.
 The producer attempts the control mutex with a zero timeout, chooses another free slot, or
@@ -235,21 +235,22 @@ flowchart LR
 flowchart LR
     QT["QMediaPlayer: decode, seek, trim, speed, cache, reconnect, audio"] --> SINK["Single QVideoSink"]
     SINK --> MAP["Public QVideoFrame map: NV12"]
-    MAP --> SHM["Protocol-v4 three-slot SHM: one bulk copy per Qt plane"]
+    MAP --> SHM["Protocol-v5 three-slot SHM: pixels + requested media epoch"]
     SHM --> APP["Leased GstBuffer: no SHM-to-owned copy"]
     APP --> UP["One D3D11 upload"]
     CAMERA["Native camera / RTSP D3D11 sources"] --> GPU["Canonical source textures"]
-    UP --> GPU
-    GPU --> RAWPRESENT["Raw media windows: direct D3D11 presenter"]
+    UP --> RAWTRANS["Canonical Raw D3D11 transition"]
+    RAWTRANS --> GPU
+    GPU --> WINDOWCOMP["Persistent Raw / Program surface compositor"]
+    WINDOWCOMP --> RAWPRESENT["Physical media windows"]
     GPU --> COMP["One D3D11 Program compositor"]
-    COMP --> PROGPRESENT["Program mirror: D3D11 presenter"]
+    COMP --> WINDOWCOMP
     COMP --> EDITOR["Editor BGRA fallback, only while subscribed"]
     COMP -->|"only with active camera consumer"| READBACK["NV12 edge conversion + one readback"]
     READBACK --> VSHM["Virtual-camera triple buffer"]
     VSHM --> DS["DirectShow exact NV12: direct IMediaSample fill"]
     DS --> CONSUMER["Zoom / OBS / other consumer"]
     COMP -. "future shared texture" .-> EDITOR
-    GPU -. "future GPU fade state machine" .-> COMP
 ```
 
 The output workers are demand-driven. A disabled Preview, presenter, or virtual camera owns
@@ -257,10 +258,14 @@ no polling cadence, and the virtual-camera readback valve opens only while its d
 enabled. Raw media-window targets lease `solin.content.current` directly and never depend on,
 activate, or render an authored scene; editing the Content scene therefore cannot disable the
 GPU presenter or leak scene layers into a raw media window. Program targets consume the
-already-transitioned Program bus. Media-window switching is Cut for now; image/video and Program-display fades belong
-to one future compositor state machine operating on canonical GPU textures. Ordinary decoded
-frames never restart that transition. Qt private ABI (`QVideoFramePrivate` and private texture
-interfaces) is outside this contract.
+already-transitioned Program bus. Raw media epochs are resolved once by the canonical
+`solin.content.current` D3D11 source before fan-out. Physical Raw presenters and a Raw layer
+inside Program therefore consume the same transitioned GPU frame naturally. A separate,
+persistent per-surface D3D11 compositor owns only Raw/Program ownership changes. Both use the
+same code-level transition policy, currently Fade through black at 200 ms, and the same state
+contract supporting Cut and Dissolve. Ordinary decoded frames and Program scene revisions
+restart neither effect. Qt private ABI (`QVideoFramePrivate` and private texture interfaces)
+is outside this contract.
 
 ### UI process responsibilities
 
@@ -722,9 +727,11 @@ minutes without an unbounded queue, deadlock, source duplication, or memory grow
 - [x] Remove the legacy Qt/QPainter opacity fades from raw image/video media changes and
   media-to-idle switching. Those paths Cut until the native GPU media-transition state
   machine below owns the effect; timer/yearly/idle-page animations remain independent.
-- [ ] Move raw media-change transitions into the native D3D11 presentation path. Extend the
+- [x] Move raw media-change transitions into the canonical native D3D11 content source,
+  before fan-out to physical Raw presenters and authored Program layers. Extend the
   content-ingress control contract with an explicit monotonic media epoch, distinct from and
-  bound to the transport generation, plus a media-switch intent; ordinary frames from the
+  bound to the transport generation. Store the requested epoch independently in the channel
+  header so the engine receives media-switch intent before a destination frame; ordinary frames from the
   same media epoch must never restart the effect. When Program mirroring is disabled, retain
   the last stable GPU frame, fade it to opaque black, commit the incoming media epoch at
   black, wait for its first valid frame within a bounded deadline, and fade it in without
@@ -735,20 +742,24 @@ minutes without an unbounded queue, deadlock, source duplication, or memory grow
   media-output fade to the ownership
   switch requested by toggling `Show in media windows`: fade the current raw-media or Program
   owner to black, atomically change the render bus at black, wait for the new owner's first
-  valid frame within the same bounded policy, and fade it in. While Program owns the surface,
-  no media-output fade is applied. Its already-rendered scene transitions remain authoritative
-  regardless of whether a scene change was automatic or manual, and content frames, playback
-  state, or scene revisions must never start an additional effect.
+  valid frame within the same bounded policy, and fade it in. Feed that transitioned Raw
+  `SourceFrame` to every consumer, including scenes containing `solin.content.current`.
+  Separately, transition physical-surface ownership between canonical Raw and the already
+  composed Program bus; do not reinterpret Raw epochs at that downstream presenter. Program
+  scene transitions remain authoritative regardless of whether a scene change was automatic
+  or manual, and content frames, playback state, or scene revisions must never start an
+  additional surface effect. The current code-level
+  policy is Fade through black at 200 ms; Cut and Dissolve use the same tested state contract.
   Keep the expanded in-app player outside this contract: it continues to show the original
-  `QVideoFrame` and does not drive physical-output transitions. Gate completion on raw-mode
-  video-to-video, video-to-image, image-to-video, raw-media-to-Program,
-  Program-to-raw-media, replay, rapid next/previous and mirror toggles, delayed first frame,
-  decode failure, and multi-monitor tests, plus P50/P95 CPU and frame-time benchmarks against
-  the current native-present and Qt-fallback paths. The current Qt opacity cost is already
+  `QVideoFrame` and does not drive physical-output transitions. The current Qt opacity cost is already
   removed; this gate restores the visual effect on the GPU. It does not claim a steady-state
   CPU reduction while decoded frames still cross
   the shared-memory ingress. The separate keyed-texture ingress gate is what can remove that
   steady-state copy/upload path.
+- [ ] Qualify the canonical Raw and physical-owner transitions on raw-mode video-to-video, video-to-image,
+  image-to-video, raw-media-to-Program, Program-to-raw-media, replay, rapid next/previous and
+  mirror toggles, delayed first frame, decode failure, device recovery, and multiple monitors;
+  record P50/P95 CPU and frame-time against both native-present and Qt-fallback paths.
 - [x] Present the expanded in-app player by forwarding the original QtMultimedia
   `QVideoFrame` to a `QVideoWidget` in the same process. Expanding the player neither
   materializes a `QImage`/`QPixmap` per frame nor starts the Media Windows compositor.

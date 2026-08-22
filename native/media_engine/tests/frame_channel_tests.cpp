@@ -6,9 +6,11 @@
 #include <cstdint>
 #include <cstring>
 #include <iostream>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <thread>
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -104,7 +106,7 @@ void test_windows_reader_consumes_only_the_latest_complete_frame() {
     std::memset(view, 0, mapping_size);
     constexpr std::array<std::uint8_t, 8U> magic{'S', 'L', 'N', 'F', 'R', 'M', '0', '1'};
     std::memcpy(view, magic.data(), magic.size());
-    write_value<std::uint16_t>(view, 8U, 4U);
+    write_value<std::uint16_t>(view, 8U, 5U);
     write_value<std::uint16_t>(view, 10U, static_cast<std::uint16_t>(header_size));
     write_value<std::uint32_t>(view, 12U, 3U);
     write_value<std::uint32_t>(view, 16U, 2U);
@@ -128,6 +130,8 @@ void test_windows_reader_consumes_only_the_latest_complete_frame() {
         .color_range = "full",
     });
     expect(!reader->read_latest().has_value(), "an initialized channel has no synthetic frame");
+    expect(reader->media_epoch() == std::optional<std::uint64_t>{0U},
+           "an initialized channel begins at the initial media epoch");
     expect(!reader->wait_for_frame(std::chrono::milliseconds{0}),
            "an idle channel does not synthesize a frame event");
     static_cast<void>(SetEvent(event.get()));
@@ -137,6 +141,20 @@ void test_windows_reader_consumes_only_the_latest_complete_frame() {
     reader->wake();
     expect(reader->wait_for_frame(std::chrono::milliseconds{10}),
            "the reader can wake a blocked source worker during shutdown");
+
+    const WindowsHandle mutex_held{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
+    const WindowsHandle release_holder{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
+    std::thread holder{[&] {
+        static_cast<void>(WaitForSingleObject(mutex.get(), INFINITE));
+        static_cast<void>(SetEvent(mutex_held.get()));
+        static_cast<void>(WaitForSingleObject(release_holder.get(), INFINITE));
+        static_cast<void>(ReleaseMutex(mutex.get()));
+    }};
+    static_cast<void>(WaitForSingleObject(mutex_held.get(), INFINITE));
+    expect(!reader->media_epoch().has_value(),
+           "epoch observation stays non-blocking while the producer owns the channel");
+    static_cast<void>(SetEvent(release_holder.get()));
+    holder.join();
 
     const auto wait_result = WaitForSingleObject(mutex.get(), INFINITE);
     expect(wait_result == WAIT_OBJECT_0, "the test writer acquires the channel mutex");
@@ -151,22 +169,27 @@ void test_windows_reader_consumes_only_the_latest_complete_frame() {
     write_value<std::uint32_t>(view, slot + 52U, 2U);
     write_value<std::uint32_t>(view, slot + 56U, 8U);
     write_value<std::uint32_t>(view, slot + 60U, 1U);
+    write_value<std::uint64_t>(view, slot + 96U, 42U);
     for (std::size_t index = 0U; index < frame_bytes; ++index) {
         view[slot + slot_header_size + index] = static_cast<std::uint8_t>(index);
     }
     write_value<std::uint64_t>(view, slot, 2U);
     write_value<std::uint64_t>(view, 56U, 1U);
+    write_value<std::uint64_t>(view, 64U, 42U);
     static_cast<void>(ReleaseMutex(mutex.get()));
 
     auto frame_lease = reader->read_latest();
     const auto* frame = frame_lease.has_value() ? &frame_lease->frame() : nullptr;
     expect(frame != nullptr && frame->generation == 7U && frame->sequence == 1U &&
                frame->presentation_timestamp_ns == 123U && frame->duration_ns == 456U &&
+               frame->media_epoch == 42U &&
                frame->width == 2U && frame->height == 2U &&
                frame->pixel_format == solin::media_engine::VideoFramePixelFormat::bgra &&
                frame->bytes.size() == frame_bytes && frame->bytes.front() == 0U &&
                frame->bytes.back() == 15U,
            "the reader returns the complete published frame and metadata");
+    expect(reader->media_epoch() == std::optional<std::uint64_t>{42U},
+           "the reader observes the requested epoch independently of frame delivery");
     expect(*reinterpret_cast<volatile LONG*>(view + slot + 64U) == 1L,
            "the reader leases the shared slot instead of copying its payload");
     view[slot + slot_header_size] = 0xEEU;
@@ -284,7 +307,7 @@ void test_windows_reader_preserves_padded_nv12_plane_layout() {
     std::memset(view, 0, mapping_size);
     constexpr std::array<std::uint8_t, 8U> magic{'S', 'L', 'N', 'F', 'R', 'M', '0', '1'};
     std::memcpy(view, magic.data(), magic.size());
-    write_value<std::uint16_t>(view, 8U, 4U);
+    write_value<std::uint16_t>(view, 8U, 5U);
     write_value<std::uint16_t>(view, 10U, static_cast<std::uint16_t>(header_size));
     write_value<std::uint32_t>(view, 12U, 3U);
     write_value<std::uint32_t>(view, 16U, 4U);

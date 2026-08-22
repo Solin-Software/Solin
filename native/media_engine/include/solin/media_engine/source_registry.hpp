@@ -42,6 +42,10 @@ class SourceFramePayload {
 struct SourceFrame {
     std::uint64_t sequence{0U};
     std::uint64_t stream_epoch{0U};
+    // Projection identity carried only by the canonical Solin content source.
+    // It is intentionally distinct from stream_epoch, which tracks source
+    // reconnect/device generations.
+    std::uint64_t media_epoch{0U};
     bool discontinuity{false};
     std::uint64_t presentation_timestamp_ns{0U};
     std::uint64_t duration_ns{0U};
@@ -86,6 +90,7 @@ class SourceRuntime {
         static_cast<void>(deadline);
         return false;
     }
+    virtual void wake_frame_waiters() noexcept {}
 
   protected:
     SourceRuntime() = default;

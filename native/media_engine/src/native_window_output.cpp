@@ -1,5 +1,7 @@
 #include "solin/media_engine/native_window_output.hpp"
+#include "solin/media_engine/presentation_transition.hpp"
 
+#include "gstreamer_frame_transition.hpp"
 #include "gstreamer_source_runtime.hpp"
 
 #include <algorithm>
@@ -8,16 +10,21 @@
 #include <chrono>
 #include <cstdint>
 #include <future>
+#include <limits>
 #include <memory>
 #include <mutex>
+#include <ranges>
 #include <stdexcept>
 #include <thread>
+#include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
 
 #ifdef SOLIN_MEDIA_ENGINE_HAS_GSTREAMER
 #include <gst/app/gstappsrc.h>
 #include <gst/gst.h>
+#include <gst/video/video-info.h>
 #include <gst/video/videooverlay.h>
 #endif
 
@@ -47,6 +54,19 @@ void require_link(GstElement* source, GstElement* destination) {
         throw std::runtime_error("native_window_output_link_failed");
     }
 }
+
+GstElement* add_element(GstElement* pipeline, const char* factory) {
+    auto* element = gst_element_factory_make(factory, nullptr);
+    if (element == nullptr || gst_bin_add(GST_BIN(pipeline), element) == FALSE) {
+        if (element != nullptr) {
+            gst_object_unref(element);
+        }
+        throw std::runtime_error("native_window_output_unavailable");
+    }
+    return element;
+}
+
+constexpr auto kTransitionFrameInterval = 16ms;
 
 #ifdef _WIN32
 
@@ -173,7 +193,7 @@ class NativeChildWindow final {
 class NativeTargetPipeline final {
   public:
     explicit NativeTargetPipeline(const OutputWindowConfiguration& target)
-        : render_bus_(target.bus) {
+        : target_id_(target.target_id), transition_(kMediaPresentationTransition) {
 #ifdef _WIN32
         window_ = std::make_unique<NativeChildWindow>(target);
 #else
@@ -186,36 +206,32 @@ class NativeTargetPipeline final {
         }
         std::unique_ptr<GstElement, decltype(&release_pipeline)> candidate{pipeline,
                                                                            &release_pipeline};
-        auto* source = gst_element_factory_make("appsrc", nullptr);
-        auto* queue = gst_element_factory_make("queue", nullptr);
 #ifdef _WIN32
-        auto* sink = gst_element_factory_make("d3d11videosink", nullptr);
+        auto* source = add_element(pipeline, "appsrc");
+        auto* queue = add_element(pipeline, "queue");
+        auto* upload = add_element(pipeline, "d3d11upload");
+        auto* convert = add_element(pipeline, "d3d11convert");
+        auto* sink = add_element(pipeline, "d3d11videosink");
 #else
-        auto* sink = gst_element_factory_make("autovideosink", nullptr);
+        auto* source = add_element(pipeline, "appsrc");
+        auto* queue = add_element(pipeline, "queue");
+        auto* upload = add_element(pipeline, "videoconvert");
+        auto* convert = add_element(pipeline, "videoconvert");
+        auto* sink = add_element(pipeline, "autovideosink");
 #endif
-        if (source == nullptr || queue == nullptr || sink == nullptr) {
-            if (source != nullptr) {
-                gst_object_unref(source);
-            }
-            if (queue != nullptr) {
-                gst_object_unref(queue);
-            }
-            if (sink != nullptr) {
-                gst_object_unref(sink);
-            }
-            throw std::runtime_error("native_window_output_unavailable");
-        }
-        gst_bin_add_many(GST_BIN(pipeline), source, queue, sink, nullptr);
-        g_object_set(source, "is-live", TRUE, "format", GST_FORMAT_TIME, "do-timestamp", TRUE,
-                     "block", FALSE, nullptr);
+        g_object_set(source, "is-live", TRUE, "format", GST_FORMAT_TIME,
+                     "do-timestamp", TRUE, "block", FALSE, nullptr);
         gst_app_src_set_max_buffers(GST_APP_SRC(source), 1U);
-        gst_app_src_set_leaky_type(GST_APP_SRC(source), GST_APP_LEAKY_TYPE_DOWNSTREAM);
-        g_object_set(queue, "max-size-buffers", 1U, "max-size-bytes", 0U, "max-size-time",
-                     static_cast<guint64>(0U), "leaky", 2, nullptr);
+        gst_app_src_set_leaky_type(GST_APP_SRC(source),
+                                   GST_APP_LEAKY_TYPE_DOWNSTREAM);
+        g_object_set(queue, "max-size-buffers", 1U, "max-size-bytes", 0U,
+                     "max-size-time", static_cast<guint64>(0U), "leaky", 2, nullptr);
+        require_link(source, queue);
+        require_link(queue, upload);
+        require_link(upload, convert);
+        require_link(convert, sink);
         g_object_set(sink, "sync", FALSE, "enable-last-sample", FALSE, "force-aspect-ratio", TRUE,
                      nullptr);
-        require_link(source, queue);
-        require_link(queue, sink);
         if (GST_IS_VIDEO_OVERLAY(sink) == FALSE) {
             throw std::runtime_error("native_window_overlay_unavailable");
         }
@@ -234,9 +250,11 @@ class NativeTargetPipeline final {
         pipeline_ = candidate.release();
         source_ = GST_APP_SRC(source);
         bus_ = bus;
+        request(target);
     }
 
     ~NativeTargetPipeline() {
+        transition_pipeline_.reset();
         if (bus_ != nullptr) {
             gst_object_unref(bus_);
         }
@@ -246,9 +264,30 @@ class NativeTargetPipeline final {
     NativeTargetPipeline(const NativeTargetPipeline&) = delete;
     NativeTargetPipeline& operator=(const NativeTargetPipeline&) = delete;
 
-    [[nodiscard]] bool push(const std::shared_ptr<const SourceFrame>& frame) noexcept {
+    void request(const OutputWindowConfiguration& target) noexcept {
+        const auto previous = transition_.desired();
+        transition_.request(
+            PresentationIdentity{
+                .bus = target.bus,
+                // Raw media changes are already resolved once in the
+                // canonical content source. A physical presenter owns only
+                // the Raw<->Program surface handoff.
+                .media_epoch = 0U,
+            },
+            std::chrono::steady_clock::now());
+        if (previous != transition_.desired()) {
+            frozen_outgoing_ = latest_presented_frame_;
+            reset_transition_pipeline();
+            direct_push_ = {};
+            last_transition_tick_ = std::chrono::steady_clock::now();
+        }
+    }
+
+    [[nodiscard]] bool render(
+        const std::array<std::shared_ptr<const SourceFrame>, 2U>& frames,
+        const std::chrono::steady_clock::time_point now) noexcept {
         try {
-            if (frame == nullptr || source_ == nullptr || bus_ == nullptr) {
+            if (source_ == nullptr || bus_ == nullptr) {
                 return false;
             }
             auto* error = gst_bus_pop_filtered(bus_, GST_MESSAGE_ERROR);
@@ -256,29 +295,91 @@ class NativeTargetPipeline final {
                 gst_message_unref(error);
                 return false;
             }
-            const auto sample = gstreamer_sample(frame);
-            if (!sample) {
-                return false;
+            const auto desired = transition_.desired();
+            const auto incoming = matching_frame(desired, frames);
+            if (transition_pipeline_ != nullptr) {
+                static_cast<void>(consume_transition_output());
+                if (transition_awaiting_output_ &&
+                    last_transition_tick_.time_since_epoch().count() != 0) {
+                    transition_.delay(now - last_transition_tick_);
+                }
             }
-            auto* buffer = gst_sample_get_buffer(sample.sample);
-            auto* caps = gst_sample_get_caps(sample.sample);
-            if (buffer == nullptr || caps == nullptr) {
-                return false;
+            const auto allow_incoming =
+                !(last_transition_phase_ ==
+                      PresentationTransitionPhase::waiting_at_black &&
+                  transition_awaiting_output_);
+            const auto transition_sample =
+                transition_.sample(now, allow_incoming && incoming != nullptr);
+            last_transition_tick_ = now;
+            last_transition_phase_ = transition_sample.phase;
+
+            if (transition_sample.phase == PresentationTransitionPhase::stable) {
+                reset_transition_pipeline();
+                frozen_outgoing_.reset();
+                if (incoming != nullptr) {
+                    if (!push_frame(incoming, false)) {
+                        return false;
+                    }
+                    latest_presented_frame_ = incoming;
+                }
+                return true;
             }
-            auto* copy = gst_buffer_copy(buffer);
-            if (copy == nullptr) {
-                return false;
+            if (transition_sample.phase ==
+                PresentationTransitionPhase::waiting_for_first_frame) {
+                return true;
             }
-            GST_BUFFER_PTS(copy) = GST_CLOCK_TIME_NONE;
-            GST_BUFFER_DTS(copy) = GST_CLOCK_TIME_NONE;
-            auto* pushed = gst_sample_new(copy, caps, nullptr, nullptr);
-            gst_buffer_unref(copy);
-            if (pushed == nullptr) {
-                return false;
+
+            TransitionStage stage = TransitionStage::blend;
+            std::shared_ptr<const SourceFrame> outgoing;
+            std::shared_ptr<const SourceFrame> transition_incoming;
+            std::shared_ptr<const SourceFrame> format_reference;
+            switch (transition_sample.phase) {
+            case PresentationTransitionPhase::fading_out:
+            case PresentationTransitionPhase::waiting_at_black:
+                stage = TransitionStage::outgoing_to_black;
+                outgoing = frozen_outgoing_;
+                format_reference = outgoing;
+                break;
+            case PresentationTransitionPhase::fading_in:
+                stage = TransitionStage::incoming_from_black;
+                transition_incoming = incoming;
+                format_reference = transition_incoming;
+                break;
+            case PresentationTransitionPhase::blending:
+                stage = TransitionStage::blend;
+                outgoing = frozen_outgoing_;
+                transition_incoming = incoming;
+                format_reference = transition_incoming;
+                break;
+            default:
+                return true;
             }
-            const auto flow = gst_app_src_push_sample(source_, pushed);
-            gst_sample_unref(pushed);
-            return flow == GST_FLOW_OK;
+            if (transition_sample.phase ==
+                    PresentationTransitionPhase::waiting_at_black &&
+                outgoing == nullptr) {
+                return true;
+            }
+            if (format_reference == nullptr ||
+                !ensure_transition_pipeline(stage, format_reference)) {
+                return recover_as_cut(incoming, now);
+            }
+            const auto checkpoint = transition_pipeline_->revision();
+            if (!transition_pipeline_->render(
+                    outgoing, transition_incoming, transition_sample.weights)) {
+                return recover_as_cut(incoming, now);
+            }
+            transition_awaited_revision_ = checkpoint;
+            transition_awaiting_output_ = true;
+            if (!consume_transition_output()) {
+                return true;
+            }
+            if (transition_sample.phase ==
+                    PresentationTransitionPhase::waiting_at_black &&
+                !transition_awaiting_output_) {
+                reset_transition_pipeline();
+                frozen_outgoing_.reset();
+            }
+            return true;
         } catch (...) {
             return false;
         }
@@ -292,10 +393,253 @@ class NativeTargetPipeline final {
 #endif
     }
 
-    [[nodiscard]] OutputBus bus() const noexcept { return render_bus_; }
+    [[nodiscard]] const std::string& target_id() const noexcept { return target_id_; }
+    [[nodiscard]] PresentationIdentity desired() const noexcept {
+        return transition_.desired();
+    }
+    [[nodiscard]] bool animation_active() const noexcept {
+        return transition_.animation_active() || transition_awaiting_output_;
+    }
 
   private:
-    OutputBus render_bus_{OutputBus::media_windows};
+    struct PushIdentity final {
+        std::uint64_t sequence{0U};
+        std::uint64_t stream_epoch{0U};
+        std::uint64_t media_epoch{0U};
+    };
+
+    enum class TransitionStage : std::uint8_t {
+        none,
+        outgoing_to_black,
+        incoming_from_black,
+        blend,
+    };
+
+    class TransitionFramePayload final : public GStreamerSamplePayload {
+      public:
+        explicit TransitionFramePayload(GstSample* sample) : sample_(sample) {
+            if (sample_ == nullptr) {
+                throw std::invalid_argument("native transition sample is required");
+            }
+        }
+        ~TransitionFramePayload() override { gst_sample_unref(sample_); }
+        [[nodiscard]] GstSample* sample() const noexcept override { return sample_; }
+
+      private:
+        GstSample* sample_{nullptr};
+    };
+
+    void reset_transition_pipeline() noexcept {
+        transition_pipeline_.reset();
+        transition_stage_ = TransitionStage::none;
+        transition_width_ = 0U;
+        transition_height_ = 0U;
+        transition_output_revision_ = 0U;
+        transition_awaiting_output_ = false;
+        transition_awaited_revision_ = 0U;
+    }
+
+    [[nodiscard]] bool ensure_transition_pipeline(
+        const TransitionStage stage,
+        const std::shared_ptr<const SourceFrame>& reference) noexcept {
+        if (reference == nullptr || reference->width == 0U || reference->height == 0U) {
+            return false;
+        }
+        if (transition_pipeline_ != nullptr && transition_stage_ == stage &&
+            transition_width_ == reference->width &&
+            transition_height_ == reference->height) {
+            return true;
+        }
+        reset_transition_pipeline();
+        try {
+            auto device = gstreamer_d3d11_device(reference);
+            const bool use_d3d11 =
+                reference->memory == SourceFrameMemory::d3d11 && device != nullptr;
+            transition_pipeline_ =
+                std::make_unique<GStreamerFrameTransitionPipeline>(
+                    use_d3d11, std::move(device), reference->width,
+                    reference->height);
+            transition_stage_ = stage;
+            transition_width_ = reference->width;
+            transition_height_ = reference->height;
+            return true;
+        } catch (...) {
+            reset_transition_pipeline();
+            return false;
+        }
+    }
+
+    [[nodiscard]] static std::shared_ptr<const SourceFrame> matching_frame(
+        const PresentationIdentity presentation,
+        const std::array<std::shared_ptr<const SourceFrame>, 2U>& frames) noexcept {
+        const auto& frame = frames[static_cast<std::size_t>(presentation.bus)];
+        if (frame == nullptr) {
+            return {};
+        }
+        return frame;
+    }
+
+    [[nodiscard]] bool push_frame(const std::shared_ptr<const SourceFrame>& frame,
+                                  const bool force) noexcept {
+        const PushIdentity identity{
+            .sequence = frame->sequence,
+            .stream_epoch = frame->stream_epoch,
+            .media_epoch = frame->media_epoch,
+        };
+        if (!force && identity.sequence == direct_push_.sequence &&
+            identity.stream_epoch == direct_push_.stream_epoch &&
+            identity.media_epoch == direct_push_.media_epoch) {
+            return true;
+        }
+        const auto sample = gstreamer_sample(frame);
+        if (!sample) {
+            return false;
+        }
+        if (!push_sample(sample.sample)) {
+            return false;
+        }
+        direct_push_ = identity;
+        return true;
+    }
+
+    [[nodiscard]] bool push_sample(GstSample* sample) noexcept {
+        if (source_ == nullptr || sample == nullptr) {
+            return false;
+        }
+        auto* buffer = gst_sample_get_buffer(sample);
+        auto* caps = gst_sample_get_caps(sample);
+        if (buffer == nullptr || caps == nullptr) {
+            return false;
+        }
+        auto* copy = gst_buffer_copy(buffer);
+        if (copy == nullptr) {
+            return false;
+        }
+        GST_BUFFER_PTS(copy) = GST_CLOCK_TIME_NONE;
+        GST_BUFFER_DTS(copy) = GST_CLOCK_TIME_NONE;
+        auto* pushed = gst_sample_new(copy, caps, nullptr, nullptr);
+        gst_buffer_unref(copy);
+        if (pushed == nullptr) {
+            return false;
+        }
+        const auto flow = gst_app_src_push_sample(source_, pushed);
+        gst_sample_unref(pushed);
+        return flow == GST_FLOW_OK;
+    }
+
+    [[nodiscard]] std::shared_ptr<const SourceFrame>
+    transition_frame(GstSample* sample) noexcept {
+        if (sample == nullptr) {
+            return {};
+        }
+        try {
+            auto* caps = gst_sample_get_caps(sample);
+            auto* buffer = gst_sample_get_buffer(sample);
+            GstVideoInfo info{};
+            if (caps == nullptr || buffer == nullptr ||
+                gst_video_info_from_caps(&info, caps) == FALSE) {
+                return {};
+            }
+            const auto* format =
+                gst_video_format_to_string(GST_VIDEO_INFO_FORMAT(&info));
+            if (format == nullptr) {
+                return {};
+            }
+            const auto* features = gst_caps_get_features(caps, 0U);
+            const bool d3d11 =
+                features != nullptr &&
+                gst_caps_features_contains(features, "memory:D3D11Memory") != FALSE;
+            auto payload =
+                std::make_shared<TransitionFramePayload>(gst_sample_ref(sample));
+            return std::make_shared<SourceFrame>(SourceFrame{
+                .sequence = ++transition_frame_sequence_,
+                .stream_epoch = 1U,
+                .media_epoch = 0U,
+                .discontinuity = false,
+                .presentation_timestamp_ns =
+                    GST_CLOCK_TIME_IS_VALID(GST_BUFFER_PTS(buffer))
+                        ? static_cast<std::uint64_t>(GST_BUFFER_PTS(buffer))
+                        : 0U,
+                .duration_ns =
+                    GST_CLOCK_TIME_IS_VALID(GST_BUFFER_DURATION(buffer))
+                        ? static_cast<std::uint64_t>(GST_BUFFER_DURATION(buffer))
+                        : 0U,
+                .received_monotonic_ns = static_cast<std::uint64_t>(
+                    std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        std::chrono::steady_clock::now().time_since_epoch())
+                        .count()),
+                .width = static_cast<std::uint32_t>(GST_VIDEO_INFO_WIDTH(&info)),
+                .height = static_cast<std::uint32_t>(GST_VIDEO_INFO_HEIGHT(&info)),
+                .pixel_format = format,
+                .memory = d3d11 ? SourceFrameMemory::d3d11
+                                : SourceFrameMemory::system_memory,
+                .payload = std::move(payload),
+            });
+        } catch (...) {
+            return {};
+        }
+    }
+
+    [[nodiscard]] bool consume_transition_output() noexcept {
+        if (transition_pipeline_ == nullptr) {
+            return false;
+        }
+        auto output =
+            transition_pipeline_->output_after(transition_output_revision_);
+        if (output.sample == nullptr) {
+            return false;
+        }
+        std::unique_ptr<GstSample, decltype(&gst_sample_unref)> guard{
+            output.sample, &gst_sample_unref};
+        const auto frame = transition_frame(guard.get());
+        if (frame == nullptr || !push_sample(guard.get())) {
+            return false;
+        }
+        transition_output_revision_ = output.revision;
+        if (transition_awaiting_output_ &&
+            output.revision > transition_awaited_revision_) {
+            transition_awaiting_output_ = false;
+        }
+        latest_presented_frame_ = frame;
+        return true;
+    }
+
+    [[nodiscard]] bool recover_as_cut(
+        const std::shared_ptr<const SourceFrame>& incoming,
+        const std::chrono::steady_clock::time_point now) noexcept {
+        const auto desired = transition_.desired();
+        reset_transition_pipeline();
+        transition_ = PresentationTransition{kMediaPresentationTransition};
+        transition_.request(desired, now);
+        frozen_outgoing_.reset();
+        direct_push_ = {};
+        if (incoming == nullptr) {
+            return true;
+        }
+        static_cast<void>(transition_.sample(now, true));
+        if (!push_frame(incoming, true)) {
+            return false;
+        }
+        latest_presented_frame_ = incoming;
+        return true;
+    }
+
+    std::string target_id_{};
+    PresentationTransition transition_;
+    PresentationTransitionPhase last_transition_phase_{
+        PresentationTransitionPhase::waiting_for_first_frame};
+    std::chrono::steady_clock::time_point last_transition_tick_{};
+    std::shared_ptr<const SourceFrame> latest_presented_frame_{};
+    std::shared_ptr<const SourceFrame> frozen_outgoing_{};
+    std::unique_ptr<GStreamerFrameTransitionPipeline> transition_pipeline_{};
+    TransitionStage transition_stage_{TransitionStage::none};
+    std::uint32_t transition_width_{0U};
+    std::uint32_t transition_height_{0U};
+    std::uint64_t transition_output_revision_{0U};
+    std::uint64_t transition_frame_sequence_{0U};
+    bool transition_awaiting_output_{false};
+    std::uint64_t transition_awaited_revision_{0U};
+    PushIdentity direct_push_{};
     GstElement* pipeline_{nullptr};
     GstAppSrc* source_{nullptr};
     GstBus* bus_{nullptr};
@@ -303,6 +647,28 @@ class NativeTargetPipeline final {
     std::unique_ptr<NativeChildWindow> window_{};
 #endif
 };
+
+struct NativeWindowRoutingState final {
+    std::mutex mutex{};
+    std::vector<OutputWindowConfiguration> targets{};
+    std::shared_ptr<SourceLease> content_source{};
+    std::uint64_t revision{0U};
+};
+
+[[nodiscard]] bool same_window_topology(
+    const std::vector<OutputWindowConfiguration>& current,
+    const std::vector<OutputWindowConfiguration>& next) {
+    if (current.size() != next.size()) {
+        return false;
+    }
+    return std::ranges::all_of(current, [&next](const auto& target) {
+        const auto match = std::ranges::find_if(next, [&target](const auto& candidate) {
+            return candidate.target_id == target.target_id;
+        });
+        return match != next.end() && match->native_handle == target.native_handle &&
+               match->visible == target.visible;
+    });
+}
 
 #endif
 
@@ -330,7 +696,7 @@ class NativeWindowOutputController::Impl final {
             if (content_required && !content_source.has_value()) {
                 return false;
             }
-            const auto current_generation = content_source_.has_value()
+            const auto current_generation = content_source_ != nullptr
                                                 ? content_source_->generation()
                                                 : 0U;
             const auto next_generation = content_source.has_value()
@@ -339,9 +705,37 @@ class NativeWindowOutputController::Impl final {
             if (targets_ == targets && current_generation == next_generation) {
                 return !desired_enabled_ || worker_running_.load() || targets_.empty();
             }
+#ifdef SOLIN_MEDIA_ENGINE_HAS_GSTREAMER
+            auto next_content_source = content_source.has_value()
+                                           ? std::make_shared<SourceLease>(
+                                                 std::move(content_source.value()))
+                                           : nullptr;
+            if (worker_running_.load() && routing_state_ != nullptr &&
+                same_window_topology(targets_, targets)) {
+                targets_ = targets;
+                content_source_ = next_content_source;
+                {
+                    std::scoped_lock routing_lock{routing_state_->mutex};
+                    routing_state_->targets = targets;
+                    routing_state_->content_source = next_content_source;
+                    ++routing_state_->revision;
+                }
+                if (content_source_ != nullptr) {
+                    content_source_->runtime().wake_frame_waiters();
+                }
+                return true;
+            }
+#endif
             stop_locked();
             targets_ = targets;
-            content_source_ = std::move(content_source);
+#ifdef SOLIN_MEDIA_ENGINE_HAS_GSTREAMER
+            content_source_ = std::move(next_content_source);
+#else
+            content_source_ = content_source.has_value()
+                                  ? std::make_shared<SourceLease>(
+                                        std::move(content_source.value()))
+                                  : nullptr;
+#endif
             return !desired_enabled_ || targets_.empty() || start_locked();
         } catch (...) {
             return false;
@@ -369,6 +763,9 @@ class NativeWindowOutputController::Impl final {
             stop_locked();
             targets_.clear();
             content_source_.reset();
+#ifdef SOLIN_MEDIA_ENGINE_HAS_GSTREAMER
+            routing_state_.reset();
+#endif
         } catch (...) {
         }
     }
@@ -386,15 +783,28 @@ class NativeWindowOutputController::Impl final {
         }
         std::promise<bool> started;
         auto started_future = started.get_future();
-        auto* content_runtime = content_source_.has_value()
-                                    ? &content_source_->runtime()
-                                    : nullptr;
+        routing_state_ = std::make_shared<NativeWindowRoutingState>();
+        routing_state_->targets = targets_;
+        routing_state_->content_source = content_source_;
+        routing_state_->revision = 1U;
         worker_ =
-            std::jthread([renderer = renderer_, targets = targets_, content_runtime,
+            std::jthread([renderer = renderer_, routing = routing_state_,
                           started = std::move(started), running = &worker_running_](
                              const std::stop_token stop_token) mutable {
                 std::vector<std::unique_ptr<NativeTargetPipeline>> pipelines;
-                const auto rebuild_pipelines = [&targets, &pipelines] {
+                std::uint64_t applied_revision = 0U;
+                const auto routing_snapshot = [&routing] {
+                    std::scoped_lock lock{routing->mutex};
+                    return std::tuple{
+                        routing->targets,
+                        routing->content_source,
+                        routing->revision,
+                    };
+                };
+                const auto rebuild_pipelines = [&routing_snapshot, &pipelines,
+                                                &applied_revision] {
+                    const auto [targets, content_source, revision] = routing_snapshot();
+                    static_cast<void>(content_source);
                     std::vector<std::unique_ptr<NativeTargetPipeline>> next;
                     next.reserve(targets.size());
                     for (const auto& target : targets) {
@@ -403,6 +813,25 @@ class NativeWindowOutputController::Impl final {
                         }
                     }
                     pipelines = std::move(next);
+                    applied_revision = revision;
+                };
+                const auto apply_routing = [&routing_snapshot, &pipelines,
+                                           &applied_revision] {
+                    const auto [targets, content_source, revision] = routing_snapshot();
+                    static_cast<void>(content_source);
+                    if (revision == applied_revision) {
+                        return;
+                    }
+                    for (const auto& target : targets) {
+                        const auto pipeline = std::ranges::find_if(
+                            pipelines, [&target](const auto& candidate) {
+                                return candidate->target_id() == target.target_id;
+                            });
+                        if (pipeline != pipelines.end()) {
+                            (*pipeline)->request(target);
+                        }
+                    }
+                    applied_revision = revision;
                 };
                 try {
                     rebuild_pipelines();
@@ -413,13 +842,11 @@ class NativeWindowOutputController::Impl final {
                     started.set_value(false);
                     return;
                 }
-                std::array<std::uint64_t, 2U> last_sequences{};
                 const auto recover_pipelines = [&] {
                     pipelines.clear();
                     std::this_thread::sleep_for(250ms);
                     try {
                         rebuild_pipelines();
-                        last_sequences.fill(0U);
                     } catch (...) {
                     }
                 };
@@ -436,6 +863,14 @@ class NativeWindowOutputController::Impl final {
                         recover_pipelines();
                         continue;
                     }
+                    apply_routing();
+                    const auto [routed_targets, content_source, routed_revision] =
+                        routing_snapshot();
+                    static_cast<void>(routed_targets);
+                    static_cast<void>(routed_revision);
+                    auto* content_runtime = content_source != nullptr
+                                                ? &content_source->runtime()
+                                                : nullptr;
                     std::array<std::shared_ptr<const SourceFrame>, 2U> frames{};
                     frames[static_cast<std::size_t>(OutputBus::media_windows)] =
                         content_runtime == nullptr ? nullptr : content_runtime->latest_frame();
@@ -449,18 +884,9 @@ class NativeWindowOutputController::Impl final {
                     }
                     frames[static_cast<std::size_t>(OutputBus::virtual_camera)] =
                         std::move(program_frame);
-                    for (std::size_t index = 0U; index < frames.size(); ++index) {
-                        const auto& frame = frames[index];
-                        if (frame == nullptr || frame->sequence <= last_sequences[index]) {
-                            continue;
-                        }
-                        const auto bus = static_cast<OutputBus>(index);
-                        for (const auto& pipeline : pipelines) {
-                            if (pipeline->bus() == bus) {
-                                healthy = pipeline->push(frame) && healthy;
-                            }
-                        }
-                        last_sequences[index] = frame->sequence;
+                    const auto now = std::chrono::steady_clock::now();
+                    for (const auto& pipeline : pipelines) {
+                        healthy = pipeline->render(frames, now) && healthy;
                     }
                     if (!healthy) {
                         recover_pipelines();
@@ -468,24 +894,39 @@ class NativeWindowOutputController::Impl final {
                     }
                     const auto has_content_target = std::ranges::any_of(
                         pipelines, [](const auto& pipeline) {
-                            return pipeline->bus() == OutputBus::media_windows;
+                            return pipeline->desired().bus == OutputBus::media_windows;
                         });
                     const auto has_program_target = std::ranges::any_of(
                         pipelines, [](const auto& pipeline) {
-                            return pipeline->bus() == OutputBus::virtual_camera;
+                            return pipeline->desired().bus == OutputBus::virtual_camera;
+                        });
+                    const auto has_active_transition = std::ranges::any_of(
+                        pipelines, [](const auto& pipeline) {
+                            return pipeline->animation_active();
                         });
                     const auto deadline = std::chrono::steady_clock::now() +
-                                          (has_program_target ? 16ms : 100ms);
+                                          (has_active_transition ||
+                                                   (has_content_target && has_program_target)
+                                               ? kTransitionFrameInterval
+                                               : 100ms);
                     if (has_content_target && content_runtime != nullptr) {
+                        const auto content_sequence =
+                            frames[static_cast<std::size_t>(OutputBus::media_windows)] == nullptr
+                                ? 0U
+                                : frames[static_cast<std::size_t>(OutputBus::media_windows)]
+                                      ->sequence;
                         static_cast<void>(content_runtime->wait_for_frame(
-                            last_sequences[static_cast<std::size_t>(
-                                OutputBus::media_windows)],
+                            content_sequence,
                             stop_token, deadline));
                     } else if (has_program_target) {
+                        const auto program_sequence =
+                            frames[static_cast<std::size_t>(OutputBus::virtual_camera)] == nullptr
+                                ? 0U
+                                : frames[static_cast<std::size_t>(OutputBus::virtual_camera)]
+                                      ->sequence;
                         static_cast<void>(renderer->wait_for_gpu_frame(
                             OutputBus::virtual_camera,
-                            last_sequences[static_cast<std::size_t>(
-                                OutputBus::virtual_camera)],
+                            program_sequence,
                             stop_token, deadline));
                     } else {
                         std::this_thread::sleep_until(deadline);
@@ -509,15 +950,21 @@ class NativeWindowOutputController::Impl final {
             worker_.join();
         }
         worker_running_.store(false);
+#ifdef SOLIN_MEDIA_ENGINE_HAS_GSTREAMER
+        routing_state_.reset();
+#endif
     }
 
     std::shared_ptr<SceneRenderer> renderer_{};
     std::mutex mutex_{};
     std::vector<OutputWindowConfiguration> targets_{};
-    std::optional<SourceLease> content_source_{};
+    std::shared_ptr<SourceLease> content_source_{};
     bool desired_enabled_{false};
     std::atomic_bool worker_running_{false};
     std::jthread worker_{};
+#ifdef SOLIN_MEDIA_ENGINE_HAS_GSTREAMER
+    std::shared_ptr<NativeWindowRoutingState> routing_state_{};
+#endif
 };
 
 NativeWindowOutputController::NativeWindowOutputController(std::shared_ptr<SceneRenderer> renderer)

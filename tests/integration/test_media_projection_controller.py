@@ -284,7 +284,7 @@ class _WindowStub:
         return text
 
 
-def _controller(window):
+def _controller(window, *, content_frame_sink=None):
     return MediaProjectionController(
         MediaProjectionContext(
             projection_session=window.projection_session,
@@ -303,7 +303,7 @@ def _controller(window):
             sjjm_announce_mode=window.settings_widget.get_sjjm_announce_mode,
             start_videos_paused=window.settings_widget.get_start_videos_paused,
             playback_protection=window.playback_protection,
-            content_frame_sink=window.content_frames.append,
+            content_frame_sink=content_frame_sink or window.content_frames.append,
         ),
         MediaProjectionHandlers(
             stop_browser_tab_projection=(window._navigation.stop_browser_tab_projection),
@@ -328,6 +328,40 @@ def _png_bytes(width=64, height=36):
 
 def _write_png(path):
     path.write_bytes(_png_bytes())
+
+
+def test_image_identity_is_committed_before_first_frame():
+    window = _WindowStub()
+    events = []
+    window.projection_session.subscribe(
+        lambda: events.append(("state", window.projection_session.session_id))
+    )
+    controller = _controller(
+        window,
+        content_frame_sink=lambda _frame: events.append(
+            ("frame", window.projection_session.session_id)
+        ),
+    )
+
+    controller.project_image_bytes(_png_bytes())
+
+    assert events[-2:] == [("state", 1), ("frame", 1)]
+
+
+def test_video_identity_is_committed_before_decoder_can_emit():
+    window = _WindowStub()
+    events = []
+    window.projection_session.subscribe(
+        lambda: events.append(("state", window.projection_session.session_id))
+    )
+    window.media_ctrl.start_playback = lambda _request: events.append(
+        ("decoder", window.projection_session.session_id)
+    )
+    controller = _controller(window)
+
+    assert controller.project_video("clip.mp4", "Clip")
+
+    assert events[-2:] == [("state", 1), ("decoder", 1)]
 
 
 def test_generated_theme_image_uses_non_persistent_image_pipeline() -> None:
@@ -920,8 +954,10 @@ def test_frame_and_image_transform_helpers_respect_projection_modes():
     controller = _controller(window)
 
     window.proj_bar.video_mode = True
+    window.projection_session.set_state({"type": "video", "is_audio": False})
     controller.distribute_frame("frame-1")
     window.proj_bar.audio_mode = True
+    window.projection_session.update_state(is_audio=True)
     controller.distribute_frame("frame-2")
     controller.on_image_apply_transform(1.5, 0.2, 0.3)
     controller.on_image_reset_transform()

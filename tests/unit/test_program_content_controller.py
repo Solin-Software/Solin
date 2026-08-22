@@ -30,6 +30,7 @@ def test_program_content_publishes_idle_and_timer_surfaces() -> None:
         _FontManager(),
         lambda frame: frames.append(QImage(frame)),
         lambda: ("A yearly quotation", "Reference", "E"),
+        media_epoch_sink=lambda _epoch: None,
         width=320,
         height=180,
     )
@@ -58,6 +59,7 @@ def test_program_content_accepts_custom_idle_frames_only_while_idle() -> None:
         _FontManager(),
         frames.append,
         lambda: ("", "", ""),
+        media_epoch_sink=lambda _epoch: None,
         width=320,
         height=180,
     )
@@ -85,6 +87,7 @@ def test_program_content_unsubscribes_on_close() -> None:
         _FontManager(),
         frames.append,
         lambda: ("", "", ""),
+        media_epoch_sink=lambda _epoch: None,
         width=320,
         height=180,
     )
@@ -95,3 +98,29 @@ def test_program_content_unsubscribes_on_close() -> None:
     session.reset_state()
 
     assert len(frames) == before
+
+
+def test_program_content_requests_current_identity_before_publishing() -> None:
+    session = ProjectionSession()
+    events: list[tuple[str, int]] = []
+    controller = ProgramContentController(
+        session,
+        _FontManager(),
+        lambda _frame: events.append(("frame", session.session_id)),
+        lambda: ("", "", ""),
+        media_epoch_sink=lambda epoch: events.append(("epoch", epoch)),
+        width=320,
+        height=180,
+    )
+
+    session.set_state(
+        {
+            "type": "timer",
+            "remaining": 10,
+            "total": 20,
+            "presentation": MediaCountdownPresentation.CIRCULAR.value,
+        }
+    )
+
+    assert events[-2:] == [("epoch", 1), ("frame", 1)]
+    controller.close()

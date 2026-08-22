@@ -21,7 +21,7 @@ namespace solin::media_engine {
 namespace {
 
 constexpr std::array<std::uint8_t, 8U> kMagic{'S', 'L', 'N', 'F', 'R', 'M', '0', '1'};
-constexpr std::uint16_t kVersion = 4U;
+constexpr std::uint16_t kVersion = 5U;
 constexpr std::size_t kHeaderSize = 128U;
 constexpr std::size_t kSlotHeaderSize = 128U;
 constexpr std::uint32_t kSlotCount = 3U;
@@ -29,11 +29,13 @@ constexpr std::uint32_t kBgraPixelFormat = 1U;
 constexpr std::uint32_t kNv12PixelFormat = 2U;
 constexpr std::uint32_t kDynamicPixelFormat = 0U;
 constexpr std::size_t kPublishedSequenceOffset = 56U;
+constexpr std::size_t kMediaEpochOffset = 64U;
 constexpr std::size_t kSlotLeaseCountOffset = 64U;
 constexpr std::size_t kSlotLeaseOwnerPidOffset = 68U;
 constexpr std::size_t kSlotLeaseOwnerCreationTimeOffset = 72U;
 constexpr std::size_t kSlotSecondPlaneStrideOffset = 80U;
 constexpr std::size_t kSlotSecondPlaneOffsetOffset = 88U;
+constexpr std::size_t kSlotMediaEpochOffset = 96U;
 constexpr std::size_t kMaximumFrameBytes = 3'840U * 2'160U * 4U;
 constexpr std::uint64_t kMaximumSequence = (std::numeric_limits<std::int64_t>::max)() / 2U;
 #ifdef _WIN32
@@ -361,6 +363,7 @@ class WindowsSharedMemoryVideoReader final : public FrameChannelReader {
             .presentation_timestamp_ns = read_value<std::uint64_t>(channel, slot_offset + 16U),
             .duration_ns = read_value<std::uint64_t>(channel, slot_offset + 24U),
             .produced_monotonic_ns = read_value<std::uint64_t>(channel, slot_offset + 32U),
+            .media_epoch = read_value<std::uint64_t>(channel, slot_offset + kSlotMediaEpochOffset),
             .width = width,
             .height = height,
             .pixel_format = bgra ? VideoFramePixelFormat::bgra : VideoFramePixelFormat::nv12,
@@ -372,6 +375,16 @@ class WindowsSharedMemoryVideoReader final : public FrameChannelReader {
             },
         };
         return make_lease(result, std::move(lifetime));
+    }
+
+    [[nodiscard]] std::optional<std::uint64_t> media_epoch() override {
+        const MutexLease lease{mutex_->get()};
+        if (!lease) {
+            return std::nullopt;
+        }
+        const auto* channel = bytes();
+        validate_header_prefix(channel);
+        return read_value<std::uint64_t>(channel, kMediaEpochOffset);
     }
 
     [[nodiscard]] bool wait_for_frame(const std::chrono::milliseconds timeout) override {
@@ -539,6 +552,7 @@ class WindowsSharedMemoryFrameWriter final : public FrameChannelWriter {
             frame.pixel_format == VideoFramePixelFormat::nv12
                 ? static_cast<std::uint64_t>(frame.width) * frame.height
                 : 0U);
+        write_value<std::uint64_t>(channel, slot_offset + kSlotMediaEpochOffset, 0U);
         copy_video_frame_pixels(
             frame,
             std::span<std::uint8_t>{channel + slot_offset + kSlotHeaderSize, payload_size});

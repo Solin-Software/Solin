@@ -18,11 +18,13 @@ renderer builds one bounded BGRA/D3D11 pipeline per output, shares leaf sources 
 scene nodes inside each pipeline, and implements crop, contain/cover/stretch fit, mirroring,
 rotation, placement, and opacity. Solin content enters through a
 versioned, three-slot latest-frame video channel. Qt video stays in NV12 and is bulk-copied
-once per plane without `QImage` conversion or Python row loops. Protocol v4 preserves the
+once per plane without `QImage` conversion or Python row loops. Protocol v5 preserves the
 source strides and offsets, and `GstVideoMeta` describes that layout to the upload path;
 static and unsupported formats use the BGRA path.
-Protocol v4 leases individual slots while D3D11 upload consumes them, so the normal Windows
-path wraps the SHM payload directly in `appsrc` without a second owned-pixel copy. The Qt
+Protocol v5 leases individual slots while D3D11 upload consumes them and stores the requested
+monotonic Raw media epoch independently in the channel header, so a switch can begin before
+its first destination frame. The normal Windows path wraps the SHM payload directly in
+`appsrc` without a second owned-pixel copy. The Qt
 producer takes the control mutex with a zero timeout, chooses another unleased slot, or drops
 the frame; it never waits for the engine. Auto-reset frame events and a process-local source
 activity signal wake the source, compositor, and output workers without 1–4 ms polling. The
@@ -44,9 +46,16 @@ transport, and the supported Windows version pass the runtime probe. On Windows,
 media surfaces render through engine-owned child windows and `d3d11videosink`; frames remain
 D3D11-backed and do not cross back through Python. Raw-media targets acquire the canonical
 `solin.content.current` runtime directly, independently of editable scenes, and bypass scene
-composition. Program-mirror targets consume the already-transitioned Program bus. Both routes
-are latest-frame/event-driven, with a bounded low-rate deadline only for window health and
-shutdown. The expanded in-app player remains in
+composition. A single canonical D3D11 transition resolves Raw media epochs inside
+`solin.content.current` before fan-out, so physical Raw windows and Raw layers authored into
+Program consume the same transitioned GPU frames. Program-mirror targets consume the
+already-transitioned Program bus. A separate persistent two-input D3D11 compositor per
+physical surface owns only Raw/Program ownership switches without rebuilding the presenter.
+The centralized code policy currently selects Fade through black at 200 ms and supports the
+same Cut, Dissolve, and Fade semantics as Program. Program scene transitions remain
+authoritative and never restart either media transition. Both routes are
+latest-frame/event-driven, with a bounded low-rate deadline
+only for window health and shutdown. The expanded in-app player remains in
 the Qt process and forwards the original QtMultimedia `QVideoFrame` to a `QVideoWidget`, so
 opening it does not start a native scene-compositor output or materialize a `QImage` per
 frame. A fixed BGRA channel feeds the independent scene-editor Preview. That compatibility
@@ -55,8 +64,8 @@ bytes in an immutable `QImage` without another full-frame copy. A demand-driven
 dynamic NV12/BGRA channel remains the bounded Program fallback for Qt-owned surfaces that
 cannot host the native presenter. Dynamic frames cross Python without conversion and are
 materialized only on the receiving Qt thread, so shutdown never waits on a Qt Multimedia
-conversion in a Python worker. Keyed-texture ingress, the exact border/corner-radius shader
-path, and image sources remain later phases in
+conversion in a Python worker. Keyed-texture ingress and the exact border/corner-radius shader
+path remain later phases in
 `docs/native-scenes-engine-implementation-plan.md`.
 
 The native process must not import, link, or dynamically load libobs. OBS WebSocket support

@@ -19,6 +19,7 @@ struct FrameChannelFrame final {
     std::uint64_t presentation_timestamp_ns{0U};
     std::uint64_t duration_ns{0U};
     std::uint64_t produced_monotonic_ns{0U};
+    std::uint64_t media_epoch{0U};
     std::uint32_t width{0U};
     std::uint32_t height{0U};
     VideoFramePixelFormat pixel_format{VideoFramePixelFormat::bgra};
@@ -53,6 +54,9 @@ class FrameChannelReader {
 
     [[nodiscard]] virtual std::optional<FrameChannelFrameLease>
     read_latest(std::uint64_t after_sequence = 0U) = 0;
+    // The requested media epoch is channel state, not frame state. It may
+    // advance before the first pixel of the new presentation is available.
+    [[nodiscard]] virtual std::optional<std::uint64_t> media_epoch() = 0;
     [[nodiscard]] virtual bool wait_for_frame(std::chrono::milliseconds timeout) = 0;
     virtual void wake() noexcept = 0;
 

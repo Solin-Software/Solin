@@ -14,6 +14,7 @@ from solin.core.scenes.frame_channel import (
     FRAME_CHANNEL_SLOT_COUNT,
     FRAME_CHANNEL_SLOT_HEADER_SIZE,
     FRAME_CHANNEL_VERSION,
+    FrameChannelStaleFrameError,
     FrameChannelUnavailableError,
     SharedMemoryBgraFramePublisher,
     SharedMemoryBgraFrameSubscriber,
@@ -34,10 +35,12 @@ def test_shared_memory_channel_is_an_explicit_platform_backend() -> None:
 def test_shared_memory_channel_publishes_a_versioned_latest_bgra_frame() -> None:
     pixels = bytes(range(16))
     with SharedMemoryBgraFramePublisher(2, 2, generation=7) as publisher:
+        publisher.set_media_epoch(12)
         sequence = publisher.publish(
             pixels,
             presentation_timestamp_ns=123,
             duration_ns=456,
+            media_epoch=13,
         )
         attached = shared_memory.SharedMemory(
             name=publisher.descriptor.handle_token,
@@ -61,6 +64,7 @@ def test_shared_memory_channel_publishes_a_versioned_latest_bgra_frame() -> None
                 * (FRAME_CHANNEL_SLOT_HEADER_SIZE + len(pixels)),
             )
             assert struct.unpack_from("<Q", attached.buf, 56)[0] == sequence
+            assert struct.unpack_from("<Q", attached.buf, 64)[0] == 13
             slot = FRAME_CHANNEL_HEADER_SIZE
             assert struct.unpack_from("<QQQQQ", attached.buf, slot)[:4] == (
                 sequence * 2,
@@ -70,6 +74,7 @@ def test_shared_memory_channel_publishes_a_versioned_latest_bgra_frame() -> None
             )
             assert struct.unpack_from("<Q", attached.buf, slot + 40)[0] == len(pixels)
             assert struct.unpack_from("<IIII", attached.buf, slot + 48) == (2, 2, 8, 1)
+            assert struct.unpack_from("<Q", attached.buf, slot + 96)[0] == 13
             assert bytes(
                 attached.buf[
                     slot + FRAME_CHANNEL_SLOT_HEADER_SIZE :
@@ -78,6 +83,20 @@ def test_shared_memory_channel_publishes_a_versioned_latest_bgra_frame() -> None
             ) == pixels
         finally:
             attached.close()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows shared-memory backend")
+def test_shared_memory_channel_rejects_frames_from_a_previous_media_epoch() -> None:
+    pixels = bytes(range(16))
+    with SharedMemoryBgraFramePublisher(2, 2) as publisher:
+        publisher.set_media_epoch(2)
+
+        with pytest.raises(FrameChannelStaleFrameError):
+            publisher.publish(pixels, media_epoch=1)
+        with pytest.raises(FrameChannelStaleFrameError):
+            publisher.set_media_epoch(1)
+
+        assert publisher.publish(pixels, media_epoch=2) == 1
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows shared-memory backend")

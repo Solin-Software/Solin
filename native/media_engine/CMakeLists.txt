@@ -24,6 +24,7 @@ set(SOLIN_MEDIA_ENGINE_SOURCES
     include/solin/media_engine/frame_channel_output.hpp
     include/solin/media_engine/media_runtime.hpp
     include/solin/media_engine/native_window_output.hpp
+    include/solin/media_engine/presentation_transition.hpp
     include/solin/media_engine/render_geometry.hpp
     include/solin/media_engine/scene_graph.hpp
     include/solin/media_engine/scene_renderer.hpp
@@ -40,12 +41,14 @@ set(SOLIN_MEDIA_ENGINE_SOURCES
     src/frame_channel.cpp
     src/gstreamer_source_runtime.cpp
     src/gstreamer_source_runtime.hpp
+    src/gstreamer_frame_transition.hpp
     src/gstreamer_scene_renderer.cpp
     src/gstreamer_scene_renderer.hpp
     src/main.cpp
     src/frame_channel_output.cpp
     src/media_runtime.cpp
     src/native_window_output.cpp
+    src/presentation_transition.cpp
     src/render_geometry.cpp
     src/scene_graph.cpp
     src/scene_renderer.cpp
@@ -137,6 +140,7 @@ target_compile_features(solin_media_engine_scene PUBLIC cxx_std_20)
 target_link_libraries(solin_media_engine_scene PUBLIC nlohmann_json::nlohmann_json)
 
 add_library(solin_media_engine_graph STATIC
+    src/presentation_transition.cpp
     src/render_geometry.cpp
     src/scene_graph.cpp
     src/scene_renderer.cpp
@@ -295,6 +299,31 @@ if(SOLIN_MEDIA_ENGINE_BUILD_TESTS)
         )
     endif()
     add_test(NAME frame-codec COMMAND solin-media-engine-protocol-tests)
+    add_executable(solin-media-engine-presentation-transition-tests
+        tests/presentation_transition_tests.cpp
+    )
+    target_link_libraries(
+        solin-media-engine-presentation-transition-tests
+        PRIVATE solin_media_engine_graph
+    )
+    target_compile_features(
+        solin-media-engine-presentation-transition-tests PRIVATE cxx_std_20
+    )
+    if(MSVC)
+        target_compile_options(
+            solin-media-engine-presentation-transition-tests
+            PRIVATE /W4 /WX /permissive- /EHsc
+        )
+    else()
+        target_compile_options(
+            solin-media-engine-presentation-transition-tests PRIVATE
+            -Wall -Wextra -Wpedantic -Werror
+        )
+    endif()
+    add_test(
+        NAME presentation-transition
+        COMMAND solin-media-engine-presentation-transition-tests
+    )
     add_executable(solin-media-engine-frame-channel-tests
         tests/frame_channel_tests.cpp
     )

@@ -51,6 +51,8 @@ class _Publisher:
         )
         self.frames: list[bytes] = []
         self.frame_sizes: list[tuple[int, int]] = []
+        self.media_epochs: list[int] = []
+        self.requested_media_epochs: list[int] = []
         self.publish_started_at: list[float] = []
         self.publish_delay = publish_delay
         self.published = threading.Event()
@@ -64,17 +66,24 @@ class _Publisher:
         frame_height: int,
         presentation_timestamp_ns: int = 0,
         duration_ns: int = 0,
+        media_epoch: int = 0,
     ) -> int:
         assert presentation_timestamp_ns == 0
         assert duration_ns == 0
+        assert media_epoch >= 0
         self.publish_started_at.append(time.monotonic())
         if self.publish_delay:
             time.sleep(self.publish_delay)
         assert len(memoryview(pixels)) == frame_width * frame_height * 4
         self.frames.append(bytes(memoryview(pixels)))
         self.frame_sizes.append((frame_width, frame_height))
+        self.media_epochs.append(media_epoch)
         self.published.set()
         return len(self.frames)
+
+    def set_media_epoch(self, media_epoch: int) -> None:
+        assert media_epoch >= 0
+        self.requested_media_epochs.append(media_epoch)
 
     def close(self) -> None:
         self.closed = True
@@ -105,6 +114,7 @@ class _BackpressuredPublisher(_Publisher):
         frame_height: int,
         presentation_timestamp_ns: int = 0,
         duration_ns: int = 0,
+        media_epoch: int = 0,
     ) -> int:
         self.attempts += 1
         if self.attempts == 1:
@@ -115,6 +125,7 @@ class _BackpressuredPublisher(_Publisher):
             frame_height=frame_height,
             presentation_timestamp_ns=presentation_timestamp_ns,
             duration_ns=duration_ns,
+            media_epoch=media_epoch,
         )
 
 
@@ -175,6 +186,35 @@ def test_content_ingress_drops_backpressured_images_without_replacing_channel() 
 
     assert len(publishers) == 1
     assert publishers[0].closed
+
+
+def test_content_ingress_does_not_relabel_retained_frame_when_media_epoch_advances() -> None:
+    publishers: list[_Publisher] = []
+
+    def create_publisher(width: int, height: int) -> _Publisher:
+        publisher = _Publisher(width, height, len(publishers) + 1)
+        publishers.append(publisher)
+        return publisher
+
+    controller = ContentFrameIngressController(
+        publisher_factory=create_publisher,
+        maximum_fps=60,
+        canvas_width=2,
+        canvas_height=2,
+    )
+    image = QImage(2, 2, QImage.Format.Format_ARGB32)
+    image.fill(QColor("#445566"))
+    controller.submit_frame(image)
+    assert publishers[0].published.wait(1.0)
+    publishers[0].published.clear()
+
+    controller.set_media_epoch(7)
+
+    assert _wait_for(lambda: publishers[0].requested_media_epochs == [7])
+    assert not publishers[0].published.wait(0.05)
+    controller.close()
+    assert publishers[0].media_epochs == [0]
+    assert publishers[0].requested_media_epochs == [7]
 
 
 def test_content_ingress_keeps_a_stable_channel_when_input_dimensions_change() -> None:
@@ -446,6 +486,7 @@ def test_content_ingress_publishes_nv12_planes_without_bgra_materialization() ->
         canvas_width=4,
         canvas_height=2,
     )
+    controller.set_media_epoch(9)
     descriptor = controller.descriptor
     assert descriptor is not None
     assert descriptor.transport is FrameChannelTransport.SHARED_MEMORY_VIDEO
@@ -481,6 +522,7 @@ def test_content_ingress_publishes_nv12_planes_without_bgra_materialization() ->
         )
         assert struct.unpack_from("<I", attached.buf, slot + 80)[0] == second_stride
         assert struct.unpack_from("<Q", attached.buf, slot + 88)[0] == first_plane_size
+        assert struct.unpack_from("<Q", attached.buf, slot + 96)[0] == 9
         assert bytes(
             attached.buf[
                 slot + FRAME_CHANNEL_SLOT_HEADER_SIZE :

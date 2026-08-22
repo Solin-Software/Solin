@@ -46,6 +46,7 @@ def test_qimage_egress_retains_the_owning_bgra_bytes_without_a_second_copy() -> 
         presentation_timestamp_ns=0,
         duration_ns=16_666_667,
         produced_monotonic_ns=0,
+        media_epoch=0,
         width=2,
         height=2,
         pixel_format=VideoPixelFormat.BGRA,

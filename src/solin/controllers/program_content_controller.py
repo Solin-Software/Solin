@@ -39,6 +39,7 @@ class ProgramContentController(QObject):
         frame_sink: Callable[[object], None],
         yearly_text: Callable[[], tuple[str, str, str]],
         *,
+        media_epoch_sink: Callable[[int], None],
         width: int,
         height: int,
         parent: QObject | None = None,
@@ -48,6 +49,7 @@ class ProgramContentController(QObject):
             raise ValueError("Program content dimensions must be positive")
         self._session = session
         self._frame_sink = frame_sink
+        self._media_epoch_sink = media_epoch_sink
         self._yearly_text = yearly_text
         self._width = width
         self._height = height
@@ -64,13 +66,14 @@ class ProgramContentController(QObject):
     def submit_frame(self, frame: object) -> None:
         if self._closed:
             return
+        self._media_epoch_sink(self._session.session_id)
         self._frame_sink(frame)
 
     @Slot(object)
     def submit_idle_frame(self, frame: object) -> None:
         if self._closed or self._session.state_type != "idle" or not self._session.idle_media_path:
             return
-        self._frame_sink(frame)
+        self.submit_frame(frame)
 
     @Slot(str, str, str)
     def update_yearly_text(self, _quote: str, _reference: str, _api_code: str) -> None:
@@ -149,7 +152,7 @@ class ProgramContentController(QObject):
         image.fill(QColor(0, 0, 0))
         widget.ensurePolished()
         widget.render(image)
-        self._frame_sink(image)
+        self.submit_frame(image)
 
 
 __all__ = ["ProgramContentController"]

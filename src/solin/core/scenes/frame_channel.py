@@ -21,7 +21,7 @@ from solin.core.scenes.model import VideoColorRange, VideoColorSpace, VideoPixel
 
 
 FRAME_CHANNEL_MAGIC = b"SLNFRM01"
-FRAME_CHANNEL_VERSION = 4
+FRAME_CHANNEL_VERSION = 5
 FRAME_CHANNEL_HEADER_SIZE = 128
 FRAME_CHANNEL_SLOT_HEADER_SIZE = 128
 FRAME_CHANNEL_SLOT_COUNT = 3
@@ -32,6 +32,7 @@ FRAME_CHANNEL_EVENT_PREFIX = "Local\\SolinFrameEvent."
 MAXIMUM_SHARED_MEMORY_FRAME_BYTES = 3840 * 2160 * 4
 
 _PUBLISHED_SEQUENCE_OFFSET = 56
+_MEDIA_EPOCH_OFFSET = 64
 _SLOT_MARKER_OFFSET = 0
 _SLOT_METADATA_OFFSET = 8
 _SLOT_PAYLOAD_SIZE_OFFSET = 40
@@ -40,11 +41,16 @@ _SLOT_LEASE_OWNER_PID_OFFSET = 68
 _SLOT_LEASE_OWNER_CREATION_TIME_OFFSET = 72
 _SLOT_SECOND_PLANE_STRIDE_OFFSET = 80
 _SLOT_SECOND_PLANE_OFFSET_OFFSET = 88
+_SLOT_MEDIA_EPOCH_OFFSET = 96
 _MAXIMUM_SEQUENCE = (2**63 - 1) // 2
 
 
 class FrameChannelUnavailableError(RuntimeError):
     """The requested frame transport is unavailable on this platform."""
+
+
+class FrameChannelStaleFrameError(RuntimeError):
+    """A frame belongs to an identity older than the channel's active epoch."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,6 +59,7 @@ class VideoFrame:
     presentation_timestamp_ns: int
     duration_ns: int
     produced_monotonic_ns: int
+    media_epoch: int
     width: int
     height: int
     pixel_format: VideoPixelFormat
@@ -109,6 +116,7 @@ class SharedMemoryVideoFramePublisher:
         self._buffer: memoryview = buffer
         self._lock = threading.Lock()
         self._sequence = 0
+        self._media_epoch = 0
         self._closed = False
         process_mutex: _WindowsNamedMutex | None = None
         frame_event: _WindowsAutoResetEvent | None = None
@@ -164,6 +172,23 @@ class SharedMemoryVideoFramePublisher:
     def frame_bytes(self) -> int:
         return self._frame_bytes
 
+    def set_media_epoch(self, media_epoch: int) -> None:
+        epoch = _non_negative_u64(media_epoch, "frame channel media epoch")
+        with self._lock:
+            if self._closed:
+                raise RuntimeError("Frame channel publisher is closed")
+            if epoch < self._media_epoch:
+                raise FrameChannelStaleFrameError(
+                    "Frame channel media epoch cannot move backwards"
+                )
+            self._media_epoch = epoch
+            self._process_mutex.acquire(timeout_ms=0)
+            try:
+                struct.pack_into("<Q", self._buffer, _MEDIA_EPOCH_OFFSET, epoch)
+            finally:
+                self._process_mutex.release()
+            self._frame_event.set()
+
     def publish(
         self,
         pixels: Buffer,
@@ -173,6 +198,7 @@ class SharedMemoryVideoFramePublisher:
         pixel_format: VideoPixelFormat = VideoPixelFormat.BGRA,
         presentation_timestamp_ns: int = 0,
         duration_ns: int = 0,
+        media_epoch: int = 0,
     ) -> int:
         width = self._width if frame_width is None else frame_width
         height = self._height if frame_height is None else frame_height
@@ -185,6 +211,7 @@ class SharedMemoryVideoFramePublisher:
             pixel_format=pixel_format,
             presentation_timestamp_ns=presentation_timestamp_ns,
             duration_ns=duration_ns,
+            media_epoch=media_epoch,
         )
 
     def publish_planes(
@@ -197,6 +224,7 @@ class SharedMemoryVideoFramePublisher:
         pixel_format: VideoPixelFormat,
         presentation_timestamp_ns: int = 0,
         duration_ns: int = 0,
+        media_epoch: int = 0,
     ) -> int:
         if not isinstance(pixel_format, VideoPixelFormat) or pixel_format not in {
             VideoPixelFormat.BGRA,
@@ -256,9 +284,15 @@ class SharedMemoryVideoFramePublisher:
                 "frame presentation timestamp",
             )
             duration = _non_negative_u64(duration_ns, "frame duration")
+            epoch = _non_negative_u64(media_epoch, "frame media epoch")
             with self._lock:
                 if self._closed:
                     raise RuntimeError("Frame channel publisher is closed")
+                if epoch < self._media_epoch:
+                    raise FrameChannelStaleFrameError(
+                        "Frame belongs to an inactive media epoch"
+                    )
+                self._media_epoch = epoch
                 if self._sequence >= _MAXIMUM_SEQUENCE:
                     raise OverflowError("Frame channel sequence is exhausted")
                 self._process_mutex.acquire(timeout_ms=0)
@@ -313,6 +347,12 @@ class SharedMemoryVideoFramePublisher:
                         slot_offset + _SLOT_SECOND_PLANE_OFFSET_OFFSET,
                         second_plane_offset,
                     )
+                    struct.pack_into(
+                        "<Q",
+                        self._buffer,
+                        slot_offset + _SLOT_MEDIA_EPOCH_OFFSET,
+                        epoch,
+                    )
                     payload_offset = slot_offset + FRAME_CHANNEL_SLOT_HEADER_SIZE
                     target = payload_offset
                     for plane, plane_size in zip(
@@ -328,6 +368,12 @@ class SharedMemoryVideoFramePublisher:
                         self._buffer,
                         _PUBLISHED_SEQUENCE_OFFSET,
                         sequence,
+                    )
+                    struct.pack_into(
+                        "<Q",
+                        self._buffer,
+                        _MEDIA_EPOCH_OFFSET,
+                        epoch,
                     )
                     self._sequence = sequence
                 finally:
@@ -587,6 +633,9 @@ class _SharedMemoryFrameSubscriber:
                 second_offset = struct.unpack_from(
                     "<Q", self._buffer, slot_offset + _SLOT_SECOND_PLANE_OFFSET_OFFSET
                 )[0]
+                media_epoch = struct.unpack_from(
+                    "<Q", self._buffer, slot_offset + _SLOT_MEDIA_EPOCH_OFFSET
+                )[0]
                 bgra = pixel_format == FRAME_CHANNEL_PIXEL_FORMAT_BGRA
                 nv12 = pixel_format == FRAME_CHANNEL_PIXEL_FORMAT_NV12
                 row_bytes = width * (4 if bgra else 1)
@@ -616,6 +665,7 @@ class _SharedMemoryFrameSubscriber:
                     presentation_timestamp_ns=timestamp,
                     duration_ns=duration,
                     produced_monotonic_ns=produced,
+                    media_epoch=media_epoch,
                     width=width,
                     height=height,
                     pixel_format=(
