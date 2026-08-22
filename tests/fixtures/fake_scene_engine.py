@@ -85,6 +85,8 @@ def main() -> int:
                 marker.write_text("crashed", encoding="utf-8")
                 return 71
         elif request.message_type == "hydrate":
+            if mode == "slow_hydrate":
+                time.sleep(0.75)
             if mode == "reject_hydrate":
                 _respond(
                     request,

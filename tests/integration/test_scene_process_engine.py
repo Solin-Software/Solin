@@ -143,6 +143,22 @@ def test_subprocess_engine_executes_the_scene_command_lifecycle() -> None:
     _wait_until(lambda: engine.health.status is SceneEngineStatus.STOPPED)
 
 
+def test_subprocess_engine_does_not_kill_a_healthy_long_running_command() -> None:
+    engine = _engine("slow_hydrate")
+    engine.start(session_id="integration-session", deadline_ms=2000).result(3)
+
+    hydrated = engine.hydrate(
+        _snapshot(),
+        request_id="slow-hydrate",
+        deadline_ms=1500,
+    ).result(2)
+
+    assert hydrated.applied
+    assert engine.health.status is SceneEngineStatus.READY
+    assert engine.health.restart_count == 0
+    engine.stop()
+
+
 def test_subprocess_engine_restarts_after_a_child_crash(tmp_path: Path) -> None:
     marker = tmp_path / "first-generation-crashed"
     engine = _engine("crash_first", str(marker))

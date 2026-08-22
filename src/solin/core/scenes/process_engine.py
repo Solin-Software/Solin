@@ -194,6 +194,7 @@ class _PendingRequest:
     document_revision: int
     deadline_monotonic_ms: int
     started_monotonic: float
+    is_liveness_probe: bool
     converter: Callable[[SceneIpcEnvelope], object]
     future: Future[object]
 
@@ -227,6 +228,7 @@ class SubprocessSceneEngine:
         self._session_id = "not-started"
         self._process_generation = "not-started"
         self._last_received_monotonic: float | None = None
+        self._last_command_timeout_monotonic: float | None = None
         self._document_revision = 0
         self._heartbeat_request_id: str | None = None
         self._restart_count = 0
@@ -616,6 +618,7 @@ class SubprocessSceneEngine:
             with self._lock:
                 self._process_generation = generation
                 self._last_received_monotonic = None
+                self._last_command_timeout_monotonic = None
                 self._heartbeat_request_id = None
             self._generation_failed.clear()
             self._publish_health(SceneEngineStatus.STARTING, "engine_starting")
@@ -691,13 +694,17 @@ class SubprocessSceneEngine:
                     break
                 with self._lock:
                     last_received = self._last_received_monotonic
-                if (
+                command_deadline = self._command_liveness_deadline()
+                heartbeat_timed_out = (
                     last_received is None
                     or now - last_received > self._config.heartbeat_timeout_ms / 1000.0
+                )
+                if heartbeat_timed_out and (
+                    command_deadline is None or now > command_deadline
                 ):
                     self._generation_failed.set()
                     break
-                if now >= next_heartbeat:
+                if command_deadline is None and now >= next_heartbeat:
                     self._send_heartbeat()
                     next_heartbeat = now + self._config.heartbeat_interval_ms / 1000.0
 
@@ -870,6 +877,7 @@ class SubprocessSceneEngine:
         payload: dict[str, object],
         converter: Callable[[SceneIpcEnvelope], _T],
         require_ready: bool = True,
+        is_liveness_probe: bool = False,
     ) -> Future[_T]:
         try:
             _validate_identity(request_id, "request id")
@@ -905,6 +913,7 @@ class SubprocessSceneEngine:
                 document_revision=document_revision,
                 deadline_monotonic_ms=deadline_monotonic_ms,
                 started_monotonic=self._monotonic(),
+                is_liveness_probe=is_liveness_probe,
                 converter=cast(Callable[[SceneIpcEnvelope], object], converter),
                 future=result,
             )
@@ -961,6 +970,7 @@ class SubprocessSceneEngine:
             deadline_ms=self._config.heartbeat_timeout_ms,
             payload={},
             converter=_heartbeat_from_envelope,
+            is_liveness_probe=True,
         )
 
         def completed(result: Future[int]) -> None:
@@ -970,7 +980,9 @@ class SubprocessSceneEngine:
             try:
                 result.result()
             except (SceneEngineProcessError, SceneIpcError):
-                self._generation_failed.set()
+                command_deadline = self._command_liveness_deadline()
+                if command_deadline is None or self._monotonic() > command_deadline:
+                    self._generation_failed.set()
 
         future.add_done_callback(completed)
 
@@ -983,6 +995,8 @@ class SubprocessSceneEngine:
                 if now_ms > pending.deadline_monotonic_ms
             ]
             pending_requests = [self._pending.pop(request_id) for request_id in expired]
+            if any(not pending.is_liveness_probe for pending in pending_requests):
+                self._last_command_timeout_monotonic = now
         for pending in pending_requests:
             if not pending.future.done():
                 with self._lock:
@@ -990,6 +1004,36 @@ class SubprocessSceneEngine:
                 pending.future.set_exception(
                     SceneEngineRequestTimeoutError("Scene engine request timed out")
                 )
+
+    def _command_liveness_deadline(self) -> float | None:
+        """Let the oldest ordered command deadline stand in for a heartbeat."""
+
+        with self._lock:
+            if (
+                self._last_command_timeout_monotonic is not None
+                and (
+                    self._last_received_monotonic is None
+                    or self._last_received_monotonic
+                    <= self._last_command_timeout_monotonic
+                )
+            ):
+                return None
+            pending_commands = (
+                pending
+                for pending in self._pending.values()
+                if (
+                    pending.process_generation == self._process_generation
+                    and not pending.is_liveness_probe
+                )
+            )
+            oldest = min(
+                pending_commands,
+                key=lambda pending: pending.started_monotonic,
+                default=None,
+            )
+        if oldest is None:
+            return None
+        return oldest.deadline_monotonic_ms / 1000.0
 
     def _recover_or_fail(self, initial: bool, message: str) -> bool:
         self._publish_health(SceneEngineStatus.FAILED, message)
