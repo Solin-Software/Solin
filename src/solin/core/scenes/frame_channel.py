@@ -53,6 +53,29 @@ class FrameChannelStaleFrameError(RuntimeError):
     """A frame belongs to an identity older than the channel's active epoch."""
 
 
+def _require_windows_frame_channel() -> None:
+    if sys.platform != "win32":
+        raise FrameChannelUnavailableError(
+            "Shared-memory video frame channels are only available on Windows"
+        )
+
+
+def _load_kernel32() -> ctypes.CDLL:
+    if sys.platform != "win32":
+        raise FrameChannelUnavailableError(
+            "Windows frame-channel synchronization is unavailable on this platform"
+        )
+    return ctypes.WinDLL("kernel32", use_last_error=True)
+
+
+def _windows_last_error() -> int:
+    if sys.platform != "win32":
+        raise FrameChannelUnavailableError(
+            "Windows frame-channel synchronization is unavailable on this platform"
+        )
+    return ctypes.get_last_error()
+
+
 @dataclass(frozen=True, slots=True)
 class VideoFrame:
     sequence: int
@@ -80,10 +103,7 @@ class SharedMemoryVideoFramePublisher:
         color_range: VideoColorRange = VideoColorRange.LIMITED,
         _dynamic_pixel_format: bool = True,
     ) -> None:
-        if sys.platform != "win32":
-            raise FrameChannelUnavailableError(
-                "Shared-memory BGRA publication is not implemented on this platform"
-            )
+        _require_windows_frame_channel()
         if isinstance(width, bool) or not isinstance(width, int) or width <= 0:
             raise ValueError("Frame width must be a positive integer")
         if isinstance(height, bool) or not isinstance(height, int) or height <= 0:
@@ -512,10 +532,7 @@ class _SharedMemoryFrameSubscriber:
         color_range: VideoColorRange = VideoColorRange.FULL,
         _dynamic_pixel_format: bool,
     ) -> None:
-        if sys.platform != "win32":
-            raise FrameChannelUnavailableError(
-                "Shared-memory BGRA subscription is not implemented on this platform"
-            )
+        _require_windows_frame_channel()
         if isinstance(width, bool) or not isinstance(width, int) or width <= 0:
             raise ValueError("Frame width must be a positive integer")
         if isinstance(height, bool) or not isinstance(height, int) or height <= 0:
@@ -783,7 +800,7 @@ class _WindowsAutoResetEvent:
     _WAIT_TIMEOUT = 0x102
 
     def __init__(self, name: str) -> None:
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32 = _load_kernel32()
         create_event = kernel32.CreateEventW
         create_event.argtypes = [
             ctypes.c_void_p,
@@ -803,7 +820,7 @@ class _WindowsAutoResetEvent:
         close_handle.restype = ctypes.c_bool
         handle = create_event(None, False, False, name)
         if not handle:
-            raise OSError(ctypes.get_last_error(), "Could not create frame channel event")
+            raise OSError(_windows_last_error(), "Could not create frame channel event")
         self._handle: int | None = handle
         self._wait = wait
         self._set_event = set_event
@@ -824,12 +841,12 @@ class _WindowsAutoResetEvent:
             return True
         if result == self._WAIT_TIMEOUT:
             return False
-        raise OSError(ctypes.get_last_error(), "Could not wait for frame channel event")
+        raise OSError(_windows_last_error(), "Could not wait for frame channel event")
 
     def set(self) -> None:
         handle = self._handle
         if handle is not None and not self._set_event(handle):
-            raise OSError(ctypes.get_last_error(), "Could not signal frame channel event")
+            raise OSError(_windows_last_error(), "Could not signal frame channel event")
 
     def close(self) -> None:
         handle = self._handle
@@ -837,7 +854,7 @@ class _WindowsAutoResetEvent:
             return
         self._handle = None
         if not self._close_handle(handle):
-            raise OSError(ctypes.get_last_error(), "Could not close frame channel event")
+            raise OSError(_windows_last_error(), "Could not close frame channel event")
 
 
 class _WindowsNamedMutex:
@@ -847,7 +864,7 @@ class _WindowsNamedMutex:
     _WAIT_BUDGET_MS = 100
 
     def __init__(self, name: str) -> None:
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32 = _load_kernel32()
         create_mutex = kernel32.CreateMutexW
         create_mutex.argtypes = [ctypes.c_void_p, ctypes.c_bool, ctypes.c_wchar_p]
         create_mutex.restype = ctypes.c_void_p
@@ -862,7 +879,7 @@ class _WindowsNamedMutex:
         close_handle.restype = ctypes.c_bool
         handle = create_mutex(None, False, name)
         if not handle:
-            raise OSError(ctypes.get_last_error(), "Could not create frame channel mutex")
+            raise OSError(_windows_last_error(), "Could not create frame channel mutex")
         self._handle: int | None = handle
         self._wait = wait
         self._release = release
@@ -882,12 +899,12 @@ class _WindowsNamedMutex:
         if result == self._WAIT_TIMEOUT:
             raise TimeoutError("Timed out acquiring frame channel mutex")
         if result not in (self._WAIT_OBJECT_0, self._WAIT_ABANDONED):
-            raise OSError(ctypes.get_last_error(), "Could not acquire frame channel mutex")
+            raise OSError(_windows_last_error(), "Could not acquire frame channel mutex")
 
     def release(self) -> None:
         handle = self._handle
         if handle is not None and not self._release(handle):
-            raise OSError(ctypes.get_last_error(), "Could not release frame channel mutex")
+            raise OSError(_windows_last_error(), "Could not release frame channel mutex")
 
     def __exit__(
         self,
@@ -904,7 +921,7 @@ class _WindowsNamedMutex:
             return
         self._handle = None
         if not self._close_handle(handle):
-            raise OSError(ctypes.get_last_error(), "Could not close frame channel mutex")
+            raise OSError(_windows_last_error(), "Could not close frame channel mutex")
 
 
 def _windows_process_identity_is_alive(
@@ -913,7 +930,7 @@ def _windows_process_identity_is_alive(
 ) -> bool:
     if sys.platform != "win32" or process_id <= 0:
         return False
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32 = _load_kernel32()
     open_process = kernel32.OpenProcess
     open_process.argtypes = [ctypes.c_uint32, ctypes.c_bool, ctypes.c_uint32]
     open_process.restype = ctypes.c_void_p
@@ -940,7 +957,7 @@ def _windows_process_identity_is_alive(
     if not handle:
         # Access denial is not proof that the process exited. Only an invalid PID
         # is safe to reclaim; every other failure keeps the slot leased.
-        return ctypes.get_last_error() != 87  # ERROR_INVALID_PARAMETER
+        return _windows_last_error() != 87  # ERROR_INVALID_PARAMETER
     try:
         if wait(handle, 0) != 0x102:  # WAIT_TIMEOUT means still running.
             return False

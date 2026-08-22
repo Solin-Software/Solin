@@ -27,8 +27,15 @@ def test_shared_memory_channel_is_an_explicit_platform_backend() -> None:
             assert publisher.descriptor.transport is FrameChannelTransport.SHARED_MEMORY_BGRA
         return
 
-    with pytest.raises(FrameChannelUnavailableError):
-        SharedMemoryBgraFramePublisher(2, 2)
+    for frame_channel_type in (
+        SharedMemoryBgraFramePublisher,
+        SharedMemoryBgraFrameSubscriber,
+    ):
+        with pytest.raises(
+            FrameChannelUnavailableError,
+            match="only available on Windows",
+        ):
+            frame_channel_type(2, 2)
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows shared-memory backend")
