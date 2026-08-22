@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections.abc import Callable
 from contextlib import ExitStack
 import logging
-import sys
 from typing import Any, TYPE_CHECKING
 
 from PySide6.QtWidgets import QApplication, QVBoxLayout, QWidget
@@ -133,6 +132,7 @@ from .ui.notifications import NotificationCenter
 from .ui.screens import ScreenManager
 from .styles.theme import activate_theme, app_stylesheet, apply_application_palette
 from .core.foundation.runtime_paths import ProfilePaths, RuntimePaths
+from .core.foundation.constants import NATIVE_SCENES_SUPPORTED
 from .core.foundation.qt_threads import OwnedQThreadRegistry
 from .core.playlists.storage import PlaylistRepository, PlaylistStoragePaths
 from .core.meetings.tree_store import MeetingTreeStore
@@ -1074,7 +1074,7 @@ class MainWindow(QWidget):
             "camera_stream",
         } and not (state.get("type") == "video" and state.get("is_audio", False))
         native_window_routing_ready = (
-            sys.platform == "win32"
+            NATIVE_SCENES_SUPPORTED
             and self.scene_runtime.native_window_routing_ready
             and not self._native_window_output_suppressed
         )

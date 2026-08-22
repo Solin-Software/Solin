@@ -29,7 +29,7 @@ from solin.bootstrap.single_instance import (
     SingleInstanceServer,
     try_forward_to_running,
 )
-from solin.core.foundation.constants import IPC_SERVER_NAME, LEGACY_CAMERA_SUPPORTED
+from solin.core.foundation.constants import IPC_SERVER_NAME, NATIVE_SCENES_SUPPORTED
 from solin.core.profiles.application import ProfileRegistryLoadError
 from solin.bootstrap.startup_timeline import startup_timeline
 
@@ -72,7 +72,7 @@ def _build_main_window_profile_settings(profile_settings):
         auto_key=AutoKeySettingsStore.for_profile_settings(profile_settings),
         camera=(
             CameraSettingsStore.for_profile_settings(profile_settings)
-            if LEGACY_CAMERA_SUPPORTED
+            if not NATIVE_SCENES_SUPPORTED
             else None
         ),
         projection_playback=ProjectionPlaybackSettingsStore.for_profile_settings(profile_settings),
@@ -235,7 +235,7 @@ def _build_main_window_service_factories(
     install_id_provider = lambda: get_install_id(installation_settings)
 
     camera_factory = None
-    if LEGACY_CAMERA_SUPPORTED:
+    if not NATIVE_SCENES_SUPPORTED:
         from solin.core.integrations.camera import CameraService
 
         camera_factory = CameraService
@@ -434,7 +434,11 @@ def _build_main_window_runtime(
     watched_folder_playlist_store = WatchedFolderPlaylistStore()
     main_window_profile_settings = _build_main_window_profile_settings(profile_settings)
     scene_workspace = _build_scene_workspace(profile_paths)
-    scene_engine = create_native_scene_engine(runtime_paths.cache_dir)
+    scene_engine = (
+        create_native_scene_engine(runtime_paths.cache_dir)
+        if NATIVE_SCENES_SUPPORTED
+        else None
+    )
     ptz_services = create_ptz_runtime_services(active_profile.id)
     scene_workspace.set_credential_cleaner(ptz_services.credentials.delete)
     meeting_linked_folder_sync = MeetingLinkedFolderSync(

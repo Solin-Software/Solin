@@ -46,6 +46,7 @@ def test_parse_runtime_args_supports_profile_equals_form(tmp_path):
 
 
 def test_build_main_window_runtime_wires_services_to_stable_window_host(monkeypatch):
+    monkeypatch.setattr(main, "NATIVE_SCENES_SUPPORTED", True)
     events = []
     file_args = ["clip.mp4", "song.mp3"]
     runtime_paths = SimpleNamespace()
@@ -344,6 +345,7 @@ def test_build_main_window_runtime_wires_services_to_stable_window_host(monkeypa
 
 
 def test_build_main_window_runtime_does_not_mutate_native_window_lifecycle(monkeypatch):
+    monkeypatch.setattr(main, "NATIVE_SCENES_SUPPORTED", True)
     events = []
     runtime_paths = SimpleNamespace()
     profile_paths = SimpleNamespace(
