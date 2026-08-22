@@ -724,9 +724,10 @@ minutes without an unbounded queue, deadlock, source duplication, or memory grow
   independently of the editable scene document and bypass the scene compositor; Program
   targets consume the already-transitioned Program bus. Source/render events wake the
   presenter, with only a low-rate bounded deadline retained for window health and shutdown.
-- [x] Remove the legacy Qt/QPainter opacity fades from raw image/video media changes and
-  media-to-idle switching. Those paths Cut until the native GPU media-transition state
-  machine below owns the effect; timer/yearly/idle-page animations remain independent.
+- [x] Remove the legacy Qt/QPainter opacity fade from every native-routed media surface.
+  Retain the 200 ms effect only on the Qt renderer used when the native presenter is absent
+  or unavailable, including Linux and macOS; timer/yearly/idle-page animations remain
+  independent.
 - [x] Move raw media-change transitions into the canonical native D3D11 content source,
   before fan-out to physical Raw presenters and authored Program layers. Extend the
   content-ingress control contract with an explicit monotonic media epoch, distinct from and
@@ -737,8 +738,9 @@ minutes without an unbounded queue, deadlock, source duplication, or memory grow
   black, wait for its first valid frame within a bounded deadline, and fade it in without
   per-pixel work or frame materialization in Python/Qt. The state machine must be
   latest-request-wins, cancel cleanly on Stop, output reassignment,
-  target loss, engine restart, or device loss, and fall back to an immediate Cut when native
-  presentation is unavailable; never restore the per-frame Qt opacity path. Scope the
+  target loss, engine restart, or device loss, and hand presentation back to the isolated Qt
+  fallback when native presentation is unavailable. The fallback may animate its own Qt
+  surface, but native-routed frames must never enter that opacity path. Scope the
   media-output fade to the ownership
   switch requested by toggling `Show in media windows`: fade the current raw-media or Program
   owner to black, atomically change the render bus at black, wait for the new owner's first
@@ -751,8 +753,9 @@ minutes without an unbounded queue, deadlock, source duplication, or memory grow
   additional surface effect. The current code-level
   policy is Fade through black at 200 ms; Cut and Dissolve use the same tested state contract.
   Keep the expanded in-app player outside this contract: it continues to show the original
-  `QVideoFrame` and does not drive physical-output transitions. The current Qt opacity cost is already
-  removed; this gate restores the visual effect on the GPU. It does not claim a steady-state
+  `QVideoFrame` and does not drive physical-output transitions. The Qt opacity cost is absent
+  from the native route; this gate restores the visual effect on the GPU while the compatibility
+  fallback retains its local 200 ms fade. It does not claim a steady-state
   CPU reduction while decoded frames still cross
   the shared-memory ingress. The separate keyed-texture ingress gate is what can remove that
   steady-state copy/upload path.

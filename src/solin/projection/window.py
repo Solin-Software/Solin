@@ -433,8 +433,9 @@ class BaseProjectionView(QWidget):
 
     This base owns the 4-page ``QStackedWidget`` and **all** content
     behaviour — media/video, circular timer, yearly text and custom idle
-    media. Media changes are deliberately immediate until the native GPU
-    transition owns them; timer and idle-page animations remain local here.
+    media. Native media surfaces delegate transitions to the GPU engine. The
+    Qt renderer retains the legacy fade only as the cross-platform fallback;
+    timer and idle-page animations remain local here.
     Subclasses are responsible only for *window-level* chrome
     (fullscreen placement vs. resizable 16:9 floating frame) and must call
     :meth:`_build_projection_stack` exactly once from their ``__init__``.
@@ -454,6 +455,7 @@ class BaseProjectionView(QWidget):
     _PAGE_YEARLY     = 2
     _PAGE_IDLE_MEDIA = 3
 
+    _MEDIA_FADE_DURATION_MS = 200
     _YEARLY_TIMER_EXIT_FADE_DURATION_MS = 200
     _YEARLY_FADE_IN_DURATION_MS = 500
 
@@ -479,6 +481,17 @@ class BaseProjectionView(QWidget):
         media_layout.addWidget(self.display_label)
         media_layout.addWidget(self.native_video_surface)
         self._stack.addWidget(self._media_host)   # index 0
+
+        # This effect belongs only to the Qt fallback renderer. Native frames
+        # are hosted by the sibling NativeVideoSurface and never cross it.
+        self._media_opacity = QGraphicsOpacityEffect(self.display_label)
+        self._media_opacity.setOpacity(1.0)
+        self.display_label.setGraphicsEffect(self._media_opacity)
+        self._media_anim = QPropertyAnimation(self._media_opacity, b"opacity")
+        self._media_anim.setDuration(self._MEDIA_FADE_DURATION_MS)
+        self._media_anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
+        self._media_fade_out_pending = False
+        self._media_anim.finished.connect(self._on_media_animation_finished)
 
         # Page 1 — live circular timer
         self._proj_timer = CircularTimerWidget()
@@ -529,6 +542,7 @@ class BaseProjectionView(QWidget):
         # stopped video from being painted after clear() is called.
         self._accept_video_frames: bool = False
         self._native_output_active: bool = False
+        self._fallback_media_entry_pending: bool = False
         self._current_pixmap: QPixmap | None = None
 
         self._stack.setCurrentIndex(self._PAGE_YEARLY)  # start on yearly text page
@@ -554,6 +568,7 @@ class BaseProjectionView(QWidget):
         self._timer_presentation = presentation
         self._accept_video_frames = False
         self.set_native_output_active(False)
+        self._fallback_media_entry_pending = False
         self._is_showing_media = False
 
         if presentation is MediaCountdownPresentation.YEARLY_TEXT:
@@ -623,14 +638,21 @@ class BaseProjectionView(QWidget):
         active = bool(active)
         if active == self._native_output_active:
             return
+        previous = self._native_output_active
         self._native_output_active = active
         self.native_video_surface.setVisible(active)
         if active:
+            self._fallback_media_entry_pending = False
             self.display_label.clear()
             self._stop_all_anims()
+            self._media_opacity.setOpacity(1.0)
             self._is_showing_media = True
             self._stack.setCurrentIndex(self._PAGE_MEDIA)
             self.native_video_surface.raise_()
+        elif previous and self._is_showing_media:
+            # If the engine becomes unavailable while media is visible, the
+            # first restored Qt frame must enter through the fallback fade.
+            self._fallback_media_entry_pending = True
 
     @Slot(QVideoFrame)
     def update_frame(self, frame: QVideoFrame) -> None:
@@ -647,10 +669,10 @@ class BaseProjectionView(QWidget):
             return
         self.display_label.set_video_frame(frame)
 
-        if not self._is_showing_media:
-            self._stop_all_anims()
+        if not self._is_showing_media or self._fallback_media_entry_pending:
             self._is_showing_media = True
-            self._stack.setCurrentIndex(self._PAGE_MEDIA)
+            self._fallback_media_entry_pending = False
+            self._start_media_fade_in()
 
     def show_image_from_url_data(
         self,
@@ -697,16 +719,31 @@ class BaseProjectionView(QWidget):
         self._cancel_pending_timer_exit()
         self._clear_timer_presentation()
         self._accept_video_frames = False
-        self.set_native_output_active(False)
+        if self._native_output_active:
+            # The native source receives this image through the independent
+            # content-ingress channel. Do not wake or mutate the Qt fallback.
+            return
         self._current_pixmap = QPixmap.fromImage(image) if cache_pixmap else None
         self.display_label.set_image(image, initial_transform=initial_transform)
 
-        if not self._is_showing_media:
-            self._stop_all_anims()
+        if not self._is_showing_media or self._fallback_media_entry_pending:
             self._is_showing_media = True
-            self._stack.setCurrentIndex(self._PAGE_MEDIA)
+            self._fallback_media_entry_pending = False
+            self._start_media_fade_in()
         else:
             self._stack.setCurrentIndex(self._PAGE_MEDIA)
+
+    def _start_media_fade_in(self) -> None:
+        """Reveal media through the Qt fallback renderer only."""
+
+        if self._native_output_active:
+            return
+        self._stop_all_anims()
+        self._media_opacity.setOpacity(0.0)
+        self._stack.setCurrentIndex(self._PAGE_MEDIA)
+        self._media_anim.setStartValue(0.0)
+        self._media_anim.setEndValue(1.0)
+        self._media_anim.start()
 
     def set_image_transform(self, zoom: float, norm_x: float, norm_y: float,
                             *, animate: bool = True) -> None:
@@ -725,12 +762,16 @@ class BaseProjectionView(QWidget):
     # ── Idle / clear transitions ──────────────────────────────────────────
 
     def clear(self) -> None:
-        """Return media to the active idle page without a CPU composited fade."""
+        """Return media to idle through the renderer that owns presentation."""
         # Immediately stop accepting video frames — this is the earliest possible
         # point to cut off the pipeline, before any async frames already queued
         # in the Qt event loop can reach update_frame().
         self._accept_video_frames = False
+        native_presentation_was_active = (
+            self._native_output_active or self._fallback_media_entry_pending
+        )
         self.set_native_output_active(False)
+        self._fallback_media_entry_pending = False
         if self._yearly_timer_exit_pending:
             return
         if (
@@ -761,8 +802,15 @@ class BaseProjectionView(QWidget):
 
         if self._is_showing_media:
             self._is_showing_media = False
-            self.display_label.clear()
-            self._switch_to_idle_immediately()
+            if native_presentation_was_active:
+                self.display_label.clear()
+                self._media_opacity.setOpacity(1.0)
+                self._switch_to_idle_immediately()
+            else:
+                self._media_fade_out_pending = True
+                self._media_anim.setStartValue(self._media_opacity.opacity())
+                self._media_anim.setEndValue(0.0)
+                self._media_anim.start()
         else:
             # Coming from timer — switch to idle with fade-in
             self._switch_to_idle_with_fade()
@@ -785,6 +833,14 @@ class BaseProjectionView(QWidget):
             return
         self._yearly_timer_exit_pending = False
         self._clear_timer_presentation()
+        self._switch_to_idle_with_fade()
+
+    def _on_media_animation_finished(self) -> None:
+        if not self._media_fade_out_pending:
+            return
+        self._media_fade_out_pending = False
+        self.display_label.clear()
+        self._media_opacity.setOpacity(1.0)
         self._switch_to_idle_with_fade()
 
     def _switch_to_idle_with_fade(self) -> None:
@@ -813,13 +869,15 @@ class BaseProjectionView(QWidget):
             self._stack.setCurrentIndex(self._PAGE_YEARLY)
 
     def _stop_all_anims(self) -> None:
-        """Stop all animations and disconnect callbacks safely."""
+        """Stop all local animations and cancel pending completion work."""
         for anim in (
+            self._media_anim,
             self._yearly_anim,
             self._timer_anim,
             self._idle_media_anim,
         ):
             anim.stop()
+        self._media_fade_out_pending = False
 
     # ── Custom idle media API ─────────────────────────────────────────────
 
