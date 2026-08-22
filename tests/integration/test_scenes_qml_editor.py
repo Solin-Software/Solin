@@ -86,6 +86,10 @@ def test_scenes_qml_editor_loads_with_the_real_workspace(tmp_path: Path) -> None
     assert widget.bridge.outputFormatLabel == "1920 × 1080"
 
     root = widget._qml.rootObject()
+    beta_badge = root.findChild(QQuickItem, "scenesBetaBadge")
+    assert beta_badge is not None
+    assert beta_badge.property("label") == "Beta"
+    assert beta_badge.isVisible()
     profile_button = root.findChild(QQuickItem, "scenesHeaderProfileButton")
     profile_menu = root.findChild(QObject, "scenesProfileMenu")
     assert profile_button is not None

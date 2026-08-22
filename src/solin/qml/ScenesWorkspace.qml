@@ -146,11 +146,20 @@ Item {
 
                     ColumnLayout {
                         spacing: 0
-                        Text {
-                            text: qsTr("Scenes")
-                            color: root.textPrimary
-                            font.pixelSize: root.narrow ? 16 : 18
-                            font.weight: Font.DemiBold
+                        RowLayout {
+                            spacing: 7
+                            Text {
+                                text: qsTr("Scenes")
+                                color: root.textPrimary
+                                font.pixelSize: root.narrow ? 16 : 18
+                                font.weight: Font.DemiBold
+                            }
+                            FeatureStageBadge {
+                                objectName: "scenesBetaBadge"
+                                Layout.alignment: Qt.AlignVCenter
+                                label: "Beta"
+                                theme: root.theme
+                            }
                         }
                         Text {
                             visible: !root.compactHeader
