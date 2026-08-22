@@ -27,6 +27,7 @@ from solin.core.scenes.model import (
     NormalizedRect,
     OnvifPtzBinding,
     OutputMode,
+    PtzBinding,
     PtzPosition,
     PtzProtocol,
     PtzTimeoutPolicy,
@@ -45,7 +46,12 @@ from solin.core.scenes.model import (
     ViscaTransport,
     new_identity,
 )
-from solin.core.scenes.ptz import PtzCredentialVault, PtzCredentials
+from solin.core.scenes.ptz import (
+    PtzControlResult,
+    PtzCredentialVault,
+    PtzCredentials,
+    PtzRecallResult,
+)
 from solin.core.scenes.workspace import SceneWorkspaceBusyError
 from solin.ui.qml.scenes_models import SceneLayerListModel, SceneListModel
 from solin.ui.scene_engine_status import scene_engine_error_summary
@@ -61,6 +67,18 @@ _SOURCE_COLORS = {
     SourceKind.COLOR: "#64748B",
     SourceKind.SCENE_REFERENCE: "#F59E0B",
 }
+
+
+def _qml_float(value: object) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+        raise TypeError("QML value must be numeric")
+    return float(value)
+
+
+def _qml_int(value: object) -> int:
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+        raise TypeError("QML value must be an integer")
+    return int(value)
 
 
 class ScenePreviewStore(Protocol):
@@ -106,7 +124,7 @@ class ScenesBridge(QObject):
         self._preview_available = False
         self._document_generation = 0
         self._active_guides: tuple[tuple[str, float], ...] = ()
-        self._ptz_recall_futures: set[Future[object]] = set()
+        self._ptz_recall_futures: set[Future[PtzRecallResult]] = set()
         self._controller_connections: tuple[tuple[Any, Any], ...] = ()
         self._connect_controller()
         self._refresh_models()
@@ -760,18 +778,20 @@ class ScenesBridge(QObject):
             return replace(
                 layer,
                 rect=NormalizedRect(
-                    x=float(values.get("x", layer.rect.x)),
-                    y=float(values.get("y", layer.rect.y)),
-                    width=float(values.get("width", layer.rect.width)),
-                    height=float(values.get("height", layer.rect.height)),
+                    x=_qml_float(values.get("x", layer.rect.x)),
+                    y=_qml_float(values.get("y", layer.rect.y)),
+                    width=_qml_float(values.get("width", layer.rect.width)),
+                    height=_qml_float(values.get("height", layer.rect.height)),
                 ),
                 crop=Crop(
-                    left=float(values.get("cropLeft", layer.crop.left)),
-                    top=float(values.get("cropTop", layer.crop.top)),
-                    right=float(values.get("cropRight", layer.crop.right)),
-                    bottom=float(values.get("cropBottom", layer.crop.bottom)),
+                    left=_qml_float(values.get("cropLeft", layer.crop.left)),
+                    top=_qml_float(values.get("cropTop", layer.crop.top)),
+                    right=_qml_float(values.get("cropRight", layer.crop.right)),
+                    bottom=_qml_float(values.get("cropBottom", layer.crop.bottom)),
                 ),
-                rotation_degrees=float(values.get("rotation", layer.rotation_degrees)),
+                rotation_degrees=_qml_float(
+                    values.get("rotation", layer.rotation_degrees)
+                ),
             )
 
         self._update_layer(layer_id, update)
@@ -921,7 +941,7 @@ class ScenesBridge(QObject):
                 configuration = RtspCameraConfig(
                     uri=str(values.get("uri", "")).strip(),
                     transport=RtspTransport(str(values.get("transport", "tcp"))),
-                    latency_ms=int(values.get("latencyMs", 200)),
+                    latency_ms=_qml_int(values.get("latencyMs", 200)),
                     ptz_binding=ptz_binding,
                     keep_active=bool(values.get("keepActive", False)),
                 )
@@ -1055,9 +1075,9 @@ class ScenesBridge(QObject):
                 if not isinstance(binding, OnvifPtzBinding):
                     raise SceneValidationError("Absolute PTZ positions require ONVIF")
                 position = PtzPosition(
-                    pan=float(values.get("pan", 0.0)),
-                    tilt=float(values.get("tilt", 0.0)),
-                    zoom=float(values.get("zoom", 0.0)),
+                    pan=_qml_float(values.get("pan", 0.0)),
+                    tilt=_qml_float(values.get("tilt", 0.0)),
+                    zoom=_qml_float(values.get("zoom", 0.0)),
                 )
             elif target_mode == "token":
                 remote_token = str(values.get("token", "")).strip()
@@ -1139,7 +1159,7 @@ class ScenesBridge(QObject):
         try:
             action = RecallPtzPresetAction(
                 preset_id=str(values.get("presetId", "")),
-                timeout_ms=int(values.get("timeoutMs", 4000)),
+                timeout_ms=_qml_int(values.get("timeoutMs", 4000)),
                 on_timeout=PtzTimeoutPolicy(str(values.get("onTimeout", "keep_current"))),
             )
         except (SceneValidationError, TypeError, ValueError):
@@ -1174,23 +1194,22 @@ class ScenesBridge(QObject):
         except Exception:  # noqa: BLE001 - PTZ boundary
             self.ptzResult.emit("", False, self.tr("PTZ preset recall failed."))
             return
-        cast_future: Future[object] = future
-        self._ptz_recall_futures.add(cast_future)
+        self._ptz_recall_futures.add(future)
 
-        def completed(done: Future[object]) -> None:
+        def completed(done: Future[PtzRecallResult]) -> None:
             self._ptz_recall_futures.discard(done)
             try:
                 result = done.result()
-                succeeded = bool(getattr(result, "succeeded", False))
-                error_code = str(getattr(result, "error_code", ""))
-                camera_id = str(getattr(result, "camera_source_id", ""))
+                succeeded = result.succeeded
+                error_code = result.error_code
+                camera_id = result.camera_source_id
             except Exception:  # noqa: BLE001 - async PTZ boundary
                 succeeded = False
                 error_code = "ptz_recall_failed"
                 camera_id = ""
             self.ptzResult.emit(camera_id, succeeded, error_code)
 
-        cast_future.add_done_callback(completed)
+        future.add_done_callback(completed)
 
     @Slot(str)
     def stopPtz(self, camera_id: str) -> None:
@@ -1493,16 +1512,16 @@ class ScenesBridge(QObject):
             return (
                 str(values["layerId"]),
                 NormalizedRect(
-                    x=float(values["x"]),
-                    y=float(values["y"]),
-                    width=float(values["width"]),
-                    height=float(values["height"]),
+                    x=_qml_float(values["x"]),
+                    y=_qml_float(values["y"]),
+                    width=_qml_float(values["width"]),
+                    height=_qml_float(values["height"]),
                 ),
                 Crop(
-                    left=float(values["cropLeft"]),
-                    top=float(values["cropTop"]),
-                    right=float(values["cropRight"]),
-                    bottom=float(values["cropBottom"]),
+                    left=_qml_float(values["cropLeft"]),
+                    top=_qml_float(values["cropTop"]),
+                    right=_qml_float(values["cropRight"]),
+                    bottom=_qml_float(values["cropBottom"]),
                 ),
             )
         except (KeyError, TypeError, ValueError, SceneValidationError):
@@ -1677,7 +1696,7 @@ class ScenesBridge(QObject):
         self,
         values: dict[str, object],
         existing: SourceDefinition | None,
-    ) -> tuple[object | None, PtzCredentials | None]:
+    ) -> tuple[PtzBinding | None, PtzCredentials | None]:
         protocol_value = str(values.get("ptzProtocol", ""))
         if not protocol_value:
             return None, None
@@ -1701,7 +1720,7 @@ class ScenesBridge(QObject):
             return (
                 ViscaIpPtzBinding(
                     host=str(values.get("ptzHost", "")).strip(),
-                    port=int(values.get("ptzPort", 52381)),
+                    port=_qml_int(values.get("ptzPort", 52381)),
                     transport=ViscaTransport(str(values.get("ptzTransport", "udp"))),
                 ),
                 None,
@@ -1709,14 +1728,14 @@ class ScenesBridge(QObject):
         return (
             ViscaSerialPtzBinding(
                 device_id=str(values.get("ptzSerialDevice", "")).strip(),
-                baud_rate=int(values.get("ptzBaudRate", 9600)),
-                camera_address=int(values.get("ptzCameraAddress", 1)),
+                baud_rate=_qml_int(values.get("ptzBaudRate", 9600)),
+                camera_address=_qml_int(values.get("ptzCameraAddress", 1)),
             ),
             None,
         )
 
     @staticmethod
-    def _camera_ptz_binding(source: SourceDefinition | None):
+    def _camera_ptz_binding(source: SourceDefinition | None) -> PtzBinding | None:
         if source is None:
             return None
         configuration = source.configuration
@@ -1797,12 +1816,16 @@ class ScenesBridge(QObject):
                     result.append(camera_id)
         return tuple(result)
 
-    def _observe_ptz_future(self, camera_id: str, future: Future[object]) -> None:
-        def completed(done: Future[object]) -> None:
+    def _observe_ptz_future(
+        self,
+        camera_id: str,
+        future: Future[PtzControlResult],
+    ) -> None:
+        def completed(done: Future[PtzControlResult]) -> None:
             try:
                 result = done.result()
-                succeeded = bool(getattr(result, "succeeded", False))
-                error_code = str(getattr(result, "error_code", ""))
+                succeeded = result.succeeded
+                error_code = result.error_code
             except Exception:  # noqa: BLE001 - async PTZ boundary
                 succeeded = False
                 error_code = "ptz_control_failed"

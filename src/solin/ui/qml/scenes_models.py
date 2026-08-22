@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from enum import IntEnum
+from typing import Generic, TypeVar
 
 from PySide6.QtCore import QAbstractListModel, QByteArray, QModelIndex, Qt, Signal, Slot
 
@@ -82,14 +83,16 @@ _LAYER_ROLES = {
     _LayerRole.SOURCE_WARNING_TEXT: QByteArray(b"sourceWarningText"),
 }
 
+_RoleT = TypeVar("_RoleT", bound=IntEnum)
 
-class _MappingListModel(QAbstractListModel):
+
+class _MappingListModel(QAbstractListModel, Generic[_RoleT]):
     countChanged = Signal()
 
     def __init__(
         self,
-        roles: Mapping[IntEnum, QByteArray],
-        keys: Mapping[IntEnum, str],
+        roles: Mapping[_RoleT, QByteArray],
+        keys: Mapping[_RoleT, str],
         parent=None,
     ) -> None:
         super().__init__(parent)
@@ -202,7 +205,7 @@ class _MappingListModel(QAbstractListModel):
         return None
 
 
-class SceneListModel(_MappingListModel):
+class SceneListModel(_MappingListModel[_SceneRole]):
     def __init__(self, parent=None) -> None:
         super().__init__(
             _SCENE_ROLES,
@@ -222,7 +225,7 @@ class SceneListModel(_MappingListModel):
         )
 
 
-class SceneLayerListModel(_MappingListModel):
+class SceneLayerListModel(_MappingListModel[_LayerRole]):
     def __init__(self, parent=None) -> None:
         super().__init__(
             _LAYER_ROLES,

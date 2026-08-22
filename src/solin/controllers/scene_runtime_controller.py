@@ -808,7 +808,7 @@ class SceneRuntimeController(QObject):
 
     def cancel_ptz_recall(
         self,
-        future: Future[PtzRecallResult | PtzControlResult],
+        future: Future[PtzRecallResult],
     ) -> None:
         if self._ptz is not None:
             self._ptz.cancel(future)
@@ -831,15 +831,15 @@ class SceneRuntimeController(QObject):
                 PtzControlKind.MOVE,
                 "ptz_binding_unavailable",
             )
-        move = getattr(self._ptz, "move", None)
-        if not callable(move):
+        ptz = self._ptz
+        if ptz is None:
             return _completed_ptz_control_failure(
                 camera_source_id,
                 PtzControlKind.MOVE,
                 "ptz_executor_unavailable",
             )
         self._moving_camera_bindings[camera_source_id] = binding
-        return move(
+        return ptz.move(
             camera_source_id=camera_source_id,
             binding=binding,
             pan=pan * speed,
@@ -857,15 +857,15 @@ class SceneRuntimeController(QObject):
                 PtzControlKind.STOP,
                 "ptz_binding_unavailable",
             )
-        stop = getattr(self._ptz, "stop", None)
-        if not callable(stop):
+        ptz = self._ptz
+        if ptz is None:
             return _completed_ptz_control_failure(
                 camera_source_id,
                 PtzControlKind.STOP,
                 "ptz_executor_unavailable",
             )
         self._moving_camera_bindings.pop(camera_source_id, None)
-        return stop(camera_source_id=camera_source_id, binding=binding)
+        return ptz.stop(camera_source_id=camera_source_id, binding=binding)
 
     def stop_all_camera_movements(self) -> None:
         for camera_source_id in tuple(self._moving_camera_bindings):
@@ -893,14 +893,14 @@ class SceneRuntimeController(QObject):
                 PtzControlKind.STORE_PRESET,
                 "ptz_binding_unavailable",
             )
-        store_preset = getattr(self._ptz, "store_preset", None)
-        if not callable(store_preset):
+        ptz = self._ptz
+        if ptz is None:
             return _completed_ptz_control_failure(
                 preset.camera_source_id,
                 PtzControlKind.STORE_PRESET,
                 "ptz_executor_unavailable",
             )
-        return store_preset(
+        return ptz.store_preset(
             camera_source_id=preset.camera_source_id,
             binding=binding,
             preset=preset,

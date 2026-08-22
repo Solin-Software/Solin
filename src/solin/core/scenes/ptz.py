@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 import threading
 import time
-from typing import Protocol
+from typing import overload, Protocol
 
 from solin.core.scenes.model import (
     CameraPreset,
@@ -255,11 +255,22 @@ class PtzRecallExecutor(Protocol):
 
 
 @dataclass(slots=True)
-class _WorkItem:
-    request: PtzRecallRequest | PtzControlRequest
+class _RecallWorkItem:
+    request: PtzRecallRequest
     cancellation: PtzCancellation
-    future: Future[PtzRecallResult] | Future[PtzControlResult]
+    future: Future[PtzRecallResult]
     cancellation_error_code: str
+
+
+@dataclass(slots=True)
+class _ControlWorkItem:
+    request: PtzControlRequest
+    cancellation: PtzCancellation
+    future: Future[PtzControlResult]
+    cancellation_error_code: str
+
+
+type _WorkItem = _RecallWorkItem | _ControlWorkItem
 
 
 @dataclass(slots=True)
@@ -318,7 +329,7 @@ class PtzExecutor:
             deadline_monotonic=self._clock() + timeout_ms / 1000.0,
         )
         self._cancel_deadman(camera_source_id)
-        item = _WorkItem(
+        item = _RecallWorkItem(
             request,
             PtzCancellation(),
             Future(),
@@ -352,7 +363,7 @@ class PtzExecutor:
             if not self._closed:
                 self._moving_bindings[camera_source_id] = binding
         future = self._enqueue(
-            _WorkItem(
+            _ControlWorkItem(
                 request,
                 PtzCancellation(),
                 Future(),
@@ -377,7 +388,7 @@ class PtzExecutor:
             timeout_ms=timeout_ms,
         )
         return self._enqueue(
-            _WorkItem(
+            _ControlWorkItem(
                 request,
                 PtzCancellation(),
                 Future(),
@@ -401,13 +412,19 @@ class PtzExecutor:
             preset=preset,
         )
         return self._enqueue(
-            _WorkItem(
+            _ControlWorkItem(
                 request,
                 PtzCancellation(),
                 Future(),
                 "ptz_command_superseded",
             )
         )
+
+    @overload
+    def _enqueue(self, item: _RecallWorkItem) -> Future[PtzRecallResult]: ...
+
+    @overload
+    def _enqueue(self, item: _ControlWorkItem) -> Future[PtzControlResult]: ...
 
     def _enqueue(
         self,
@@ -417,16 +434,12 @@ class PtzExecutor:
         submit = False
         with self._lock:
             if self._closed:
-                item.future.set_result(
-                    _result(item, PtzRecallStatus.CANCELLED, "ptz_executor_closed")
-                )
+                _resolve(item, PtzRecallStatus.CANCELLED, "ptz_executor_closed")
                 return item.future
             lane = self._lanes.get(camera_source_id)
             if lane is None:
                 if len(self._lanes) >= self._maximum_camera_lanes:
-                    item.future.set_result(
-                        _result(item, PtzRecallStatus.BUSY, "ptz_camera_lane_limit")
-                    )
+                    _resolve(item, PtzRecallStatus.BUSY, "ptz_camera_lane_limit")
                     return item.future
                 self._lanes[camera_source_id] = _CameraLane(running=item)
                 submit = True
@@ -674,13 +687,29 @@ class PtzExecutor:
         workers.shutdown(wait=False, cancel_futures=True)
 
 
+@overload
+def _result(
+    item: _RecallWorkItem,
+    status: PtzRecallStatus,
+    error_code: str,
+) -> PtzRecallResult: ...
+
+
+@overload
+def _result(
+    item: _ControlWorkItem,
+    status: PtzRecallStatus,
+    error_code: str,
+) -> PtzControlResult: ...
+
+
 def _result(
     item: _WorkItem,
     status: PtzRecallStatus,
     error_code: str,
 ) -> PtzRecallResult | PtzControlResult:
-    request = item.request
-    if isinstance(request, PtzRecallRequest):
+    if isinstance(item, _RecallWorkItem):
+        request = item.request
         return PtzRecallResult(
             request_id=request.request_id,
             camera_source_id=request.camera_source_id,
@@ -688,6 +717,7 @@ def _result(
             status=status,
             error_code=error_code,
         )
+    request = item.request
     return PtzControlResult(
         request_id=request.request_id,
         camera_source_id=request.camera_source_id,
@@ -702,7 +732,10 @@ def _resolve(
     status: PtzRecallStatus,
     error_code: str,
 ) -> None:
-    if not item.future.done():
+    if isinstance(item, _RecallWorkItem):
+        if not item.future.done():
+            item.future.set_result(_result(item, status, error_code))
+    elif not item.future.done():
         item.future.set_result(_result(item, status, error_code))
 
 
