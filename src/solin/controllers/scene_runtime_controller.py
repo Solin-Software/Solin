@@ -8,6 +8,7 @@ from typing import Any, Protocol
 
 from PySide6.QtCore import QObject, Signal, Slot
 
+from solin.core.foundation.constants import MEMORIZE_PRE_MEDIA_SCENE
 from solin.core.scenes.application import SceneDocumentChange, SceneDocumentService
 from solin.core.scenes.engine import (
     DEFAULT_ENGINE_STARTUP_DEADLINE_MS,
@@ -382,16 +383,80 @@ class SceneRuntimeController(QObject):
         )
 
     def take_program_scene(self, scene_id: str) -> SceneRuntimeState:
-        previous_suspension = self._suspended_media_session_id
+        self._documents.document.scene(scene_id)
         runtime = self._runtime.state.output(BusId.VIRTUAL_CAMERA)
         category = content_category_for_projection(self._projection.state)
+        if (
+            runtime.mode is OutputMode.AUTO
+            and category in AUTOMATIC_MEDIA_CATEGORIES
+            and scene_id == self._documents.program_media_scene_id
+        ):
+            self._suspended_media_session_id = None
+            self._reconcile_desired(prepare=True)
+            return self._runtime.state
+        if scene_id == self.desired_scene(BusId.VIRTUAL_CAMERA):
+            return self._runtime.state
+        previous_suspension = self._suspended_media_session_id
         if runtime.mode is OutputMode.AUTO and category in AUTOMATIC_MEDIA_CATEGORIES:
             self._suspended_media_session_id = self._projection_session_id()
         try:
-            return self._runtime.select_program_scene(scene_id)
+            state = self._runtime.select_program_scene(scene_id)
         except Exception:  # noqa: BLE001 - restore transient automation state on write failure
             self._suspended_media_session_id = previous_suspension
             raise
+        # Selecting the already-saved base scene is intentionally a runtime
+        # no-op. Suspension is controller state, so it must still reconcile the
+        # desired Program scene instead of relying on a persistence callback.
+        self._reconcile_desired(prepare=True)
+        return state
+
+    @property
+    def program_automation_suspended(self) -> bool:
+        runtime = self._runtime.state.output(BusId.VIRTUAL_CAMERA)
+        category = content_category_for_projection(self._projection.state)
+        return (
+            runtime.mode is OutputMode.AUTO
+            and category in AUTOMATIC_MEDIA_CATEGORIES
+            and self._suspended_media_session_id == self._projection_session_id()
+        )
+
+    @property
+    def program_return_scene_id(self) -> str:
+        """Return the current automatic-media exit target."""
+
+        runtime = self._runtime.state.output(BusId.VIRTUAL_CAMERA)
+        scene_ids = {scene.id for scene in self._documents.document.scenes}
+        media_scene_id = self._documents.program_media_scene_id
+        if runtime.manual_scene_id in scene_ids and runtime.manual_scene_id != media_scene_id:
+            return runtime.manual_scene_id
+        default_scene_id = self._documents.program_default_scene_id
+        return default_scene_id if default_scene_id in scene_ids else ""
+
+    @property
+    def program_return_override_available(self) -> bool:
+        runtime = self._runtime.state.output(BusId.VIRTUAL_CAMERA)
+        category = content_category_for_projection(self._projection.state)
+        media_scene_id = self._documents.program_media_scene_id
+        return bool(
+            runtime.mode is OutputMode.AUTO
+            and not self.program_automation_suspended
+            and category in AUTOMATIC_MEDIA_CATEGORIES
+            and media_scene_id
+            and self.desired_scene(BusId.VIRTUAL_CAMERA) == media_scene_id
+            and self.applied_scene(BusId.VIRTUAL_CAMERA) == media_scene_id
+        )
+
+    def set_program_return_scene(self, scene_id: str) -> SceneRuntimeState:
+        """Override where automatic Program returns after the active media."""
+
+        self._documents.document.scene(scene_id)
+        if not self.program_return_override_available:
+            raise SceneValidationError(
+                "Program return can only change while the automatic media scene is live"
+            )
+        if scene_id == self._documents.program_media_scene_id:
+            raise SceneValidationError("Program return scene must differ from media scene")
+        return self._runtime.select_program_scene(scene_id)
 
     def resume_program_automation(self) -> SceneRuntimeState:
         if not self._documents.program_automation_configured:
@@ -399,7 +464,9 @@ class SceneRuntimeController(QObject):
                 "Automatic switching requires different default and media scenes"
             )
         self._suspended_media_session_id = None
-        return self._runtime.resume_program_automation()
+        state = self._runtime.resume_program_automation()
+        self._reconcile_desired(prepare=True)
+        return state
 
     def set_program_automatic(self, enabled: bool) -> SceneRuntimeState:
         if enabled and not self._documents.program_automation_configured:
@@ -407,14 +474,22 @@ class SceneRuntimeController(QObject):
                 "Automatic switching requires different default and media scenes"
             )
         self._suspended_media_session_id = None
-        current_scene_id = (
-            self.applied_scene(BusId.VIRTUAL_CAMERA)
-            or self.desired_scene(BusId.VIRTUAL_CAMERA)
+        current_scene_id = self.desired_scene(BusId.VIRTUAL_CAMERA)
+        media_scene_id = self._documents.program_media_scene_id
+        automatic_base_scene_id = (
+            self._documents.program_default_scene_id
+            if enabled
+            and media_scene_id
+            and self._runtime.state.output(BusId.VIRTUAL_CAMERA).manual_scene_id == media_scene_id
+            else None
         )
-        return self._runtime.set_program_automatic(
+        state = self._runtime.set_program_automatic(
             bool(enabled),
             current_scene_id=current_scene_id,
+            automatic_base_scene_id=automatic_base_scene_id,
         )
+        self._reconcile_desired(prepare=True)
+        return state
 
     def set_output_enabled(self, bus_id: BusId, enabled: bool) -> SceneRuntimeState:
         return self._runtime.set_output_enabled(bus_id, enabled)
@@ -926,6 +1001,17 @@ class SceneRuntimeController(QObject):
         if session_id != self._last_projection_session_id:
             self._last_projection_session_id = session_id
             self._suspended_media_session_id = None
+            category = content_category_for_projection(self._projection.state)
+            runtime = self._runtime.state.output(BusId.VIRTUAL_CAMERA)
+            default_scene_id = self._documents.program_default_scene_id
+            if (
+                not MEMORIZE_PRE_MEDIA_SCENE
+                and runtime.mode is OutputMode.AUTO
+                and category in AUTOMATIC_MEDIA_CATEGORIES
+                and default_scene_id
+                and runtime.manual_scene_id != default_scene_id
+            ):
+                self._runtime.select_program_scene(default_scene_id)
         self._reconcile_desired(prepare=True)
 
     def _on_engine_event(self, event: SceneEngineEvent) -> None:

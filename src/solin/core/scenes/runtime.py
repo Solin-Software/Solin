@@ -287,11 +287,30 @@ class SceneRuntimeService:
         enabled: bool,
         *,
         current_scene_id: str,
+        automatic_base_scene_id: str | None = None,
     ) -> SceneRuntimeState:
         if not isinstance(enabled, bool):
             raise SceneValidationError("Program automation state must be a boolean")
         if enabled:
-            return self.resume_program_automation()
+            if automatic_base_scene_id is not None:
+                self._documents.document.scene(automatic_base_scene_id)
+            return self._commit(
+                replace(
+                    self._state,
+                    outputs=tuple(
+                        replace(
+                            output,
+                            mode=OutputMode.AUTO,
+                            manual_scene_id=(
+                                automatic_base_scene_id
+                                if automatic_base_scene_id is not None
+                                else output.manual_scene_id
+                            ),
+                        )
+                        for output in self._state.outputs
+                    ),
+                )
+            )
         return self.take_program_scene(current_scene_id)
 
     def set_output_enabled(self, bus_id: BusId, enabled: bool) -> SceneRuntimeState:

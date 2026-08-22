@@ -38,6 +38,7 @@ from solin.core.scenes.model import (
     DEFAULT_CAMERA_SOURCE_ID,
     LocalCameraConfig,
     OnvifPtzBinding,
+    OutputMode,
     PtzTimeoutPolicy,
     RecallPtzPresetAction,
     SceneDocument,
@@ -111,6 +112,7 @@ def test_local_video_formats_enforce_the_native_media_budget() -> None:
 class _Projection:
     def __init__(self) -> None:
         self.state = {"type": "idle"}
+        self.session_id = 0
         self._listeners: set[Callable[[], None]] = set()
 
     def subscribe(self, listener: Callable[[], None]) -> Callable[[], None]:
@@ -119,6 +121,7 @@ class _Projection:
 
     def set_type(self, state_type: str) -> None:
         self.state = {"type": state_type}
+        self.session_id += 1
         for listener in tuple(self._listeners):
             listener()
 
@@ -893,6 +896,193 @@ def test_runtime_prepares_and_takes_without_full_snapshot_on_hot_path() -> None:
     assert engine.stopped
     assert not controller.engine_ready
     assert readiness == [True, False]
+
+
+def test_manual_take_reconciles_when_the_saved_auto_return_scene_is_unchanged() -> None:
+    projection = _Projection()
+    engine = _Engine()
+    _documents, runtime, controller = _runtime_controller(
+        engine,
+        projection,
+        request_ids=(),
+    )
+    runtime.select_program_scene(CAMERA_SCENE_ID)
+    projection.set_type("image")
+    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
+
+    controller.take_program_scene(CAMERA_SCENE_ID)
+
+    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
+    assert controller.program_automation_suspended
+    controller.close()
+
+
+def test_auto_media_returns_to_the_previous_program_base_scene() -> None:
+    projection = _Projection()
+    _documents, runtime, controller = _runtime_controller(
+        _Engine(),
+        projection,
+        request_ids=(),
+    )
+    runtime.select_program_scene(CONTENT_CAMERA_PIP_SCENE_ID)
+
+    projection.set_type("image")
+
+    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
+    assert controller.program_return_scene_id == CONTENT_CAMERA_PIP_SCENE_ID
+
+    projection.set_type("idle")
+
+    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == (CONTENT_CAMERA_PIP_SCENE_ID)
+    controller.close()
+
+
+def test_return_scene_override_does_not_take_program_until_media_ends() -> None:
+    projection = _Projection()
+    _documents, _runtime, controller = _runtime_controller(
+        _Engine(),
+        projection,
+        request_ids=(),
+    )
+    projection.set_type("video")
+    controller._set_applied_scenes(((BusId.VIRTUAL_CAMERA, CONTENT_SCENE_ID),))
+    assert controller.program_return_override_available
+
+    controller.set_program_return_scene(CONTENT_CAMERA_PIP_SCENE_ID)
+
+    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
+    assert controller.program_return_scene_id == CONTENT_CAMERA_PIP_SCENE_ID
+
+    projection.set_type("idle")
+
+    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == (CONTENT_CAMERA_PIP_SCENE_ID)
+    controller.close()
+
+
+def test_auto_media_does_not_return_after_operator_takes_another_scene() -> None:
+    projection = _Projection()
+    _documents, _runtime, controller = _runtime_controller(
+        _Engine(),
+        projection,
+        request_ids=(),
+    )
+    projection.set_type("image")
+
+    controller.take_program_scene(CONTENT_CAMERA_PIP_SCENE_ID)
+
+    assert controller.program_automation_suspended
+    assert not controller.program_return_override_available
+    with pytest.raises(SceneValidationError, match="only change while"):
+        controller.set_program_return_scene(CAMERA_SCENE_ID)
+
+    projection.set_type("idle")
+
+    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == (CONTENT_CAMERA_PIP_SCENE_ID)
+    controller.close()
+
+
+def test_taking_the_live_automatic_media_scene_is_a_noop() -> None:
+    projection = _Projection()
+    _documents, runtime, controller = _runtime_controller(
+        _Engine(),
+        projection,
+        request_ids=(),
+    )
+    projection.set_type("image")
+    controller._set_applied_scenes(((BusId.VIRTUAL_CAMERA, CONTENT_SCENE_ID),))
+    before = runtime.state
+
+    after = controller.take_program_scene(CONTENT_SCENE_ID)
+
+    assert after is before
+    assert not controller.program_automation_suspended
+    assert controller.program_return_override_available
+    controller.close()
+
+
+def test_taking_media_again_resumes_a_suspended_automatic_media_session() -> None:
+    projection = _Projection()
+    _documents, _runtime, controller = _runtime_controller(
+        _Engine(),
+        projection,
+        request_ids=(),
+    )
+    projection.set_type("video")
+    controller.take_program_scene(CAMERA_SCENE_ID)
+    assert controller.program_automation_suspended
+    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
+
+    controller.take_program_scene(CONTENT_SCENE_ID)
+
+    assert not controller.program_automation_suspended
+    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
+    controller.close()
+
+
+def test_resume_program_automation_reconciles_when_runtime_state_is_unchanged() -> None:
+    projection = _Projection()
+    _documents, _runtime, controller = _runtime_controller(
+        _Engine(),
+        projection,
+        request_ids=(),
+    )
+    projection.set_type("image")
+    controller.take_program_scene(CAMERA_SCENE_ID)
+    assert controller.program_automation_suspended
+
+    controller.resume_program_automation()
+
+    assert not controller.program_automation_suspended
+    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
+    controller.close()
+
+
+def test_disabling_automation_preserves_the_latest_desired_scene_during_take() -> None:
+    projection = _Projection()
+    _documents, runtime, controller = _runtime_controller(
+        _Engine(),
+        projection,
+        request_ids=(),
+    )
+    projection.set_type("image")
+    controller._set_applied_scenes(((BusId.VIRTUAL_CAMERA, CONTENT_SCENE_ID),))
+    controller.take_program_scene(CAMERA_SCENE_ID)
+    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
+    assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
+
+    controller.set_program_automatic(False)
+
+    program = runtime.state.output(BusId.VIRTUAL_CAMERA)
+    assert program.mode is OutputMode.MANUAL
+    assert program.manual_scene_id == CAMERA_SCENE_ID
+    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
+    controller.close()
+
+
+def test_disabled_previous_scene_memory_returns_to_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "solin.controllers.scene_runtime_controller.MEMORIZE_PRE_MEDIA_SCENE",
+        False,
+    )
+    projection = _Projection()
+    _documents, runtime, controller = _runtime_controller(
+        _Engine(),
+        projection,
+        request_ids=(),
+    )
+    runtime.select_program_scene(CONTENT_CAMERA_PIP_SCENE_ID)
+
+    projection.set_type("image")
+
+    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
+    assert controller.program_return_scene_id == CAMERA_SCENE_ID
+
+    projection.set_type("idle")
+
+    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
+    controller.close()
 
 
 def test_transition_policy_changes_do_not_rehydrate_and_preview_always_cuts() -> None:

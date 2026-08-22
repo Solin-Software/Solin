@@ -7798,6 +7798,134 @@ Adicione uma quando quiser.</translation>
   <context>
     <name>SceneControlPopup</name>
     <message>
+      <source>Solin scenes</source>
+      <translation>Cenas do Solin</translation>
+    </message>
+    <message>
+      <source>Virtual camera</source>
+      <translation>Câmera virtual</translation>
+    </message>
+    <message>
+      <source>Auto-switch media</source>
+      <translation>Troca automática</translation>
+    </message>
+    <message>
+      <source>Media windows</source>
+      <translation>Janelas de mídia</translation>
+    </message>
+    <message>
+      <source>Configured</source>
+      <translation>Configuradas</translation>
+    </message>
+    <message>
+      <source>Other scenes</source>
+      <translation>Outras cenas</translation>
+    </message>
+    <message>
+      <source>Show in media windows</source>
+      <translation>Exibir nas janelas de mídia</translation>
+    </message>
+    <message>
+      <source>The scene could not be selected.</source>
+      <translation>Não foi possível selecionar a cena.</translation>
+    </message>
+    <message>
+      <source>The return scene could not be changed.</source>
+      <translation>Não foi possível alterar a cena de retorno.</translation>
+    </message>
+    <message>
+      <source>Automatic switching could not be updated.</source>
+      <translation>Não foi possível alterar a troca automática.</translation>
+    </message>
+    <message>
+      <source>The output state could not be changed.</source>
+      <translation>Não foi possível alterar o estado da saída.</translation>
+    </message>
+    <message>
+      <source>The media-window mirror could not be changed.</source>
+      <translation>Não foi possível alterar o espelhamento nas janelas de mídia.</translation>
+    </message>
+    <message>
+      <source>Preparing…</source>
+      <translation>Preparando…</translation>
+    </message>
+    <message>
+      <source>Error</source>
+      <translation>Erro</translation>
+    </message>
+    <message>
+      <source>Ready</source>
+      <translation>Pronto</translation>
+    </message>
+    <message>
+      <source>Starting…</source>
+      <translation>Iniciando…</translation>
+    </message>
+    <message>
+      <source>Unavailable</source>
+      <translation>Indisponível</translation>
+    </message>
+    <message>
+      <source>Return: %1 · Right-click to change</source>
+      <translation>Retorno: %1 · Clique com o botão direito para alterar</translation>
+    </message>
+    <message>
+      <source>Scene engine ready</source>
+      <translation>Motor de cenas pronto</translation>
+    </message>
+    <message>
+      <source>Auto-switch paused for this media session</source>
+      <translation>Troca automática pausada nesta sessão de mídia</translation>
+    </message>
+    <message>
+      <source>Paused for this media session after a manual scene change.</source>
+      <translation>Pausada nesta sessão de mídia após uma troca manual de cena.</translation>
+    </message>
+    <message>
+      <source>Choose different default and media scenes first.</source>
+      <translation>Primeiro, escolha cenas padrão e de mídia diferentes.</translation>
+    </message>
+    <message>
+      <source>Output on</source>
+      <translation>Saída ativa</translation>
+    </message>
+    <message>
+      <source>Output off</source>
+      <translation>Saída inativa</translation>
+    </message>
+    <message>
+      <source>LIVE</source>
+      <translation>NO AR</translation>
+    </message>
+    <message>
+      <source>SELECTED</source>
+      <translation>SELECIONADA</translation>
+    </message>
+    <message>
+      <source>Default scene</source>
+      <translation>Cena padrão</translation>
+    </message>
+    <message>
+      <source>Media scene</source>
+      <translation>Cena de mídia</translation>
+    </message>
+    <message>
+      <source>Return scene</source>
+      <translation>Cena de retorno</translation>
+    </message>
+    <message>
+      <source>Right-click to return here when media ends.</source>
+      <translation>Clique com o botão direito para retornar aqui quando a mídia terminar.</translation>
+    </message>
+    <message>
+      <source>Scene engine</source>
+      <translation>Motor de cenas</translation>
+    </message>
+    <message>
+      <source>Scene status</source>
+      <translation>Status das cenas</translation>
+    </message>
+    <message>
       <source>Transition override: %1</source>
       <translation>Sobrescrita de transição: %1</translation>
     </message>

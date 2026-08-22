@@ -67,6 +67,22 @@ def test_manual_scene_is_sticky_until_automation_is_resumed() -> None:
     assert runtime.resolve_scene(BusId.VIRTUAL_CAMERA, ContentCategory.IMAGE) == CONTENT_SCENE_ID
 
 
+def test_enabling_automation_can_normalize_a_media_scene_base() -> None:
+    _documents, runtime = _services()
+    runtime.take_program_scene(CONTENT_SCENE_ID)
+
+    runtime.set_program_automatic(
+        True,
+        current_scene_id=CONTENT_SCENE_ID,
+        automatic_base_scene_id=CAMERA_SCENE_ID,
+    )
+
+    assert all(output.mode is OutputMode.AUTO for output in runtime.state.outputs)
+    assert {output.manual_scene_id for output in runtime.state.outputs} == {CAMERA_SCENE_ID}
+    assert runtime.resolve_scene(BusId.VIRTUAL_CAMERA, ContentCategory.IDLE) == CAMERA_SCENE_ID
+    assert runtime.resolve_scene(BusId.VIRTUAL_CAMERA, ContentCategory.VIDEO) == CONTENT_SCENE_ID
+
+
 def test_live_take_is_not_part_of_editor_undo_history() -> None:
     documents, runtime = _services()
     documents.rename_scene(CONTENT_SCENE_ID, "Renamed")

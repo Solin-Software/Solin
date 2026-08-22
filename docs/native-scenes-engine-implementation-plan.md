@@ -107,9 +107,13 @@ mirroring is enabled.
 Program has one base scene, a default-scene role, a media-scene role, and an automatic-media
 toggle. Automation is available only when the two roles exist and refer to different scenes.
 While projected content is active, automation selects the media scene; when projection stops,
-it restores the base/default scene. A manual Take during active content suspends automation
-only for that projection session, and the next session resumes automatically. Editing history
-never rewinds Program or destination-enabled state.
+it restores the previous Program base scene, or the configured default when previous-scene
+memory is disabled. The toolbar exposes that return target while the automatic media scene is
+live, and right-clicking another scene overrides the return without taking it immediately. A
+manual Take during active content suspends automation only for that projection session. The
+content end performs an automatic return only while Program is still on the configured media
+scene; a manual Take is therefore never overwritten. The next session resumes automatically.
+Editing history never rewinds Program or destination-enabled state.
 
 Each Scene profile owns one default Program transition and optional per-scene overrides.
 New Scene profiles default to Dissolve at 350 ms; migrated profiles preserve their persisted
@@ -496,10 +500,16 @@ Add a dedicated Solin Scenes icon next to, but visually distinct from, OBS Scene
 provides:
 
 - one-click Program scene Take;
-- current desired and applied markers;
-- resume automatic switching;
-- virtual-camera and media-window mirror enablement;
-- engine readiness and non-sensitive failure status.
+- stable compact scene chips with desired/applied state and accessible default, media, and
+  return roles;
+- default/media chips pinned in a configured group, with remaining scenes in a responsive
+  wrapping flow and no duplicate Program summary;
+- automatic switching with an explicit per-session suspension state;
+- a fixed, single-line status area for engine state, failures, suspension, and the current
+  automatic-media return target; right-click overrides the return with local chip feedback;
+- virtual-camera enablement in the header and media-window mirror enablement in the footer;
+- per-pixel bounded scrolling that preserves row identity, focus, and scroll position across
+  engine acknowledgements.
 
 OBS WebSocket scenes keep their existing icon, settings, popup, and behavior.
 
