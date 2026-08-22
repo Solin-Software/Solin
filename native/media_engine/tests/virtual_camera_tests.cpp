@@ -128,7 +128,8 @@ void test_solin_output_device_cannot_be_selected_as_an_input() {
 
 } // namespace
 
-int main(const int argument_count, char** arguments) {
+int main([[maybe_unused]] const int argument_count,
+         [[maybe_unused]] char** arguments) {
     test_probe_never_advertises_a_partial_backend();
 #ifdef _WIN32
     expect(argument_count == 2,
