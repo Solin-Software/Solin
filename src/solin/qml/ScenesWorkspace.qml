@@ -136,9 +136,9 @@ Item {
                     height: 42
                     spacing: 9
 
-                    HeaderIconButton {
+                    DrawerToggle {
                         visible: !root.fullWorkspace
-                        iconName: "panel-left"
+                        open: root.drawerOpen
                         toolTipText: root.sourceRailVisible
                             ? qsTr("Open scenes") : qsTr("Open scenes and sources")
                         onClicked: root.toggleWorkspaceDrawer()
@@ -1331,6 +1331,61 @@ Item {
         }
         ToolTip.visible: iconMouse.containsMouse && button.toolTipText.length > 0
         ToolTip.text: button.toolTipText
+    }
+
+    component DrawerToggle: Rectangle {
+        id: toggle
+        objectName: "scenesDrawerToggle"
+        property bool open: false
+        property string toolTipText: ""
+        signal clicked()
+
+        Layout.preferredWidth: 34
+        Layout.preferredHeight: 34
+        radius: 9
+        color: toggle.open ? root.accentTint
+                           : toggleMouse.containsMouse ? root.hover : "transparent"
+        border.width: toggle.open || toggleMouse.containsMouse || activeFocus ? 1 : 0
+        border.color: toggle.open || activeFocus ? root.accent : root.borderStrong
+        activeFocusOnTab: visible && enabled
+        Accessible.role: Accessible.CheckBox
+        Accessible.name: toggle.toolTipText
+        Accessible.checked: toggle.open
+        Accessible.onPressAction: toggle.clicked()
+
+        Behavior on color { ColorAnimation { duration: 120 } }
+        Behavior on border.color { ColorAnimation { duration: 120 } }
+
+        Keys.onPressed: function(event) {
+            if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter
+                    || event.key === Qt.Key_Space) {
+                toggle.clicked()
+                event.accepted = true
+            }
+        }
+
+        Image {
+            id: toggleIcon
+            objectName: "scenesDrawerToggleIcon"
+            anchors.centerIn: parent
+            width: 16
+            height: 16
+            source: "image://sceneicons/panel-left/16/"
+                + root.iconHex(toggle.open ? root.accent : root.textSecondary)
+            sourceSize.width: 16
+            sourceSize.height: 16
+            smooth: true
+        }
+
+        MouseArea {
+            id: toggleMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: toggle.clicked()
+        }
+        ToolTip.visible: toggleMouse.containsMouse && toggle.toolTipText.length > 0
+        ToolTip.text: toggle.toolTipText
     }
 
     component TransitionButton: Rectangle {

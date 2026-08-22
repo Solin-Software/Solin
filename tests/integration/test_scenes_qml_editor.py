@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import QCoreApplication, QObject, QPoint, QPointF, Qt
+from PySide6.QtGui import QColor
 from PySide6.QtQuick import QQuickItem
 from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtTest import QTest
@@ -143,6 +144,39 @@ def test_scenes_qml_editor_loads_with_the_real_workspace(tmp_path: Path) -> None
     canvas = widget._qml.rootObject().findChild(QObject, "scenesCanvas")
     assert canvas is not None
     assert canvas.property("width") > 300
+
+    widget.cleanup()
+    widget.deleteLater()
+    QCoreApplication.processEvents()
+    controller.close()
+
+
+def test_responsive_drawer_toggle_reflects_the_drawer_state(tmp_path: Path) -> None:
+    workspace = SceneWorkspaceService(_profile_paths(tmp_path), seed_names=_seed_names())
+    controller = SceneRuntimeController(workspace, _Projection())
+    widget = ScenesEditorWidget(controller)
+    widget.resize(1000, 700)
+    widget.show()
+    assert _wait_until(lambda: widget._qml.status() is QQuickWidget.Status.Ready)
+
+    root = widget._qml.rootObject()
+    assert root is not None
+    workspace_item = root.findChild(QObject, "scenesWorkspace")
+    toggle = root.findChild(QObject, "scenesDrawerToggle")
+    toggle_icon = root.findChild(QObject, "scenesDrawerToggleIcon")
+    assert isinstance(workspace_item, QQuickItem)
+    assert isinstance(toggle, QQuickItem)
+    assert isinstance(toggle_icon, QQuickItem)
+    assert toggle.isVisible()
+    assert toggle.property("open") is False
+    assert QColor(toggle.property("color")).alpha() == 0
+    closed_icon_source = str(toggle_icon.property("source"))
+
+    workspace_item.setProperty("drawerOpen", True)
+
+    assert _wait_until(lambda: toggle.property("open") is True)
+    assert _wait_until(lambda: QColor(toggle.property("color")).alpha() > 0)
+    assert str(toggle_icon.property("source")) != closed_icon_source
 
     widget.cleanup()
     widget.deleteLater()
