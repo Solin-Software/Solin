@@ -59,6 +59,7 @@ class ProjectionSession:
         self._state: ProjectionState = idle_projection_state()
         self._revision = 0
         self._session_id = 0
+        self._image_transform_animate = False
         self._listeners: set[Callable[[], None]] = set()
         self._idle_media_path = ""
         self._tab_projection_active = False
@@ -85,6 +86,7 @@ class ProjectionSession:
 
     def set_state(self, state: Mapping[str, Any]) -> None:
         self._state = dict(state)
+        self._image_transform_animate = False
         self._session_id += 1
         self._publish_changed()
 
@@ -94,8 +96,26 @@ class ProjectionSession:
         self._state.update(changes)
         self._publish_changed()
 
+    @property
+    def image_transform_animate(self) -> bool:
+        """Animation intent for the latest image-transform state update."""
+
+        return self._image_transform_animate
+
+    def update_image_transform(
+        self,
+        transform: tuple[float, float, float],
+        *,
+        animate: bool,
+    ) -> None:
+        """Publish transform state while keeping animation intent transient."""
+
+        self._image_transform_animate = bool(animate)
+        self.update_state(transform=transform)
+
     def reset_state(self) -> None:
         self._state = idle_projection_state()
+        self._image_transform_animate = False
         self._session_id += 1
         self._publish_changed()
 

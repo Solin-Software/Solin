@@ -106,7 +106,7 @@ void test_windows_reader_consumes_only_the_latest_complete_frame() {
     std::memset(view, 0, mapping_size);
     constexpr std::array<std::uint8_t, 8U> magic{'S', 'L', 'N', 'F', 'R', 'M', '0', '1'};
     std::memcpy(view, magic.data(), magic.size());
-    write_value<std::uint16_t>(view, 8U, 5U);
+    write_value<std::uint16_t>(view, 8U, 6U);
     write_value<std::uint16_t>(view, 10U, static_cast<std::uint16_t>(header_size));
     write_value<std::uint32_t>(view, 12U, 3U);
     write_value<std::uint32_t>(view, 16U, 2U);
@@ -132,6 +132,8 @@ void test_windows_reader_consumes_only_the_latest_complete_frame() {
     expect(!reader->read_latest().has_value(), "an initialized channel has no synthetic frame");
     expect(reader->media_epoch() == std::optional<std::uint64_t>{0U},
            "an initialized channel begins at the initial media epoch");
+    expect(!reader->image_transform().has_value(),
+           "an initialized channel has no synthetic image transform");
     expect(!reader->wait_for_frame(std::chrono::milliseconds{0}),
            "an idle channel does not synthesize a frame event");
     static_cast<void>(SetEvent(event.get()));
@@ -153,8 +155,29 @@ void test_windows_reader_consumes_only_the_latest_complete_frame() {
     static_cast<void>(WaitForSingleObject(mutex_held.get(), INFINITE));
     expect(!reader->media_epoch().has_value(),
            "epoch observation stays non-blocking while the producer owns the channel");
+    expect(!reader->image_transform().has_value(),
+           "transform observation stays non-blocking while the producer owns the channel");
     static_cast<void>(SetEvent(release_holder.get()));
     holder.join();
+
+    write_value<std::uint64_t>(view, 72U, 3U);
+    write_value<std::uint64_t>(view, 80U, 11U);
+    write_value<std::uint32_t>(view, 88U, 3U);
+    write_value<std::uint32_t>(view, 92U, 2U);
+    write_value<std::uint32_t>(view, 96U, 2U);
+    write_value<std::uint32_t>(view, 100U, 2'100U);
+    write_value<double>(view, 104U, 1.5);
+    write_value<double>(view, 112U, 0.25);
+    write_value<double>(view, 120U, -0.1);
+    const auto image_transform = reader->image_transform();
+    expect(image_transform.has_value() && image_transform->revision == 3U &&
+               image_transform->media_epoch == 11U && image_transform->enabled &&
+               image_transform->animate && image_transform->canvas_width == 2U &&
+               image_transform->canvas_height == 2U &&
+               image_transform->duration_ms == 2'100U &&
+               image_transform->zoom == 1.5 && image_transform->norm_x == 0.25 &&
+               image_transform->norm_y == -0.1,
+           "the reader exposes versioned image framing independently from pixels");
 
     const auto wait_result = WaitForSingleObject(mutex.get(), INFINITE);
     expect(wait_result == WAIT_OBJECT_0, "the test writer acquires the channel mutex");
@@ -307,7 +330,7 @@ void test_windows_reader_preserves_padded_nv12_plane_layout() {
     std::memset(view, 0, mapping_size);
     constexpr std::array<std::uint8_t, 8U> magic{'S', 'L', 'N', 'F', 'R', 'M', '0', '1'};
     std::memcpy(view, magic.data(), magic.size());
-    write_value<std::uint16_t>(view, 8U, 5U);
+    write_value<std::uint16_t>(view, 8U, 6U);
     write_value<std::uint16_t>(view, 10U, static_cast<std::uint16_t>(header_size));
     write_value<std::uint32_t>(view, 12U, 3U);
     write_value<std::uint32_t>(view, 16U, 4U);

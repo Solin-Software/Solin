@@ -12,6 +12,7 @@ from PySide6.QtMultimedia import QVideoFrame, QVideoFrameFormat
 from solin.controllers.content_frame_ingress_controller import (
     ContentFrameIngressController,
 )
+from solin.core.projection.image_framing import ImageTransform
 from solin.core.scenes.engine import SceneEngineSnapshot
 from solin.core.scenes.frame_channel import (
     SharedMemoryBgraFrameSubscriber,
@@ -108,6 +109,24 @@ def _padded_red_nv12_frame() -> QVideoFrame:
     finally:
         frame.unmap()
     return frame
+
+
+def _quadrant_image(width: int = 800, height: int = 600) -> QImage:
+    image = QImage(width, height, QImage.Format.Format_ARGB32)
+    half_width = width // 2
+    half_height = height // 2
+    for y in range(height):
+        for x in range(width):
+            if x < half_width and y < half_height:
+                color = QColor("#e02020")
+            elif x >= half_width and y < half_height:
+                color = QColor("#20d020")
+            elif x < half_width:
+                color = QColor("#2040e0")
+            else:
+                color = QColor("#e0d020")
+            image.setPixelColor(x, y, color)
+    return image
 
 
 def _wait_for_clean_aspect_transition(
@@ -354,8 +373,171 @@ def test_actual_size_content_reaches_composed_native_output(tmp_path) -> None:
                     break
             time.sleep(1 / 60)
         assert min(center_pixel[:3]) >= 245
+
+        # Image framing is authored once on the canonical Raw source. A 4:3
+        # image normally has black side bars in the 16:9 scene; zooming it to
+        # 2x must cover the edge in the composed output without republishing
+        # transformed pixels from Python.
+        ingress.set_media_epoch(1)
+        ingress.set_image_transform(
+            ImageTransform(1.0, 0.0, 0.0),
+            media_epoch=1,
+            canvas_width=1920,
+            canvas_height=1080,
+            animate=False,
+        )
+        ingress.submit_frame(four_by_three)
+        framed_identity = _wait_for_pixel(
+            egress,
+            x=0,
+            y=540,
+            expected=black,
+            timeout=8.0,
+        )
+        assert framed_identity is not None
+
+        # A future target is retained but cannot mutate the outgoing epoch.
+        ingress.set_image_transform(
+            ImageTransform(2.0, 0.0, 0.0),
+            media_epoch=2,
+            canvas_width=1920,
+            canvas_height=1080,
+            animate=False,
+        )
+        time.sleep(0.1)
+        try:
+            still_identity = egress.read_latest()
+        except TimeoutError:
+            still_identity = None
+        if still_identity is not None:
+            assert _bgra_pixel(still_identity, 0, 540) == black
+
+        ingress.set_media_epoch(2)
+        ingress.submit_frame(four_by_three)
+        zoomed = _wait_for_pixel(
+            egress,
+            x=0,
+            y=540,
+            expected=green,
+            timeout=8.0,
+        )
+        assert zoomed is not None
+        assert _bgra_pixel(zoomed, 1919, 540) == green
+
     finally:
         ingress.close()
         egress.close()
         program_egress.close()
+        engine.stop()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows native media pipeline")
+def test_native_image_framing_preserves_aspect_and_normalized_pan(tmp_path) -> None:
+    engine = create_native_scene_engine(
+        tmp_path,
+        repository_root=REPOSITORY_ROOT,
+    )
+    if engine is None:
+        pytest.skip("Built native media engine is unavailable")
+
+    ingress = ContentFrameIngressController(
+        maximum_fps=30,
+        canvas_width=1920,
+        canvas_height=1080,
+    )
+    egress = SharedMemoryBgraFrameSubscriber(1920, 1080)
+    document, content_scene = _content_document()
+    try:
+        capabilities = engine.start(
+            session_id="native-image-framing",
+            deadline_ms=10_000,
+        ).result(15)
+        if not capabilities.local_cameras and not capabilities.rtsp_cameras:
+            pytest.skip("Native GStreamer graph is unavailable")
+        acknowledged = engine.hydrate(
+            SceneEngineSnapshot(
+                session_id="native-image-framing",
+                sequence=1,
+                document=document,
+                active_scenes=tuple(
+                    (route.bus_id, content_scene.id) for route in document.outputs
+                ),
+                render_enabled=(
+                    (BusId.MEDIA_WINDOWS, True),
+                    (BusId.VIRTUAL_CAMERA, True),
+                ),
+                output_enabled=(
+                    (BusId.MEDIA_WINDOWS, True),
+                    (BusId.VIRTUAL_CAMERA, False),
+                ),
+                content_ingress=ingress.descriptor,
+                preview_egress=egress.descriptor,
+            ),
+            request_id="native-image-framing-hydrate",
+            deadline_ms=10_000,
+        ).result(15)
+        assert acknowledged.applied
+
+        ingress.set_image_transform(
+            ImageTransform(2.0, 0.25, 0.25),
+            media_epoch=1,
+            canvas_width=1920,
+            canvas_height=1080,
+            animate=False,
+        )
+        ingress.set_media_epoch(1)
+        quadrants = _quadrant_image()
+        red = bytes((0x20, 0x20, 0xE0, 0xFF))
+        green = bytes((0x20, 0xD0, 0x20, 0xFF))
+        blue = bytes((0xE0, 0x40, 0x20, 0xFF))
+        yellow = bytes((0x20, 0xD0, 0xE0, 0xFF))
+        output = None
+        deadline = time.monotonic() + 8.0
+        while output is None and time.monotonic() < deadline:
+            ingress.submit_frame(quadrants)
+            output = _wait_for_pixel(
+                egress,
+                x=200,
+                y=900,
+                expected=blue,
+                timeout=0.1,
+            )
+
+        assert output is not None
+        samples = [
+            (x, y, _bgra_pixel(output, x, y))
+            for y in (0, 100, 200, 400, 539, 540, 700, 900, 1079)
+            for x in (0, 100, 200, 500, 959, 960, 1400, 1700, 1919)
+        ]
+        assert _bgra_pixel(output, 200, 200) == red, samples
+        assert _bgra_pixel(output, 1700, 200) == green
+        assert _bgra_pixel(output, 200, 900) == blue
+        assert _bgra_pixel(output, 1700, 900) == yellow
+        assert _bgra_pixel(output, 1200, 700) == red
+
+        # Retargeting the same retained image to a centered zoom exercises
+        # negative X and Y simultaneously. It must crop proportionally instead
+        # of stretching the bottom-right source edge over the destination.
+        ingress.set_image_transform(
+            ImageTransform(2.0, 0.0, 0.0),
+            media_epoch=1,
+            canvas_width=1920,
+            canvas_height=1080,
+            animate=True,
+        )
+        centered = _wait_for_pixel(
+            egress,
+            x=1200,
+            y=200,
+            expected=green,
+            timeout=8.0,
+        )
+        assert centered is not None
+        assert _bgra_pixel(centered, 200, 200) == red
+        assert _bgra_pixel(centered, 200, 900) == blue
+        assert _bgra_pixel(centered, 1200, 700) == yellow
+        assert _bgra_pixel(centered, 1200, 900) == yellow
+    finally:
+        ingress.close()
+        egress.close()
         engine.stop()

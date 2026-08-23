@@ -4,6 +4,7 @@ import logging
 import threading
 import time
 from collections.abc import Buffer, Callable
+from dataclasses import dataclass
 from typing import Any, Protocol
 
 from PySide6.QtCore import QObject, QSize, Qt, Signal, Slot
@@ -17,6 +18,13 @@ from solin.core.scenes.frame_channel import (
     SharedMemoryVideoFramePublisher,
 )
 from solin.core.scenes.model import VideoPixelFormat
+from solin.core.projection.image_framing import (
+    ImageTransform,
+    normalize_image_transform,
+)
+from solin.core.projection.transform_animation import (
+    PROJECTION_TRANSFORM_DURATION_SECONDS,
+)
 
 
 log = logging.getLogger(__name__)
@@ -24,6 +32,16 @@ _DEFAULT_MAXIMUM_FPS = 30
 _DEFAULT_CANVAS_WIDTH = 1920
 _DEFAULT_CANVAS_HEIGHT = 1080
 _SHUTDOWN_BUDGET_SECONDS = 0.5
+_TRANSFORM_DURATION_MS = round(PROJECTION_TRANSFORM_DURATION_SECONDS * 1_000)
+
+
+@dataclass(frozen=True, slots=True)
+class _ImageTransformRequest:
+    transform: ImageTransform | None
+    media_epoch: int
+    canvas_width: int
+    canvas_height: int
+    animate: bool
 
 
 class _FramePublisher(Protocol):
@@ -55,6 +73,17 @@ class _FramePublisher(Protocol):
     ) -> int: ...
 
     def set_media_epoch(self, media_epoch: int) -> None: ...
+
+    def set_image_transform(
+        self,
+        transform: ImageTransform | None,
+        *,
+        media_epoch: int,
+        canvas_width: int,
+        canvas_height: int,
+        animate: bool,
+        duration_ms: int,
+    ) -> None: ...
 
     def close(self) -> None: ...
 
@@ -92,8 +121,16 @@ class ContentFrameIngressController(QObject):
         self._worker_stopped = threading.Event()
         self._pending_frame: tuple[QImage, int] | None = None
         self._pending_media_epoch: int | None = None
+        self._pending_image_transform: _ImageTransformRequest | None = None
         self._retained_frame: tuple[QImage, int] | None = None
         self._media_epoch = 0
+        self._image_transform = _ImageTransformRequest(
+            transform=None,
+            media_epoch=0,
+            canvas_width=canvas_width,
+            canvas_height=canvas_height,
+            animate=False,
+        )
         self._next_video_materialization_at = 0.0
         self._enabled = True
         self._closed = False
@@ -148,6 +185,46 @@ class ContentFrameIngressController(QObject):
                 self._pending_frame = None
             self._condition.notify_all()
 
+    def set_image_transform(
+        self,
+        transform: ImageTransform | None,
+        *,
+        media_epoch: int,
+        canvas_width: int,
+        canvas_height: int,
+        animate: bool,
+    ) -> None:
+        if (
+            isinstance(media_epoch, bool)
+            or not isinstance(media_epoch, int)
+            or not 0 <= media_epoch <= 2**64 - 1
+        ):
+            raise ValueError("Content transform epoch must be a non-negative 64-bit integer")
+        if (
+            isinstance(canvas_width, bool)
+            or not isinstance(canvas_width, int)
+            or isinstance(canvas_height, bool)
+            or not isinstance(canvas_height, int)
+            or not 1 <= canvas_width <= self._canvas_size.width()
+            or not 1 <= canvas_height <= self._canvas_size.height()
+        ):
+            raise ValueError("Content transform canvas exceeds the ingress capacity")
+        request = _ImageTransformRequest(
+            transform=(
+                normalize_image_transform(transform) if transform is not None else None
+            ),
+            media_epoch=media_epoch,
+            canvas_width=canvas_width,
+            canvas_height=canvas_height,
+            animate=bool(animate),
+        )
+        with self._condition:
+            if self._closed or request == self._image_transform:
+                return
+            self._image_transform = request
+            self._pending_image_transform = request
+            self._condition.notify_all()
+
     def submit_frame(self, frame: object) -> None:
         if isinstance(frame, QVideoFrame):
             if not frame.isValid():
@@ -191,6 +268,7 @@ class ContentFrameIngressController(QObject):
             self._closed = True
             self._pending_frame = None
             self._pending_media_epoch = None
+            self._pending_image_transform = None
             self._retained_frame = None
             self._condition.notify_all()
         # Do not call Thread.join() from the Qt close event. A QVideoFrame can
@@ -212,6 +290,7 @@ class ContentFrameIngressController(QObject):
                         not self._closed
                         and self._pending_frame is None
                         and self._pending_media_epoch is None
+                        and self._pending_image_transform is None
                     ):
                         self._condition.wait()
                     if self._closed:
@@ -224,13 +303,17 @@ class ContentFrameIngressController(QObject):
                     self._pending_frame = None
                     pending_media_epoch = self._pending_media_epoch
                     self._pending_media_epoch = None
+                    pending_image_transform = self._pending_image_transform
+                    self._pending_image_transform = None
                 publish_started_at = time.monotonic()
+                controls_ready = True
                 if pending_media_epoch is not None:
                     try:
                         self._publish_media_epoch(pending_media_epoch)
                     except TimeoutError:
+                        controls_ready = False
                         with self._condition:
-                            if not self._closed:
+                            if not self._closed and self._pending_media_epoch is None:
                                 self._pending_media_epoch = pending_media_epoch
                                 self._condition.notify()
                     except FrameChannelStaleFrameError:
@@ -243,15 +326,47 @@ class ContentFrameIngressController(QObject):
                         log.warning("Could not publish the native content epoch", exc_info=True)
                         self._reset_publisher()
                         self.descriptor_changed.emit(None)
-                if pending is not None:
+                if pending_image_transform is not None:
+                    try:
+                        self._publish_image_transform(pending_image_transform)
+                    except TimeoutError:
+                        controls_ready = False
+                        with self._condition:
+                            if not self._closed and self._pending_image_transform is None:
+                                self._pending_image_transform = pending_image_transform
+                                self._condition.notify()
+                    except FrameChannelUnavailableError:
+                        log.info("Native content frame transport is unavailable on this platform")
+                        self.descriptor_changed.emit(None)
+                        return
+                    except Exception:  # noqa: BLE001 - native frame transport boundary
+                        log.warning("Could not publish the native image transform", exc_info=True)
+                        self._reset_publisher()
+                        self.descriptor_changed.emit(None)
+                if pending is not None and not controls_ready:
+                    # Do not let pixels overtake the epoch-bound transform that
+                    # describes them. A newer pending frame remains authoritative.
+                    with self._condition:
+                        if not self._closed and self._pending_frame is None:
+                            self._pending_frame = pending
+                            self._condition.notify()
+                elif pending is not None:
                     frame, media_epoch = pending
                     try:
                         self._publish(frame, media_epoch)
                     except TimeoutError:
-                        # Slot leases and the cross-process mutex are deliberately
-                        # non-blocking. Keep the channel and let the next latest
-                        # frame supersede this one.
-                        pass
+                        # The transport stays non-blocking, but a static image has
+                        # no naturally arriving next frame. Retain this attempt
+                        # unless a newer frame or epoch already superseded it.
+                        with self._condition:
+                            if (
+                                not self._closed
+                                and self._enabled
+                                and self._pending_frame is None
+                                and media_epoch == self._media_epoch
+                            ):
+                                self._pending_frame = (frame, media_epoch)
+                                self._condition.notify()
                     except FrameChannelStaleFrameError:
                         pass
                     except FrameChannelUnavailableError:
@@ -311,6 +426,27 @@ class ContentFrameIngressController(QObject):
         if descriptor is not None:
             self.descriptor_changed.emit(descriptor)
 
+    def _publish_image_transform(self, request: _ImageTransformRequest) -> None:
+        descriptor: FrameChannelDescriptor | None = None
+        with self._publisher_lock:
+            publisher = self._publisher
+            if publisher is None:
+                publisher = self._create_publisher()
+                if publisher is None:
+                    return
+                self._publisher = publisher
+                descriptor = publisher.descriptor
+            publisher.set_image_transform(
+                request.transform,
+                media_epoch=request.media_epoch,
+                canvas_width=request.canvas_width,
+                canvas_height=request.canvas_height,
+                animate=request.animate,
+                duration_ms=_TRANSFORM_DURATION_MS,
+            )
+        if descriptor is not None:
+            self.descriptor_changed.emit(descriptor)
+
     def _publish_video_frame(self, frame: QVideoFrame, media_epoch: int) -> bool:
         if frame.pixelFormat() is not QVideoFrameFormat.PixelFormat.Format_NV12:
             return False
@@ -360,6 +496,16 @@ class ContentFrameIngressController(QObject):
             )
             if self._media_epoch != 0:
                 publisher.set_media_epoch(self._media_epoch)
+            request = self._image_transform
+            if request.media_epoch != 0 or request.transform is not None:
+                publisher.set_image_transform(
+                    request.transform,
+                    media_epoch=request.media_epoch,
+                    canvas_width=request.canvas_width,
+                    canvas_height=request.canvas_height,
+                    animate=False,
+                    duration_ms=_TRANSFORM_DURATION_MS,
+                )
             return publisher
         except FrameChannelUnavailableError:
             log.info("Native content frame transport is unavailable on this platform")

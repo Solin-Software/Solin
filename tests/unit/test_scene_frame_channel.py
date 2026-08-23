@@ -7,6 +7,7 @@ from multiprocessing import shared_memory
 
 import pytest
 
+from solin.core.projection.image_framing import ImageTransform
 from solin.core.scenes.engine import FrameChannelTransport, FrameProducerKind
 from solin.core.scenes.frame_channel import (
     FRAME_CHANNEL_HEADER_SIZE,
@@ -43,6 +44,14 @@ def test_shared_memory_channel_publishes_a_versioned_latest_bgra_frame() -> None
     pixels = bytes(range(16))
     with SharedMemoryBgraFramePublisher(2, 2, generation=7) as publisher:
         publisher.set_media_epoch(12)
+        publisher.set_image_transform(
+            ImageTransform(1.5, 0.25, -0.1),
+            media_epoch=13,
+            canvas_width=2,
+            canvas_height=2,
+            animate=True,
+            duration_ms=2100,
+        )
         sequence = publisher.publish(
             pixels,
             presentation_timestamp_ns=123,
@@ -72,6 +81,17 @@ def test_shared_memory_channel_publishes_a_versioned_latest_bgra_frame() -> None
             )
             assert struct.unpack_from("<Q", attached.buf, 56)[0] == sequence
             assert struct.unpack_from("<Q", attached.buf, 64)[0] == 13
+            assert struct.unpack_from("<QQIIII3d", attached.buf, 72) == (
+                1,
+                13,
+                3,
+                2,
+                2,
+                2100,
+                1.5,
+                0.25,
+                -0.1,
+            )
             slot = FRAME_CHANNEL_HEADER_SIZE
             assert struct.unpack_from("<QQQQQ", attached.buf, slot)[:4] == (
                 sequence * 2,

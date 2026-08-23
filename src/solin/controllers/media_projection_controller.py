@@ -480,7 +480,10 @@ class MediaProjectionController:
         # projected images.
         state = self._session.state
         if state.get("type") in _TRANSFORMABLE_STATES:
-            self._session.update_state(transform=(zoom, norm_x, norm_y))
+            self._session.update_image_transform(
+                (zoom, norm_x, norm_y),
+                animate=animate,
+            )
         if sync_preview:
             self._context.projection_bar.set_projected_image_transform(
                 ImageTransform(zoom, norm_x, norm_y)
@@ -496,7 +499,10 @@ class MediaProjectionController:
     def on_image_reset_transform(self) -> None:
         state = self._session.state
         if state.get("type") in _TRANSFORMABLE_STATES:
-            self._session.update_state(transform=_IDENTITY_TRANSFORM)
+            self._session.update_image_transform(
+                _IDENTITY_TRANSFORM,
+                animate=True,
+            )
         for projection_window in self._context.projection_windows():
             projection_window.set_image_transform(*_IDENTITY_TRANSFORM)
 

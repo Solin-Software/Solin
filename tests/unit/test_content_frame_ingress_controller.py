@@ -26,6 +26,7 @@ from solin.core.scenes.engine import (
 )
 from solin.core.scenes.frame_channel import FRAME_CHANNEL_SLOT_HEADER_SIZE
 from solin.core.scenes.model import VideoColorRange, VideoColorSpace, VideoPixelFormat
+from solin.core.projection.image_framing import ImageTransform
 
 
 class _Publisher:
@@ -53,6 +54,7 @@ class _Publisher:
         self.frame_sizes: list[tuple[int, int]] = []
         self.media_epochs: list[int] = []
         self.requested_media_epochs: list[int] = []
+        self.image_transforms: list[tuple[ImageTransform | None, dict[str, object]]] = []
         self.publish_started_at: list[float] = []
         self.publish_delay = publish_delay
         self.published = threading.Event()
@@ -84,6 +86,13 @@ class _Publisher:
     def set_media_epoch(self, media_epoch: int) -> None:
         assert media_epoch >= 0
         self.requested_media_epochs.append(media_epoch)
+
+    def set_image_transform(
+        self,
+        transform: ImageTransform | None,
+        **options: object,
+    ) -> None:
+        self.image_transforms.append((transform, options))
 
     def close(self) -> None:
         self.closed = True
@@ -129,6 +138,22 @@ class _BackpressuredPublisher(_Publisher):
         )
 
 
+class _BackpressuredTransformPublisher(_Publisher):
+    def __init__(self, width: int, height: int, generation: int) -> None:
+        super().__init__(width, height, generation)
+        self.transform_attempts = 0
+
+    def set_image_transform(
+        self,
+        transform: ImageTransform | None,
+        **options: object,
+    ) -> None:
+        self.transform_attempts += 1
+        if self.transform_attempts == 1:
+            raise TimeoutError("bounded frame channel is busy")
+        super().set_image_transform(transform, **options)
+
+
 def test_content_ingress_converts_qt_images_to_bounded_bgra_frames() -> None:
     publishers: list[_Publisher] = []
 
@@ -162,7 +187,7 @@ def test_content_ingress_converts_qt_images_to_bounded_bgra_frames() -> None:
     assert publishers[0].closed
 
 
-def test_content_ingress_drops_backpressured_images_without_replacing_channel() -> None:
+def test_content_ingress_retries_a_backpressured_static_image_in_place() -> None:
     publishers: list[_BackpressuredPublisher] = []
 
     def create_publisher(width: int, height: int) -> _BackpressuredPublisher:
@@ -178,12 +203,11 @@ def test_content_ingress_drops_backpressured_images_without_replacing_channel() 
     )
     image = QImage(2, 2, QImage.Format.Format_ARGB32)
     controller.submit_frame(image)
-    assert _wait_for(lambda: publishers[0].attempts == 1)
-    controller.submit_frame(image)
     assert publishers[0].published.wait(1.0)
 
     controller.close()
 
+    assert publishers[0].attempts == 2
     assert len(publishers) == 1
     assert publishers[0].closed
 
@@ -217,6 +241,45 @@ def test_content_ingress_does_not_relabel_retained_frame_when_media_epoch_advanc
     assert publishers[0].requested_media_epochs == [7]
 
 
+def test_content_ingress_coalesces_image_transform_state_independently_from_pixels() -> None:
+    publishers: list[_Publisher] = []
+
+    def create_publisher(width: int, height: int) -> _Publisher:
+        publisher = _Publisher(width, height, len(publishers) + 1)
+        publishers.append(publisher)
+        return publisher
+
+    controller = ContentFrameIngressController(
+        publisher_factory=create_publisher,
+        canvas_width=320,
+        canvas_height=180,
+    )
+
+    controller.set_image_transform(
+        ImageTransform(2.0, 0.25, -0.1),
+        media_epoch=7,
+        canvas_width=320,
+        canvas_height=180,
+        animate=True,
+    )
+
+    assert _wait_for(lambda: bool(publishers[0].image_transforms))
+    assert publishers[0].frames == []
+    assert publishers[0].image_transforms == [
+        (
+            ImageTransform(2.0, 0.25, -0.1),
+            {
+                "media_epoch": 7,
+                "canvas_width": 320,
+                "canvas_height": 180,
+                "animate": True,
+                "duration_ms": 2100,
+            },
+        )
+    ]
+    controller.close()
+
+
 def test_content_ingress_keeps_a_stable_channel_when_input_dimensions_change() -> None:
     publishers: list[_Publisher] = []
 
@@ -246,6 +309,43 @@ def test_content_ingress_keeps_a_stable_channel_when_input_dimensions_change() -
     assert len(publishers) == 1
     assert publishers[0].frame_sizes[-1] == (2, 1)
     assert len(publishers[0].frames[-1]) == 2 * 1 * 4
+
+
+def test_content_ingress_never_lets_pixels_overtake_their_image_transform() -> None:
+    publishers: list[_BackpressuredTransformPublisher] = []
+
+    def create_publisher(width: int, height: int) -> _BackpressuredTransformPublisher:
+        publisher = _BackpressuredTransformPublisher(
+            width,
+            height,
+            len(publishers) + 1,
+        )
+        publishers.append(publisher)
+        return publisher
+
+    controller = ContentFrameIngressController(
+        publisher_factory=create_publisher,
+        maximum_fps=60,
+        canvas_width=2,
+        canvas_height=2,
+    )
+    controller.set_image_transform(
+        ImageTransform(2.0, 0.0, 0.0),
+        media_epoch=1,
+        canvas_width=2,
+        canvas_height=2,
+        animate=False,
+    )
+    controller.set_media_epoch(1)
+    controller.submit_frame(QImage(2, 2, QImage.Format.Format_ARGB32))
+
+    assert _wait_for(lambda: publishers[0].transform_attempts == 1)
+    assert publishers[0].frames == []
+    assert publishers[0].published.wait(1.0)
+    assert publishers[0].transform_attempts == 2
+    assert publishers[0].image_transforms[0][0] == ImageTransform(2.0, 0.0, 0.0)
+    assert publishers[0].media_epochs == [1]
+    controller.close()
 
 
 def test_content_ingress_preserves_smaller_source_dimensions_for_gpu_scaling() -> None:

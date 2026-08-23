@@ -173,7 +173,8 @@ retained as the device-loss and compatibility fallback.
 
 The producer increments a generation whenever capacity, device, or transport changes. The
 engine rejects stale generations. The channel is a versioned three-slot latest-frame
-mapping protected by bounded cross-process synchronization. Protocol v5 gives every slot a
+mapping protected by bounded cross-process synchronization. Protocol v6 retains the v5
+per-slot lease contract and adds versioned, epoch-bound image-framing state; every slot has a
 cross-process lease. The D3D11 ingress wraps the leased SHM span directly in a `GstBuffer` and
 releases the lease after upload consumes it; system-memory fallback makes an owned copy.
 The producer attempts the control mutex with a zero timeout, chooses another free slot, or
@@ -769,6 +770,19 @@ minutes without an unbounded queue, deadlock, source duplication, or memory grow
   CPU reduction while decoded frames still cross
   the shared-memory ingress. The separate keyed-texture ingress gate is what can remove that
   steady-state copy/upload path.
+- [x] Move projected-image zoom/pan into the canonical Raw source before fan-out. Publish one
+  versioned transform target, its media epoch, canvas aspect, duration, and animation intent in
+  the content channel header independently from pixels. Bind the target to the image epoch so a
+  future image cannot reframe the outgoing surface before its media fade and a disabled target
+  cannot leak into the previous image. Reproduce the Qt fallback's centered contain geometry,
+  normalized pan, 2.1 s CSS ease/ease-out interruption contract, and instant retained-state
+  replay in a bounded native compositor. Convert off-canvas painter geometry into a
+  proportional source crop and non-negative destination before composition so pan preserves
+  the source aspect ratio at every zoom. Drive framing updates at animation cadence only while
+  interpolation or GPU acknowledgement is active, then retain the stable GPU frame, pause the
+  auxiliary graph, and return to zero control-loop animation cadence until the next retarget.
+  Physical Raw presenters and every Program layer referencing `solin.content.current` consume
+  the same framed `SourceFrame`; Python never scales or republishes transformed pixels.
 - [ ] Qualify the canonical Raw and physical-owner transitions on raw-mode video-to-video, video-to-image,
   image-to-video, raw-media-to-Program, Program-to-raw-media, replay, rapid next/previous and
   mirror toggles, delayed first frame, decode failure, device recovery, and multiple monitors;

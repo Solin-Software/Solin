@@ -1,6 +1,7 @@
 #include "gstreamer_source_runtime.hpp"
 #include "gstreamer_frame_transition.hpp"
 
+#include "solin/media_engine/content_image_framing.hpp"
 #include "solin/media_engine/frame_channel.hpp"
 #include "solin/media_engine/presentation_transition.hpp"
 #include <algorithm>
@@ -423,8 +424,49 @@ class ContentGpuTransitionPipeline final {
         }
     }
 
+    [[nodiscard]] bool render_framed(
+        const std::shared_ptr<const SourceFrame>& frame,
+        const ContentImagePlacement placement) noexcept {
+        try {
+            if (pipeline_ == nullptr || bus_ == nullptr || sources_[0] == nullptr ||
+                pads_[0] == nullptr || frame == nullptr) {
+                return false;
+            }
+            if (!resume()) {
+                return false;
+            }
+            if (auto* error = gst_bus_pop_filtered(bus_, GST_MESSAGE_ERROR);
+                error != nullptr) {
+                gst_message_unref(error);
+                return false;
+            }
+            const auto visible = placement.visible();
+            g_object_set(
+                pads_[0], "xpos", static_cast<gint>(placement.destination_x),
+                "ypos", static_cast<gint>(placement.destination_y), "width",
+                static_cast<gint>(placement.destination_width), "height",
+                static_cast<gint>(placement.destination_height), "alpha",
+                visible ? 1.0 : 0.0, "sizing-policy", 0, nullptr);
+            g_object_set(pads_[1], "alpha", 0.0, nullptr);
+            return push(sources_[0], frame, visible ? &placement : nullptr);
+        } catch (...) {
+            return false;
+        }
+    }
+
     [[nodiscard]] std::uint64_t revision() const noexcept {
         return output_revision_.load(std::memory_order_acquire);
+    }
+
+    void suspend() noexcept {
+        try {
+            if (pipeline_ != nullptr && running_ &&
+                gst_element_set_state(pipeline_, GST_STATE_PAUSED) !=
+                    GST_STATE_CHANGE_FAILURE) {
+                running_ = false;
+            }
+        } catch (...) {
+        }
     }
 
     [[nodiscard]] Output output_after(const std::uint64_t revision) const noexcept {
@@ -447,6 +489,7 @@ class ContentGpuTransitionPipeline final {
     void close() noexcept {
         release_pipeline(pipeline_);
         pipeline_ = nullptr;
+        running_ = false;
         for (auto*& pad : pads_) {
             if (pad != nullptr) {
                 gst_object_unref(pad);
@@ -563,6 +606,7 @@ class ContentGpuTransitionPipeline final {
                     GST_STATE_CHANGE_FAILURE) {
                 throw std::runtime_error("content transition pipeline could not start");
             }
+            running_ = true;
         } catch (...) {
             close();
             throw;
@@ -570,7 +614,8 @@ class ContentGpuTransitionPipeline final {
     }
 
     [[nodiscard]] static bool push(
-        GstAppSrc* source, const std::shared_ptr<const SourceFrame>& frame) noexcept {
+        GstAppSrc* source, const std::shared_ptr<const SourceFrame>& frame,
+        const ContentImagePlacement* placement = nullptr) noexcept {
         const auto lease = gstreamer_sample(frame);
         if (!lease || source == nullptr) {
             return false;
@@ -584,6 +629,20 @@ class ContentGpuTransitionPipeline final {
         if (buffer == nullptr) {
             return false;
         }
+        if (placement != nullptr) {
+            auto* crop = gst_buffer_get_video_crop_meta(buffer);
+            if (crop == nullptr) {
+                crop = gst_buffer_add_video_crop_meta(buffer);
+            }
+            if (crop == nullptr) {
+                gst_buffer_unref(buffer);
+                return false;
+            }
+            crop->x = placement->source_x;
+            crop->y = placement->source_y;
+            crop->width = placement->source_width;
+            crop->height = placement->source_height;
+        }
         GST_BUFFER_PTS(buffer) = GST_CLOCK_TIME_NONE;
         GST_BUFFER_DTS(buffer) = GST_CLOCK_TIME_NONE;
         GST_BUFFER_DURATION(buffer) = GST_CLOCK_TIME_NONE;
@@ -595,6 +654,19 @@ class ContentGpuTransitionPipeline final {
         const auto flow = gst_app_src_push_sample(source, sample);
         gst_sample_unref(sample);
         return flow == GST_FLOW_OK;
+    }
+
+    [[nodiscard]] bool resume() noexcept {
+        if (running_) {
+            return true;
+        }
+        if (pipeline_ == nullptr ||
+            gst_element_set_state(pipeline_, GST_STATE_PLAYING) ==
+                GST_STATE_CHANGE_FAILURE) {
+            return false;
+        }
+        running_ = true;
+        return true;
     }
 
     static GstFlowReturn on_new_sample(GstAppSink* sink, gpointer data) noexcept {
@@ -623,6 +695,7 @@ class ContentGpuTransitionPipeline final {
     bool use_d3d11_{false};
     std::shared_ptr<GstD3D11Device> device_{};
     GstElement* pipeline_{nullptr};
+    bool running_{false};
     std::array<GstAppSrc*, 2U> sources_{};
     std::array<GstPad*, 2U> pads_{};
     GstBus* bus_{nullptr};
@@ -931,6 +1004,11 @@ class GStreamerSourceRuntime final : public SourceRuntime {
             content_requested_media_epoch_.store(requested_epoch.value(),
                                                  std::memory_order_release);
         }
+        if (const auto requested_transform = frame_channel_reader_->image_transform();
+            requested_transform.has_value() &&
+            requested_transform->revision > content_requested_image_transform_.revision) {
+            content_requested_image_transform_ = requested_transform.value();
+        }
         auto frame_lease = frame_channel_reader_->read_latest(content_pipeline_sequence_);
         if (!frame_lease.has_value()) {
             return;
@@ -1038,6 +1116,7 @@ class GStreamerSourceRuntime final : public SourceRuntime {
 
     void release_content_frame() noexcept {
         reset_content_transition_pipeline();
+        reset_content_image_framing();
         if (content_frame_caps_ != nullptr) {
             gst_caps_unref(content_frame_caps_);
             content_frame_caps_ = nullptr;
@@ -1051,6 +1130,7 @@ class GStreamerSourceRuntime final : public SourceRuntime {
         content_transition_ = PresentationTransition{kMediaPresentationTransition};
         content_transition_requested_ = false;
         content_observed_requested_media_epoch_ = 0U;
+        content_requested_image_transform_ = {};
         content_last_transition_phase_ =
             PresentationTransitionPhase::waiting_for_first_frame;
         content_last_transition_tick_ = {};
@@ -1065,6 +1145,50 @@ class GStreamerSourceRuntime final : public SourceRuntime {
         incoming_from_black,
         blend,
     };
+
+    void reset_content_framing_pipeline() noexcept {
+        content_framing_pipeline_.reset();
+        content_framing_width_ = 0U;
+        content_framing_height_ = 0U;
+        content_framing_output_revision_ = 0U;
+        content_framing_awaiting_output_ = false;
+        content_framing_awaited_revision_ = 0U;
+        content_framing_requested_input_sequence_ = 0U;
+    }
+
+    void reset_content_image_framing() noexcept {
+        reset_content_framing_pipeline();
+        content_image_transform_animation_.reset();
+        content_observed_image_transform_revision_ = 0U;
+        content_applied_image_transform_media_epoch_ = 0U;
+        content_framed_input_sequence_ = 0U;
+        content_framed_frame_.reset();
+        content_last_rendered_image_transform_ = {};
+        content_has_last_rendered_image_transform_ = false;
+        content_framing_last_tick_ = {};
+        content_failed_image_transform_revision_ = 0U;
+    }
+
+    [[nodiscard]] bool ensure_content_framing_pipeline(
+        const std::uint32_t width, const std::uint32_t height) noexcept {
+        if (content_framing_pipeline_ != nullptr &&
+            content_framing_width_ == width &&
+            content_framing_height_ == height) {
+            return true;
+        }
+        reset_content_framing_pipeline();
+        try {
+            content_framing_pipeline_ =
+                std::make_unique<ContentGpuTransitionPipeline>(
+                    use_d3d11_, d3d11_device_, width, height);
+            content_framing_width_ = width;
+            content_framing_height_ = height;
+            return true;
+        } catch (...) {
+            reset_content_framing_pipeline();
+            return false;
+        }
+    }
 
     void reset_content_transition_pipeline() noexcept {
         content_transition_pipeline_.reset();
@@ -1128,11 +1252,11 @@ class GStreamerSourceRuntime final : public SourceRuntime {
         }
     }
 
-    void publish_content_transition_output(
+    [[nodiscard]] std::shared_ptr<SourceFrame> content_gpu_output_frame(
         ContentGpuTransitionPipeline::Output output,
         const std::uint64_t media_epoch) noexcept {
         if (output.sample == nullptr) {
-            return;
+            return {};
         }
         std::unique_ptr<GstSample, decltype(&gst_sample_unref)> sample_guard{
             output.sample, &gst_sample_unref};
@@ -1143,7 +1267,7 @@ class GStreamerSourceRuntime final : public SourceRuntime {
             if (caps == nullptr || buffer == nullptr ||
                 gst_video_info_from_caps(&info, caps) == FALSE ||
                 !is_bounded_video_caps(caps)) {
-                return;
+                return {};
             }
             const auto* features = gst_caps_get_features(caps, 0U);
             const bool d3d11 =
@@ -1153,12 +1277,12 @@ class GStreamerSourceRuntime final : public SourceRuntime {
                 gst_video_format_to_string(GST_VIDEO_INFO_FORMAT(&info));
             if (format == nullptr ||
                 (d3d11 && !d3d11_manager_->is_current(d3d11_device_))) {
-                return;
+                return {};
             }
             const auto sequence = frame_sequence_.fetch_add(1U) + 1U;
             auto payload = std::make_shared<GStreamerFramePayload>(
                 sample_guard.release(), runtime_lifetime_, d3d11_device_);
-            publish_content_frame(std::make_shared<SourceFrame>(SourceFrame{
+            return std::make_shared<SourceFrame>(SourceFrame{
                 .sequence = sequence,
                 .stream_epoch = stream_epoch_.load(),
                 .media_epoch = media_epoch,
@@ -1172,9 +1296,16 @@ class GStreamerSourceRuntime final : public SourceRuntime {
                 .memory = d3d11 ? SourceFrameMemory::d3d11
                                 : SourceFrameMemory::system_memory,
                 .payload = std::move(payload),
-            }));
+            });
         } catch (...) {
+            return {};
         }
+    }
+
+    void publish_content_transition_output(
+        ContentGpuTransitionPipeline::Output output,
+        const std::uint64_t media_epoch) noexcept {
+        publish_content_frame(content_gpu_output_frame(std::move(output), media_epoch));
     }
 
     void consume_content_transition_output(const std::uint64_t media_epoch) noexcept {
@@ -1192,6 +1323,154 @@ class GStreamerSourceRuntime final : public SourceRuntime {
             content_transition_awaiting_output_ = false;
         }
         publish_content_transition_output(std::move(output), media_epoch);
+    }
+
+    void consume_content_framing_output(const std::uint64_t media_epoch) noexcept {
+        if (content_framing_pipeline_ == nullptr ||
+            !content_framing_awaiting_output_) {
+            return;
+        }
+        auto output = content_framing_pipeline_->output_after(
+            content_framing_output_revision_);
+        if (output.sample == nullptr) {
+            return;
+        }
+        content_framing_output_revision_ = output.revision;
+        if (output.revision <= content_framing_awaited_revision_) {
+            gst_sample_unref(output.sample);
+            return;
+        }
+        auto frame = content_gpu_output_frame(std::move(output), media_epoch);
+        if (frame == nullptr) {
+            return;
+        }
+        content_framing_awaiting_output_ = false;
+        content_framed_input_sequence_ =
+            content_framing_requested_input_sequence_;
+        content_framed_frame_ = std::move(frame);
+    }
+
+    [[nodiscard]] std::shared_ptr<SourceFrame> prepare_content_image_frame(
+        const std::shared_ptr<SourceFrame>& decoded,
+        const std::chrono::steady_clock::time_point now,
+        bool& framing_active) noexcept {
+        framing_active = false;
+        if (decoded == nullptr) {
+            return {};
+        }
+        const auto& requested = content_requested_image_transform_;
+        if (requested.revision == 0U || requested.media_epoch != decoded->media_epoch) {
+            if (content_framed_frame_ != nullptr &&
+                content_applied_image_transform_media_epoch_ ==
+                    decoded->media_epoch) {
+                framing_active = content_framing_awaiting_output_ ||
+                                 content_image_transform_animation_.active();
+                return content_framed_frame_;
+            }
+            return decoded;
+        }
+
+        bool request_changed = false;
+        if (requested.revision != content_observed_image_transform_revision_) {
+            request_changed = true;
+            const bool same_media =
+                content_applied_image_transform_media_epoch_ == requested.media_epoch;
+            content_observed_image_transform_revision_ = requested.revision;
+            content_applied_image_transform_media_epoch_ = requested.media_epoch;
+            content_failed_image_transform_revision_ = 0U;
+            if (requested.enabled) {
+                content_image_transform_animation_.request(
+                    ContentImageTransform{
+                        .zoom = requested.zoom,
+                        .norm_x = requested.norm_x,
+                        .norm_y = requested.norm_y,
+                    },
+                    std::chrono::milliseconds{requested.duration_ms},
+                    requested.animate && same_media, now);
+            } else {
+                content_image_transform_animation_.reset();
+            }
+            if (!same_media) {
+                reset_content_framing_pipeline();
+                content_framed_input_sequence_ = 0U;
+                content_framed_frame_.reset();
+                content_has_last_rendered_image_transform_ = false;
+            }
+        }
+
+        if (!requested.enabled) {
+            reset_content_framing_pipeline();
+            content_framed_input_sequence_ = 0U;
+            content_framed_frame_.reset();
+            content_has_last_rendered_image_transform_ = false;
+            return decoded;
+        }
+        if (content_failed_image_transform_revision_ == requested.revision) {
+            return content_framed_frame_ != nullptr ? content_framed_frame_ : decoded;
+        }
+
+        if (content_framing_pipeline_ != nullptr) {
+            consume_content_framing_output(decoded->media_epoch);
+            if (content_framing_awaiting_output_ &&
+                content_framing_last_tick_.time_since_epoch().count() != 0) {
+                content_image_transform_animation_.delay(
+                    now - content_framing_last_tick_);
+            }
+        }
+        content_framing_last_tick_ = now;
+        if (content_framing_awaiting_output_) {
+            framing_active = true;
+            return content_framed_frame_;
+        }
+
+        const auto transform = content_image_transform_animation_.sample(now);
+        const bool needs_render =
+            request_changed ||
+            content_framed_input_sequence_ != decoded->sequence ||
+            !content_has_last_rendered_image_transform_ ||
+            transform != content_last_rendered_image_transform_;
+        if (!needs_render) {
+            framing_active = content_image_transform_animation_.active();
+            if (!framing_active && content_framing_pipeline_ != nullptr) {
+                content_framing_pipeline_->suspend();
+            }
+            return content_framed_frame_;
+        }
+        if (!ensure_content_framing_pipeline(requested.canvas_width,
+                                             requested.canvas_height)) {
+            content_failed_image_transform_revision_ = requested.revision;
+            return content_framed_frame_ != nullptr ? content_framed_frame_ : decoded;
+        }
+        try {
+            const auto geometry = compute_content_image_rect(
+                decoded->width, decoded->height, requested.canvas_width,
+                requested.canvas_height, transform);
+            const auto placement = compute_content_image_placement(
+                decoded->width, decoded->height, requested.canvas_width,
+                requested.canvas_height, geometry);
+            const auto checkpoint = content_framing_pipeline_->revision();
+            if (!content_framing_pipeline_->render_framed(decoded, placement)) {
+                content_failed_image_transform_revision_ = requested.revision;
+                reset_content_framing_pipeline();
+                return content_framed_frame_ != nullptr ? content_framed_frame_ : decoded;
+            }
+            content_last_rendered_image_transform_ = transform;
+            content_has_last_rendered_image_transform_ = true;
+            content_framing_requested_input_sequence_ = decoded->sequence;
+            content_framing_awaited_revision_ = checkpoint;
+            content_framing_awaiting_output_ = true;
+            consume_content_framing_output(decoded->media_epoch);
+            framing_active = content_image_transform_animation_.active() ||
+                             content_framing_awaiting_output_;
+            if (!framing_active) {
+                content_framing_pipeline_->suspend();
+            }
+            return content_framed_frame_;
+        } catch (...) {
+            content_failed_image_transform_revision_ = requested.revision;
+            reset_content_framing_pipeline();
+            return content_framed_frame_ != nullptr ? content_framed_frame_ : decoded;
+        }
     }
 
     void recover_content_transition_as_cut(
@@ -1230,6 +1509,8 @@ class GStreamerSourceRuntime final : public SourceRuntime {
             if (requested_epoch == 0U && decoded != nullptr) {
                 requested_epoch = decoded->media_epoch;
             }
+            bool framing_active = false;
+            decoded = prepare_content_image_frame(decoded, now, framing_active);
             if (!content_transition_requested_ ||
                 requested_epoch != content_observed_requested_media_epoch_) {
                 content_frozen_outgoing_ = std::move(published);
@@ -1245,7 +1526,7 @@ class GStreamerSourceRuntime final : public SourceRuntime {
                 content_last_transition_tick_ = now;
             }
             if (!content_transition_requested_) {
-                return false;
+                return framing_active;
             }
 
             const auto desired = content_transition_.desired();
@@ -1275,11 +1556,11 @@ class GStreamerSourceRuntime final : public SourceRuntime {
                 if (incoming != nullptr) {
                     publish_content_frame(incoming);
                 }
-                return false;
+                return framing_active;
             }
             if (transition_sample.phase ==
                 PresentationTransitionPhase::waiting_for_first_frame) {
-                return false;
+                return framing_active;
             }
 
             ContentTransitionStage stage = ContentTransitionStage::blend;
@@ -1315,27 +1596,27 @@ class GStreamerSourceRuntime final : public SourceRuntime {
                 }
                 break;
             default:
-                return false;
+                return framing_active;
             }
             if (transition_sample.phase ==
                     PresentationTransitionPhase::waiting_at_black &&
                 outgoing == nullptr) {
-                return false;
+                return framing_active;
             }
             if (output_width == 0U || output_height == 0U) {
                 recover_content_transition_as_cut(incoming, now);
-                return false;
+                return framing_active;
             }
             if (!ensure_content_transition_pipeline(stage, output_width,
                                                     output_height)) {
                 recover_content_transition_as_cut(incoming, now);
-                return false;
+                return framing_active;
             }
             const auto checkpoint = content_transition_pipeline_->revision();
             if (!content_transition_pipeline_->render(
                     outgoing, transition_incoming, transition_sample.weights)) {
                 recover_content_transition_as_cut(incoming, now);
-                return false;
+                return framing_active;
             }
             content_transition_awaited_revision_ = checkpoint;
             content_transition_awaiting_output_ = true;
@@ -1348,9 +1629,9 @@ class GStreamerSourceRuntime final : public SourceRuntime {
                 // while waiting for the next valid first frame.
                 reset_content_transition_pipeline();
                 content_frozen_outgoing_.reset();
-                return false;
+                return framing_active;
             }
-            return transition_sample.animation_active() ||
+            return framing_active || transition_sample.animation_active() ||
                    content_transition_awaiting_output_;
         } catch (...) {
             return false;
@@ -1578,6 +1859,7 @@ class GStreamerSourceRuntime final : public SourceRuntime {
                 use_d3d11_ = false;
                 d3d11_device_.reset();
                 reset_content_transition_pipeline();
+                reset_content_image_framing();
                 content_frozen_outgoing_.reset();
                 std::scoped_lock lock{state_mutex_};
                 latest_frame_.reset();
@@ -1726,6 +2008,23 @@ class GStreamerSourceRuntime final : public SourceRuntime {
     std::uint32_t content_frame_height_{0U};
     VideoFramePixelFormat content_frame_pixel_format_{VideoFramePixelFormat::bgra};
     std::atomic_uint64_t content_requested_media_epoch_{0U};
+    FrameChannelImageTransform content_requested_image_transform_{};
+    ContentImageTransformAnimation content_image_transform_animation_{};
+    std::uint64_t content_observed_image_transform_revision_{0U};
+    std::uint64_t content_applied_image_transform_media_epoch_{0U};
+    std::uint64_t content_failed_image_transform_revision_{0U};
+    std::unique_ptr<ContentGpuTransitionPipeline> content_framing_pipeline_{};
+    std::uint32_t content_framing_width_{0U};
+    std::uint32_t content_framing_height_{0U};
+    std::uint64_t content_framing_output_revision_{0U};
+    bool content_framing_awaiting_output_{false};
+    std::uint64_t content_framing_awaited_revision_{0U};
+    std::uint64_t content_framing_requested_input_sequence_{0U};
+    std::uint64_t content_framed_input_sequence_{0U};
+    std::shared_ptr<SourceFrame> content_framed_frame_{};
+    ContentImageTransform content_last_rendered_image_transform_{};
+    bool content_has_last_rendered_image_transform_{false};
+    std::chrono::steady_clock::time_point content_framing_last_tick_{};
     PresentationTransition content_transition_{kMediaPresentationTransition};
     bool content_transition_requested_{false};
     std::uint64_t content_observed_requested_media_epoch_{0U};

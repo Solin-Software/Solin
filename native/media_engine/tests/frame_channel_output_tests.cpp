@@ -212,7 +212,7 @@ class TestFrameChannel final {
         constexpr std::array<std::uint8_t, 8U> magic{'S', 'L', 'N', 'F',
                                                      'R', 'M', '0', '1'};
         std::memcpy(view_, magic.data(), magic.size());
-        write_value<std::uint16_t>(view_, 8U, 4U);
+        write_value<std::uint16_t>(view_, 8U, 6U);
         write_value<std::uint16_t>(view_, 10U,
                                    static_cast<std::uint16_t>(header_size));
         write_value<std::uint32_t>(view_, 12U, 3U);

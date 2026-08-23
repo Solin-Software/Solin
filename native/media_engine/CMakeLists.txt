@@ -18,6 +18,7 @@ if(SOLIN_VIRTUAL_CAMERA_FILTER_ONLY)
 endif()
 
 set(SOLIN_MEDIA_ENGINE_SOURCES
+    include/solin/media_engine/content_image_framing.hpp
     include/solin/media_engine/control_protocol.hpp
     include/solin/media_engine/frame_codec.hpp
     include/solin/media_engine/frame_channel.hpp
@@ -37,6 +38,7 @@ set(SOLIN_MEDIA_ENGINE_SOURCES
     include/solin/media_engine/virtual_camera_broker_protocol.hpp
     include/solin/media_engine/virtual_camera_broker.hpp
     src/control_protocol.cpp
+    src/content_image_framing.cpp
     src/frame_codec.cpp
     src/frame_channel.cpp
     src/gstreamer_source_runtime.cpp
@@ -63,6 +65,7 @@ set(SOLIN_MEDIA_ENGINE_SOURCES
     src/windows_virtual_camera_backend.cpp
     src/windows_virtual_camera_backend.hpp
     tests/frame_codec_tests.cpp
+    tests/content_image_framing_tests.cpp
     tests/frame_channel_tests.cpp
     tests/gstreamer_source_runtime_tests.cpp
     tests/render_geometry_tests.cpp
@@ -140,6 +143,7 @@ target_compile_features(solin_media_engine_scene PUBLIC cxx_std_20)
 target_link_libraries(solin_media_engine_scene PUBLIC nlohmann_json::nlohmann_json)
 
 add_library(solin_media_engine_graph STATIC
+    src/content_image_framing.cpp
     src/presentation_transition.cpp
     src/render_geometry.cpp
     src/scene_graph.cpp
@@ -323,6 +327,31 @@ if(SOLIN_MEDIA_ENGINE_BUILD_TESTS)
     add_test(
         NAME presentation-transition
         COMMAND solin-media-engine-presentation-transition-tests
+    )
+    add_executable(solin-media-engine-content-image-framing-tests
+        tests/content_image_framing_tests.cpp
+    )
+    target_link_libraries(
+        solin-media-engine-content-image-framing-tests
+        PRIVATE solin_media_engine_graph
+    )
+    target_compile_features(
+        solin-media-engine-content-image-framing-tests PRIVATE cxx_std_20
+    )
+    if(MSVC)
+        target_compile_options(
+            solin-media-engine-content-image-framing-tests
+            PRIVATE /W4 /WX /permissive- /EHsc
+        )
+    else()
+        target_compile_options(
+            solin-media-engine-content-image-framing-tests PRIVATE
+            -Wall -Wextra -Wpedantic -Werror
+        )
+    endif()
+    add_test(
+        NAME content-image-framing
+        COMMAND solin-media-engine-content-image-framing-tests
     )
     add_executable(solin-media-engine-frame-channel-tests
         tests/frame_channel_tests.cpp

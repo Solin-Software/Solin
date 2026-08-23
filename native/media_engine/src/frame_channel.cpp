@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstring>
 #include <limits>
@@ -21,7 +22,7 @@ namespace solin::media_engine {
 namespace {
 
 constexpr std::array<std::uint8_t, 8U> kMagic{'S', 'L', 'N', 'F', 'R', 'M', '0', '1'};
-constexpr std::uint16_t kVersion = 5U;
+constexpr std::uint16_t kVersion = 6U;
 constexpr std::size_t kHeaderSize = 128U;
 constexpr std::size_t kSlotHeaderSize = 128U;
 constexpr std::uint32_t kSlotCount = 3U;
@@ -30,6 +31,19 @@ constexpr std::uint32_t kNv12PixelFormat = 2U;
 constexpr std::uint32_t kDynamicPixelFormat = 0U;
 constexpr std::size_t kPublishedSequenceOffset = 56U;
 constexpr std::size_t kMediaEpochOffset = 64U;
+constexpr std::size_t kImageTransformRevisionOffset = 72U;
+constexpr std::size_t kImageTransformMediaEpochOffset = 80U;
+constexpr std::size_t kImageTransformFlagsOffset = 88U;
+constexpr std::size_t kImageTransformCanvasWidthOffset = 92U;
+constexpr std::size_t kImageTransformCanvasHeightOffset = 96U;
+constexpr std::size_t kImageTransformDurationMsOffset = 100U;
+constexpr std::size_t kImageTransformZoomOffset = 104U;
+constexpr std::size_t kImageTransformNormXOffset = 112U;
+constexpr std::size_t kImageTransformNormYOffset = 120U;
+constexpr std::uint32_t kImageTransformEnabled = 1U << 0U;
+constexpr std::uint32_t kImageTransformAnimate = 1U << 1U;
+constexpr std::uint32_t kImageTransformKnownFlags =
+    kImageTransformEnabled | kImageTransformAnimate;
 constexpr std::size_t kSlotLeaseCountOffset = 64U;
 constexpr std::size_t kSlotLeaseOwnerPidOffset = 68U;
 constexpr std::size_t kSlotLeaseOwnerCreationTimeOffset = 72U;
@@ -385,6 +399,55 @@ class WindowsSharedMemoryVideoReader final : public FrameChannelReader {
         const auto* channel = bytes();
         validate_header_prefix(channel);
         return read_value<std::uint64_t>(channel, kMediaEpochOffset);
+    }
+
+    [[nodiscard]] std::optional<FrameChannelImageTransform>
+    image_transform() override {
+        const MutexLease lease{mutex_->get()};
+        if (!lease) {
+            return std::nullopt;
+        }
+        const auto* channel = bytes();
+        validate_header_prefix(channel);
+        const auto revision =
+            read_value<std::uint64_t>(channel, kImageTransformRevisionOffset);
+        if (revision == 0U) {
+            return std::nullopt;
+        }
+        const auto flags =
+            read_value<std::uint32_t>(channel, kImageTransformFlagsOffset);
+        FrameChannelImageTransform result{
+            .revision = revision,
+            .media_epoch = read_value<std::uint64_t>(
+                channel, kImageTransformMediaEpochOffset),
+            .enabled = (flags & kImageTransformEnabled) != 0U,
+            .animate = (flags & kImageTransformAnimate) != 0U,
+            .canvas_width = read_value<std::uint32_t>(
+                channel, kImageTransformCanvasWidthOffset),
+            .canvas_height = read_value<std::uint32_t>(
+                channel, kImageTransformCanvasHeightOffset),
+            .duration_ms = read_value<std::uint32_t>(
+                channel, kImageTransformDurationMsOffset),
+            .zoom = read_value<double>(channel, kImageTransformZoomOffset),
+            .norm_x = read_value<double>(channel, kImageTransformNormXOffset),
+            .norm_y = read_value<double>(channel, kImageTransformNormYOffset),
+        };
+        const auto canvas_pixels =
+            static_cast<std::uint64_t>(result.canvas_width) * result.canvas_height;
+        if ((flags & ~kImageTransformKnownFlags) != 0U ||
+            result.canvas_width == 0U ||
+            result.canvas_width > configuration_.width ||
+            result.canvas_height == 0U ||
+            result.canvas_height > configuration_.height ||
+            canvas_pixels > kMaximumFrameBytes / 4U ||
+            result.duration_ms == 0U || result.duration_ms > 60'000U ||
+            !std::isfinite(result.zoom) || result.zoom < 0.1 ||
+            result.zoom > 10.0 || !std::isfinite(result.norm_x) ||
+            std::abs(result.norm_x) > 16.0 || !std::isfinite(result.norm_y) ||
+            std::abs(result.norm_y) > 16.0) {
+            throw std::runtime_error("frame_channel_image_transform_invalid");
+        }
+        return result;
     }
 
     [[nodiscard]] bool wait_for_frame(const std::chrono::milliseconds timeout) override {

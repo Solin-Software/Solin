@@ -18,10 +18,11 @@ from solin.core.scenes.engine import (
     FrameProducerKind,
 )
 from solin.core.scenes.model import VideoColorRange, VideoColorSpace, VideoPixelFormat
+from solin.core.projection.image_framing import ImageTransform, normalize_image_transform
 
 
 FRAME_CHANNEL_MAGIC = b"SLNFRM01"
-FRAME_CHANNEL_VERSION = 5
+FRAME_CHANNEL_VERSION = 6
 FRAME_CHANNEL_HEADER_SIZE = 128
 FRAME_CHANNEL_SLOT_HEADER_SIZE = 128
 FRAME_CHANNEL_SLOT_COUNT = 3
@@ -33,6 +34,17 @@ MAXIMUM_SHARED_MEMORY_FRAME_BYTES = 3840 * 2160 * 4
 
 _PUBLISHED_SEQUENCE_OFFSET = 56
 _MEDIA_EPOCH_OFFSET = 64
+_IMAGE_TRANSFORM_REVISION_OFFSET = 72
+_IMAGE_TRANSFORM_MEDIA_EPOCH_OFFSET = 80
+_IMAGE_TRANSFORM_FLAGS_OFFSET = 88
+_IMAGE_TRANSFORM_CANVAS_WIDTH_OFFSET = 92
+_IMAGE_TRANSFORM_CANVAS_HEIGHT_OFFSET = 96
+_IMAGE_TRANSFORM_DURATION_MS_OFFSET = 100
+_IMAGE_TRANSFORM_ZOOM_OFFSET = 104
+_IMAGE_TRANSFORM_NORM_X_OFFSET = 112
+_IMAGE_TRANSFORM_NORM_Y_OFFSET = 120
+_IMAGE_TRANSFORM_ENABLED = 1 << 0
+_IMAGE_TRANSFORM_ANIMATE = 1 << 1
 _SLOT_MARKER_OFFSET = 0
 _SLOT_METADATA_OFFSET = 8
 _SLOT_PAYLOAD_SIZE_OFFSET = 40
@@ -137,6 +149,7 @@ class SharedMemoryVideoFramePublisher:
         self._lock = threading.Lock()
         self._sequence = 0
         self._media_epoch = 0
+        self._image_transform_revision = 0
         self._closed = False
         process_mutex: _WindowsNamedMutex | None = None
         frame_event: _WindowsAutoResetEvent | None = None
@@ -205,6 +218,62 @@ class SharedMemoryVideoFramePublisher:
             self._process_mutex.acquire(timeout_ms=0)
             try:
                 struct.pack_into("<Q", self._buffer, _MEDIA_EPOCH_OFFSET, epoch)
+            finally:
+                self._process_mutex.release()
+            self._frame_event.set()
+
+    def set_image_transform(
+        self,
+        transform: ImageTransform | None,
+        *,
+        media_epoch: int,
+        canvas_width: int,
+        canvas_height: int,
+        animate: bool,
+        duration_ms: int,
+    ) -> None:
+        epoch = _non_negative_u64(media_epoch, "content image transform epoch")
+        width = _positive_u32(canvas_width, "content image transform canvas width")
+        height = _positive_u32(canvas_height, "content image transform canvas height")
+        duration = _positive_u32(duration_ms, "content image transform duration")
+        if width > self._width or height > self._height:
+            raise ValueError("Content image transform canvas exceeds channel capacity")
+        normalized = (
+            normalize_image_transform(transform) if transform is not None else None
+        )
+        with self._lock:
+            if self._closed:
+                raise RuntimeError("Frame channel publisher is closed")
+            if self._image_transform_revision >= 2**64 - 1:
+                raise OverflowError("Content image transform revision is exhausted")
+            revision = self._image_transform_revision + 1
+            flags = 0
+            if normalized is not None:
+                flags |= _IMAGE_TRANSFORM_ENABLED
+            if animate:
+                flags |= _IMAGE_TRANSFORM_ANIMATE
+            zoom, norm_x, norm_y = (
+                (normalized.zoom, normalized.norm_x, normalized.norm_y)
+                if normalized is not None
+                else (1.0, 0.0, 0.0)
+            )
+            self._process_mutex.acquire(timeout_ms=0)
+            try:
+                struct.pack_into(
+                    "<QQIIII3d",
+                    self._buffer,
+                    _IMAGE_TRANSFORM_REVISION_OFFSET,
+                    revision,
+                    epoch,
+                    flags,
+                    width,
+                    height,
+                    duration,
+                    zoom,
+                    norm_x,
+                    norm_y,
+                )
+                self._image_transform_revision = revision
             finally:
                 self._process_mutex.release()
             self._frame_event.set()
@@ -983,5 +1052,11 @@ def _windows_process_identity_is_alive(
 
 def _non_negative_u64(value: int, field_name: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 2**64 - 1:
+        raise ValueError(f"Invalid {field_name}")
+    return value
+
+
+def _positive_u32(value: int, field_name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= 2**32 - 1:
         raise ValueError(f"Invalid {field_name}")
     return value

@@ -28,6 +28,19 @@ struct FrameChannelFrame final {
     std::span<const std::uint8_t> bytes{};
 };
 
+struct FrameChannelImageTransform final {
+    std::uint64_t revision{0U};
+    std::uint64_t media_epoch{0U};
+    bool enabled{false};
+    bool animate{false};
+    std::uint32_t canvas_width{0U};
+    std::uint32_t canvas_height{0U};
+    std::uint32_t duration_ms{0U};
+    double zoom{1.0};
+    double norm_x{0.0};
+    double norm_y{0.0};
+};
+
 class FrameChannelFrameLease final {
   public:
     FrameChannelFrameLease(const FrameChannelFrameLease&) = delete;
@@ -57,6 +70,10 @@ class FrameChannelReader {
     // The requested media epoch is channel state, not frame state. It may
     // advance before the first pixel of the new presentation is available.
     [[nodiscard]] virtual std::optional<std::uint64_t> media_epoch() = 0;
+    // Image framing is source state bound to one media epoch. It changes
+    // independently from pixels so a retained static frame can be animated.
+    [[nodiscard]] virtual std::optional<FrameChannelImageTransform>
+    image_transform() = 0;
     [[nodiscard]] virtual bool wait_for_frame(std::chrono::milliseconds timeout) = 0;
     virtual void wake() noexcept = 0;
 

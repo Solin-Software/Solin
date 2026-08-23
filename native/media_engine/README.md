@@ -18,12 +18,18 @@ renderer builds one bounded BGRA/D3D11 pipeline per output, shares leaf sources 
 scene nodes inside each pipeline, and implements crop, contain/cover/stretch fit, mirroring,
 rotation, placement, and opacity. Solin content enters through a
 versioned, three-slot latest-frame video channel. Qt video stays in NV12 and is bulk-copied
-once per plane without `QImage` conversion or Python row loops. Protocol v5 preserves the
-source strides and offsets, and `GstVideoMeta` describes that layout to the upload path;
+once per plane without `QImage` conversion or Python row loops. Protocol v6 preserves the
+v5 source strides, offsets, and per-slot leases, and `GstVideoMeta` describes that layout to
+the upload path;
 static and unsupported formats use the BGRA path.
-Protocol v5 leases individual slots while D3D11 upload consumes them and stores the requested
-monotonic Raw media epoch independently in the channel header, so a switch can begin before
-its first destination frame. The normal Windows path wraps the SHM payload directly in
+Protocol v6 also stores the requested monotonic Raw media epoch and versioned, epoch-bound
+image zoom/pan state independently in the channel header, so a switch can begin before its
+first destination frame and a retained static image can be reframed without republishing
+pixels. The engine reproduces the Qt fallback geometry and easing in a temporary D3D11
+compositor before canonical Raw fan-out. Off-canvas painter geometry is converted to a
+proportional source crop and non-negative destination, preserving the source aspect ratio for
+every zoom/pan position. Once stable, the graph retains the GPU result and pauses until the next
+retarget, returning the control loop to an idle cadence. The normal Windows path wraps the SHM payload directly in
 `appsrc` without a second owned-pixel copy. The Qt
 producer takes the control mutex with a zero timeout, chooses another unleased slot, or drops
 the frame; it never waits for the engine. Auto-reset frame events and a process-local source
