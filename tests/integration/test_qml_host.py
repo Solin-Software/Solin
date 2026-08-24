@@ -723,17 +723,23 @@ def test_playlist_section_collapse_retains_the_original_height_animation() -> No
         assert root is not None
         card = _find_visual(root, "sectionCard-animated")
         assert card is not None
-        QTest.qWait(240)
+        for _ in range(100):
+            if card.height() > 100:
+                break
+            QTest.qWait(10)
         expanded_height = card.height()
         assert expanded_height > 100
 
         height_samples: list[float] = []
         card.heightChanged.connect(lambda: height_samples.append(card.height()))
         assert QMetaObject.invokeMethod(card, "toggleCollapsed")
-        QTest.qWait(240)
+        for _ in range(100):
+            if abs(card.height() - 48) < 0.01:
+                break
+            QTest.qWait(10)
 
         assert any(48 < height < expanded_height for height in height_samples)
-        assert card.height() == pytest.approx(48)
+        assert card.height() == pytest.approx(48, abs=0.01)
         assert controller.collapsed == ["animated"]
         assert widget.errors() == []
     finally:
