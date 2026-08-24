@@ -331,12 +331,8 @@ class SceneRuntimeController(QObject):
 
     @property
     def native_window_routing_ready(self) -> bool:
-        """Whether native windows can bind to a fully applied scene graph."""
-        return (
-            self._engine_ready
-            and not self.hydration_in_progress
-            and len(self._applied_scenes) == len(BusId)
-        )
+        """Whether native windows have an applied graph they can keep presenting."""
+        return self._engine_ready and len(self._applied_scenes) == len(BusId)
 
     @property
     def local_cameras(self) -> LocalCameraDiscovery:
@@ -560,9 +556,7 @@ class SceneRuntimeController(QObject):
             )
             for bus_id in BusId
         )
-        preview_required = (
-            self._preview_egress is not None
-        )
+        preview_required = self._profile_preview_scene_id is not None
         program_required = (
             activation.runtime.state.output(BusId.VIRTUAL_CAMERA).enabled
             or activation.runtime.state.output(BusId.MEDIA_WINDOWS).enabled
@@ -1939,10 +1933,7 @@ class SceneRuntimeController(QObject):
 
     def _render_enabled(self) -> tuple[tuple[BusId, bool], ...]:
         destination = self._runtime.state
-        preview_required = (
-            self._preview_scene_id is not None
-            or self._preview_egress is not None
-        )
+        preview_required = self._preview_scene_id is not None
         program_required = (
             destination.output(BusId.VIRTUAL_CAMERA).enabled
             or destination.output(BusId.MEDIA_WINDOWS).enabled

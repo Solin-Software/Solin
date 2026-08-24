@@ -428,7 +428,7 @@ class MainWindow(QWidget):
         self._scene_program_egress.frame_ready.connect(
             self._on_scene_program_frame
         )
-        self.scene_runtime.set_preview_egress(None)
+        self.scene_runtime.set_preview_egress(self._scene_preview_egress.descriptor)
         self.scene_runtime.set_program_egress(None)
         self.scene_runtime.document_changed.connect(
             self._on_scene_document_changed_for_egress
@@ -1023,15 +1023,8 @@ class MainWindow(QWidget):
     def _on_scene_desired_changed_for_egress(self, _scenes) -> None:
         self._reconcile_native_scene_surfaces()
 
-    def _on_scene_preview_demand_changed(self, _scene_id) -> None:
-        self._reconcile_scene_media_egress()
-
     def _reconcile_scene_media_egress(self) -> None:
-        self.scene_runtime.set_preview_egress(
-            self._scene_preview_egress.descriptor
-            if self.scene_runtime.preview_scene_id is not None
-            else None
-        )
+        self.scene_runtime.set_preview_egress(self._scene_preview_egress.descriptor)
         self.scene_runtime.set_program_egress(
             self._scene_program_egress.descriptor
             if self._native_fallback_mirror_required
@@ -1453,9 +1446,6 @@ class MainWindow(QWidget):
         self.scene_runtime.engine_error.connect(self._on_native_scene_engine_error)
         self.scene_runtime.desired_scenes_changed.connect(
             self._on_scene_desired_changed_for_egress
-        )
-        self.scene_runtime.preview_scene_changed.connect(
-            self._on_scene_preview_demand_changed
         )
         self._reconcile_native_scene_surfaces()
         self.library_widget = resources.library_widget

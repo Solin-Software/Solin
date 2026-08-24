@@ -16,6 +16,9 @@ from solin.core.scenes.application import SceneDocumentService
 from solin.core.scenes.engine import (
     DEFAULT_ENGINE_STARTUP_DEADLINE_MS,
     EngineHealthEvent,
+    FrameChannelDescriptor,
+    FrameChannelTransport,
+    FrameProducerKind,
     LocalCameraDevice,
     LocalCameraDiscovery,
     LocalVideoFormat,
@@ -45,6 +48,9 @@ from solin.core.scenes.model import (
     SceneValidationError,
     TransitionKind,
     TransitionSpec,
+    VideoColorRange,
+    VideoColorSpace,
+    VideoPixelFormat,
 )
 from solin.core.foundation.runtime_paths import ProfilePaths
 from solin.core.scenes.ptz import (
@@ -591,6 +597,21 @@ def _runtime_controller(
         session_id="test-session",
     )
     return documents, runtime, controller
+
+
+def _preview_egress_descriptor() -> FrameChannelDescriptor:
+    return FrameChannelDescriptor(
+        channel_id="scene-preview",
+        generation=1,
+        producer_kind=FrameProducerKind.NATIVE_COMPOSITOR,
+        transport=FrameChannelTransport.SHARED_MEMORY_BGRA,
+        handle_token="scene-preview-mapping",
+        width=1920,
+        height=1080,
+        pixel_format=VideoPixelFormat.BGRA,
+        color_space=VideoColorSpace.SRGB,
+        color_range=VideoColorRange.FULL,
+    )
 
 
 def test_projection_categories_are_explicit_and_unknown_types_fail_safe() -> None:
@@ -1364,6 +1385,48 @@ def test_editor_preview_uses_the_media_bus_without_changing_program() -> None:
     controller.close()
 
 
+def test_editor_preview_transport_is_idle_until_the_editor_requests_frames() -> None:
+    engine = _Engine()
+    _documents, _runtime, controller = _runtime_controller(
+        engine,
+        _Projection(),
+        request_ids=(
+            "hydrate",
+            "enable-preview-render",
+            "preview-prepare",
+            "preview-take",
+            "disable-preview-render",
+            "restore-media-prepare",
+            "restore-media-take",
+        ),
+    )
+    descriptor = _preview_egress_descriptor()
+    controller.set_preview_egress(descriptor)
+    controller.start_engine()
+
+    assert engine.snapshots[0][1].preview_egress == descriptor
+    assert not dict(engine.snapshots[0][1].render_enabled)[BusId.MEDIA_WINDOWS]
+
+    controller.set_preview_scene(CONTENT_SCENE_ID)
+
+    assert len(engine.snapshots) == 1
+    assert engine.renders[-1] == (
+        "enable-preview-render",
+        BusId.MEDIA_WINDOWS,
+        True,
+    )
+
+    controller.set_preview_scene(None)
+
+    assert len(engine.snapshots) == 1
+    assert engine.renders[-1] == (
+        "disable-preview-render",
+        BusId.MEDIA_WINDOWS,
+        False,
+    )
+    controller.close()
+
+
 def test_preview_demand_is_published_when_the_media_scene_is_already_selected() -> None:
     projection = _Projection()
     projection.set_type("image")
@@ -1647,7 +1710,7 @@ def test_runtime_coalesces_hydration_changes_while_one_request_is_in_flight() ->
 
     assert len(engine.snapshots) == 2
     assert controller.hydration_in_progress
-    assert not controller.native_window_routing_ready
+    assert controller.native_window_routing_ready
     assert engine.snapshots[1][1].document.revision == documents.document.revision
     second_request, second_snapshot = engine.snapshots[1]
     engine.hydrations[1].set_result(
@@ -1656,6 +1719,49 @@ def test_runtime_coalesces_hydration_changes_while_one_request_is_in_flight() ->
     assert not controller.hydration_in_progress
     assert controller.native_window_routing_ready
     assert controller.applied_scenes == controller.desired_scenes
+    controller.close()
+
+
+def test_applied_native_window_route_remains_ready_during_graph_rehydration() -> None:
+    class _PendingHydrateEngine(_Engine):
+        def __init__(self) -> None:
+            super().__init__()
+            self.hydrations: list[Future[SceneEngineAck]] = []
+
+        def hydrate(
+            self,
+            snapshot: SceneEngineSnapshot,
+            *,
+            request_id: str,
+            deadline_ms: int,
+        ) -> Future[SceneEngineAck]:
+            assert deadline_ms > 0
+            self.snapshots.append((request_id, snapshot))
+            future: Future[SceneEngineAck] = Future()
+            self.hydrations.append(future)
+            return future
+
+    engine = _PendingHydrateEngine()
+    documents, _runtime, controller = _runtime_controller(
+        engine,
+        _Projection(),
+        request_ids=("initial-hydrate", "document-hydrate"),
+    )
+    controller.start_engine()
+    initial_request, initial_snapshot = engine.snapshots[0]
+    engine.hydrations[0].set_result(
+        engine._ack(
+            initial_request,
+            initial_snapshot.sequence,
+            initial_snapshot.document.revision,
+        )
+    )
+    assert controller.native_window_routing_ready
+
+    documents.rename_scene(CAMERA_SCENE_ID, "Camera wide")
+
+    assert controller.hydration_in_progress
+    assert controller.native_window_routing_ready
     controller.close()
 
 
