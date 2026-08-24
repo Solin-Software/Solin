@@ -4,6 +4,29 @@
 
 namespace solin::media_engine {
 
+PresentationReadinessWatchdog::PresentationReadinessWatchdog(
+    const std::chrono::steady_clock::duration timeout) noexcept
+    : timeout_{timeout} {}
+
+void PresentationReadinessWatchdog::arm(
+    const std::chrono::steady_clock::time_point now) noexcept {
+    if (!armed_at_.has_value()) {
+        armed_at_ = now;
+    }
+}
+
+void PresentationReadinessWatchdog::acknowledge() noexcept { armed_at_.reset(); }
+
+bool PresentationReadinessWatchdog::pending() const noexcept {
+    return armed_at_.has_value();
+}
+
+bool PresentationReadinessWatchdog::timed_out(
+    const std::chrono::steady_clock::time_point now) const noexcept {
+    return armed_at_.has_value() && timeout_ > timeout_.zero() &&
+           now >= *armed_at_ && now - *armed_at_ >= timeout_;
+}
+
 PresentationTransition::PresentationTransition(const SceneTransitionSpec transition)
     : transition_(transition) {
     validate_scene_transition(transition_);
@@ -219,6 +242,16 @@ void PresentationTransition::delay(
         phase_ == PresentationTransitionPhase::fading_in) {
         phase_started_at_ += duration;
     }
+}
+
+void PresentationTransition::restore_stable(
+    const PresentationIdentity presentation) noexcept {
+    requested_ = true;
+    desired_ = presentation;
+    current_ = presentation;
+    phase_ = PresentationTransitionPhase::stable;
+    phase_started_at_ = {};
+    incoming_observed_ = false;
 }
 
 void PresentationTransition::commit_desired() noexcept {

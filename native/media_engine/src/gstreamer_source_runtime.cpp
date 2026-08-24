@@ -11,6 +11,7 @@
 #include <condition_variable>
 #include <cstdint>
 #include <exception>
+#include <iostream>
 #include <limits>
 #include <memory>
 #include <mutex>
@@ -73,6 +74,7 @@ using namespace std::chrono_literals;
 constexpr auto kBusPollInterval = 100ms;
 constexpr auto kContentFrameInterval = 33'333'333ns;
 constexpr auto kContentTransitionFrameInterval = 16ms;
+constexpr std::uint64_t kTransitionSubmissionFps = 60U;
 constexpr auto kInitialReconnectDelay = 250ms;
 constexpr auto kMaximumReconnectDelay = 4'000ms;
 constexpr auto kFreshFrameThreshold = 2s;
@@ -373,15 +375,19 @@ class ContentGpuTransitionPipeline final {
   public:
     struct Output final {
         std::uint64_t revision{0U};
+        std::uint64_t submission{0U};
         GstSample* sample{nullptr};
     };
 
     ContentGpuTransitionPipeline(const bool use_d3d11,
                                  std::shared_ptr<GstD3D11Device> device,
                                  const std::uint32_t width,
-                                 const std::uint32_t height)
-        : use_d3d11_(use_d3d11), device_(std::move(device)) {
-        if (width == 0U || height == 0U || (use_d3d11_ && device_ == nullptr)) {
+                                 const std::uint32_t height,
+                                 const std::uint8_t input_count)
+        : use_d3d11_(use_d3d11), device_(std::move(device)),
+          input_count_(input_count) {
+        if (width == 0U || height == 0U || input_count_ == 0U ||
+            input_count_ > sources_.size() || (use_d3d11_ && device_ == nullptr)) {
             throw std::invalid_argument("content transition output is invalid");
         }
         build(width, height);
@@ -397,7 +403,7 @@ class ContentGpuTransitionPipeline final {
                               const SceneTransitionWeights weights) noexcept {
         try {
             if (pipeline_ == nullptr || bus_ == nullptr || sources_[0] == nullptr ||
-                sources_[1] == nullptr || pads_[0] == nullptr || pads_[1] == nullptr) {
+                pads_[0] == nullptr) {
                 return false;
             }
             if (auto* error = gst_bus_pop_filtered(bus_, GST_MESSAGE_ERROR);
@@ -406,18 +412,26 @@ class ContentGpuTransitionPipeline final {
                 return false;
             }
             const bool two_inputs = outgoing != nullptr && incoming != nullptr;
+            if (two_inputs && input_count_ < 2U) {
+                return false;
+            }
+            const auto submission = submission_sequence_.fetch_add(1U) + 1U;
             g_object_set(pads_[0], "alpha",
                          outgoing != nullptr ? weights.outgoing : weights.incoming,
                          nullptr);
-            g_object_set(pads_[1], "alpha", two_inputs ? weights.incoming : 0.0,
-                         nullptr);
-            if (outgoing != nullptr && !push(sources_[0], outgoing)) {
+            if (pads_[1] != nullptr) {
+                g_object_set(pads_[1], "alpha", two_inputs ? weights.incoming : 0.0,
+                             nullptr);
+            }
+            if (outgoing != nullptr &&
+                !push(sources_[0], outgoing, submission)) {
                 return false;
             }
             if (incoming != nullptr &&
-                !push(sources_[two_inputs ? 1U : 0U], incoming)) {
+                !push(sources_[two_inputs ? 1U : 0U], incoming, submission)) {
                 return false;
             }
+            latest_submission_.store(submission, std::memory_order_release);
             return outgoing != nullptr || incoming != nullptr;
         } catch (...) {
             return false;
@@ -441,14 +455,22 @@ class ContentGpuTransitionPipeline final {
                 return false;
             }
             const auto visible = placement.visible();
+            const auto submission = submission_sequence_.fetch_add(1U) + 1U;
             g_object_set(
                 pads_[0], "xpos", static_cast<gint>(placement.destination_x),
                 "ypos", static_cast<gint>(placement.destination_y), "width",
                 static_cast<gint>(placement.destination_width), "height",
                 static_cast<gint>(placement.destination_height), "alpha",
                 visible ? 1.0 : 0.0, "sizing-policy", 0, nullptr);
-            g_object_set(pads_[1], "alpha", 0.0, nullptr);
-            return push(sources_[0], frame, visible ? &placement : nullptr);
+            if (pads_[1] != nullptr) {
+                g_object_set(pads_[1], "alpha", 0.0, nullptr);
+            }
+            if (!push(sources_[0], frame, submission,
+                      visible ? &placement : nullptr)) {
+                return false;
+            }
+            latest_submission_.store(submission, std::memory_order_release);
+            return true;
         } catch (...) {
             return false;
         }
@@ -458,15 +480,8 @@ class ContentGpuTransitionPipeline final {
         return output_revision_.load(std::memory_order_acquire);
     }
 
-    void suspend() noexcept {
-        try {
-            if (pipeline_ != nullptr && running_ &&
-                gst_element_set_state(pipeline_, GST_STATE_PAUSED) !=
-                    GST_STATE_CHANGE_FAILURE) {
-                running_ = false;
-            }
-        } catch (...) {
-        }
+    [[nodiscard]] std::uint64_t submission() const noexcept {
+        return latest_submission_.load(std::memory_order_acquire);
     }
 
     [[nodiscard]] Output output_after(const std::uint64_t revision) const noexcept {
@@ -478,6 +493,7 @@ class ContentGpuTransitionPipeline final {
             }
             return {
                 .revision = current,
+                .submission = latest_output_submission_,
                 .sample = gst_sample_ref(latest_output_),
             };
         } catch (...) {
@@ -516,8 +532,11 @@ class ContentGpuTransitionPipeline final {
         if (use_d3d11_) {
             convert = add_element(pipeline_, "d3d11convert", nullptr);
         }
-        g_object_set(source, "is-live", TRUE, "format", GST_FORMAT_TIME,
-                     "do-timestamp", TRUE, "block", FALSE, nullptr);
+        // This graph advances only when its owner submits a complete frame set.
+        // A shared explicit timestamp across every input makes the compositor
+        // wait for that exact set and turns the output PTS into a causal ACK.
+        g_object_set(source, "is-live", FALSE, "format", GST_FORMAT_TIME,
+                     "do-timestamp", FALSE, "block", FALSE, nullptr);
         gst_app_src_set_max_buffers(GST_APP_SRC(source), 1U);
         gst_app_src_set_leaky_type(GST_APP_SRC(source), GST_APP_LEAKY_TYPE_DOWNSTREAM);
         g_object_set(queue, "max-size-buffers", 1U, "max-size-bytes", 0U,
@@ -564,7 +583,7 @@ class ContentGpuTransitionPipeline final {
             }
             auto* compositor = gst_element_factory_make_full(
                 use_d3d11_ ? "d3d11compositor" : "compositor",
-                "force-live", TRUE, nullptr);
+                "force-live", FALSE, nullptr);
             if (compositor == nullptr ||
                 gst_bin_add(GST_BIN(pipeline_), compositor) == FALSE) {
                 if (compositor != nullptr) {
@@ -577,10 +596,11 @@ class ContentGpuTransitionPipeline final {
                          static_cast<guint64>(0U), nullptr);
             if (g_object_class_find_property(G_OBJECT_GET_CLASS(compositor),
                                              "ignore-inactive-pads") != nullptr) {
-                g_object_set(compositor, "ignore-inactive-pads", TRUE, nullptr);
+                g_object_set(compositor, "ignore-inactive-pads", FALSE, nullptr);
             }
-            static_cast<void>(add_input(compositor, 0U));
-            static_cast<void>(add_input(compositor, 1U));
+            for (std::size_t index = 0U; index < input_count_; ++index) {
+                static_cast<void>(add_input(compositor, index));
+            }
             auto* caps_filter = add_element(pipeline_, "capsfilter", nullptr);
             const auto caps = exact_raw_caps(use_d3d11_, width, height);
             if (caps == nullptr) {
@@ -596,6 +616,8 @@ class ContentGpuTransitionPipeline final {
             gst_app_sink_set_leaky_type(GST_APP_SINK(sink),
                                         GST_APP_LEAKY_TYPE_DOWNSTREAM);
             GstAppSinkCallbacks callbacks{};
+            callbacks.new_preroll =
+                &ContentGpuTransitionPipeline::on_new_preroll;
             callbacks.new_sample = &ContentGpuTransitionPipeline::on_new_sample;
             gst_app_sink_set_callbacks(GST_APP_SINK(sink), &callbacks, this, nullptr);
             require_link(compositor, caps_filter);
@@ -615,6 +637,7 @@ class ContentGpuTransitionPipeline final {
 
     [[nodiscard]] static bool push(
         GstAppSrc* source, const std::shared_ptr<const SourceFrame>& frame,
+        const std::uint64_t submission,
         const ContentImagePlacement* placement = nullptr) noexcept {
         const auto lease = gstreamer_sample(frame);
         if (!lease || source == nullptr) {
@@ -643,9 +666,15 @@ class ContentGpuTransitionPipeline final {
             crop->width = placement->source_width;
             crop->height = placement->source_height;
         }
-        GST_BUFFER_PTS(buffer) = GST_CLOCK_TIME_NONE;
-        GST_BUFFER_DTS(buffer) = GST_CLOCK_TIME_NONE;
-        GST_BUFFER_DURATION(buffer) = GST_CLOCK_TIME_NONE;
+        const auto timestamp = gst_util_uint64_scale(
+            submission - 1U, GST_SECOND, kTransitionSubmissionFps);
+        const auto next_timestamp = gst_util_uint64_scale(
+            submission, GST_SECOND, kTransitionSubmissionFps);
+        GST_BUFFER_PTS(buffer) = timestamp;
+        GST_BUFFER_DTS(buffer) = timestamp;
+        GST_BUFFER_DURATION(buffer) = next_timestamp - timestamp;
+        GST_BUFFER_OFFSET(buffer) = submission;
+        GST_BUFFER_OFFSET_END(buffer) = submission;
         auto* sample = gst_sample_new(buffer, caps, nullptr, nullptr);
         gst_buffer_unref(buffer);
         if (sample == nullptr) {
@@ -670,20 +699,46 @@ class ContentGpuTransitionPipeline final {
     }
 
     static GstFlowReturn on_new_sample(GstAppSink* sink, gpointer data) noexcept {
-        return static_cast<ContentGpuTransitionPipeline*>(data)->receive(sink);
+        return static_cast<ContentGpuTransitionPipeline*>(data)->receive(
+            gst_app_sink_pull_sample(sink));
     }
 
-    GstFlowReturn receive(GstAppSink* sink) noexcept {
-        auto* sample = gst_app_sink_pull_sample(sink);
+    static GstFlowReturn on_new_preroll(GstAppSink* sink,
+                                        gpointer data) noexcept {
+        return static_cast<ContentGpuTransitionPipeline*>(data)->receive(
+            gst_app_sink_pull_preroll(sink));
+    }
+
+    GstFlowReturn receive(GstSample* sample) noexcept {
         if (sample == nullptr) {
             return GST_FLOW_EOS;
         }
         try {
+            auto* buffer = gst_sample_get_buffer(sample);
+            const auto timestamp =
+                buffer == nullptr ? GST_CLOCK_TIME_NONE : GST_BUFFER_PTS(buffer);
+            if (!GST_CLOCK_TIME_IS_VALID(timestamp)) {
+                gst_sample_unref(sample);
+                return GST_FLOW_OK;
+            }
+            const auto acknowledged_submission = gst_util_uint64_scale_round(
+                                                     timestamp,
+                                                     kTransitionSubmissionFps,
+                                                     GST_SECOND) +
+                                                 1U;
+            const auto expected_timestamp = gst_util_uint64_scale(
+                acknowledged_submission - 1U, GST_SECOND,
+                kTransitionSubmissionFps);
+            if (timestamp != expected_timestamp) {
+                gst_sample_unref(sample);
+                return GST_FLOW_OK;
+            }
             std::scoped_lock lock{output_mutex_};
             if (latest_output_ != nullptr) {
                 gst_sample_unref(latest_output_);
             }
             latest_output_ = sample;
+            latest_output_submission_ = acknowledged_submission;
             output_revision_.fetch_add(1U, std::memory_order_release);
             return GST_FLOW_OK;
         } catch (...) {
@@ -694,6 +749,7 @@ class ContentGpuTransitionPipeline final {
 
     bool use_d3d11_{false};
     std::shared_ptr<GstD3D11Device> device_{};
+    std::size_t input_count_{0U};
     GstElement* pipeline_{nullptr};
     bool running_{false};
     std::array<GstAppSrc*, 2U> sources_{};
@@ -701,7 +757,10 @@ class ContentGpuTransitionPipeline final {
     GstBus* bus_{nullptr};
     mutable std::mutex output_mutex_{};
     GstSample* latest_output_{nullptr};
+    std::uint64_t latest_output_submission_{0U};
     std::atomic_uint64_t output_revision_{0U};
+    std::atomic_uint64_t submission_sequence_{0U};
+    std::atomic_uint64_t latest_submission_{0U};
 };
 
 class GStreamerSourceRuntime final : public SourceRuntime {
@@ -1135,6 +1194,9 @@ class GStreamerSourceRuntime final : public SourceRuntime {
             PresentationTransitionPhase::waiting_for_first_frame;
         content_last_transition_tick_ = {};
         content_frozen_outgoing_.reset();
+        content_transition_bypass_epoch_.reset();
+        content_transition_black_output_observed_ = false;
+        content_transition_first_frame_watchdog_.acknowledge();
         std::scoped_lock lock{state_mutex_};
         content_decoded_frame_.reset();
     }
@@ -1153,7 +1215,9 @@ class GStreamerSourceRuntime final : public SourceRuntime {
         content_framing_output_revision_ = 0U;
         content_framing_awaiting_output_ = false;
         content_framing_awaited_revision_ = 0U;
+        content_framing_awaited_submission_ = 0U;
         content_framing_requested_input_sequence_ = 0U;
+        content_framing_output_watchdog_.acknowledge();
     }
 
     void reset_content_image_framing() noexcept {
@@ -1180,7 +1244,7 @@ class GStreamerSourceRuntime final : public SourceRuntime {
         try {
             content_framing_pipeline_ =
                 std::make_unique<ContentGpuTransitionPipeline>(
-                    use_d3d11_, d3d11_device_, width, height);
+                    use_d3d11_, d3d11_device_, width, height, 1U);
             content_framing_width_ = width;
             content_framing_height_ = height;
             return true;
@@ -1198,6 +1262,8 @@ class GStreamerSourceRuntime final : public SourceRuntime {
         content_transition_output_revision_ = 0U;
         content_transition_awaiting_output_ = false;
         content_transition_awaited_revision_ = 0U;
+        content_transition_awaited_submission_ = 0U;
+        content_transition_output_watchdog_.acknowledge();
     }
 
     [[nodiscard]] bool ensure_content_transition_pipeline(
@@ -1213,7 +1279,8 @@ class GStreamerSourceRuntime final : public SourceRuntime {
         try {
             content_transition_pipeline_ =
                 std::make_unique<ContentGpuTransitionPipeline>(
-                    use_d3d11_, d3d11_device_, width, height);
+                    use_d3d11_, d3d11_device_, width, height,
+                    stage == ContentTransitionStage::blend ? 2U : 1U);
             content_transition_stage_ = stage;
             content_transition_width_ = width;
             content_transition_height_ = height;
@@ -1319,8 +1386,14 @@ class GStreamerSourceRuntime final : public SourceRuntime {
         }
         content_transition_output_revision_ = output.revision;
         if (content_transition_awaiting_output_ &&
-            output.revision > content_transition_awaited_revision_) {
+            (output.revision <= content_transition_awaited_revision_ ||
+             output.submission != content_transition_awaited_submission_)) {
+            gst_sample_unref(output.sample);
+            return;
+        }
+        if (content_transition_awaiting_output_) {
             content_transition_awaiting_output_ = false;
+            content_transition_output_watchdog_.acknowledge();
         }
         publish_content_transition_output(std::move(output), media_epoch);
     }
@@ -1336,7 +1409,8 @@ class GStreamerSourceRuntime final : public SourceRuntime {
             return;
         }
         content_framing_output_revision_ = output.revision;
-        if (output.revision <= content_framing_awaited_revision_) {
+        if (output.revision <= content_framing_awaited_revision_ ||
+            output.submission != content_framing_awaited_submission_) {
             gst_sample_unref(output.sample);
             return;
         }
@@ -1345,6 +1419,7 @@ class GStreamerSourceRuntime final : public SourceRuntime {
             return;
         }
         content_framing_awaiting_output_ = false;
+        content_framing_output_watchdog_.acknowledge();
         content_framed_input_sequence_ =
             content_framing_requested_input_sequence_;
         content_framed_frame_ = std::move(frame);
@@ -1412,6 +1487,15 @@ class GStreamerSourceRuntime final : public SourceRuntime {
         if (content_framing_pipeline_ != nullptr) {
             consume_content_framing_output(decoded->media_epoch);
             if (content_framing_awaiting_output_ &&
+                content_framing_output_watchdog_.timed_out(now)) {
+                content_failed_image_transform_revision_ = requested.revision;
+                reset_content_framing_pipeline();
+                record_content_readiness_timeout(
+                    "image framing output", kPresentationOutputTimeout);
+                return content_framed_frame_ != nullptr ? content_framed_frame_
+                                                        : decoded;
+            }
+            if (content_framing_awaiting_output_ &&
                 content_framing_last_tick_.time_since_epoch().count() != 0) {
                 content_image_transform_animation_.delay(
                     now - content_framing_last_tick_);
@@ -1431,9 +1515,6 @@ class GStreamerSourceRuntime final : public SourceRuntime {
             transform != content_last_rendered_image_transform_;
         if (!needs_render) {
             framing_active = content_image_transform_animation_.active();
-            if (!framing_active && content_framing_pipeline_ != nullptr) {
-                content_framing_pipeline_->suspend();
-            }
             return content_framed_frame_;
         }
         if (!ensure_content_framing_pipeline(requested.canvas_width,
@@ -1458,13 +1539,13 @@ class GStreamerSourceRuntime final : public SourceRuntime {
             content_has_last_rendered_image_transform_ = true;
             content_framing_requested_input_sequence_ = decoded->sequence;
             content_framing_awaited_revision_ = checkpoint;
+            content_framing_awaited_submission_ =
+                content_framing_pipeline_->submission();
             content_framing_awaiting_output_ = true;
+            content_framing_output_watchdog_.arm(now);
             consume_content_framing_output(decoded->media_epoch);
             framing_active = content_image_transform_animation_.active() ||
                              content_framing_awaiting_output_;
-            if (!framing_active) {
-                content_framing_pipeline_->suspend();
-            }
             return content_framed_frame_;
         } catch (...) {
             content_failed_image_transform_revision_ = requested.revision;
@@ -1477,6 +1558,9 @@ class GStreamerSourceRuntime final : public SourceRuntime {
         const std::shared_ptr<SourceFrame>& incoming,
         const std::chrono::steady_clock::time_point now) noexcept {
         reset_content_transition_pipeline();
+        content_transition_bypass_epoch_.reset();
+        content_transition_black_output_observed_ = false;
+        content_transition_first_frame_watchdog_.acknowledge();
         content_transition_ = PresentationTransition{kMediaPresentationTransition};
         content_transition_requested_ = false;
         content_frozen_outgoing_.reset();
@@ -1492,6 +1576,66 @@ class GStreamerSourceRuntime final : public SourceRuntime {
         content_transition_requested_ = true;
         content_observed_requested_media_epoch_ = incoming->media_epoch;
         publish_content_frame(incoming);
+    }
+
+    void record_content_readiness_timeout(
+        const std::string_view stage,
+        const std::chrono::steady_clock::duration timeout) noexcept {
+        const auto dropped = dropped_frames_total_.fetch_add(1U) + 1U;
+        {
+            std::scoped_lock lock{state_mutex_};
+            health_.dropped_frames = dropped;
+        }
+        try {
+            std::cerr << "Native content " << stage
+                      << " did not become ready within "
+                      << std::chrono::duration_cast<std::chrono::milliseconds>(timeout)
+                             .count()
+                      << " ms; recovering through the direct frame route.\n";
+        } catch (...) {
+        }
+    }
+
+    [[nodiscard]] std::shared_ptr<SourceFrame> republish_content_frame(
+        const std::shared_ptr<SourceFrame>& frame) noexcept {
+        if (frame == nullptr) {
+            return {};
+        }
+        try {
+            auto recovered = std::make_shared<SourceFrame>(*frame);
+            recovered->sequence = frame_sequence_.fetch_add(1U) + 1U;
+            recovered->received_monotonic_ns = monotonic_nanoseconds();
+            publish_content_frame(recovered);
+            return recovered;
+        } catch (...) {
+            return {};
+        }
+    }
+
+    void restore_content_after_missing_first_frame(
+        const std::uint64_t failed_epoch,
+        const std::chrono::steady_clock::time_point now) noexcept {
+        content_transition_bypass_epoch_ = failed_epoch;
+        reset_content_transition_pipeline();
+        content_transition_black_output_observed_ = false;
+        content_transition_first_frame_watchdog_.acknowledge();
+        if (const auto recovered =
+                republish_content_frame(content_frozen_outgoing_);
+            recovered != nullptr) {
+            content_transition_.restore_stable(PresentationIdentity{
+                .bus = OutputBus::media_windows,
+                .media_epoch = recovered->media_epoch,
+            });
+            content_frozen_outgoing_ = recovered;
+            content_last_transition_phase_ =
+                PresentationTransitionPhase::stable;
+        } else {
+            content_transition_ =
+                PresentationTransition{kMediaPresentationTransition};
+            content_last_transition_phase_ =
+                PresentationTransitionPhase::waiting_for_first_frame;
+        }
+        content_last_transition_tick_ = now;
     }
 
     [[nodiscard]] bool render_content_presentation(
@@ -1513,7 +1657,13 @@ class GStreamerSourceRuntime final : public SourceRuntime {
             decoded = prepare_content_image_frame(decoded, now, framing_active);
             if (!content_transition_requested_ ||
                 requested_epoch != content_observed_requested_media_epoch_) {
-                content_frozen_outgoing_ = std::move(published);
+                const bool already_black =
+                    content_transition_black_output_observed_ &&
+                    content_last_transition_phase_ ==
+                        PresentationTransitionPhase::waiting_at_black;
+                if (!already_black) {
+                    content_frozen_outgoing_ = std::move(published);
+                }
                 content_transition_.request(
                     PresentationIdentity{
                         .bus = OutputBus::media_windows,
@@ -1522,11 +1672,39 @@ class GStreamerSourceRuntime final : public SourceRuntime {
                     now);
                 content_transition_requested_ = true;
                 content_observed_requested_media_epoch_ = requested_epoch;
+                content_transition_bypass_epoch_.reset();
                 reset_content_transition_pipeline();
+                content_transition_black_output_observed_ = already_black;
+                content_transition_first_frame_watchdog_.acknowledge();
+                if (already_black) {
+                    content_transition_first_frame_watchdog_.arm(now);
+                }
                 content_last_transition_tick_ = now;
             }
             if (!content_transition_requested_) {
                 return framing_active;
+            }
+
+            if (content_transition_bypass_epoch_.has_value()) {
+                const auto deferred_epoch = *content_transition_bypass_epoch_;
+                const auto deferred =
+                    decoded != nullptr && decoded->media_epoch == deferred_epoch
+                        ? decoded
+                        : std::shared_ptr<SourceFrame>{};
+                if (deferred == nullptr) {
+                    return framing_active;
+                }
+                content_frozen_outgoing_ = std::move(published);
+                content_transition_.request(
+                    PresentationIdentity{
+                        .bus = OutputBus::media_windows,
+                        .media_epoch = deferred_epoch,
+                    },
+                    now);
+                content_transition_bypass_epoch_.reset();
+                reset_content_transition_pipeline();
+                content_last_transition_tick_ = now;
+                return true;
             }
 
             const auto desired = content_transition_.desired();
@@ -1534,11 +1712,54 @@ class GStreamerSourceRuntime final : public SourceRuntime {
                 decoded != nullptr && decoded->media_epoch == desired.media_epoch
                     ? decoded
                     : std::shared_ptr<SourceFrame>{};
+            if (content_transition_black_output_observed_) {
+                if (incoming == nullptr) {
+                    if (content_transition_first_frame_watchdog_.timed_out(now)) {
+                        record_content_readiness_timeout(
+                            "first frame", kPresentationFirstFrameTimeout);
+                        restore_content_after_missing_first_frame(
+                            desired.media_epoch, now);
+                    }
+                    return framing_active;
+                }
+                content_transition_black_output_observed_ = false;
+                content_transition_first_frame_watchdog_.acknowledge();
+            }
             if (content_transition_pipeline_ != nullptr) {
                 consume_content_transition_output(desired.media_epoch);
+                if (!content_transition_awaiting_output_ &&
+                    content_last_transition_phase_ ==
+                        PresentationTransitionPhase::waiting_at_black &&
+                    incoming == nullptr) {
+                    reset_content_transition_pipeline();
+                    content_transition_black_output_observed_ = true;
+                    content_transition_first_frame_watchdog_.arm(now);
+                    return framing_active;
+                }
+                if (content_transition_awaiting_output_ &&
+                    content_transition_output_watchdog_.timed_out(now)) {
+                    content_transition_bypass_epoch_ = desired.media_epoch;
+                    reset_content_transition_pipeline();
+                    content_transition_black_output_observed_ = false;
+                    content_transition_first_frame_watchdog_.acknowledge();
+                    record_content_readiness_timeout(
+                        "presentation transition output",
+                        kPresentationOutputTimeout);
+                    if (incoming != nullptr) {
+                        recover_content_transition_as_cut(incoming, now);
+                    } else if (content_frozen_outgoing_ != nullptr) {
+                        restore_content_after_missing_first_frame(
+                            desired.media_epoch, now);
+                    }
+                    return framing_active;
+                }
                 if (content_transition_awaiting_output_ &&
                     content_last_transition_tick_.time_since_epoch().count() != 0) {
                     content_transition_.delay(now - content_last_transition_tick_);
+                }
+                if (content_transition_awaiting_output_) {
+                    content_last_transition_tick_ = now;
+                    return true;
                 }
             }
             const auto allow_incoming =
@@ -1552,6 +1773,8 @@ class GStreamerSourceRuntime final : public SourceRuntime {
 
             if (transition_sample.phase == PresentationTransitionPhase::stable) {
                 reset_content_transition_pipeline();
+                content_transition_black_output_observed_ = false;
+                content_transition_first_frame_watchdog_.acknowledge();
                 content_frozen_outgoing_.reset();
                 if (incoming != nullptr) {
                     publish_content_frame(incoming);
@@ -1619,16 +1842,22 @@ class GStreamerSourceRuntime final : public SourceRuntime {
                 return framing_active;
             }
             content_transition_awaited_revision_ = checkpoint;
+            content_transition_awaited_submission_ =
+                content_transition_pipeline_->submission();
             content_transition_awaiting_output_ = true;
+            content_transition_output_watchdog_.arm(now);
             consume_content_transition_output(desired.media_epoch);
             if (transition_sample.phase ==
                     PresentationTransitionPhase::waiting_at_black &&
                 !content_transition_awaiting_output_) {
-                // The black frame is now a standalone GPU sample. Destroy the
-                // ephemeral graph and release the old source frame/SHM ancestry
-                // while waiting for the next valid first frame.
+                // The black frame is now a standalone GPU sample, so the
+                // ephemeral graph can be destroyed. Retain one bounded outgoing
+                // lease until the incoming epoch becomes visible; a missing
+                // first frame can then recover instead of making black the
+                // permanent canonical output.
                 reset_content_transition_pipeline();
-                content_frozen_outgoing_.reset();
+                content_transition_black_output_observed_ = true;
+                content_transition_first_frame_watchdog_.arm(now);
                 return framing_active;
             }
             return framing_active || transition_sample.animation_active() ||
@@ -2019,6 +2248,8 @@ class GStreamerSourceRuntime final : public SourceRuntime {
     std::uint64_t content_framing_output_revision_{0U};
     bool content_framing_awaiting_output_{false};
     std::uint64_t content_framing_awaited_revision_{0U};
+    std::uint64_t content_framing_awaited_submission_{0U};
+    PresentationReadinessWatchdog content_framing_output_watchdog_{};
     std::uint64_t content_framing_requested_input_sequence_{0U};
     std::uint64_t content_framed_input_sequence_{0U};
     std::shared_ptr<SourceFrame> content_framed_frame_{};
@@ -2039,6 +2270,12 @@ class GStreamerSourceRuntime final : public SourceRuntime {
     std::uint64_t content_transition_output_revision_{0U};
     bool content_transition_awaiting_output_{false};
     std::uint64_t content_transition_awaited_revision_{0U};
+    std::uint64_t content_transition_awaited_submission_{0U};
+    PresentationReadinessWatchdog content_transition_output_watchdog_{};
+    std::optional<std::uint64_t> content_transition_bypass_epoch_{};
+    bool content_transition_black_output_observed_{false};
+    PresentationReadinessWatchdog content_transition_first_frame_watchdog_{
+        kPresentationFirstFrameTimeout};
     std::uint64_t last_content_sequence_{0U};
     std::uint64_t content_pipeline_sequence_{0U};
     std::mutex reconnect_mutex_{};
@@ -2092,16 +2329,19 @@ class GStreamerSourceRuntimeFactory final : public SourceRuntimeFactory {
 class GStreamerFrameTransitionPipeline::Impl final {
   public:
     Impl(const bool use_d3d11, std::shared_ptr<GstD3D11Device> device,
-         const std::uint32_t width, const std::uint32_t height)
-        : pipeline(use_d3d11, std::move(device), width, height) {}
+         const std::uint32_t width, const std::uint32_t height,
+         const std::uint8_t input_count)
+        : pipeline(use_d3d11, std::move(device), width, height, input_count) {}
 
     ContentGpuTransitionPipeline pipeline;
 };
 
 GStreamerFrameTransitionPipeline::GStreamerFrameTransitionPipeline(
     const bool use_d3d11, std::shared_ptr<GstD3D11Device> device,
-    const std::uint32_t width, const std::uint32_t height)
-    : impl_(std::make_unique<Impl>(use_d3d11, std::move(device), width, height)) {}
+    const std::uint32_t width, const std::uint32_t height,
+    const std::uint8_t input_count)
+    : impl_(std::make_unique<Impl>(use_d3d11, std::move(device), width, height,
+                                  input_count)) {}
 
 GStreamerFrameTransitionPipeline::~GStreamerFrameTransitionPipeline() = default;
 
@@ -2116,13 +2356,21 @@ std::uint64_t GStreamerFrameTransitionPipeline::revision() const noexcept {
     return impl_ == nullptr ? 0U : impl_->pipeline.revision();
 }
 
+std::uint64_t GStreamerFrameTransitionPipeline::submission() const noexcept {
+    return impl_ == nullptr ? 0U : impl_->pipeline.submission();
+}
+
 GStreamerFrameTransitionPipeline::Output
 GStreamerFrameTransitionPipeline::output_after(const std::uint64_t revision) const noexcept {
     if (impl_ == nullptr) {
         return {};
     }
     const auto output = impl_->pipeline.output_after(revision);
-    return {.revision = output.revision, .sample = output.sample};
+    return {
+        .revision = output.revision,
+        .submission = output.submission,
+        .sample = output.sample,
+    };
 }
 
 std::shared_ptr<SourceRuntimeFactory>

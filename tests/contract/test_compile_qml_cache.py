@@ -158,6 +158,7 @@ def test_stage_windows_qt_quick_libraries_includes_required_runtime(
     source_root = tmp_path / "PySide6"
     source_root.mkdir()
     for name in (
+        "opengl32sw.dll",
         "Qt6Multimedia.dll",
         "Qt6MultimediaQuick.dll",
         "Qt6QuickEffects.dll",
@@ -169,11 +170,25 @@ def test_stage_windows_qt_quick_libraries_includes_required_runtime(
     staged = compile_qml_cache.stage_windows_qt_quick_libraries(tmp_path / "out")
 
     assert {path.name for path in staged} == {
+        "opengl32sw.dll",
         "Qt6Multimedia.dll",
         "Qt6MultimediaQuick.dll",
         "Qt6QuickEffects.dll",
         "Qt6QuickLayouts.dll",
     }
+
+
+def test_stage_windows_qt_quick_libraries_requires_software_opengl_fallback(
+    tmp_path,
+    monkeypatch,
+):
+    source_root = tmp_path / "PySide6"
+    source_root.mkdir()
+    (source_root / "Qt6Multimedia.dll").write_text("runtime", encoding="utf-8")
+    monkeypatch.setattr(compile_qml_cache, "find_pyside6_dir", lambda: source_root)
+
+    with pytest.raises(SystemExit, match="software OpenGL fallback"):
+        compile_qml_cache.stage_windows_qt_quick_libraries(tmp_path / "out")
 
 
 def test_stage_linux_qt_quick_libraries_copies_only_transitive_qt_dependencies(

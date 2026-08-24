@@ -340,6 +340,7 @@ def stage_windows_qt_quick_libraries(output_dir: Path) -> list[Path]:
         old_dll.unlink()
 
     patterns = [
+        "opengl32sw.dll",
         "Qt6Multimedia.dll",
         "Qt6MultimediaQuick.dll",
         "Qt6QuickControls2*.dll",
@@ -355,7 +356,12 @@ def stage_windows_qt_quick_libraries(output_dir: Path) -> list[Path]:
             shutil.copy2(dll, target)
             staged.append(target)
 
-    if sys.platform.startswith("win") and not staged:
+    staged_names = {path.name for path in staged}
+    if "opengl32sw.dll" not in staged_names:
+        raise SystemExit(
+            "Required Qt software OpenGL fallback was not found in the PySide6 directory."
+        )
+    if sys.platform.startswith("win") and len(staged) == 1:
         raise SystemExit("No Qt Quick runtime DLLs were found in the PySide6 directory.")
 
     return staged

@@ -358,7 +358,8 @@ wait_for_frame(solin::media_engine::SourceRuntime& runtime,
     return true;
 }
 
-[[nodiscard]] bool sample_center_is_test_color(GstSample* sample) {
+[[nodiscard]] bool sample_center_is_color(
+    GstSample* sample, const std::array<guint8, 4U> expected) {
     auto* caps = sample == nullptr ? nullptr : gst_sample_get_caps(sample);
     auto* buffer = sample == nullptr ? nullptr : gst_sample_get_buffer(sample);
     GstVideoInfo info{};
@@ -376,10 +377,14 @@ wait_for_frame(solin::media_engine::SourceRuntime& runtime,
                         static_cast<std::size_t>(y) * static_cast<std::size_t>(
                             GST_VIDEO_FRAME_PLANE_STRIDE(&frame, 0U)) +
                         static_cast<std::size_t>(x) * 4U;
-    const bool matches = pixel[0] == 0x99U && pixel[1] == 0x66U &&
-                         pixel[2] == 0x33U && pixel[3] == 0xFFU;
+    const bool matches =
+        std::equal(expected.begin(), expected.end(), pixel);
     gst_video_frame_unmap(&frame);
     return matches;
+}
+
+[[nodiscard]] bool sample_center_is_test_color(GstSample* sample) {
+    return sample_center_is_color(sample, {0x99U, 0x66U, 0x33U, 0xFFU});
 }
 
 void test_color_source_publishes_bounded_latest_d3d11_frames(
@@ -1193,41 +1198,78 @@ void test_renderer_hydration_and_output_updates_drive_graph_demand(
            "disabling Program closes its direct output and suspends rendering");
 }
 
-void test_ephemeral_transition_graph_retries_until_output(
+void test_ephemeral_transition_graph_requires_causal_output(
     solin::media_engine::MediaRuntime& media_runtime) {
     const auto factory = media_runtime.source_runtime_factory();
     solin::media_engine::SourceRegistry registry{factory};
-    registry.replace_snapshot(color_snapshot());
-    auto lease = registry.acquire("color-1", "transition-readiness-test");
-    const auto frame = wait_for_frame(lease.runtime(), 5s);
-    expect(frame != nullptr, "the transition readiness fixture has a GPU frame");
-    if (frame == nullptr) {
+    registry.replace_snapshot(transition_snapshot());
+    auto red_lease =
+        registry.acquire("color-red", "transition-readiness-red-test");
+    auto blue_lease =
+        registry.acquire("color-blue", "transition-readiness-blue-test");
+    const auto red = wait_for_frame(red_lease.runtime(), 5s);
+    const auto blue = wait_for_frame(blue_lease.runtime(), 5s);
+    expect(red != nullptr && blue != nullptr,
+           "the transition readiness fixture has two distinct GPU frames");
+    if (red == nullptr || blue == nullptr) {
         return;
     }
     for (std::size_t attempt = 0U; attempt < 5U; ++attempt) {
-        auto device = solin::media_engine::gstreamer_d3d11_device(frame);
+        const auto input_count = static_cast<std::uint8_t>(attempt % 2U + 1U);
+        auto device = solin::media_engine::gstreamer_d3d11_device(red);
         const bool d3d11 =
-            frame->memory == solin::media_engine::SourceFrameMemory::d3d11 &&
+            red->memory == solin::media_engine::SourceFrameMemory::d3d11 &&
             device != nullptr;
         solin::media_engine::GStreamerFrameTransitionPipeline transition{
-            d3d11, std::move(device), frame->width, frame->height};
+            d3d11, std::move(device), red->width, red->height, input_count};
         std::uint64_t revision = 0U;
         std::unique_ptr<GstSample, decltype(&gst_sample_unref)> output{
             nullptr, &gst_sample_unref};
-        const auto deadline = std::chrono::steady_clock::now() + 1s;
-        while (std::chrono::steady_clock::now() < deadline && output == nullptr) {
-            expect(transition.render(frame, frame, {.outgoing = 0.5, .incoming = 0.5}),
-                   "the ephemeral transition accepts a synchronized retry");
-            auto candidate = transition.output_after(revision);
-            if (candidate.sample != nullptr) {
-                revision = candidate.revision;
-                output.reset(candidate.sample);
-                break;
-            }
-            std::this_thread::sleep_for(16ms);
+        std::this_thread::sleep_for(50ms);
+        auto unsolicited = transition.output_after(revision);
+        expect(unsolicited.sample == nullptr,
+               "a fresh ephemeral transition cannot acknowledge itself with a background frame");
+        if (unsolicited.sample != nullptr) {
+            gst_sample_unref(unsolicited.sample);
         }
-        expect(output != nullptr,
-               "each fresh transition graph acknowledges output under startup races");
+        std::uint64_t previous_submission = 0U;
+        for (std::size_t submission_index = 0U; submission_index < 6U;
+             ++submission_index) {
+            const auto& submitted =
+                submission_index % 2U == 0U ? red : blue;
+            const auto expected =
+                submission_index % 2U == 0U
+                    ? std::array<guint8, 4U>{0x00U, 0x00U, 0xFFU, 0xFFU}
+                    : std::array<guint8, 4U>{0xFFU, 0x00U, 0x00U, 0xFFU};
+            output.reset();
+            expect(transition.render(
+                       submitted, input_count == 2U ? submitted : nullptr,
+                       {.outgoing = 1.0, .incoming = 0.0}),
+                   "the ephemeral transition accepts one bounded submission");
+            const auto awaited_submission = transition.submission();
+            expect(awaited_submission > previous_submission,
+                   "successive transition submissions have distinct identities");
+            const auto deadline = std::chrono::steady_clock::now() + 1s;
+            while (std::chrono::steady_clock::now() < deadline && output == nullptr) {
+                auto candidate = transition.output_after(revision);
+                if (candidate.sample != nullptr) {
+                    revision = candidate.revision;
+                    if (candidate.submission == awaited_submission) {
+                        output.reset(candidate.sample);
+                        break;
+                    }
+                    gst_sample_unref(candidate.sample);
+                }
+                std::this_thread::sleep_for(16ms);
+            }
+            expect(output != nullptr,
+                   "each submitted input set receives its own causal output acknowledgement");
+            expect(output != nullptr &&
+                       sample_center_is_color(output.get(), expected),
+                   "each acknowledgement carries the pixels from its exact submission");
+            previous_submission = awaited_submission;
+            std::this_thread::sleep_for(50ms);
+        }
     }
 }
 
@@ -1410,7 +1452,7 @@ int main(const int argc, const char* const argv[]) {
         const auto probe = media_runtime.initialize();
         expect(probe.initialized, "the pinned GStreamer runtime initializes");
         if (probe.initialized) {
-            test_ephemeral_transition_graph_retries_until_output(media_runtime);
+            test_ephemeral_transition_graph_requires_causal_output(media_runtime);
             test_color_source_publishes_bounded_latest_d3d11_frames(media_runtime);
             test_rtsp_source_decodes_to_the_same_bounded_frame_contract(media_runtime);
             if (probe.d3d11_compositor) {
