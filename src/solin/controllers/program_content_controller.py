@@ -9,10 +9,6 @@ from PySide6.QtGui import QColor, QImage
 from PySide6.QtWidgets import QWidget
 
 from solin.core.timer.models import MediaCountdownPresentation
-from solin.core.projection.aspect_ratio import (
-    DEFAULT_PROJECTION_ASPECT_RATIO,
-    ProjectionAspectRatio,
-)
 from solin.core.projection.image_framing import (
     IDENTITY_IMAGE_TRANSFORM,
     ImageTransform,
@@ -30,10 +26,6 @@ def _discard_image_transform(
     **_options: object,
 ) -> None:
     return
-
-
-def _default_projection_aspect_ratio() -> ProjectionAspectRatio:
-    return DEFAULT_PROJECTION_ASPECT_RATIO
 
 
 class _ProjectionSession(Protocol):
@@ -64,9 +56,6 @@ class ProgramContentController(QObject):
         *,
         media_epoch_sink: Callable[[int], None],
         image_transform_sink: Callable[..., None] = _discard_image_transform,
-        projection_aspect_ratio_provider: Callable[[], ProjectionAspectRatio] = (
-            _default_projection_aspect_ratio
-        ),
         width: int,
         height: int,
         parent: QObject | None = None,
@@ -78,7 +67,6 @@ class ProgramContentController(QObject):
         self._frame_sink = frame_sink
         self._media_epoch_sink = media_epoch_sink
         self._image_transform_sink = image_transform_sink
-        self._projection_aspect_ratio_provider = projection_aspect_ratio_provider
         self._yearly_text = yearly_text
         self._width = width
         self._height = height
@@ -173,17 +161,8 @@ class ProgramContentController(QObject):
         )
         if state.get("type") == "image" and transform is None:
             transform = IDENTITY_IMAGE_TRANSFORM
-        try:
-            ratio = self._projection_aspect_ratio_provider()
-        except Exception:  # noqa: BLE001 - optional projection target boundary
-            ratio = DEFAULT_PROJECTION_ASPECT_RATIO
-        if not isinstance(ratio, ProjectionAspectRatio):
-            ratio = DEFAULT_PROJECTION_ASPECT_RATIO
-        canvas_width, canvas_height = _fit_aspect_inside(
-            self._width,
-            self._height,
-            ratio.value,
-        )
+        canvas_width = self._width
+        canvas_height = self._height
         key = (media_epoch, transform, canvas_width, canvas_height)
         if not force and key == self._published_image_transform_key:
             return
@@ -237,17 +216,4 @@ class ProgramContentController(QObject):
         widget.ensurePolished()
         widget.render(image)
         self.submit_frame(image)
-
-
-def _fit_aspect_inside(
-    maximum_width: int,
-    maximum_height: int,
-    aspect_ratio: float,
-) -> tuple[int, int]:
-    ratio = aspect_ratio if aspect_ratio > 0.0 else 16.0 / 9.0
-    if maximum_width / maximum_height > ratio:
-        return max(1, round(maximum_height * ratio)), maximum_height
-    return maximum_width, max(1, round(maximum_width / ratio))
-
-
 __all__ = ["ProgramContentController"]
