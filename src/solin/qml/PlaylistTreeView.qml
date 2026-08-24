@@ -23,6 +23,8 @@ Item {
     property color textSecondary: appTheme.textSecondary
     property color textMuted: appTheme.textMuted
     property color textDim: appTheme.textDim
+    property color secondaryControl: appTheme.secondaryControl
+    property color secondaryControlHover: appTheme.secondaryControlHover
     property color accent: appTheme.accent
     property color accentTint: appTheme.accentTint
     property color previewBg: Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.12)
@@ -1528,6 +1530,22 @@ Item {
         }
     }
 
+    component DragGrip: Image {
+        property bool hovered: false
+        property bool dragging: false
+
+        width: 12
+        height: 12
+        source: root.picon(
+                    "grip",
+                    12,
+                    root.iconHex(dragging
+                                 ? root.accent
+                                 : hovered
+                                   ? root.secondaryControlHover
+                                   : root.secondaryControl))
+    }
+
     // ── MediaCard ──────────────────────────────────────────────────────────────
 
     Component {
@@ -1678,12 +1696,10 @@ Item {
                     Layout.preferredWidth: 24
                     Layout.fillHeight: true
 
-                    Image {
+                    DragGrip {
                         anchors.centerIn: parent
-                        width: 12
-                        height: 12
-                        source: root.picon("grip", 12, root.iconHex(root.textDim))
-                        opacity: 0.6
+                        hovered: mediaRoot.dragArea.containsMouse
+                        dragging: mediaRoot.dragStarted
                     }
                 }
 
@@ -1977,7 +1993,8 @@ Item {
                             enabled: !mediaRoot.operationActive
                             iconName: "more"
                             iconSize: 13
-                            colorHex: root.iconHex(root.textDim)
+                            colorHex: root.iconHex(root.secondaryControl)
+                            hoverColorHex: root.iconHex(root.secondaryControlHover)
                             Layout.preferredWidth: 28
                             Layout.preferredHeight: 28
                             onClicked: itemMenu.open()
@@ -2120,12 +2137,10 @@ Item {
                 Layout.preferredWidth: 22
                 Layout.fillHeight: true
 
-                Image {
+                DragGrip {
                     anchors.centerIn: parent
-                    width: 12
-                    height: 12
-                    source: root.picon("grip", 12, root.iconHex(root.textDim))
-                    opacity: 0.42
+                    hovered: markerRoot.dragArea.containsMouse
+                    dragging: markerRoot.dragStarted
                 }
             }
 
@@ -2322,12 +2337,10 @@ Item {
                             Layout.preferredWidth: sectionRoot.isSubsection ? 24 : 22
                             Layout.fillHeight: true
 
-                            Image {
+                            DragGrip {
                                 anchors.centerIn: parent
-                                width: 12
-                                height: 12
-                                source: root.picon("grip", 12, root.iconHex(root.textDim))
-                                opacity: 0.5
+                                hovered: sectionRoot.dragArea.containsMouse
+                                dragging: sectionRoot.dragStarted
                             }
                         }
 
@@ -2388,7 +2401,8 @@ Item {
                         HeaderButton {
                             iconName: "more"
                             iconSize: 12
-                            colorHex: root.iconHex(root.textDim)
+                            colorHex: root.iconHex(root.secondaryControl)
+                            hoverColorHex: root.iconHex(root.secondaryControlHover)
                             implicitWidth: 24
                             implicitHeight: 24
                             onClicked: sectionMenu.open()
@@ -2484,6 +2498,7 @@ Item {
         property string iconName: ""
         property int iconSize: 14
         property string colorHex: root.iconHex(root.textMuted)
+        property string hoverColorHex: root.iconHex(root.textSecondary)
         property string toolTipText: ""
         property bool accentButton: false
         signal clicked()
@@ -2507,7 +2522,9 @@ Item {
             width: hdrBtn.iconSize
             height: hdrBtn.iconSize
             source: root.picon(hdrBtn.iconName, hdrBtn.iconSize,
-                               hdrMa.containsMouse ? root.iconHex(root.textSecondary) : hdrBtn.colorHex)
+                               hdrMa.containsMouse
+                               ? hdrBtn.hoverColorHex
+                               : hdrBtn.colorHex)
         }
 
         MouseArea {

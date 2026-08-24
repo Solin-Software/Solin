@@ -33,6 +33,9 @@ class ThemePalette:
     text_faint: str
     text_on_accent: str
 
+    secondary_control: str
+    secondary_control_hover: str
+
     accent: str
     accent_alt: str
     accent_hover: str
@@ -90,6 +93,8 @@ class ThemePalette:
             "textDim": self.text_dim,
             "textFaint": self.text_faint,
             "textOnAccent": self.text_on_accent,
+            "secondaryControl": self.secondary_control,
+            "secondaryControlHover": self.secondary_control_hover,
             "accent": self.accent,
             "accentHover": self.accent_hover,
             "accentPressed": self.accent_pressed,
