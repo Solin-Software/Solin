@@ -6,7 +6,6 @@ import struct
 import sys
 from collections.abc import Buffer
 from multiprocessing import shared_memory
-from statistics import median
 from unittest.mock import patch
 
 import pytest
@@ -108,6 +107,40 @@ class _BlockingClosePublisher(_Publisher):
         self.close_started.set()
         self.allow_close.wait()
         super().close()
+
+
+class _BlockingFirstPublishPublisher(_Publisher):
+    def __init__(self, width: int, height: int, generation: int) -> None:
+        super().__init__(width, height, generation)
+        self.first_publish_started = threading.Event()
+        self.allow_first_publish = threading.Event()
+        self.second_publish_started = threading.Event()
+        self.publish_calls = 0
+
+    def publish(
+        self,
+        pixels: Buffer,
+        *,
+        frame_width: int,
+        frame_height: int,
+        presentation_timestamp_ns: int = 0,
+        duration_ns: int = 0,
+        media_epoch: int = 0,
+    ) -> int:
+        self.publish_calls += 1
+        if self.publish_calls == 1:
+            self.first_publish_started.set()
+            self.allow_first_publish.wait()
+        elif self.publish_calls == 2:
+            self.second_publish_started.set()
+        return super().publish(
+            pixels,
+            frame_width=frame_width,
+            frame_height=frame_height,
+            presentation_timestamp_ns=presentation_timestamp_ns,
+            duration_ns=duration_ns,
+            media_epoch=media_epoch,
+        )
 
 
 class _BackpressuredPublisher(_Publisher):
@@ -496,48 +529,36 @@ def test_content_ingress_descriptor_exists_before_the_first_frame() -> None:
 
 
 def test_content_ingress_paces_frame_starts_without_adding_processing_time() -> None:
-    publishers: list[_Publisher] = []
+    publishers: list[_BlockingFirstPublishPublisher] = []
 
-    def create_publisher(width: int, height: int) -> _Publisher:
-        publisher = _Publisher(
-            width,
-            height,
-            len(publishers) + 1,
-            publish_delay=0.010,
+    def create_publisher(width: int, height: int) -> _BlockingFirstPublishPublisher:
+        publisher = _BlockingFirstPublishPublisher(
+            width, height, len(publishers) + 1
         )
         publishers.append(publisher)
         return publisher
 
     controller = ContentFrameIngressController(
         publisher_factory=create_publisher,
-        maximum_fps=30,
+        maximum_fps=5,
         canvas_width=2,
         canvas_height=2,
     )
     image = QImage(2, 2, QImage.Format.Format_ARGB32)
     try:
-        deadline = time.monotonic() + 2.0
-        while (
-            len(publishers[0].publish_started_at) < 12
-            and time.monotonic() < deadline
-        ):
-            controller.submit_frame(image)
-            time.sleep(0.002)
-        assert len(publishers[0].publish_started_at) >= 12
-    finally:
-        controller.close()
+        controller.submit_frame(image)
+        assert publishers[0].first_publish_started.wait(1.0)
+        controller.submit_frame(image)
 
-    intervals = [
-        right - left
-        for left, right in zip(
-            publishers[0].publish_started_at,
-            publishers[0].publish_started_at[1:],
-            strict=False,
-        )
-    ]
-    assert len(intervals) >= 11
-    # The former completion-based clock produced ~43 ms here (23 fps).
-    assert median(intervals) < 0.041
+        # Keep the first publication busy beyond the 200 ms frame interval. A
+        # start-based deadline is already overdue when it returns, whereas the
+        # former completion-based clock would add another full 200 ms wait.
+        time.sleep(0.25)
+        publishers[0].allow_first_publish.set()
+        assert publishers[0].second_publish_started.wait(0.1)
+    finally:
+        publishers[0].allow_first_publish.set()
+        controller.close()
 
 
 def test_content_ingress_shutdown_budget_does_not_join_native_worker(
