@@ -1115,24 +1115,17 @@ def _build_icon_svg(name: str) -> str:
         )
     elif name == "ICON_CLAPPERBOARD":
         return (
-            # Adapted from user-provided 256×256 design → 24×24 currentColor
-            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none"'
-            ' stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">'
-            # Top clapper (rotated strip with dividers)
-            '<g transform="rotate(-18 72 92)">'
-            '<rect x="32" y="52" width="192" height="40" rx="8" stroke-width="12"/>'
-            '<line x1="64"  y1="52" x2="64"  y2="92" stroke-width="10"/>'
-            '<line x1="108" y1="52" x2="108" y2="92" stroke-width="10"/>'
-            '<line x1="152" y1="52" x2="152" y2="92" stroke-width="10"/>'
-            '<line x1="196" y1="52" x2="196" y2="92" stroke-width="10"/>'
-            "</g>"
-            # Main board
-            '<rect x="32" y="100" width="192" height="144" rx="14" stroke-width="12"/>'
-            # Internal lines (scene list representation)
-            '<line x1="60" y1="144" x2="196" y2="144" stroke-width="9"/>'
-            '<line x1="60" y1="180" x2="196" y2="180" stroke-width="9"/>'
-            '<line x1="60" y1="216" x2="156" y2="216" stroke-width="9"/>'
-            "</svg>"
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
+            ' stroke="currentColor" stroke-width="2" stroke-linecap="round"'
+            ' stroke-linejoin="round">'
+            '<rect x="3" y="10.5" width="18" height="10.5" rx="2"/>'
+            '<line x1="7" y1="14.5" x2="12" y2="14.5"/>'
+            '<line x1="7" y1="17.5" x2="15" y2="17.5"/>'
+            '<g transform="rotate(-10 3 10.5)">'
+            '<rect x="3" y="5.5" width="18" height="5" rx="1.5"/>'
+            '<line x1="8" y1="5.5" x2="10" y2="10.5"/>'
+            '<line x1="13.5" y1="5.5" x2="15.5" y2="10.5"/>'
+            "</g></svg>"
         )
     elif name == "ICON_PACKAGE":
         return (
