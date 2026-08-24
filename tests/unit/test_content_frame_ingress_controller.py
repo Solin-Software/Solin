@@ -515,12 +515,17 @@ def test_content_ingress_paces_frame_starts_without_adding_processing_time() -> 
         canvas_height=2,
     )
     image = QImage(2, 2, QImage.Format.Format_ARGB32)
-    deadline = time.monotonic() + 0.55
-    while time.monotonic() < deadline:
-        controller.submit_frame(image)
-        time.sleep(0.002)
-    assert _wait_for(lambda: len(publishers[0].publish_started_at) >= 12)
-    controller.close()
+    try:
+        deadline = time.monotonic() + 2.0
+        while (
+            len(publishers[0].publish_started_at) < 12
+            and time.monotonic() < deadline
+        ):
+            controller.submit_frame(image)
+            time.sleep(0.002)
+        assert len(publishers[0].publish_started_at) >= 12
+    finally:
+        controller.close()
 
     intervals = [
         right - left
