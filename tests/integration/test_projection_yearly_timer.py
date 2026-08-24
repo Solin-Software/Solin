@@ -3,7 +3,7 @@ from __future__ import annotations
 from PySide6.QtCore import QAbstractAnimation, QObject, Signal
 from PySide6.QtGui import QColor, QImage
 from PySide6.QtMultimedia import QVideoFrame
-from PySide6.QtTest import QTest
+from PySide6.QtTest import QSignalSpy, QTest
 from PySide6.QtWidgets import QApplication, QVBoxLayout
 
 from solin.core.timer.models import MediaCountdownPresentation
@@ -217,28 +217,31 @@ def test_new_untransformed_image_resets_zoom_before_clear_fade_finishes():
 
 def test_fallback_media_fades_in_and_out_through_the_qt_renderer() -> None:
     view = _ProjectionViewHarness()
-    image = QImage(160, 90, QImage.Format.Format_RGB32)
-    image.fill(QColor("white"))
+    try:
+        image = QImage(160, 90, QImage.Format.Format_RGB32)
+        image.fill(QColor("white"))
+        fade_finished = QSignalSpy(view._media_anim.finished)
 
-    view.show_image_from_qimage(image)
+        view.show_image_from_qimage(image)
 
-    assert view._stack.currentIndex() == view._PAGE_MEDIA
-    assert view.display_label.graphicsEffect() is view._media_opacity
-    assert not hasattr(view.display_label, "_fade_timer")
-    assert view._media_anim.duration() == view._MEDIA_FADE_DURATION_MS
-    assert view._media_anim.state() is QAbstractAnimation.State.Running
+        assert view._stack.currentIndex() == view._PAGE_MEDIA
+        assert view.display_label.graphicsEffect() is view._media_opacity
+        assert not hasattr(view.display_label, "_fade_timer")
+        assert view._media_anim.duration() == view._MEDIA_FADE_DURATION_MS
+        assert view._media_anim.state() is QAbstractAnimation.State.Running
+        assert fade_finished.wait(view._MEDIA_FADE_DURATION_MS + 1_000)
+        assert view._media_opacity.opacity() == 1.0
 
-    QTest.qWait(view._MEDIA_FADE_DURATION_MS + 40)
-    assert view._media_opacity.opacity() == 1.0
+        fade_finished = QSignalSpy(view._media_anim.finished)
+        view.clear()
 
-    view.clear()
-
-    assert not view._is_showing_media
-    assert view._stack.currentIndex() == view._PAGE_MEDIA
-    assert view._media_anim.state() is QAbstractAnimation.State.Running
-
-    QTest.qWait(view._MEDIA_FADE_DURATION_MS + 40)
-    assert view._stack.currentIndex() == view._PAGE_YEARLY
+        assert not view._is_showing_media
+        assert view._stack.currentIndex() == view._PAGE_MEDIA
+        assert view._media_anim.state() is QAbstractAnimation.State.Running
+        assert fade_finished.wait(view._MEDIA_FADE_DURATION_MS + 1_000)
+        assert view._stack.currentIndex() == view._PAGE_YEARLY
+    finally:
+        view.deleteLater()
 
 
 def test_native_media_output_never_runs_the_qt_media_fade() -> None:

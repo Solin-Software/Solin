@@ -9,10 +9,10 @@ on:
         type: number
         default: 5
       run_release_smoke_tests:
-        description: Run packaged startup and app replacement smoke tests
+        description: Run app replacement smoke test against a previous DMG
         required: true
         type: boolean
-        default: true
+        default: false
       previous_macos_dmg_url:
         description: Previously distributed DMG used for app replacement smoke
         required: false
@@ -589,12 +589,11 @@ jobs:
           python -m pytest tests/e2e/test_macos_app_upgrade_smoke.py -q
 
       - name: Run packaged startup smoke
-        if: ${{ inputs.run_release_smoke_tests }}
         shell: bash
         env:
           SOLIN_E2E_STARTUP_SECONDS: "8"
         run: |
-          export SOLIN_PACKAGED_EXE="${SOLIN_NEW_MACOS_APP}/Contents/MacOS/main"
+          export SOLIN_PACKAGED_EXE="${PWD}/${BUILD_DIR}/${APP_NAME}.app/Contents/MacOS/main"
           python -m pytest tests/e2e/test_packaged_app_smoke.py -q
 
       - name: Upload macOS DMG
