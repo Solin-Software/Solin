@@ -18,20 +18,26 @@ def normalize_duration_ticks(
     only at external API boundaries and are converted here exactly once.
     """
 
-    if not isinstance(ticks, bool):
-        try:
-            normalized_ticks = int(ticks)
-        except (TypeError, ValueError, OverflowError):
-            normalized_ticks = 0
+    if ticks is not None and not isinstance(ticks, bool):
+        if type(ticks) is int:
+            normalized_ticks = ticks
+        else:
+            try:
+                normalized_ticks = int(ticks)
+            except (TypeError, ValueError, OverflowError):
+                normalized_ticks = 0
         if normalized_ticks > 0:
             return normalized_ticks
 
-    if isinstance(seconds, bool):
+    if seconds is None or isinstance(seconds, bool):
         return 0
-    try:
-        normalized_seconds = float(seconds)
-    except (TypeError, ValueError, OverflowError):
-        return 0
+    if type(seconds) in (int, float):
+        normalized_seconds = seconds
+    else:
+        try:
+            normalized_seconds = float(seconds)
+        except (TypeError, ValueError, OverflowError):
+            return 0
     if not math.isfinite(normalized_seconds) or normalized_seconds <= 0:
         return 0
     return round(normalized_seconds * TICKS_PER_SECOND)

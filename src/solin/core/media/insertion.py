@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-from solin.core.jw.identifiers import lang_to_meps
+from solin.core.jw.identifiers import MEPS_FROM_LANG
 
 from .duration import normalize_duration_ticks
 
@@ -16,10 +16,12 @@ _JW_SOURCES = frozenset({"jworg", "pub-media"})
 
 
 def _int_or_zero(value: Any) -> int:
-    if isinstance(value, bool):
+    if value is None or isinstance(value, bool):
         return 0
+    if type(value) is int:
+        return value
     try:
-        return int(value or 0)
+        return int(value)
     except (TypeError, ValueError, OverflowError):
         return 0
 
@@ -49,7 +51,7 @@ class MediaInsertPayload:
         language = str(get("language") or "").upper()
         meps_language = _int_or_zero(get("meps_language"))
         if not meps_language and language:
-            meps_language = lang_to_meps(language)
+            meps_language = MEPS_FROM_LANG.get(language, 0)
         media_type = str(get("media_type") or get("type") or "video").lower()
         if media_type not in _MEDIA_TYPES:
             media_type = "video"

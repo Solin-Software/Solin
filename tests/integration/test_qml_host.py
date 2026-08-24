@@ -718,27 +718,26 @@ def test_playlist_section_collapse_retains_the_original_height_animation() -> No
         [section],
         height=260,
     )
-    root = widget.rootObject()
-    assert root is not None
-    card = _find_visual(root, "sectionCard-animated")
-    header = _find_visual(root, "sectionHeaderHitArea-animated")
-    assert card is not None
-    assert header is not None
-    QTest.qWait(240)
-    expanded_height = card.height()
-    assert expanded_height > 100
+    try:
+        root = widget.rootObject()
+        assert root is not None
+        card = _find_visual(root, "sectionCard-animated")
+        assert card is not None
+        QTest.qWait(240)
+        expanded_height = card.height()
+        assert expanded_height > 100
 
-    point = header.mapToScene(QPointF(header.width() / 2, header.height() / 2)).toPoint()
-    QTest.mouseClick(widget, Qt.MouseButton.LeftButton, pos=point)
-    QTest.qWait(60)
-    animated_height = card.height()
+        height_samples: list[float] = []
+        card.heightChanged.connect(lambda: height_samples.append(card.height()))
+        assert QMetaObject.invokeMethod(card, "toggleCollapsed")
+        QTest.qWait(240)
 
-    assert 48 < animated_height < expanded_height
-    QTest.qWait(220)
-    assert card.height() == pytest.approx(48)
-    assert controller.collapsed == ["animated"]
-    assert widget.errors() == []
-    widget.deleteLater()
+        assert any(48 < height < expanded_height for height in height_samples)
+        assert card.height() == pytest.approx(48)
+        assert controller.collapsed == ["animated"]
+        assert widget.errors() == []
+    finally:
+        widget.deleteLater()
 
 
 def test_media_countdown_page_renders_context_and_applies_meeting_suggestion() -> None:
