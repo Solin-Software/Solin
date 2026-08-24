@@ -161,6 +161,8 @@ _ICON_NAMES = frozenset(
         "ICON_GRIP",
         "ICON_EYE",
         "ICON_EYE_OFF",
+        "ICON_LOCK",
+        "ICON_UNLOCK",
         "ICON_ALIGN_LEFT",
         "ICON_ALIGN_CENTER",
         "ICON_ALIGN_RIGHT",
@@ -461,6 +463,21 @@ def _build_icon_svg(name: str) -> str:
             '<path d="M3 3l18 18"/><path d="M10.6 5.2A10.7 10.7 0 0 1 12 5c6.5 0 10 7 10 7a18 18 0 0 1-2.3 3.2"/>'
             '<path d="M6.6 6.6C3.6 8.6 2 12 2 12s3.5 7 10 7c1.7 0 3.2-.5 4.5-1.2"/>'
             '<path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>'
+            "</svg>"
+        )
+    elif name in {"ICON_LOCK", "ICON_UNLOCK"}:
+        shackle = (
+            '<path d="M7 10V7a5 5 0 0 1 10 0v3"/>'
+            if name == "ICON_LOCK"
+            else '<path d="M17 10V7a5 5 0 0 0-9.7-1.7"/>'
+        )
+        return (
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
+            ' stroke="currentColor" stroke-width="2" stroke-linecap="round"'
+            ' stroke-linejoin="round">'
+            f"{shackle}"
+            '<rect x="5" y="10" width="14" height="11" rx="2"/>'
+            '<circle cx="12" cy="15.5" r="1" fill="currentColor" stroke="none"/>'
             "</svg>"
         )
     elif name in {"ICON_ALIGN_LEFT", "ICON_ALIGN_CENTER", "ICON_ALIGN_RIGHT"}:
@@ -1098,24 +1115,17 @@ def _build_icon_svg(name: str) -> str:
         )
     elif name == "ICON_CLAPPERBOARD":
         return (
-            # Adapted from user-provided 256×256 design → 24×24 currentColor
-            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none"'
-            ' stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">'
-            # Top clapper (rotated strip with dividers)
-            '<g transform="rotate(-18 72 92)">'
-            '<rect x="32" y="52" width="192" height="40" rx="8" stroke-width="12"/>'
-            '<line x1="64"  y1="52" x2="64"  y2="92" stroke-width="10"/>'
-            '<line x1="108" y1="52" x2="108" y2="92" stroke-width="10"/>'
-            '<line x1="152" y1="52" x2="152" y2="92" stroke-width="10"/>'
-            '<line x1="196" y1="52" x2="196" y2="92" stroke-width="10"/>'
-            "</g>"
-            # Main board
-            '<rect x="32" y="100" width="192" height="144" rx="14" stroke-width="12"/>'
-            # Internal lines (scene list representation)
-            '<line x1="60" y1="144" x2="196" y2="144" stroke-width="9"/>'
-            '<line x1="60" y1="180" x2="196" y2="180" stroke-width="9"/>'
-            '<line x1="60" y1="216" x2="156" y2="216" stroke-width="9"/>'
-            "</svg>"
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
+            ' stroke="currentColor" stroke-width="2" stroke-linecap="round"'
+            ' stroke-linejoin="round">'
+            '<rect x="3" y="10.5" width="18" height="10.5" rx="2"/>'
+            '<line x1="7" y1="14.5" x2="12" y2="14.5"/>'
+            '<line x1="7" y1="17.5" x2="15" y2="17.5"/>'
+            '<g transform="rotate(-10 3 10.5)">'
+            '<rect x="3" y="5.5" width="18" height="5" rx="1.5"/>'
+            '<line x1="8" y1="5.5" x2="10" y2="10.5"/>'
+            '<line x1="13.5" y1="5.5" x2="15.5" y2="10.5"/>'
+            "</g></svg>"
         )
     elif name == "ICON_PACKAGE":
         return (

@@ -34,7 +34,7 @@ class MainWindowProfileSettings:
     zoom: ZoomSettingsStore
     auto_share: AutoShareSettingsStore
     auto_key: AutoKeySettingsStore
-    camera: CameraSettingsStore
+    camera: CameraSettingsStore | None
     projection_playback: ProjectionPlaybackSettingsStore
     meeting_schedule: MeetingScheduleSettingsStore
     media_countdown: MediaCountdownSettingsStore

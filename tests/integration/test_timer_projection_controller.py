@@ -79,12 +79,17 @@ class _WindowStub:
         self._navigation = _NavigationStub()
         self.media_ctrl = _ServiceStub()
         self._ndi_service = _ServiceStub()
-        self._camera_service = _ServiceStub()
         self.proj_bar = _ProjectionBarStub()
         self._projection_integrations = _ProjectionIntegrationsStub()
         self.projection_session.set_state({"type": "video"})
         self.windows = [_ProjectionWindowStub(), _ProjectionWindowStub()]
         self.playback_protection = _ProtectionStub()
+        self.timer_blinks = []
+        self.program_content = type(
+            "ProgramContentStub",
+            (),
+            {"set_timer_blink": lambda _self, value: self.timer_blinks.append(value)},
+        )()
 
     def _all_windows(self):
         return self.windows
@@ -100,10 +105,10 @@ def _controller(window):
             projection_bar=window.proj_bar,
             media_controller=window.media_ctrl,
             ndi_service=window._ndi_service,
-            camera_service=window._camera_service,
             projection_windows=window._all_windows,
             translate=window.tr,
             playback_protection=window.playback_protection,
+            program_content=window.program_content,
         ),
         TimerProjectionHandlers(
             stop_browser_tab_projection=(
@@ -128,7 +133,6 @@ def test_start_timer_stops_active_sources_and_broadcasts_timer():
     assert window._navigation.stopped == 1
     assert window.media_ctrl.stopped == 1
     assert window._ndi_service.stopped == 1
-    assert window._camera_service.stopped == 1
     assert window.proj_bar.playlists == [[]]
     assert window.proj_bar.timers == [
         (target_dt, MediaCountdownPresentation.YEARLY_TEXT)

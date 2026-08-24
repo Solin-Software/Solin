@@ -236,6 +236,13 @@ def test_profile_registry_and_directory_layout_are_stable(
     assert runtime.paths.talk_theme_assets_dir == (
         tmp_path / "profiles" / "main_hall" / "talk_theme_assets"
     )
+    assert runtime.paths.scenes_file == (tmp_path / "profiles" / "main_hall" / "scenes.json")
+    assert runtime.paths.scenes_runtime_file == (
+        tmp_path / "profiles" / "main_hall" / "scenes_runtime.json"
+    )
+    assert runtime.paths.scenes_assets_dir == (
+        tmp_path / "profiles" / "main_hall" / "scenes_assets"
+    )
     assert runtime.paths.profile_cache_dir == cache_dir / "profiles" / "main_hall"
     assert runtime.paths.thumb_cache_dir == (cache_dir / "profiles" / "main_hall" / "thumbs")
     assert runtime.paths.meeting_thumb_cache_dir == (

@@ -58,6 +58,7 @@ Tests are grouped under `tests/unit`, `tests/integration`, `tests/contract`, and
 - [Translations](docs/translations.md)
 - [Development tools](docs/development-tools.md)
 - [Versioning and releases](docs/releases.md)
+- [Architecture decision records](docs/adr/README.md)
 
 The remote-control implementation contract lives beside its static resources in
 [`src/solin/resources/remote_control/README.md`](src/solin/resources/remote_control/README.md).

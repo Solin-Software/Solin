@@ -62,6 +62,11 @@ elif sys.platform.startswith("linux"):
 else:
     APP_PLATFORM: str = sys.platform
 
+# The complete native scenes feature is currently qualified only on Windows.
+# This capability is the single source of truth for exposing its UI, starting
+# its engine, and selecting the legacy Qt camera workflow on other platforms.
+NATIVE_SCENES_SUPPORTED: bool = APP_PLATFORM == "windows"
+
 # ── Arquivos temporários de stream (cache OFF) ─────────────────────────────────
 # Prefixo obrigatório em todo tempfile e lockfile gerado pelo Solin.
 # A limpeza de órfãos na inicialização filtra EXCLUSIVAMENTE por este prefixo,
@@ -92,10 +97,12 @@ ORDER_RANDOM: str = "random"
 # Se False (padrão), o recurso é desabilitado para projeções ao vivo.
 ALLOW_ZOOM_PAN_ON_LIVE_TAB: bool = False
 
-# ── OBS Studio — memorização de cena ────────────────────────────────────────────
-# Se True (padrão), ao trocar para a cena de mídia o Solin memoriza a cena anterior
-# e volta a ela quando a mídia terminar. Se False, sempre retorna à cena idle
-# configurada em Settings, nunca memorizando a anterior.
+# ── Retorno após cena de mídia ──────────────────────────────────────────────────
+# Contrato compartilhado pelo Scenes nativo e pela integração OBS. Se True
+# (padrão), a cena-base anterior continua sendo o destino ao fim da mídia. Se
+# False, a automação redefine a cena-base para a cena default configurada ao
+# entrar em uma nova sessão de mídia. Um override explícito do operador ainda
+# pode escolher outro retorno para a sessão atual.
 MEMORIZE_PRE_MEDIA_SCENE: bool = True
 
 JWL_PLAYLIST_EXTS: frozenset[str] = frozenset({".jwlplaylist"})

@@ -6,7 +6,7 @@ import logging
 from typing import Any, TYPE_CHECKING
 
 from PySide6.QtWidgets import QApplication, QVBoxLayout, QWidget
-from PySide6.QtCore import QObject, QTimer, Signal, QEvent, Qt
+from PySide6.QtCore import QObject, QPoint, QTimer, Signal, QEvent, Qt
 
 from .controllers.auto_key_projection_controller import AutoKeyProjectionController
 from .controllers.language_controller import LanguageContext, LanguageController
@@ -61,6 +61,14 @@ from .controllers.playback_protection_controller import (
     PlaybackProtectionController,
 )
 from .controllers.profile_switch_controller import ProfileSwitchController
+from .controllers.scene_runtime_controller import SceneRuntimeController
+from .controllers.content_frame_ingress_controller import ContentFrameIngressController
+from .controllers.program_content_controller import ProgramContentController
+from .controllers.scene_frame_egress_controller import (
+    SceneFrameEgressController,
+    SceneVideoFrameEgressController,
+    video_frame_to_image,
+)
 from .controllers.projection_integration_controller import (
     ProjectionIntegrationContext,
     ProjectionIntegrationController,
@@ -102,6 +110,9 @@ from .controllers.wifi_media_controller import (
 from .controllers.window_state_controller import WindowStateContext, WindowStateController
 from .core.projection.aspect_ratio import projection_aspect_ratio_from_windows
 from .core.projection.application import ObsSceneSession, ProjectionSession
+from .core.scenes.engine import OutputWindowTarget
+from .core.scenes.model import BusId, SceneDocument
+from .core.scenes.workspace import SceneWorkspaceService
 from .core.timer.application import TimerSession
 from .core.i18n.manager import LanguageManager
 from .core.integrations.automation.screen_share import (
@@ -121,6 +132,7 @@ from .ui.notifications import NotificationCenter
 from .ui.screens import ScreenManager
 from .styles.theme import activate_theme, app_stylesheet, apply_application_palette
 from .core.foundation.runtime_paths import ProfilePaths, RuntimePaths
+from .core.foundation.constants import NATIVE_SCENES_SUPPORTED
 from .core.foundation.qt_threads import OwnedQThreadRegistry
 from .core.playlists.storage import PlaylistRepository, PlaylistStoragePaths
 from .core.meetings.tree_store import MeetingTreeStore
@@ -133,6 +145,16 @@ from .ui.window_focus import raise_projection_window
 
 
 _STARTUP_SCREEN_SETTLE_MS = 900
+
+
+def _use_native_media_presentation(
+    *,
+    native_window_routing_ready: bool,
+    mirror_enabled: bool,
+    raw_visual: bool,
+) -> bool:
+    """Keep every media surface on the same native routing policy."""
+    return native_window_routing_ready and (mirror_enabled or raw_visual)
 log = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
@@ -151,6 +173,8 @@ if TYPE_CHECKING:
     from .core.media.cache_scan import CacheScanSessionFactory
     from .core.media.cache_delete import CacheDeletionSessionFactory
     from .core.network.browser_images import BrowserImageFetchService
+    from .core.scenes.engine import SceneEngine
+    from .core.scenes.ptz import PtzCredentialVault, PtzRecallExecutor
     from .core.playlists.cleanup import PlaylistCleanupQueue
     from .core.rendering.document_conversion import DocumentConversionService
     from .ui.media_info import MediaInfoQueue, MediaInfoService
@@ -210,7 +234,11 @@ class MainWindow(QWidget):
         active_profile: ProfileInfo,
         *,
         talk_theme_output_settings: Any,
+        scene_workspace: SceneWorkspaceService,
         window_host: ApplicationWindow,
+        scene_engine: SceneEngine | None = None,
+        ptz_executor: PtzRecallExecutor | None = None,
+        ptz_credentials: PtzCredentialVault | None = None,
     ):
         super().__init__(window_host.content_parent())
         from .bootstrap.startup_timeline import startup_timeline
@@ -278,6 +306,46 @@ class MainWindow(QWidget):
                 ScreenManager.secondary_screens()
             ),
         )
+        self.scene_workspace = scene_workspace
+        self.scene_runtime = SceneRuntimeController(
+            scene_workspace,
+            self.projection_session,
+            engine=scene_engine,
+            ptz=ptz_executor,
+            parent=self,
+        )
+        program_output = self.scene_documents.document.output(BusId.VIRTUAL_CAMERA)
+        self._content_frame_ingress = ContentFrameIngressController(
+            self,
+            canvas_width=program_output.video_format.width,
+            canvas_height=program_output.video_format.height,
+        )
+        self._content_frame_ingress.descriptor_changed.connect(
+            self.scene_runtime.set_content_ingress
+        )
+        self.scene_runtime.set_content_ingress(self._content_frame_ingress.descriptor)
+        self._program_content = ProgramContentController(
+            self.projection_session,
+            self.font_manager,
+            self._content_frame_ingress.submit_frame,
+            self._current_yearly_projection_text,
+            media_epoch_sink=self._content_frame_ingress.set_media_epoch,
+            image_transform_sink=self._content_frame_ingress.set_image_transform,
+            projection_aspect_ratio_provider=(
+                lambda: projection_aspect_ratio_from_windows(
+                    tuple(self.projection_session.projection_windows)
+                )
+            ),
+            width=program_output.video_format.width,
+            height=program_output.video_format.height,
+            parent=self,
+        )
+        self.scene_runtime.content_ingress_demand_changed.connect(
+            self._on_content_ingress_demand_changed
+        )
+        self._on_content_ingress_demand_changed(
+            self.scene_runtime.content_ingress_required
+        )
         self._obs_scene_session = ObsSceneSession()
         self._monitor_popup = None
         self._ipc_controller = None
@@ -306,6 +374,8 @@ class MainWindow(QWidget):
                 ),
                 sync_obs_scene=lambda active: self._projection_integrations.sync_obs_scene(active),
                 yearly_text=self._current_yearly_projection_text,
+                content_frame_sink=self._program_content.submit_idle_frame,
+                refresh_program_content=self._program_content.refresh,
                 set_projection_screen_count=(lambda count: self.proj_bar.set_screen_count(count)),
                 set_toolbar_screen_count=(
                     lambda count: self._quick_toolbar.set_screen_count(count)
@@ -316,10 +386,58 @@ class MainWindow(QWidget):
                 dialog_parent=self,
                 timer_output=lambda: getattr(self, "timer_output", None),
                 timer_bridge=lambda: getattr(self, "timer_bridge", None),
+                program_mirror_enabled=self._program_mirror_enabled,
+                program_content_requested=self._program_content_requested,
+                native_outputs_changed=self._reconcile_native_scene_surfaces,
             )
+        )
+        self._media_mirror_was_enabled = self._program_mirror_enabled()
+        self._native_fallback_mirror_required = False
+        self._native_window_output_suppressed = False
+        self._unsubscribe_native_projection_state = self.projection_session.subscribe(
+            self._on_projection_state_changed_for_native
+        )
+        self.scene_runtime.runtime_changed.connect(self._on_scene_window_route_changed)
+        self.destroyed.connect(
+            lambda _object=None: self._unsubscribe_native_projection_state()
+        )
+        document = self.scene_documents.document
+        preview_output = document.output(BusId.MEDIA_WINDOWS)
+        program_output = document.output(BusId.VIRTUAL_CAMERA)
+        self._scene_preview_egress = SceneFrameEgressController(
+            preview_output.video_format.width,
+            preview_output.video_format.height,
+            self,
+            worker_name="solin-scene-preview-egress",
+        )
+        self._scene_preview_egress.descriptor_changed.connect(
+            self._on_scene_frame_egress_descriptor_changed
+        )
+        self._scene_preview_egress.frame_ready.connect(
+            self._on_scene_preview_frame
+        )
+        self._scene_program_egress = SceneVideoFrameEgressController(
+            program_output.video_format.width,
+            program_output.video_format.height,
+            self,
+            worker_name="solin-scene-program-egress",
+        )
+        self._scene_program_egress.descriptor_changed.connect(
+            self._on_scene_frame_egress_descriptor_changed
+        )
+        self._scene_program_egress.frame_ready.connect(
+            self._on_scene_program_frame
+        )
+        self.scene_runtime.set_preview_egress(self._scene_preview_egress.descriptor)
+        self.scene_runtime.set_program_egress(None)
+        self.scene_runtime.document_changed.connect(
+            self._on_scene_document_changed_for_egress
         )
 
         self.notifications = NotificationCenter(self)
+        self.scene_runtime.transition_fallback.connect(
+            self._on_scene_transition_fallback
+        )
         self.playback_protection = PlaybackProtectionController(
             self._media_settings,
             self.media_ctrl,
@@ -375,8 +493,11 @@ class MainWindow(QWidget):
         # OBS/DistroAV NDI program stream receiver
         self._ndi_service = service_factories.ndi_receiver(self)
 
-        # Live camera receiver
-        self._camera_service = service_factories.camera(self)
+        self._camera_service = (
+            service_factories.camera(self)
+            if service_factories.camera is not None
+            else None
+        )
 
         # Zoom Meetings integration
         self._zoom_service = service_factories.zoom(self._zoom_settings, self)
@@ -430,6 +551,8 @@ class MainWindow(QWidget):
                 notifications=self.notifications,
                 profile_paths=self.profile_paths,
                 projection_session=self.projection_session,
+                scene_runtime=self.scene_runtime,
+                ptz_credentials=ptz_credentials,
                 runtime_paths=self.runtime_paths,
                 media_cache_manager=self.media_cache_manager,
                 media_tree_runtime=self.media_tree_runtime,
@@ -539,8 +662,8 @@ class MainWindow(QWidget):
                 ),
                 project_obs_stream=lambda: self._live_integrations.project_obs_ndi_stream(),
                 project_camera_stream=lambda: self._live_integrations.project_camera_stream(),
-                camera_selection_changed=lambda option: (
-                    self._live_integrations.on_camera_selection_changed(option)
+                camera_selection_changed=(
+                    lambda option: self._live_integrations.on_camera_selection_changed(option)
                 ),
                 profile_switch_requested=self._profile_switch.request_switch,
             ),
@@ -654,7 +777,7 @@ class MainWindow(QWidget):
                 media_controller=self.media_ctrl,
                 ndi_service=self._ndi_service,
                 camera_service=self._camera_service,
-                projection_windows=self.projection_session.all_windows,
+                projection_windows=self._raw_projection_windows,
                 playlist_edit_is_temp=lambda: getattr(
                     self.playlist_widget, "is_temporary_edit", False
                 ),
@@ -664,6 +787,7 @@ class MainWindow(QWidget):
                 sjjm_announce_mode=self.settings_widget.get_sjjm_announce_mode,
                 start_videos_paused=self.settings_widget.get_start_videos_paused,
                 playback_protection=self.playback_protection,
+                content_frame_sink=self._program_content.submit_frame,
                 projection_aspect_ratio_provider=(
                     lambda: projection_aspect_ratio_from_windows(
                         tuple(self.projection_session.projection_windows)
@@ -686,7 +810,7 @@ class MainWindow(QWidget):
                 media_controller=self.media_ctrl,
                 ndi_service=self._ndi_service,
                 camera_service=self._camera_service,
-                projection_windows=self.projection_session.all_windows,
+                projection_windows=self._raw_projection_windows,
                 auto_share_configured=(self._projection_integrations.auto_share_configured),
             ),
             ProjectionStopHandlers(
@@ -713,18 +837,19 @@ class MainWindow(QWidget):
                 projection_session=self.projection_session,
                 obs_scene_session=self._obs_scene_session,
                 obs_settings=self._obs_settings,
-                camera_settings=self._camera_settings,
                 obs_service=self._obs_service,
                 ndi_service=self._ndi_service,
-                camera_service=self._camera_service,
                 zoom_service=self._zoom_service,
                 notifications=self.notifications,
                 projection_bar=self.proj_bar,
                 media_controller=self.media_ctrl,
                 quick_toolbar=lambda: getattr(self, "_quick_toolbar", None),
-                projection_windows=self.projection_session.all_windows,
+                projection_windows=self._raw_projection_windows,
                 translate=self.tr,
                 playback_protection=self.playback_protection,
+                content_frame_sink=self._program_content.submit_frame,
+                camera_settings=self._camera_settings,
+                camera_service=self._camera_service,
             ),
             LiveIntegrationHandlers(
                 stop_projection=self._projection_stop.stop_projection,
@@ -739,9 +864,10 @@ class MainWindow(QWidget):
                 media_controller=self.media_ctrl,
                 ndi_service=self._ndi_service,
                 camera_service=self._camera_service,
-                projection_windows=self.projection_session.all_windows,
+                projection_windows=self._raw_projection_windows,
                 translate=self.tr,
                 playback_protection=self.playback_protection,
+                program_content=self._program_content,
             ),
             TimerProjectionHandlers(
                 stop_browser_tab_projection=(self._navigation.stop_browser_tab_projection),
@@ -797,6 +923,9 @@ class MainWindow(QWidget):
         )
         startup.mark("projection_controllers_ready")
         self._signal_connections.connect_signals()
+        self.settings_widget.yearly_text_changed.connect(
+            self._program_content.update_yearly_text
+        )
         self.settings_widget.remote_control_settings_changed.connect(
             self._ensure_remote_control_started
         )
@@ -846,13 +975,22 @@ class MainWindow(QWidget):
                     obs=self._obs_service,
                     zoom=self._zoom_service,
                     ipc=lambda: self._ipc_controller,
+                    scenes=self.scene_runtime,
+                    program_content=self._program_content,
+                    content_frame_ingress=self._content_frame_ingress,
+                    scene_frame_egresses=(
+                        self._scene_preview_egress,
+                        self._scene_program_egress,
+                    ),
                 ),
                 widget_providers=(
+                    lambda: self.settings_widget,
                     lambda: self.meetings_widget,
                     lambda: self.library_widget,
                     lambda: self._lazy_pages.wifi_receive_widget,
                     lambda: self.playlist_widget,
                     lambda: self.timer_widget,
+                    lambda: self.scenes_widget,
                 ),
                 conversion_threads=self._conversion_threads,
                 jwl_temp_files=self._jwl_tmp_files,
@@ -863,6 +1001,225 @@ class MainWindow(QWidget):
         )
         startup.mark("main_window_constructor_ready")
 
+    def _on_scene_document_changed_for_egress(
+        self,
+        document: SceneDocument,
+    ) -> None:
+        preview_output = document.output(BusId.MEDIA_WINDOWS)
+        self._scene_preview_egress.reconfigure(
+            preview_output.video_format.width,
+            preview_output.video_format.height,
+        )
+        program_output = document.output(BusId.VIRTUAL_CAMERA)
+        self._scene_program_egress.reconfigure(
+            program_output.video_format.width,
+            program_output.video_format.height,
+        )
+        self._reconcile_native_scene_surfaces()
+
+    def _on_scene_frame_egress_descriptor_changed(self, _descriptor) -> None:
+        self._reconcile_scene_media_egress()
+
+    def _on_scene_desired_changed_for_egress(self, _scenes) -> None:
+        self._reconcile_native_scene_surfaces()
+
+    def _reconcile_scene_media_egress(self) -> None:
+        self.scene_runtime.set_preview_egress(self._scene_preview_egress.descriptor)
+        self.scene_runtime.set_program_egress(
+            self._scene_program_egress.descriptor
+            if self._native_fallback_mirror_required
+            else None
+        )
+
+    @staticmethod
+    def _native_window_target(
+        surface,
+        target_id: str,
+        bus_id: BusId,
+    ) -> OutputWindowTarget:
+        screen = surface.screen() or QApplication.primaryScreen()
+        origin = surface.mapToGlobal(QPoint(0, 0))
+        return OutputWindowTarget(
+            bus_id=bus_id,
+            target_id=target_id,
+            screen_id=(screen.name() or "primary") if screen is not None else "primary",
+            native_handle=surface.native_handle,
+            x=origin.x(),
+            y=origin.y(),
+            width=max(1, surface.width()),
+            height=max(1, surface.height()),
+            device_pixel_ratio=surface.devicePixelRatioF(),
+        )
+
+    def _on_projection_state_changed_for_native(self) -> None:
+        self._content_frame_ingress.set_media_epoch(
+            self.projection_session.session_id
+        )
+        self._reconcile_native_scene_surfaces()
+
+    def _reconcile_native_scene_surfaces(self) -> None:
+        mirror_enabled = self._program_mirror_enabled()
+        render_bus = (
+            BusId.VIRTUAL_CAMERA if mirror_enabled else BusId.MEDIA_WINDOWS
+        )
+        state = self.projection_session.state
+        raw_visual = state.get("type") in {
+            "idle",
+            "video",
+            "image",
+            "browser",
+            "timer",
+            "obs_stream",
+            "camera_stream",
+        } and not (state.get("type") == "video" and state.get("is_audio", False))
+        native_window_routing_ready = (
+            NATIVE_SCENES_SUPPORTED
+            and self.scene_runtime.native_window_routing_ready
+            and not self._native_window_output_suppressed
+        )
+        native_presentation = _use_native_media_presentation(
+            native_window_routing_ready=native_window_routing_ready,
+            mirror_enabled=mirror_enabled,
+            raw_visual=raw_visual,
+        )
+        physical_windows = tuple(self.projection_session.projection_windows)
+        targets: list[OutputWindowTarget] = []
+
+        for index, window in enumerate(physical_windows):
+            set_native_active = getattr(window, "set_native_output_active", None)
+            if callable(set_native_active):
+                set_native_active(native_presentation)
+            if native_presentation:
+                surface = window.native_video_surface
+                targets.append(
+                    self._native_window_target(
+                        surface,
+                        f"media-window-{index}",
+                        render_bus,
+                    )
+                )
+        for window in self.projection_session.all_windows():
+            if window in physical_windows:
+                continue
+            set_native_active = getattr(window, "set_native_output_active", None)
+            if callable(set_native_active):
+                auxiliary_native = (
+                    native_presentation
+                    and hasattr(window, "native_video_surface")
+                )
+                set_native_active(auxiliary_native)
+                if auxiliary_native:
+                    targets.append(
+                        self._native_window_target(
+                            window.native_video_surface,
+                            "media-floating-preview",
+                            render_bus,
+                        )
+                    )
+
+        fallback_windows = (
+            tuple(self.projection_session.all_windows())
+            if mirror_enabled
+            else ()
+        )
+        self._native_fallback_mirror_required = any(
+            not getattr(window, "_native_output_active", False)
+            for window in fallback_windows
+        )
+        if targets:
+            self.scene_runtime.set_window_targets(tuple(targets))
+        else:
+            self.scene_runtime.set_window_targets(())
+        self._reconcile_scene_media_egress()
+
+    def _on_native_scene_engine_ready_changed(self, ready: bool) -> None:
+        if ready:
+            self._native_window_output_suppressed = False
+        self._reconcile_native_scene_surfaces()
+
+    def _on_native_scene_engine_error(self, _message: str) -> None:
+        if self.scene_runtime.last_engine_error_code != "native_window_output_failed":
+            return
+        self._native_window_output_suppressed = True
+        self._reconcile_native_scene_surfaces()
+
+    def _on_scene_transition_fallback(self, message: str) -> None:
+        self.notifications.warning(
+            message,
+            title=self.tr("Scenes"),
+            dedupe_key="scene-transition-fallback",
+        )
+
+    def _on_scene_preview_frame(self, image) -> None:
+        self.scene_runtime.publish_preview_frame(image)
+
+    def _on_scene_program_frame(self, frame) -> None:
+        if not self._program_mirror_enabled():
+            return
+        image = video_frame_to_image(frame)
+        if image.isNull():
+            return
+        for window in self.projection_session.all_windows():
+            if getattr(window, "_native_output_active", False):
+                continue
+            show_image = getattr(window, "show_image_from_qimage", None)
+            if callable(show_image):
+                show_image(image, cache_pixmap=False)
+        if hasattr(self, "proj_bar"):
+            self.proj_bar.update_tab_live_preview(image)
+
+    def _program_mirror_enabled(self) -> bool:
+        return self.scene_live.state.output(BusId.MEDIA_WINDOWS).enabled
+
+    @property
+    def scene_documents(self):
+        return self.scene_workspace.documents
+
+    @property
+    def scene_live(self):
+        return self.scene_workspace.runtime
+
+    def _program_content_requested(self) -> bool:
+        state = self.scene_live.state
+        return any(state.output(bus_id).enabled for bus_id in BusId)
+
+    def _on_content_ingress_demand_changed(self, required: bool) -> None:
+        self._content_frame_ingress.set_enabled(required)
+        if not required:
+            return
+        self._program_content.refresh()
+        if self.projection_session.state_type != "video":
+            return
+        frame = self.media_ctrl.video_sink.videoFrame()
+        if frame.isValid():
+            self._program_content.submit_frame(frame)
+
+    def _raw_projection_windows(self) -> list:
+        if self._program_mirror_enabled():
+            return []
+        return [
+            window
+            for window in self.projection_session.all_windows()
+            if not getattr(window, "_native_output_active", False)
+        ]
+
+    def _on_scene_window_route_changed(self, _state) -> None:
+        mirror_enabled = self._program_mirror_enabled()
+        if mirror_enabled == self._media_mirror_was_enabled:
+            return
+        self._media_mirror_was_enabled = mirror_enabled
+        self._reconcile_native_scene_surfaces()
+        if mirror_enabled:
+            self._program_content.refresh()
+            return
+        QTimer.singleShot(0, self._restore_raw_projection_windows)
+
+    def _restore_raw_projection_windows(self) -> None:
+        if self._program_mirror_enabled() or getattr(self, "_closing", False):
+            return
+        for window in self._raw_projection_windows():
+            self._projection_targets.apply_full_state_to_window(window)
+
     def _start_deferred_startup(self) -> None:
         if self._deferred_startup_started or getattr(self, "_closing", False):
             return
@@ -872,6 +1229,8 @@ class MainWindow(QWidget):
         self._application_maintenance()
         self.settings_widget.start_deferred_services()
         self._ui_preparation.start()
+        if self.scene_runtime.engine_configured:
+            self.scene_runtime.start_engine()
         self._ensure_remote_control_started()
         self._timer_output_startup_timer.start(_STARTUP_SCREEN_SETTLE_MS)
 
@@ -1078,12 +1437,24 @@ class MainWindow(QWidget):
         self._ui_preparation.completed.connect(self._on_ui_preparation_completed)
         self.right_col = resources.right_col
         self.proj_bar = resources.projection_bar
+        self.scene_runtime.engine_ready_changed.connect(
+            self._on_native_scene_engine_ready_changed
+        )
+        self.scene_runtime.operational_state_changed.connect(
+            self._reconcile_native_scene_surfaces
+        )
+        self.scene_runtime.engine_error.connect(self._on_native_scene_engine_error)
+        self.scene_runtime.desired_scenes_changed.connect(
+            self._on_scene_desired_changed_for_egress
+        )
+        self._reconcile_native_scene_surfaces()
         self.library_widget = resources.library_widget
         self.settings_widget = resources.settings_widget
         self.timer_widget = resources.timer_widget
         self.talk_theme_widget = resources.talk_theme_widget
         self.playlist_widget = resources.playlist_widget
         self.meetings_widget = resources.meetings_widget
+        self.scenes_widget = resources.scenes_widget
         self._quick_toolbar = resources.quick_toolbar
         self._sidebar_title_lbl = resources.sidebar_title_label
         self._sidebar_subtitle_lbl = resources.sidebar_subtitle_label
@@ -1119,6 +1490,7 @@ class MainWindow(QWidget):
             getattr(self, "talk_theme_widget", None),
             getattr(self, "playlist_widget", None),
             getattr(self, "meetings_widget", None),
+            getattr(self, "scenes_widget", None),
             getattr(self, "_lazy_pages", None),
             getattr(self, "proj_bar", None),
             getattr(self, "_quick_toolbar", None),
@@ -1350,6 +1722,31 @@ class MainWindow(QWidget):
             "cleanup",
         )
         self._partial_cleanup_method(
+            "program content",
+            getattr(self, "_program_content", None),
+            "close",
+        )
+        self._partial_cleanup_method(
+            "content frame ingress",
+            getattr(self, "_content_frame_ingress", None),
+            "close",
+        )
+        self._partial_cleanup_method(
+            "scene preview egress",
+            getattr(self, "_scene_preview_egress", None),
+            "close",
+        )
+        self._partial_cleanup_method(
+            "scene program egress",
+            getattr(self, "_scene_program_egress", None),
+            "close",
+        )
+        self._partial_cleanup_method(
+            "scene runtime",
+            getattr(self, "scene_runtime", None),
+            "close",
+        )
+        self._partial_cleanup_method(
             "background song",
             getattr(self, "_background_song_service", None),
             "shutdown",
@@ -1369,11 +1766,6 @@ class MainWindow(QWidget):
             getattr(self, "_ndi_service", None),
             "stop",
             wait=True,
-        )
-        self._partial_cleanup_method(
-            "camera service",
-            getattr(self, "_camera_service", None),
-            "stop",
         )
         self._partial_cleanup_method(
             "OBS service",

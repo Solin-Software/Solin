@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 import os
 import re
 from collections.abc import Callable
@@ -30,8 +29,6 @@ from ..core.projection.image_framing import (
 )
 from ..core.projection.result import ProjectionResult, ProjectionResultStatus
 
-log = logging.getLogger(__name__)
-
 #: Projection states that carry a zoom/pan transform so newly created surfaces
 #: can restore exactly the same framing.
 _TRANSFORMABLE_STATES = frozenset({"image"})
@@ -44,6 +41,10 @@ def _default_projection_aspect_ratio() -> ProjectionAspectRatio:
     return DEFAULT_PROJECTION_ASPECT_RATIO
 
 
+def _discard_content_frame(_frame: object) -> None:
+    return
+
+
 @dataclass(frozen=True, slots=True)
 class MediaProjectionContext:
     """Dependencies for media, image, playlist, cache, and live-tab projection."""
@@ -52,7 +53,6 @@ class MediaProjectionContext:
     projection_bar: Any
     media_controller: Any
     ndi_service: Any
-    camera_service: Any
     projection_windows: Callable[[], list[Any]]
     playlist_edit_is_temp: Callable[[], bool]
     meeting_service: Callable[[], Any]
@@ -62,6 +62,8 @@ class MediaProjectionContext:
     start_videos_paused: Callable[[], bool]
     playback_protection: Any
     projection_aspect_ratio_provider: Callable[[], Any] = _default_projection_aspect_ratio
+    content_frame_sink: Callable[[object], None] = _discard_content_frame
+    camera_service: Any | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,7 +88,6 @@ class MediaProjectionController:
         self._handlers = handlers
         self._session = context.projection_session
         self._next_is_sjjm = False
-        self._browser_tap_connected = False
 
     def on_song_project(
         self,
@@ -277,7 +278,8 @@ class MediaProjectionController:
         if url == "__replay__":
             context.media_controller.stop()
             context.ndi_service.stop()
-            context.camera_service.stop()
+            if context.camera_service is not None:
+                context.camera_service.stop()
             current = context.projection_bar.current_playlist_item()
             if current is None:
                 return
@@ -327,10 +329,10 @@ class MediaProjectionController:
         self._session.set_tab_projection_active(False)
         self._handlers.stop_browser_tab_projection()
         context.ndi_service.stop()
-        context.camera_service.stop()
+        if context.camera_service is not None:
+            context.camera_service.stop()
         context.media_controller.stop()
         context.ndi_service.stop()
-        context.camera_service.stop()
 
         for projection_window in context.projection_windows():
             projection_window.clear()
@@ -358,15 +360,6 @@ class MediaProjectionController:
         if announce:
             context.projection_bar.begin_announcement_mode()
 
-        start_paused = not is_audio and not announce and context.start_videos_paused()
-        context.media_controller.start_playback(
-            self._playback_request(
-                media_item or {"url": url},
-                source=url,
-                autoplay=not (start_paused or wait_for_auto_share),
-            )
-        )
-
         self._session.set_state(
             {
                 "type": "video",
@@ -374,6 +367,14 @@ class MediaProjectionController:
                 "title": title,
                 "origin": self._projection_origin(media_item),
             }
+        )
+        start_paused = not is_audio and not announce and context.start_videos_paused()
+        context.media_controller.start_playback(
+            self._playback_request(
+                media_item or {"url": url},
+                source=url,
+                autoplay=not (start_paused or wait_for_auto_share),
+            )
         )
         self._handlers.update_projection_status(
             True,
@@ -427,7 +428,8 @@ class MediaProjectionController:
             self._session.set_tab_projection_active(True)
             context.media_controller.stop()
             context.ndi_service.stop()
-            context.camera_service.stop()
+            if context.camera_service is not None:
+                context.camera_service.stop()
             context.projection_bar.set_playlist([])
             for projection_window in context.projection_windows():
                 projection_window.clear()
@@ -444,54 +446,13 @@ class MediaProjectionController:
                 auto_keys_media=False,
             )
 
-        obs_composited = False
         for projection_window in context.projection_windows():
-            # Under the obs engine, push the browser frame into a libobs async
-            # source (composited + crossfaded on channel 0) instead of painting a
-            # QImage per frame on the Qt page. The frame stream keeps producing
-            # frames while the browser page is hidden, so this stays live across
-            # panel switches. Falls back to the Qt path when unavailable.
-            if isinstance(frame, QImage) and hasattr(projection_window, "show_browser_frame"):
-                try:
-                    if projection_window.show_browser_frame(frame):
-                        obs_composited = True
-                        continue
-                except Exception:  # noqa: BLE001 - libobs/render boundary
-                    log.debug("libobs browser frame failed; using Qt frames", exc_info=True)
             if isinstance(frame, QImage) and hasattr(projection_window, "show_image_from_qimage"):
                 projection_window.show_image_from_qimage(frame, cache_pixmap=False)
             else:
                 projection_window.show_image_from_pixmap(frame)
-        if obs_composited:
-            # Operator preview reflects the *composited* channel-0 output (with
-            # crossfades/overlays), tapped from libobs — not the raw pre-composite
-            # browser frame — mirroring the camera preview.
-            self._start_browser_preview_tap()
-        else:
-            context.projection_bar.update_tab_live_preview(frame)
-
-    def _start_browser_preview_tap(self) -> None:
-        from ..projection.program_preview import program_preview_tap
-
-        tap = program_preview_tap()
-        if not self._browser_tap_connected:
-            tap.frame_ready.connect(self._on_browser_preview_frame)
-            self._browser_tap_connected = True
-        tap.set_enabled(True)
-
-    def _stop_browser_preview_tap(self) -> None:
-        from ..projection.program_preview import program_preview_tap
-
-        program_preview_tap().set_enabled(False)
-
-    def _on_browser_preview_frame(self, image) -> None:
-        # The tap is a shared channel-0 grab; forward only while the browser is the
-        # projected content, and self-disarm once it isn't (so no teardown hook is
-        # needed in every stop path).
-        if self._session.state_type == "browser":
-            self._context.projection_bar.update_tab_live_preview(image)
-        else:
-            self._stop_browser_preview_tap()
+        context.projection_bar.update_tab_live_preview(frame)
+        context.content_frame_sink(frame)
 
     def on_image_apply_transform(self, zoom: float, norm_x: float, norm_y: float) -> None:
         self._apply_image_transform(zoom, norm_x, norm_y, animate=True)
@@ -519,7 +480,10 @@ class MediaProjectionController:
         # projected images.
         state = self._session.state
         if state.get("type") in _TRANSFORMABLE_STATES:
-            self._session.update_state(transform=(zoom, norm_x, norm_y))
+            self._session.update_image_transform(
+                (zoom, norm_x, norm_y),
+                animate=animate,
+            )
         if sync_preview:
             self._context.projection_bar.set_projected_image_transform(
                 ImageTransform(zoom, norm_x, norm_y)
@@ -535,7 +499,10 @@ class MediaProjectionController:
     def on_image_reset_transform(self) -> None:
         state = self._session.state
         if state.get("type") in _TRANSFORMABLE_STATES:
-            self._session.update_state(transform=_IDENTITY_TRANSFORM)
+            self._session.update_image_transform(
+                _IDENTITY_TRANSFORM,
+                animate=True,
+            )
         for projection_window in self._context.projection_windows():
             projection_window.set_image_transform(*_IDENTITY_TRANSFORM)
 
@@ -569,10 +536,10 @@ class MediaProjectionController:
 
     def distribute_frame(self, frame) -> None:
         context = self._context
-        if not context.projection_bar.is_video_mode():
+        state = self._session.state
+        if state.get("type") != "video" or state.get("is_audio", False):
             return
-        if context.projection_bar.is_audio_mode():
-            return
+        context.content_frame_sink(frame)
         for projection_window in context.projection_windows():
             projection_window.update_frame(frame)
 
@@ -792,8 +759,8 @@ class MediaProjectionController:
         self._handlers.stop_browser_tab_projection()
         context.media_controller.stop()
         context.ndi_service.stop()
-        context.camera_service.stop()
-
+        if context.camera_service is not None:
+            context.camera_service.stop()
         if playlist is not None:
             if playback_order is None:
                 context.projection_bar.set_playlist(
@@ -834,6 +801,7 @@ class MediaProjectionController:
         if fingerprint:
             state["fingerprint"] = fingerprint
         self._session.set_state(state)
+        context.content_frame_sink(image)
         activate_options: dict[str, Any] = {
             "image_data": data,
             "keep_expanded": keep_expanded,

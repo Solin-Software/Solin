@@ -198,6 +198,8 @@ class AutoShareSettingsStore(_ProfilePrefsSettings):
 
 @dataclass(frozen=True, slots=True)
 class CameraSettingsStore(_ProfilePrefsSettings):
+    """Persisted configuration for the legacy Linux/macOS camera workflow."""
+
     def is_enabled(self) -> bool:
         return bool(self.settings.value(SettingsKey.CAMERA_ENABLED, False, bool))
 

@@ -21,9 +21,9 @@ class MainWindowSignalSources:
     settings_widget: Any
     obs_service: Any
     ndi_service: Any
-    camera_service: Any
     auto_share_finished: Any
     media_countdown_automation: Any
+    camera_service: Any | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -140,11 +140,16 @@ class SignalConnectionController:
         settings.obs_stream_config_changed.connect(
             live_integrations.refresh_obs_stream_availability
         )
-        settings.camera_enabled_toggled.connect(
-            live_integrations.on_camera_settings_enabled_toggled
+        if sources.camera_service is not None:
+            settings.camera_enabled_toggled.connect(
+                live_integrations.on_camera_settings_enabled_toggled
+            )
+        settings.background_song_toggled.connect(
+            handlers.background_song_service.set_enabled
         )
-        settings.background_song_toggled.connect(handlers.background_song_service.set_enabled)
-        settings.meeting_schedule_changed.connect(handlers.background_song_service.reload_settings)
+        settings.meeting_schedule_changed.connect(
+            handlers.background_song_service.reload_settings
+        )
         settings.meeting_schedule_changed.connect(
             sources.media_countdown_automation.reload_schedule
         )
@@ -162,9 +167,10 @@ class SignalConnectionController:
         sources.ndi_service.error.connect(live_integrations.on_obs_ndi_error)
         sources.ndi_service.stopped.connect(live_integrations.on_obs_ndi_stopped)
 
-        sources.camera_service.frame_ready.connect(live_integrations.on_camera_frame)
-        sources.camera_service.error.connect(live_integrations.on_camera_error)
-        sources.camera_service.stopped.connect(live_integrations.on_camera_stopped)
+        if sources.camera_service is not None:
+            sources.camera_service.frame_ready.connect(live_integrations.on_camera_frame)
+            sources.camera_service.error.connect(live_integrations.on_camera_error)
+            sources.camera_service.stopped.connect(live_integrations.on_camera_stopped)
 
         projection_bar.obs_scene_toggle_requested.connect(live_integrations.on_obs_scene_toggle)
         projection_bar.set_as_idle_requested.connect(

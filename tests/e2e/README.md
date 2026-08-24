@@ -24,6 +24,9 @@ or CI runner with no existing Solin installation:
 $env:SOLIN_E2E_ALLOW_INSTALLER_MUTATION = "1"
 $env:SOLIN_OLD_INSTALLER = "C:\path\to\old\Solin_Setup_1.0.0.exe"
 $env:SOLIN_NEW_INSTALLER = "C:\path\to\new\Solin_Setup_1.1.0.exe"
+$env:SOLIN_ROLLBACK_INSTALLER = "C:\path\to\Solin_Setup_1.1.0-rollback-injection.exe"
+$env:SOLIN_DIRECTSHOW_HARNESS_X64 = "C:\path\to\x64\solin-virtual-camera-filter-tests.exe"
+$env:SOLIN_DIRECTSHOW_HARNESS_X86 = "C:\path\to\x86\solin-virtual-camera-filter-tests.exe"
 .\.venv\Scripts\python.exe -m pytest tests\e2e\test_installer_upgrade_smoke.py -q
 ```
 
@@ -33,6 +36,15 @@ installer over it, verifies that user state survived, starts the upgraded app,
 then runs the generated uninstaller and removes its test registry keys. It is
 also wired into the Windows release workflow after the Inno Setup build by
 downloading the previous production installer configured in the workflow input.
+The smoke temporarily registers the per-user DirectShow camera in both WOW64
+registry views, loads each installed DLL through its architecture-matched
+harness, connects a real graph, and validates standby samples. It then runs an
+installer whose x86 registration deliberately fails and verifies that the prior
+x64/x86 pair was restored before uninstall. Both registrations must be absent
+after uninstall. The test refuses to run when the Solin camera CLSID already
+exists, so use a disposable Windows account or runner. The Windows release
+workflow builds the failure-injection artifact automatically; it is never
+published.
 
 Run the macOS app replacement smoke after extracting the previous release DMG
 and building the new app bundle:

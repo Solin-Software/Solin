@@ -138,6 +138,7 @@ fi
     --include-module=websocket._core \
     --include-module=websocket._app \
     --include-package=ephem \
+    --include-package=keyring \
     --include-package-data=pyqttoast \
     --include-data-dir=src/solin/resources/assets=solin/resources/assets \
     --include-data-dir=src/solin/resources/remote_control=solin/resources/remote_control \

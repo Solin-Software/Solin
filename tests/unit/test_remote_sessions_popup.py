@@ -125,12 +125,29 @@ def test_quick_toolbar_bridge_exposes_remote_state_without_secret_material() -> 
     assert clicks == [True]
 
 
+def test_quick_toolbar_bridge_exposes_solin_scenes_independently_from_obs() -> None:
+    bridge = QuickToolbarBridge()
+    clicks: list[bool] = []
+    bridge.scenesClicked.connect(lambda: clicks.append(True))
+
+    bridge.set_scenes_visible(True)
+    bridge.set_scenes_icon_color("#388bfd")
+    bridge.set_scenes_tooltip("Solin scenes · engine ready")
+    bridge.onScenesClicked()
+
+    assert bridge.scenesVisible is True
+    assert bridge.scenesIconColor == "388bfd"
+    assert bridge.scenesTooltip == "Solin scenes · engine ready"
+    assert clicks == [True]
+
+
 def test_remote_toolbar_control_keeps_the_maximum_pill_within_its_fixed_surface() -> None:
     bridge = SimpleNamespace(
         _background_song_visible=True,
         _separator_visible=True,
         _obs_visible=True,
-        _camera_visible=True,
+        _scenes_visible=True,
+        _camera_visible=False,
         _zoom_visible=True,
         _remote_control_visible=True,
     )
@@ -138,6 +155,8 @@ def test_remote_toolbar_control_keeps_the_maximum_pill_within_its_fixed_surface(
     source = Path("src/solin/qml/QuickAccessToolbar.qml").read_text(encoding="utf-8")
 
     assert QuickAccessToolbar._calc_pill_width(toolbar) == 240
+    assert source.index("id: obsMA") < source.index("id: scenesMA")
+    assert source.index("id: scenesMA") < source.index("id: zoomMA")
     assert source.index("id: zoomMA") < source.index("id: remoteControlButton")
     assert source.index("id: remoteControlButton") < source.index("id: minMA")
     assert "Accessible.role: Accessible.Button" in source

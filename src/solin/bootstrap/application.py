@@ -9,34 +9,6 @@ from solin.core.foundation.qt_logging import (
 
 configure_qt_logging_rules()
 
-
-def _configure_qt_gl_integration() -> None:
-    """Prepare Qt to coexist with libobs' OpenGL when the libobs engine is on.
-
-    Two settings, Linux/X11 only, applied before QApplication is constructed:
-
-    * ``QT_XCB_GL_INTEGRATION=xcb_egl`` — libobs' OpenGL backend uses EGL. If Qt
-      uses GLX (the xcb default), the two can't share a context and the libobs
-      projection display fails with EGL_BAD_ACCESS. Selecting ``xcb_egl`` makes
-      Qt use EGL so — with ``obs_set_nix_platform_display`` sharing Qt's X
-      connection — both live on a single EGLDisplay.
-    * ``QT_QUICK_BACKEND=software`` — but with ``xcb_egl`` active, Qt Quick's
-      OpenGL RHI cannot make a context current on some Intel GPUs (``QRhiGles2:
-      Failed to make context current`` / ``eglMakeCurrent failed: 3009``), so the
-      QML operator UI never leaves the splash. Rendering Qt Quick in *software*
-      sidesteps that entirely and leaves the GPU to libobs (fine for the
-      operator UI — it is not GPU-bound).
-    """
-    if os.environ.get("SOLIN_MEDIA_ENGINE", "").strip().lower() != "obs":
-        return
-    if sys.platform.startswith("linux"):
-        if not os.environ.get("QT_XCB_GL_INTEGRATION"):
-            os.environ["QT_XCB_GL_INTEGRATION"] = "xcb_egl"
-        os.environ.setdefault("QT_QUICK_BACKEND", "software")
-
-
-_configure_qt_gl_integration()
-
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import Qt, QCoreApplication, QTimer
 
@@ -57,7 +29,7 @@ from solin.bootstrap.single_instance import (
     SingleInstanceServer,
     try_forward_to_running,
 )
-from solin.core.foundation.constants import IPC_SERVER_NAME
+from solin.core.foundation.constants import IPC_SERVER_NAME, NATIVE_SCENES_SUPPORTED
 from solin.core.profiles.application import ProfileRegistryLoadError
 from solin.bootstrap.startup_timeline import startup_timeline
 
@@ -98,7 +70,11 @@ def _build_main_window_profile_settings(profile_settings):
         zoom=ZoomSettingsStore.for_profile_settings(profile_settings),
         auto_share=AutoShareSettingsStore.for_profile_settings(profile_settings),
         auto_key=AutoKeySettingsStore.for_profile_settings(profile_settings),
-        camera=CameraSettingsStore.for_profile_settings(profile_settings),
+        camera=(
+            CameraSettingsStore.for_profile_settings(profile_settings)
+            if not NATIVE_SCENES_SUPPORTED
+            else None
+        ),
         projection_playback=ProjectionPlaybackSettingsStore.for_profile_settings(profile_settings),
         meeting_schedule=MeetingScheduleSettingsStore.for_profile_settings(profile_settings),
         media_countdown=(MediaCountdownSettingsStore.for_profile_settings(profile_settings)),
@@ -132,6 +108,33 @@ def _meeting_weekday_resolver(schedule_settings):
         return UNCONFIGURED_WEEKDAY
 
     return weekday_for_pub_type
+
+
+def _scene_seed_names():
+    from solin.core.scenes.presets import SceneSeedNames
+
+    translate = lambda source: QCoreApplication.translate("_Scenes", source)
+    return SceneSeedNames(
+        content_source=translate("Current Solin content"),
+        default_camera_source=translate("Default camera"),
+        no_signal_source=translate("No signal background"),
+        content_scene=translate("Content"),
+        camera_scene=translate("Camera"),
+        content_camera_pip_scene=translate("Content + camera"),
+        no_signal_scene=translate("No signal"),
+        content_layer=translate("Content"),
+        camera_layer=translate("Camera"),
+        background_layer=translate("Background"),
+    )
+
+
+def _build_scene_workspace(profile_paths):
+    from solin.core.scenes.workspace import SceneWorkspaceService
+
+    return SceneWorkspaceService(
+        profile_paths,
+        seed_names=_scene_seed_names(),
+    )
 
 
 def _import_main_window_class():
@@ -174,6 +177,8 @@ def _prepare_profile_main_window(profile_paths, cancellation=None):
     # async-load error boundary so the UI cannot mutate unsupported/corrupt data.
     playlist_repository.migrate_strict()
     meeting_tree_store.migrate_strict()
+    scene_workspace = _build_scene_workspace(profile_paths)
+    scene_workspace.close()
 
     try:
         maintenance = ProfileMaintenanceService(
@@ -221,7 +226,6 @@ def _build_main_window_service_factories(
     from solin.core.integrations.automation.obs import OBSWebSocketService
     from solin.core.integrations.automation.shortcuts import AutoKeyDispatcher
     from solin.core.integrations.automation.zoom.service import ZoomService
-    from solin.core.integrations.camera import CameraService
     from solin.core.integrations.ndi import NDIReceiverService
     from solin.core.jw.background_song_service import BackgroundSongService
     from solin.core.jw.yeartext import YeartextService
@@ -229,6 +233,12 @@ def _build_main_window_service_factories(
     from solin.core.meetings.publications import JwpubService
 
     install_id_provider = lambda: get_install_id(installation_settings)
+
+    camera_factory = None
+    if not NATIVE_SCENES_SUPPORTED:
+        from solin.core.integrations.camera import CameraService
+
+        camera_factory = CameraService
 
     def create_remote_services(parent):
         from typing import cast
@@ -290,7 +300,7 @@ def _build_main_window_service_factories(
         auto_key_dispatcher=AutoKeyDispatcher,
         obs_websocket=OBSWebSocketService,
         ndi_receiver=NDIReceiverService,
-        camera=CameraService,
+        camera=camera_factory,
         zoom=ZoomService,
         background_song=BackgroundSongService,
         yeartext=lambda parent: YeartextService(
@@ -360,6 +370,8 @@ def _build_main_window_runtime(
         PlaylistStoragePaths,
     )
     from solin.core.foundation.resource_lanes import ResourceLaneRegistry
+    from solin.core.scenes.native_engine import create_native_scene_engine
+    from solin.core.scenes.ptz_runtime import create_ptz_runtime_services
 
     playlist_storage_paths = PlaylistStoragePaths(
         playlists_file=profile_paths.playlists_file,
@@ -421,6 +433,14 @@ def _build_main_window_runtime(
     watched_folder_file_store = WatchedFolderFileStore()
     watched_folder_playlist_store = WatchedFolderPlaylistStore()
     main_window_profile_settings = _build_main_window_profile_settings(profile_settings)
+    scene_workspace = _build_scene_workspace(profile_paths)
+    scene_engine = (
+        create_native_scene_engine(runtime_paths.cache_dir)
+        if NATIVE_SCENES_SUPPORTED
+        else None
+    )
+    ptz_services = create_ptz_runtime_services(active_profile.id)
+    scene_workspace.set_credential_cleaner(ptz_services.credentials.delete)
     meeting_linked_folder_sync = MeetingLinkedFolderSync(
         _meeting_weekday_resolver(main_window_profile_settings.meeting_schedule)
     )
@@ -433,9 +453,7 @@ def _build_main_window_runtime(
         application_maintenance,
     )
     media_controller = media.create_playback(main_window_profile_settings.media)
-    background_media_controller = media.create_playback(
-        main_window_profile_settings.media, projection=False
-    )
+    background_media_controller = media.create_playback(main_window_profile_settings.media)
     timeline.mark("critical_ui_started")
     try:
         runtime = MainWindow(
@@ -482,9 +500,15 @@ def _build_main_window_runtime(
             timer_session,
             active_profile,
             talk_theme_output_settings=talk_theme_output_settings,
+            scene_workspace=scene_workspace,
+            scene_engine=scene_engine,
+            ptz_executor=ptz_services.executor,
+            ptz_credentials=ptz_services.credentials,
             window_host=window_host,
         )
     except Exception:  # noqa: BLE001 - transactional startup rollback boundary
+        ptz_services.executor.close()
+        scene_workspace.close()
         window_host.abort_runtime_construction()
         for controller in (media_controller, background_media_controller):
             stop = getattr(controller, "stop", None)

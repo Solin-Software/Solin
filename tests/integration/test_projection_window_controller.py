@@ -108,7 +108,7 @@ class _ProjectionWindowStub:
         self.index = index
         self.idle_active = 0
         self.cleared_idle = 0
-        self.obs_idle_calls = []
+        self.cleared = 0
         self.idle_images = []
         self.idle_visible_flag = False
         self.visibility_slot = None
@@ -130,11 +130,11 @@ class _ProjectionWindowStub:
     def set_idle_active(self):
         self.idle_active += 1
 
-    def show_obs_idle_media(self, path, media_type):
-        self.obs_idle_calls.append((path, media_type))
-
     def clear_idle(self):
         self.cleared_idle += 1
+
+    def clear(self):
+        self.cleared += 1
 
     def update_idle_image(self, image):
         self.idle_images.append(image)
@@ -198,6 +198,8 @@ class _WindowStub:
         self._quick_toolbar = _CountTargetStub()
         self._monitor_popup = _MonitorPopupStub()
         self.font_manager = object()
+        self.program_frames = []
+        self.program_refreshes = 0
 
     def tr(self, text):
         return text
@@ -217,6 +219,10 @@ def _projection_context(window: _WindowStub) -> ProjectionWindowContext:
         yearly_text=lambda: (
             *window.settings_widget.get_yearly_text(),
             window.settings_widget._current_api_code(),
+        ),
+        content_frame_sink=window.program_frames.append,
+        refresh_program_content=lambda: setattr(
+            window, "program_refreshes", window.program_refreshes + 1
         ),
         set_projection_screen_count=window.proj_bar.set_screen_count,
         set_toolbar_screen_count=window._quick_toolbar.set_screen_count,
@@ -263,32 +269,6 @@ def test_on_idle_media_changed_activates_source_and_windows(tmp_path):
     assert src.cleared == 1
     assert win.cleared_idle == 1
     assert window._monitor_popup.idle_paths == [str(img), ""]
-
-
-def test_on_idle_media_changed_composites_in_libobs_in_obs_mode(tmp_path, monkeypatch):
-    # In obs mode the idle background composites inside libobs (no Qt decoder):
-    # the controller routes the file straight to the surface, never touching the
-    # shared IdleMediaSource.
-    monkeypatch.setattr(
-        projection_controller, "obs_media_engine_active", lambda: True
-    )
-    vid = tmp_path / "idle.mp4"
-    vid.write_bytes(b"fake")
-    src = _StubIdleSource()
-    window = _WindowStub()
-    win = _ProjectionWindowStub()
-    window.projection_session.projection_windows = [win]
-    controller = ProjectionWindowController(
-        _projection_context(window),
-        idle_source_factory=lambda: src,
-    )
-
-    controller.on_idle_media_changed(str(vid))
-
-    assert win.obs_idle_calls == [(str(vid), "video")]
-    assert win.idle_active == 0          # Qt idle-media mode not used
-    assert src.media_set == []           # shared Qt decoder never created/loaded
-    assert controller._idle_source is None
 
 
 def test_on_idle_media_changed_rejects_missing_file():

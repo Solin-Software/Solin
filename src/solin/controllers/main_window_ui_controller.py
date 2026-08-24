@@ -16,8 +16,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ..core.foundation.constants import NATIVE_SCENES_SUPPORTED
 from ..core.meetings.preparation import MeetingPreparationService
 from ..styles.icons import (
+    ICON_CLAPPERBOARD,
     ICON_MENU,
     ICON_NAV_BROWSER,
     ICON_NAV_LIBRARY,
@@ -43,6 +45,7 @@ from ..widgets.library_widget import LibraryWidget
 from ..widgets.playlist.widget import PlaylistWidget
 from ..widgets.projection.bar import ProjectionBar
 from ..widgets.quick_access_toolbar import QuickAccessToolbar
+from ..widgets.deferred_scenes_widget import DeferredScenesWidget
 from ..widgets.deferred_talk_theme_widget import DeferredTalkThemeWidget
 from ..widgets.settings_widget import SettingsWidget
 from ..widgets.timer_widget import TimerWidget
@@ -82,6 +85,8 @@ class MainWindowUiContext:
     notifications: Any
     profile_paths: Any
     projection_session: Any
+    scene_runtime: Any
+    ptz_credentials: Any
     runtime_paths: Any
     media_cache_manager: Any
     media_tree_runtime: Any
@@ -90,12 +95,10 @@ class MainWindowUiContext:
     obs_service: Any
     ndi_service: Any
     zoom_service: Any
-    camera_service: Any
     app_settings: Any
     obs_settings: Any
     zoom_settings: Any
     auto_share_settings: Any
-    camera_settings: Any
     auto_key_settings: Any
     media_settings: Any
     playback_protection: Any
@@ -140,6 +143,8 @@ class MainWindowUiContext:
     jw_songs_store: Any
     jwpub_service_factory: Callable[[QObject], Any]
     memorial_service_factory: Callable[[QObject], Any]
+    camera_service: Any | None = None
+    camera_settings: Any | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -157,9 +162,9 @@ class MainWindowUiHandlers:
     quick_obs_scene_change: Callable[..., Any]
     quick_obs_return_scene_change: Callable[..., Any]
     project_obs_stream: Callable[..., Any]
-    project_camera_stream: Callable[..., Any]
-    camera_selection_changed: Callable[..., Any]
     profile_switch_requested: Callable[..., Any]
+    project_camera_stream: Callable[..., Any] | None = None
+    camera_selection_changed: Callable[..., Any] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -176,6 +181,7 @@ class MainWindowUiResources:
     talk_theme_widget: DeferredTalkThemeWidget
     playlist_widget: PlaylistWidget
     meetings_widget: MeetingsWidget
+    scenes_widget: DeferredScenesWidget
     quick_toolbar: QuickAccessToolbar
     sidebar_title_label: QLabel
     sidebar_subtitle_label: QLabel
@@ -193,6 +199,7 @@ class _PageResources:
     talk_theme_widget: DeferredTalkThemeWidget
     playlist_widget: PlaylistWidget
     meetings_widget: MeetingsWidget
+    scenes_widget: DeferredScenesWidget
 
 
 @dataclass(frozen=True, slots=True)
@@ -218,6 +225,7 @@ class MainWindowUiController:
         ICON_NAV_SETTINGS,
         ICON_NAV_PLAYLIST,
         ICON_NAV_WIFI,
+        ICON_CLAPPERBOARD,
     )
     _NAV_BUTTON_SPECS = tuple(
         (attr_name, icon, label, int(page))
@@ -226,6 +234,7 @@ class MainWindowUiController:
     _SIDEBAR_LAYOUT_ORDER = (
         "nav_meetings_btn",
         "nav_browser_btn",
+        "nav_scenes_btn",
         "nav_timer_btn",
         "nav_playlist_btn",
         "nav_library_btn",
@@ -252,11 +261,19 @@ class MainWindowUiController:
 
     @classmethod
     def nav_button_specs(cls) -> tuple[tuple[str, str, str, int], ...]:
-        return cls._NAV_BUTTON_SPECS
+        if NATIVE_SCENES_SUPPORTED:
+            return cls._NAV_BUTTON_SPECS
+        return tuple(
+            spec for spec in cls._NAV_BUTTON_SPECS if spec[0] != "nav_scenes_btn"
+        )
 
     @classmethod
     def sidebar_layout_order(cls) -> tuple[str, ...]:
-        return cls._SIDEBAR_LAYOUT_ORDER
+        if NATIVE_SCENES_SUPPORTED:
+            return cls._SIDEBAR_LAYOUT_ORDER
+        return tuple(
+            name for name in cls._SIDEBAR_LAYOUT_ORDER if name != "nav_scenes_btn"
+        )
 
     def build_ui(self) -> MainWindowUiResources:
         context = self._context
@@ -327,6 +344,17 @@ class MainWindowUiController:
             thread_name_prefix="solin-browser-import",
         )
         lazy_pages.set_browser_preparation(browser_preparation)
+        on_demand_tasks = {
+            -1: projection_bar.overlay_preparation_handle,
+            -2: quick_toolbar.preparation_handle,
+            int(MainPage.LIBRARY): pages.library_widget.qml_load_handle,
+            int(MainPage.TIMER): pages.timer_widget.qml_load_handle,
+            int(MainPage.TALK_THEME): pages.talk_theme_widget.preparation_handle,
+            int(MainPage.SETTINGS): pages.settings_widget.preparation_handle,
+            int(MainPage.PLAYLISTS): pages.playlist_widget.preparation_handle,
+        }
+        if NATIVE_SCENES_SUPPORTED:
+            on_demand_tasks[int(MainPage.SCENES)] = pages.scenes_widget.preparation_handle
         preparation = UiPreparationCoordinator(
             {
                 -4: quick_toolbar.qml_load_handle,
@@ -334,15 +362,7 @@ class MainWindowUiController:
                 2: browser_preparation,
             },
             context.parent,
-            on_demand_tasks={
-                -1: projection_bar.overlay_preparation_handle,
-                -2: quick_toolbar.preparation_handle,
-                int(MainPage.LIBRARY): pages.library_widget.qml_load_handle,
-                int(MainPage.TIMER): pages.timer_widget.qml_load_handle,
-                int(MainPage.TALK_THEME): pages.talk_theme_widget.preparation_handle,
-                int(MainPage.SETTINGS): pages.settings_widget.preparation_handle,
-                int(MainPage.PLAYLISTS): pages.playlist_widget.preparation_handle,
-            },
+            on_demand_tasks=on_demand_tasks,
         )
         preparation_ref["value"] = preparation
         right_col.installEventFilter(context.event_filter)
@@ -360,6 +380,7 @@ class MainWindowUiController:
             talk_theme_widget=pages.talk_theme_widget,
             playlist_widget=pages.playlist_widget,
             meetings_widget=pages.meetings_widget,
+            scenes_widget=pages.scenes_widget,
             quick_toolbar=quick_toolbar,
             sidebar_title_label=sidebar.title_label,
             sidebar_subtitle_label=sidebar.subtitle_label,
@@ -540,6 +561,13 @@ class MainWindowUiController:
             parent=context.parent,
         )
         timeline.mark("page_meetings_constructed")
+        scenes_widget = DeferredScenesWidget(
+            context.scene_runtime,
+            credentials=context.ptz_credentials,
+            notifications=context.notifications,
+            parent=context.parent,
+        )
+        timeline.mark("page_scenes_constructed")
         meetings_widget.set_watched_folder(watched_folder)
         settings_widget.meetings_auto_download_toggled.connect(
             meetings_widget.set_automatic_download_enabled
@@ -553,6 +581,7 @@ class MainWindowUiController:
         stack.addWidget(settings_widget)
         stack.addWidget(playlist_widget)
         stack.addWidget(lazy_pages.placeholder())
+        stack.addWidget(scenes_widget)
 
         return _PageResources(
             library_widget=library_widget,
@@ -561,6 +590,7 @@ class MainWindowUiController:
             talk_theme_widget=talk_theme_widget,
             playlist_widget=playlist_widget,
             meetings_widget=meetings_widget,
+            scenes_widget=scenes_widget,
         )
 
     def _build_sidebar(
@@ -605,7 +635,7 @@ class MainWindowUiController:
         layout.addSpacing(8)
         layout.addWidget(self._separator())
         layout.addSpacing(4)
-        for attr_name in self._SIDEBAR_LAYOUT_ORDER:
+        for attr_name in self.sidebar_layout_order():
             layout.addWidget(nav_buttons_by_name[attr_name])
         layout.addStretch()
         layout.addWidget(nav_buttons_by_name["nav_settings_btn"])
@@ -676,20 +706,27 @@ class MainWindowUiController:
         toolbar = QuickAccessToolbar(
             context.obs_service,
             context.zoom_service,
-            context.camera_service,
             right_col,
             obs_settings=context.obs_settings,
-            camera_settings=context.camera_settings,
             background_song_service=context.background_song_service,
+            scene_runtime=(context.scene_runtime if NATIVE_SCENES_SUPPORTED else None),
+            camera_service=context.camera_service,
+            camera_settings=context.camera_settings,
         )
         toolbar.monitor_clicked.connect(handlers.monitor_manager_requested)
         toolbar.obs_scene_change.connect(handlers.quick_obs_scene_change)
         toolbar.obs_return_scene_change.connect(handlers.quick_obs_return_scene_change)
         toolbar.obs_stream_requested.connect(handlers.project_obs_stream)
-        toolbar.obs_camera_stream_requested.connect(handlers.project_camera_stream)
-        toolbar.camera_stream_requested.connect(handlers.project_camera_stream)
-        toolbar.camera_selection_changed.connect(handlers.camera_selection_changed)
-        toolbar.set_camera_enabled(settings_widget.get_camera_enabled())
+        if (
+            context.camera_service is not None
+            and context.camera_settings is not None
+            and handlers.project_camera_stream is not None
+            and handlers.camera_selection_changed is not None
+        ):
+            toolbar.obs_camera_stream_requested.connect(handlers.project_camera_stream)
+            toolbar.camera_stream_requested.connect(handlers.project_camera_stream)
+            toolbar.camera_selection_changed.connect(handlers.camera_selection_changed)
+            toolbar.set_camera_enabled(settings_widget.get_camera_enabled())
         toolbar.show()
         toolbar.reposition()
         navigation.update_quick_toolbar_browser_style()
@@ -763,7 +800,7 @@ class MainWindowUiController:
     ) -> tuple[dict[str, SidebarButton], list[SidebarButton]]:
         nav_buttons_by_name: dict[str, SidebarButton] = {}
         nav_buttons: list[SidebarButton] = []
-        for attr_name, icon, label, page_index in self._NAV_BUTTON_SPECS:
+        for attr_name, icon, label, page_index in self.nav_button_specs():
             button = SidebarButton(icon, self._context.translate(label))
             button.clicked.connect(
                 lambda _checked=False, index=page_index: navigation.switch_page(index)

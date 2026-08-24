@@ -101,6 +101,7 @@ def test_profile_paths_snapshot_is_immutable_and_creates_profile_cache_dirs(
             profile_paths.images_dir,
             profile_paths.embedded_dir,
             profile_paths.talk_theme_assets_dir,
+            profile_paths.scenes_assets_dir,
             profile_paths.profile_cache_dir,
             profile_paths.thumb_cache_dir,
             profile_paths.meeting_thumb_cache_dir,

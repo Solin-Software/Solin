@@ -1,21 +1,143 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QEvent, qInstallMessageHandler
-from PySide6.QtGui import QColor, QPixmap
+import sys
+
+from PySide6.QtCore import QEvent, QObject, QPointF, Qt, Signal, qInstallMessageHandler
+from PySide6.QtGui import QColor, QMouseEvent, QPixmap
 from PySide6.QtWidgets import QApplication
 
 from solin.core.projection.image_framing import cover_zoom_for_frame
 from solin.core.projection.image_framing import ImageTransform
+from solin.projection.window import FloatingPreviewWindow
 from solin.widgets.projection.preview import ImagePreviewWidget
 
 
 _APP = QApplication.instance() or QApplication([])
 
 
+class _FontManager(QObject):
+    font_ready = Signal(str)
+
+    def ensure(self, _name: str) -> None:
+        pass
+
+    def family(self, _name: str) -> str:
+        return "Arial"
+
+
 def _pixmap(width: int = 300, height: int = 400) -> QPixmap:
     pixmap = QPixmap(width, height)
     pixmap.fill(QColor("#ffffff"))
     return pixmap
+
+
+def _move_mouse(widget, position: QPointF) -> None:
+    _send_mouse(
+        widget,
+        QEvent.Type.MouseMove,
+        position,
+        button=Qt.MouseButton.NoButton,
+        buttons=Qt.MouseButton.NoButton,
+    )
+
+
+def _send_mouse(
+    widget,
+    event_type: QEvent.Type,
+    position: QPointF,
+    *,
+    button: Qt.MouseButton,
+    buttons: Qt.MouseButton,
+) -> None:
+    global_position = QPointF(widget.mapToGlobal(position.toPoint()))
+    QApplication.sendEvent(
+        widget,
+        QMouseEvent(
+            event_type,
+            position,
+            global_position,
+            button,
+            buttons,
+            Qt.KeyboardModifier.NoModifier,
+        ),
+    )
+
+
+def test_native_floating_preview_cursor_returns_to_arrow_away_from_edges() -> None:
+    window = FloatingPreviewWindow(_FontManager())
+    try:
+        window.resize(640, 360)
+        window.set_native_output_active(True)
+        _APP.processEvents()
+        surface = window.native_video_surface
+        overlay = surface.input_overlay
+        assert overlay is not None
+        assert overlay.isVisible()
+        assert overlay.testAttribute(Qt.WidgetAttribute.WA_NativeWindow)
+        if sys.platform == "win32":
+            assert not overlay.testAttribute(
+                Qt.WidgetAttribute.WA_TranslucentBackground
+            )
+            assert not overlay.updatesEnabled()
+        center_y = surface.height() / 2
+
+        _move_mouse(overlay, QPointF(1, center_y))
+
+        assert window.cursor().shape() == Qt.CursorShape.SizeHorCursor
+        assert surface.cursor().shape() == Qt.CursorShape.SizeHorCursor
+        assert overlay.cursor().shape() == Qt.CursorShape.SizeHorCursor
+
+        _move_mouse(overlay, QPointF(surface.width() / 2, center_y))
+
+        assert window.cursor().shape() == Qt.CursorShape.ArrowCursor
+        assert surface.cursor().shape() == Qt.CursorShape.ArrowCursor
+        assert overlay.cursor().shape() == Qt.CursorShape.ArrowCursor
+    finally:
+        window.close()
+        window.deleteLater()
+        _APP.processEvents()
+
+
+def test_native_floating_preview_overlay_forwards_resize_drag() -> None:
+    window = FloatingPreviewWindow(_FontManager())
+    try:
+        window.resize(640, 360)
+        window.set_native_output_active(True)
+        _APP.processEvents()
+        overlay = window.native_video_surface.input_overlay
+        assert overlay is not None
+        center_y = overlay.height() / 2
+        original = window.geometry()
+
+        _send_mouse(
+            overlay,
+            QEvent.Type.MouseButtonPress,
+            QPointF(1, center_y),
+            button=Qt.MouseButton.LeftButton,
+            buttons=Qt.MouseButton.LeftButton,
+        )
+        _send_mouse(
+            overlay,
+            QEvent.Type.MouseMove,
+            QPointF(-31, center_y),
+            button=Qt.MouseButton.NoButton,
+            buttons=Qt.MouseButton.LeftButton,
+        )
+        _send_mouse(
+            overlay,
+            QEvent.Type.MouseButtonRelease,
+            QPointF(1, center_y),
+            button=Qt.MouseButton.LeftButton,
+            buttons=Qt.MouseButton.NoButton,
+        )
+
+        assert window.width() > original.width()
+        assert window.x() < original.x()
+        assert window._resize_dir == (False, False, False, False)
+    finally:
+        window.close()
+        window.deleteLater()
+        _APP.processEvents()
 
 
 def test_preview_theme_styles_do_not_emit_qss_parse_warnings() -> None:

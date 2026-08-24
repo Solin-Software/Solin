@@ -18,10 +18,11 @@ class TimerProjectionContext:
     projection_bar: Any
     media_controller: Any
     ndi_service: Any
-    camera_service: Any
     projection_windows: Callable[[], list[Any]]
     translate: Callable[[str], str]
     playback_protection: Any
+    program_content: Any
+    camera_service: Any | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,6 +117,7 @@ class TimerProjectionController:
             projection_window.update_timer(remaining, total)
 
     def on_timer_blink_proj(self, on: bool) -> None:
+        self._context.program_content.set_timer_blink(on)
         for projection_window in self._context.projection_windows():
             projection_window.set_timer_blink(on)
 
@@ -127,7 +129,8 @@ class TimerProjectionController:
         self._handlers.stop_browser_tab_projection()
         context.media_controller.stop()
         context.ndi_service.stop()
-        context.camera_service.stop()
+        if context.camera_service is not None:
+            context.camera_service.stop()
 
 
 __all__ = [

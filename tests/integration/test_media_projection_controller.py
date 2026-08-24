@@ -264,7 +264,6 @@ class _WindowStub:
         self._navigation = _NavigationStub()
         self.media_ctrl = _ServiceStub(self.events, "media")
         self._ndi_service = _ServiceStub(self.events, "ndi")
-        self._camera_service = _ServiceStub(self.events, "camera")
         self.proj_bar = _ProjectionBarStub(self.events)
         self.settings_widget = _SettingsStub()
         self.playback_protection = _ProtectionStub()
@@ -276,6 +275,7 @@ class _WindowStub:
             _ProjectionWindowStub(self.events),
             _ProjectionWindowStub(self.events),
         ]
+        self.content_frames = []
 
     def _all_windows(self):
         return self.windows
@@ -284,14 +284,13 @@ class _WindowStub:
         return text
 
 
-def _controller(window):
+def _controller(window, *, content_frame_sink=None):
     return MediaProjectionController(
         MediaProjectionContext(
             projection_session=window.projection_session,
             projection_bar=window.proj_bar,
             media_controller=window.media_ctrl,
             ndi_service=window._ndi_service,
-            camera_service=window._camera_service,
             projection_windows=window._all_windows,
             playlist_edit_is_temp=lambda: getattr(
                 window.playlist_widget._edit_view,
@@ -304,6 +303,7 @@ def _controller(window):
             sjjm_announce_mode=window.settings_widget.get_sjjm_announce_mode,
             start_videos_paused=window.settings_widget.get_start_videos_paused,
             playback_protection=window.playback_protection,
+            content_frame_sink=content_frame_sink or window.content_frames.append,
         ),
         MediaProjectionHandlers(
             stop_browser_tab_projection=(window._navigation.stop_browser_tab_projection),
@@ -328,6 +328,40 @@ def _png_bytes(width=64, height=36):
 
 def _write_png(path):
     path.write_bytes(_png_bytes())
+
+
+def test_image_identity_is_committed_before_first_frame():
+    window = _WindowStub()
+    events = []
+    window.projection_session.subscribe(
+        lambda: events.append(("state", window.projection_session.session_id))
+    )
+    controller = _controller(
+        window,
+        content_frame_sink=lambda _frame: events.append(
+            ("frame", window.projection_session.session_id)
+        ),
+    )
+
+    controller.project_image_bytes(_png_bytes())
+
+    assert events[-2:] == [("state", 1), ("frame", 1)]
+
+
+def test_video_identity_is_committed_before_decoder_can_emit():
+    window = _WindowStub()
+    events = []
+    window.projection_session.subscribe(
+        lambda: events.append(("state", window.projection_session.session_id))
+    )
+    window.media_ctrl.start_playback = lambda _request: events.append(
+        ("decoder", window.projection_session.session_id)
+    )
+    controller = _controller(window)
+
+    assert controller.project_video("clip.mp4", "Clip")
+
+    assert events[-2:] == [("state", 1), ("decoder", 1)]
 
 
 def test_generated_theme_image_uses_non_persistent_image_pipeline() -> None:
@@ -732,7 +766,6 @@ def test_reprojecting_same_image_animates_only_changed_prepared_framing(tmp_path
     assert window._navigation.stopped == 1
     assert window.media_ctrl.stopped == 1
     assert window._ndi_service.stopped == 1
-    assert window._camera_service.stopped == 1
     assert len(window._projection_integrations.statuses) == 1
     for surface in window.windows:
         assert surface.cleared == 1
@@ -913,58 +946,7 @@ def test_project_tab_frame_initializes_live_tab_once():
         [frame, frame],
         [frame, frame],
     ]
-
-
-def test_project_tab_frame_uses_channel0_preview_tap_when_libobs_composites(monkeypatch):
-    """When the browser is composited by libobs, the operator preview taps the
-    channel-0 output (crossfades/overlays) instead of the raw pre-composite
-    frame — mirroring the camera preview."""
-    from PySide6.QtGui import QImage
-
-    import solin.projection.program_preview as preview_mod
-
-    class _FakeSignal:
-        def __init__(self):
-            self.slots = []
-
-        def connect(self, fn):
-            self.slots.append(fn)
-
-    class _FakeTap:
-        def __init__(self):
-            self.frame_ready = _FakeSignal()
-            self.enabled = []
-
-        def set_enabled(self, on):
-            self.enabled.append(on)
-
-    fake_tap = _FakeTap()
-    monkeypatch.setattr(preview_mod, "program_preview_tap", lambda: fake_tap)
-
-    window = _WindowStub()
-    window.projection_session.set_tab_projection_active(False)
-    controller = _controller(window)
-    for projection_window in window.windows:
-        projection_window.show_browser_frame = lambda _img: True  # libobs composites it
-
-    img = QImage(4, 4, QImage.Format.Format_RGB32)
-    img.fill(0)
-    controller.project_tab_frame(img)
-
-    # Tap started + connected; the raw frame is NOT pushed to the preview.
-    assert fake_tap.enabled == [True]
-    assert len(fake_tap.frame_ready.slots) == 1
-    assert window.proj_bar.tab_previews == []
-
-    # A tapped channel-0 frame reaches the preview while the browser is active…
-    tapped = QImage(2, 2, QImage.Format.Format_RGB32)
-    fake_tap.frame_ready.slots[0](tapped)
-    assert window.proj_bar.tab_previews == [tapped]
-
-    # …and the tap self-disarms once the browser is no longer projected.
-    window.projection_session.set_state({"type": "video", "title": "x"})
-    fake_tap.frame_ready.slots[0](QImage(2, 2, QImage.Format.Format_RGB32))
-    assert fake_tap.enabled == [True, False]
+    assert window.content_frames == [frame, frame]
 
 
 def test_frame_and_image_transform_helpers_respect_projection_modes():
@@ -972,8 +954,10 @@ def test_frame_and_image_transform_helpers_respect_projection_modes():
     controller = _controller(window)
 
     window.proj_bar.video_mode = True
+    window.projection_session.set_state({"type": "video", "is_audio": False})
     controller.distribute_frame("frame-1")
     window.proj_bar.audio_mode = True
+    window.projection_session.update_state(is_audio=True)
     controller.distribute_frame("frame-2")
     controller.on_image_apply_transform(1.5, 0.2, 0.3)
     controller.on_image_reset_transform()
@@ -982,6 +966,7 @@ def test_frame_and_image_transform_helpers_respect_projection_modes():
         ["frame-1"],
         ["frame-1"],
     ]
+    assert window.content_frames == ["frame-1"]
     assert [projection_window.transforms for projection_window in window.windows] == [
         [(1.5, 0.2, 0.3, True), (1.0, 0.0, 0.0, True)],
         [(1.5, 0.2, 0.3, True), (1.0, 0.0, 0.0, True)],

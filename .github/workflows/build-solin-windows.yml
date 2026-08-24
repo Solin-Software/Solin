@@ -13,6 +13,11 @@ on:
         required: true
         type: boolean
         default: true
+      sign_windows_artifacts:
+        description: Sign binaries and installer (required for distribution)
+        required: true
+        type: boolean
+        default: true
       previous_windows_installer_url:
         description: Previously distributed installer used for upgrade smoke
         required: false
@@ -82,6 +87,16 @@ jobs:
           python -m ruff check .
           python scripts/typecheck.py
           python -m pytest
+
+      - name: Cache pinned GStreamer installer
+        uses: actions/cache@v4
+        with:
+          path: build/downloads/gstreamer-1.0-msvc-x86_64-*.exe
+          key: gstreamer-msvc-x86_64-${{ hashFiles('scripts/install_gstreamer_windows.ps1') }}
+
+      - name: Build and test native media engine with GStreamer
+        shell: pwsh
+        run: python scripts\build_native_engine.py --configuration Release
 
       - name: Install Inno Setup
         shell: pwsh
@@ -171,6 +186,7 @@ jobs:
             --include-module=websocket._core `
             --include-module=websocket._app `
             --include-package=ephem `
+            --include-package=keyring `
             --include-package=pywinauto `
             --include-package=comtypes `
             --include-package-data=pyqttoast `
@@ -187,12 +203,38 @@ jobs:
             --include-qt-plugins=platforms,styles,imageformats,multimedia,position `
             main.py
 
+      - name: Package native media engine and private runtime
+        shell: pwsh
+        run: |
+          $runtimeRoot = & .\scripts\install_gstreamer_windows.ps1 `
+            -InstallType runtime `
+            -InstallDirectory build\dependencies\gstreamer-runtime\msvc_x86_64
+          if ([string]::IsNullOrWhiteSpace($runtimeRoot)) {
+            throw "GStreamer runtime bootstrap did not return an installation root."
+          }
+          python scripts\package_native_engine_windows.py `
+            --gstreamer-root "$runtimeRoot" `
+            --application-dir "$env:BUILD_DIR\main.dist"
+
       - name: Post-build cleanup
         shell: pwsh
         run: |
           $dist = Join-Path $env:BUILD_DIR "main.dist"
           if (-not (Test-Path "$dist\Solin.exe")) {
             throw "Solin.exe was not produced at $dist"
+          }
+          if (-not (Test-Path "$dist\native\media-engine\solin-media-engine.exe")) {
+            throw "The native media engine was not packaged."
+          }
+          if (-not (Test-Path "$dist\native\media-engine\virtual-camera\x64\solin-virtual-camera.dll") -or
+              -not (Test-Path "$dist\native\media-engine\virtual-camera\x86\solin-virtual-camera.dll")) {
+            throw "The x86/x64 DirectShow virtual-camera filters were not packaged."
+          }
+          if (-not (Test-Path "$dist\native\media-engine\gstreamer\bin")) {
+            throw "The private GStreamer runtime was not packaged."
+          }
+          if (-not (Test-Path "$dist\native\media-engine\gstreamer\lib\gstreamer-1.0")) {
+            throw "The private GStreamer plugins were not packaged."
           }
           if (-not (Test-Path "$dist\sideview\sideview_native.dll")) {
             throw "The SideView Windows backend was not packaged."
@@ -275,11 +317,58 @@ jobs:
           }
           Write-Host "App QML packaged as compiled .qmlc cache only."
 
+      - name: Sign packaged Windows binaries
+        if: ${{ inputs.sign_windows_artifacts }}
+        shell: pwsh
+        env:
+          SOLIN_SIGNING_CERTIFICATE_BASE64: ${{ secrets.SOLIN_SIGNING_CERTIFICATE_BASE64 }}
+          SOLIN_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.SOLIN_SIGNING_CERTIFICATE_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:SOLIN_SIGNING_CERTIFICATE_BASE64) -or
+              [string]::IsNullOrWhiteSpace($env:SOLIN_SIGNING_CERTIFICATE_PASSWORD)) {
+            throw "Windows signing was requested, but the signing certificate secrets are unavailable."
+          }
+          $certificate = Join-Path $env:RUNNER_TEMP "solin-windows-signing.pfx"
+          [IO.File]::WriteAllBytes(
+            $certificate,
+            [Convert]::FromBase64String($env:SOLIN_SIGNING_CERTIFICATE_BASE64)
+          )
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1 -ExpandProperty FullName
+          if ([string]::IsNullOrWhiteSpace($signtool)) {
+            throw "signtool.exe was not found."
+          }
+          $signingWrapper = Join-Path $env:RUNNER_TEMP "solin-inno-sign.ps1"
+          @'
+          param([Parameter(Mandatory = $true)][string] $Target)
+          & $env:SOLIN_SIGNTOOL_EXE sign /f $env:SOLIN_SIGNING_CERTIFICATE_PATH /p $env:SOLIN_SIGNING_CERTIFICATE_PASSWORD /fd SHA256 /td SHA256 /tr https://timestamp.digicert.com $Target
+          exit $LASTEXITCODE
+          '@ | Set-Content -LiteralPath $signingWrapper -Encoding ascii
+          "SOLIN_SIGNING_CERTIFICATE_PATH=$certificate" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "SOLIN_SIGNTOOL_EXE=$signtool" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "SOLIN_INNO_SIGN_WRAPPER=$signingWrapper" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          $targets = @(
+            "$env:BUILD_DIR\main.dist\Solin.exe",
+            "$env:BUILD_DIR\main.dist\native\media-engine\solin-media-engine.exe",
+            "$env:BUILD_DIR\main.dist\native\media-engine\virtual-camera\x64\solin-virtual-camera.dll",
+            "$env:BUILD_DIR\main.dist\native\media-engine\virtual-camera\x86\solin-virtual-camera.dll"
+          )
+          foreach ($target in $targets) {
+            & $signtool sign /f $certificate /p $env:SOLIN_SIGNING_CERTIFICATE_PASSWORD /fd SHA256 /td SHA256 /tr https://timestamp.digicert.com $target
+            if ($LASTEXITCODE -ne 0) { throw "Signing failed: $target" }
+            & $signtool verify /pa /v $target
+            if ($LASTEXITCODE -ne 0) { throw "Signature verification failed: $target" }
+          }
+
       - name: Package standalone zip
         shell: pwsh
+        env:
+          SOLIN_SIGN_WINDOWS_ARTIFACTS: ${{ inputs.sign_windows_artifacts }}
         run: |
           New-Item -ItemType Directory -Force -Path $env:DIST_DIR | Out-Null
-          $zip = "$env:DIST_DIR\$env:APP_NAME-$env:APP_VERSION-windows-standalone.zip"
+          $suffix = if ($env:SOLIN_SIGN_WINDOWS_ARTIFACTS -eq "true") { "" } else { "-unsigned-diagnostic" }
+          $zip = "$env:DIST_DIR\$env:APP_NAME-$env:APP_VERSION-windows-standalone$suffix.zip"
           Compress-Archive -Path "$env:BUILD_DIR\main.dist\*" -DestinationPath $zip -Force
           Get-FileHash $zip -Algorithm SHA256 |
             ForEach-Object { "$($_.Hash.ToLowerInvariant())  $(Split-Path $_.Path -Leaf)" } |
@@ -287,6 +376,9 @@ jobs:
 
       - name: Build full installer with Inno Setup
         shell: pwsh
+        env:
+          SOLIN_SIGN_WINDOWS_ARTIFACTS: ${{ inputs.sign_windows_artifacts }}
+          SOLIN_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.SOLIN_SIGNING_CERTIFICATE_PASSWORD }}
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) {
@@ -295,11 +387,69 @@ jobs:
 
           Push-Location "packaging\windows\installer"
           try {
-            & $iscc "/DMyAppVersion=$env:APP_VERSION" setup.iss
+            $arguments = @("/DMyAppVersion=$env:APP_VERSION")
+            if ($env:SOLIN_SIGN_WINDOWS_ARTIFACTS -eq "true") {
+              if (-not (Test-Path -LiteralPath $env:SOLIN_INNO_SIGN_WRAPPER)) {
+                throw "The Inno Setup signing wrapper is unavailable."
+              }
+              $arguments += "/DMySignToolName=solinsign"
+              $arguments += "/Ssolinsign=powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File `$q$env:SOLIN_INNO_SIGN_WRAPPER`$q `$f"
+            }
+            else {
+              $arguments += "/DMyArtifactSuffix=-unsigned-diagnostic"
+            }
+            & $iscc @arguments setup.iss
+            if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed." }
           }
           finally {
             Pop-Location
           }
+
+      - name: Verify signed Windows installer
+        if: ${{ inputs.sign_windows_artifacts }}
+        shell: pwsh
+        run: |
+          $installer = Get-Item "build\installer_output\Solin_Setup_*.exe"
+          & $env:SOLIN_SIGNTOOL_EXE verify /pa /v $installer.FullName
+          if ($LASTEXITCODE -ne 0) { throw "Installer signature verification failed." }
+
+      - name: Build DirectShow rollback-injection installer
+        if: ${{ inputs.run_release_smoke_tests }}
+        shell: pwsh
+        env:
+          SOLIN_SIGN_WINDOWS_ARTIFACTS: ${{ inputs.sign_windows_artifacts }}
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          $suffix = if ($env:SOLIN_SIGN_WINDOWS_ARTIFACTS -eq "true") {
+            "-rollback-injection"
+          }
+          else {
+            "-rollback-injection-unsigned-diagnostic"
+          }
+          Push-Location "packaging\windows\installer"
+          try {
+            $arguments = @(
+              "/DMyAppVersion=$env:APP_VERSION",
+              "/DMyArtifactSuffix=$suffix",
+              "/DMyVirtualCameraForceX86RegistrationFailure=1"
+            )
+            if ($env:SOLIN_SIGN_WINDOWS_ARTIFACTS -eq "true") {
+              $arguments += "/DMySignToolName=solinsign"
+              $arguments += "/Ssolinsign=powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File `$q$env:SOLIN_INNO_SIGN_WRAPPER`$q `$f"
+            }
+            & $iscc @arguments setup.iss
+            if ($LASTEXITCODE -ne 0) {
+              throw "Rollback-injection installer compilation failed."
+            }
+          }
+          finally {
+            Pop-Location
+          }
+          $rollbackInstaller = Get-Item "build\installer_output\Solin_Setup_*$suffix.exe"
+          $rollbackDirectory = New-Item -ItemType Directory -Force -Path "build\rollback-test"
+          $rollbackTarget = Join-Path $rollbackDirectory.FullName $rollbackInstaller.Name
+          Move-Item -LiteralPath $rollbackInstaller.FullName -Destination $rollbackTarget -Force
+          "SOLIN_ROLLBACK_INSTALLER=$rollbackTarget" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       # Patch installers are intentionally not built here. packaging/windows/installer/patch.iss expects
       # scripts/diff_release.py needs an explicit OLD dist directory plus
@@ -361,6 +511,8 @@ jobs:
           SOLIN_E2E_ALLOW_INSTALLER_MUTATION: "1"
           SOLIN_E2E_STARTUP_SECONDS: "8"
           SOLIN_E2E_INSTALLER_TIMEOUT: "240"
+          SOLIN_DIRECTSHOW_HARNESS_X64: 'build\native\media-engine-gstreamer\Release\solin-virtual-camera-filter-tests.exe'
+          SOLIN_DIRECTSHOW_HARNESS_X86: 'build\native\directshow-filter-x86\Release\solin-virtual-camera-filter-tests.exe'
         run: |
           python -m pytest tests\e2e\test_installer_upgrade_smoke.py -q
 
@@ -385,12 +537,24 @@ jobs:
 
           Get-ChildItem "$env:DIST_DIR" -Recurse | Select-Object FullName, Length
 
+      - name: Remove temporary signing certificate
+        if: ${{ always() && inputs.sign_windows_artifacts }}
+        shell: pwsh
+        run: |
+          $certificate = Join-Path $env:RUNNER_TEMP "solin-windows-signing.pfx"
+          if (Test-Path -LiteralPath $certificate) {
+            Remove-Item -LiteralPath $certificate -Force
+          }
+          if (Test-Path -LiteralPath $env:SOLIN_INNO_SIGN_WRAPPER) {
+            Remove-Item -LiteralPath $env:SOLIN_INNO_SIGN_WRAPPER -Force
+          }
+
       - name: Upload Windows standalone
         uses: actions/upload-artifact@v4
         with:
-          name: Solin-${{ steps.version.outputs.app_version }}-windows-standalone
+          name: Solin-${{ steps.version.outputs.app_version }}-${{ inputs.sign_windows_artifacts && 'windows-standalone' || 'windows-standalone-unsigned-diagnostic' }}
           path: |
-            dist/*windows-standalone.zip
+            dist/*windows-standalone*.zip
             dist/SHA256SUMS-windows.txt
           if-no-files-found: error
           retention-days: ${{ inputs.retention_days }}
@@ -398,7 +562,7 @@ jobs:
       - name: Upload Windows installers
         uses: actions/upload-artifact@v4
         with:
-          name: Solin-${{ steps.version.outputs.app_version }}-windows-installers
+          name: Solin-${{ steps.version.outputs.app_version }}-${{ inputs.sign_windows_artifacts && 'windows-installers' || 'windows-installers-unsigned-diagnostic' }}
           path: dist/installers/*
           if-no-files-found: error
           retention-days: ${{ inputs.retention_days }}

@@ -14,7 +14,6 @@ SWITCH_PROFILE_SOURCE = QT_TRANSLATE_NOOP("MainWindow", "Switch profile")
 COLLAPSE_SIDEBAR_SOURCE = QT_TRANSLATE_NOOP("MainWindow", "Collapse sidebar")
 EXPAND_SIDEBAR_SOURCE = QT_TRANSLATE_NOOP("MainWindow", "Expand sidebar")
 
-
 class MainPage(IntEnum):
     LIBRARY = 0
     MEETINGS = 1
@@ -24,6 +23,7 @@ class MainPage(IntEnum):
     SETTINGS = 5
     PLAYLISTS = 6
     WIFI = 7
+    SCENES = 8
 
 
 NAV_ITEMS = (
@@ -35,6 +35,7 @@ NAV_ITEMS = (
     ("nav_settings_btn", QT_TRANSLATE_NOOP("MainWindow", "Settings"), MainPage.SETTINGS),
     ("nav_playlist_btn", QT_TRANSLATE_NOOP("MainWindow", "Playlists"), MainPage.PLAYLISTS),
     ("nav_wifi_btn", QT_TRANSLATE_NOOP("MainWindow", "Receive via Wi-Fi"), MainPage.WIFI),
+    ("nav_scenes_btn", QT_TRANSLATE_NOOP("MainWindow", "Scenes"), MainPage.SCENES),
 )
 
 NAV_LABELS = tuple((attribute, label) for attribute, label, _page in NAV_ITEMS)

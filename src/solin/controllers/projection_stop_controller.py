@@ -16,9 +16,9 @@ class ProjectionStopContext:
     projection_bar: Any
     media_controller: Any
     ndi_service: Any
-    camera_service: Any
     projection_windows: Callable[[], list[Any]]
     auto_share_configured: Callable[[], bool]
+    camera_service: Any | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,11 +28,11 @@ class ProjectionStopHandlers:
     stop_browser_tab_projection: Callable[[], None]
     update_projection_status: Callable[..., None]
     set_obs_stream_active: Callable[[bool], None]
-    set_camera_stream_active: Callable[[bool], None]
+    set_camera_stream_active: Callable[[bool], None] | None = None
 
 
 class ProjectionStopController:
-    """Stops active projection sessions while preserving OBS/camera edge cases."""
+    """Stops active projection sessions while preserving OBS stream edge cases."""
 
     _VISUAL_PROJECTION_TYPES = {
         "image",
@@ -87,7 +87,8 @@ class ProjectionStopController:
             context.ndi_service.stop_later()
         else:
             context.ndi_service.stop()
-        context.camera_service.stop()
+        if context.camera_service is not None:
+            context.camera_service.stop()
 
         for projection_window in context.projection_windows():
             projection_window.clear()
@@ -99,7 +100,8 @@ class ProjectionStopController:
         )
         self._session.reset_state()
         self._handlers.set_obs_stream_active(False)
-        self._handlers.set_camera_stream_active(False)
+        if self._handlers.set_camera_stream_active is not None:
+            self._handlers.set_camera_stream_active(False)
 
         share_handling = context.auto_share_configured()
         floating_preview = self._session.floating_preview_window

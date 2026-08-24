@@ -54,6 +54,12 @@
   #error MyAppVersion must be supplied by the build pipeline.
 #endif
 
+#ifndef MyArtifactSuffix
+  #define MyArtifactSuffix ""
+#endif
+
+#define MyVirtualCameraVersion MyAppVersion
+
 ; =============================================================================
 [Setup]
 AppId={{B7E4D2A1-9C3F-4E8B-A5D6-E7F8G9H0I1J2}
@@ -95,9 +101,14 @@ RestartApplications=no
     Copy(MyAppVersion, 1, RPos(".", MyAppVersion) - 1)
     
 OutputDir=..\..\..\build\installer_output
-OutputBaseFilename=Solin_Setup_{#MySetupFileVersion}
+OutputBaseFilename=Solin_Setup_{#MySetupFileVersion}{#MyArtifactSuffix}
 SetupIconFile=..\..\..\src\solin\resources\assets\icon.ico
 WizardStyle=modern
+
+#ifdef MySignToolName
+SignTool={#MySignToolName}
+SignedUninstaller=yes
+#endif
 
 ; ── Define o ícone no Painel de Controle (Adicionar/Remover Programas) ──
 UninstallDisplayIcon={app}\{#MyAppExeName}
@@ -123,6 +134,9 @@ VersionInfoProductVersion={#MyAppVersion}
 
 RestartIfNeededByRun=no
 ChangesAssociations=yes
+ArchitecturesAllowed=x64os
+ArchitecturesInstallIn64BitMode=x64os
+MinVersion=10.0.17763
 
 ; =============================================================================
 [Languages]
@@ -141,6 +155,11 @@ Name: "startupicon"; Description: "Start with Windows";     GroupDescription: "O
 [Files]
 ; ── 1. Copy build output (DRY: one line copies the entire app) ────────────────
 Source: "{#MyDistDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; DirectShow consumers load architecture-matched in-process filters. Keep each
+; release immutable so an application holding the previous DLL never blocks an
+; update. DllRegisterServer scopes all COM/category writes to the current user.
+Source: "{#MyDistDir}\native\media-engine\virtual-camera\x64\solin-virtual-camera.dll"; DestDir: "{localappdata}\Solin\VirtualCamera\versions\{#MyAppVersion}\x64"; Flags: ignoreversion regserver 64bit uninsrestartdelete
+Source: "{#MyDistDir}\native\media-engine\virtual-camera\x86\solin-virtual-camera.dll"; DestDir: "{localappdata}\Solin\VirtualCamera\versions\{#MyAppVersion}\x86"; Flags: ignoreversion regserver 32bit uninsrestartdelete; BeforeInstall: MaybeInjectVirtualCameraX86RegistrationFailure
 
 ; ── 2. App icon (only if not already inside main.dist) ───────────────────────
 Source: "..\..\..\src\solin\resources\assets\icon.ico"; DestDir: "{app}\resources\assets"; Flags: ignoreversion
@@ -382,6 +401,8 @@ begin
   CloseHandle(ExecInfo.hProcess);
 end;
 
+#include "virtual_camera_registration.iss"
+
 // ── Install scope ─────────────────────────────────────────────────────────────
 
 function GetInstallScope(Param: String): String;
@@ -454,6 +475,7 @@ end;
 
 function InitializeSetup(): Boolean;
 begin
+  CaptureCameraRegistrationState();
   Result := True;
   if IsAppRunning() then
   begin
@@ -599,7 +621,17 @@ end;
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssInstall then
+  begin
     EnsureWebView2Runtime();
+    BeginCameraRegistrationTransaction();
+  end;
+  if CurStep = ssPostInstall then
+    VerifyCameraRegistrationTransaction();
+  if CurStep = ssDone then
+  begin
+    CleanupObsoleteCameraVersions();
+    CommitCameraRegistrationTransaction();
+  end;
 end;
 
 // ── Uninstaller ───────────────────────────────────────────────────────────────
@@ -653,6 +685,8 @@ end;
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   AppDir: String;
+  CameraFilterX64Path: String;
+  CameraFilterX86Path: String;
 begin
   AppDir := ExpandConstant('{app}');
 
@@ -686,6 +720,28 @@ begin
 
     usUninstall:
     begin
+      // Unregister both DirectShow registry views before deleting the immutable
+      // version. The calls are idempotent with Inno's regserver bookkeeping.
+      CameraFilterX64Path := '';
+      if not RegQueryStringValue(
+        HKCU64, CameraClassKey(), '', CameraFilterX64Path
+      ) then
+        CameraFilterX64Path := CameraVersionedFilterPath('x64');
+      if FileExists(CameraFilterX64Path) and
+         not RunCameraRegsvr(CameraFilterX64Path, True, True) then
+        Log('x64 virtual-camera cleanup failed during uninstall.');
+      RemoveCameraRegistrationView(HKCU64);
+
+      CameraFilterX86Path := '';
+      if not RegQueryStringValue(
+        HKCU32, CameraClassKey(), '', CameraFilterX86Path
+      ) then
+        CameraFilterX86Path := CameraVersionedFilterPath('x86');
+      if FileExists(CameraFilterX86Path) and
+         not RunCameraRegsvr(CameraFilterX86Path, False, True) then
+        Log('x86 virtual-camera cleanup failed during uninstall.');
+      RemoveCameraRegistrationView(HKCU32);
+
       // Remove QSettings keys (always HKCU — written by the Qt app)
       DeleteQSettingsKeys();
 
@@ -725,6 +781,7 @@ begin
 
     usPostUninstall:
     begin
+      DelTree(ExpandConstant('{localappdata}\Solin\VirtualCamera'), True, True, True);
       // Inno Setup installer temp files left behind from interrupted installs
       DeleteTempFiles(AppDir);
 

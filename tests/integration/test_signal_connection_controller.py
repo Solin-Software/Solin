@@ -99,7 +99,6 @@ class _WindowStub:
             "zoom_enabled_toggled",
             "zoom_participants_toggled",
             "obs_stream_config_changed",
-            "camera_enabled_toggled",
             "background_song_toggled",
             "meeting_schedule_changed",
         )
@@ -112,12 +111,6 @@ class _WindowStub:
             "scenes_updated",
         )
         self._ndi_service = _signal_namespace("ndi", "frame_ready", "error", "stopped")
-        self._camera_service = _signal_namespace(
-            "camera",
-            "frame_ready",
-            "error",
-            "stopped",
-        )
         self._background_song_service = SimpleNamespace(
             set_enabled=_slot("background_song_enabled"),
             reload_settings=_slot("background_song_reload_settings"),
@@ -149,7 +142,6 @@ class _WindowStub:
             on_zoom_settings_enabled_toggled=_slot("zoom_enabled"),
             on_zoom_settings_parts_toggled=_slot("zoom_parts"),
             refresh_obs_stream_availability=_slot("refresh_obs_stream"),
-            on_camera_settings_enabled_toggled=_slot("camera_enabled"),
             on_obs_state_changed=_slot("obs_state"),
             on_obs_scene_changed=_slot("obs_scene"),
             refresh_obs_btn_availability=_slot("refresh_obs_button"),
@@ -157,9 +149,6 @@ class _WindowStub:
             on_obs_ndi_frame=_slot("ndi_frame"),
             on_obs_ndi_error=_slot("ndi_error"),
             on_obs_ndi_stopped=_slot("ndi_stopped"),
-            on_camera_frame=_slot("camera_frame"),
-            on_camera_error=_slot("camera_error"),
-            on_camera_stopped=_slot("camera_stopped"),
             on_obs_scene_toggle=_slot("obs_scene_toggle"),
         )
         self._projection_integrations = SimpleNamespace(
@@ -209,7 +198,6 @@ def _sources(window):
         settings_widget=window.settings_widget,
         obs_service=window._obs_service,
         ndi_service=window._ndi_service,
-        camera_service=window._camera_service,
         auto_share_finished=window._auto_share_finished,
         media_countdown_automation=window._media_countdown_automation,
     )
@@ -242,7 +230,7 @@ def test_connect_signals_wires_expected_signal_graph():
     controller.connect_signals()
 
     total_connections = sum(len(signal.connected) for signal in _Signal.registry)
-    assert total_connections == 53
+    assert total_connections == 49
     assert window.library_widget.project_media_signal.connected == [
         controller._project_library_media
     ]

@@ -3,7 +3,7 @@ import QtQuick
 // ─────────────────────────────────────────────────────────────────────────────
 // QuickAccessToolbar.qml
 //
-// Floating toolbar with monitor, OBS, camera, zoom buttons and a minimize
+// Floating toolbar with monitor, OBS, Solin scenes, Zoom, and a minimize
 // chevron.  Rendered entirely in QML for proper alpha compositing (no black-
 // corner artefacts over browser / web-engine content).
 //
@@ -192,6 +192,33 @@ Item {
                     onEntered: root.beginButtonHover(obsMA, bridge.obsTooltip)
                     onExited: root.endButtonHover()
                     onClicked: bridge.onObsClicked()
+                }
+            }
+
+            // ── Solin Scenes ─────────────────────────────────────────
+            Item {
+                visible: bridge.scenesVisible
+                width: 30; height: 30
+
+                Rectangle {
+                    anchors.fill: parent; radius: 15
+                    color: scenesMA.pressed
+                           ? root.toolbarPressed
+                           : scenesMA.containsMouse
+                             ? root.toolbarHover : "transparent"
+                }
+                Image {
+                    anchors.centerIn: parent
+                    source: "image://icons/scenes/14/" + bridge.scenesIconColor
+                    sourceSize: Qt.size(14, 14)
+                    cache: false
+                }
+                MouseArea {
+                    id: scenesMA; anchors.fill: parent
+                    hoverEnabled: true
+                    onEntered: root.beginButtonHover(scenesMA, bridge.scenesTooltip)
+                    onExited: root.endButtonHover()
+                    onClicked: bridge.onScenesClicked()
                 }
             }
 

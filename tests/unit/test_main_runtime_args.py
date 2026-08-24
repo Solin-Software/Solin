@@ -46,6 +46,7 @@ def test_parse_runtime_args_supports_profile_equals_form(tmp_path):
 
 
 def test_build_main_window_runtime_wires_services_to_stable_window_host(monkeypatch):
+    monkeypatch.setattr(main, "NATIVE_SCENES_SUPPORTED", True)
     events = []
     file_args = ["clip.mp4", "song.mp3"]
     runtime_paths = SimpleNamespace()
@@ -61,6 +62,7 @@ def test_build_main_window_runtime_wires_services_to_stable_window_host(monkeypa
         pptx_pages_dir="profile_pptx_pages",
         docx_pages_dir="profile_docx_pages",
     )
+    runtime_paths.cache_dir = "cache"
     runtime_paths.thumb_cache_dir = "thumbs"
     runtime_paths.meeting_thumb_cache_dir = "meeting_thumbs"
     runtime_paths.pdf_pages_dir = "pdf_pages"
@@ -86,7 +88,7 @@ def test_build_main_window_runtime_wires_services_to_stable_window_host(monkeypa
     pending_media_controllers = list(created_media_controllers)
     media = SimpleNamespace(
         cache_manager=media_cache_manager,
-        create_playback=lambda settings, projection=True: (
+        create_playback=lambda settings: (
             pending_media_controllers.pop(0) if settings is media_settings else None
         ),
         create_info_queue=object(),
@@ -101,8 +103,15 @@ def test_build_main_window_runtime_wires_services_to_stable_window_host(monkeypa
     installation_settings = object()
     application_maintenance = lambda: None
     timer_session = object()
-    active_profile = object()
+    active_profile = SimpleNamespace(id="profile-test")
     talk_theme_output_settings = object()
+    credential_cleaners = []
+    scene_workspace = SimpleNamespace(
+        set_credential_cleaner=credential_cleaners.append,
+    )
+    scene_engine = object()
+    ptz_executor = object()
+    ptz_credentials = SimpleNamespace(delete=lambda _reference: None)
 
     class _MainWindow:
         def __init__(
@@ -148,6 +157,10 @@ def test_build_main_window_runtime_wires_services_to_stable_window_host(monkeypa
             received_active_profile,
             *,
             talk_theme_output_settings,
+            scene_workspace,
+            scene_engine,
+            ptz_executor,
+            ptz_credentials,
             window_host,
         ):
             self.lang_manager = lang_manager
@@ -193,6 +206,10 @@ def test_build_main_window_runtime_wires_services_to_stable_window_host(monkeypa
             self.timer_session = received_timer_session
             self.active_profile = received_active_profile
             self.talk_theme_output_settings = talk_theme_output_settings
+            self.scene_workspace = scene_workspace
+            self.scene_engine = scene_engine
+            self.ptz_executor = ptz_executor
+            self.ptz_credentials = ptz_credentials
             self.window_host = window_host
 
     monkeypatch.setitem(
@@ -220,6 +237,22 @@ def test_build_main_window_runtime_wires_services_to_stable_window_host(monkeypa
         main,
         "_build_main_window_service_factories",
         lambda *args: events.append(("service_factories", args)) or service_factories,
+    )
+    monkeypatch.setattr(
+        main,
+        "_build_scene_workspace",
+        lambda _paths: scene_workspace,
+    )
+    monkeypatch.setattr(
+        "solin.core.scenes.native_engine.create_native_scene_engine",
+        lambda _cache_dir: scene_engine,
+    )
+    monkeypatch.setattr(
+        "solin.core.scenes.ptz_runtime.create_ptz_runtime_services",
+        lambda _profile_id: SimpleNamespace(
+            executor=ptz_executor,
+            credentials=ptz_credentials,
+        ),
     )
 
     window_host = object()
@@ -288,6 +321,11 @@ def test_build_main_window_runtime_wires_services_to_stable_window_host(monkeypa
     assert window.timer_session is timer_session
     assert window.active_profile is active_profile
     assert window.talk_theme_output_settings is talk_theme_output_settings
+    assert window.scene_workspace is scene_workspace
+    assert window.scene_engine is not None
+    assert window.ptz_executor is ptz_executor
+    assert window.ptz_credentials is ptz_credentials
+    assert credential_cleaners == [ptz_credentials.delete]
     assert window.window_host is window_host
     assert events == [
         ("profile_settings_bundle", profile_settings),
@@ -307,6 +345,7 @@ def test_build_main_window_runtime_wires_services_to_stable_window_host(monkeypa
 
 
 def test_build_main_window_runtime_does_not_mutate_native_window_lifecycle(monkeypatch):
+    monkeypatch.setattr(main, "NATIVE_SCENES_SUPPORTED", True)
     events = []
     runtime_paths = SimpleNamespace()
     profile_paths = SimpleNamespace(
@@ -321,6 +360,7 @@ def test_build_main_window_runtime_does_not_mutate_native_window_lifecycle(monke
         pptx_pages_dir="profile_pptx_pages",
         docx_pages_dir="profile_docx_pages",
     )
+    runtime_paths.cache_dir = "cache"
     runtime_paths.thumb_cache_dir = "thumbs"
     runtime_paths.meeting_thumb_cache_dir = "meeting_thumbs"
     runtime_paths.pdf_pages_dir = "pdf_pages"
@@ -341,7 +381,7 @@ def test_build_main_window_runtime_does_not_mutate_native_window_lifecycle(monke
 
     media = SimpleNamespace(
         cache_manager=media_cache_manager,
-        create_playback=lambda _settings, projection=True: _MediaController(),
+        create_playback=lambda _settings: _MediaController(),
         create_info_queue=object(),
         create_info_service=object(),
         create_browser_download_service=object(),
@@ -354,8 +394,16 @@ def test_build_main_window_runtime_does_not_mutate_native_window_lifecycle(monke
     installation_settings = object()
     application_maintenance = lambda: None
     timer_session = object()
-    active_profile = object()
+    active_profile = SimpleNamespace(id="profile-test")
     talk_theme_output_settings = object()
+    credential_cleaners = []
+    scene_workspace = SimpleNamespace(
+        close=lambda: events.append(("scene_workspace_close",)),
+        set_credential_cleaner=credential_cleaners.append,
+    )
+    scene_engine = object()
+    ptz_executor = SimpleNamespace(close=lambda: events.append(("ptz_close",)))
+    ptz_credentials = SimpleNamespace(delete=lambda _reference: None)
 
     class _MainWindow:
         def __init__(
@@ -401,6 +449,10 @@ def test_build_main_window_runtime_does_not_mutate_native_window_lifecycle(monke
             received_active_profile,
             *,
             talk_theme_output_settings,
+            scene_workspace,
+            scene_engine,
+            ptz_executor,
+            ptz_credentials,
             window_host,
         ):
             self.lang_manager = lang_manager
@@ -446,6 +498,10 @@ def test_build_main_window_runtime_does_not_mutate_native_window_lifecycle(monke
             self.timer_session = received_timer_session
             self.active_profile = received_active_profile
             self.talk_theme_output_settings = talk_theme_output_settings
+            self.scene_workspace = scene_workspace
+            self.scene_engine = scene_engine
+            self.ptz_executor = ptz_executor
+            self.ptz_credentials = ptz_credentials
             self.window_host = window_host
 
     monkeypatch.setitem(
@@ -473,6 +529,22 @@ def test_build_main_window_runtime_does_not_mutate_native_window_lifecycle(monke
         main,
         "_build_main_window_service_factories",
         lambda *args: events.append(("service_factories", args)) or service_factories,
+    )
+    monkeypatch.setattr(
+        main,
+        "_build_scene_workspace",
+        lambda _paths: scene_workspace,
+    )
+    monkeypatch.setattr(
+        "solin.core.scenes.native_engine.create_native_scene_engine",
+        lambda _cache_dir: scene_engine,
+    )
+    monkeypatch.setattr(
+        "solin.core.scenes.ptz_runtime.create_ptz_runtime_services",
+        lambda _profile_id: SimpleNamespace(
+            executor=ptz_executor,
+            credentials=ptz_credentials,
+        ),
     )
 
     window_host = object()
@@ -510,6 +582,7 @@ def test_build_main_window_runtime_does_not_mutate_native_window_lifecycle(monke
     ]
     assert runtime.window_host is window_host
     assert runtime.talk_theme_output_settings is talk_theme_output_settings
+    assert credential_cleaners == [ptz_credentials.delete]
 
 
 def test_run_zoom_poll_standalone_keeps_window_alive_until_event_loop(monkeypatch):

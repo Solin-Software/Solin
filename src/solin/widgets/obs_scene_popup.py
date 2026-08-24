@@ -5,11 +5,9 @@ from __future__ import annotations
 from PySide6.QtCore import (
     QEasingCurve,
     QEvent,
-    QRect,
-    QSize,
     QPropertyAnimation,
+    QSize,
     Qt,
-    QVariantAnimation,
     Signal,
 )
 from PySide6.QtGui import QGuiApplication
@@ -33,71 +31,8 @@ from solin.styles.icons import (
 )
 from solin.styles.theme import PALETTE, qss_rgba
 from solin.ui.themed_tooltip import install_themed_tooltip
-
-
-class _FlowContainer(QWidget):
-    """Lightweight flow layout that wraps child widgets into rows."""
-
-    def __init__(self, h_spacing=6, v_spacing=6, parent=None):
-        super().__init__(parent)
-        self._hs = h_spacing
-        self._vs = v_spacing
-        self._items: list[QWidget] = []
-
-    def add_widget(self, widget: QWidget) -> None:
-        widget.setParent(self)
-        self._items.append(widget)
-
-    def clear_items(self) -> None:
-        for widget in self._items:
-            widget.setParent(None)
-            widget.deleteLater()
-        self._items.clear()
-
-    def heightForWidth(self, width: int) -> int:
-        return self._do_layout(QRect(0, 0, width, 0), dry_run=True)
-
-    def minimumSize(self):
-        return QSize(100, 40)
-
-    def resizeEvent(self, event) -> None:
-        super().resizeEvent(event)
-        if self.width() > 0:
-            self._do_layout(QRect(0, 0, self.width(), self.height()))
-
-    def showEvent(self, event) -> None:
-        super().showEvent(event)
-        if self.width() > 0:
-            self._do_layout(QRect(0, 0, self.width(), self.height()))
-
-    def _do_layout(self, rect: QRect, dry_run: bool = False) -> int:
-        x = rect.x()
-        y = rect.y()
-        row_h = 0
-        for widget in self._items:
-            if not dry_run and not widget.isVisible():
-                continue
-            width = (
-                widget.minimumWidth()
-                if widget.minimumWidth() == widget.maximumWidth()
-                else widget.sizeHint().width()
-            )
-            height = (
-                widget.minimumHeight()
-                if widget.minimumHeight() == widget.maximumHeight()
-                else widget.sizeHint().height()
-            )
-            if width <= 0 or height <= 0:
-                continue
-            if x + width > rect.x() + rect.width() and x > rect.x():
-                x = rect.x()
-                y += row_h + self._vs
-                row_h = 0
-            if not dry_run:
-                widget.setGeometry(x, y, width, height)
-            x += width + self._hs
-            row_h = max(row_h, height)
-        return y + row_h
+from solin.widgets.common.button_feedback import ButtonSuccessFlash
+from solin.widgets.common.flow_container import FlowContainer
 
 
 class _SceneChipButton(QPushButton):
@@ -146,8 +81,7 @@ class OBSScenePopup(QWidget):
         self._idle_scene = ""
         self._media_scene = ""
         self._return_scene_override_enabled = False
-        self._chip_feedback_anims: list[QVariantAnimation] = []
-        self._chip_feedback_by_id: dict[int, tuple[QVariantAnimation, str]] = {}
+        self._success_flash = ButtonSuccessFlash(self)
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -361,7 +295,7 @@ class OBSScenePopup(QWidget):
             sec_lbl.setStyleSheet(self._section_label_style())
             self._content_lay.addWidget(sec_lbl)
 
-            flow_p = _FlowContainer(h_spacing=6, v_spacing=6)
+            flow_p = FlowContainer(horizontal_spacing=6, vertical_spacing=6)
             flow_p.setStyleSheet("background: transparent;")
             for name, badge in pinned:
                 flow_p.add_widget(self._make_chip(name, name == current_scene, badge))
@@ -373,7 +307,7 @@ class OBSScenePopup(QWidget):
                 sec_lbl2.setStyleSheet(self._section_label_style())
                 self._content_lay.addWidget(sec_lbl2)
 
-            flow_r = _FlowContainer(h_spacing=6, v_spacing=6)
+            flow_r = FlowContainer(horizontal_spacing=6, vertical_spacing=6)
             flow_r.setStyleSheet("background: transparent;")
             for name in rest:
                 flow_r.add_widget(self._make_chip(name, name == current_scene, ""))
@@ -406,7 +340,7 @@ class OBSScenePopup(QWidget):
             if widget is None:
                 continue
             n_widgets += 1
-            if isinstance(widget, _FlowContainer):
+            if isinstance(widget, FlowContainer):
                 height = max(widget.heightForWidth(content_w), 36)
                 widget.setFixedSize(content_w, height)
                 total_h += height
@@ -509,76 +443,7 @@ class OBSScenePopup(QWidget):
         self._flash_return_scene_chip(chip)
 
     def _flash_return_scene_chip(self, chip: QPushButton) -> None:
-        chip_id = id(chip)
-        previous = self._chip_feedback_by_id.pop(chip_id, None)
-        if previous is not None:
-            previous_anim, previous_style = previous
-            previous_anim.stop()
-            if previous_anim in self._chip_feedback_anims:
-                self._chip_feedback_anims.remove(previous_anim)
-            try:
-                chip.setStyleSheet(previous_style)
-            except RuntimeError:
-                pass
-
-        original_style = chip.styleSheet()
-        uid = chip.objectName()
-
-        anim = QVariantAnimation(self)
-        anim.setDuration(360)
-        anim.setStartValue(1.0)
-        anim.setEndValue(0.0)
-        anim.setEasingCurve(QEasingCurve.Type.OutCubic)
-        self._chip_feedback_anims.append(anim)
-
-        def _apply(value) -> None:
-            t = float(value)
-            bg_alpha = int(18 + (56 * t))
-            border_alpha = int(70 + (120 * t))
-            hover_bg_alpha = int(30 + (70 * t))
-            pressed_bg_alpha = int(42 + (82 * t))
-            border = qss_rgba(PALETTE.success, border_alpha / 255)
-            try:
-                chip.setStyleSheet(
-                    original_style
-                    + f"QPushButton#{uid} {{"
-                    f"  background: {qss_rgba(PALETTE.success, bg_alpha / 255)};"
-                    f"  border-color: {border};"
-                    f"  color: {PALETTE.success};"
-                    "}"
-                    + f"QPushButton#{uid}:hover {{"
-                    f"  background: {qss_rgba(PALETTE.success, hover_bg_alpha / 255)};"
-                    f"  border-color: {border};"
-                    f"  color: {PALETTE.success};"
-                    "}"
-                    + f"QPushButton#{uid}:pressed {{"
-                    f"  background: {qss_rgba(PALETTE.success, pressed_bg_alpha / 255)};"
-                    f"  border-color: {border};"
-                    f"  color: {PALETTE.text_secondary};"
-                    "}"
-                )
-            except RuntimeError:
-                pass
-
-        def _cleanup() -> None:
-            try:
-                chip.setStyleSheet(original_style)
-            except RuntimeError:
-                pass
-            if anim in self._chip_feedback_anims:
-                self._chip_feedback_anims.remove(anim)
-            current = self._chip_feedback_by_id.get(chip_id)
-            if current is not None and current[0] is anim:
-                self._chip_feedback_by_id.pop(chip_id, None)
-
-        anim.valueChanged.connect(_apply)
-        anim.finished.connect(_cleanup)
-        chip.destroyed.connect(
-            lambda _obj=None, key=chip_id: self._chip_feedback_by_id.pop(key, None)
-        )
-        self._chip_feedback_by_id[chip_id] = (anim, original_style)
-        _apply(1.0)
-        anim.start()
+        self._success_flash.flash(chip)
 
     def show_above(self, anchor: QWidget) -> None:
         self.adjustSize()
@@ -695,17 +560,14 @@ class OBSScenePopup(QWidget):
 
     def _update_stream_kind(self) -> None:
         self._stream_kind = (
-            "obs"
-            if self._stream_available or self._stream_active
-            else "camera"
+            "obs" if self._stream_available or self._stream_active else "camera"
         )
-        visible = (
+        self._stream_btn.setVisible(
             self._stream_available
             or self._stream_active
             or self._camera_stream_available
             or self._camera_stream_active
         )
-        self._stream_btn.setVisible(visible)
 
     def _on_stream_clicked(self) -> None:
         if self._stream_kind == "camera":
@@ -718,8 +580,7 @@ class OBSScenePopup(QWidget):
         if btn is None:
             return
         if self._stream_kind == "camera":
-            camera_active = getattr(self, "_camera_stream_active", False)
-            if camera_active:
+            if self._camera_stream_active:
                 icon_color = PALETTE.danger
                 text = self.tr("Stop Stream")
                 tooltip = self.tr("Stop OBS virtual camera")

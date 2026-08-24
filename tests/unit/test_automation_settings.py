@@ -153,7 +153,6 @@ def test_zoom_and_camera_settings_read_defaults_and_saved_values():
         assert camera.is_enabled() is False
         assert camera.backend() == ""
         assert camera.device_name() == ""
-
         zoom.set_enabled(True)
         zoom.set_show_participants(False)
         camera.set_enabled(True)

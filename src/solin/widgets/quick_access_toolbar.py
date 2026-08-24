@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import os
 import sys
+from typing import TYPE_CHECKING
 
 from PySide6.QtCore import (
     QEasingCurve,
@@ -21,10 +21,7 @@ from PySide6.QtGui import QColor, QCursor, QFontMetrics, QGuiApplication, QRegio
 from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtWidgets import QWidget
 
-from solin.core.integrations.automation.settings import (
-    CameraSettingsStore,
-    OBSSettingsStore,
-)
+from solin.core.integrations.automation.settings import CameraSettingsStore, OBSSettingsStore
 from solin.core.integrations.camera_options import CameraOption
 from solin.core.remote_control.security import RemoteSessionInfo
 from solin.ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
@@ -41,6 +38,9 @@ from solin.ui.qml.svg_icons import SvgIconProvider
 from solin.ui.incremental_load import IncrementalLoadHandle
 from solin.widgets.background_song_popup import BackgroundSongPopup
 
+if TYPE_CHECKING:
+    from solin.controllers.scene_runtime_controller import SceneRuntimeController
+
 
 # Quick-Access Toolbar (floating, bottom-center)
 
@@ -51,7 +51,7 @@ _QAT_BAR_H = 48
 _QAT_MINI_W = 26
 _QAT_MINI_H = 30
 # The QQuickWidget is fixed-width; QML handles the actual pill width.
-_QAT_MAX_W = 240
+_QAT_MAX_W = 280
 
 # Pill / mini corner radii used for the native macOS layer clip (see below).
 _QAT_PILL_RADIUS = 20
@@ -71,41 +71,18 @@ def _icon_hex(color: str) -> str:
     return color.lstrip("#")
 
 
-def _software_qml_backend() -> bool:
-    """True when Qt Quick renders in software (obs mode sets QT_QUICK_BACKEND)."""
-    return os.environ.get("QT_QUICK_BACKEND", "").strip().lower() == "software"
-
-
-def _toolbar_surface_opaque(*, top_level: bool) -> bool:
-    """An *embedded* child QQuickWidget can't composite a translucent background
-    under the software scene-graph backend (obs mode) — the pill renders as an
-    opaque WHITE box. Under that backend the toolbar therefore always lives on
-    the *top-level* WM-composited surface (see show()/set_browser_overlay_mode),
-    which keeps true, anti-aliased transparency and a rounded pill. The embedded
-    surface is only a fallback if that surface can't be built; make it genuinely
-    OPAQUE there (clear to the dark app bg) so it blends into the dark panels
-    instead of flashing white."""
-    return _software_qml_backend() and not top_level
-
-
-def _toolbar_clear_color(*, top_level: bool):
-    return QColor(PALETTE.bg0) if _toolbar_surface_opaque(top_level=top_level) else QColor(0, 0, 0, 0)
-
-
 def _configure_toolbar_surface(
     surface: QQuickWidget,
     bridge: QuickToolbarBridge,
     *,
     defer_load: bool = False,
-    top_level: bool = False,
 ):
     """Configure one rendering surface for the shared toolbar state."""
-    opaque = _toolbar_surface_opaque(top_level=top_level)
-    surface.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, not opaque)
+    surface.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
     surface.setAttribute(Qt.WidgetAttribute.WA_AlwaysStackOnTop, True)
-    surface.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, opaque)
-    surface.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, not opaque)
-    surface.setStyleSheet(f"background: {PALETTE.bg0};" if opaque else "background: transparent;")
+    surface.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, False)
+    surface.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
+    surface.setStyleSheet("background: transparent;")
     if _MAC:
         surface.resize(_QAT_MAX_W, _QAT_H)
     else:
@@ -114,7 +91,7 @@ def _configure_toolbar_surface(
     return configure_qml_host(
         surface,
         type_name="QuickAccessToolbar",
-        clear_color=_toolbar_clear_color(top_level=top_level),
+        clear_color=QColor(0, 0, 0, 0),
         image_providers={
             "icons": SvgIconProvider(
                 QUICK_TOOLBAR_ICON_SVGS,
@@ -140,7 +117,7 @@ class _LinuxBrowserToolbarSurface(QQuickWidget):
         )
         self.setParent(parent_window, flags)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
-        _configure_toolbar_surface(self, bridge, top_level=True)
+        _configure_toolbar_surface(self, bridge)
         self.hide()
 
 
@@ -180,20 +157,22 @@ class QuickAccessToolbar(QQuickWidget):
         self,
         obs_service,
         zoom_service,
-        camera_service=None,
         parent=None,
         *,
         obs_settings: OBSSettingsStore,
-        camera_settings: CameraSettingsStore,
         background_song_service=None,
+        scene_runtime: SceneRuntimeController | None = None,
+        camera_service=None,
+        camera_settings: CameraSettingsStore | None = None,
     ):
         super().__init__(parent)
         self._obs = obs_service
         self._zoom = zoom_service
-        self._camera = camera_service
         self._obs_settings = obs_settings
-        self._camera_settings = camera_settings
         self._background_song = background_song_service
+        self._scene_runtime = scene_runtime
+        self._camera = camera_service
+        self._camera_settings = camera_settings
         self._minimized = False
         self._obs_connected = False
         self._screen_count = 0
@@ -242,6 +221,7 @@ class QuickAccessToolbar(QQuickWidget):
         )
         self._bridge.backgroundSongClicked.connect(self._on_background_song_clicked)
         self._bridge.obsClicked.connect(self._on_obs_clicked)
+        self._bridge.scenesClicked.connect(self._on_solin_scenes_clicked)
         self._bridge.zoomClicked.connect(self._on_zoom_clicked)
         self._bridge.cameraClicked.connect(self._on_camera_clicked)
         self._bridge.remoteControlClicked.connect(self._on_remote_control_clicked)
@@ -310,15 +290,26 @@ class QuickAccessToolbar(QQuickWidget):
 
         # ── OBS Scene Popup ───────────────────────────────────────────────
         self._scene_popup = None
-
-        # ── Camera Panel ──────────────────────────────────────────────────
         self._camera_panel = None
+
+        # ── Solin Scene Popup ─────────────────────────────────────────────
+        self._solin_scene_popup = None
+        self._bridge.set_scenes_visible(self._scene_runtime is not None)
+        if self._scene_runtime is not None:
+            self._scene_runtime.engine_ready_changed.connect(
+                lambda _ready: self._sync_solin_scene_state()
+            )
+            self._scene_runtime.applied_scenes_changed.connect(
+                lambda _scenes: self._sync_solin_scene_state()
+            )
+            self._sync_solin_scene_state()
 
         self._remote_sessions_popup = None
         self.auxiliary_preparation_handle = IncrementalLoadHandle(
             (
                 self._ensure_zoom_panel,
                 self._ensure_scene_popup,
+                self._ensure_solin_scene_popup,
                 self._ensure_camera_panel,
                 self._ensure_remote_sessions_popup,
             ),
@@ -363,31 +354,6 @@ class QuickAccessToolbar(QQuickWidget):
         ):
             self._schedule_reposition()
         return super().eventFilter(obj, event)
-
-    def show(self) -> None:
-        # Under the software backend the toolbar always lives on the WM-composited
-        # top-level surface (set_browser_overlay_mode forces it), so its own pill
-        # gets true anti-aliased transparency. Route show() there and keep the
-        # embedded widget hidden — otherwise the opaque embedded pill would flash.
-        if _software_qml_backend():
-            if not self._browser_overlay_mode:
-                self.set_browser_overlay_mode(True)  # lazily builds the surface
-            if self._browser_surface is not None:
-                self._browser_surface_should_be_visible = True
-                if not self._projection_overlay_active:
-                    self._ensure_transient_parent()
-                    self._browser_surface.show()
-                    self._ensure_transient_parent()
-                    self._schedule_reposition()
-                return
-        super().show()
-
-    def hide(self) -> None:
-        if _software_qml_backend() and self._browser_overlay_mode and self._browser_surface is not None:
-            self._browser_surface_should_be_visible = False
-            self._browser_surface.hide()
-            return
-        super().hide()
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
@@ -514,12 +480,15 @@ class QuickAccessToolbar(QQuickWidget):
         popup.set_stream_available(self._obs_stream_available)
         popup.set_stream_active(self._obs_stream_active)
         popup.set_camera_stream_available(self._obs_camera_stream_available)
+        popup.set_camera_stream_active(self._camera_stream_active)
         self._scene_popup = popup
         return popup
 
     def _ensure_camera_panel(self):
-        if self._camera_panel is not None or self._camera is None:
+        if self._camera_panel is not None:
             return self._camera_panel
+        if self._camera is None or self._camera_settings is None:
+            return None
         from solin.widgets.camera_popup import CameraPopup
 
         panel = CameraPopup(self._camera, self._camera_settings, self)
@@ -531,6 +500,17 @@ class QuickAccessToolbar(QQuickWidget):
             panel.populate(known_cameras)
         self._camera_panel = panel
         return panel
+
+    def _ensure_solin_scene_popup(self):
+        if self._solin_scene_popup is not None:
+            return self._solin_scene_popup
+        if self._scene_runtime is None:
+            return None
+        from solin.widgets.scenes.control_popup import SceneControlPopup
+
+        popup = SceneControlPopup(self._scene_runtime, self)
+        self._solin_scene_popup = popup
+        return popup
 
     def _ensure_remote_sessions_popup(self):
         if self._remote_sessions_popup is not None:
@@ -587,21 +567,23 @@ class QuickAccessToolbar(QQuickWidget):
         if self._zoom_panel is not None:
             self._zoom_panel.set_sharing(sharing)
 
-    def set_camera_enabled(self, enabled: bool):
-        self._camera_enabled = bool(enabled)
+    def set_camera_enabled(self, enabled: bool) -> None:
+        self._camera_enabled = bool(
+            enabled and self._camera is not None and self._camera_settings is not None
+        )
         self._bridge.set_camera_visible(self._camera_enabled)
         self._bridge.set_camera_icon_color(
-            _icon_hex(PALETTE.text_muted if enabled else PALETTE.text_dim)
+            _icon_hex(PALETTE.text_muted if self._camera_enabled else PALETTE.text_dim)
         )
         self._update_separator()
         self._reposition()
 
-    def set_camera_stream_active(self, active: bool):
+    def set_camera_stream_active(self, active: bool) -> None:
         self._camera_stream_active = bool(active)
         self._bridge.set_camera_icon_color(
             _icon_hex(PALETTE.accent if active else PALETTE.text_muted)
         )
-        if self._camera_panel:
+        if self._camera_panel is not None:
             self._camera_panel.set_stream_active(active)
         if self._scene_popup is not None:
             self._scene_popup.set_camera_stream_active(active)
@@ -698,6 +680,26 @@ class QuickAccessToolbar(QQuickWidget):
             self._bridge.set_background_song_tooltip(tooltip)
         self._reposition()
 
+    def _sync_solin_scene_state(self) -> None:
+        controller = self._scene_runtime
+        if controller is None:
+            self._bridge.set_scenes_visible(False)
+            return
+        self._bridge.set_scenes_visible(True)
+        if controller.engine_ready:
+            color = PALETTE.accent
+            tooltip = self.tr("Solin scenes · engine ready")
+        elif controller.engine_configured:
+            color = PALETTE.warning_text
+            tooltip = self.tr("Solin scenes · engine starting")
+        else:
+            color = PALETTE.text_muted
+            tooltip = self.tr("Solin scenes · engine unavailable")
+        self._bridge.set_scenes_icon_color(_icon_hex(color))
+        self._bridge.set_scenes_tooltip(tooltip)
+        self._update_separator()
+        self._reposition()
+
     def set_obs_current_scene(self, scene_name: str):
         self._obs_current_scene = str(scene_name or "")
         if scene_name:
@@ -737,35 +739,38 @@ class QuickAccessToolbar(QQuickWidget):
         if self._scene_popup is not None:
             self._scene_popup.set_stream_active(active)
 
-    def set_obs_camera_stream_available(self, available: bool):
+    def set_obs_camera_stream_available(self, available: bool) -> None:
         self._obs_camera_stream_available = bool(available)
         if self._scene_popup is not None:
             self._scene_popup.set_camera_stream_available(available)
 
     def current_camera_option(self) -> CameraOption | None:
-        if self._camera_panel:
+        if self._camera_panel is not None:
             return self._camera_panel.selected_camera()
-        if self._camera is not None:
-            cameras = self._camera.known_cameras()
-            saved_backend = self._camera_settings.backend()
-            saved_name = self._camera_settings.device_name()
-            for option in cameras:
-                if option.backend.value == saved_backend and option.name == saved_name:
-                    return option
-            if cameras:
-                return cameras[0]
-        return None
+        if self._camera is None or self._camera_settings is None:
+            return None
+        saved_backend = self._camera_settings.backend()
+        saved_name = self._camera_settings.device_name()
+        cameras = self._camera.known_cameras()
+        return next(
+            (
+                option
+                for option in cameras
+                if option.backend.value == saved_backend and option.name == saved_name
+            ),
+            cameras[0] if cameras else None,
+        )
 
     def reposition(self):
         self._reposition()
 
     def apply_theme(self) -> None:
         hide_themed_tooltip()
-        apply_qml_theme(self, clear_color=_toolbar_clear_color(top_level=False))
+        apply_qml_theme(self, clear_color=QColor(0, 0, 0, 0))
         if self._browser_surface is not None:
             apply_qml_theme(
                 self._browser_surface,
-                clear_color=_toolbar_clear_color(top_level=True),
+                clear_color=QColor(0, 0, 0, 0),
             )
         self.set_screen_count(self._screen_count)
         if self._obs_connected:
@@ -783,9 +788,12 @@ class QuickAccessToolbar(QQuickWidget):
             self._scene_popup.apply_theme()
         if self._camera_panel is not None:
             self._camera_panel.apply_theme()
+        if self._solin_scene_popup is not None:
+            self._solin_scene_popup.apply_theme()
         if self._remote_sessions_popup is not None:
             self._remote_sessions_popup.apply_theme()
         self._sync_background_song_state()
+        self._sync_solin_scene_state()
         self._sync_remote_control_state()
         self._bridge.stateChanged.emit()
 
@@ -807,12 +815,6 @@ class QuickAccessToolbar(QQuickWidget):
         """Use a transient native toolbar only above WebKitGTK on Linux."""
         if not _LINUX:
             return
-        # Under the software Qt Quick backend (obs mode) an embedded QQuickWidget
-        # can't render a translucent pill (white/opaque box). Only the top-level
-        # surface is WM-composited with true, anti-aliased transparency — so use
-        # it on EVERY panel, not just over the browser.
-        if _software_qml_backend():
-            enabled = True
         overlay_mode = bool(enabled)
         if overlay_mode == self._browser_overlay_mode:
             self._schedule_reposition()
@@ -930,7 +932,10 @@ class QuickAccessToolbar(QQuickWidget):
 
     def _update_separator(self):
         visible = (
-            self._bridge._obs_visible or self._bridge._zoom_visible or self._bridge._camera_visible
+            self._bridge._obs_visible
+            or self._bridge._scenes_visible
+            or self._bridge._zoom_visible
+            or self._bridge._camera_visible
         )
         self._bridge.set_separator_visible(visible)
 
@@ -942,6 +947,8 @@ class QuickAccessToolbar(QQuickWidget):
         if self._bridge._separator_visible:
             items.append(1)
         if self._bridge._obs_visible:
+            items.append(30)
+        if self._bridge._scenes_visible:
             items.append(30)
         if self._bridge._camera_visible:
             items.append(30)
@@ -1130,6 +1137,20 @@ class QuickAccessToolbar(QQuickWidget):
         if not scenes:
             self._obs.request_scenes_refresh()
 
+    def _on_solin_scenes_clicked(self) -> None:
+        hide_themed_tooltip()
+        popup = self._ensure_solin_scene_popup()
+        if popup is not None:
+            popup.show_above(self._active_surface())
+
+    def _on_camera_clicked(self) -> None:
+        hide_themed_tooltip()
+        if not self._camera_enabled:
+            return
+        panel = self._ensure_camera_panel()
+        if panel is not None:
+            panel.show_above(self._active_surface())
+
     def _on_background_song_clicked(self):
         hide_themed_tooltip()
         if not self._background_song_panel or not self._background_song:
@@ -1144,13 +1165,6 @@ class QuickAccessToolbar(QQuickWidget):
             return
         self._ensure_zoom_panel().show_above(self._active_surface())
 
-    def _on_camera_clicked(self):
-        hide_themed_tooltip()
-        panel = self._ensure_camera_panel()
-        if panel is None:
-            return
-        panel.show_above(self._active_surface())
-
     def _on_remote_control_clicked(self) -> None:
         hide_themed_tooltip()
         if not self._remote_enabled:
@@ -1163,5 +1177,8 @@ class QuickAccessToolbar(QQuickWidget):
         if event.type() == QEvent.Type.LanguageChange:
             self._bridge.update_translations()
             self._sync_background_song_state()
+            self._sync_solin_scene_state()
+            if self._camera_panel is not None:
+                self._camera_panel.apply_theme()
             self._sync_remote_control_state()
         super().changeEvent(event)

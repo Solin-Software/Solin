@@ -1,5 +1,4 @@
 import ctypes
-import os
 import sys
 
 from PySide6.QtCore import (
@@ -27,18 +26,19 @@ from PySide6.QtGui import (
 from PySide6.QtMultimedia import QVideoFrame
 from PySide6.QtWidgets import (
     QGraphicsOpacityEffect,
+    QStackedLayout,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
 
 from ..core.foundation.exception_logging import log_ignored_exception
-from ..core.media.obs_program import proj_diag
 from ..core.projection.image_framing import IDENTITY_IMAGE_TRANSFORM, ImageTransform
 from ..core.projection.transform_animation import ProjectionTransformAnimation
 from ..core.rendering.fonts import FontManager
 from ..core.timer.models import MediaCountdownPresentation
 from ..widgets.circular_timer import CircularTimerWidget
+from ..widgets.projection.native_surface import NativeVideoSurface
 from .yearly_text import YearlyTextWidget
 
 
@@ -67,105 +67,6 @@ def exclude_from_aero_peek(hwnd: int) -> None:
         )
     except Exception:  # noqa: BLE001 - Win32 window-manager API boundary
         log_ignored_exception(__name__, "Could not exclude projection window from Aero Peek")
-
-
-def obs_media_engine_active() -> bool:
-    """True when the libobs media engine is selected (SOLIN_MEDIA_ENGINE=obs)."""
-    return os.environ.get("SOLIN_MEDIA_ENGINE", "").strip().lower() == "obs"
-
-
-# libobs can only bind a Display to the native projection surface once its X
-# window is realised; a fresh fullscreen window needs a few event-loop turns, so
-# the idle attach retries at this cadence up to this many times.
-_OBS_ATTACH_RETRY_MS = 150
-_OBS_ATTACH_MAX_TRIES = 40
-
-
-class ObsProjectionSurface(QWidget):
-    """Native child surface that libobs renders the shared OBS canvas into.
-
-    Used only when the libobs media engine is active. It follows the same
-    pattern OBS Studio uses for its Qt preview: a native window with Qt painting
-    disabled (``paintEngine`` returns ``None``) whose handle hosts an
-    ``obs_display_t``. The display renders the main OBS texture (the projected
-    media source on its output channel), letterboxed to the widget size.
-
-    The surface overlays the projection page stack: it is shown/raised while a
-    video is projecting and hidden for idle/image/timer content so the ordinary
-    Qt pages remain visible.
-    """
-
-    def __init__(self, parent: QWidget) -> None:
-        super().__init__(parent)
-        self.setAttribute(Qt.WidgetAttribute.WA_NativeWindow, True)
-        self.setAttribute(Qt.WidgetAttribute.WA_PaintOnScreen, True)
-        self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
-        self.setStyleSheet("background-color: black;")
-        self._display = None
-
-    def paintEngine(self):  # noqa: N802 - libobs owns this surface, not Qt
-        return None
-
-    def ensure_display(self) -> bool:
-        """Create the libobs display bound to this window handle (idempotent)."""
-        if self._display is not None:
-            return True
-        try:
-            from solin.core.media.obs_runtime import obs_runtime
-
-            runtime = obs_runtime()
-            runtime.ensure_started()
-            ob = runtime.ob
-            canvas = runtime.video
-            handle = int(self.winId())
-            display = ob.Display.from_window(
-                handle,
-                max(1, self.width()),
-                max(1, self.height()),
-                # Black letterbox bars, consistent with the projection background
-                # (the default 0xFF1A1A1A would show grey bars around the content).
-                background_color=0xFF000000,
-            )
-
-            def _draw(cx: int, cy: int) -> None:
-                ob.render_main_texture_letterboxed(canvas.width, canvas.height, cx, cy)
-
-            display.add_draw_callback(_draw)
-            self._display = display
-            return True
-        except Exception:  # noqa: BLE001 - libobs display creation boundary
-            log_ignored_exception(__name__, "Could not create libobs projection display")
-            return False
-
-    def set_enabled(self, enabled: bool) -> None:
-        if self._display is not None:
-            try:
-                self._display.enabled = bool(enabled)
-            except Exception:  # noqa: BLE001 - libobs boundary
-                log_ignored_exception(__name__, "Could not toggle libobs display")
-
-    def sync_geometry(self, rect: QRect) -> None:
-        self.setGeometry(rect)
-        # A WA_PaintOnScreen native child does not resize its backing X window
-        # from setGeometry alone; resize the QWindow directly so libobs renders
-        # into a full-size surface instead of the default tiny corner.
-        handle = self.windowHandle()
-        if handle is not None:
-            handle.setGeometry(rect)
-        if self._display is not None:
-            try:
-                self._display.resize(max(1, rect.width()), max(1, rect.height()))
-            except Exception:  # noqa: BLE001 - libobs boundary
-                log_ignored_exception(__name__, "Could not resize libobs display")
-
-    def release(self) -> None:
-        if self._display is not None:
-            try:
-                self._display.release()
-            except Exception:  # noqa: BLE001 - libobs boundary
-                log_ignored_exception(__name__, "Could not release libobs display")
-            self._display = None
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # IdleMediaWidget — replaces the yeartext when a custom idle media is set
@@ -323,21 +224,11 @@ class VideoDisplayWidget(QWidget):
       • Receives QImage via set_image() — stored and painted the same way.
       • Keeps a QPixmap copy for faster subsequent paints (no CPU re-scale).
 
-    Smoothstep transitions:
-      • Every new image/video start is faded in using a smoothstep curve
-        driven by a QTimer at 60 fps for a polished cinematic feel.
-
     Zoom/pan transform (images only):
       • set_image_transform(zoom, norm_x, norm_y) applies an offset on top
         of the centred fit-to-widget base rect.
       • Uses a time-based premium easing curve so projector motion stays smooth.
     """
-
-    # ── Smoothstep helper ─────────────────────────────────────────────────
-    @staticmethod
-    def _smoothstep(t: float) -> float:
-        t = max(0.0, min(1.0, t))
-        return t * t * (3.0 - 2.0 * t)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -356,12 +247,6 @@ class VideoDisplayWidget(QWidget):
         self._cached_widget_size: QSize = QSize()
         self._cached_src_size: QSize = QSize()
         self._cached_dst_rect: QRectF = QRectF()
-
-        # ── Smoothstep fade-in state ──────────────────────────────────────
-        self._fade_t: float = 1.0        # 0.0 → 1.0 progress
-        self._fade_timer = QTimer(self)
-        self._fade_timer.setInterval(16)  # ~60 fps
-        self._fade_timer.timeout.connect(self._on_fade_tick)
 
         # ── Zoom/pan transform (images only) ─────────────────────────────
         self._image_transform = ProjectionTransformAnimation()
@@ -388,7 +273,6 @@ class VideoDisplayWidget(QWidget):
         initial_transform: ImageTransform | None = None,
     ) -> None:
         """Display a static QImage (replaces any active video)."""
-        coming_from_black = (self._mode == "black")
         self._video_frame = None
         self._video_image = None
         self._static_image = image
@@ -401,12 +285,6 @@ class VideoDisplayWidget(QWidget):
             transform.norm_y,
             animate=False,
         )
-        # Only trigger smoothstep fade-in on the very first frame (from black).
-        # Live-tab projections can update very frequently — restarting the fade every
-        # call would keep _fade_t perpetually near 0 and the screen stays black.
-        if coming_from_black:
-            self._fade_t = 0.0
-            self._fade_timer.start()
         self._paint_pending = True
         self.update()
 
@@ -416,8 +294,6 @@ class VideoDisplayWidget(QWidget):
         self._video_image = None
         self._static_image = None
         self._mode = "black"
-        self._fade_timer.stop()
-        self._fade_t = 1.0
         # Reset transform without animation
         self._image_transform.reset()
         self._transform_timer.stop()
@@ -454,17 +330,6 @@ class VideoDisplayWidget(QWidget):
         """
         self._image_transform.reset()
         self._transform_timer.stop()
-
-    # ── Fade-in tick ─────────────────────────────────────────────────────
-
-    def _on_fade_tick(self):
-        self._fade_t += 0.045   # ~22 frames for full fade ≈ 360 ms
-        if self._fade_t >= 1.0:
-            self._fade_t = 1.0
-            self._fade_timer.stop()
-        if not self._paint_pending:
-            self._paint_pending = True
-            self.update()
 
     # ── Transform animation tick ──────────────────────────────────────────
 
@@ -530,11 +395,6 @@ class VideoDisplayWidget(QWidget):
             painter.end()
             return
 
-        # ── Apply smoothstep opacity for fade-in ─────────────────────────
-        opacity = self._smoothstep(self._fade_t)
-        if opacity < 1.0:
-            painter.setOpacity(opacity)
-
         # ── Base fit-to-widget rect ───────────────────────────────────────
         base = self._ensure_dst_rect(img_to_draw.width(), img_to_draw.height())
 
@@ -573,8 +433,10 @@ class BaseProjectionView(QWidget):
 
     This base owns the 4-page ``QStackedWidget`` and **all** content
     behaviour — media/video, circular timer, yearly text and custom idle
-    media — together with the fade animations that transition
-    between them.  Subclasses are responsible only for *window-level* chrome
+    media. Native media surfaces delegate transitions to the GPU engine. The
+    Qt renderer retains the legacy fade only as the cross-platform fallback;
+    timer and idle-page animations remain local here.
+    Subclasses are responsible only for *window-level* chrome
     (fullscreen placement vs. resizable 16:9 floating frame) and must call
     :meth:`_build_projection_stack` exactly once from their ``__init__``.
 
@@ -594,6 +456,7 @@ class BaseProjectionView(QWidget):
     _PAGE_IDLE_MEDIA = 3
 
     _MEDIA_FADE_DURATION_MS = 200
+    _YEARLY_TIMER_EXIT_FADE_DURATION_MS = 200
     _YEARLY_FADE_IN_DURATION_MS = 500
 
     def _build_projection_stack(self, layout) -> None:
@@ -608,18 +471,27 @@ class BaseProjectionView(QWidget):
         self._stack.setStyleSheet("background: black;")
         layout.addWidget(self._stack)
 
-        # Page 0 — media / image  (VideoDisplayWidget — GPU-scaled, frame-throttled)
+        # Page 0 — media / image
+        self._media_host = QWidget()
+        media_layout = QStackedLayout(self._media_host)
+        media_layout.setContentsMargins(0, 0, 0, 0)
+        media_layout.setStackingMode(QStackedLayout.StackingMode.StackAll)
         self.display_label = VideoDisplayWidget()
-        self._stack.addWidget(self.display_label)   # index 0
+        self.native_video_surface = NativeVideoSurface()
+        media_layout.addWidget(self.display_label)
+        media_layout.addWidget(self.native_video_surface)
+        self._stack.addWidget(self._media_host)   # index 0
 
-        # Opacity / fade effect on the media label
+        # This effect belongs only to the Qt fallback renderer. Native frames
+        # are hosted by the sibling NativeVideoSurface and never cross it.
         self._media_opacity = QGraphicsOpacityEffect(self.display_label)
         self._media_opacity.setOpacity(1.0)
         self.display_label.setGraphicsEffect(self._media_opacity)
         self._media_anim = QPropertyAnimation(self._media_opacity, b"opacity")
         self._media_anim.setDuration(self._MEDIA_FADE_DURATION_MS)
         self._media_anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
-        self._media_fade_out_connected = False
+        self._media_fade_out_pending = False
+        self._media_anim.finished.connect(self._on_media_animation_finished)
 
         # Page 1 — live circular timer
         self._proj_timer = CircularTimerWidget()
@@ -661,12 +533,6 @@ class BaseProjectionView(QWidget):
         # Explicit state flag — never rely on currentIndex for logic
         self._is_showing_media: bool = False
         self._has_idle_media: bool = False   # True when custom idle is loaded
-        # obs mode: the custom idle background is composited inside libobs, so the
-        # surface records which file/type to (re)show on the program (see
-        # show_obs_idle_media). Empty in the Qt engine, which paints frames on the
-        # IdleMediaWidget instead.
-        self._idle_media_path: str = ""
-        self._idle_media_type: str = ""
         self._timer_presentation: MediaCountdownPresentation | None = None
 
         # Guard: only True while a *video* (not audio) is expected.
@@ -675,179 +541,17 @@ class BaseProjectionView(QWidget):
         # Prevents residual pipeline frames from a just-
         # stopped video from being painted after clear() is called.
         self._accept_video_frames: bool = False
+        self._native_output_active: bool = False
+        self._fallback_media_entry_pending: bool = False
         self._current_pixmap: QPixmap | None = None
 
         self._stack.setCurrentIndex(self._PAGE_YEARLY)  # start on yearly text page
-
-        # ── libobs projection program (only when the OBS media engine is on) ──
-        # The second monitor is composited entirely inside libobs: the native
-        # surface is *always on* and renders channel 0 (a fade transition), and
-        # every kind of projected content — idle yeartext, media, still images,
-        # generated talk themes and countdowns — is a libobs scene the program crossfades
-        # between (see solin.core.media.obs_program / .program_driver). The
-        # surface is hidden only for the two things that still stream through Qt:
-        # a live browser tab and a custom idle video (re-encoding an image_source
-        # per frame would be far too slow).
-        self._obs_mode: bool = obs_media_engine_active()
-        self._obs_surface: ObsProjectionSurface | None = None
-        self._obs_attach_tries: int = 0
-        # clear() defers its idle crossfade one tick; a content switch in the
-        # same tick (project_video_core does stop→clear→begin_video) cancels it,
-        # so the projection goes straight to the new content — no yeartext flash.
-        self._obs_idle_pending: bool = False
-        if self._obs_mode:
-            self._obs_surface = ObsProjectionSurface(self)
-            self._obs_surface.hide()
-            # Bring the always-on program surface up on the idle yeartext scene
-            # once the window is realised (winId must be valid for the Display).
-            QTimer.singleShot(_OBS_ATTACH_RETRY_MS, self._obs_enter_idle)
-
-    # ── libobs projection program control ─────────────────────────────────
-
-    def _program_driver(self):
-        from .program_driver import projection_program_driver
-
-        return projection_program_driver(self._font_manager)
-
-    def _obs_show_surface(self) -> None:
-        """Bring the always-on program surface up over the Qt page stack."""
-        surface = self._obs_surface
-        if not self._obs_mode or surface is None:
-            return
-        surface.sync_geometry(self.rect())
-        if not surface.ensure_display():
-            return
-        surface.set_enabled(True)
-        surface.show()
-        surface.raise_()
-        # Re-sync after the native window is mapped: the backing X window only
-        # resizes to full size once its QWindow exists (post-winId/show).
-        surface.sync_geometry(self.rect())
-
-    def _obs_hide_surface(self) -> None:
-        """Hide the program surface so a Qt page (live tab, idle video) shows."""
-        surface = self._obs_surface
-        if not self._obs_mode or surface is None:
-            return
-        # The surface is going away; a deferred idle crossfade would fire on it
-        # underneath the Qt page and leave the program stuck on the yeartext.
-        self._obs_idle_pending = False
-        surface.set_enabled(False)
-        surface.hide()
-
-    def _obs_apply_idle(self) -> None:
-        """Fire the deferred idle crossfade unless a content switch superseded it."""
-        if not self._obs_idle_pending:
-            proj_diag("window._obs_apply_idle: SKIP (pending cancelled by a content switch)")
-            return
-        self._obs_idle_pending = False
-        proj_diag("window._obs_apply_idle: crossfading program to yeartext idle")
-        try:
-            self._program_driver().show_yeartext()
-        except Exception:  # noqa: BLE001 - libobs/render boundary
-            proj_diag("window._obs_apply_idle: show_yeartext RAISED")
-            log_ignored_exception(__name__, "Could not crossfade program to idle")
-        self._obs_show_surface()
-
-    def _obs_cancel_idle(self) -> None:
-        """A content switch is taking over; drop any deferred idle crossfade."""
-        self._obs_idle_pending = False
-
-    # Back-compat aliases for the media call sites (begin_video / clear paths).
-    def _enter_obs_video(self) -> None:
-        self._obs_cancel_idle()
-        self._is_showing_media = True
-        self._obs_show_surface()
-
-    def _leave_obs_video(self) -> None:
-        self._obs_hide_surface()
-
-    def _obs_enter_idle(self) -> None:
-        """Show the idle yeartext scene as the initial program output.
-
-        libobs can only bind a Display to the native surface once its X window
-        is realised; on a fresh fullscreen window that takes a few event-loop
-        turns, so retry the attach until it succeeds (bounded).
-        """
-        if not self._obs_mode:
-            return
-        surface = self._obs_surface
-        if surface is None:
-            return
-        if not surface.ensure_display():
-            self._obs_attach_tries += 1
-            if self._obs_attach_tries <= _OBS_ATTACH_MAX_TRIES:
-                QTimer.singleShot(_OBS_ATTACH_RETRY_MS, self._obs_enter_idle)
-            return
-        self._obs_cancel_idle()
-        try:
-            driver = self._program_driver()
-            # The program is a process-wide singleton on channel 0 shared by every
-            # surface. Only seed the idle yeartext when it is blank — a surface
-            # attaching later (the window preview opened mid-playback) must render
-            # the shared output as-is, not reset what the other monitors show.
-            if driver.is_blank:
-                driver.show_yeartext()
-        except Exception:  # noqa: BLE001 - libobs/render boundary
-            log_ignored_exception(__name__, "Could not show program idle scene")
-        self._obs_show_surface()
-
-    def _obs_clear(self) -> None:
-        """Return the program to idle: crossfade to the yeartext scene.
-
-        If a custom idle video is active it streams through Qt, so the surface is
-        hidden and the Qt idle-media page shows instead.
-        """
-        self._cancel_pending_timer_exit()
-        self._clear_timer_presentation()
-        self._is_showing_media = False
-        proj_diag(
-            f"window._obs_clear: has_idle_media={self._has_idle_media} "
-            f"driver_key={self._program_driver().current_key}"
-        )
-        if self._has_idle_media:
-            # Custom idle now composites INSIDE libobs (video → looping
-            # ffmpeg_source, image → image_source). Crossfade the program to it
-            # with the surface up — the crossfade also disposes any just-detached
-            # media source. If nothing is on record (or the source can't be built)
-            # fall back to blacking the program so a detached media source is still
-            # released instead of decoding on indefinitely.
-            self._obs_cancel_idle()
-            if not self._show_obs_idle_media():
-                try:
-                    self._program_driver().show_black()
-                except Exception:  # noqa: BLE001 - libobs/render boundary
-                    log_ignored_exception(__name__, "Could not black out program for idle media")
-                self._obs_show_surface()
-            return
-        # Defer the yeartext crossfade one event-loop tick: project_video_core does
-        # stop→clear→begin_video and _project_image does stop→clear→show_image in
-        # the same tick, and the following content switch cancels this pending idle
-        # (see _obs_cancel_idle). So the projection goes image→video / image→image
-        # directly instead of flashing the yeartext in between.
-        self._obs_idle_pending = True
-        self._obs_show_surface()
-        QTimer.singleShot(0, self._obs_apply_idle)
-
-    def resizeEvent(self, event):  # noqa: N802 - Qt override
-        super().resizeEvent(event)
-        if self._obs_surface is not None and self._obs_surface.isVisible():
-            self._obs_surface.sync_geometry(self.rect())
-
-    def closeEvent(self, event):  # noqa: N802 - Qt override
-        if self._obs_surface is not None:
-            self._obs_surface.release()
-        super().closeEvent(event)
 
     # ── Yearly text API ───────────────────────────────────────────────────
 
     def set_yearly_text(self, quote: str, reference: str, api_code: str = "") -> None:
         """Update the yearly text shown when idle."""
         self._yearly_widget.set_text(quote, reference, api_code)
-        if self._obs_mode:
-            # Keep the program's idle scene in sync (re-renders live if idle is
-            # currently showing).
-            self._program_driver().set_yeartext(quote, reference, api_code)
 
     # ── Timer API ─────────────────────────────────────────────────────────
 
@@ -863,15 +567,9 @@ class BaseProjectionView(QWidget):
         self._clear_timer_presentation()
         self._timer_presentation = presentation
         self._accept_video_frames = False
+        self.set_native_output_active(False)
+        self._fallback_media_entry_pending = False
         self._is_showing_media = False
-
-        if self._obs_mode:
-            # Render the countdown to a canvas scene and crossfade to it; ticks
-            # update the scene in place (see update_timer).
-            self._obs_cancel_idle()
-            self._program_driver().show_timer(remaining, total, presentation)
-            self._obs_show_surface()
-            return
 
         if presentation is MediaCountdownPresentation.YEARLY_TEXT:
             self._yearly_widget.set_countdown(remaining, total)
@@ -892,12 +590,6 @@ class BaseProjectionView(QWidget):
 
     def update_timer(self, remaining: int, total: int) -> None:
         """Update countdown (called every second while timer mode is active)."""
-        if self._obs_mode:
-            if self._timer_presentation is not None:
-                self._program_driver().update_timer(
-                    remaining, total, self._timer_presentation
-                )
-            return
         if (
             self._timer_presentation is MediaCountdownPresentation.YEARLY_TEXT
             and self._stack.currentIndex() == self._PAGE_YEARLY
@@ -910,11 +602,6 @@ class BaseProjectionView(QWidget):
             self._proj_timer.update_data(remaining, total)
 
     def set_timer_blink(self, on: bool) -> None:
-        if self._obs_mode:
-            # The countdown is a libobs image scene; re-render it with the blink
-            # toggled (the window's own Qt widgets are hidden under the surface).
-            self._program_driver().set_timer_blink(on)
-            return
         if (
             self._timer_presentation is MediaCountdownPresentation.YEARLY_TEXT
             and self._stack.currentIndex() == self._PAGE_YEARLY
@@ -946,13 +633,26 @@ class BaseProjectionView(QWidget):
         self._cancel_pending_timer_exit()
         self._clear_timer_presentation()
         self._accept_video_frames = True
-        if self._obs_mode:
-            # Media arrives from the engine as an ffmpeg_source the program
-            # crossfades in; bring the always-on program surface up.
-            self._enter_obs_video()
-        # Qt engine: leave _is_showing_media False so the first update_frame()
-        # switches the page stack to _PAGE_MEDIA (setting it True here would keep
-        # the projection stuck on the idle page and the video invisible).
+
+    def set_native_output_active(self, active: bool) -> None:
+        active = bool(active)
+        if active == self._native_output_active:
+            return
+        previous = self._native_output_active
+        self._native_output_active = active
+        self.native_video_surface.setVisible(active)
+        if active:
+            self._fallback_media_entry_pending = False
+            self.display_label.clear()
+            self._stop_all_anims()
+            self._media_opacity.setOpacity(1.0)
+            self._is_showing_media = True
+            self._stack.setCurrentIndex(self._PAGE_MEDIA)
+            self.native_video_surface.raise_()
+        elif previous and self._is_showing_media:
+            # If the engine becomes unavailable while media is visible, the
+            # first restored Qt frame must enter through the fallback fade.
+            self._fallback_media_entry_pending = True
 
     @Slot(QVideoFrame)
     def update_frame(self, frame: QVideoFrame) -> None:
@@ -962,24 +662,17 @@ class BaseProjectionView(QWidget):
         # called (e.g. when switching from video to audio).
         if not self._accept_video_frames:
             return
-        # Under the libobs engine the projection program renders media on the
-        # native surface; the engine's per-source frame_ready is only for the
-        # operator preview, so ignore it here.
-        if self._obs_mode:
-            return
         # Pass the raw QVideoFrame — VideoDisplayWidget handles throttle + conversion
         if not frame.isValid():
             return
+        if self._native_output_active:
+            return
         self.display_label.set_video_frame(frame)
 
-        if not self._is_showing_media:
-            self._stop_all_anims()
+        if not self._is_showing_media or self._fallback_media_entry_pending:
             self._is_showing_media = True
-            self._media_opacity.setOpacity(0.0)
-            self._stack.setCurrentIndex(self._PAGE_MEDIA)
-            self._media_anim.setStartValue(0.0)
-            self._media_anim.setEndValue(1.0)
-            self._media_anim.start()
+            self._fallback_media_entry_pending = False
+            self._start_media_fade_in()
 
     def show_image_from_url_data(
         self,
@@ -1026,108 +719,31 @@ class BaseProjectionView(QWidget):
         self._cancel_pending_timer_exit()
         self._clear_timer_presentation()
         self._accept_video_frames = False
-        # Under the libobs engine, a *still* picture (cache_pixmap=True) becomes
-        # an image_source scene the program crossfades to, shown by the native
-        # surface. Streaming frames (live tab, cache_pixmap=False) keep flowing
-        # through the Qt page — re-encoding a PNG per frame would be far too slow.
-        if self._obs_mode and cache_pixmap:
-            self._obs_cancel_idle()
-            self._is_showing_media = True
-            self._current_pixmap = QPixmap.fromImage(image)
-            try:
-                self._program_driver().show_static_image(
-                    image, transform=initial_transform
-                )
-                self._obs_show_surface()
-                proj_diag("window._show_image: libobs image OK, surface up")
-                return
-            except Exception:  # noqa: BLE001 - libobs/render boundary
-                proj_diag("window._show_image: libobs FAILED -> Qt fallback")
-                log_ignored_exception(__name__, "Could not project image via libobs")
-        # Streaming frames, or a libobs failure: fall back to the Qt page.
-        self._leave_obs_video()
+        if self._native_output_active:
+            # The native source receives this image through the independent
+            # content-ingress channel. Do not wake or mutate the Qt fallback.
+            return
         self._current_pixmap = QPixmap.fromImage(image) if cache_pixmap else None
         self.display_label.set_image(image, initial_transform=initial_transform)
 
-        if not self._is_showing_media:
-            self._stop_all_anims()
+        if not self._is_showing_media or self._fallback_media_entry_pending:
             self._is_showing_media = True
-            # Use smoothstep easing curve for the overlay opacity animation
-            self._media_anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
-            self._media_opacity.setOpacity(0.0)
-            self._stack.setCurrentIndex(self._PAGE_MEDIA)
-            self._media_anim.setStartValue(0.0)
-            self._media_anim.setEndValue(1.0)
-            self._media_anim.start()
+            self._fallback_media_entry_pending = False
+            self._start_media_fade_in()
         else:
             self._stack.setCurrentIndex(self._PAGE_MEDIA)
 
-    def show_camera(self, device_path: str, device_name: str = "") -> bool:
-        """Project a camera as a native libobs capture scene (composited +
-        crossfaded on channel 0), instead of streaming Qt frames — v4l2_input on
-        Linux, dshow_input on Windows, av_capture_input on macOS (libobs owns the
-        device). Returns True only when the source was created; the caller keeps
-        the Qt camera path when this returns False.
-        """
-        if not self._obs_mode:
-            return False
-        self._cancel_pending_timer_exit()
-        self._clear_timer_presentation()
-        self._accept_video_frames = False
-        self._obs_cancel_idle()
-        try:
-            if self._program_driver().show_camera(device_path, device_name):
-                self._is_showing_media = True
-                self._obs_show_surface()
-                return True
-        except Exception:  # noqa: BLE001 - libobs/render boundary
-            log_ignored_exception(__name__, "Could not project camera via libobs")
-        return False
+    def _start_media_fade_in(self) -> None:
+        """Reveal media through the Qt fallback renderer only."""
 
-    def show_browser_frame(self, image: QImage) -> bool:
-        """Project the live browser tab by pushing its frame into a libobs async
-        video source (composited + crossfaded on channel 0), instead of painting a
-        QImage per frame on the Qt page. The frame stream works while the browser
-        page is hidden, so this stays live across panel switches with no black.
-        Returns True only when the frame was accepted; the caller keeps its Qt
-        per-frame path when this returns False (Qt engine, or source unavailable).
-        """
-        if not self._obs_mode:
-            return False
-        self._cancel_pending_timer_exit()
-        self._clear_timer_presentation()
-        self._accept_video_frames = False
-        self._obs_cancel_idle()
-        try:
-            if self._program_driver().show_browser_frame(image):
-                self._is_showing_media = True
-                self._obs_show_surface()
-                return True
-        except Exception:  # noqa: BLE001 - libobs/render boundary
-            log_ignored_exception(__name__, "Could not project browser frame via libobs")
-        return False
-
-    def show_ndi_frame(self, image: QImage) -> bool:
-        """Project an NDI / OBS-program stream by pushing its ctypes-decoded frame
-        into a libobs async video source (composited + crossfaded on channel 0),
-        instead of painting a QImage per frame on the Qt page with the surface
-        hidden. Returns True only when the frame was accepted; the caller keeps its
-        Qt per-frame path when this returns False (Qt engine, or source unavailable).
-        """
-        if not self._obs_mode:
-            return False
-        self._cancel_pending_timer_exit()
-        self._clear_timer_presentation()
-        self._accept_video_frames = False
-        self._obs_cancel_idle()
-        try:
-            if self._program_driver().show_ndi_frame(image):
-                self._is_showing_media = True
-                self._obs_show_surface()
-                return True
-        except Exception:  # noqa: BLE001 - libobs/render boundary
-            log_ignored_exception(__name__, "Could not project NDI frame via libobs")
-        return False
+        if self._native_output_active:
+            return
+        self._stop_all_anims()
+        self._media_opacity.setOpacity(0.0)
+        self._stack.setCurrentIndex(self._PAGE_MEDIA)
+        self._media_anim.setStartValue(0.0)
+        self._media_anim.setEndValue(1.0)
+        self._media_anim.start()
 
     def set_image_transform(self, zoom: float, norm_x: float, norm_y: float,
                             *, animate: bool = True) -> None:
@@ -1136,35 +752,26 @@ class BaseProjectionView(QWidget):
         ``animate=False`` snaps instantly — used to replay the active transform
         onto a newly created surface so it matches the others immediately.
         """
-        if self._obs_mode:
-            # Static images, including rendered talk themes, are libobs scene
-            # items. Other program content carries no transform.
-            if self._program_driver().current_key == "image":
-                self._program_driver().set_image_transform(
-                    zoom, norm_x, norm_y, animate=animate
-                )
-            return
         if self._stack.currentIndex() == self._PAGE_MEDIA:
             self.display_label.set_image_transform(zoom, norm_x, norm_y, animate=animate)
 
     def reset_image_transform_instant(self) -> None:
         """Snap the image display to identity before loading a new projection."""
-        if self._obs_mode:
-            self._program_driver().reset_transform()
         self.display_label.reset_transform_instant()
 
     # ── Idle / clear transitions ──────────────────────────────────────────
 
     def clear(self) -> None:
-        """Return to idle screen: fade out media (if active), then fade in the
-        active idle page (custom media page 3 if set, else yeartext page 2)."""
+        """Return media to idle through the renderer that owns presentation."""
         # Immediately stop accepting video frames — this is the earliest possible
         # point to cut off the pipeline, before any async frames already queued
         # in the Qt event loop can reach update_frame().
         self._accept_video_frames = False
-        if self._obs_mode:
-            self._obs_clear()
-            return
+        native_presentation_was_active = (
+            self._native_output_active or self._fallback_media_entry_pending
+        )
+        self.set_native_output_active(False)
+        self._fallback_media_entry_pending = False
         if self._yearly_timer_exit_pending:
             return
         if (
@@ -1177,7 +784,7 @@ class BaseProjectionView(QWidget):
             self._start_yearly_fade(
                 start=self._yearly_opacity.opacity(),
                 end=0.0,
-                duration_ms=self._MEDIA_FADE_DURATION_MS,
+                duration_ms=self._YEARLY_TIMER_EXIT_FADE_DURATION_MS,
             )
             return
 
@@ -1194,13 +801,16 @@ class BaseProjectionView(QWidget):
         self._current_pixmap = None
 
         if self._is_showing_media:
-            # Fade out media label
             self._is_showing_media = False
-            self._media_anim.setStartValue(self._media_opacity.opacity())
-            self._media_anim.setEndValue(0.0)
-            self._media_anim.finished.connect(self._on_media_fade_out_done)
-            self._media_fade_out_connected = True
-            self._media_anim.start()
+            if native_presentation_was_active:
+                self.display_label.clear()
+                self._media_opacity.setOpacity(1.0)
+                self._switch_to_idle_immediately()
+            else:
+                self._media_fade_out_pending = True
+                self._media_anim.setStartValue(self._media_opacity.opacity())
+                self._media_anim.setEndValue(0.0)
+                self._media_anim.start()
         else:
             # Coming from timer — switch to idle with fade-in
             self._switch_to_idle_with_fade()
@@ -1225,12 +835,11 @@ class BaseProjectionView(QWidget):
         self._clear_timer_presentation()
         self._switch_to_idle_with_fade()
 
-    def _on_media_fade_out_done(self) -> None:
-        """Media faded out — now switch to the idle page and fade it in."""
-        if self._media_fade_out_connected:
-            self._media_anim.finished.disconnect(self._on_media_fade_out_done)
-            self._media_fade_out_connected = False
-        self.display_label.clear()   # VideoDisplayWidget.clear() → go black
+    def _on_media_animation_finished(self) -> None:
+        if not self._media_fade_out_pending:
+            return
+        self._media_fade_out_pending = False
+        self.display_label.clear()
         self._media_opacity.setOpacity(1.0)
         self._switch_to_idle_with_fade()
 
@@ -1251,8 +860,16 @@ class BaseProjectionView(QWidget):
                 duration_ms=self._YEARLY_FADE_IN_DURATION_MS,
             )
 
+    def _switch_to_idle_immediately(self) -> None:
+        if self._has_idle_media:
+            self._idle_media_opacity.setOpacity(1.0)
+            self._stack.setCurrentIndex(self._PAGE_IDLE_MEDIA)
+        else:
+            self._yearly_opacity.setOpacity(1.0)
+            self._stack.setCurrentIndex(self._PAGE_YEARLY)
+
     def _stop_all_anims(self) -> None:
-        """Stop all animations and disconnect callbacks safely."""
+        """Stop all local animations and cancel pending completion work."""
         for anim in (
             self._media_anim,
             self._yearly_anim,
@@ -1260,73 +877,18 @@ class BaseProjectionView(QWidget):
             self._idle_media_anim,
         ):
             anim.stop()
-        if self._media_fade_out_connected:
-            self._media_anim.finished.disconnect(self._on_media_fade_out_done)
-            self._media_fade_out_connected = False
+        self._media_fade_out_pending = False
 
     # ── Custom idle media API ─────────────────────────────────────────────
 
-    #: Program keys the custom idle background may safely replace — the plain
-    #: yeartext idle, an idle-media scene already showing, black, or nothing yet.
-    #: Anything else (media/image/timer/browser/camera) is live projected
-    #: content the idle must not override; it shows when that content clears.
-    _OBS_IDLE_REPLACEABLE = frozenset(
-        {"idle", "idle_video", "idle_image", "__black__", None}
-    )
-
-    def show_obs_idle_media(self, path: str, media_type: str) -> None:
-        """obs engine: composite the custom idle background INSIDE libobs.
-
-        A video plays through a native looping, muted ``ffmpeg_source``; a still
-        image through an ``image_source`` — both crossfaded on the program, so the
-        idle screen never leaves libobs (unlike the Qt IdleMediaWidget path). Only
-        replaces an idle/blank program, never live projected content (which shows
-        the custom idle when it clears, via _obs_clear).
-        """
-        self._has_idle_media = True
-        self._idle_media_path = path or ""
-        self._idle_media_type = media_type or ""
-        if not self._obs_mode:
-            return
-        if self._is_showing_media:
-            return
-        if self._program_driver().current_key in self._OBS_IDLE_REPLACEABLE:
-            self._obs_cancel_idle()
-            self._show_obs_idle_media()
-
-    def _show_obs_idle_media(self) -> bool:
-        """Crossfade the libobs program to the recorded custom idle media.
-
-        Returns False if nothing is on record or the source can't be created.
-        """
-        if not self._obs_mode:
-            return False
-        driver = self._program_driver()
-        ok = False
-        try:
-            if self._idle_media_type == "video" and self._idle_media_path:
-                ok = driver.show_idle_video(self._idle_media_path)
-            elif self._idle_media_type == "image" and self._idle_media_path:
-                ok = driver.show_idle_image(self._idle_media_path)
-        except Exception:  # noqa: BLE001 - libobs/render boundary
-            log_ignored_exception(__name__, "Could not show obs idle media")
-            return False
-        if ok:
-            self._obs_show_surface()
-        return ok
-
     def set_idle_active(self) -> None:
-        """Qt engine: flip this surface into custom-idle mode.
+        """Mark that a shared custom idle is active for this surface.
 
         Frames are decoded by the shared IdleMediaSource and delivered via
         update_idle_image(); this only flips the surface into idle-media mode and,
-        if currently on the plain yeartext idle page, fades over to it. In obs mode
-        the idle background composites inside libobs instead — see
-        :meth:`show_obs_idle_media`.
+        if currently on the plain yeartext idle page, fades over to it.
         """
         self._has_idle_media = True
-        if self._obs_mode:
-            return
         if (
             self._timer_presentation is None
             and self._stack.currentIndex() == self._PAGE_YEARLY
@@ -1338,39 +900,17 @@ class BaseProjectionView(QWidget):
     def clear_idle(self) -> None:
         """Stop showing the custom idle and return to the yeartext screen."""
         self._has_idle_media = False
-        self._idle_media_path = ""
-        self._idle_media_type = ""
         self._idle_media_widget.clear()
-        if self._obs_mode:
-            # Crossfade off the custom idle scene back to the yeartext idle — but
-            # ONLY when the shared channel-0 program is currently on an idle scene.
-            # clear_idle also fires on window creation/reconcile (controller's
-            # apply_full_state_to_window with no idle media); if live content is
-            # showing (here or on another surface) we must NOT reset the shared
-            # program to yeartext (that is the is-blank/replaceable guard the
-            # window-preview-mid-playback fix added — do not bypass it).
-            driver = self._program_driver()
-            if not self._is_showing_media and driver.current_key in self._OBS_IDLE_REPLACEABLE:
-                self._obs_cancel_idle()
-                try:
-                    driver.show_yeartext()
-                except Exception:  # noqa: BLE001 - libobs/render boundary
-                    log_ignored_exception(__name__, "Could not crossfade program to idle")
-                self._obs_show_surface()
-            return
         if self._stack.currentIndex() == self._PAGE_IDLE_MEDIA and not self._is_showing_media:
             self._stop_all_anims()
             self._switch_to_idle_with_fade()
 
     def update_idle_image(self, image: QImage) -> None:
-        """Paint the latest idle frame from the shared source (Qt engine only).
+        """Paint the latest idle frame from the shared source.
 
         No-op unless a custom idle is currently active for this surface, so the
-        controller can fan every frame out to all surfaces unconditionally. In obs
-        mode libobs decodes the idle file itself, so there are no frames to paint.
+        controller can fan every frame out to all surfaces unconditionally.
         """
-        if self._obs_mode:
-            return
         if self._has_idle_media:
             self._idle_media_widget.set_image(image)
 
@@ -1604,9 +1144,7 @@ class FloatingPreviewWindow(BaseProjectionView):
         self._build_projection_stack(layout)
 
         if yearly_text_quote:
-            # Routes through set_yearly_text so the program driver also gets the
-            # initial idle text under the OBS engine.
-            self.set_yearly_text(yearly_text_quote, yearly_text_ref, api_code)
+            self._yearly_widget.set_text(yearly_text_quote, yearly_text_ref, api_code)
 
         # ── Child mouse-tracking for resize-cursor feedback ───────────────
         # The QStackedWidget and all its page-widgets cover the entire window
@@ -1615,6 +1153,11 @@ class FloatingPreviewWindow(BaseProjectionView):
         # observe MouseMove at the parent level and update the cursor correctly
         # even when the pointer is over a child widget.
         self._install_child_tracking(self._stack)
+        # The native scene presenter belongs to the media-engine process and
+        # cannot reliably forward hover through its child HWND hierarchy.  A
+        # transparent app-process input plane keeps Qt as the sole owner of
+        # move and resize interaction while the presenter only renders video.
+        self.native_video_surface.set_input_target(self)
         
         # ── Keep-alive (Anti-congelamento para Zoom/OBS) ──────────────────
         # Cria um pixel 1x1 no topo esquerdo (0,0) que flutua sobre a UI
@@ -1689,11 +1232,13 @@ class FloatingPreviewWindow(BaseProjectionView):
         if event.type() == QEvent.Type.MouseMove and isinstance(obj, QWidget):
             try:
                 if self.isFullScreen():
-                    self.setCursor(self._ARROW)
+                    self._set_interaction_cursor(self._ARROW)
                     return False
                 global_pos = obj.mapToGlobal(event.position().toPoint())
                 local_pos  = self.mapFromGlobal(global_pos)
-                self.setCursor(self._cursor_for_edges(self._edge_hits(local_pos)))
+                self._set_interaction_cursor(
+                    self._cursor_for_edges(self._edge_hits(local_pos))
+                )
             except Exception:  # noqa: BLE001 - Qt event-filter boundary
                 log_ignored_exception(__name__, "Could not update projection resize cursor")
         return False  # do NOT consume — let the event propagate normally
@@ -1725,7 +1270,7 @@ class FloatingPreviewWindow(BaseProjectionView):
         self._normal_geometry_before_fullscreen = self.geometry()
         self._resize_dir = (False, False, False, False)
         self._drag_pos = None
-        self.setCursor(self._ARROW)
+        self._set_interaction_cursor(self._ARROW)
         self.showFullScreen()
         self.setFocus()
         self._refresh_after_window_state_change()
@@ -1739,7 +1284,7 @@ class FloatingPreviewWindow(BaseProjectionView):
         self.showNormal()
         if restore_geometry.isValid() and not restore_geometry.isEmpty():
             self.setGeometry(restore_geometry)
-        self.setCursor(self._ARROW)
+        self._set_interaction_cursor(self._ARROW)
         self.setFocus()
         self._refresh_after_window_state_change()
 
@@ -1853,6 +1398,11 @@ class FloatingPreviewWindow(BaseProjectionView):
         if t or b:                 return self._VER
         return self._ARROW
 
+    def _set_interaction_cursor(self, cursor: Qt.CursorShape) -> None:
+        """Keep the frameless host and its native presenter cursor in sync."""
+        self.setCursor(cursor)
+        self.native_video_surface.set_interaction_cursor(cursor)
+
     def mousePressEvent(self, event: QMouseEvent) -> None:
         if self.isFullScreen():
             event.accept()
@@ -1875,13 +1425,15 @@ class FloatingPreviewWindow(BaseProjectionView):
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
         if self.isFullScreen():
-            self.setCursor(self._ARROW)
+            self._set_interaction_cursor(self._ARROW)
             event.accept()
             return
         pos = event.position().toPoint()
         if not (event.buttons() & Qt.MouseButton.LeftButton):
             # Hover — update resize cursor
-            self.setCursor(self._cursor_for_edges(self._edge_hits(pos)))
+            self._set_interaction_cursor(
+                self._cursor_for_edges(self._edge_hits(pos))
+            )
             super().mouseMoveEvent(event)
             return
 
@@ -1895,6 +1447,12 @@ class FloatingPreviewWindow(BaseProjectionView):
         if event.button() == Qt.MouseButton.LeftButton:
             self._resize_dir = (False, False, False, False)
             self._drag_pos   = None
+            if not self.isFullScreen():
+                self._set_interaction_cursor(
+                    self._cursor_for_edges(
+                        self._edge_hits(event.position().toPoint())
+                    )
+                )
         super().mouseReleaseEvent(event)
 
     def mouseDoubleClickEvent(self, event: QMouseEvent) -> None:

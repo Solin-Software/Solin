@@ -913,7 +913,6 @@ class RemoteControlController(QObject):
             "browser": RemoteMediaKind.BROWSER,
             "timer": RemoteMediaKind.SCREEN,
             "obs_stream": RemoteMediaKind.SCREEN,
-            "camera_stream": RemoteMediaKind.SCREEN,
         }.get(state_type, RemoteMediaKind.UNKNOWN)
 
     def _execute_command(self, command: RemoteCommand) -> CommandError | None:

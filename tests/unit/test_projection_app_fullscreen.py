@@ -165,6 +165,55 @@ def test_audio_frames_do_not_reach_app_fullscreen():
     assert overlay.frames == []
 
 
+def test_expanded_preview_forwards_the_original_video_frame_without_materializing_it():
+    overlay = _Overlay(active=True)
+    bar = _bar(mode="video", audio=False, overlay=overlay)
+    bar._expanded = True
+
+    class _Frame:
+        def toImage(self):
+            raise AssertionError("the expanded preview must not materialize a QImage")
+
+    class _VideoPreview:
+        def __init__(self):
+            self.frames = []
+
+        def set_frame(self, frame):
+            self.frames.append(frame)
+
+    bar.video_preview = _VideoPreview()
+    frame = _Frame()
+
+    bar._on_video_frame(frame)
+
+    assert overlay.frames == [frame]
+    assert bar.video_preview.frames == [frame]
+
+
+def test_video_preview_leaves_letterbox_to_the_themed_container(monkeypatch):
+    from PySide6.QtGui import QColor, QImage
+    from PySide6.QtMultimedia import QVideoFrame
+
+    preview = projection_bar._ThemedVideoPreview()
+    preview.resize(1000, 800)
+    frame = QVideoFrame(QImage(1600, 900, QImage.Format.Format_ARGB32))
+
+    preview.set_frame(frame)
+
+    geometry = preview._video_widget.geometry()
+    assert geometry.width() == 1000
+    assert geometry.height() == 562
+    assert geometry.x() == 0
+    assert geometry.y() == 119
+    assert QColor(projection_bar.PALETTE.bg0).name() in preview.styleSheet()
+
+    themed_palette = type("Palette", (), {"bg0": "#f2f4f8"})()
+    monkeypatch.setattr(projection_bar, "PALETTE", themed_palette)
+    preview.apply_theme()
+
+    assert "#f2f4f8" in preview.styleSheet()
+
+
 def test_recovery_feedback_is_mirrored_to_app_fullscreen():
     overlay = _Overlay(active=True)
     bar = _bar(mode="video", overlay=overlay)

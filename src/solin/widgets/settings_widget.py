@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+import sys
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
@@ -56,7 +58,9 @@ from .settings.shared import SettingsToggleSwitch
 from .settings.watched_folder_section import WatchedFolderSectionMixin
 from .settings.yearly_text_section import YearlyTextSectionMixin
 from .settings.zoom_section import ZoomSectionMixin
-import sys
+
+
+log = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from ..core.jw.yeartext import YeartextService
@@ -108,7 +112,7 @@ class SettingsWidget(
         obs_settings: OBSSettingsStore,
         zoom_settings: ZoomSettingsStore,
         auto_share_settings: AutoShareSettingsStore,
-        camera_settings: CameraSettingsStore,
+        camera_settings: CameraSettingsStore | None,
         auto_key_settings: AutoKeySettingsStore,
         media_settings: MediaSettingsStore,
         playback_protection,
@@ -175,6 +179,21 @@ class SettingsWidget(
         self._deferred_services_started = True
         self.lang.jw_lang_service.fetch_if_needed()
         self._check_and_fetch_yeartext()
+
+    def cleanup(self) -> None:
+        """Stop settings-owned asynchronous work before Qt destroys the page."""
+
+        preparation = getattr(self, "preparation_handle", None)
+        if preparation is not None:
+            preparation.cancel()
+        service = getattr(self, "_yt_service", None)
+        if service is not None:
+            unfinished = service.shutdown()
+            if unfinished:
+                log.debug(
+                    "Annual-text request will finish on its daemon worker: %s",
+                    unfinished,
+                )
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -337,15 +356,17 @@ class SettingsWidget(
         layout.addSpacing(8)
         layout.addWidget(self._build_obs_card())
 
-    def _build_camera_settings_unit(self) -> None:
-        self._settings_sections_layout.addSpacing(16)
-        self._settings_sections_layout.addWidget(self._build_camera_card())
-
     def _build_zoom_settings_unit(self) -> None:
         if sys.platform != "win32":
             return
         self._settings_sections_layout.addSpacing(16)
         self._settings_sections_layout.addWidget(self._build_zoom_card())
+
+    def _build_camera_settings_unit(self) -> None:
+        if self._camera_settings is None:
+            return
+        self._settings_sections_layout.addSpacing(16)
+        self._settings_sections_layout.addWidget(self._build_camera_card())
 
     def _build_auto_share_settings_unit(self) -> None:
         self._settings_sections_layout.addSpacing(16)
@@ -569,8 +590,11 @@ class SettingsWidget(
         self._obs_stream_refresh_btn.setText(self.tr("Find sources"))
         if self._obs:
             self._sync_obs_ui_state(self._obs.state, "")
-        self._camera_label.setText(self.tr("Camera"))
-        self._camera_desc.setText(self.tr("Shows a camera button in the live tools toolbar."))
+        if hasattr(self, "_camera_label"):
+            self._camera_label.setText(self.tr("Camera"))
+            self._camera_desc.setText(
+                self.tr("Shows a camera button in the live tools toolbar.")
+            )
         self._auto_keys_header_lbl.setText(self.tr("Automatic Shortcuts"))
         self._auto_keys_header_desc.setText(
             self.tr("Sends keyboard shortcuts when visual media changes state.")
