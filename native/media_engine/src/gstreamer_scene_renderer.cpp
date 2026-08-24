@@ -41,6 +41,7 @@ using namespace std::chrono_literals;
 
 constexpr auto kPrepareTimeout = 3s;
 constexpr auto kTransitionStartTimeout = 500ms;
+constexpr auto kTransitionObservationTimeout = 500ms;
 constexpr std::uint32_t kMaximumOutputDimension = 3'840U;
 constexpr std::uint64_t kMaximumOutputPixels = 3'840ULL * 2'160ULL;
 constexpr std::uint32_t kMaximumOutputFramesPerSecond = 60U;
@@ -1410,7 +1411,19 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
     visit_latest_frame(const std::uint64_t after_sequence,
                        const VideoFrameVisitor& visitor) const noexcept override {
         try {
-            return visit_gstreamer_frame(latest_frame(), after_sequence, visitor);
+            const auto sequence =
+                visit_gstreamer_frame(latest_frame(), after_sequence, visitor);
+            if (sequence.has_value() && body_observation_armed_.load() &&
+                sequence.value() > body_observation_after_sequence_.load()) {
+                auto unobserved = std::int64_t{0};
+                const auto observed_at =
+                    std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        std::chrono::steady_clock::now().time_since_epoch())
+                        .count();
+                static_cast<void>(body_observed_at_ns_.compare_exchange_strong(
+                    unobserved, observed_at));
+            }
+            return sequence;
         } catch (...) {
             return std::nullopt;
         }
@@ -1824,7 +1837,9 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
     void feed() noexcept {
         std::optional<std::chrono::steady_clock::time_point> started_at;
         std::optional<std::chrono::steady_clock::time_point> start_requested_at;
-        bool body_frame_delivered = false;
+        bool body_frame_attempted = false;
+        std::optional<std::chrono::steady_clock::time_point>
+            body_frame_delivered_at;
         const auto delivery_timeout = (std::max)(
             frame_interval_ * 4,
             std::chrono::duration_cast<std::chrono::nanoseconds>(250ms));
@@ -1849,29 +1864,53 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
             bool terminal_frame = false;
             bool body_frame = false;
             if (started_at.has_value()) {
-                const auto elapsed = std::chrono::steady_clock::now() - *started_at;
+                const auto now = std::chrono::steady_clock::now();
+                const auto elapsed = now - *started_at;
                 const auto duration = std::chrono::milliseconds{transition_.duration_ms};
                 progress = std::chrono::duration<double>(elapsed).count() /
                            std::chrono::duration<double>(duration).count();
                 terminal_frame = progress >= 1.0;
-                body_frame = !body_frame_delivered && progress >= 0.25;
-                if (terminal_frame && body_frame) {
+                body_frame = !body_frame_attempted && progress >= 0.25;
+                const auto observed_at_ns = body_observed_at_ns_.load();
+                const auto now_ns =
+                    std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        now.time_since_epoch())
+                        .count();
+                const bool body_observation_pending =
+                    body_frame_delivered_at.has_value() &&
+                    body_observation_armed_.load() &&
+                    system_memory_output_enabled_.load() &&
+                    (observed_at_ns == 0 ||
+                     now_ns - observed_at_ns < frame_interval_.count());
+                const bool body_observation_deadline_open =
+                    body_frame_delivered_at.has_value() &&
+                    now < *body_frame_delivered_at +
+                              kTransitionObservationTimeout;
+                if (terminal_frame &&
+                    (body_frame || (body_observation_pending &&
+                                    body_observation_deadline_open))) {
                     // A required egress that fell behind must observe the body of
-                    // the effect before the destination is promoted. Holding a
-                    // single midpoint has a fixed deadline, so device failure
-                    // cannot stall control indefinitely.
-                    const auto delivery_deadline =
-                        *started_at + duration + delivery_timeout;
-                    if (std::chrono::steady_clock::now() < delivery_deadline) {
-                        progress = 0.5;
-                        terminal_frame = false;
-                    }
+                    // the effect for one output interval before the destination
+                    // is promoted. A late feeder always gets one bounded body
+                    // publication attempt; the observation deadline starts only
+                    // after that publication instead of expiring while the
+                    // worker is descheduled.
+                    progress = 0.5;
+                    terminal_frame = false;
                 }
                 apply_weights(scene_transition_weights(transition_, progress));
             }
             const bool require_cpu =
                 start_requires_system_memory_output_.load() &&
                 system_memory_output_enabled_.load();
+            if (body_frame && require_cpu &&
+                !body_observation_armed_.load()) {
+                const auto current_frame = latest_frame();
+                const auto after_sequence =
+                    current_frame == nullptr ? 0U : current_frame->sequence;
+                body_observation_after_sequence_.store(after_sequence);
+                body_observation_armed_.store(true);
+            }
             const bool gpu_output_ready = gpu_output_ready_.load();
             const bool synchronize_output =
                 started_at.has_value() ||
@@ -1892,8 +1931,13 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
                 const auto delivered = wait_for_output_after(
                     publication_checkpoint, require_cpu,
                     std::chrono::steady_clock::now() + delivery_timeout);
-                body_frame_delivered =
-                    body_frame_delivered || (body_frame && delivered);
+                if (body_frame) {
+                    body_frame_attempted = true;
+                    if (delivered) {
+                        body_frame_delivered_at =
+                            std::chrono::steady_clock::now();
+                    }
+                }
                 if (terminal_frame && delivered) {
                     break;
                 }
@@ -1974,6 +2018,9 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
     std::atomic_bool system_memory_output_enabled_{false};
     std::atomic_bool start_requires_system_memory_output_{false};
     std::atomic_bool gpu_output_ready_{false};
+    mutable std::atomic_bool body_observation_armed_{false};
+    mutable std::atomic_uint64_t body_observation_after_sequence_{0U};
+    mutable std::atomic_int64_t body_observed_at_ns_{0};
     std::thread feeder_{};
     std::mutex wakeup_mutex_{};
     std::condition_variable wakeup_{};

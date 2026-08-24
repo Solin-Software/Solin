@@ -628,6 +628,7 @@ void test_program_transitions_render_real_synthetic_frames(
     std::uint8_t minimum_dissolve_luma = 255U;
     std::size_t sampled_frames = 0U;
     bool every_short_transition_published_a_blended_frame = true;
+    std::vector<std::uint64_t> missed_short_transition_indices;
     for (std::uint64_t index = 0U; index < 20U; ++index) {
         const auto target = index % 2U == 0U ? "scene-blue" : "scene-red";
         const auto prepare_sequence = 2'000U + index * 2U;
@@ -636,6 +637,12 @@ void test_program_transitions_render_real_synthetic_frames(
             "continuity-" + std::to_string(index), prepare_sequence,
             {.kind = SceneTransitionKind::dissolve, .duration_ms = 50U});
         graph.take(prepared, 1U, prepare_sequence + 1U);
+        if (index == 0U) {
+            // A latest-frame consumer can be descheduled beyond the minimum
+            // transition duration. The compositor must retain a body frame
+            // until the required Program egress has observed it.
+            std::this_thread::sleep_for(250ms);
+        }
         bool published_blended_frame = false;
         const auto deadline = std::chrono::steady_clock::now() + 120ms;
         while (std::chrono::steady_clock::now() < deadline) {
@@ -661,9 +668,19 @@ void test_program_transitions_render_real_synthetic_frames(
         every_short_transition_published_a_blended_frame =
             every_short_transition_published_a_blended_frame &&
             published_blended_frame;
+        if (!published_blended_frame) {
+            missed_short_transition_indices.push_back(index);
+        }
     }
     expect(sampled_frames >= 40U,
            "rapid real transitions expose enough Program frames for continuity checks");
+    if (!every_short_transition_published_a_blended_frame) {
+        std::cerr << "Missed minimum-duration transition indices:";
+        for (const auto index : missed_short_transition_indices) {
+            std::cerr << ' ' << index;
+        }
+        std::cerr << '\n';
+    }
     expect(every_short_transition_published_a_blended_frame,
            "every minimum-duration Program transition publishes a blended NV12 frame");
     expect(minimum_dissolve_luma >= 24U,

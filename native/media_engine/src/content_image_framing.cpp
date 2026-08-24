@@ -49,6 +49,13 @@ namespace {
     };
 }
 
+[[nodiscard]] std::uint32_t rounded_coordinate(
+    const double value, const std::uint32_t extent) noexcept {
+    const auto rounded = static_cast<std::int64_t>(std::llround(value));
+    return static_cast<std::uint32_t>(std::clamp(
+        rounded, std::int64_t{0}, static_cast<std::int64_t>(extent)));
+}
+
 } // namespace
 
 ContentImageRect compute_content_image_rect(
@@ -109,18 +116,14 @@ ContentImagePlacement compute_content_image_placement(
         return {};
     }
 
-    const auto destination_left = static_cast<std::uint32_t>(std::clamp(
-        std::llround(visible_left), std::int64_t{0},
-        static_cast<std::int64_t>(canvas_width)));
-    const auto destination_top = static_cast<std::uint32_t>(std::clamp(
-        std::llround(visible_top), std::int64_t{0},
-        static_cast<std::int64_t>(canvas_height)));
-    const auto destination_right = static_cast<std::uint32_t>(std::clamp(
-        std::llround(visible_right), std::int64_t{0},
-        static_cast<std::int64_t>(canvas_width)));
-    const auto destination_bottom = static_cast<std::uint32_t>(std::clamp(
-        std::llround(visible_bottom), std::int64_t{0},
-        static_cast<std::int64_t>(canvas_height)));
+    const auto destination_left =
+        rounded_coordinate(visible_left, canvas_width);
+    const auto destination_top =
+        rounded_coordinate(visible_top, canvas_height);
+    const auto destination_right =
+        rounded_coordinate(visible_right, canvas_width);
+    const auto destination_bottom =
+        rounded_coordinate(visible_bottom, canvas_height);
     if (destination_right <= destination_left ||
         destination_bottom <= destination_top) {
         return {};
@@ -133,9 +136,7 @@ ContentImagePlacement compute_content_image_placement(
         const auto normalized =
             (static_cast<double>(destination) - destination_origin) /
             destination_extent;
-        return static_cast<std::uint32_t>(std::clamp(
-            std::llround(normalized * source_extent), std::int64_t{0},
-            static_cast<std::int64_t>(source_extent)));
+        return rounded_coordinate(normalized * source_extent, source_extent);
     };
     const auto source_left = source_coordinate(
         destination_left, painter_rect.x, painter_rect.width, source_width);
