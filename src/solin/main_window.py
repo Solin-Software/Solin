@@ -331,11 +331,6 @@ class MainWindow(QWidget):
             self._current_yearly_projection_text,
             media_epoch_sink=self._content_frame_ingress.set_media_epoch,
             image_transform_sink=self._content_frame_ingress.set_image_transform,
-            projection_aspect_ratio_provider=(
-                lambda: projection_aspect_ratio_from_windows(
-                    tuple(self.projection_session.projection_windows)
-                )
-            ),
             width=program_output.video_format.width,
             height=program_output.video_format.height,
             parent=self,
