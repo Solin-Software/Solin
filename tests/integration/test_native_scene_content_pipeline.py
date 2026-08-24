@@ -424,6 +424,65 @@ def test_actual_size_content_reaches_composed_native_output(tmp_path) -> None:
         assert zoomed is not None
         assert _bgra_pixel(zoomed, 1919, 540) == green
 
+        # Reproduce a decoder/device handoff that accepts the next media epoch
+        # but never supplies its first pixels. The source retains an old frame,
+        # so the ordinary stream timeout deliberately stays quiet. Raw may fade
+        # to black while preparing, but its bounded readiness contract must
+        # restore the last stable frame instead of stranding every consumer.
+        ingress.set_media_epoch(3)
+        black_hold = _wait_for_pixel(
+            egress,
+            x=960,
+            y=540,
+            expected=black,
+            timeout=2.0,
+        )
+        assert black_hold is not None
+        recovered = _wait_for_pixel(
+            egress,
+            x=960,
+            y=540,
+            expected=green,
+            timeout=7.0,
+        )
+        assert recovered is not None
+        assert recovered.sequence > black_hold.sequence
+
+        # A genuinely late frame for the failed epoch is replayed through a
+        # fresh transition from the restored owner, rather than cutting or
+        # inheriting the stale waiting-at-black phase.
+        ingress.submit_frame(sixteen_by_nine)
+        late = _wait_for_pixel(
+            egress,
+            x=960,
+            y=540,
+            expected=yellow,
+            timeout=8.0,
+        )
+        assert late is not None
+        assert late.sequence > recovered.sequence
+
+        # Recovery and deferred replay must leave the logical owner healthy so
+        # another playback request can still complete normally.
+        ingress.set_image_transform(
+            ImageTransform(1.0, 0.0, 0.0),
+            media_epoch=4,
+            canvas_width=1920,
+            canvas_height=1080,
+            animate=False,
+        )
+        ingress.set_media_epoch(4)
+        ingress.submit_frame(four_by_three)
+        resumed = _wait_for_pixel(
+            egress,
+            x=960,
+            y=540,
+            expected=green,
+            timeout=8.0,
+        )
+        assert resumed is not None
+        assert resumed.sequence > late.sequence
+
     finally:
         ingress.close()
         egress.close()

@@ -272,6 +272,12 @@ if not exist "%DIST%\Qt6QuickLayouts.dll" (
     exit /b 1
 )
 
+if not exist "%DIST%\opengl32sw.dll" (
+    echo  [ERRO] Fallback OpenGL por software do Qt nao foi empacotado.
+    pause
+    exit /b 1
+)
+
 if not exist "%DIST%\Qt6QuickControls2.dll" (
     echo  [ERRO] Qt6QuickControls2.dll nao foi empacotado.
     pause

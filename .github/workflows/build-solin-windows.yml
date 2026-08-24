@@ -297,6 +297,9 @@ jobs:
           if (-not (Test-Path (Join-Path $dist "Qt6QuickLayouts.dll"))) {
             throw "Qt6QuickLayouts.dll was not packaged."
           }
+          if (-not (Test-Path (Join-Path $dist "opengl32sw.dll"))) {
+            throw "Qt software OpenGL fallback was not packaged."
+          }
           if (-not (Test-Path (Join-Path $dist "Qt6QuickControls2.dll"))) {
             throw "Qt6QuickControls2.dll was not packaged."
           }

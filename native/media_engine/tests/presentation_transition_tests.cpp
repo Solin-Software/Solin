@@ -7,6 +7,7 @@ namespace {
 
 using namespace std::chrono_literals;
 using solin::media_engine::PresentationIdentity;
+using solin::media_engine::PresentationReadinessWatchdog;
 using solin::media_engine::PresentationTransition;
 using solin::media_engine::PresentationTransitionPhase;
 using solin::media_engine::OutputBus;
@@ -106,6 +107,50 @@ void test_readiness_delay_stops_the_visual_clock() {
            "the fade clock advances after the renderer acknowledges output");
 }
 
+void test_output_watchdog_bounds_a_missing_gpu_acknowledgement() {
+    PresentationReadinessWatchdog watchdog{500ms};
+    const auto start = std::chrono::steady_clock::time_point{};
+
+    watchdog.arm(start);
+    watchdog.arm(start + 400ms);
+    expect(watchdog.pending() && !watchdog.timed_out(start + 499ms),
+           "retries do not slide the original GPU output deadline");
+    expect(watchdog.timed_out(start + 500ms),
+           "an accepted GPU input without output reaches a bounded deadline");
+
+    watchdog.acknowledge();
+    expect(!watchdog.pending() && !watchdog.timed_out(start + 5s),
+           "an observed output disarms the GPU deadline");
+}
+
+void test_recovery_restores_the_visible_owner() {
+    PresentationTransition state{{SceneTransitionKind::fade_to_black, 200U}};
+    const auto start = std::chrono::steady_clock::time_point{};
+    const PresentationIdentity outgoing{OutputBus::media_windows, 41U};
+    const PresentationIdentity failed{OutputBus::media_windows, 42U};
+    const PresentationIdentity next{OutputBus::media_windows, 43U};
+
+    state.request(outgoing, start);
+    static_cast<void>(state.sample(start, true));
+    state.request(failed, start);
+    const auto at_black = state.sample(start + 100ms, false);
+    expect(at_black.phase == PresentationTransitionPhase::waiting_at_black,
+           "the failed destination reaches black while waiting for its first frame");
+
+    state.restore_stable(outgoing);
+    const auto recovered = state.sample(start + 5s, true);
+    expect(recovered.phase == PresentationTransitionPhase::stable &&
+               state.current() == std::optional{outgoing} &&
+               state.desired() == outgoing,
+           "recovery aligns the logical owner with the restored visible frame");
+
+    state.request(next, start + 5s);
+    const auto restarted = state.sample(start + 5s, false);
+    expect(restarted.phase == PresentationTransitionPhase::fading_out &&
+               restarted.outgoing == std::optional{outgoing},
+           "the request after recovery starts from the restored owner");
+}
+
 void test_superseding_while_black_never_reveals_the_old_frame() {
     PresentationTransition state{{SceneTransitionKind::fade_to_black, 200U}};
     const auto start = std::chrono::steady_clock::time_point{};
@@ -158,6 +203,8 @@ int main() {
     test_latest_request_supersedes_a_pending_raw_epoch();
     test_superseding_fade_in_reverses_without_an_opacity_flash();
     test_readiness_delay_stops_the_visual_clock();
+    test_output_watchdog_bounds_a_missing_gpu_acknowledgement();
+    test_recovery_restores_the_visible_owner();
     test_superseding_while_black_never_reveals_the_old_frame();
     test_dissolve_and_cut_share_the_surface_contract();
     if (failures == 0) {

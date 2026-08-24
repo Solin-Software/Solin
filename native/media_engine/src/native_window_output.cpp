@@ -10,9 +10,11 @@
 #include <chrono>
 #include <cstdint>
 #include <future>
+#include <iostream>
 #include <limits>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <ranges>
 #include <stdexcept>
 #include <thread>
@@ -265,22 +267,35 @@ class NativeTargetPipeline final {
     NativeTargetPipeline& operator=(const NativeTargetPipeline&) = delete;
 
     void request(const OutputWindowConfiguration& target) noexcept {
-        const auto previous = transition_.desired();
-        transition_.request(
-            PresentationIdentity{
-                .bus = target.bus,
-                // Raw media changes are already resolved once in the
-                // canonical content source. A physical presenter owns only
-                // the Raw<->Program surface handoff.
-                .media_epoch = 0U,
-            },
-            std::chrono::steady_clock::now());
-        if (previous != transition_.desired()) {
-            frozen_outgoing_ = latest_presented_frame_;
-            reset_transition_pipeline();
-            direct_push_ = {};
-            last_transition_tick_ = std::chrono::steady_clock::now();
+        const PresentationIdentity requested{
+            .bus = target.bus,
+            // Raw media changes are already resolved once in the canonical
+            // content source. A physical presenter owns only Raw<->Program.
+            .media_epoch = 0U,
+        };
+        if (requested_presentation_ == std::optional{requested}) {
+            return;
         }
+        requested_presentation_ = requested;
+        const auto now = std::chrono::steady_clock::now();
+        const bool already_black =
+            transition_black_output_observed_ &&
+            last_transition_phase_ ==
+                PresentationTransitionPhase::waiting_at_black;
+        if (!already_black) {
+            frozen_outgoing_ = latest_presented_frame_;
+            frozen_outgoing_presentation_ = transition_.current();
+        }
+        transition_.request(requested, now);
+        deferred_presentation_.reset();
+        reset_transition_pipeline();
+        direct_push_ = {};
+        transition_black_output_observed_ = already_black;
+        transition_first_frame_watchdog_.acknowledge();
+        if (already_black) {
+            transition_first_frame_watchdog_.arm(now);
+        }
+        last_transition_tick_ = now;
     }
 
     [[nodiscard]] bool render(
@@ -295,13 +310,57 @@ class NativeTargetPipeline final {
                 gst_message_unref(error);
                 return false;
             }
+            if (deferred_presentation_.has_value()) {
+                const auto deferred = *deferred_presentation_;
+                const auto deferred_frame = matching_frame(deferred, frames);
+                if (deferred_frame == nullptr) {
+                    return true;
+                }
+                frozen_outgoing_ = latest_presented_frame_;
+                frozen_outgoing_presentation_ = transition_.current();
+                transition_.request(deferred, now);
+                deferred_presentation_.reset();
+                reset_transition_pipeline();
+                last_transition_tick_ = now;
+                return true;
+            }
+
             const auto desired = transition_.desired();
             const auto incoming = matching_frame(desired, frames);
+            if (transition_black_output_observed_) {
+                if (incoming == nullptr) {
+                    if (transition_first_frame_watchdog_.timed_out(now)) {
+                        return restore_after_missing_first_frame(desired, now);
+                    }
+                    return true;
+                }
+                transition_black_output_observed_ = false;
+                transition_first_frame_watchdog_.acknowledge();
+            }
             if (transition_pipeline_ != nullptr) {
                 static_cast<void>(consume_transition_output());
+                if (!transition_awaiting_output_ &&
+                    last_transition_phase_ ==
+                        PresentationTransitionPhase::waiting_at_black &&
+                    incoming == nullptr) {
+                    reset_transition_pipeline();
+                    transition_black_output_observed_ = true;
+                    transition_first_frame_watchdog_.arm(now);
+                    return true;
+                }
+                if (transition_awaiting_output_ &&
+                    transition_output_watchdog_.timed_out(now)) {
+                    return incoming != nullptr
+                               ? recover_as_cut(incoming, now)
+                               : restore_after_missing_first_frame(desired, now);
+                }
                 if (transition_awaiting_output_ &&
                     last_transition_tick_.time_since_epoch().count() != 0) {
                     transition_.delay(now - last_transition_tick_);
+                }
+                if (transition_awaiting_output_) {
+                    last_transition_tick_ = now;
+                    return true;
                 }
             }
             const auto allow_incoming =
@@ -315,7 +374,10 @@ class NativeTargetPipeline final {
 
             if (transition_sample.phase == PresentationTransitionPhase::stable) {
                 reset_transition_pipeline();
+                transition_black_output_observed_ = false;
+                transition_first_frame_watchdog_.acknowledge();
                 frozen_outgoing_.reset();
+                frozen_outgoing_presentation_.reset();
                 if (incoming != nullptr) {
                     if (!push_frame(incoming, false)) {
                         return false;
@@ -369,7 +431,10 @@ class NativeTargetPipeline final {
                 return recover_as_cut(incoming, now);
             }
             transition_awaited_revision_ = checkpoint;
+            transition_awaited_submission_ =
+                transition_pipeline_->submission();
             transition_awaiting_output_ = true;
+            transition_output_watchdog_.arm(now);
             if (!consume_transition_output()) {
                 return true;
             }
@@ -377,7 +442,8 @@ class NativeTargetPipeline final {
                     PresentationTransitionPhase::waiting_at_black &&
                 !transition_awaiting_output_) {
                 reset_transition_pipeline();
-                frozen_outgoing_.reset();
+                transition_black_output_observed_ = true;
+                transition_first_frame_watchdog_.arm(now);
             }
             return true;
         } catch (...) {
@@ -395,10 +461,11 @@ class NativeTargetPipeline final {
 
     [[nodiscard]] const std::string& target_id() const noexcept { return target_id_; }
     [[nodiscard]] PresentationIdentity desired() const noexcept {
-        return transition_.desired();
+        return requested_presentation_.value_or(transition_.desired());
     }
     [[nodiscard]] bool animation_active() const noexcept {
-        return transition_.animation_active() || transition_awaiting_output_;
+        return transition_.animation_active() || transition_awaiting_output_ ||
+               transition_black_output_observed_;
     }
 
   private:
@@ -437,6 +504,8 @@ class NativeTargetPipeline final {
         transition_output_revision_ = 0U;
         transition_awaiting_output_ = false;
         transition_awaited_revision_ = 0U;
+        transition_awaited_submission_ = 0U;
+        transition_output_watchdog_.acknowledge();
     }
 
     [[nodiscard]] bool ensure_transition_pipeline(
@@ -458,7 +527,8 @@ class NativeTargetPipeline final {
             transition_pipeline_ =
                 std::make_unique<GStreamerFrameTransitionPipeline>(
                     use_d3d11, std::move(device), reference->width,
-                    reference->height);
+                    reference->height,
+                    stage == TransitionStage::blend ? 2U : 1U);
             transition_stage_ = stage;
             transition_width_ = reference->width;
             transition_height_ = reference->height;
@@ -591,14 +661,19 @@ class NativeTargetPipeline final {
         }
         std::unique_ptr<GstSample, decltype(&gst_sample_unref)> guard{
             output.sample, &gst_sample_unref};
+        transition_output_revision_ = output.revision;
+        if (transition_awaiting_output_ &&
+            (output.revision <= transition_awaited_revision_ ||
+             output.submission != transition_awaited_submission_)) {
+            return false;
+        }
         const auto frame = transition_frame(guard.get());
         if (frame == nullptr || !push_sample(guard.get())) {
             return false;
         }
-        transition_output_revision_ = output.revision;
-        if (transition_awaiting_output_ &&
-            output.revision > transition_awaited_revision_) {
+        if (transition_awaiting_output_) {
             transition_awaiting_output_ = false;
+            transition_output_watchdog_.acknowledge();
         }
         latest_presented_frame_ = frame;
         return true;
@@ -609,9 +684,13 @@ class NativeTargetPipeline final {
         const std::chrono::steady_clock::time_point now) noexcept {
         const auto desired = transition_.desired();
         reset_transition_pipeline();
+        deferred_presentation_.reset();
+        transition_black_output_observed_ = false;
+        transition_first_frame_watchdog_.acknowledge();
         transition_ = PresentationTransition{kMediaPresentationTransition};
         transition_.request(desired, now);
         frozen_outgoing_.reset();
+        frozen_outgoing_presentation_.reset();
         direct_push_ = {};
         if (incoming == nullptr) {
             return true;
@@ -624,6 +703,39 @@ class NativeTargetPipeline final {
         return true;
     }
 
+    [[nodiscard]] bool restore_after_missing_first_frame(
+        const PresentationIdentity failed,
+        const std::chrono::steady_clock::time_point now) noexcept {
+        deferred_presentation_ = failed;
+        reset_transition_pipeline();
+        transition_black_output_observed_ = false;
+        transition_first_frame_watchdog_.acknowledge();
+        if (frozen_outgoing_ != nullptr &&
+            frozen_outgoing_presentation_.has_value()) {
+            if (!push_frame(frozen_outgoing_, true)) {
+                return false;
+            }
+            latest_presented_frame_ = frozen_outgoing_;
+            transition_.restore_stable(*frozen_outgoing_presentation_);
+            last_transition_phase_ = PresentationTransitionPhase::stable;
+        } else {
+            transition_ = PresentationTransition{kMediaPresentationTransition};
+            last_transition_phase_ =
+                PresentationTransitionPhase::waiting_for_first_frame;
+        }
+        last_transition_tick_ = now;
+        try {
+            std::cerr << "Native output target " << target_id_
+                      << " did not receive the requested presentation within "
+                      << std::chrono::duration_cast<std::chrono::milliseconds>(
+                             kPresentationFirstFrameTimeout)
+                             .count()
+                      << " ms; restored the previous presentation.\n";
+        } catch (...) {
+        }
+        return true;
+    }
+
     std::string target_id_{};
     PresentationTransition transition_;
     PresentationTransitionPhase last_transition_phase_{
@@ -631,6 +743,10 @@ class NativeTargetPipeline final {
     std::chrono::steady_clock::time_point last_transition_tick_{};
     std::shared_ptr<const SourceFrame> latest_presented_frame_{};
     std::shared_ptr<const SourceFrame> frozen_outgoing_{};
+    std::optional<PresentationIdentity> frozen_outgoing_presentation_{};
+    std::optional<PresentationIdentity> requested_presentation_{};
+    std::optional<PresentationIdentity> deferred_presentation_{};
+    bool transition_black_output_observed_{false};
     std::unique_ptr<GStreamerFrameTransitionPipeline> transition_pipeline_{};
     TransitionStage transition_stage_{TransitionStage::none};
     std::uint32_t transition_width_{0U};
@@ -639,6 +755,10 @@ class NativeTargetPipeline final {
     std::uint64_t transition_frame_sequence_{0U};
     bool transition_awaiting_output_{false};
     std::uint64_t transition_awaited_revision_{0U};
+    std::uint64_t transition_awaited_submission_{0U};
+    PresentationReadinessWatchdog transition_output_watchdog_{};
+    PresentationReadinessWatchdog transition_first_frame_watchdog_{
+        kPresentationFirstFrameTimeout};
     PushIdentity direct_push_{};
     GstElement* pipeline_{nullptr};
     GstAppSrc* source_{nullptr};

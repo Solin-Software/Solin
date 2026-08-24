@@ -19,6 +19,7 @@ class GStreamerFrameTransitionPipeline final {
   public:
     struct Output final {
         std::uint64_t revision{0U};
+        std::uint64_t submission{0U};
         // A new reference owned by the caller. Unref it after wrapping or use.
         GstSample* sample{nullptr};
     };
@@ -26,7 +27,8 @@ class GStreamerFrameTransitionPipeline final {
     GStreamerFrameTransitionPipeline(bool use_d3d11,
                                      std::shared_ptr<GstD3D11Device> device,
                                      std::uint32_t width,
-                                     std::uint32_t height);
+                                     std::uint32_t height,
+                                     std::uint8_t input_count = 2U);
     ~GStreamerFrameTransitionPipeline();
 
     GStreamerFrameTransitionPipeline(const GStreamerFrameTransitionPipeline&) = delete;
@@ -38,6 +40,7 @@ class GStreamerFrameTransitionPipeline final {
         const std::shared_ptr<const SourceFrame>& incoming,
         SceneTransitionWeights weights) noexcept;
     [[nodiscard]] std::uint64_t revision() const noexcept;
+    [[nodiscard]] std::uint64_t submission() const noexcept;
     [[nodiscard]] Output output_after(std::uint64_t revision) const noexcept;
 
   private:

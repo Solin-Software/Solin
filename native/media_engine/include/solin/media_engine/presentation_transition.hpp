@@ -16,6 +16,30 @@ inline constexpr SceneTransitionSpec kMediaPresentationTransition{
     .duration_ms = 200U,
 };
 
+// Ephemeral GPU graphs are asynchronous: accepting an input frame does not
+// guarantee that their appsink will ever acknowledge an output. Keep this
+// deadline longer than an ordinary transition, but bounded so a stalled device
+// cannot become the permanent owner of the canonical Raw presentation.
+inline constexpr auto kPresentationOutputTimeout = std::chrono::milliseconds{500};
+inline constexpr auto kPresentationFirstFrameTimeout = std::chrono::seconds{5};
+
+class PresentationReadinessWatchdog final {
+  public:
+    explicit PresentationReadinessWatchdog(
+        std::chrono::steady_clock::duration timeout =
+            kPresentationOutputTimeout) noexcept;
+
+    void arm(std::chrono::steady_clock::time_point now) noexcept;
+    void acknowledge() noexcept;
+    [[nodiscard]] bool pending() const noexcept;
+    [[nodiscard]] bool timed_out(
+        std::chrono::steady_clock::time_point now) const noexcept;
+
+  private:
+    std::chrono::steady_clock::duration timeout_{};
+    std::optional<std::chrono::steady_clock::time_point> armed_at_{};
+};
+
 struct PresentationIdentity final {
     OutputBus bus{OutputBus::media_windows};
     // Meaningful only for Raw. Program is already a composed continuous stream,
@@ -65,6 +89,10 @@ class PresentationTransition final {
     // visual clock stopped while a GPU graph has not acknowledged its previous
     // frame, instead of allowing wall time to skip the effect.
     void delay(std::chrono::steady_clock::duration duration) noexcept;
+    // Re-establishes the presentation that recovery actually made visible.
+    // This keeps the logical owner aligned with the screen after a readiness
+    // timeout, so a later request starts a normal transition from that owner.
+    void restore_stable(PresentationIdentity presentation) noexcept;
 
     [[nodiscard]] PresentationIdentity desired() const noexcept;
     [[nodiscard]] std::optional<PresentationIdentity> current() const noexcept;
