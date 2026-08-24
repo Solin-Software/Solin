@@ -100,6 +100,16 @@ def test_shared_tree_keeps_shell_theme_contract_and_native_drag_feedback():
     assert "draggable.beginVisualDrag()" in source
 
 
+def test_drag_grips_and_overflow_buttons_share_secondary_control_colors():
+    source = Path("src/solin/qml/PlaylistTreeView.qml").read_text(encoding="utf-8")
+
+    assert "component DragGrip: Image" in source
+    assert "root.secondaryControl))" in source
+    assert "root.secondaryControlHover" in source
+    assert source.count("colorHex: root.iconHex(root.secondaryControl)") == 2
+    assert source.count("hoverColorHex: root.iconHex(root.secondaryControlHover)") == 2
+
+
 def test_thumbnail_provider_can_return_uncropped_image_for_framing_editor():
     portrait = QPixmap(100, 200)
     portrait.fill(QColor("red"))
