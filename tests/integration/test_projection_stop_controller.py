@@ -132,9 +132,10 @@ def _controller(window):
     )
 
 
-def test_stop_any_clears_projection_and_triggers_zoom_break_for_visual_state():
+def test_stop_any_clears_projection_without_replacing_floating_preview():
     window = _WindowStub(state_type="image", tab_active=True)
     controller = _controller(window)
+    floating_preview = window.projection_session.floating_preview_window
 
     controller.stop_any()
 
@@ -147,7 +148,8 @@ def test_stop_any_clears_projection_and_triggers_zoom_break_for_visual_state():
     assert window.proj_bar.deactivated == 1
     assert window.projection_session.state == {"type": "idle"}
     assert window._live_integrations.obs_active == [False]
-    assert window.projection_session.floating_preview_window.zoom_breaks == 1
+    assert window.projection_session.floating_preview_window is floating_preview
+    assert window.projection_session.floating_preview_window.zoom_breaks == 0
     assert window._projection_integrations.statuses == [
         ((False,), {"sync_obs": True})
     ]

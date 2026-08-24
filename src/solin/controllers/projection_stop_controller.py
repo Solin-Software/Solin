@@ -68,10 +68,18 @@ class ProjectionStopController:
         tolerate_navigation_errors: bool,
         stop_ndi_later_for_obs: bool,
     ) -> None:
+        """Stop projection output without replacing the floating media window.
+
+        The legacy Zoom-break block below destroyed and respawned the floating
+        window so meeting software would release its native capture handle.
+        Automatic sharing now owns that lifecycle, making the replacement both
+        redundant and disruptive to the operator.  The workaround remains
+        commented at its original call site for historical context.
+        """
         context = self._context
         was_obs_stream = self._session.state_type == "obs_stream"
         was_camera_stream = self._session.state_type == "camera_stream"
-        was_visual = self._was_visual_projection()
+        # was_visual = self._was_visual_projection()
 
         self._session.set_tab_projection_active(False)
         if tolerate_navigation_errors:
@@ -103,14 +111,14 @@ class ProjectionStopController:
         if self._handlers.set_camera_stream_active is not None:
             self._handlers.set_camera_stream_active(False)
 
-        share_handling = context.auto_share_configured()
-        floating_preview = self._session.floating_preview_window
-        if (
-            was_visual
-            and floating_preview is not None
-            and not share_handling
-        ):
-            floating_preview.trigger_zoom_break()
+        # share_handling = context.auto_share_configured()
+        # floating_preview = self._session.floating_preview_window
+        # if (
+        #     was_visual
+        #     and floating_preview is not None
+        #     and not share_handling
+        # ):
+        #     floating_preview.trigger_zoom_break()
 
     def _was_visual_projection(self) -> bool:
         is_visual_media_active = getattr(
