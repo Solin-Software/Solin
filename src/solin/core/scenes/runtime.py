@@ -255,15 +255,18 @@ class SceneRuntimeService:
             )
         )
 
-    def select_program_scene(self, scene_id: str) -> SceneRuntimeState:
-        """Select the Program base while preserving the auto-switch preference."""
+    def select_program_scene(self, scene_id: str | None) -> SceneRuntimeState:
+        """Select the Program base, or clear its override, without changing auto-switch."""
 
-        self._documents.document.scene(scene_id)
+        if scene_id is not None:
+            self._documents.document.scene(scene_id)
+        stored_scene_id = scene_id or ""
         return self._commit(
             replace(
                 self._state,
                 outputs=tuple(
-                    replace(output, manual_scene_id=scene_id) for output in self._state.outputs
+                    replace(output, manual_scene_id=stored_scene_id)
+                    for output in self._state.outputs
                 ),
             )
         )
