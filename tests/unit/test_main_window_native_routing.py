@@ -31,11 +31,11 @@ def test_every_media_surface_uses_native_presentation_for_raw_visual_or_program(
 
 class _ProjectionBar:
     def __init__(self, *, requested: bool) -> None:
-        self.native_video_preview_requested = requested
-        self.native_video_preview_surface = object()
+        self.native_video_output_requested = requested
+        self.native_video_output_surface = object()
         self.active_states: list[bool] = []
 
-    def set_native_video_preview_active(self, active: bool) -> None:
+    def set_native_video_output_active(self, active: bool) -> None:
         self.active_states.append(active)
 
     @property
@@ -94,7 +94,7 @@ def _native_preview_host(*, requested: bool):
     return host, projection_bar, runtime
 
 
-def test_operator_video_preview_uses_the_raw_native_bus(monkeypatch) -> None:
+def test_operator_video_output_uses_the_raw_native_bus(monkeypatch) -> None:
     monkeypatch.setattr(main_window, "NATIVE_SCENES_SUPPORTED", True)
     host, projection_bar, runtime = _native_preview_host(requested=True)
 
@@ -103,14 +103,14 @@ def test_operator_video_preview_uses_the_raw_native_bus(monkeypatch) -> None:
     assert projection_bar.active_states == [True]
     assert runtime.targets == (
         (
-            projection_bar.native_video_preview_surface,
-            "media-control-preview",
+            projection_bar.native_video_output_surface,
+            "media-control-video",
             BusId.MEDIA_WINDOWS,
         ),
     )
 
 
-def test_operator_video_preview_keeps_qt_fallback_without_native_routing(
+def test_operator_video_output_keeps_qt_fallback_without_native_routing(
     monkeypatch,
 ) -> None:
     monkeypatch.setattr(main_window, "NATIVE_SCENES_SUPPORTED", False)

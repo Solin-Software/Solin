@@ -3,6 +3,7 @@
 
 #include "gstreamer_frame_transition.hpp"
 #include "gstreamer_source_runtime.hpp"
+#include "native_window_output_routing.hpp"
 #include "native_window_output_wait.hpp"
 
 #include <algorithm>
@@ -122,18 +123,20 @@ class NativeChildWindow final {
         if (GetClientRect(parent_, &bounds) == FALSE) {
             throw std::runtime_error("native_window_handle_invalid");
         }
-        width_ = std::max<LONG>(1, bounds.right - bounds.left);
-        height_ = std::max<LONG>(1, bounds.bottom - bounds.top);
+        const auto width = std::max<LONG>(1, bounds.right - bounds.left);
+        const auto height = std::max<LONG>(1, bounds.bottom - bounds.top);
+        width_ = width;
+        height_ = height;
         window_ = CreateWindowExW(WS_EX_NOPARENTNOTIFY | WS_EX_NOACTIVATE, kNativeChildWindowClass,
-                                  L"", WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS, 0, 0, width_,
-                                  height_, parent_, nullptr, GetModuleHandleW(nullptr), nullptr);
+                                  L"", WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS, 0, 0, width,
+                                  height, parent_, nullptr, GetModuleHandleW(nullptr), nullptr);
         if (window_ == nullptr) {
             throw std::runtime_error("native_window_child_unavailable");
         }
         // The presenter is a rendering plane.  Keeping it at the bottom of
         // its Qt host allows app-process interaction/decoration planes to sit
         // above it without coupling the engine to a particular target id.
-        if (SetWindowPos(window_, HWND_BOTTOM, 0, 0, width_, height_,
+        if (SetWindowPos(window_, HWND_BOTTOM, 0, 0, width, height,
                          SWP_NOACTIVATE | SWP_NOOWNERZORDER) == FALSE) {
             DestroyWindow(window_);
             window_ = nullptr;
@@ -152,6 +155,26 @@ class NativeChildWindow final {
 
     [[nodiscard]] HWND handle() const noexcept { return window_; }
 
+    [[nodiscard]] bool retarget(
+        const OutputWindowConfiguration& target) noexcept {
+        const auto next_parent =
+            reinterpret_cast<HWND>(static_cast<std::uintptr_t>(target.native_handle));
+        if (next_parent == nullptr || IsWindow(next_parent) == FALSE || window_ == nullptr ||
+            IsWindow(window_) == FALSE) {
+            return false;
+        }
+        const bool parent_changed = next_parent != parent_;
+        if (parent_changed) {
+            SetLastError(ERROR_SUCCESS);
+            const auto previous_parent = SetParent(window_, next_parent);
+            if (previous_parent == nullptr && GetLastError() != ERROR_SUCCESS) {
+                return false;
+            }
+            parent_ = next_parent;
+        }
+        return fit_to_parent(parent_changed);
+    }
+
     [[nodiscard]] bool pump() noexcept {
         if (parent_ == nullptr || IsWindow(parent_) == FALSE || window_ == nullptr ||
             IsWindow(window_) == FALSE) {
@@ -165,24 +188,29 @@ class NativeChildWindow final {
             TranslateMessage(&message);
             DispatchMessageW(&message);
         }
+        return fit_to_parent(false);
+    }
+
+  private:
+    [[nodiscard]] bool fit_to_parent(const bool force) noexcept {
         RECT bounds{};
-        if (GetClientRect(parent_, &bounds) == FALSE) {
+        if (parent_ == nullptr || GetClientRect(parent_, &bounds) == FALSE) {
             return false;
         }
         const auto width = std::max<LONG>(1, bounds.right - bounds.left);
         const auto height = std::max<LONG>(1, bounds.bottom - bounds.top);
-        if (width != width_ || height != height_) {
-            if (SetWindowPos(window_, HWND_BOTTOM, 0, 0, width, height,
-                             SWP_NOACTIVATE | SWP_NOOWNERZORDER) == FALSE) {
-                return false;
-            }
-            width_ = width;
-            height_ = height;
+        if (!force && width == width_ && height == height_) {
+            return true;
         }
+        if (SetWindowPos(window_, HWND_BOTTOM, 0, 0, width, height,
+                         SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_SHOWWINDOW) == FALSE) {
+            return false;
+        }
+        width_ = width;
+        height_ = height;
         return true;
     }
 
-  private:
     HWND parent_{nullptr};
     HWND window_{nullptr};
     LONG width_{1};
@@ -194,7 +222,8 @@ class NativeChildWindow final {
 class NativeTargetPipeline final {
   public:
     explicit NativeTargetPipeline(const OutputWindowConfiguration& target)
-        : target_id_(target.target_id), transition_(kMediaPresentationTransition) {
+        : target_id_(target.target_id), native_handle_(target.native_handle),
+          transition_(kMediaPresentationTransition) {
 #ifdef _WIN32
         window_ = std::make_unique<NativeChildWindow>(target);
 #else
@@ -270,6 +299,22 @@ class NativeTargetPipeline final {
 
     NativeTargetPipeline(const NativeTargetPipeline&) = delete;
     NativeTargetPipeline& operator=(const NativeTargetPipeline&) = delete;
+
+    [[nodiscard]] bool apply_target(
+        const OutputWindowConfiguration& target) noexcept {
+#ifdef _WIN32
+        if (window_ == nullptr || !window_->retarget(target)) {
+            return false;
+        }
+#else
+        if (target.native_handle != native_handle_) {
+            return false;
+        }
+#endif
+        native_handle_ = target.native_handle;
+        request(target);
+        return true;
+    }
 
     void request(const OutputWindowConfiguration& target) noexcept {
         const PresentationIdentity requested{
@@ -742,6 +787,7 @@ class NativeTargetPipeline final {
     }
 
     std::string target_id_{};
+    std::uint64_t native_handle_{0U};
     PresentationTransition transition_;
     PresentationTransitionPhase last_transition_phase_{
         PresentationTransitionPhase::waiting_for_first_frame};
@@ -785,21 +831,6 @@ struct NativeWindowRoutingState final {
     std::uint64_t revision{0U};
 };
 
-[[nodiscard]] bool same_window_topology(
-    const std::vector<OutputWindowConfiguration>& current,
-    const std::vector<OutputWindowConfiguration>& next) {
-    if (current.size() != next.size()) {
-        return false;
-    }
-    return std::ranges::all_of(current, [&next](const auto& target) {
-        const auto match = std::ranges::find_if(next, [&target](const auto& candidate) {
-            return candidate.target_id == target.target_id;
-        });
-        return match != next.end() && match->native_handle == target.native_handle &&
-               match->visible == target.visible;
-    });
-}
-
 #endif
 
 } // namespace
@@ -841,7 +872,7 @@ class NativeWindowOutputController::Impl final {
                                                  std::move(content_source.value()))
                                            : nullptr;
             if (worker_running_.load() && routing_state_ != nullptr &&
-                same_window_topology(targets_, targets)) {
+                detail::same_presenter_set(targets_, targets)) {
                 auto previous_content_source = content_source_;
                 std::stop_source previous_routing_wait;
                 targets_ = targets;
@@ -967,7 +998,7 @@ class NativeWindowOutputController::Impl final {
                     static_cast<void>(content_source);
                     static_cast<void>(routing_stop_token);
                     if (revision == applied_revision) {
-                        return;
+                        return true;
                     }
                     for (const auto& target : targets) {
                         const auto pipeline = std::ranges::find_if(
@@ -975,10 +1006,13 @@ class NativeWindowOutputController::Impl final {
                                 return candidate->target_id() == target.target_id;
                             });
                         if (pipeline != pipelines.end()) {
-                            (*pipeline)->request(target);
+                            if (!(*pipeline)->apply_target(target)) {
+                                return false;
+                            }
                         }
                     }
                     applied_revision = revision;
+                    return true;
                 };
                 try {
                     rebuild_pipelines();
@@ -1142,7 +1176,10 @@ class NativeWindowOutputController::Impl final {
                         recover_pipelines();
                         continue;
                     }
-                    apply_routing();
+                    if (!apply_routing()) {
+                        recover_pipelines();
+                        continue;
+                    }
                     const auto [routed_targets, content_source, routed_revision,
                                 routing_stop_token] = routing_snapshot();
                     static_cast<void>(routed_targets);

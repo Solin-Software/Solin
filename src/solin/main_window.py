@@ -145,7 +145,7 @@ from .ui.window_focus import raise_projection_window
 
 
 _STARTUP_SCREEN_SETTLE_MS = 900
-_OPERATOR_VIDEO_PREVIEW_TARGET_ID = "media-control-preview"
+_OPERATOR_VIDEO_OUTPUT_TARGET_ID = "media-control-video"
 
 
 def _use_native_media_presentation(
@@ -1140,22 +1140,22 @@ class MainWindow(QWidget):
 
         projection_bar = getattr(self, "proj_bar", None)
         if projection_bar is not None:
-            operator_preview_native = (
+            operator_video_native = (
                 native_presentation
-                and projection_bar.native_video_preview_requested
+                and projection_bar.native_video_output_requested
                 and len(targets) < MAXIMUM_OUTPUT_WINDOW_TARGETS
             )
-            projection_bar.set_native_video_preview_active(
-                operator_preview_native
+            projection_bar.set_native_video_output_active(
+                operator_video_native
             )
-            operator_preview_surface = (
-                projection_bar.native_video_preview_surface
+            operator_video_surface = (
+                projection_bar.native_video_output_surface
             )
-            if operator_preview_native and operator_preview_surface is not None:
+            if operator_video_native and operator_video_surface is not None:
                 targets.append(
                     self._native_window_target(
-                        operator_preview_surface,
-                        _OPERATOR_VIDEO_PREVIEW_TARGET_ID,
+                        operator_video_surface,
+                        _OPERATOR_VIDEO_OUTPUT_TARGET_ID,
                         BusId.MEDIA_WINDOWS,
                     )
                 )
@@ -1506,11 +1506,8 @@ class MainWindow(QWidget):
         self._ui_preparation.completed.connect(self._on_ui_preparation_completed)
         self.right_col = resources.right_col
         self.proj_bar = resources.projection_bar
-        self.proj_bar.video_preview_target_changed.connect(
+        self.proj_bar.video_output_target_changed.connect(
             self._reconcile_native_scene_surfaces
-        )
-        self.proj_bar.video_frame_delivery_requirement_changed.connect(
-            self._reconcile_python_video_frame_delivery
         )
         self.scene_runtime.engine_ready_changed.connect(
             self._on_native_scene_engine_ready_changed

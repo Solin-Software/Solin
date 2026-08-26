@@ -252,8 +252,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
     obs_scene_toggle_requested = Signal()    # usuário quer alternar entre cena de mídia e cena anterior
     set_as_idle_requested      = Signal(str) # path — usuário quer definir mídia como idle screen
     expanded_changed           = Signal(bool)
-    video_preview_target_changed = Signal()
-    video_frame_delivery_requirement_changed = Signal()
+    video_output_target_changed = Signal()
 
     _BAR_H = 48
 
@@ -298,6 +297,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._audio_cover_pixmap: QPixmap | None = None
         self._is_live_tab: bool = False   # True quando projetando aba ao vivo do browser
         self._fullscreen_overlay: FullscreenVideoOverlay | None = None
+        self._fullscreen_preparation_scheduled = False
         self._last_buffer_progress: tuple[int, int] = (0, 0)
         self._playback_recovering: bool = False
 
@@ -898,14 +898,21 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
             False,
         ):
             self._video_preview_route_requested = video_visible
-            self.video_preview_target_changed.emit()
+            self.video_output_target_changed.emit()
 
     @property
-    def native_video_preview_requested(self) -> bool:
-        return getattr(self, "_video_preview_route_requested", False)
+    def native_video_output_requested(self) -> bool:
+        return self.app_fullscreen_active() or getattr(
+            self,
+            "_video_preview_route_requested",
+            False,
+        )
 
     @property
-    def native_video_preview_surface(self) -> NativeVideoSurface | None:
+    def native_video_output_surface(self) -> NativeVideoSurface | None:
+        overlay = getattr(self, "_fullscreen_overlay", None)
+        if overlay is not None and overlay.is_active():
+            return overlay.native_video_surface
         preview = getattr(self, "video_preview", None)
         return preview.native_surface if preview is not None else None
 
@@ -916,19 +923,29 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         if self._mode != "video" or self._is_audio:
             return False
         if self.app_fullscreen_active():
-            return True
+            overlay = getattr(self, "_fullscreen_overlay", None)
+            return overlay is None or not overlay.native_output_active
         if not self._video_preview_desired():
             return False
         preview = getattr(self, "video_preview", None)
         return preview is None or not preview.native_output_active
 
-    def set_native_video_preview_active(self, active: bool) -> None:
+    def set_native_video_output_active(self, active: bool) -> None:
+        fullscreen_active = self.app_fullscreen_active()
+        overlay = getattr(self, "_fullscreen_overlay", None)
+        if overlay is not None:
+            overlay.set_native_output_active(bool(active) and fullscreen_active)
+
         preview = getattr(self, "video_preview", None)
         if preview is None:
             return
-        effective = bool(active) and self.native_video_preview_requested
+        effective = (
+            bool(active)
+            and not fullscreen_active
+            and getattr(self, "_video_preview_route_requested", False)
+        )
         changed = preview.set_native_output_active(effective)
-        if changed and not effective:
+        if changed and not effective and not fullscreen_active:
             self._present_current_video_frame()
 
     def _present_current_video_frame(self) -> None:
@@ -1052,7 +1069,12 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
     def enter_app_fullscreen(self) -> None:
         if not self._is_app_fullscreen_available():
             return
+        self._fullscreen_preparation_scheduled = False
         overlay = self._ensure_fullscreen_overlay()
+        preview = getattr(self, "video_preview", None)
+        overlay.set_native_output_active(
+            bool(preview is not None and preview.native_output_active)
+        )
         self._hydrate_fullscreen_overlay(overlay)
         overlay.show_fullscreen()
 
@@ -1088,9 +1110,24 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._fullscreen_overlay = overlay
         return overlay
 
+    def _schedule_fullscreen_preparation(self) -> None:
+        if (
+            not self._is_app_fullscreen_available()
+            or self._fullscreen_preparation_scheduled
+        ):
+            return
+        self._fullscreen_preparation_scheduled = True
+        QTimer.singleShot(0, self._prepare_fullscreen_when_idle)
+
+    def _prepare_fullscreen_when_idle(self) -> None:
+        self._fullscreen_preparation_scheduled = False
+        if not self._is_app_fullscreen_available():
+            return
+        self._ensure_fullscreen_overlay().prepare()
+
     @Slot(bool)
     def _on_fullscreen_visibility_changed(self, _visible: bool) -> None:
-        self.video_frame_delivery_requirement_changed.emit()
+        self.video_output_target_changed.emit()
 
     def _hydrate_fullscreen_overlay(self, overlay: FullscreenVideoOverlay) -> None:
         title = self.ov_title.text() or self.proj_title.toolTip() or self.proj_title.text()
@@ -1262,6 +1299,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         # Agenda captura one-shot de thumbnail ao vivo, se o item ainda não tem miniatura
         self._live_thumb_timer.stop()
         self._schedule_live_thumb()
+        self._schedule_fullscreen_preparation()
 
     def activate_image(
         self,

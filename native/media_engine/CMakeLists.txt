@@ -50,6 +50,7 @@ set(SOLIN_MEDIA_ENGINE_SOURCES
     src/frame_channel_output.cpp
     src/media_runtime.cpp
     src/native_window_output.cpp
+    src/native_window_output_routing.hpp
     src/native_window_output_wait.hpp
     src/windows_d3d11_frame_channel.cpp
     src/windows_d3d11_frame_channel.hpp
@@ -348,7 +349,13 @@ if(SOLIN_MEDIA_ENGINE_BUILD_TESTS)
     )
     target_include_directories(
         solin-media-engine-native-window-output-wait-tests
-        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
+        PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/src
+            ${CMAKE_CURRENT_SOURCE_DIR}/include
+    )
+    target_link_libraries(
+        solin-media-engine-native-window-output-wait-tests
+        PRIVATE solin_media_engine_scene
     )
     target_compile_features(
         solin-media-engine-native-window-output-wait-tests PRIVATE cxx_std_20
