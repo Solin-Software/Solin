@@ -691,6 +691,7 @@ def test_bridge_uses_exact_local_camera_format(tmp_path: Path) -> None:
     assert configuration.media_type is CameraMediaType.JPEG
     assert configuration.fps_numerator == 30_000
     assert configuration.fps_denominator == 1_001
+    assert configuration.keep_active
     bridge.close()
     controller.close()
 

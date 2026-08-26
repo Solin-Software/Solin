@@ -935,7 +935,7 @@ class ScenesBridge(QObject):
                     media_type=selected_format.media_type if selected_format is not None else None,
                     pixel_format=selected_format.pixel_format if selected_format is not None else "",
                     ptz_binding=ptz_binding,
-                    keep_active=bool(values.get("keepActive", False)),
+                    keep_active=bool(values.get("keepActive", True)),
                 )
             elif kind is SourceKind.RTSP_CAMERA:
                 configuration = RtspCameraConfig(
@@ -943,7 +943,7 @@ class ScenesBridge(QObject):
                     transport=RtspTransport(str(values.get("transport", "tcp"))),
                     latency_ms=_qml_int(values.get("latencyMs", 200)),
                     ptz_binding=ptz_binding,
-                    keep_active=bool(values.get("keepActive", False)),
+                    keep_active=bool(values.get("keepActive", True)),
                 )
             else:
                 raise SceneValidationError("Camera kind is invalid")
