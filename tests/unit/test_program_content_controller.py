@@ -80,6 +80,64 @@ def test_program_content_accepts_custom_idle_frames_only_while_idle() -> None:
     controller.close()
 
 
+def test_program_content_replays_static_idle_after_active_media_ends() -> None:
+    session = ProjectionSession()
+    events: list[tuple[str, int, object | None]] = []
+    controller = ProgramContentController(
+        session,
+        _FontManager(),
+        lambda frame: events.append(("frame", session.session_id, frame)),
+        lambda: ("", "", ""),
+        media_epoch_sink=lambda epoch: events.append(("epoch", epoch, None)),
+        width=320,
+        height=180,
+    )
+    active_frame = object()
+    custom_idle = QImage(16, 9, QImage.Format.Format_ARGB32)
+
+    session.set_state({"type": "image"})
+    session.set_idle_media_path("configured-idle.png")
+    controller.submit_idle_frame(custom_idle)
+    controller.submit_frame(active_frame)
+
+    assert events[-1] == ("frame", 1, active_frame)
+
+    session.reset_state()
+
+    assert events[-2] == ("epoch", 2, None)
+    assert events[-1][0:2] == ("frame", 2)
+    assert events[-1][2] is custom_idle
+    controller.close()
+
+
+def test_program_content_does_not_replay_idle_from_a_replaced_path() -> None:
+    session = ProjectionSession()
+    frames: list[object] = []
+    controller = ProgramContentController(
+        session,
+        _FontManager(),
+        frames.append,
+        lambda: ("", "", ""),
+        media_epoch_sink=lambda _epoch: None,
+        width=320,
+        height=180,
+    )
+    active_frame = object()
+    replaced_idle = QImage(16, 9, QImage.Format.Format_ARGB32)
+
+    session.set_state({"type": "video"})
+    session.set_idle_media_path("first-idle.png")
+    controller.submit_idle_frame(replaced_idle)
+    controller.submit_frame(active_frame)
+    session.set_idle_media_path("replacement-idle.png")
+    controller.refresh()
+
+    session.reset_state()
+
+    assert frames[-1] is active_frame
+    controller.close()
+
+
 def test_program_content_unsubscribes_on_close() -> None:
     session = ProjectionSession()
     frames: list[object] = []

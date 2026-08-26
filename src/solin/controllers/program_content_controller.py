@@ -73,6 +73,10 @@ class ProgramContentController(QObject):
         self._closed = False
         self._published_projection_session_id = -1
         self._published_image_transform_key: tuple[object, ...] | None = None
+        self._cached_idle_frame: object | None = None
+        self._cached_idle_media_path = ""
+        self._cached_idle_frame_revision = 0
+        self._published_idle_frame_key: tuple[int, str, int] | None = None
         self._yearly_widget = YearlyTextWidget(font_manager)
         self._timer_widget = CircularTimerWidget()
         for widget in (self._yearly_widget, self._timer_widget):
@@ -92,9 +96,15 @@ class ProgramContentController(QObject):
 
     @Slot(object)
     def submit_idle_frame(self, frame: object) -> None:
-        if self._closed or self._session.state_type != "idle" or not self._session.idle_media_path:
+        if self._closed:
             return
-        self.submit_frame(frame)
+        idle_media_path = self._session.idle_media_path
+        if not idle_media_path:
+            return
+        self._cached_idle_frame = frame
+        self._cached_idle_media_path = idle_media_path
+        self._cached_idle_frame_revision += 1
+        self._publish_cached_idle_frame()
 
     @Slot(str, str, str)
     def update_yearly_text(self, _quote: str, _reference: str, _api_code: str) -> None:
@@ -113,6 +123,7 @@ class ProgramContentController(QObject):
     def refresh(self) -> None:
         if self._closed:
             return
+        self._discard_stale_idle_frame()
         state = self._session.state
         state_type = str(state.get("type", "idle"))
         if state_type == "image":
@@ -123,7 +134,9 @@ class ProgramContentController(QObject):
                 )
             return
         if state_type == "idle":
-            if not self._session.idle_media_path:
+            if self._session.idle_media_path:
+                self._publish_cached_idle_frame()
+            else:
                 self._render_yearly()
             return
         if state_type == "timer":
@@ -134,6 +147,9 @@ class ProgramContentController(QObject):
             return
         self._closed = True
         self._unsubscribe()
+        self._cached_idle_frame = None
+        self._cached_idle_media_path = ""
+        self._published_idle_frame_key = None
         self._yearly_widget.close()
         self._timer_widget.close()
 
@@ -151,6 +167,32 @@ class ProgramContentController(QObject):
             return
         self._media_epoch_sink(media_epoch)
         self._published_projection_session_id = media_epoch
+
+    def _discard_stale_idle_frame(self) -> None:
+        if self._cached_idle_media_path == self._session.idle_media_path:
+            return
+        self._cached_idle_frame = None
+        self._cached_idle_media_path = ""
+        self._published_idle_frame_key = None
+
+    def _publish_cached_idle_frame(self) -> None:
+        idle_media_path = self._session.idle_media_path
+        if (
+            self._session.state_type != "idle"
+            or not idle_media_path
+            or self._cached_idle_frame is None
+            or self._cached_idle_media_path != idle_media_path
+        ):
+            return
+        key = (
+            self._session.session_id,
+            idle_media_path,
+            self._cached_idle_frame_revision,
+        )
+        if key == self._published_idle_frame_key:
+            return
+        self.submit_frame(self._cached_idle_frame)
+        self._published_idle_frame_key = key
 
     def _publish_image_transform(
         self,
