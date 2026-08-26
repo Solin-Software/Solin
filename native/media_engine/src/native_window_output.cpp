@@ -871,8 +871,7 @@ class NativeWindowOutputController::Impl final {
                                            ? std::make_shared<SourceLease>(
                                                  std::move(content_source.value()))
                                            : nullptr;
-            if (worker_running_.load() && routing_state_ != nullptr &&
-                detail::same_presenter_set(targets_, targets)) {
+            if (worker_running_.load() && routing_state_ != nullptr) {
                 auto previous_content_source = content_source_;
                 std::stop_source previous_routing_wait;
                 targets_ = targets;
@@ -963,7 +962,10 @@ class NativeWindowOutputController::Impl final {
                           started = std::move(started), running = &worker_running_](
                              const std::stop_token stop_token) mutable {
                 std::vector<std::unique_ptr<NativeTargetPipeline>> pipelines;
+                std::vector<OutputWindowConfiguration> applied_targets;
                 std::uint64_t applied_revision = 0U;
+                std::uint64_t failed_routing_revision = 0U;
+                std::chrono::steady_clock::time_point routing_retry_after{};
                 const auto activity_signal = routing->activity_signal;
                 const auto routing_signal = routing->routing_signal;
                 const auto routing_snapshot = [&routing] {
@@ -976,6 +978,7 @@ class NativeWindowOutputController::Impl final {
                     };
                 };
                 const auto rebuild_pipelines = [&routing_snapshot, &pipelines,
+                                                &applied_targets,
                                                 &applied_revision] {
                     const auto [targets, content_source, revision,
                                 routing_stop_token] = routing_snapshot();
@@ -989,10 +992,13 @@ class NativeWindowOutputController::Impl final {
                         }
                     }
                     pipelines = std::move(next);
+                    applied_targets = targets;
                     applied_revision = revision;
                 };
                 const auto apply_routing = [&routing_snapshot, &pipelines,
-                                           &applied_revision] {
+                                           &applied_targets, &applied_revision,
+                                           &failed_routing_revision,
+                                           &routing_retry_after] {
                     const auto [targets, content_source, revision,
                                 routing_stop_token] = routing_snapshot();
                     static_cast<void>(content_source);
@@ -1000,18 +1006,80 @@ class NativeWindowOutputController::Impl final {
                     if (revision == applied_revision) {
                         return true;
                     }
-                    for (const auto& target : targets) {
-                        const auto pipeline = std::ranges::find_if(
-                            pipelines, [&target](const auto& candidate) {
-                                return candidate->target_id() == target.target_id;
+                    const auto now = std::chrono::steady_clock::now();
+                    if (revision == failed_routing_revision &&
+                        now < routing_retry_after) {
+                        return false;
+                    }
+                    const auto plan = detail::native_window_routing_plan(
+                        applied_targets, targets);
+                    std::vector<std::pair<
+                        std::string,
+                        std::unique_ptr<NativeTargetPipeline>>>
+                        prepared_pipelines;
+                    prepared_pipelines.reserve(
+                        plan.retained_target_ids.size() +
+                        plan.added_target_ids.size());
+                    const auto target_by_id = [&targets](const std::string& id) {
+                        return std::ranges::find_if(
+                            targets, [&id](const auto& target) {
+                                return target.visible && target.target_id == id;
                             });
-                        if (pipeline != pipelines.end()) {
-                            if (!(*pipeline)->apply_target(target)) {
-                                return false;
+                    };
+                    const auto pipeline_by_id = [&pipelines](const std::string& id) {
+                        return std::ranges::find_if(
+                            pipelines, [&id](const auto& pipeline) {
+                                return pipeline->target_id() == id;
+                            });
+                    };
+                    try {
+                        for (const auto& target_id : plan.retained_target_ids) {
+                            const auto target = target_by_id(target_id);
+                            if (target == targets.end()) {
+                                continue;
+                            }
+                            const auto pipeline = pipeline_by_id(target_id);
+                            if (pipeline == pipelines.end() ||
+                                !(*pipeline)->apply_target(*target)) {
+                                prepared_pipelines.emplace_back(
+                                    target_id,
+                                    std::make_unique<NativeTargetPipeline>(*target));
                             }
                         }
+                        for (const auto& target_id : plan.added_target_ids) {
+                            const auto target = target_by_id(target_id);
+                            if (target != targets.end()) {
+                                prepared_pipelines.emplace_back(
+                                    target_id,
+                                    std::make_unique<NativeTargetPipeline>(*target));
+                            }
+                        }
+                    } catch (...) {
+                        failed_routing_revision = revision;
+                        routing_retry_after = now + 250ms;
+                        return false;
                     }
+                    std::erase_if(pipelines, [&plan](const auto& pipeline) {
+                        return std::ranges::find(
+                                   plan.removed_target_ids,
+                                   pipeline->target_id()) !=
+                               plan.removed_target_ids.end();
+                    });
+                    for (auto& [target_id, prepared] : prepared_pipelines) {
+                        const auto pipeline = std::ranges::find_if(
+                            pipelines, [&target_id](const auto& candidate) {
+                                return candidate->target_id() == target_id;
+                            });
+                        if (pipeline != pipelines.end()) {
+                            *pipeline = std::move(prepared);
+                        } else {
+                            pipelines.push_back(std::move(prepared));
+                        }
+                    }
+                    applied_targets = targets;
                     applied_revision = revision;
+                    failed_routing_revision = 0U;
+                    routing_retry_after = {};
                     return true;
                 };
                 try {
@@ -1164,8 +1232,12 @@ class NativeWindowOutputController::Impl final {
                     return;
                 }
                 while (!stop_token.stop_requested()) {
+                    static_cast<void>(apply_routing());
                     if (pipelines.empty()) {
-                        recover_pipelines();
+                        const auto routing_revision = routing_signal->revision();
+                        static_cast<void>(routing_signal->wait_after(
+                            routing_revision, stop_token,
+                            std::chrono::steady_clock::now() + 100ms));
                         continue;
                     }
                     bool healthy = true;
@@ -1173,10 +1245,6 @@ class NativeWindowOutputController::Impl final {
                         healthy = pipeline->pump_window() && healthy;
                     }
                     if (!healthy) {
-                        recover_pipelines();
-                        continue;
-                    }
-                    if (!apply_routing()) {
                         recover_pipelines();
                         continue;
                     }
