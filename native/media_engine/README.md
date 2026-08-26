@@ -16,32 +16,50 @@ source leases required by both graphs, follow the Program output clock, and rele
 temporary resources after completion. The editor Preview always cuts immediately. The
 renderer builds one bounded BGRA/D3D11 pipeline per output, shares leaf sources and nested
 scene nodes inside each pipeline, and implements crop, contain/cover/stretch fit, mirroring,
-rotation, placement, and opacity. Solin content enters through a
-versioned, three-slot latest-frame video channel. Qt video stays in NV12 and is bulk-copied
-once per plane without `QImage` conversion or Python row loops. Protocol v6 preserves the
-v5 source strides, offsets, and per-slot leases, and `GstVideoMeta` describes that layout to
-the upload path;
-static and unsupported formats use the BGRA path.
-Protocol v6 also stores the requested monotonic Raw media epoch and versioned, epoch-bound
-image zoom/pan state independently in the channel header, so a switch can begin before its
-first destination frame and a retained static image can be reframed without republishing
-pixels. The engine reproduces the Qt fallback geometry and easing in a temporary D3D11
+rotation, placement, and opacity. Solin content enters through a versioned, three-slot,
+dynamic latest-frame channel. On Windows, the primary channel is a pinned Qt 6.11.1 bridge:
+a no-GIL native worker maps hardware NV12 video through Qt's private video-buffer interface
+and copies it GPU-to-GPU into bridge-owned named D3D11 textures. Static BGRA content is
+uploaded once into the same ring, so video, images, and idle retain one logical descriptor,
+source runtime, and Raw transition owner. The sidecar validates adapter/resource generations,
+imports each leased texture as `GstD3D11Memory`, and performs one canonical BGRA
+conversion/scale. Video takes no Solin CPU pixel readback, SHM pixel copy, or CPU-to-GPU
+upload on that route. The private ABI is isolated
+behind exact package/runtime guards and an independent feature flag. Incompatible frames,
+bridge/device failures, and other platforms retain the public NV12/BGRA shared-memory path.
+Adapter/import and device-loss errors are emitted as typed content-source health; the Solin
+controller retires the rejected bridge instance before replacing the ingress descriptor, so
+the route cannot oscillate between accelerated and compatibility transports.
+That fallback bulk-copies mapped NV12 planes without `QImage` conversion or Python row loops;
+Protocol v6 preserves source strides, offsets, and per-slot leases, and `GstVideoMeta`
+describes the layout to the upload path. Static and unsupported formats use BGRA. Both
+channel protocols also store the monotonic Raw media epoch and versioned, epoch-bound image
+zoom/pan state in the channel header. Producers arm a future epoch locally and commit it
+atomically with its first matching frame, so a transport handoff cannot expose black or stale
+pixels. Transform targets remain independently versioned, allowing a retained static image
+to be reframed without republishing pixels. The engine reproduces the Qt fallback geometry
+and easing in a temporary D3D11
 compositor before canonical Raw fan-out. Off-canvas painter geometry is converted to a
 proportional source crop and non-negative destination, preserving the source aspect ratio for
 every zoom/pan position. Once stable, the graph retains the GPU result and pauses until the next
-retarget, returning the control loop to an idle cadence. The normal Windows path wraps the SHM payload directly in
-`appsrc` without a second owned-pixel copy. The Qt
-producer takes the control mutex with a zero timeout, chooses another unleased slot, or drops
-the frame; it never waits for the engine. Auto-reset frame events and a process-local source
-activity signal wake the source, compositor, and output workers without 1–4 ms polling. The
-system-memory fallback still copies before releasing its slot. Keyed D3D11 texture ingress
-remains the preferred future cross-process zero-copy path. The virtual-camera render branch
-converts on the shared D3D11 device, downloads a
+retarget, returning the control loop to an idle cadence. The fallback Windows path wraps the
+SHM payload directly in `appsrc` without a second owned-pixel copy. Both producers take their
+control mutex with a zero timeout, choose another unleased slot, or drop the frame; neither
+waits for the engine. Auto-reset frame events and a process-local source-activity signal wake
+the source, compositor, and output workers without 1–4 ms polling. The system-memory fallback
+still copies before releasing its slot. The virtual-camera render branch converts on the
+shared D3D11 device, downloads a
 tightly packed NV12 edge frame, and publishes it through a separate lock-free, three-slot
 shared-memory channel. A per-user DirectShow source filter consumes that channel through a
 private protocol-v3 broker. The broker derives its pipe from the current SID and session,
 rejects remote clients, validates the client's token and session, and reveals only a
-read-only file-backed transport locator. Each x86 or x64 consumer owns an independent output
+read-only file-backed transport locator. A current DirectShow pin retains its authenticated
+broker session until its stream thread stops. The resulting active-session count gates the
+NV12 conversion and GPU readback, so an enabled camera with no consumer and a filter that is
+only enumerated publish no system-memory frames. During an in-place update, a previously
+shipped protocol-v3 filter is detected by its completed handshake without a presence lease;
+correctness-first demand then remains active until the sidecar restarts. Each x86 or x64
+consumer owns an independent output
 sample while reading the same latest frame. An exact-size NV12 consumer is filled directly
 from the validated stable SHM span; staging remains only for scaling, letterboxing, and YUY2
 conversion. The filter adapts the producer's NV12 frame to
@@ -70,8 +88,8 @@ bytes in an immutable `QImage` without another full-frame copy. A demand-driven
 dynamic NV12/BGRA channel remains the bounded Program fallback for Qt-owned surfaces that
 cannot host the native presenter. Dynamic frames cross Python without conversion and are
 materialized only on the receiving Qt thread, so shutdown never waits on a Qt Multimedia
-conversion in a Python worker. Keyed-texture ingress and the exact border/corner-radius shader
-path remain later phases in
+conversion in a Python worker. Keyed-texture editor egress and the exact border/corner-radius
+shader path remain later phases in
 `docs/native-scenes-engine-implementation-plan.md`.
 
 The native process must not import, link, or dynamically load libobs. OBS WebSocket support

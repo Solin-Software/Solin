@@ -194,12 +194,12 @@ def test_native_video_output_bypasses_qt_frame_materialization() -> None:
     view.set_native_output_active(True)
     view.update_frame(QVideoFrame(image))
 
-    assert view._native_output_active
+    assert view.native_output_active
     assert view._stack.currentIndex() == view._PAGE_MEDIA
     assert view.display_label._video_frame is None
 
     view.clear()
-    assert not view._native_output_active
+    assert not view.native_output_active
 
 
 def test_new_untransformed_image_resets_zoom_before_clear_fade_finishes():
@@ -252,7 +252,7 @@ def test_native_media_output_never_runs_the_qt_media_fade() -> None:
     view.set_native_output_active(True)
     view.show_image_from_qimage(image)
 
-    assert view._native_output_active
+    assert view.native_output_active
     assert view.native_video_surface.graphicsEffect() is None
     assert view._media_anim.state() is QAbstractAnimation.State.Stopped
     assert view._media_opacity.opacity() == 1.0
@@ -273,6 +273,6 @@ def test_first_fallback_frame_after_native_routing_loss_fades_in() -> None:
     view.set_native_output_active(False)
     view.update_frame(QVideoFrame(image))
 
-    assert not view._native_output_active
+    assert not view.native_output_active
     assert view._stack.currentIndex() == view._PAGE_MEDIA
     assert view._media_anim.state() is QAbstractAnimation.State.Running

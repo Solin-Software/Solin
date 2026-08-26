@@ -202,6 +202,7 @@ class _ProjectionIntegrationsStub:
 class _ProjectionWindowStub:
     def __init__(self, events=None):
         self.events = events
+        self.native_output_active = False
         self.cleared = 0
         self.began_video = 0
         self.images = []
@@ -971,6 +972,19 @@ def test_frame_and_image_transform_helpers_respect_projection_modes():
         [(1.5, 0.2, 0.3, True), (1.0, 0.0, 0.0, True)],
         [(1.5, 0.2, 0.3, True), (1.0, 0.0, 0.0, True)],
     ]
+
+
+def test_video_frame_fanout_skips_native_projection_outputs():
+    window = _WindowStub()
+    controller = _controller(window)
+    window.windows[0].native_output_active = True
+    window.projection_session.set_state({"type": "video", "is_audio": False})
+
+    controller.distribute_frame("frame-1")
+
+    assert window.windows[0].frames == []
+    assert window.windows[1].frames == ["frame-1"]
+    assert window.content_frames == ["frame-1"]
 
 
 def test_image_transform_is_persisted_in_projection_state():

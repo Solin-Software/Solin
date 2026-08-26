@@ -50,6 +50,9 @@ set(SOLIN_MEDIA_ENGINE_SOURCES
     src/frame_channel_output.cpp
     src/media_runtime.cpp
     src/native_window_output.cpp
+    src/native_window_output_wait.hpp
+    src/windows_d3d11_frame_channel.cpp
+    src/windows_d3d11_frame_channel.hpp
     src/presentation_transition.cpp
     src/render_geometry.cpp
     src/scene_graph.cpp
@@ -68,6 +71,7 @@ set(SOLIN_MEDIA_ENGINE_SOURCES
     tests/content_image_framing_tests.cpp
     tests/frame_channel_tests.cpp
     tests/gstreamer_source_runtime_tests.cpp
+    tests/native_window_output_wait_tests.cpp
     tests/render_geometry_tests.cpp
     tests/scene_graph_tests.cpp
     tests/scene_snapshot_tests.cpp
@@ -212,8 +216,19 @@ if(WIN32)
     )
     target_sources(solin_media_engine_outputs PRIVATE src/windows_virtual_camera_backend.cpp)
     target_link_libraries(
-        solin_media_engine_outputs PRIVATE advapi32 bcrypt ole32 oleaut32 strmiids
+        solin_media_engine_outputs
+        PRIVATE advapi32 bcrypt ole32 oleaut32 strmiids
     )
+    target_sources(
+        solin_media_engine_runtime PRIVATE
+            src/windows_d3d11_frame_channel.cpp
+            src/windows_d3d11_frame_channel.hpp
+    )
+    target_include_directories(
+        solin_media_engine_runtime PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}/../media_transport/include"
+    )
+    target_link_libraries(solin_media_engine_runtime PRIVATE d3d11 dxgi)
     include(cmake/SolinVirtualCameraFilter.cmake)
     solin_add_virtual_camera_filter()
 endif()
@@ -327,6 +342,31 @@ if(SOLIN_MEDIA_ENGINE_BUILD_TESTS)
     add_test(
         NAME presentation-transition
         COMMAND solin-media-engine-presentation-transition-tests
+    )
+    add_executable(solin-media-engine-native-window-output-wait-tests
+        tests/native_window_output_wait_tests.cpp
+    )
+    target_include_directories(
+        solin-media-engine-native-window-output-wait-tests
+        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+    target_compile_features(
+        solin-media-engine-native-window-output-wait-tests PRIVATE cxx_std_20
+    )
+    if(MSVC)
+        target_compile_options(
+            solin-media-engine-native-window-output-wait-tests
+            PRIVATE /W4 /WX /permissive- /EHsc
+        )
+    else()
+        target_compile_options(
+            solin-media-engine-native-window-output-wait-tests PRIVATE
+            -Wall -Wextra -Wpedantic -Werror
+        )
+    endif()
+    add_test(
+        NAME native-window-output-wait
+        COMMAND solin-media-engine-native-window-output-wait-tests
     )
     add_executable(solin-media-engine-content-image-framing-tests
         tests/content_image_framing_tests.cpp

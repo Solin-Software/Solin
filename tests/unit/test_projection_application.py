@@ -64,6 +64,19 @@ def test_projection_session_publishes_versioned_snapshots() -> None:
     assert session.revision == 3
 
 
+def test_projection_session_notifies_observers_in_subscription_order() -> None:
+    session = ProjectionSession()
+    notifications: list[str] = []
+
+    session.subscribe(lambda: notifications.append("content"))
+    session.subscribe(lambda: notifications.append("scenes"))
+    session.subscribe(lambda: notifications.append("surfaces"))
+
+    session.set_state({"type": "image"})
+
+    assert notifications == ["content", "scenes", "surfaces"]
+
+
 def test_projection_session_identity_excludes_incremental_state_updates() -> None:
     session = ProjectionSession()
 

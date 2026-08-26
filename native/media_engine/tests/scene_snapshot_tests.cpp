@@ -266,6 +266,7 @@ void test_content_ingress_transport_requires_a_compatible_pixel_layout() {
         {"shared_memory_bgra", "bgra", true},     {"shared_memory_bgra", "nv12", false},
         {"shared_memory_video", "dynamic", true}, {"shared_memory_video", "bgra", false},
         {"d3d11_shared_texture", "bgra", true},   {"d3d11_shared_texture", "nv12", true},
+        {"d3d11_shared_texture", "dynamic", true},
     };
 
     for (const auto& combination : combinations) {

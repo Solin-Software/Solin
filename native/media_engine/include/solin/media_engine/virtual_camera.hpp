@@ -82,6 +82,9 @@ class VirtualCameraSink {
     VirtualCameraSink& operator=(VirtualCameraSink&&) = delete;
 
     virtual void start() = 0;
+    // Backends with an explicit consumer-presence signal override this so the
+    // renderer can keep GPU readback closed while the device is merely enabled.
+    [[nodiscard]] virtual bool has_consumer() const noexcept { return true; }
     [[nodiscard]] virtual bool publish(const VideoFrameView& frame) noexcept = 0;
     virtual void heartbeat() noexcept {}
     virtual void stop() noexcept = 0;

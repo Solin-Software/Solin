@@ -654,6 +654,11 @@ class BaseProjectionView(QWidget):
             # first restored Qt frame must enter through the fallback fade.
             self._fallback_media_entry_pending = True
 
+    @property
+    def native_output_active(self) -> bool:
+        """Whether the native renderer owns this projection surface."""
+        return self._native_output_active
+
     @Slot(QVideoFrame)
     def update_frame(self, frame: QVideoFrame) -> None:
         """Receive a video frame and display it."""

@@ -541,6 +541,8 @@ class MediaProjectionController:
             return
         context.content_frame_sink(frame)
         for projection_window in context.projection_windows():
+            if getattr(projection_window, "native_output_active", False):
+                continue
             projection_window.update_frame(frame)
 
     def project_media_at_index(

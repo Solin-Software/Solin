@@ -60,7 +60,11 @@ class ProjectionSession:
         self._revision = 0
         self._session_id = 0
         self._image_transform_animate = False
-        self._listeners: set[Callable[[], None]] = set()
+        # Projection observers form an ordered application pipeline: content
+        # identity/framing is published before scene reconciliation, which in
+        # turn precedes surface routing. A set made that order hash-dependent
+        # and turned first-frame scene changes into an intermittent race.
+        self._listeners: dict[Callable[[], None], None] = {}
         self._idle_media_path = ""
         self._tab_projection_active = False
         self._media_hidden_screen_names = set(media_hidden_screen_names)
@@ -120,10 +124,10 @@ class ProjectionSession:
         self._publish_changed()
 
     def subscribe(self, listener: Callable[[], None]) -> Callable[[], None]:
-        self._listeners.add(listener)
+        self._listeners[listener] = None
 
         def unsubscribe() -> None:
-            self._listeners.discard(listener)
+            self._listeners.pop(listener, None)
 
         return unsubscribe
 

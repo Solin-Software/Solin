@@ -92,6 +92,7 @@ from .controls import (
     projection_menu_style,
 )
 from .fullscreen import FullscreenVideoOverlay
+from .native_surface import NativeVideoSurface
 from .playlist import ProjectionPlaylistMixin, playback_order_has_pending_item
 from .preview import ImagePreviewWidget
 from solin.widgets.common.buffered_slider import BufferedSlider
@@ -111,6 +112,8 @@ class _ThemedVideoPreview(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(f"background: {PALETTE.bg0};")
         self._aspect_ratio = self._DEFAULT_ASPECT_RATIO
+        self._native_output_active = False
+        self._native_surface: NativeVideoSurface | None = None
         self._video_widget = QVideoWidget(self)
         # The child always has the video's exact aspect ratio, so the multimedia
         # backend has no letterbox pixels of its own to paint black.
@@ -123,6 +126,8 @@ class _ThemedVideoPreview(QWidget):
         )
 
     def set_frame(self, frame: QVideoFrame) -> None:
+        if self._native_output_active:
+            return
         if not frame.isValid():
             self.clear_frame()
             return
@@ -139,6 +144,41 @@ class _ThemedVideoPreview(QWidget):
 
     def clear_frame(self) -> None:
         self._video_widget.videoSink().setVideoFrame(QVideoFrame())
+
+    def set_native_output_active(self, active: bool) -> bool:
+        active = bool(active)
+        if active == self._native_output_active:
+            return False
+        self._native_output_active = active
+        if active:
+            surface = self._ensure_native_surface()
+            self.clear_frame()
+            self._video_widget.hide()
+            surface.show()
+            surface.raise_()
+        else:
+            if self._native_surface is not None:
+                self._native_surface.hide()
+            self._video_widget.show()
+        return True
+
+    @property
+    def native_output_active(self) -> bool:
+        return self._native_output_active
+
+    @property
+    def native_surface(self) -> NativeVideoSurface | None:
+        return self._native_surface
+
+    def _ensure_native_surface(self) -> NativeVideoSurface:
+        if self._native_surface is None:
+            self._native_surface = NativeVideoSurface(self)
+            self._native_surface.set_input_target(self)
+            self._native_surface.set_interaction_cursor(
+                Qt.CursorShape.PointingHandCursor
+            )
+            self._apply_video_geometry()
+        return self._native_surface
 
     def apply_theme(self) -> None:
         self.setStyleSheet(f"background: {PALETTE.bg0};")
@@ -157,7 +197,16 @@ class _ThemedVideoPreview(QWidget):
         available_height = max(0, self.height())
         if available_width == 0 or available_height == 0:
             self._video_widget.setGeometry(0, 0, 0, 0)
+            if self._native_surface is not None:
+                self._native_surface.setGeometry(0, 0, 0, 0)
             return
+        if self._native_surface is not None:
+            self._native_surface.setGeometry(
+                0,
+                0,
+                available_width,
+                available_height,
+            )
         target_width = available_width
         target_height = round(target_width / self._aspect_ratio)
         if target_height > available_height:
@@ -198,6 +247,8 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
     obs_scene_toggle_requested = Signal()    # usuário quer alternar entre cena de mídia e cena anterior
     set_as_idle_requested      = Signal(str) # path — usuário quer definir mídia como idle screen
     expanded_changed           = Signal(bool)
+    video_preview_target_changed = Signal()
+    video_frame_delivery_requirement_changed = Signal()
 
     _BAR_H = 48
 
@@ -238,6 +289,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._image_pixmap: QPixmap | None = None
         self._image_file_path: str = ""   # caminho do arquivo salvo para imagens sem URL
         self._is_audio: bool = False
+        self._video_preview_route_requested = False
         self._audio_cover_pixmap: QPixmap | None = None
         self._is_live_tab: bool = False   # True quando projetando aba ao vivo do browser
         self._fullscreen_overlay: FullscreenVideoOverlay | None = None
@@ -824,6 +876,44 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
                 video_preview.clear_frame()
         if preview_content is not None:
             preview_content.setVisible(not video_visible)
+        if video_visible != getattr(
+            self,
+            "_video_preview_route_requested",
+            False,
+        ):
+            self._video_preview_route_requested = video_visible
+            self.video_preview_target_changed.emit()
+
+    @property
+    def native_video_preview_requested(self) -> bool:
+        return getattr(self, "_video_preview_route_requested", False)
+
+    @property
+    def native_video_preview_surface(self) -> NativeVideoSurface | None:
+        preview = getattr(self, "video_preview", None)
+        return preview.native_surface if preview is not None else None
+
+    @property
+    def python_video_frame_delivery_required(self) -> bool:
+        """Whether an active Qt-only surface still needs decoded video frames."""
+
+        if self._mode != "video" or self._is_audio:
+            return False
+        if self.app_fullscreen_active():
+            return True
+        if not self._video_preview_desired():
+            return False
+        preview = getattr(self, "video_preview", None)
+        return preview is None or not preview.native_output_active
+
+    def set_native_video_preview_active(self, active: bool) -> None:
+        preview = getattr(self, "video_preview", None)
+        if preview is None:
+            return
+        effective = bool(active) and self.native_video_preview_requested
+        changed = preview.set_native_output_active(effective)
+        if changed and not effective:
+            self._present_current_video_frame()
 
     def _present_current_video_frame(self) -> None:
         if not self._video_preview_desired():
@@ -976,6 +1066,9 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         overlay.speed_selected.connect(self._set_speed)
         overlay.loop_toggled.connect(self._toggle_loop)
         overlay.playback_order_selected.connect(self._set_playback_order)
+        overlay.visibility_changed.connect(
+            self.video_frame_delivery_requirement_changed.emit
+        )
         self._fullscreen_overlay = overlay
         return overlay
 
@@ -1076,8 +1169,8 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._ensure_overlay_ready()
         self.cancel_auto_share_playback_wait()
         self._cancel_announcement_mode()
-        self._enter_mode("video")
         self._is_audio = is_audio
+        self._enter_mode("video")
         self._image_pixmap = None
         self._stop_wave_animation()   # para animação da faixa anterior (se houver)
         self._last_buffer_progress = (0, 0)

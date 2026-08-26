@@ -831,6 +831,7 @@ def test_engine_snapshot_requires_each_bus_once_and_known_scenes() -> None:
         (FrameChannelTransport.SHARED_MEMORY_VIDEO, VideoPixelFormat.BGRA, False),
         (FrameChannelTransport.D3D11_SHARED_TEXTURE, VideoPixelFormat.BGRA, True),
         (FrameChannelTransport.D3D11_SHARED_TEXTURE, VideoPixelFormat.NV12, True),
+        (FrameChannelTransport.D3D11_SHARED_TEXTURE, VideoPixelFormat.DYNAMIC, True),
     ],
 )
 def test_frame_channel_transport_requires_a_compatible_pixel_layout(

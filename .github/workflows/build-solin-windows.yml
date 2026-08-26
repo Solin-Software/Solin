@@ -94,6 +94,12 @@ jobs:
           path: build/downloads/gstreamer-1.0-msvc-x86_64-*.exe
           key: gstreamer-msvc-x86_64-${{ hashFiles('scripts/install_gstreamer_windows.ps1') }}
 
+      - name: Cache pinned Qt bridge SDK archives
+        uses: actions/cache@v4
+        with:
+          path: build/downloads/qt-bridge-sdk
+          key: qt-bridge-sdk-6.11.1-${{ hashFiles('scripts/install_qt_bridge_sdk_windows.ps1') }}
+
       - name: Build and test native media engine with GStreamer
         shell: pwsh
         run: python scripts\build_native_engine.py --configuration Release
@@ -225,6 +231,9 @@ jobs:
           }
           if (-not (Test-Path "$dist\native\media-engine\solin-media-engine.exe")) {
             throw "The native media engine was not packaged."
+          }
+          if (-not (Test-Path "$dist\native\media-engine\qt-media-bridge\solin_qt_media_bridge*.pyd")) {
+            throw "The Qt media bridge was not packaged."
           }
           if (-not (Test-Path "$dist\native\media-engine\virtual-camera\x64\solin-virtual-camera.dll") -or
               -not (Test-Path "$dist\native\media-engine\virtual-camera\x86\solin-virtual-camera.dll")) {

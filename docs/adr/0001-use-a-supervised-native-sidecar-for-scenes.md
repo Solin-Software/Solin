@@ -101,8 +101,14 @@ concrete requirement makes its broader capabilities material.
 
 - Solin owns the scene model, IPC protocol, supervisor, compositor integration, native
   presenter, and virtual-camera lifecycle.
-- The current Qt-decoded media ingress crosses shared memory and performs a D3D11 upload.
-  Shared textures remain an optimization path, not a completed capability.
+- The optimized Windows ingress isolates Qt 6.11.1 private video-buffer ABI behind a pinned
+  bridge and a separate feature flag. It transports hardware NV12 through shared D3D11
+  textures; an ABI mismatch, incompatible frame, or device failure falls back to the public
+  shared-memory path. The sidecar reports adapter/import and device-loss failures through
+  typed source health; Solin retires that bridge instance before publishing the replacement
+  descriptor so the route cannot oscillate back to an already rejected device. This removes
+  the normal CPU pixel round-trip but adds a deliberately bounded Qt-version maintenance
+  obligation.
 - Cross-process synchronization and recovery add complexity that an in-process engine does
   not have.
 - Native Scenes is Windows-only initially; Linux `v4l2loopback` and macOS CoreMediaIO output
@@ -126,9 +132,9 @@ applicable budgets and scenarios in the implementation plan, including:
 - install, update, rollback, unregister, and uninstall verification for both filter
   architectures.
 
-Keyed shared-texture ingress and editor egress remain preferred optimizations. They become
-stable-release blockers only if the compatibility transport cannot meet the measured budgets
-or required user experience.
+Keyed shared-texture editor egress remains a preferred optimization. The implemented ingress
+and its compatibility fallback become stable-release blockers only if they cannot meet the
+measured budgets or required user experience across the supported adapter and decoder matrix.
 
 ## Reconsideration triggers
 
@@ -137,8 +143,8 @@ when one or more of the following becomes true:
 
 - recording, streaming, or a broad third-party source/plugin ecosystem becomes a committed
   product requirement;
-- the native sidecar cannot meet its performance or reliability budgets after the planned
-  shared-texture work;
+- the native sidecar cannot meet its performance or reliability budgets after the implemented
+  shared-texture ingress and remaining measured output work;
 - maintaining Solin's compositor and protocol costs more than adopting and qualifying a
   broader engine;
 - the playback engine itself is intentionally replaced as a separate product decision with

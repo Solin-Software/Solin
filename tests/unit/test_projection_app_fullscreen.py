@@ -214,6 +214,67 @@ def test_video_preview_leaves_letterbox_to_the_themed_container(monkeypatch):
     assert "#f2f4f8" in preview.styleSheet()
 
 
+def test_video_preview_creates_native_surface_only_when_route_is_enabled():
+    preview = projection_bar._ThemedVideoPreview()
+    preview.resize(1000, 800)
+
+    assert preview.native_surface is None
+
+    assert preview.set_native_output_active(True) is True
+
+    assert preview.native_output_active is True
+    assert preview.native_surface is not None
+    assert preview.native_surface.geometry().width() == 1000
+    assert preview.native_surface.geometry().height() == 800
+    assert preview._video_widget.isHidden()
+
+
+def test_native_video_preview_does_not_feed_the_qt_presenter():
+    from PySide6.QtGui import QImage
+    from PySide6.QtMultimedia import QVideoFrame
+
+    preview = projection_bar._ThemedVideoPreview()
+    frame = QVideoFrame(QImage(1600, 900, QImage.Format.Format_ARGB32))
+
+    preview.set_native_output_active(True)
+    preview.set_frame(frame)
+
+    assert not preview._video_widget.videoSink().videoFrame().isValid()
+
+    preview.set_native_output_active(False)
+    preview.set_frame(frame)
+
+    assert preview._video_widget.videoSink().videoFrame().isValid()
+
+
+def test_collapsed_video_does_not_require_python_frame_delivery():
+    bar = _bar(mode="video", audio=False)
+
+    assert bar.python_video_frame_delivery_required is False
+
+
+def test_expanded_qt_preview_requires_python_frame_delivery():
+    bar = _bar(mode="video", audio=False)
+    bar._expanded = True
+    bar.video_preview = type("Preview", (), {"native_output_active": False})()
+
+    assert bar.python_video_frame_delivery_required is True
+
+
+def test_expanded_native_preview_does_not_require_python_frame_delivery():
+    bar = _bar(mode="video", audio=False)
+    bar._expanded = True
+    bar.video_preview = type("Preview", (), {"native_output_active": True})()
+
+    assert bar.python_video_frame_delivery_required is False
+
+
+def test_app_fullscreen_always_requires_python_frame_delivery():
+    bar = _bar(mode="video", audio=False, overlay=_Overlay(active=True))
+
+    assert bar.python_video_frame_delivery_required is True
+
+
 def test_recovery_feedback_is_mirrored_to_app_fullscreen():
     overlay = _Overlay(active=True)
     bar = _bar(mode="video", overlay=overlay)

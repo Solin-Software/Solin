@@ -86,10 +86,9 @@ class ProgramContentController(QObject):
         if self._closed:
             return
         media_epoch = self._session.session_id
-        self._media_epoch_sink(media_epoch)
-        self._publish_image_transform(media_epoch, animate=False, force=True)
+        self._publish_projection_identity(media_epoch)
+        self._publish_image_transform(media_epoch, animate=False)
         self._frame_sink(frame)
-        self._published_projection_session_id = media_epoch
 
     @Slot(object)
     def submit_idle_frame(self, frame: object) -> None:
@@ -139,19 +138,25 @@ class ProgramContentController(QObject):
         self._timer_widget.close()
 
     def _on_projection_changed(self) -> None:
-        if self._session.session_id == self._published_projection_session_id:
-            self._publish_image_transform(
-                self._published_projection_session_id,
-                animate=self._session.image_transform_animate,
-            )
+        media_epoch = self._session.session_id
+        self._publish_projection_identity(media_epoch)
+        self._publish_image_transform(
+            media_epoch,
+            animate=self._session.image_transform_animate,
+        )
         self.refresh()
+
+    def _publish_projection_identity(self, media_epoch: int) -> None:
+        if media_epoch == self._published_projection_session_id:
+            return
+        self._media_epoch_sink(media_epoch)
+        self._published_projection_session_id = media_epoch
 
     def _publish_image_transform(
         self,
         media_epoch: int,
         *,
         animate: bool,
-        force: bool = False,
     ) -> None:
         state = self._session.state
         transform = (
@@ -164,7 +169,7 @@ class ProgramContentController(QObject):
         canvas_width = self._width
         canvas_height = self._height
         key = (media_epoch, transform, canvas_width, canvas_height)
-        if not force and key == self._published_image_transform_key:
+        if key == self._published_image_transform_key:
             return
         self._image_transform_sink(
             transform,

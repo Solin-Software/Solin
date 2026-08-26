@@ -15,6 +15,7 @@ inline constexpr std::size_t kVirtualCameraBrokerNonceSize = 16U;
 inline constexpr std::size_t kVirtualCameraBrokerRequestSize = 32U;
 inline constexpr std::size_t kVirtualCameraBrokerResponseSize = 640U;
 inline constexpr std::size_t kVirtualCameraBrokerMaximumPathBytes = 512U;
+inline constexpr std::uint8_t kVirtualCameraBrokerPresenceMarker = 0xA5U;
 
 using VirtualCameraBrokerNonce =
     std::array<std::uint8_t, kVirtualCameraBrokerNonceSize>;

@@ -244,3 +244,43 @@ def test_program_content_keeps_retained_image_framing_stable_on_refresh() -> Non
 
     assert transforms == []
     controller.close()
+
+
+def test_program_content_does_not_republish_static_video_controls_per_frame() -> None:
+    session = ProjectionSession()
+    epochs: list[int] = []
+    transforms: list[tuple[ImageTransform | None, dict[str, object]]] = []
+    frames: list[object] = []
+    controller = ProgramContentController(
+        session,
+        _FontManager(),
+        frames.append,
+        lambda: ("", "", ""),
+        media_epoch_sink=epochs.append,
+        image_transform_sink=lambda transform, **options: transforms.append(
+            (transform, options)
+        ),
+        width=320,
+        height=180,
+    )
+    session.set_state({"type": "video"})
+    first = object()
+    second = object()
+
+    controller.submit_frame(first)
+    controller.submit_frame(second)
+
+    assert epochs == [1]
+    assert transforms == [
+        (
+            None,
+            {
+                "media_epoch": 1,
+                "canvas_width": 320,
+                "canvas_height": 180,
+                "animate": False,
+            },
+        )
+    ]
+    assert frames == [first, second]
+    controller.close()

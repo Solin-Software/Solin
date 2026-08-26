@@ -225,11 +225,11 @@ class FrameChannelDescriptor:
             and self.pixel_format is not VideoPixelFormat.DYNAMIC
         ):
             raise ValueError("Dynamic shared-memory channels require dynamic pixels")
-        if (
-            self.transport is not FrameChannelTransport.SHARED_MEMORY_VIDEO
-            and self.pixel_format is VideoPixelFormat.DYNAMIC
-        ):
-            raise ValueError("Dynamic pixels require a dynamic shared-memory channel")
+        if self.pixel_format is VideoPixelFormat.DYNAMIC and self.transport not in {
+            FrameChannelTransport.SHARED_MEMORY_VIDEO,
+            FrameChannelTransport.D3D11_SHARED_TEXTURE,
+        }:
+            raise ValueError("Dynamic pixels require a dynamic video channel")
         if not isinstance(self.color_space, VideoColorSpace):
             raise ValueError("Invalid frame color space")
         if not isinstance(self.color_range, VideoColorRange):

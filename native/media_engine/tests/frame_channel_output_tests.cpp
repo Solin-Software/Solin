@@ -38,7 +38,9 @@ void expect(const bool condition, const char* const description) {
 
 class AdvancingRenderer final : public solin::media_engine::SceneRenderer {
   public:
-    explicit AdvancingRenderer(const solin::media_engine::OutputBus bus) : bus_(bus) {}
+    explicit AdvancingRenderer(const solin::media_engine::OutputBus bus,
+                               const bool static_frame = false)
+        : bus_(bus), static_frame_(static_frame) {}
 
     [[nodiscard]] std::shared_ptr<solin::media_engine::PreparedSceneRenderGraph>
     prepare(const solin::media_engine::SceneRenderPreparation&) override {
@@ -93,15 +95,21 @@ class AdvancingRenderer final : public solin::media_engine::SceneRenderer {
         return {};
     }
 
-    [[nodiscard]] std::optional<std::uint64_t>
+    [[nodiscard]] std::optional<solin::media_engine::SceneOutputFrameCursor>
     visit_latest_frame(
-        const solin::media_engine::OutputBus bus, std::uint64_t,
+        const solin::media_engine::OutputBus bus,
+        const solin::media_engine::SceneOutputFrameCursor after,
         const solin::media_engine::VideoFrameVisitor& visitor) const noexcept override {
         if (bus != bus_) {
             return std::nullopt;
         }
         try {
-            const auto sequence = next_sequence_.fetch_add(1U) + 1U;
+            ++visit_attempts_;
+            const auto sequence =
+                static_frame_ ? 1U : next_sequence_.fetch_add(1U) + 1U;
+            if (sequence <= after.frame_sequence) {
+                return std::nullopt;
+            }
             const auto layout = solin::media_engine::packed_video_frame_layout(
                 2U, 2U, solin::media_engine::VideoFramePixelFormat::bgra);
             const solin::media_engine::PackedVideoFrame frame{
@@ -115,14 +123,18 @@ class AdvancingRenderer final : public solin::media_engine::SceneRenderer {
                 .bytes = std::vector<std::uint8_t>(layout.payload_size, 0x5AU),
             };
             visitor(solin::media_engine::video_frame_view(frame));
-            return sequence;
+            return solin::media_engine::SceneOutputFrameCursor{
+                .route_generation = 1U,
+                .frame_sequence = sequence,
+            };
         } catch (...) {
             return std::nullopt;
         }
     }
 
     [[nodiscard]] bool wait_for_frame(
-        const solin::media_engine::OutputBus bus, std::uint64_t,
+        const solin::media_engine::OutputBus bus,
+        solin::media_engine::SceneOutputFrameCursor,
         const std::stop_token stop_token,
         const std::chrono::steady_clock::time_point deadline) const noexcept override {
         if (bus != bus_) {
@@ -142,9 +154,15 @@ class AdvancingRenderer final : public solin::media_engine::SceneRenderer {
 
     void shutdown() noexcept override {}
 
+    [[nodiscard]] std::uint64_t visit_attempts() const noexcept {
+        return visit_attempts_.load();
+    }
+
   private:
     solin::media_engine::OutputBus bus_{solin::media_engine::OutputBus::media_windows};
+    bool static_frame_{false};
     mutable std::atomic_uint64_t next_sequence_{0U};
+    mutable std::atomic_uint64_t visit_attempts_{0U};
     std::atomic_bool system_memory_output_enabled_{false};
 };
 
@@ -256,8 +274,25 @@ class TestFrameChannel final {
         return sequence;
     }
 
+    [[nodiscard]] bool hold_writer_mutex() {
+        if (mutex_held_) {
+            return true;
+        }
+        const auto result = WaitForSingleObject(mutex_, INFINITE);
+        mutex_held_ = result == WAIT_OBJECT_0 || result == WAIT_ABANDONED;
+        return mutex_held_;
+    }
+
+    void release_writer_mutex() noexcept {
+        if (mutex_held_) {
+            static_cast<void>(ReleaseMutex(mutex_));
+            mutex_held_ = false;
+        }
+    }
+
   private:
     void close() noexcept {
+        release_writer_mutex();
         if (view_ != nullptr) {
             static_cast<void>(UnmapViewOfFile(view_));
             view_ = nullptr;
@@ -281,6 +316,7 @@ class TestFrameChannel final {
     HANDLE mutex_{nullptr};
     HANDLE event_{nullptr};
     std::uint8_t* view_{nullptr};
+    bool mutex_held_{false};
 };
 
 [[nodiscard]] solin::media_engine::SceneOutputDefinition preview_output() {
@@ -359,6 +395,30 @@ void test_uncapped_frame_channel_preserves_existing_behavior() {
            "omitting a cadence limit preserves the full latest-frame pump");
 }
 
+void test_static_frame_retries_after_transient_reader_contention() {
+    TestFrameChannel channel;
+    auto renderer = std::make_shared<AdvancingRenderer>(
+        solin::media_engine::OutputBus::media_windows, true);
+    solin::media_engine::FrameChannelOutputController controller{
+        renderer, solin::media_engine::OutputBus::media_windows};
+    expect(controller.configure(channel.configuration(), preview_output()),
+           "the static frame channel configures");
+    expect(channel.hold_writer_mutex(),
+           "the test owns the reader mutex before publication");
+    expect(controller.set_enabled(true), "the static frame channel starts");
+    const auto attempted_deadline = std::chrono::steady_clock::now() + 500ms;
+    while (renderer->visit_attempts() == 0U &&
+           std::chrono::steady_clock::now() < attempted_deadline) {
+        std::this_thread::sleep_for(1ms);
+    }
+    expect(renderer->visit_attempts() != 0U,
+           "publication is attempted while the reader owns the mutex");
+    channel.release_writer_mutex();
+    expect(wait_for_first_frame(channel),
+           "a rejected static frame is retried without a newer renderer revision");
+    controller.shutdown();
+}
+
 #endif
 
 } // namespace
@@ -368,6 +428,7 @@ int main() {
 #ifdef _WIN32
     test_preview_publication_samples_latest_frames_at_thirty_fps();
     test_uncapped_frame_channel_preserves_existing_behavior();
+    test_static_frame_retries_after_transient_reader_contention();
 #endif
     return failures == 0 ? 0 : 1;
 }

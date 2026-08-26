@@ -1,6 +1,8 @@
 #include "solin/media_engine/virtual_camera_output.hpp"
 
+#include <algorithm>
 #include <chrono>
+#include <condition_variable>
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -32,6 +34,7 @@ namespace {
 }
 
 constexpr auto kHeartbeatInterval = std::chrono::milliseconds{500};
+constexpr auto kConsumerProbeInterval = std::chrono::milliseconds{50};
 
 } // namespace
 
@@ -147,23 +150,39 @@ class VirtualCameraOutputController::Impl final {
         }
         std::shared_ptr<VirtualCameraSink> next_sink{std::move(unique_sink)};
         next_sink->start();
-        set_system_memory_output_enabled_locked(true);
         try {
             pump_ = std::jthread(
                 [renderer = renderer_, sink = next_sink](
                     const std::stop_token stop_token) {
-                    std::uint64_t last_sequence = 0U;
+                    SceneOutputFrameCursor cursor{};
+                    bool system_memory_requested = false;
+                    std::mutex consumer_probe_mutex;
+                    std::condition_variable_any consumer_probe_wakeup;
                     auto next_heartbeat =
                         std::chrono::steady_clock::now() + kHeartbeatInterval;
                     while (!stop_token.stop_requested()) {
+                        const auto consumer_present = sink->has_consumer();
+                        const auto requires_system_memory = consumer_present;
+                        if (requires_system_memory != system_memory_requested) {
+                            renderer->set_system_memory_output_enabled(
+                                OutputBus::virtual_camera,
+                                SystemMemoryOutputConsumer::virtual_camera,
+                                requires_system_memory);
+                            system_memory_requested = requires_system_memory;
+                        }
                         bool published = false;
-                        if (auto sequence = renderer->visit_latest_frame(
-                                OutputBus::virtual_camera, last_sequence,
-                                [&sink, &published](const VideoFrameView& frame) {
-                                    published = sink->publish(frame);
-                                });
-                            sequence.has_value()) {
-                            last_sequence = sequence.value();
+                        bool publication_rejected = false;
+                        if (consumer_present) {
+                            const auto sequence = renderer->visit_latest_frame(
+                                    OutputBus::virtual_camera, cursor,
+                                    [&sink, &published](const VideoFrameView& frame) {
+                                        published = sink->publish(frame);
+                                    });
+                            if (sequence.has_value() && published) {
+                                cursor = sequence.value();
+                            }
+                            publication_rejected =
+                                sequence.has_value() && !published;
                         }
                         const auto now = std::chrono::steady_clock::now();
                         if (published) {
@@ -172,13 +191,32 @@ class VirtualCameraOutputController::Impl final {
                             sink->heartbeat();
                             next_heartbeat = now + kHeartbeatInterval;
                         }
-                        static_cast<void>(renderer->wait_for_frame(
-                            OutputBus::virtual_camera, last_sequence, stop_token,
-                            next_heartbeat));
+                        const auto next_probe = now + kConsumerProbeInterval;
+                        const auto wake_deadline =
+                            (std::min)(next_heartbeat, next_probe);
+                        if (consumer_present && !publication_rejected) {
+                            static_cast<void>(renderer->wait_for_frame(
+                                OutputBus::virtual_camera, cursor,
+                                stop_token, wake_deadline));
+                        } else {
+                            // No frame can satisfy a demand probe. Likewise, a
+                            // rejected publication must retain its renderer
+                            // sequence and retry on a bounded cadence; waiting on
+                            // that unchanged sequence would return immediately
+                            // and spin a core.
+                            std::unique_lock lock{consumer_probe_mutex};
+                            static_cast<void>(consumer_probe_wakeup.wait_until(
+                                lock, stop_token, wake_deadline,
+                                [] { return false; }));
+                        }
+                    }
+                    if (system_memory_requested) {
+                        renderer->set_system_memory_output_enabled(
+                            OutputBus::virtual_camera,
+                            SystemMemoryOutputConsumer::virtual_camera, false);
                     }
                 });
         } catch (...) {
-            set_system_memory_output_enabled_locked(false);
             next_sink->stop();
             throw;
         }
@@ -197,19 +235,11 @@ class VirtualCameraOutputController::Impl final {
             sink_->stop();
             sink_.reset();
         }
-        set_system_memory_output_enabled_locked(false);
-        health_.state = VirtualCameraSinkState::stopped;
-        health_.error_code.clear();
-    }
-
-    void set_system_memory_output_enabled_locked(const bool enabled) noexcept {
-        if (system_memory_output_enabled_ == enabled) {
-            return;
-        }
         renderer_->set_system_memory_output_enabled(
             OutputBus::virtual_camera,
-            SystemMemoryOutputConsumer::virtual_camera, enabled);
-        system_memory_output_enabled_ = enabled;
+            SystemMemoryOutputConsumer::virtual_camera, false);
+        health_.state = VirtualCameraSinkState::stopped;
+        health_.error_code.clear();
     }
 
     void record_failure(const std::string_view error_code) noexcept {
@@ -229,7 +259,6 @@ class VirtualCameraOutputController::Impl final {
     mutable std::mutex mutex_{};
     std::optional<VirtualCameraConfiguration> configuration_{};
     bool desired_enabled_{false};
-    bool system_memory_output_enabled_{false};
     std::shared_ptr<VirtualCameraSink> sink_{};
     std::jthread pump_{};
     VirtualCameraSinkHealth health_{};

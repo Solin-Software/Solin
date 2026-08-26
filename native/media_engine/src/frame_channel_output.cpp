@@ -17,6 +17,7 @@ namespace solin::media_engine {
 namespace {
 
 constexpr auto kFrameWaitWatchdog = std::chrono::seconds{1};
+constexpr auto kPublicationRetryInterval = std::chrono::milliseconds{1};
 
 [[nodiscard]] bool valid_configuration(
     const FrameChannelConfiguration& channel,
@@ -126,7 +127,7 @@ class FrameChannelOutputController::Impl final {
                 [renderer = renderer_, writer = next_writer, bus = bus_,
                  minimum_publication_interval](
                     const std::stop_token stop_token) {
-                std::uint64_t last_sequence = 0U;
+                SceneOutputFrameCursor cursor{};
                 auto next_publication_at = std::chrono::steady_clock::time_point::min();
                 std::mutex cadence_mutex;
                 std::condition_variable_any cadence_wakeup;
@@ -140,8 +141,8 @@ class FrameChannelOutputController::Impl final {
                     }
                     std::exception_ptr failure;
                     bool published = false;
-                    if (auto sequence = renderer->visit_latest_frame(
-                            bus, last_sequence,
+                    const auto sequence = renderer->visit_latest_frame(
+                            bus, cursor,
                             [&writer, &failure, &published](
                                 const VideoFrameView& frame) {
                                 try {
@@ -150,11 +151,23 @@ class FrameChannelOutputController::Impl final {
                                     failure = std::current_exception();
                                 }
                             });
-                        sequence.has_value()) {
-                        last_sequence = sequence.value();
+                    if (sequence.has_value() && published) {
+                        cursor = sequence.value();
                     }
                     if (failure != nullptr) {
                         return;
+                    }
+                    if (sequence.has_value() && !published) {
+                        // A reader briefly owns the cross-process mutex, or all
+                        // bounded slots are still leased. The renderer revision
+                        // remains the latest authoritative frame; acknowledging
+                        // it here would discard a static image forever because
+                        // no later producer revision is guaranteed.
+                        std::unique_lock lock{cadence_mutex};
+                        static_cast<void>(cadence_wakeup.wait_for(
+                            lock, stop_token, kPublicationRetryInterval,
+                            [] { return false; }));
+                        continue;
                     }
                     if (published && minimum_publication_interval.count() > 0) {
                         const auto published_at = std::chrono::steady_clock::now();
@@ -178,7 +191,7 @@ class FrameChannelOutputController::Impl final {
                     const auto deadline =
                         std::chrono::steady_clock::now() + kFrameWaitWatchdog;
                     static_cast<void>(renderer->wait_for_frame(
-                        bus, last_sequence, stop_token, deadline));
+                        bus, cursor, stop_token, deadline));
                 }
                 });
         } catch (...) {

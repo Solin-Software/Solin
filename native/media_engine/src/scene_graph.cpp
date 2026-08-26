@@ -17,8 +17,7 @@ namespace solin::media_engine {
 namespace {
 
 constexpr std::size_t kOutputBusCount = 2U;
-constexpr auto kRetiredGraphReleaseDelay = std::chrono::seconds{3};
-constexpr std::size_t kMaximumRetiredGraphs = 16U;
+constexpr auto kContentIngressHandoffTimeout = std::chrono::seconds{3};
 
 [[nodiscard]] std::size_t bus_index(const OutputBus bus) noexcept {
     return static_cast<std::size_t>(bus);
@@ -31,9 +30,33 @@ constexpr std::size_t kMaximumRetiredGraphs = 16U;
 }
 
 [[nodiscard]] bool same_document_definition(const SceneHydrationSnapshot& left,
-                                            const SceneHydrationSnapshot& right) {
-    return left.document_id == right.document_id && left.sources == right.sources &&
+                                             const SceneHydrationSnapshot& right) {
+    return left.document_id == right.document_id &&
+           std::ranges::equal(left.sources, right.sources,
+                              same_scene_document_source_definition) &&
            left.scenes == right.scenes && left.outputs == right.outputs;
+}
+
+[[nodiscard]] const SceneSource*
+content_source(const SceneHydrationSnapshot& snapshot) noexcept {
+    const auto source = std::ranges::find_if(
+        snapshot.sources, [](const auto& candidate) {
+            return candidate.id == kSolinContentSourceId &&
+                   candidate.kind == SceneSourceKind::solin_content;
+        });
+    return source == snapshot.sources.end() ? nullptr : &*source;
+}
+
+[[nodiscard]] bool content_ingress_changed(
+    const SceneHydrationSnapshot* previous,
+    const SceneHydrationSnapshot& next) noexcept {
+    if (previous == nullptr) {
+        return false;
+    }
+    const auto* previous_source = content_source(*previous);
+    const auto* next_source = content_source(next);
+    return previous_source != nullptr && next_source != nullptr &&
+           previous_source->frame_channel != next_source->frame_channel;
 }
 
 class SceneCompiler final {
@@ -175,29 +198,25 @@ class SceneGraphRuntime::Impl final {
         std::shared_ptr<PreparedSceneRenderGraph> transition_output{};
     };
 
-    class DeferredReleaseQueue final {
+    class RetiredGraphCache final {
       public:
-        DeferredReleaseQueue() : worker_([this] { run(); }) {}
-        ~DeferredReleaseQueue() { close(); }
+        RetiredGraphCache() : worker_([this] { run(); }) {}
+        ~RetiredGraphCache() { close(); }
 
-        DeferredReleaseQueue(const DeferredReleaseQueue&) = delete;
-        DeferredReleaseQueue& operator=(const DeferredReleaseQueue&) = delete;
+        RetiredGraphCache(const RetiredGraphCache&) = delete;
+        RetiredGraphCache& operator=(const RetiredGraphCache&) = delete;
 
-        void defer(PreparedScene scene) {
+        void cache(PreparedScene scene) {
             {
                 std::scoped_lock lock{mutex_};
                 if (closed_) {
                     throw std::logic_error("scene release queue is closed");
                 }
-                entries_.push_back({
-                    .release_at = std::chrono::steady_clock::now() +
-                                  kRetiredGraphReleaseDelay,
-                    .scene = std::move(scene),
-                });
-                if (entries_.size() > kMaximumRetiredGraphs) {
-                    entries_.front().release_at =
-                        std::chrono::steady_clock::time_point::min();
+                auto& retained = entries_[bus_index(scene.receipt.bus)];
+                if (retained.has_value()) {
+                    releases_.push_back(std::move(retained.value()));
                 }
+                retained.emplace(std::move(scene));
             }
             wakeup_.notify_one();
         }
@@ -208,20 +227,44 @@ class SceneGraphRuntime::Impl final {
             std::optional<PreparedScene> reclaimed;
             {
                 std::scoped_lock lock{mutex_};
-                const auto candidate = std::ranges::find_if(
-                    entries_, [bus, scene_id, document_revision](const Entry& entry) {
-                        return entry.scene.receipt.bus == bus &&
-                               entry.scene.receipt.scene_id == scene_id &&
-                               entry.scene.document_revision == document_revision;
-                    });
-                if (candidate == entries_.end()) {
+                auto& candidate = entries_[bus_index(bus)];
+                if (!candidate.has_value() ||
+                    candidate->receipt.scene_id != scene_id ||
+                    candidate->document_revision != document_revision) {
                     return {};
                 }
-                reclaimed.emplace(std::move(candidate->scene));
-                entries_.erase(candidate);
+                reclaimed.emplace(std::move(candidate.value()));
+                candidate.reset();
             }
-            wakeup_.notify_one();
             return reclaimed;
+        }
+
+        void discard(PreparedScene scene) noexcept {
+            try {
+                {
+                    std::scoped_lock lock{mutex_};
+                    releases_.push_back(std::move(scene));
+                }
+                wakeup_.notify_one();
+            } catch (...) {
+            }
+        }
+
+        void clear_cache() noexcept {
+            try {
+                {
+                    std::scoped_lock lock{mutex_};
+                    for (auto& retained : entries_) {
+                        if (!retained.has_value()) {
+                            continue;
+                        }
+                        releases_.push_back(std::move(retained.value()));
+                        retained.reset();
+                    }
+                }
+                wakeup_.notify_one();
+            } catch (...) {
+            }
         }
 
         void close() noexcept {
@@ -231,6 +274,12 @@ class SceneGraphRuntime::Impl final {
                     return;
                 }
                 closed_ = true;
+                for (auto& retained : entries_) {
+                    if (retained.has_value()) {
+                        releases_.push_back(std::move(retained.value()));
+                        retained.reset();
+                    }
+                }
             }
             wakeup_.notify_all();
             if (worker_.joinable()) {
@@ -239,32 +288,22 @@ class SceneGraphRuntime::Impl final {
         }
 
       private:
-        struct Entry final {
-            std::chrono::steady_clock::time_point release_at{};
-            PreparedScene scene{};
-        };
-
         void run() noexcept {
             while (true) {
-                std::optional<Entry> released;
+                std::optional<PreparedScene> released;
                 {
                     std::unique_lock lock{mutex_};
-                    if (entries_.empty() && !closed_) {
-                        wakeup_.wait(lock,
-                                     [this] { return closed_ || !entries_.empty(); });
-                    }
-                    if (entries_.empty() && closed_) {
-                        return;
-                    }
-                    if (!closed_) {
-                        const auto deadline = entries_.front().release_at;
-                        if (std::chrono::steady_clock::now() < deadline) {
-                            wakeup_.wait_until(lock, deadline);
-                            continue;
+                    wakeup_.wait(lock, [this] {
+                        return closed_ || !releases_.empty();
+                    });
+                    if (releases_.empty()) {
+                        if (closed_) {
+                            return;
                         }
+                        continue;
                     }
-                    released.emplace(std::move(entries_.front()));
-                    entries_.pop_front();
+                    released.emplace(std::move(releases_.front()));
+                    releases_.pop_front();
                 }
                 // Prepared render graphs must be destroyed before their source
                 // leases. PreparedScene's member order guarantees that here,
@@ -275,7 +314,8 @@ class SceneGraphRuntime::Impl final {
 
         std::mutex mutex_{};
         std::condition_variable wakeup_{};
-        std::deque<Entry> entries_{};
+        std::array<std::optional<PreparedScene>, kOutputBusCount> entries_{};
+        std::deque<PreparedScene> releases_{};
         bool closed_{false};
         std::thread worker_{};
     };
@@ -288,23 +328,42 @@ class SceneGraphRuntime::Impl final {
                    }),
           renderer(std::move(renderer_value)) {}
 
-    void defer_release(std::optional<PreparedScene>& scene) {
+    static void stop_transition(PreparedScene& scene) noexcept {
+        if (scene.transition_output != nullptr) {
+            scene.transition_output->stop();
+        }
+    }
+
+    static void quiesce(PreparedScene& scene) noexcept {
+        stop_transition(scene);
+        if (scene.render_graph != nullptr) {
+            scene.render_graph->set_direct_output_enabled(false);
+            scene.render_graph->set_rendering_enabled(false);
+        }
+    }
+
+    void cache_active(std::optional<PreparedScene>& scene) {
         if (!scene.has_value()) {
             return;
         }
-        if (scene->transition_output != nullptr) {
-            scene->transition_output->stop();
-        }
-        deferred_releases.defer(std::move(scene.value()));
+        quiesce(scene.value());
+        deferred_releases.cache(std::move(scene.value()));
         scene.reset();
     }
 
-    void defer_all_pending() {
+    void discard(std::optional<PreparedScene>& scene) noexcept {
+        if (!scene.has_value()) {
+            return;
+        }
+        quiesce(scene.value());
+        deferred_releases.discard(std::move(scene.value()));
+        scene.reset();
+    }
+
+    void discard_all_pending() noexcept {
         for (auto& [_, scene] : pending_by_token) {
-            if (scene.transition_output != nullptr) {
-                scene.transition_output->stop();
-            }
-            deferred_releases.defer(std::move(scene));
+            quiesce(scene);
+            deferred_releases.discard(std::move(scene));
         }
         pending_by_token.clear();
         token_by_request.clear();
@@ -338,9 +397,27 @@ class SceneGraphRuntime::Impl final {
         }
         auto token = next_token();
         if (source_update == nullptr) {
-            if (auto retained = deferred_releases.reclaim(
-                    bus, scene_id, expected_document_revision);
-                retained.has_value()) {
+            while (auto retained = deferred_releases.reclaim(
+                       bus, scene_id, expected_document_revision)) {
+                const auto current_sources = std::ranges::all_of(
+                    retained->render_resources->source_leases,
+                    [this](const SourceLease& lease) {
+                        return registry.is_current(lease);
+                    });
+                if (!current_sources) {
+                    // Runtime transport changes are intentionally independent
+                    // from the authored document revision. A recently retired
+                    // graph can therefore match the same scene while still
+                    // owning the previous content channel generation. Destroy
+                    // that graph now; reclaiming it would route Program back to
+                    // stale decoder pixels.
+                    deferred_releases.discard(std::move(retained.value()));
+                    continue;
+                }
+                if (retained->render_graph != nullptr) {
+                    retained->render_graph->set_direct_output_enabled(false);
+                    retained->render_graph->set_rendering_enabled(true);
+                }
                 retained->receipt.preparation_token = token;
                 retained->request_id = std::string{request_id};
                 retained->graph = graph->second;
@@ -465,10 +542,8 @@ class SceneGraphRuntime::Impl final {
                 continue;
             }
             token_by_request.erase(iterator->second.request_id);
-            if (iterator->second.transition_output != nullptr) {
-                iterator->second.transition_output->stop();
-            }
-            deferred_releases.defer(std::move(iterator->second));
+            quiesce(iterator->second);
+            deferred_releases.discard(std::move(iterator->second));
             iterator = pending_by_token.erase(iterator);
         }
     }
@@ -477,7 +552,7 @@ class SceneGraphRuntime::Impl final {
     bool closed{false};
     SourceRegistry registry;
     std::shared_ptr<SceneRenderer> renderer{};
-    DeferredReleaseQueue deferred_releases{};
+    RetiredGraphCache deferred_releases{};
     std::shared_ptr<const CompiledSceneDocument> document{};
     std::shared_ptr<const SceneHydrationSnapshot> applied_snapshot{};
     std::array<std::optional<PreparedScene>, kOutputBusCount> active{};
@@ -528,12 +603,31 @@ void SceneGraphRuntime::hydrate(const SceneHydrationSnapshot& snapshot,
     }
 
     std::array<std::optional<Impl::PreparedScene>, kOutputBusCount> next_active{};
+    const bool require_content_handoff_output =
+        content_ingress_changed(impl_->applied_snapshot.get(), snapshot);
     for (std::size_t index = 0U; index < kOutputBusCount; ++index) {
         const auto bus = static_cast<OutputBus>(index);
         next_active[index].emplace(impl_->prepare_graph(
             bus, snapshot.active_scene_ids[index], snapshot.document_revision,
             index == 0U ? "hydrate-media-windows" : "hydrate-virtual-camera", next_document,
             snapshot.outputs[index], {}, &source_update.value()));
+    }
+    if (require_content_handoff_output && impl_->renderer != nullptr) {
+        const auto deadline = std::chrono::steady_clock::now() +
+                              kContentIngressHandoffTimeout;
+        for (std::size_t index = 0U; index < kOutputBusCount; ++index) {
+            const auto& graph = next_active[index]->render_graph;
+            const auto ready = index == bus_index(OutputBus::virtual_camera)
+                                   ? graph->wait_for_gpu_frame(
+                                         0U, std::stop_token{}, deadline)
+                                   : graph->wait_for_frame(
+                                         0U, std::stop_token{}, deadline);
+            if (!ready) {
+                throw SceneGraphError{
+                    "content_ingress_output_unavailable",
+                    "The replacement content route did not produce its first output"};
+            }
+        }
     }
     try {
         source_update->commit();
@@ -548,9 +642,10 @@ void SceneGraphRuntime::hydrate(const SceneHydrationSnapshot& snapshot,
         }
         impl_->renderer->commit_hydration(render_graphs, snapshot.render_enabled, sequence);
     }
-    impl_->defer_all_pending();
+    impl_->discard_all_pending();
+    impl_->deferred_releases.clear_cache();
     for (auto& active : impl_->active) {
-        impl_->defer_release(active);
+        impl_->discard(active);
     }
     impl_->active = std::move(next_active);
     impl_->outputs_enabled = snapshot.render_enabled;
@@ -636,12 +731,21 @@ void SceneGraphRuntime::take(const OutputBus bus, const std::string_view scene_i
     auto committed = std::move(pending->second);
     impl_->pending_by_token.erase(pending);
     impl_->token_by_request.erase(committed.request_id);
-    impl_->defer_release(impl_->active[index]);
+    auto previous = std::move(impl_->active[index]);
+    if (previous.has_value()) {
+        // Retargeting replaces the ephemeral compositor, but the stable scene
+        // graph remains an input until commit_take has acquired the new A/B.
+        Impl::stop_transition(previous.value());
+    }
     if (impl_->renderer != nullptr) {
         impl_->renderer->commit_take(bus, committed.render_graph,
                                      committed.transition_output, sequence);
     }
     impl_->active[index] = std::move(committed);
+    // The transition renderer must acquire and start its A/B ownership before
+    // the scene runtime pauses the former on-air graph. Retiring first leaves
+    // video transitions dependent on a coincidentally retained last frame.
+    impl_->cache_active(previous);
     impl_->last_mutation_sequence = sequence;
 }
 
@@ -657,10 +761,8 @@ void SceneGraphRuntime::cancel(const std::string_view request_id) noexcept {
         }
         const auto pending = impl_->pending_by_token.find(token->second);
         if (pending != impl_->pending_by_token.end()) {
-            if (pending->second.transition_output != nullptr) {
-                pending->second.transition_output->stop();
-            }
-            impl_->deferred_releases.defer(std::move(pending->second));
+            Impl::quiesce(pending->second);
+            impl_->deferred_releases.discard(std::move(pending->second));
             impl_->pending_by_token.erase(pending);
         }
         impl_->token_by_request.erase(token);
@@ -745,7 +847,7 @@ void SceneGraphRuntime::shutdown() noexcept {
                 return;
             }
             impl_->closed = true;
-            impl_->defer_all_pending();
+            impl_->discard_all_pending();
             renderer = impl_->renderer;
         }
         // Active leases stay alive until the renderer has stopped every graph
@@ -756,8 +858,9 @@ void SceneGraphRuntime::shutdown() noexcept {
         {
             std::scoped_lock lock{impl_->mutex};
             for (auto& active : impl_->active) {
-                impl_->defer_release(active);
+                impl_->discard(active);
             }
+            impl_->deferred_releases.clear_cache();
             impl_->document.reset();
             impl_->applied_snapshot.reset();
             impl_->renderer.reset();

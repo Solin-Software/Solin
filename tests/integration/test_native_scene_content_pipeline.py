@@ -1,19 +1,21 @@
 from __future__ import annotations
+import os
 import sys
 import time
+from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import QSize
+from PySide6.QtCore import QCoreApplication, QSize, Qt, QUrl
 from PySide6.QtGui import QColor, QImage
-from PySide6.QtMultimedia import QVideoFrame, QVideoFrameFormat
+from PySide6.QtMultimedia import QMediaPlayer, QVideoFrame, QVideoFrameFormat, QVideoSink
 
 from solin.controllers.content_frame_ingress_controller import (
     ContentFrameIngressController,
 )
 from solin.core.projection.image_framing import ImageTransform
-from solin.core.scenes.engine import SceneEngineSnapshot
+from solin.core.scenes.engine import FrameChannelTransport, SceneEngineSnapshot
 from solin.core.scenes.frame_channel import (
     SharedMemoryBgraFrameSubscriber,
     SharedMemoryVideoFrameSubscriber,
@@ -22,8 +24,11 @@ from solin.core.scenes.frame_channel import (
 from solin.core.scenes.model import (
     BusId,
     CONTENT_SOURCE_ID,
+    NO_SIGNAL_SOURCE_ID,
     SceneDefinition,
     SceneDocument,
+    TransitionKind,
+    TransitionSpec,
     VideoPixelFormat,
 )
 from solin.core.scenes.native_engine import create_native_scene_engine
@@ -33,9 +38,109 @@ from solin.core.scenes.presets import SceneSeedNames, create_default_scene_docum
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
 
+def _wait_for(
+    predicate: Callable[[], bool],
+    *,
+    application: QCoreApplication | None = None,
+    timeout: float = 5.0,
+) -> bool:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if application is not None:
+            application.processEvents()
+        if predicate():
+            return True
+        time.sleep(1 / 240)
+    return False
+
+
 def _bgra_pixel(frame: VideoFrame, x: int, y: int) -> bytes:
     offset = (y * frame.width + x) * 4
     return frame.pixels[offset : offset + 4]
+
+
+def _nv12_pixel_is_green(frame: VideoFrame, x: int, y: int) -> bool:
+    if frame.pixel_format is not VideoPixelFormat.NV12:
+        return False
+    luma = frame.pixels[y * frame.width + x]
+    chroma_offset = frame.width * frame.height + (y // 2) * frame.width + (x // 2) * 2
+    blue_chroma = frame.pixels[chroma_offset]
+    red_chroma = frame.pixels[chroma_offset + 1]
+    return 130 <= luma <= 190 and 65 <= blue_chroma <= 125 and 20 <= red_chroma <= 90
+
+
+def _nv12_pixel_is_red(frame: VideoFrame, x: int, y: int) -> bool:
+    if frame.pixel_format is not VideoPixelFormat.NV12:
+        return False
+    luma = frame.pixels[y * frame.width + x]
+    chroma_offset = frame.width * frame.height + (y // 2) * frame.width + (x // 2) * 2
+    blue_chroma = frame.pixels[chroma_offset]
+    red_chroma = frame.pixels[chroma_offset + 1]
+    return 45 <= luma <= 115 and 90 <= blue_chroma <= 140 and 170 <= red_chroma <= 245
+
+
+def _wait_for_raw_and_program_color(
+    raw: SharedMemoryBgraFrameSubscriber,
+    program: SharedMemoryVideoFrameSubscriber,
+    *,
+    raw_bgra: bytes,
+    program_match: Callable[[VideoFrame, int, int], bool],
+    raw_after: int = 0,
+    program_after: int = 0,
+    raw_samples: list[bytes] | None = None,
+    timeout: float = 5.0,
+) -> tuple[VideoFrame | None, VideoFrame | None]:
+    raw_output = None
+    program_output = None
+    sampled_raw_sequence = raw_after
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            raw_candidate = raw.read_latest()
+        except TimeoutError:
+            raw_candidate = None
+        try:
+            program_candidate = program.read_latest()
+        except TimeoutError:
+            program_candidate = None
+        if (
+            raw_samples is not None
+            and raw_candidate is not None
+            and raw_candidate.sequence > sampled_raw_sequence
+        ):
+            sampled_raw_sequence = raw_candidate.sequence
+            raw_samples.append(
+                _bgra_pixel(
+                    raw_candidate,
+                    raw_candidate.width // 2,
+                    raw_candidate.height // 2,
+                )
+            )
+        if (
+            raw_candidate is not None
+            and raw_candidate.sequence > raw_after
+            and _bgra_pixel(
+                raw_candidate,
+                raw_candidate.width // 2,
+                raw_candidate.height // 2,
+            )
+            == raw_bgra
+        ):
+            raw_output = raw_candidate
+        if (
+            program_candidate is not None
+            and program_candidate.sequence > program_after
+            and program_match(
+                program_candidate,
+                program_candidate.width // 2,
+                program_candidate.height // 2,
+            )
+        ):
+            program_output = program_candidate
+        if raw_output is not None and program_output is not None:
+            break
+        time.sleep(1 / 240)
+    return raw_output, program_output
 
 
 def _wait_for_pixel(
@@ -44,6 +149,7 @@ def _wait_for_pixel(
     x: int,
     y: int,
     expected: bytes,
+    after_sequence: int = 0,
     timeout: float = 5.0,
 ) -> VideoFrame | None:
     deadline = time.monotonic() + timeout
@@ -52,7 +158,7 @@ def _wait_for_pixel(
             candidate = subscriber.read_latest()
         except TimeoutError:
             candidate = None
-        if candidate is not None:
+        if candidate is not None and candidate.sequence > after_sequence:
             if _bgra_pixel(candidate, x, y) == expected:
                 return candidate
         time.sleep(1 / 120)
@@ -184,12 +290,521 @@ def _content_document() -> tuple[SceneDocument, SceneDefinition]:
         replace(
             document,
             outputs=tuple(
-                replace(route, default_scene_id=content_scene.id)
-                for route in document.outputs
+                replace(route, default_scene_id=content_scene.id) for route in document.outputs
             ),
         ),
         content_scene,
     )
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows native media pipeline")
+@pytest.mark.parametrize(
+    "media_mirror_enabled",
+    [False, True],
+    ids=["media-mirror-off", "media-mirror-on"],
+)
+def test_hardware_decoded_qt_frame_stays_on_gpu_until_composition(
+    tmp_path,
+    media_mirror_enabled: bool,
+) -> None:
+    video_path = Path(os.environ.get("SOLIN_QT_BRIDGE_TEST_VIDEO", ""))
+    alternate_video_path = Path(os.environ.get("SOLIN_QT_BRIDGE_TEST_VIDEO_ALTERNATE", ""))
+    if not video_path.is_file():
+        pytest.skip("SOLIN_QT_BRIDGE_TEST_VIDEO does not identify a decoder fixture")
+    engine = create_native_scene_engine(
+        tmp_path,
+        repository_root=REPOSITORY_ROOT,
+    )
+    if engine is None:
+        pytest.skip("Built native media engine is unavailable")
+
+    application = QCoreApplication.instance() or QCoreApplication([])
+    ingress = ContentFrameIngressController(
+        maximum_fps=30,
+        canvas_width=1920,
+        canvas_height=1080,
+    )
+    descriptor = ingress.descriptor
+    if descriptor is None or descriptor.transport is not FrameChannelTransport.D3D11_SHARED_TEXTURE:
+        ingress.close()
+        engine.stop()
+        pytest.skip("Built Qt D3D11 bridge is unavailable")
+    egress = SharedMemoryBgraFrameSubscriber(1920, 1080)
+    program_egress = SharedMemoryVideoFrameSubscriber(1920, 1080)
+    document, content_scene = _content_document()
+    descriptor_changes: list[object] = []
+    ingress.descriptor_changed.connect(
+        descriptor_changes.append,
+        Qt.ConnectionType.DirectConnection,
+    )
+    sink = QVideoSink()
+    player = QMediaPlayer()
+    player.setVideoSink(sink)
+    assert ingress.bind_video_sink(sink)
+    sink.videoFrameChanged.connect(ingress.submit_frame)
+    ingress.set_decoder_frame_gate(1, True)
+    ingress.begin_presentation(1)
+    events: list[object] = []
+    unsubscribe = engine.subscribe(events.append)
+    try:
+        capabilities = engine.start(
+            session_id="native-qt-gpu-ingress",
+            deadline_ms=10_000,
+        ).result(15)
+        assert capabilities.d3d11_shared_textures
+        initial_snapshot = SceneEngineSnapshot(
+            session_id="native-qt-gpu-ingress",
+            sequence=1,
+            document=document,
+            active_scenes=tuple((route.bus_id, content_scene.id) for route in document.outputs),
+            render_enabled=(
+                (BusId.MEDIA_WINDOWS, True),
+                (BusId.VIRTUAL_CAMERA, True),
+            ),
+            output_enabled=(
+                (BusId.MEDIA_WINDOWS, media_mirror_enabled),
+                (BusId.VIRTUAL_CAMERA, False),
+            ),
+            content_ingress=descriptor,
+            preview_egress=egress.descriptor,
+            program_egress=program_egress.descriptor,
+        )
+        acknowledged = engine.hydrate(
+            initial_snapshot,
+            request_id="native-qt-gpu-ingress-hydrate",
+            deadline_ms=10_000,
+        ).result(15)
+        assert acknowledged.applied
+
+        player.setSource(QUrl.fromLocalFile(str(video_path.resolve())))
+        player.play()
+        output = None
+        deadline = time.monotonic() + 12.0
+        while time.monotonic() < deadline:
+            application.processEvents()
+            try:
+                candidate = egress.read_latest()
+            except TimeoutError:
+                candidate = None
+            visible = candidate is not None and any(
+                _bgra_pixel(candidate, x, y)[:3] != bytes(3)
+                for x in (candidate.width // 4, candidate.width // 2, candidate.width * 3 // 4)
+                for y in (candidate.height // 4, candidate.height // 2, candidate.height * 3 // 4)
+            )
+            if visible:
+                output = candidate
+                break
+            time.sleep(1 / 240)
+
+        bridge = ingress._accelerated_publisher
+        status = bridge.status() if bridge is not None else None
+        assert output is not None, (status, events, player.errorString())
+        assert ingress.descriptor == descriptor
+        assert descriptor_changes == []
+
+        default_scene = next(
+            scene
+            for scene in document.scenes
+            if len(scene.layers) == 1
+            and scene.layers[0].source_id == NO_SIGNAL_SOURCE_ID
+        )
+
+        # Replacing the decoder resource does not replace the logical ingress
+        # channel. When an alternate fixture is supplied, require the native
+        # texture generation and the engine output to advance across a real
+        # source-size change. This guards the cached GstD3D11Memory layout.
+        if alternate_video_path.is_file():
+            assert bridge is not None and status is not None
+            initial_resource_generation = int(status["resource_generation"])
+            initial_resource_size = (
+                int(status["resource_width"]),
+                int(status["resource_height"]),
+            )
+            player.stop()
+            player.setSource(QUrl.fromLocalFile(str(alternate_video_path.resolve())))
+            player.play()
+            replacement_output = None
+            replacement_status = None
+            deadline = time.monotonic() + 12.0
+            while time.monotonic() < deadline:
+                application.processEvents()
+                replacement_status = bridge.status()
+                try:
+                    candidate = egress.read_latest()
+                except TimeoutError:
+                    candidate = None
+                if (
+                    candidate is not None
+                    and candidate.sequence > output.sequence
+                    and int(replacement_status["resource_generation"]) > initial_resource_generation
+                    and (
+                        int(replacement_status["resource_width"]),
+                        int(replacement_status["resource_height"]),
+                    )
+                    != initial_resource_size
+                ):
+                    replacement_output = candidate
+                    break
+                time.sleep(1 / 240)
+            assert replacement_output is not None, (
+                initial_resource_size,
+                replacement_status,
+                events,
+                player.errorString(),
+            )
+            assert ingress.descriptor == descriptor
+            assert descriptor_changes == []
+
+        # Reproduce the production auto-return before a static projection takes
+        # Program again. Video, still image and idle are presentations of one
+        # logical content source; changing media must not replace its descriptor,
+        # runtime or scene graphs.
+        away = engine.prepare_scene(
+            BusId.VIRTUAL_CAMERA,
+            default_scene.id,
+            transition=TransitionSpec(TransitionKind.FADE_TO_BLACK, 200),
+            document_revision=document.revision,
+            request_id="native-qt-leave-content",
+            sequence=2,
+            deadline_ms=10_000,
+        ).result(15)
+        assert engine.take_prepared(
+            away,
+            request_id="native-qt-leave-content-take",
+            sequence=3,
+            deadline_ms=10_000,
+        ).result(15).applied
+
+        # A decoder callback can arrive after playback has been gated while the
+        # static projection is taking ownership of Program. The image must be
+        # committed to the same dynamic D3D11 channel, and that late GPU frame
+        # must never restore the previous video's texture generation.
+        late_decoder_frame = QVideoFrame(sink.videoFrame())
+        assert late_decoder_frame.isValid()
+        ingress.set_decoder_frame_gate(2, False)
+        player.stop()
+        application.processEvents()
+        ingress.begin_presentation(2)
+        ingress.set_image_transform(
+            ImageTransform(1.0, 0.0, 0.0),
+            media_epoch=2,
+            canvas_width=1920,
+            canvas_height=1080,
+            animate=False,
+        )
+        static_image = QImage(1280, 720, QImage.Format.Format_ARGB32)
+        static_image.fill(QColor("#23c45e"))
+        ingress.submit_frame(static_image)
+
+        returned = engine.prepare_scene(
+            BusId.VIRTUAL_CAMERA,
+            content_scene.id,
+            transition=TransitionSpec(
+                TransitionKind.FADE_TO_BLACK,
+                200,
+            ),
+            document_revision=document.revision,
+            request_id="native-qt-return-to-content",
+            sequence=4,
+            deadline_ms=10_000,
+        ).result(15)
+        assert engine.take_prepared(
+            returned,
+            request_id="native-qt-return-to-content-take",
+            sequence=5,
+            deadline_ms=10_000,
+        ).result(15).applied
+
+        static_output = None
+        static_program_output = None
+        last_static_center = None
+        last_program_yuv = None
+        static_descriptor = None
+        deadline = time.monotonic() + 8.0
+        while time.monotonic() < deadline:
+            application.processEvents()
+            static_descriptor = ingress.descriptor
+            try:
+                candidate = egress.read_latest()
+            except TimeoutError:
+                candidate = None
+            try:
+                program_candidate = program_egress.read_latest()
+            except TimeoutError:
+                program_candidate = None
+            if (
+                candidate is not None
+                and _bgra_pixel(candidate, candidate.width // 2, candidate.height // 2)
+                == bytes((0x5E, 0xC4, 0x23, 0xFF))
+                and static_descriptor == descriptor
+            ):
+                static_output = candidate
+            if candidate is not None:
+                last_static_center = _bgra_pixel(
+                    candidate,
+                    candidate.width // 2,
+                    candidate.height // 2,
+                )
+            if program_candidate is not None and _nv12_pixel_is_green(
+                program_candidate,
+                program_candidate.width // 2,
+                program_candidate.height // 2,
+            ):
+                static_program_output = program_candidate
+            if (
+                program_candidate is not None
+                and program_candidate.pixel_format is VideoPixelFormat.NV12
+            ):
+                x = program_candidate.width // 2
+                y = program_candidate.height // 2
+                chroma_offset = (
+                    program_candidate.width * program_candidate.height
+                    + (y // 2) * program_candidate.width
+                    + (x // 2) * 2
+                )
+                last_program_yuv = (
+                    program_candidate.pixels[y * program_candidate.width + x],
+                    program_candidate.pixels[chroma_offset],
+                    program_candidate.pixels[chroma_offset + 1],
+                )
+            if static_output is not None and static_program_output is not None:
+                break
+            time.sleep(1 / 240)
+
+        assert static_output is not None, (
+            f"raw_center={last_static_center!r}, program_yuv={last_program_yuv!r}, "
+            f"transport={getattr(static_descriptor, 'transport', None)!r}"
+        )
+        assert static_program_output is not None, (
+            f"raw_center={last_static_center!r}, program_yuv={last_program_yuv!r}, "
+            f"transport={getattr(static_descriptor, 'transport', None)!r}, "
+            f"events={events!r}"
+        )
+        assert static_descriptor == descriptor
+        assert descriptor_changes == []
+
+        ingress.submit_frame(late_decoder_frame)
+        deadline = time.monotonic() + 0.25
+        while time.monotonic() < deadline:
+            application.processEvents()
+            time.sleep(1 / 240)
+        assert ingress.descriptor == static_descriptor
+        assert descriptor_changes == []
+
+        # Closing and reopening the same image does not change the D3D11
+        # descriptor. Each media epoch must nevertheless advance both consumers;
+        # neither graph may retain the old decoder texture or an intermediate
+        # black transition frame.
+        last_raw_sequence = static_output.sequence
+        last_program_sequence = static_program_output.sequence
+        idle_image = QImage(1280, 720, QImage.Format.Format_ARGB32)
+        idle_image.fill(QColor("#d12d3f"))
+        for cycle in range(3):
+            idle_epoch = 3 + cycle * 2
+            ingress.begin_presentation(idle_epoch)
+            ingress.set_image_transform(
+                None,
+                media_epoch=idle_epoch,
+                canvas_width=1920,
+                canvas_height=1080,
+                animate=False,
+            )
+            ingress.submit_frame(idle_image)
+            idle_raw, idle_program = _wait_for_raw_and_program_color(
+                egress,
+                program_egress,
+                raw_bgra=bytes((0x3F, 0x2D, 0xD1, 0xFF)),
+                program_match=_nv12_pixel_is_red,
+                raw_after=last_raw_sequence,
+                program_after=last_program_sequence,
+            )
+            assert idle_raw is not None, (cycle, events)
+            assert idle_program is not None, (cycle, events)
+            last_raw_sequence = idle_raw.sequence
+            last_program_sequence = idle_program.sequence
+
+            image_epoch = idle_epoch + 1
+            ingress.begin_presentation(image_epoch)
+            ingress.set_image_transform(
+                ImageTransform(1.0, 0.0, 0.0),
+                media_epoch=image_epoch,
+                canvas_width=1920,
+                canvas_height=1080,
+                animate=False,
+            )
+            ingress.submit_frame(static_image)
+            ingress.submit_frame(late_decoder_frame)
+            raw_transition_samples: list[bytes] = []
+            image_raw, image_program = _wait_for_raw_and_program_color(
+                egress,
+                program_egress,
+                raw_bgra=bytes((0x5E, 0xC4, 0x23, 0xFF)),
+                program_match=_nv12_pixel_is_green,
+                raw_after=last_raw_sequence,
+                program_after=last_program_sequence,
+                raw_samples=raw_transition_samples,
+            )
+            assert image_raw is not None, (cycle, events)
+            assert image_program is not None, (cycle, events)
+            assert any(
+                max(pixel[:3]) < 48 for pixel in raw_transition_samples
+            ), (cycle, raw_transition_samples, events)
+            last_raw_sequence = image_raw.sequence
+            last_program_sequence = image_program.sequence
+            assert ingress.descriptor == static_descriptor
+            assert descriptor_changes == []
+
+        # Re-enter the GPU decoder after repeated static presentations, then
+        # leave it while a physical Raw consumer may be active. The second
+        # video must advance the dynamic resource without replacing its source
+        # identity, and the Program fade
+        # must retain its outgoing texture until the Take completes.
+        ingress.set_decoder_frame_gate(3, True)
+        ingress.begin_presentation(9)
+        player.setSource(QUrl.fromLocalFile(str(video_path.resolve())))
+        player.play()
+        video_descriptor = descriptor
+        deadline = time.monotonic() + 12.0
+        while time.monotonic() < deadline:
+            application.processEvents()
+            if ingress.descriptor == descriptor and bridge is not None and int(
+                bridge.status().get("resource_generation", 0)
+            ) > 0:
+                break
+            time.sleep(1 / 240)
+        assert ingress.descriptor == video_descriptor
+        assert descriptor_changes == []
+
+        video_program = None
+        deadline = time.monotonic() + 8.0
+        while time.monotonic() < deadline:
+            application.processEvents()
+            try:
+                candidate = program_egress.read_latest()
+            except TimeoutError:
+                candidate = None
+            if candidate is not None and candidate.sequence > last_program_sequence:
+                video_program = candidate
+                break
+            time.sleep(1 / 240)
+        assert video_program is not None, (bridge.status() if bridge else None, events)
+
+        sample_points = tuple(
+            (x, y)
+            for x in (
+                video_program.width // 4,
+                video_program.width // 2,
+                video_program.width * 3 // 4,
+            )
+            for y in (
+                video_program.height // 4,
+                video_program.height // 2,
+                video_program.height * 3 // 4,
+            )
+        )
+        sample_x, sample_y = max(
+            sample_points,
+            key=lambda point: video_program.pixels[
+                point[1] * video_program.width + point[0]
+            ],
+        )
+        outgoing_luma = video_program.pixels[
+            sample_y * video_program.width + sample_x
+        ]
+
+        ingress.set_decoder_frame_gate(4, False)
+        player.stop()
+        application.processEvents()
+        ingress.begin_presentation(10)
+        ingress.set_image_transform(
+            None,
+            media_epoch=10,
+            canvas_width=1920,
+            canvas_height=1080,
+            animate=False,
+        )
+        ingress.submit_frame(idle_image)
+        assert _wait_for(
+            lambda: ingress.descriptor == static_descriptor,
+            application=application,
+            timeout=5.0,
+        )
+
+        leave_second_video = engine.prepare_scene(
+            BusId.VIRTUAL_CAMERA,
+            default_scene.id,
+            transition=TransitionSpec(TransitionKind.FADE_TO_BLACK, 200),
+            document_revision=document.revision,
+            request_id="native-qt-leave-second-video",
+            sequence=8,
+            deadline_ms=10_000,
+        ).result(15)
+        assert engine.take_prepared(
+            leave_second_video,
+            request_id="native-qt-leave-second-video-take",
+            sequence=9,
+            deadline_ms=10_000,
+        ).result(15).applied
+
+        transition_lumas: list[int] = []
+        deadline = time.monotonic() + 0.8
+        after_sequence = video_program.sequence
+        while time.monotonic() < deadline:
+            try:
+                candidate = program_egress.read_latest()
+            except TimeoutError:
+                candidate = None
+            if candidate is not None and candidate.sequence > after_sequence:
+                after_sequence = candidate.sequence
+                transition_lumas.append(
+                    candidate.pixels[sample_y * candidate.width + sample_x]
+                )
+            time.sleep(1 / 240)
+        assert any(
+            18 < luma < outgoing_luma - 4 for luma in transition_lumas
+        ), (outgoing_luma, transition_lumas, events)
+
+        # Complete enough arbitrary A/B switches to exceed the former global
+        # retired-graph history. Every destination is still prepared normally;
+        # completed pipelines must be reclaimed instead of accumulating worker
+        # threads and GPU resources across the session.
+        command_sequence = 11
+        for cycle in range(18):
+            destination = content_scene if cycle % 2 == 0 else default_scene
+            prepared = engine.prepare_scene(
+                BusId.VIRTUAL_CAMERA,
+                destination.id,
+                transition=TransitionSpec(TransitionKind.DISSOLVE, 50),
+                document_revision=document.revision,
+                request_id=f"native-qt-bounded-switch-{cycle}",
+                sequence=command_sequence,
+                deadline_ms=10_000,
+            ).result(15)
+            command_sequence += 1
+            assert engine.take_prepared(
+                prepared,
+                request_id=f"native-qt-bounded-switch-{cycle}-take",
+                sequence=command_sequence,
+                deadline_ms=10_000,
+            ).result(15).applied
+            command_sequence += 1
+            deadline = time.monotonic() + 0.08
+            while time.monotonic() < deadline:
+                application.processEvents()
+                time.sleep(1 / 240)
+
+        metrics = engine.metrics
+        assert metrics.timeout_count == 0
+        assert metrics.rejected_count == 0
+        assert metrics.restart_count == 0
+    finally:
+        player.stop()
+        application.processEvents()
+        ingress.close()
+        egress.close()
+        program_egress.close()
+        unsubscribe()
+        engine.stop()
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows native media pipeline")
@@ -202,6 +817,7 @@ def test_actual_size_content_reaches_composed_native_output(tmp_path) -> None:
         pytest.skip("Built native media engine is unavailable")
 
     ingress = ContentFrameIngressController(
+        enable_accelerated=False,
         maximum_fps=30,
         canvas_width=1920,
         canvas_height=1080,
@@ -213,6 +829,8 @@ def test_actual_size_content_reaches_composed_native_output(tmp_path) -> None:
     image.fill(QColor("#123456"))
     latest = None
     center_pixel = b""
+    events: list[object] = []
+    unsubscribe = engine.subscribe(events.append)
 
     try:
         capabilities = engine.start(
@@ -225,9 +843,7 @@ def test_actual_size_content_reaches_composed_native_output(tmp_path) -> None:
             session_id="native-content-smoke",
             sequence=1,
             document=document,
-            active_scenes=tuple(
-                (route.bus_id, content_scene.id) for route in document.outputs
-            ),
+            active_scenes=tuple((route.bus_id, content_scene.id) for route in document.outputs),
             render_enabled=(
                 (BusId.MEDIA_WINDOWS, True),
                 (BusId.VIRTUAL_CAMERA, True),
@@ -256,16 +872,13 @@ def test_actual_size_content_reaches_composed_native_output(tmp_path) -> None:
                 candidate = None
             if candidate is not None:
                 latest = candidate
-                offset = (
-                    (candidate.height // 2) * candidate.width
-                    + candidate.width // 2
-                ) * 4
+                offset = ((candidate.height // 2) * candidate.width + candidate.width // 2) * 4
                 center_pixel = candidate.pixels[offset : offset + 4]
                 if center_pixel == bytes((0x56, 0x34, 0x12, 0xFF)):
                     break
             time.sleep(1 / 60)
 
-        assert latest is not None
+        assert latest is not None, events
         assert (latest.width, latest.height) == (1920, 1080)
         assert center_pixel == bytes((0x56, 0x34, 0x12, 0xFF))
 
@@ -295,6 +908,15 @@ def test_actual_size_content_reaches_composed_native_output(tmp_path) -> None:
         assert program_frame.pixel_format is VideoPixelFormat.NV12
         assert (program_frame.width, program_frame.height) == (1920, 1080)
         assert len(program_frame.pixels) == 1920 * 1080 * 3 // 2
+        assert (
+            _wait_for_pixel(
+                egress,
+                x=960,
+                y=540,
+                expected=bytes((0x56, 0x34, 0x12, 0xFF)),
+            )
+            is not None
+        )
 
         four_by_three = QImage(800, 600, QImage.Format.Format_ARGB32)
         four_by_three.fill(QColor("#20d020"))
@@ -305,7 +927,9 @@ def test_actual_size_content_reaches_composed_native_output(tmp_path) -> None:
             y=540,
             expected=bytes((0x20, 0xD0, 0x20, 0xFF)),
         )
-        assert latest is not None
+        publisher = ingress._publisher
+        publisher_sequence = getattr(publisher, "_sequence", None)
+        assert latest is not None, (publisher_sequence, events)
         assert _bgra_pixel(latest, 239, 540) == bytes((0, 0, 0, 0xFF))
         assert _bgra_pixel(latest, 240, 540) == bytes((0x20, 0xD0, 0x20, 0xFF))
         assert _bgra_pixel(latest, 1679, 540) == bytes((0x20, 0xD0, 0x20, 0xFF))
@@ -364,10 +988,7 @@ def test_actual_size_content_reaches_composed_native_output(tmp_path) -> None:
             except TimeoutError:
                 candidate = None
             if candidate is not None:
-                offset = (
-                    (candidate.height // 2) * candidate.width
-                    + candidate.width // 2
-                ) * 4
+                offset = ((candidate.height // 2) * candidate.width + candidate.width // 2) * 4
                 center_pixel = candidate.pixels[offset : offset + 4]
                 if len(center_pixel) == 4 and min(center_pixel[:3]) >= 245:
                     break
@@ -378,7 +999,7 @@ def test_actual_size_content_reaches_composed_native_output(tmp_path) -> None:
         # image normally has black side bars in the 16:9 scene; zooming it to
         # 2x must cover the edge in the composed output without republishing
         # transformed pixels from Python.
-        ingress.set_media_epoch(1)
+        ingress.begin_presentation(1)
         ingress.set_image_transform(
             ImageTransform(1.0, 0.0, 0.0),
             media_epoch=1,
@@ -412,7 +1033,7 @@ def test_actual_size_content_reaches_composed_native_output(tmp_path) -> None:
         if still_identity is not None:
             assert _bgra_pixel(still_identity, 0, 540) == black
 
-        ingress.set_media_epoch(2)
+        ingress.begin_presentation(2)
         ingress.submit_frame(four_by_three)
         zoomed = _wait_for_pixel(
             egress,
@@ -424,33 +1045,21 @@ def test_actual_size_content_reaches_composed_native_output(tmp_path) -> None:
         assert zoomed is not None
         assert _bgra_pixel(zoomed, 1919, 540) == green
 
-        # Reproduce a decoder/device handoff that accepts the next media epoch
-        # but never supplies its first pixels. The source retains an old frame,
-        # so the ordinary stream timeout deliberately stays quiet. Raw may fade
-        # to black while preparing, but its bounded readiness contract must
-        # restore the last stable frame instead of stranding every consumer.
-        ingress.set_media_epoch(3)
-        black_hold = _wait_for_pixel(
-            egress,
-            x=960,
-            y=540,
-            expected=black,
-            timeout=2.0,
-        )
-        assert black_hold is not None
-        recovered = _wait_for_pixel(
-            egress,
-            x=960,
-            y=540,
-            expected=green,
-            timeout=7.0,
-        )
-        assert recovered is not None
-        assert recovered.sequence > black_hold.sequence
+        # Arming a future presentation without supplying its first pixels must
+        # preserve the currently published presentation. Identity becomes
+        # visible atomically with a frame, so there is no black watchdog state
+        # and no way to relabel the previous image as the future epoch.
+        ingress.begin_presentation(3)
+        time.sleep(0.25)
+        try:
+            still_preserved = egress.read_latest()
+        except TimeoutError:
+            still_preserved = None
+        if still_preserved is not None:
+            assert _bgra_pixel(still_preserved, 960, 540) == green
 
-        # A genuinely late frame for the failed epoch is replayed through a
-        # fresh transition from the restored owner, rather than cutting or
-        # inheriting the stale waiting-at-black phase.
+        # The first frame commits the armed epoch and starts its transition from
+        # the preserved owner.
         ingress.submit_frame(sixteen_by_nine)
         late = _wait_for_pixel(
             egress,
@@ -460,7 +1069,7 @@ def test_actual_size_content_reaches_composed_native_output(tmp_path) -> None:
             timeout=8.0,
         )
         assert late is not None
-        assert late.sequence > recovered.sequence
+        assert late.sequence > zoomed.sequence
 
         # Recovery and deferred replay must leave the logical owner healthy so
         # another playback request can still complete normally.
@@ -471,7 +1080,7 @@ def test_actual_size_content_reaches_composed_native_output(tmp_path) -> None:
             canvas_height=1080,
             animate=False,
         )
-        ingress.set_media_epoch(4)
+        ingress.begin_presentation(4)
         ingress.submit_frame(four_by_three)
         resumed = _wait_for_pixel(
             egress,
@@ -487,6 +1096,7 @@ def test_actual_size_content_reaches_composed_native_output(tmp_path) -> None:
         ingress.close()
         egress.close()
         program_egress.close()
+        unsubscribe()
         engine.stop()
 
 
@@ -500,6 +1110,7 @@ def test_native_image_framing_preserves_aspect_and_normalized_pan(tmp_path) -> N
         pytest.skip("Built native media engine is unavailable")
 
     ingress = ContentFrameIngressController(
+        enable_accelerated=False,
         maximum_fps=30,
         canvas_width=1920,
         canvas_height=1080,
@@ -518,9 +1129,7 @@ def test_native_image_framing_preserves_aspect_and_normalized_pan(tmp_path) -> N
                 session_id="native-image-framing",
                 sequence=1,
                 document=document,
-                active_scenes=tuple(
-                    (route.bus_id, content_scene.id) for route in document.outputs
-                ),
+                active_scenes=tuple((route.bus_id, content_scene.id) for route in document.outputs),
                 render_enabled=(
                     (BusId.MEDIA_WINDOWS, True),
                     (BusId.VIRTUAL_CAMERA, True),
@@ -544,7 +1153,7 @@ def test_native_image_framing_preserves_aspect_and_normalized_pan(tmp_path) -> N
             canvas_height=1080,
             animate=False,
         )
-        ingress.set_media_epoch(1)
+        ingress.begin_presentation(1)
         quadrants = _quadrant_image()
         red = bytes((0x20, 0x20, 0xE0, 0xFF))
         green = bytes((0x20, 0xD0, 0x20, 0xFF))

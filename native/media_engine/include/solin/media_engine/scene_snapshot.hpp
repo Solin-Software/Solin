@@ -190,6 +190,12 @@ struct SceneHydrationSnapshot {
     bool operator==(const SceneHydrationSnapshot&) const = default;
 };
 
+// The Solin content frame channel is runtime transport state injected into a
+// hydration snapshot, not part of the versioned scene document. All persisted
+// source fields remain revision-bound.
+[[nodiscard]] bool same_scene_document_source_definition(
+    const SceneSource& left, const SceneSource& right) noexcept;
+
 [[nodiscard]] SceneHydrationSnapshot
 parse_scene_hydration_snapshot(const nlohmann::json& payload,
                                std::uint64_t expected_document_revision);

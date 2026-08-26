@@ -226,6 +226,68 @@ enum class PipeIoResult : std::uint8_t {
     return PipeIoResult::completed;
 }
 
+enum class ClientLifetime : std::uint8_t {
+    legacy,
+    persistent,
+    stopped,
+};
+
+[[nodiscard]] ClientLifetime wait_for_client_disconnect(
+    HANDLE pipe, HANDLE stop_event) noexcept {
+    bool presence_marker_received = false;
+    for (;;) {
+        const UniqueHandle event{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
+        if (!event) {
+            return presence_marker_received ? ClientLifetime::persistent
+                                            : ClientLifetime::legacy;
+        }
+        OVERLAPPED overlapped{};
+        overlapped.hEvent = event.get();
+        std::uint8_t sentinel = 0U;
+        DWORD transferred = 0U;
+        if (ReadFile(pipe, &sentinel, sizeof(sentinel), &transferred,
+                     &overlapped) != FALSE) {
+            if (transferred == 0U) {
+                return presence_marker_received ? ClientLifetime::persistent
+                                                : ClientLifetime::legacy;
+            }
+            if (sentinel != kVirtualCameraBrokerPresenceMarker) {
+                return ClientLifetime::legacy;
+            }
+            presence_marker_received = true;
+            continue;
+        }
+        const auto error = GetLastError();
+        if (error == ERROR_BROKEN_PIPE || error == ERROR_PIPE_NOT_CONNECTED ||
+            error == ERROR_NO_DATA) {
+            return presence_marker_received ? ClientLifetime::persistent
+                                            : ClientLifetime::legacy;
+        }
+        if (error != ERROR_IO_PENDING) {
+            return presence_marker_received ? ClientLifetime::persistent
+                                            : ClientLifetime::legacy;
+        }
+        const std::array<HANDLE, 2U> events{stop_event, event.get()};
+        const auto wait_result = WaitForMultipleObjects(
+            static_cast<DWORD>(events.size()), events.data(), FALSE, INFINITE);
+        if (wait_result == WAIT_OBJECT_0) {
+            static_cast<void>(cancel_and_drain(pipe, overlapped, transferred));
+            return ClientLifetime::stopped;
+        }
+        if (wait_result != WAIT_OBJECT_0 + 1U ||
+            GetOverlappedResult(pipe, &overlapped, &transferred, FALSE) ==
+                FALSE ||
+            transferred == 0U) {
+            return presence_marker_received ? ClientLifetime::persistent
+                                            : ClientLifetime::legacy;
+        }
+        if (sentinel != kVirtualCameraBrokerPresenceMarker) {
+            return ClientLifetime::legacy;
+        }
+        presence_marker_received = true;
+    }
+}
+
 class WindowsVirtualCameraFrameBroker final : public VirtualCameraFrameBroker {
   public:
     explicit WindowsVirtualCameraFrameBroker(
@@ -312,6 +374,8 @@ class WindowsVirtualCameraFrameBroker final : public VirtualCameraFrameBroker {
             stop_event_.reset();
             std::scoped_lock health_lock{health_mutex_};
             health_.running = false;
+            health_.active_connections = 0U;
+            health_.legacy_consumer_present = false;
         } catch (...) {
         }
     }
@@ -457,8 +521,25 @@ class WindowsVirtualCameraFrameBroker final : public VirtualCameraFrameBroker {
         } catch (...) {
         }
         if (response.status == VirtualCameraBrokerStatus::ok && delivered) {
+            {
+                std::scoped_lock lock{health_mutex_};
+                ++health_.accepted_connections;
+                ++health_.active_connections;
+            }
+            const auto lifetime =
+                wait_for_client_disconnect(pipe, stop_event_.get());
             std::scoped_lock lock{health_mutex_};
-            ++health_.accepted_connections;
+            if (health_.active_connections != 0U) {
+                --health_.active_connections;
+            }
+            if (lifetime == ClientLifetime::legacy) {
+                // Protocol v3 filters shipped before persistent presence
+                // signalling close the broker pipe after receiving the shared
+                // channel. Keep correctness during an in-place upgrade; the
+                // optimization resumes after the engine restarts with the new
+                // filter. New filters retain their pipe and remain exact.
+                health_.legacy_consumer_present = true;
+            }
         }
     }
 

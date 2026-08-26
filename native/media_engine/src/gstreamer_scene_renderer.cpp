@@ -11,6 +11,7 @@
 #include <cmath>
 #include <condition_variable>
 #include <cstdint>
+#include <iostream>
 #include <limits>
 #include <map>
 #include <memory>
@@ -40,6 +41,11 @@ namespace {
 using namespace std::chrono_literals;
 
 constexpr auto kPrepareTimeout = 3s;
+constexpr auto kDeferredPrerollProbe = 100ms;
+constexpr auto kRenderAcknowledgementProbeInterval = 100ms;
+constexpr auto kRenderAcknowledgementFailureTimeout = 3s;
+constexpr auto kRenderRecoveryRetryInterval = 500ms;
+constexpr auto kInactiveGraphRetryInterval = 50ms;
 constexpr auto kTransitionStartTimeout = 500ms;
 constexpr auto kTransitionObservationTimeout = 500ms;
 constexpr std::uint32_t kMaximumOutputDimension = 3'840U;
@@ -94,7 +100,32 @@ void release_bus(GstBus* bus) noexcept {
     return element;
 }
 
-[[nodiscard]] GstElement* add_live_compositor(GstElement* pipeline) {
+[[nodiscard]] GstElement* add_event_driven_compositor(GstElement* pipeline) {
+    // Every source frame is explicitly pushed by the source-revision feeder.  Letting
+    // the aggregator manufacture clock-driven output after that frame has been consumed
+    // keeps static images and paused video rendering at the negotiated frame rate forever.
+    // Transitions push their retained endpoints on each animation tick, so they retain
+    // their cadence without force-live.
+    auto* compositor =
+        gst_element_factory_make_full("d3d11compositor", "force-live", FALSE, nullptr);
+    if (compositor == nullptr) {
+        throw SceneRendererError{"renderer_dependency_unavailable",
+                                 "The D3D11 compositor is unavailable"};
+    }
+    if (gst_bin_add(GST_BIN(pipeline), compositor) == FALSE) {
+        gst_object_unref(compositor);
+        throw SceneRendererError{"renderer_pipeline_failed",
+                                 "The D3D11 compositor could not be added"};
+    }
+    g_object_set(compositor, "ignore-inactive-pads", TRUE, "latency",
+                 static_cast<guint64>(0U), nullptr);
+    return compositor;
+}
+
+[[nodiscard]] GstElement* add_realtime_compositor(GstElement* pipeline) {
+    // Scene graphs are event-driven, but an ephemeral transition is a timed
+    // animation. Let GStreamer own that short-lived cadence so OS scheduling
+    // jitter cannot collapse a 50-200 ms effect into one terminal frame.
     auto* compositor =
         gst_element_factory_make_full("d3d11compositor", "force-live", TRUE, nullptr);
     if (compositor == nullptr) {
@@ -390,6 +421,22 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
         gst_bus_set_sync_handler(bus_, &PreparedGStreamerSceneGraph::on_bus_message,
                                  source_frame_signal_.get(), nullptr);
 
+        // A retained source already exists for ordinary scene changes and for a
+        // transactional content-ingress handoff. Prime appsrc caps, geometry,
+        // and one buffer before starting the graph so negotiation cannot consume
+        // the only static image and leave a compositor background behind. The
+        // feeder replays the retained revision once PLAYING, at the next causal
+        // timestamp, to complete any asynchronous allocator negotiation.
+        bool source_primed = false;
+        for (auto& [_, source] : sources_) {
+            source_primed = push_latest_frame(source, 0U, nullptr) ||
+                            source_primed;
+        }
+        if (source_primed) {
+            next_render_timestamp_ = output_frame_duration();
+            source_replay_requested_.store(true);
+        }
+
         const auto state_change = gst_element_set_state(pipeline_, GST_STATE_PLAYING);
         if (state_change == GST_STATE_CHANGE_FAILURE) {
             stop();
@@ -403,13 +450,26 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
             throw SceneRendererError{"renderer_worker_failed",
                                      "The compositor feeder could not start"};
         }
+        // A valid source channel can intentionally have no pixels yet (idle
+        // content, a camera still connecting, or the first decoded frame still
+        // pending). Non-live appsrc keeps that graph event-driven, but also means
+        // PAUSED cannot preroll until the first source revision arrives. Accept
+        // that well-defined ASYNC state after a short error probe; the feeder
+        // completes preroll when it receives the first retained frame.
+        const auto deferred_preroll = std::ranges::any_of(
+            sources_, [](const auto& item) {
+                return item.second.runtime->latest_frame() == nullptr;
+            });
         GstState state = GST_STATE_NULL;
         const auto state_result = gst_element_get_state(
             pipeline_, &state, nullptr,
             static_cast<GstClockTime>(
-                std::chrono::duration_cast<std::chrono::nanoseconds>(kPrepareTimeout)
+                std::chrono::duration_cast<std::chrono::nanoseconds>(
+                    deferred_preroll ? kDeferredPrerollProbe : kPrepareTimeout)
                     .count()));
-        if (state_result == GST_STATE_CHANGE_FAILURE || state < GST_STATE_PAUSED) {
+        if (state_result == GST_STATE_CHANGE_FAILURE ||
+            (state < GST_STATE_PAUSED &&
+             !(deferred_preroll && state_result == GST_STATE_CHANGE_ASYNC))) {
             stop();
             throw SceneRendererError{"renderer_preroll_failed",
                                      "The compositor pipeline did not preroll"};
@@ -423,6 +483,7 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
             return;
         }
         wake_frame_waiters();
+        render_acknowledgement_.notify_all();
         source_frame_signal_->notify();
         if (feeder_.joinable()) {
             feeder_.join();
@@ -439,6 +500,14 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
         }
         if (bus != nullptr) {
             gst_bus_set_sync_handler(bus, nullptr, nullptr, nullptr);
+        }
+        for (auto& [_, source] : sources_) {
+            release_caps(std::exchange(source.source_caps, nullptr));
+            release_caps(std::exchange(source.render_caps, nullptr));
+            if (source.missing_frame_buffer != nullptr) {
+                gst_buffer_unref(
+                    std::exchange(source.missing_frame_buffer, nullptr));
+            }
         }
         release_bus(bus);
         release_pipeline(pipeline);
@@ -476,9 +545,8 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
         try {
             std::unique_lock lock{frame_mutex_};
             const auto ready = [&] {
-                return stopped_.load() || failed_.load() ||
-                       (latest_frame_ != nullptr &&
-                        latest_frame_->sequence > after_sequence);
+                return latest_frame_ != nullptr &&
+                       latest_frame_->sequence > after_sequence;
             };
             if (ready()) {
                 return latest_frame_ != nullptr &&
@@ -527,6 +595,7 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
     void set_direct_output_enabled(const bool enabled) noexcept override {
         try {
             bool replay_retained_frame = false;
+            bool demand_changed = false;
             {
                 std::scoped_lock lock{pipeline_mutex_};
                 if (stopped_.load() || direct_output_valve_ == nullptr) {
@@ -534,10 +603,17 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
                 }
                 const bool previously_enabled =
                     direct_output_enabled_.exchange(enabled);
+                demand_changed = previously_enabled != enabled;
                 g_object_set(direct_output_valve_, "drop",
                              enabled ? FALSE : TRUE,
                              nullptr);
                 replay_retained_frame = enabled && !previously_enabled;
+            }
+            if (demand_changed) {
+                // A feeder may be waiting for the direct branch that has just
+                // been disabled. Conversely, enabling demand needs a retained
+                // replay because a static source has no future producer wakeup.
+                render_acknowledgement_.notify_all();
             }
             if (replay_retained_frame) {
                 // Static images and paused video may not emit another producer
@@ -557,9 +633,8 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
         try {
             std::unique_lock lock{frame_mutex_};
             const auto ready = [&] {
-                return stopped_.load() || failed_.load() ||
-                       (latest_gpu_frame_ != nullptr &&
-                        latest_gpu_frame_->sequence > after_sequence);
+                return latest_gpu_frame_ != nullptr &&
+                       latest_gpu_frame_->sequence > after_sequence;
             };
             if (ready()) {
                 return latest_gpu_frame_ != nullptr &&
@@ -580,28 +655,34 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
 
     void set_rendering_enabled(const bool enabled) noexcept override {
         try {
-            std::scoped_lock lock{pipeline_mutex_};
-            if (stopped_.load() || rendering_enabled_.load() == enabled) {
-                return;
+            {
+                std::scoped_lock lock{pipeline_mutex_};
+                if (stopped_.load() || rendering_enabled_.load() == enabled) {
+                    return;
+                }
+                auto* pipeline = pipeline_;
+                rendering_enabled_.store(enabled);
+                static_cast<void>(rendering_generation_.fetch_add(1U));
+                // Cancels an in-flight render acknowledgement before PAUSED can
+                // prevent its callback. The feeder treats this route generation
+                // change as suspension and replays the retained inputs on resume,
+                // rather than permanently failing an intentionally idle graph.
+                render_acknowledgement_.notify_all();
+                if (pipeline == nullptr ||
+                    gst_element_set_state(
+                        pipeline, enabled ? GST_STATE_PLAYING : GST_STATE_PAUSED) ==
+                        GST_STATE_CHANGE_FAILURE) {
+                    record_failure("renderer_state_change_failed");
+                    return;
+                }
             }
-            auto* pipeline = pipeline_;
-            if (pipeline == nullptr ||
-                gst_element_set_state(
-                    pipeline, enabled ? GST_STATE_PLAYING : GST_STATE_PAUSED) ==
-                    GST_STATE_CHANGE_FAILURE) {
-                failed_.store(true);
-                wake_frame_waiters();
-                return;
-            }
-            rendering_enabled_.store(enabled);
             // A disabled feeder deliberately ignores source notifications. Wake it
             // once on resume so the latest retained source frame is submitted even
             // when the producer itself is paused or static.
             source_replay_requested_.store(enabled);
             source_frame_signal_->notify();
         } catch (...) {
-            failed_.store(true);
-            wake_frame_waiters();
+            record_failure("renderer_state_change_exception");
         }
     }
 
@@ -660,6 +741,11 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
         SourceRuntime* runtime{nullptr};
         GstElement* app_source{nullptr};
         GstElement* tee{nullptr};
+        bool stream_ended{false};
+        GstCaps* source_caps{nullptr};
+        GstCaps* render_caps{nullptr};
+        GstBuffer* missing_frame_buffer{nullptr};
+        bool missing_frame_active{false};
         std::uint64_t last_stream_epoch{0U};
         std::uint64_t last_sequence{0U};
         std::uint32_t configured_width{0U};
@@ -673,7 +759,7 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
         if (existing != scene_outputs_.end()) {
             return existing->second;
         }
-        auto* compositor = add_live_compositor(pipeline_);
+        auto* compositor = add_event_driven_compositor(pipeline_);
         g_object_set(compositor, "background", root ? 1 : 3, nullptr);
         if (root) {
             root_compositor_ = compositor;
@@ -739,9 +825,9 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
             .app_source = add_element(pipeline_, "appsrc"),
             .tee = add_element(pipeline_, "tee"),
         };
-        g_object_set(input.app_source, "is-live", TRUE, "do-timestamp", TRUE,
+        g_object_set(input.app_source, "is-live", FALSE, "do-timestamp", FALSE,
                      "format", GST_FORMAT_TIME, "block", FALSE, "emit-signals", FALSE,
-                     "max-buffers", static_cast<guint64>(1U), "max-bytes",
+                     "max-buffers", static_cast<guint64>(2U), "max-bytes",
                      static_cast<guint64>(0U), "max-time", static_cast<guint64>(0U),
                      "leaky-type", GST_APP_LEAKY_TYPE_DOWNSTREAM, nullptr);
         require_link(input.app_source, input.tee);
@@ -760,7 +846,7 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
         auto* upload = add_element(pipeline_, "d3d11upload");
         auto* transform = add_element(pipeline_, "d3d11convert");
         auto* caps_filter = add_element(pipeline_, "capsfilter");
-        g_object_set(queue, "max-size-buffers", 1U, "max-size-bytes", 0U,
+        g_object_set(queue, "max-size-buffers", 2U, "max-size-bytes", 0U,
                      "max-size-time", static_cast<guint64>(0U), "leaky", 2, nullptr);
         g_object_set(transform, "ortho", TRUE, "rotation-z",
                      static_cast<gfloat>(geometry.rotation_degrees), "scale-x",
@@ -900,59 +986,66 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
                      transform.opacity, nullptr);
     }
 
-    static void on_samples_selected(GstAggregator* aggregator, GstSegment*, guint64,
+    static void on_samples_selected(GstAggregator* aggregator, GstSegment*, guint64 pts,
                                     guint64, guint64, GstStructure*,
                                     gpointer user_data) noexcept {
         static_cast<PreparedGStreamerSceneGraph*>(user_data)
-            ->synchronize_compositor_geometry(aggregator);
+            ->synchronize_compositor_geometry(aggregator, pts);
     }
 
-    void synchronize_compositor_geometry(GstAggregator* aggregator) noexcept {
+    void synchronize_compositor_geometry(GstAggregator* aggregator,
+                                         const GstClockTime pts) noexcept {
         try {
-            std::scoped_lock lock{geometry_mutex_};
-            const auto compositor = compositor_layers_.find(GST_ELEMENT(aggregator));
-            if (compositor == compositor_layers_.end()) {
-                return;
+            bool root_selected = false;
+            {
+                std::scoped_lock lock{geometry_mutex_};
+                const auto compositor = compositor_layers_.find(GST_ELEMENT(aggregator));
+                if (compositor == compositor_layers_.end()) {
+                    return;
+                }
+                bool all_inputs_ready = !compositor->second.empty();
+                for (auto& layer : compositor->second) {
+                    const auto branch = layer_branches_.find(layer.key);
+                    if (branch == layer_branches_.end()) {
+                        continue;
+                    }
+                    std::unique_ptr<GstSample, decltype(&gst_sample_unref)> sample{
+                        gst_aggregator_peek_next_sample(
+                            aggregator, GST_AGGREGATOR_PAD(layer.pad)),
+                        &gst_sample_unref};
+                    if (sample == nullptr) {
+                        all_inputs_ready = false;
+                        continue;
+                    }
+                    auto* caps = gst_sample_get_caps(sample.get());
+                    GstVideoInfo info{};
+                    if (caps == nullptr ||
+                        gst_video_info_from_caps(&info, caps) == FALSE) {
+                        continue;
+                    }
+                    const auto width =
+                        static_cast<std::uint32_t>(GST_VIDEO_INFO_WIDTH(&info));
+                    const auto height =
+                        static_cast<std::uint32_t>(GST_VIDEO_INFO_HEIGHT(&info));
+                    if (width == 0U || height == 0U ||
+                        (width == layer.selected_width &&
+                         height == layer.selected_height)) {
+                        continue;
+                    }
+                    apply_compositor_geometry(layer.pad, branch->second.geometry,
+                                              width, height);
+                    layer.selected_width = width;
+                    layer.selected_height = height;
+                }
+                root_selected = GST_ELEMENT(aggregator) == root_compositor_;
+                if (root_selected && all_inputs_ready &&
+                    !output_ready_.exchange(true)) {
+                    open_readiness_gate(output_readiness_valve_);
+                }
             }
-            bool all_inputs_ready = !compositor->second.empty();
-            for (auto& layer : compositor->second) {
-                const auto branch = layer_branches_.find(layer.key);
-                if (branch == layer_branches_.end()) {
-                    continue;
-                }
-                std::unique_ptr<GstSample, decltype(&gst_sample_unref)> sample{
-                    gst_aggregator_peek_next_sample(
-                        aggregator, GST_AGGREGATOR_PAD(layer.pad)),
-                    &gst_sample_unref};
-                if (sample == nullptr) {
-                    all_inputs_ready = false;
-                    continue;
-                }
-                auto* caps = gst_sample_get_caps(sample.get());
-                GstVideoInfo info{};
-                if (caps == nullptr ||
-                    gst_video_info_from_caps(&info, caps) == FALSE) {
-                    continue;
-                }
-                const auto width =
-                    static_cast<std::uint32_t>(GST_VIDEO_INFO_WIDTH(&info));
-                const auto height =
-                    static_cast<std::uint32_t>(GST_VIDEO_INFO_HEIGHT(&info));
-                if (width == 0U || height == 0U ||
-                    (width == layer.selected_width &&
-                     height == layer.selected_height)) {
-                    continue;
-                }
-                apply_compositor_geometry(layer.pad, branch->second.geometry, width, height);
-                layer.selected_width = width;
-                layer.selected_height = height;
-            }
-            if (GST_ELEMENT(aggregator) == root_compositor_ && all_inputs_ready &&
-                !output_ready_.exchange(true)) {
-                open_readiness_gate(output_readiness_valve_);
-            }
+            static_cast<void>(pts);
         } catch (...) {
-            failed_.store(true);
+            record_failure("renderer_geometry_sync_failed");
         }
     }
 
@@ -964,8 +1057,12 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
         auto* sink = add_element(pipeline_, "appsink");
         g_object_set(queue, "max-size-buffers", 1U, "max-size-bytes", 0U,
                      "max-size-time", static_cast<guint64>(0U), "leaky", 2, nullptr);
-        g_object_set(sink, "sync", FALSE, "enable-last-sample", FALSE,
-                     "wait-on-eos", FALSE, nullptr);
+        // These sinks are application taps, not clock owners. In particular, a
+        // demand-gated CPU branch must not hold the entire Program pipeline in
+        // PAUSED while the always-on GPU branch is already ready.
+        g_object_set(sink, "sync", FALSE, "async", FALSE,
+                     "enable-last-sample", FALSE, "wait-on-eos", FALSE,
+                     nullptr);
         gst_app_sink_set_max_buffers(GST_APP_SINK(sink), 1U);
         gst_app_sink_set_leaky_type(GST_APP_SINK(sink),
                                     GST_APP_LEAKY_TYPE_DOWNSTREAM);
@@ -1031,8 +1128,9 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
         auto* sink = add_element(pipeline_, "appsink");
         g_object_set(queue, "max-size-buffers", 1U, "max-size-bytes", 0U,
                      "max-size-time", static_cast<guint64>(0U), "leaky", 2, nullptr);
-        g_object_set(sink, "sync", FALSE, "enable-last-sample", FALSE,
-                     "wait-on-eos", FALSE, nullptr);
+        g_object_set(sink, "sync", FALSE, "async", FALSE,
+                     "enable-last-sample", FALSE, "wait-on-eos", FALSE,
+                     nullptr);
         gst_app_sink_set_max_buffers(GST_APP_SINK(sink), 1U);
         gst_app_sink_set_leaky_type(GST_APP_SINK(sink),
                                     GST_APP_LEAKY_TYPE_DOWNSTREAM);
@@ -1107,6 +1205,21 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
                 }
             }
             frame_wakeup_.notify_all();
+            if (GST_CLOCK_TIME_IS_VALID(GST_BUFFER_PTS(buffer))) {
+                const auto timestamp = GST_BUFFER_PTS(buffer);
+                {
+                    std::scoped_lock lock{render_acknowledgement_mutex_};
+                    auto& received = gpu_tap ? gpu_output_received_
+                                             : direct_output_received_;
+                    auto& latest = gpu_tap ? last_gpu_output_timestamp_
+                                           : last_direct_output_timestamp_;
+                    if (!received || timestamp > latest) {
+                        latest = timestamp;
+                    }
+                    received = true;
+                }
+                render_acknowledgement_.notify_all();
+            }
             return GST_FLOW_OK;
         } catch (...) {
             return GST_FLOW_ERROR;
@@ -1124,21 +1237,117 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
 
     void feed_sources() noexcept {
         auto source_revision = source_frame_signal_->revision();
+        std::optional<std::chrono::steady_clock::time_point>
+            render_retry_started_at;
+        std::optional<GstClockTime> render_retry_timestamp;
+        bool render_timeout_reported = false;
         while (!stopped_.load()) {
             auto* message = gst_bus_pop_filtered(bus_, GST_MESSAGE_ERROR);
             if (message != nullptr) {
                 gst_message_unref(message);
-                failed_.store(true);
-                wake_frame_waiters();
+                record_failure("renderer_pipeline_error");
                 break;
             }
             if (!rendering_enabled_.load()) {
+                render_retry_started_at.reset();
+                render_retry_timestamp.reset();
+                render_timeout_reported = false;
                 source_revision = source_frame_signal_->wait_after(source_revision);
                 continue;
             }
             const bool replay_sources = source_replay_requested_.exchange(false);
+            const bool source_changed = std::ranges::any_of(
+                sources_, [](const auto& item) {
+                    const auto& source = item.second;
+                    const auto frame = source.runtime->latest_frame();
+                    return frame != nullptr &&
+                           (frame->stream_epoch != source.last_stream_epoch ||
+                            frame->sequence != source.last_sequence);
+                });
+            if (!replay_sources && !source_changed) {
+                source_revision = source_frame_signal_->wait_after(source_revision);
+                continue;
+            }
+            // A non-force-live aggregator consumes one sample from every active input
+            // for each render revision. Re-submit retained references together with the
+            // changed source so paused/static layers cannot hold the revision back.
+            const auto rendering_generation = rendering_generation_.load();
+            const auto presentation_timestamp = next_render_timestamp_;
+            bool submitted = false;
+            bool caps_changed = false;
             for (auto& [_, source] : sources_) {
-                push_latest_frame(source, replay_sources);
+                bool source_caps_changed = false;
+                submitted = push_latest_frame(source, presentation_timestamp,
+                                              &source_caps_changed) ||
+                            submitted;
+                caps_changed = caps_changed || source_caps_changed;
+            }
+            if (submitted && caps_changed) {
+                // GstVideoAggregator consumes the first buffer accompanying a
+                // dynamic CAPS event while rebuilding its input frame. Re-submit
+                // the retained revision at the same causal timestamp so the
+                // renegotiated graph can render immediately without waiting for a
+                // future decoder frame (which static images do not have).
+                for (auto& [_, source] : sources_) {
+                    static_cast<void>(push_latest_frame(
+                        source, presentation_timestamp, nullptr));
+                }
+            }
+            if (submitted) {
+                if (!render_retry_started_at.has_value()) {
+                    render_retry_started_at = std::chrono::steady_clock::now();
+                    render_retry_timestamp = presentation_timestamp;
+                }
+                next_render_timestamp_ += output_frame_duration();
+                if (!wait_for_render_acknowledgement(
+                        render_retry_timestamp.value(), rendering_generation)) {
+                    if (stopped_.load() || failed_.load()) {
+                        break;
+                    }
+                    if (!rendering_enabled_.load() ||
+                        rendering_generation_.load() != rendering_generation) {
+                        render_retry_started_at.reset();
+                        render_retry_timestamp.reset();
+                        continue;
+                    }
+                    // Dynamic caps negotiation is asynchronous. A pushed still
+                    // frame can be consumed while d3d11convert and the compositor
+                    // rebuild their allocation, leaving no future decoder frame
+                    // to complete the render. Replay the retained latest frame at
+                    // a bounded cadence. An output watchdog is diagnostic, not a
+                    // terminal state: images and idle frames are one-shot inputs,
+                    // so abandoning their retained revision would leave Program
+                    // permanently frozen until another video happened to arrive.
+                    if (std::chrono::steady_clock::now() -
+                            render_retry_started_at.value() <
+                        kRenderAcknowledgementFailureTimeout) {
+                        source_replay_requested_.store(true);
+                        continue;
+                    }
+                    if (!render_timeout_reported) {
+                        try {
+                            std::cerr
+                                << "Native scene renderer "
+                                << (bus_id_ == OutputBus::virtual_camera
+                                        ? "Program"
+                                        : "Raw")
+                                << " graph output is stalled; retaining and "
+                                   "retrying the latest revision\n";
+                        } catch (...) {
+                        }
+                        render_timeout_reported = true;
+                    }
+                    source_replay_requested_.store(true);
+                    static_cast<void>(source_frame_signal_->wait_after(
+                        source_revision, {},
+                        std::chrono::steady_clock::now() +
+                            kRenderRecoveryRetryInterval));
+                    source_revision = source_frame_signal_->revision();
+                    continue;
+                }
+                render_retry_started_at.reset();
+                render_retry_timestamp.reset();
+                render_timeout_reported = false;
             }
             open_readiness_gate_when_sources_settle();
             source_revision = source_frame_signal_->wait_after(source_revision);
@@ -1166,24 +1375,98 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
                 open_readiness_gate(output_readiness_valve_);
             }
         } catch (...) {
-            failed_.store(true);
+            record_failure("renderer_readiness_failed");
         }
     }
 
-    void push_latest_frame(SourceInput& source, const bool replay) noexcept {
+    void record_failure(const std::string_view error_code) noexcept {
+        if (failed_.exchange(true)) {
+            return;
+        }
         try {
+            std::cerr << "Native scene renderer "
+                      << (bus_id_ == OutputBus::virtual_camera ? "Program" : "Raw")
+                      << " graph failed: " << error_code << '\n';
+        } catch (...) {
+        }
+        render_acknowledgement_.notify_all();
+        wake_frame_waiters();
+    }
+
+    [[nodiscard]] GstClockTime output_frame_duration() const noexcept {
+        return gst_util_uint64_scale_int(
+            GST_SECOND, static_cast<int>(output_.fps_denominator),
+            static_cast<int>(output_.fps_numerator));
+    }
+
+    [[nodiscard]] bool wait_for_render_acknowledgement(
+        const GstClockTime presentation_timestamp,
+        const std::uint64_t rendering_generation) noexcept {
+        try {
+            std::unique_lock lock{render_acknowledgement_mutex_};
+            const auto output_published = [this, presentation_timestamp] {
+                const bool primary_output =
+                    bus_id_ == OutputBus::virtual_camera
+                        ? gpu_output_received_ &&
+                              last_gpu_output_timestamp_ >= presentation_timestamp
+                        : direct_output_received_ &&
+                              last_direct_output_timestamp_ >= presentation_timestamp;
+                const bool demanded_direct_output =
+                    bus_id_ != OutputBus::virtual_camera ||
+                    !direct_output_enabled_.load() ||
+                    (direct_output_received_ &&
+                     last_direct_output_timestamp_ >= presentation_timestamp);
+                return primary_output && demanded_direct_output;
+            };
+            const auto completed = render_acknowledgement_.wait_for(
+                lock, kRenderAcknowledgementProbeInterval,
+                [this, rendering_generation, &output_published] {
+                    return stopped_.load() || failed_.load() ||
+                           !rendering_enabled_.load() ||
+                           rendering_generation_.load() != rendering_generation ||
+                           output_published();
+                });
+            return completed && !stopped_.load() && !failed_.load() &&
+                   rendering_enabled_.load() &&
+                   rendering_generation_.load() == rendering_generation &&
+                   output_published();
+        } catch (...) {
+            return false;
+        }
+    }
+
+    [[nodiscard]] bool push_latest_frame(
+        SourceInput& source, const GstClockTime presentation_timestamp,
+        bool* const caps_changed) noexcept {
+        try {
+            if (caps_changed != nullptr) {
+                *caps_changed = false;
+            }
             auto frame = source.runtime->latest_frame();
-            if (frame == nullptr ||
-                (!replay && frame->stream_epoch == source.last_stream_epoch &&
-                 frame->sequence == source.last_sequence)) {
-                return;
+            if (frame == nullptr) {
+                const auto status = source.runtime->health().status;
+                if (!source.stream_ended &&
+                    status == SourceRuntimeStatus::stopped) {
+                    source.stream_ended =
+                        gst_app_src_end_of_stream(GST_APP_SRC(source.app_source)) ==
+                        GST_FLOW_OK;
+                }
+                if (status == SourceRuntimeStatus::failed ||
+                    status == SourceRuntimeStatus::degraded) {
+                    return push_missing_source_gap(
+                        source, presentation_timestamp, caps_changed);
+                }
+                return false;
             }
             auto sample = gstreamer_sample(frame);
             if (!sample) {
-                return;
+                return false;
             }
-            if (source.configured_width != frame->width ||
-                source.configured_height != frame->height) {
+            source.missing_frame_active = false;
+            const bool geometry_changed =
+                source.configured_width != frame->width ||
+                source.configured_height != frame->height;
+            if (geometry_changed) {
                 std::scoped_lock lock{geometry_mutex_};
                 for (const auto& key : source.branches) {
                     const auto branch = layer_branches_.find(key);
@@ -1198,19 +1481,42 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
             auto* original_buffer = gst_sample_get_buffer(sample.sample);
             auto* caps = gst_sample_get_caps(sample.sample);
             if (original_buffer == nullptr || caps == nullptr) {
-                return;
+                return false;
+            }
+            if (source.source_caps == nullptr || source.render_caps == nullptr ||
+                gst_caps_is_equal(source.source_caps, caps) == FALSE) {
+                auto* source_caps = gst_caps_copy(caps);
+                auto* render_caps = gst_caps_copy(caps);
+                if (source_caps == nullptr || render_caps == nullptr) {
+                    release_caps(source_caps);
+                    release_caps(render_caps);
+                    return false;
+                }
+                gst_caps_set_simple(
+                    render_caps, "framerate", GST_TYPE_FRACTION,
+                    static_cast<gint>(output_.fps_numerator),
+                    static_cast<gint>(output_.fps_denominator), nullptr);
+                release_caps(std::exchange(source.source_caps, source_caps));
+                release_caps(std::exchange(source.render_caps, render_caps));
+                if (caps_changed != nullptr) {
+                    *caps_changed = true;
+                }
             }
             auto* buffer = gst_buffer_copy(original_buffer);
             if (buffer == nullptr) {
-                return;
+                return false;
             }
-            GST_BUFFER_PTS(buffer) = GST_CLOCK_TIME_NONE;
+            GST_BUFFER_PTS(buffer) = presentation_timestamp;
             GST_BUFFER_DTS(buffer) = GST_CLOCK_TIME_NONE;
-            GST_BUFFER_DURATION(buffer) = GST_CLOCK_TIME_NONE;
-            auto* retimed = gst_sample_new(buffer, caps, nullptr, nullptr);
+            GST_BUFFER_DURATION(buffer) = output_frame_duration();
+            if (geometry_changed || frame->discontinuity) {
+                GST_BUFFER_FLAG_SET(buffer, GST_BUFFER_FLAG_DISCONT);
+            }
+            auto* retimed =
+                gst_sample_new(buffer, source.render_caps, nullptr, nullptr);
             gst_buffer_unref(buffer);
             if (retimed == nullptr) {
-                return;
+                return false;
             }
             const auto flow =
                 gst_app_src_push_sample(GST_APP_SRC(source.app_source), retimed);
@@ -1218,8 +1524,82 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
             if (flow == GST_FLOW_OK) {
                 source.last_stream_epoch = frame->stream_epoch;
                 source.last_sequence = frame->sequence;
+                if (source.missing_frame_buffer != nullptr) {
+                    gst_buffer_unref(
+                        std::exchange(source.missing_frame_buffer, nullptr));
+                }
             }
+            return flow == GST_FLOW_OK;
         } catch (...) {
+            return false;
+        }
+    }
+
+    [[nodiscard]] bool push_missing_source_gap(
+        SourceInput& source, const GstClockTime presentation_timestamp,
+        bool* const caps_changed) noexcept {
+        try {
+            if (!source.missing_frame_active || source.source_caps == nullptr ||
+                source.render_caps == nullptr) {
+                auto* source_caps = gst_caps_new_simple(
+                    "video/x-raw", "format", G_TYPE_STRING, "BGRA", "width",
+                    G_TYPE_INT, static_cast<gint>(output_.width), "height",
+                    G_TYPE_INT, static_cast<gint>(output_.height),
+                    "pixel-aspect-ratio", GST_TYPE_FRACTION, 1, 1, nullptr);
+                auto* render_caps =
+                    source_caps == nullptr ? nullptr : gst_caps_copy(source_caps);
+                if (source_caps == nullptr || render_caps == nullptr) {
+                    release_caps(source_caps);
+                    release_caps(render_caps);
+                    return false;
+                }
+                gst_caps_set_simple(
+                    render_caps, "framerate", GST_TYPE_FRACTION,
+                    static_cast<gint>(output_.fps_numerator),
+                    static_cast<gint>(output_.fps_denominator), nullptr);
+                release_caps(std::exchange(source.source_caps, source_caps));
+                release_caps(std::exchange(source.render_caps, render_caps));
+                if (caps_changed != nullptr) {
+                    *caps_changed = true;
+                }
+                source.missing_frame_active = true;
+            }
+            if (source.missing_frame_buffer == nullptr) {
+                const auto bytes = static_cast<gsize>(output_.width) *
+                                   static_cast<gsize>(output_.height) * 4U;
+                source.missing_frame_buffer =
+                    gst_buffer_new_allocate(nullptr, bytes, nullptr);
+                if (source.missing_frame_buffer == nullptr ||
+                    gst_buffer_memset(source.missing_frame_buffer, 0U, 0, bytes) !=
+                        bytes) {
+                    if (source.missing_frame_buffer != nullptr) {
+                        gst_buffer_unref(std::exchange(
+                            source.missing_frame_buffer, nullptr));
+                    }
+                    return false;
+                }
+            }
+            auto* buffer = gst_buffer_copy(source.missing_frame_buffer);
+            if (buffer == nullptr) {
+                return false;
+            }
+            GST_BUFFER_PTS(buffer) = presentation_timestamp;
+            GST_BUFFER_DTS(buffer) = GST_CLOCK_TIME_NONE;
+            GST_BUFFER_DURATION(buffer) = output_frame_duration();
+            GST_BUFFER_FLAG_SET(buffer, GST_BUFFER_FLAG_GAP);
+            GST_BUFFER_FLAG_SET(buffer, GST_BUFFER_FLAG_DROPPABLE);
+            auto* sample =
+                gst_sample_new(buffer, source.render_caps, nullptr, nullptr);
+            gst_buffer_unref(buffer);
+            if (sample == nullptr) {
+                return false;
+            }
+            const auto flow =
+                gst_app_src_push_sample(GST_APP_SRC(source.app_source), sample);
+            gst_sample_unref(sample);
+            return flow == GST_FLOW_OK;
+        } catch (...) {
+            return false;
         }
     }
 
@@ -1241,9 +1621,17 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
     std::atomic_bool stopped_{false};
     std::atomic_bool failed_{false};
     std::atomic_bool rendering_enabled_{true};
+    std::atomic_uint64_t rendering_generation_{0U};
     std::atomic_bool direct_output_enabled_{false};
     std::atomic_bool source_replay_requested_{false};
     std::atomic_bool output_ready_{false};
+    GstClockTime next_render_timestamp_{0U};
+    std::mutex render_acknowledgement_mutex_{};
+    std::condition_variable render_acknowledgement_{};
+    GstClockTime last_gpu_output_timestamp_{0U};
+    GstClockTime last_direct_output_timestamp_{0U};
+    bool gpu_output_received_{false};
+    bool direct_output_received_{false};
     std::thread feeder_{};
     std::shared_ptr<std::atomic_uint64_t> frame_sequence_{};
     std::shared_ptr<GStreamerFrameSignal> source_frame_signal_{};
@@ -1528,7 +1916,7 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
 
         outgoing_source_ = add_transition_input(pipeline.get());
         incoming_source_ = add_transition_input(pipeline.get());
-        auto* compositor = add_live_compositor(pipeline.get());
+        auto* compositor = add_realtime_compositor(pipeline.get());
         g_object_set(compositor, "background", 1, nullptr);
         outgoing_pad_ = link_transition_input(outgoing_source_, compositor, 0U);
         incoming_pad_ = link_transition_input(incoming_source_, compositor, 1U);
@@ -1658,8 +2046,9 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
                         GstFlowReturn (*callback)(GstAppSink*, gpointer)) {
         g_object_set(queue, "max-size-buffers", 1U, "max-size-bytes", 0U,
                      "max-size-time", static_cast<guint64>(0U), "leaky", 2, nullptr);
-        g_object_set(sink, "sync", FALSE, "enable-last-sample", FALSE,
-                     "wait-on-eos", FALSE, nullptr);
+        g_object_set(sink, "sync", FALSE, "async", FALSE,
+                     "enable-last-sample", FALSE, "wait-on-eos", FALSE,
+                     nullptr);
         gst_app_sink_set_max_buffers(GST_APP_SINK(sink), 1U);
         gst_app_sink_set_leaky_type(GST_APP_SINK(sink),
                                     GST_APP_LEAKY_TYPE_DOWNSTREAM);
@@ -1733,8 +2122,8 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
         }
     }
 
-    [[nodiscard]] bool push_frame(GstElement* source,
-                                  const std::shared_ptr<const SourceFrame>& frame) noexcept {
+    [[nodiscard]] bool push_frame(
+        GstElement* source, const std::shared_ptr<const SourceFrame>& frame) noexcept {
         try {
             const auto sample = gstreamer_sample(frame);
             if (!sample) {
@@ -1837,7 +2226,9 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
     void feed() noexcept {
         std::optional<std::chrono::steady_clock::time_point> started_at;
         std::optional<std::chrono::steady_clock::time_point> start_requested_at;
-        bool body_frame_attempted = false;
+        bool body_frame_delivered = false;
+        std::optional<std::chrono::steady_clock::time_point>
+            body_frame_first_attempted_at;
         std::optional<std::chrono::steady_clock::time_point>
             body_frame_delivered_at;
         const auto delivery_timeout = (std::max)(
@@ -1870,7 +2261,12 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
                 progress = std::chrono::duration<double>(elapsed).count() /
                            std::chrono::duration<double>(duration).count();
                 terminal_frame = progress >= 1.0;
-                body_frame = !body_frame_attempted && progress >= 0.25;
+                const bool body_delivery_deadline_open =
+                    !body_frame_first_attempted_at.has_value() ||
+                    now < *body_frame_first_attempted_at +
+                              kTransitionObservationTimeout;
+                body_frame = !body_frame_delivered &&
+                             body_delivery_deadline_open && progress >= 0.25;
                 const auto observed_at_ns = body_observed_at_ns_.load();
                 const auto now_ns =
                     std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -1891,9 +2287,9 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
                                     body_observation_deadline_open))) {
                     // A required egress that fell behind must observe the body of
                     // the effect for one output interval before the destination
-                    // is promoted. A late feeder always gets one bounded body
-                    // publication attempt; the observation deadline starts only
-                    // after that publication instead of expiring while the
+                    // is promoted. A late feeder retries body publication within
+                    // one bounded observation window; the observation deadline
+                    // starts only after delivery instead of expiring while the
                     // worker is descheduled.
                     progress = 0.5;
                     terminal_frame = false;
@@ -1911,6 +2307,9 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
                 body_observation_after_sequence_.store(after_sequence);
                 body_observation_armed_.store(true);
             }
+            if (body_frame && !body_frame_first_attempted_at.has_value()) {
+                body_frame_first_attempted_at = iteration_started_at;
+            }
             const bool gpu_output_ready = gpu_output_ready_.load();
             const bool synchronize_output =
                 started_at.has_value() ||
@@ -1918,10 +2317,12 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
             const auto publication_checkpoint =
                 synchronize_output ? output_publication_checkpoint()
                                    : OutputPublicationCheckpoint{};
-            const bool have_outgoing = outgoing != nullptr &&
-                                       push_frame(outgoing_source_, outgoing);
-            const bool have_incoming = incoming != nullptr &&
-                                       push_frame(incoming_source_, incoming);
+            const bool have_outgoing =
+                outgoing != nullptr &&
+                push_frame(outgoing_source_, outgoing);
+            const bool have_incoming =
+                incoming != nullptr &&
+                push_frame(incoming_source_, incoming);
             if (start_requested && have_outgoing && have_incoming &&
                 output_ready_.load() && gpu_output_ready &&
                 !started_at.has_value()) {
@@ -1931,12 +2332,10 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
                 const auto delivered = wait_for_output_after(
                     publication_checkpoint, require_cpu,
                     std::chrono::steady_clock::now() + delivery_timeout);
-                if (body_frame) {
-                    body_frame_attempted = true;
-                    if (delivered) {
-                        body_frame_delivered_at =
-                            std::chrono::steady_clock::now();
-                    }
+                if (body_frame && delivered) {
+                    body_frame_delivered = true;
+                    body_frame_delivered_at =
+                        std::chrono::steady_clock::now();
                 }
                 if (terminal_frame && delivered) {
                     break;
@@ -1962,6 +2361,10 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
         if (!stopped_.load()) {
             incoming_->set_direct_output_enabled(
                 system_memory_output_enabled_.load());
+            if (outgoing_ != nullptr) {
+                outgoing_->set_direct_output_enabled(false);
+                outgoing_->set_rendering_enabled(false);
+            }
             outgoing_.reset();
             frozen_outgoing_gpu_.reset();
             frozen_outgoing_cpu_.reset();
@@ -2130,6 +2533,11 @@ class GStreamerSceneRenderer final : public SceneRenderer {
             for (auto& graph : previous) {
                 if (graph != nullptr) {
                     graph->wake_frame_waiters();
+                    // Source leases remain alive in the deferred-release queue,
+                    // but a retired graph must stop consuming D3D11 and CPU
+                    // immediately. It is no longer reachable by any output
+                    // route after the atomic swap above.
+                    set_graph_enabled(graph, false, false);
                 }
             }
             route_wakeup_.notify_all();
@@ -2144,12 +2552,14 @@ class GStreamerSceneRenderer final : public SceneRenderer {
         try {
             std::shared_ptr<PreparedSceneRenderGraph> previous;
             std::stop_source previous_route_wait;
+            bool previous_owned_by_transition = false;
             {
                 std::scoped_lock lock{mutex_};
                 const auto index = bus_index(bus);
                 previous = active_[index];
                 previous_route_wait = route_wait_cancellation_[index];
                 if (render_output != nullptr && enabled_[index]) {
+                    previous_owned_by_transition = true;
                     render_output->set_direct_output_enabled(
                         system_memory_output_required(index));
                     render_output->start_transition();
@@ -2168,6 +2578,9 @@ class GStreamerSceneRenderer final : public SceneRenderer {
             static_cast<void>(previous_route_wait.request_stop());
             if (previous != nullptr) {
                 previous->wake_frame_waiters();
+                if (!previous_owned_by_transition) {
+                    set_graph_enabled(previous, false, false);
+                }
             }
             route_wakeup_.notify_all();
         } catch (...) {
@@ -2270,31 +2683,40 @@ class GStreamerSceneRenderer final : public SceneRenderer {
         }
     }
 
-    [[nodiscard]] std::optional<std::uint64_t>
-    visit_latest_frame(const OutputBus bus, const std::uint64_t after_sequence,
+    [[nodiscard]] std::optional<SceneOutputFrameCursor>
+    visit_latest_frame(const OutputBus bus, const SceneOutputFrameCursor after,
                        const VideoFrameVisitor& visitor) const noexcept override {
         try {
-            std::shared_ptr<PreparedSceneRenderGraph> graph;
-            {
-                std::scoped_lock lock{mutex_};
-                if (!enabled_[bus_index(bus)]) {
-                    return std::nullopt;
-                }
-                graph = active_[bus_index(bus)];
+            std::scoped_lock lock{mutex_};
+            const auto index = bus_index(bus);
+            if (!enabled_[index] || active_[index] == nullptr) {
+                return std::nullopt;
             }
-            return graph == nullptr
-                       ? std::nullopt
-                       : graph->visit_latest_frame(after_sequence, visitor);
+            const auto route_generation = route_generation_[index];
+            const auto after_sequence =
+                after.route_generation == 0U ||
+                        after.route_generation == route_generation
+                    ? after.frame_sequence
+                    : 0U;
+            const auto sequence = active_[index]->visit_latest_frame(
+                after_sequence, visitor);
+            if (!sequence.has_value()) {
+                return std::nullopt;
+            }
+            return SceneOutputFrameCursor{
+                .route_generation = route_generation,
+                .frame_sequence = sequence.value(),
+            };
         } catch (...) {
             return std::nullopt;
         }
     }
 
     [[nodiscard]] bool wait_for_frame(
-        const OutputBus bus, const std::uint64_t after_sequence,
+        const OutputBus bus, const SceneOutputFrameCursor after,
         const std::stop_token stop_token,
         const std::chrono::steady_clock::time_point deadline) const noexcept override {
-        return wait_for_rendered_frame(bus, after_sequence, stop_token,
+        return wait_for_rendered_frame(bus, after, stop_token,
                                        deadline, false);
     }
 
@@ -2302,8 +2724,9 @@ class GStreamerSceneRenderer final : public SceneRenderer {
         const OutputBus bus, const std::uint64_t after_sequence,
         const std::stop_token stop_token,
         const std::chrono::steady_clock::time_point deadline) const noexcept override {
-        return wait_for_rendered_frame(bus, after_sequence, stop_token,
-                                       deadline, true);
+        return wait_for_rendered_frame(
+            bus, SceneOutputFrameCursor{.frame_sequence = after_sequence},
+            stop_token, deadline, true);
     }
 
     void shutdown() noexcept override {
@@ -2337,16 +2760,18 @@ class GStreamerSceneRenderer final : public SceneRenderer {
 
   private:
     [[nodiscard]] bool wait_for_rendered_frame(
-        const OutputBus bus, const std::uint64_t after_sequence,
+        const OutputBus bus, const SceneOutputFrameCursor after,
         const std::stop_token stop_token,
         const std::chrono::steady_clock::time_point deadline,
         const bool gpu_frame) const noexcept {
         try {
             std::shared_ptr<PreparedSceneRenderGraph> graph;
             std::stop_token route_stop_token;
+            std::uint64_t selected_route_generation = 0U;
+            std::size_t index = 0U;
             {
                 std::unique_lock lock{mutex_};
-                const auto index = bus_index(bus);
+                index = bus_index(bus);
                 if (!enabled_[index] || active_[index] == nullptr) {
                     const auto route_generation = route_generation_[index];
                     static_cast<void>(route_wakeup_.wait_until(
@@ -2361,6 +2786,7 @@ class GStreamerSceneRenderer final : public SceneRenderer {
                 }
                 graph = active_[index];
                 route_stop_token = route_wait_cancellation_[index].get_token();
+                selected_route_generation = route_generation_[index];
             }
             if (graph == nullptr) {
                 return false;
@@ -2378,13 +2804,35 @@ class GStreamerSceneRenderer final : public SceneRenderer {
                 route_stop_token, [&combined_cancellation] {
                     static_cast<void>(combined_cancellation.request_stop());
                 }};
-            return gpu_frame
-                       ? graph->wait_for_gpu_frame(
-                             after_sequence, combined_cancellation.get_token(),
-                             deadline)
-                       : graph->wait_for_frame(
-                             after_sequence, combined_cancellation.get_token(),
-                             deadline);
+            const auto after_sequence =
+                after.route_generation == 0U ||
+                        after.route_generation == selected_route_generation
+                    ? after.frame_sequence
+                    : 0U;
+            const auto delivered =
+                gpu_frame
+                    ? graph->wait_for_gpu_frame(
+                          after_sequence, combined_cancellation.get_token(), deadline)
+                    : graph->wait_for_frame(
+                          after_sequence, combined_cancellation.get_token(), deadline);
+            if (delivered || stop_token.stop_requested() ||
+                route_stop_token.stop_requested()) {
+                return delivered;
+            }
+            // A terminal graph wakes current waiters, but it must not turn every
+            // event-driven consumer into a tight retry loop while supervision
+            // prepares its replacement. Keep route changes prompt and bound
+            // retries independently of the caller's (possibly infinite) wait.
+            const auto retry_deadline = (std::min)(
+                deadline,
+                std::chrono::steady_clock::now() + kInactiveGraphRetryInterval);
+            std::unique_lock lock{mutex_};
+            static_cast<void>(route_wakeup_.wait_until(
+                lock, stop_token, retry_deadline, [&] {
+                    return closed_.load() ||
+                           route_generation_[index] != selected_route_generation;
+                }));
+            return false;
         } catch (...) {
             return false;
         }

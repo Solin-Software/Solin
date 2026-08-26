@@ -29,12 +29,14 @@ def test_release_staging_uses_curated_runtime_and_preserves_notices(
 ) -> None:
     monkeypatch.setattr(package_native_engine_windows.sys, "platform", "win32")
     engine = tmp_path / "build" / "solin-media-engine.exe"
+    qt_media_bridge = tmp_path / "bridge" / "solin_qt_media_bridge.cp313-win_amd64.pyd"
     virtual_camera_filter_x64 = tmp_path / "build64" / "solin-virtual-camera.dll"
     virtual_camera_filter_x86 = tmp_path / "build32" / "solin-virtual-camera.dll"
     application = tmp_path / "application"
     runtime = tmp_path / "runtime"
     licenses = tmp_path / "licenses"
     _touch(engine)
+    _write_pe(qt_media_bridge, 0x8664)
     _write_pe(virtual_camera_filter_x64, 0x8664)
     _write_pe(virtual_camera_filter_x86, 0x014C)
     _touch(application / "Solin.exe")
@@ -58,6 +60,7 @@ def test_release_staging_uses_curated_runtime_and_preserves_notices(
 
     destination = package_native_engine_windows.package_native_engine(
         engine=engine,
+        qt_media_bridge=qt_media_bridge,
         virtual_camera_filter_x64=virtual_camera_filter_x64,
         virtual_camera_filter_x86=virtual_camera_filter_x86,
         runtime_root=runtime,
@@ -67,6 +70,11 @@ def test_release_staging_uses_curated_runtime_and_preserves_notices(
     )
 
     assert (destination / "solin-media-engine.exe").is_file()
+    assert (
+        destination
+        / "qt-media-bridge"
+        / "solin_qt_media_bridge.cp313-win_amd64.pyd"
+    ).is_file()
     assert (
         destination / "virtual-camera" / "x64" / "solin-virtual-camera.dll"
     ).is_file()
@@ -310,3 +318,15 @@ def test_custom_engine_resolves_an_explicit_filter_pair() -> None:
         Path("custom/solin-virtual-camera.dll"),
         Path("custom-x86/solin-virtual-camera.dll"),
     )
+
+
+def test_custom_engine_requires_an_explicit_matching_qt_bridge() -> None:
+    options = package_native_engine_windows._parser().parse_args(
+        ["--engine", "custom/solin-media-engine.exe"]
+    )
+
+    with pytest.raises(
+        package_native_engine_windows.NativeEnginePackagingError,
+        match="custom --engine requires --qt-media-bridge",
+    ):
+        package_native_engine_windows._resolve_qt_media_bridge(options)

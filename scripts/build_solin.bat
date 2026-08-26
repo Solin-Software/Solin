@@ -333,6 +333,12 @@ if not exist "%DIST%\native\media-engine\solin-media-engine.exe" (
     exit /b 1
 )
 
+if not exist "%DIST%\native\media-engine\qt-media-bridge\solin_qt_media_bridge*.pyd" (
+    echo  [ERRO] O bridge Qt/D3D11 nao foi empacotado.
+    pause
+    exit /b 1
+)
+
 if not exist "%DIST%\native\media-engine\virtual-camera\x64\solin-virtual-camera.dll" (
     echo  [ERRO] O filtro DirectShow x64 nao foi empacotado.
     pause

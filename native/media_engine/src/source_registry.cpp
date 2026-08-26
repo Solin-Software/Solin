@@ -369,9 +369,12 @@ source_map(const SceneHydrationSnapshot& snapshot) {
     if (current.size() != next.size()) {
         return false;
     }
-    return std::ranges::equal(current, next, {}, [](const auto& entry) {
-        return std::tie(entry.first, entry.second.definition);
-    }, [](const auto& entry) { return std::tie(entry.first, entry.second); });
+    return std::ranges::equal(
+        current, next, [](const auto& left, const auto& right) {
+            return left.first == right.first &&
+                   same_scene_document_source_definition(
+                       left.second.definition, right.second);
+        });
 }
 
 void ensure_capacity_for(const detail::SourceRegistryState& state,
@@ -815,6 +818,20 @@ SourceLease SourceRegistry::acquire(const std::string_view source_id,
     }
     return SourceLease{state_, std::move(acquired.slot),
                        std::move(acquired.consumer_id)};
+}
+
+bool SourceRegistry::is_current(const SourceLease& lease) const noexcept {
+    try {
+        if (state_ == nullptr || lease.state_ != state_ || lease.slot_ == nullptr) {
+            return false;
+        }
+        std::scoped_lock lock{state_->mutex};
+        const auto current = state_->current_sources.find(lease.slot_->source.id);
+        return current != state_->current_sources.end() &&
+               current->second.generation == lease.slot_->generation;
+    } catch (...) {
+        return false;
+    }
 }
 
 std::vector<SourceRegistryEntry> SourceRegistry::entries() const {

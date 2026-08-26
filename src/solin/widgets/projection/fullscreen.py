@@ -104,6 +104,7 @@ class FullscreenVideoSurface(QWidget):
 
 
 class FullscreenVideoOverlay(QWidget):
+    visibility_changed = Signal(bool)
     exit_requested = Signal()
     seek_requested = Signal(int)
     toggle_requested = Signal()
@@ -578,12 +579,14 @@ class FullscreenVideoOverlay(QWidget):
     def showEvent(self, event) -> None:
         super().showEvent(event)
         self._show_chrome()
+        self.visibility_changed.emit(True)
 
     def hideEvent(self, event) -> None:
         self._hide_timer.stop()
         self.unsetCursor()
         self._surface.unsetCursor()
         super().hideEvent(event)
+        self.visibility_changed.emit(False)
 
     def _show_chrome(self) -> None:
         if not self.isVisible() and not self.isFullScreen():
