@@ -3,9 +3,9 @@ from types import SimpleNamespace
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QCoreApplication, QEvent, Qt
 from PySide6.QtGui import QShowEvent
-from PySide6.QtWidgets import QApplication, QWidget
+from PySide6.QtWidgets import QApplication, QFrame, QWidget
 
 import solin.widgets.projection.bar as projection_bar
 from solin.widgets.projection.fullscreen import (
@@ -15,6 +15,29 @@ from solin.widgets.projection.fullscreen import (
 
 
 _APP = QApplication.instance() or QApplication([])
+
+
+def test_active_projection_bar_surface_owns_click_cursor():
+    bar = projection_bar.ProjectionBar.__new__(projection_bar.ProjectionBar)
+    QFrame.__init__(bar)
+    bar._container = None
+    bar._volume = 0.5
+    bar.setCursor(Qt.CursorShape.ArrowCursor)
+    try:
+        bar._build_bar_ui()
+
+        assert bar.cursor().shape() is Qt.CursorShape.ArrowCursor
+        assert bar.inactive_widget.testAttribute(Qt.WidgetAttribute.WA_SetCursor)
+        assert bar.inactive_widget.cursor().shape() is Qt.CursorShape.ArrowCursor
+        assert bar.active_widget.testAttribute(Qt.WidgetAttribute.WA_SetCursor)
+        assert (
+            bar.active_widget.cursor().shape()
+            is Qt.CursorShape.PointingHandCursor
+        )
+        assert bar.proj_title.cursor().shape() is Qt.CursorShape.PointingHandCursor
+    finally:
+        bar.deleteLater()
+        QCoreApplication.sendPostedEvents(bar, QEvent.Type.DeferredDelete)
 
 
 class _Button:

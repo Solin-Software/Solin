@@ -386,7 +386,8 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
 
         self.setObjectName("StatusBar")
         self.setFixedHeight(self._BAR_H)
-        # Cursor is ArrowCursor in inactive state; PointingHandCursor when media is active
+        # The shell is not interactive. Each visible state owns its cursor so
+        # native child-window materialization cannot replace the active hint.
         self.setCursor(Qt.CursorShape.ArrowCursor)
 
         self._build_bar_ui()
@@ -473,6 +474,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
 
         # ── Estado inativo ────────────────────────────────────────────────
         self.inactive_widget = QWidget()
+        self.inactive_widget.setCursor(Qt.CursorShape.ArrowCursor)
         self.inactive_widget.setStyleSheet("background: transparent;")
         inact_lay = QHBoxLayout(self.inactive_widget)
         inact_lay.setContentsMargins(0, 0, 0, 0)
@@ -496,6 +498,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
 
         # ── Estado ativo ──────────────────────────────────────────────────
         self.active_widget = QWidget()
+        self.active_widget.setCursor(Qt.CursorShape.PointingHandCursor)
         self.active_widget.setStyleSheet("background: transparent;")
         self.active_widget.setVisible(False)
         act_lay = QHBoxLayout(self.active_widget)
@@ -1265,8 +1268,6 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.inactive_widget.setVisible(False)
         self.active_widget.setVisible(True)
         self.overlay_stack.setCurrentIndex(0)
-        # Bar is clickable to expand when active
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
         self._sync_app_fullscreen_availability()
 
         # Aplica velocidade salva
@@ -1374,7 +1375,6 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.inactive_widget.setVisible(False)
         self.active_widget.setVisible(True)
         self.overlay_stack.setCurrentIndex(0)
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
         # Botão OBS: visível se disponível; ao entrar no modo imagem, assume cena de mídia ativa
         self._obs_scene_is_media = True
         self._refresh_obs_scene_btn()
@@ -1464,8 +1464,6 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.inactive_widget.setVisible(False)
         self.active_widget.setVisible(True)
         self.overlay_stack.setCurrentIndex(0)
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-
         if self._expanded:
             if keep_expanded:
                 self._update_overlay_geometry()
@@ -1528,7 +1526,6 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.ov_set_idle_btn.setVisible(False)        # cronômetro não pode ser idle
         self.inactive_widget.setVisible(False)
         self.active_widget.setVisible(True)
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
         if self._expanded:
             self._collapse()
         self._timer_tick.start()
@@ -1697,8 +1694,6 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.active_widget.setVisible(False)
         self._offline_badge.setVisible(False)
         self.seek_slider.reset()
-        # No clickable expand action when inactive — use arrow cursor
-        self.setCursor(Qt.CursorShape.ArrowCursor)
 
     # ── OBS scene toggle (modo imagem) ────────────────────────────────────
 
