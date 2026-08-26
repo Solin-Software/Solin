@@ -4,6 +4,9 @@
 #include "solin/media_engine/content_image_framing.hpp"
 #include "solin/media_engine/frame_channel.hpp"
 #include "solin/media_engine/presentation_transition.hpp"
+#ifdef _WIN32
+#include "windows_d3d11_frame_channel.hpp"
+#endif
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -782,7 +785,20 @@ class GStreamerSourceRuntime final : public SourceRuntime {
             if (!source_.frame_channel.has_value()) {
                 throw std::runtime_error("content_ingress_unavailable");
             }
-            frame_channel_reader_ = make_frame_channel_reader(source_.frame_channel.value());
+            const auto& channel = source_.frame_channel.value();
+#ifdef _WIN32
+            if (channel.transport == "d3d11_shared_texture") {
+                if (!use_d3d11_ || d3d11_device_ == nullptr) {
+                    throw std::runtime_error("content_d3d11_ingress_unavailable");
+                }
+                d3d11_frame_channel_reader_ = make_d3d11_frame_channel_reader(
+                    channel,
+                    gst_d3d11_device_get_device_handle(d3d11_device_.get()));
+            } else
+#endif
+            {
+                frame_channel_reader_ = make_frame_channel_reader(channel);
+            }
         }
     }
 
@@ -835,6 +851,11 @@ class GStreamerSourceRuntime final : public SourceRuntime {
         if (frame_channel_reader_ != nullptr) {
             frame_channel_reader_->wake();
         }
+#ifdef _WIN32
+        if (d3d11_frame_channel_reader_ != nullptr) {
+            d3d11_frame_channel_reader_->wake();
+        }
+#endif
         reconnect_wakeup_.notify_all();
         if (worker_.joinable()) {
             worker_.join();
@@ -870,14 +891,28 @@ class GStreamerSourceRuntime final : public SourceRuntime {
             const auto frame = latest_frame();
             return frame != nullptr && frame->sequence > after_sequence;
         };
-        if (ready()) {
-            return true;
+        const auto stopped = [this] {
+            return health().status == SourceRuntimeStatus::stopped;
+        };
+        while (!stop_token.stop_requested() &&
+               std::chrono::steady_clock::now() < deadline) {
+            if (ready()) {
+                return true;
+            }
+            if (stopped()) {
+                return false;
+            }
+            const auto revision = frame_signal_->revision();
+            if (ready()) {
+                return true;
+            }
+            if (stopped()) {
+                return false;
+            }
+            if (!frame_signal_->wait_after(revision, stop_token, deadline)) {
+                break;
+            }
         }
-        const auto revision = frame_signal_->revision();
-        if (ready()) {
-            return true;
-        }
-        static_cast<void>(frame_signal_->wait_after(revision, stop_token, deadline));
         return ready();
     }
 
@@ -1054,49 +1089,51 @@ class GStreamerSourceRuntime final : public SourceRuntime {
         content_appsrc_ = GST_APP_SRC(source);
     }
 
-    void push_content_frame() {
-        if (content_appsrc_ == nullptr || frame_channel_reader_ == nullptr) {
-            throw std::runtime_error("content_ingress_unavailable");
+    struct ContentIngressMetadata final {
+        std::uint64_t sequence{0U};
+        std::uint64_t media_epoch{0U};
+        std::uint32_t width{0U};
+        std::uint32_t height{0U};
+        VideoFramePixelFormat pixel_format{VideoFramePixelFormat::bgra};
+        std::array<std::uint32_t, 2U> plane_strides{};
+        std::array<std::uint64_t, 2U> plane_offsets{};
+        bool d3d11_memory{false};
+    };
+
+    void update_content_control_state() {
+        std::optional<std::uint64_t> requested_epoch;
+        std::optional<FrameChannelImageTransform> requested_transform;
+#ifdef _WIN32
+        if (d3d11_frame_channel_reader_ != nullptr) {
+            requested_epoch = d3d11_frame_channel_reader_->media_epoch();
+            requested_transform = d3d11_frame_channel_reader_->image_transform();
+        } else
+#endif
+        if (frame_channel_reader_ != nullptr) {
+            requested_epoch = frame_channel_reader_->media_epoch();
+            requested_transform = frame_channel_reader_->image_transform();
         }
-        if (const auto requested_epoch = frame_channel_reader_->media_epoch();
-            requested_epoch.has_value()) {
+        if (requested_epoch.has_value()) {
             content_requested_media_epoch_.store(requested_epoch.value(),
                                                  std::memory_order_release);
         }
-        if (const auto requested_transform = frame_channel_reader_->image_transform();
-            requested_transform.has_value() &&
-            requested_transform->revision > content_requested_image_transform_.revision) {
+        if (requested_transform.has_value() &&
+            requested_transform->revision >
+                content_requested_image_transform_.revision) {
             content_requested_image_transform_ = requested_transform.value();
         }
-        auto frame_lease = frame_channel_reader_->read_latest(content_pipeline_sequence_);
-        if (!frame_lease.has_value()) {
-            return;
-        }
-        const auto frame = frame_lease->frame();
-        GstBuffer* buffer = nullptr;
-        if (use_d3d11_) {
-            auto lifetime =
-                std::make_unique<FrameChannelFrameLease>(std::move(frame_lease.value()));
-            buffer = gst_buffer_new_wrapped_full(
-                GST_MEMORY_FLAG_READONLY,
-                const_cast<std::uint8_t*>(lifetime->frame().bytes.data()),
-                lifetime->frame().bytes.size(), 0U, lifetime->frame().bytes.size(),
-                lifetime.get(), [](gpointer value) {
-                    delete static_cast<FrameChannelFrameLease*>(value);
-                });
-            if (buffer != nullptr) {
-                static_cast<void>(lifetime.release());
-            }
-        } else {
-            buffer = gst_buffer_new_memdup(frame.bytes.data(), frame.bytes.size());
-        }
+    }
+
+    void push_content_buffer(GstBuffer* buffer,
+                             const ContentIngressMetadata& frame) {
         if (buffer == nullptr) {
             throw std::runtime_error("content ingress buffer allocation failed");
         }
         const auto video_format = frame.pixel_format == VideoFramePixelFormat::nv12
                                       ? GST_VIDEO_FORMAT_NV12
                                       : GST_VIDEO_FORMAT_BGRA;
-        const auto plane_count = frame.pixel_format == VideoFramePixelFormat::nv12 ? 2U : 1U;
+        const auto plane_count =
+            frame.pixel_format == VideoFramePixelFormat::nv12 ? 2U : 1U;
         gsize plane_offsets[GST_VIDEO_MAX_PLANES]{};
         gint plane_strides[GST_VIDEO_MAX_PLANES]{};
         for (guint index = 0U; index < plane_count; ++index) {
@@ -1105,39 +1142,55 @@ class GStreamerSourceRuntime final : public SourceRuntime {
                 gst_buffer_unref(buffer);
                 throw std::runtime_error("content ingress stride is invalid");
             }
-            plane_offsets[index] = static_cast<gsize>(frame.plane_offsets[index]);
-            plane_strides[index] = static_cast<gint>(frame.plane_strides[index]);
+            plane_offsets[index] =
+                static_cast<gsize>(frame.plane_offsets[index]);
+            plane_strides[index] =
+                static_cast<gint>(frame.plane_strides[index]);
         }
         if (gst_buffer_add_video_meta_full(
-                buffer, GST_VIDEO_FRAME_FLAG_NONE, video_format, frame.width, frame.height,
-                plane_count, plane_offsets, plane_strides) == nullptr) {
+                buffer, GST_VIDEO_FRAME_FLAG_NONE, video_format, frame.width,
+                frame.height, plane_count, plane_offsets, plane_strides) ==
+            nullptr) {
             gst_buffer_unref(buffer);
-            throw std::runtime_error("content ingress video metadata allocation failed");
+            throw std::runtime_error(
+                "content ingress video metadata allocation failed");
         }
-        if (content_frame_caps_ == nullptr || content_frame_width_ != frame.width ||
+        if (content_frame_caps_ == nullptr ||
+            content_frame_width_ != frame.width ||
             content_frame_height_ != frame.height ||
-            content_frame_pixel_format_ != frame.pixel_format) {
+            content_frame_pixel_format_ != frame.pixel_format ||
+            content_frame_d3d11_ != frame.d3d11_memory) {
             if (content_canonical_caps_filter_ == nullptr) {
                 gst_buffer_unref(buffer);
                 throw std::runtime_error("content canonical caps are unavailable");
             }
-            const auto canonical_caps = exact_raw_caps(use_d3d11_, frame.width, frame.height);
+            const auto canonical_caps =
+                exact_raw_caps(use_d3d11_, frame.width, frame.height);
             if (canonical_caps == nullptr) {
                 gst_buffer_unref(buffer);
-                throw std::runtime_error("content canonical caps could not be created");
+                throw std::runtime_error(
+                    "content canonical caps could not be created");
             }
-            g_object_set(content_canonical_caps_filter_, "caps", canonical_caps.get(), nullptr);
+            g_object_set(content_canonical_caps_filter_, "caps",
+                         canonical_caps.get(), nullptr);
             const auto* pixel_format =
-                frame.pixel_format == VideoFramePixelFormat::nv12 ? "NV12" : "BGRA";
+                frame.pixel_format == VideoFramePixelFormat::nv12 ? "NV12"
+                                                                  : "BGRA";
             auto* replacement_caps = gst_caps_new_simple(
                 "video/x-raw", "format", G_TYPE_STRING, pixel_format,
-                "pixel-aspect-ratio", GST_TYPE_FRACTION, 1, 1, "width", G_TYPE_INT,
-                static_cast<gint>(frame.width), "height", G_TYPE_INT,
-                static_cast<gint>(frame.height), "framerate", GST_TYPE_FRACTION, 0, 1,
-                nullptr);
+                "pixel-aspect-ratio", GST_TYPE_FRACTION, 1, 1, "width",
+                G_TYPE_INT, static_cast<gint>(frame.width), "height", G_TYPE_INT,
+                static_cast<gint>(frame.height), "framerate", GST_TYPE_FRACTION,
+                0, 1, nullptr);
             if (replacement_caps == nullptr) {
                 gst_buffer_unref(buffer);
                 throw std::runtime_error("content ingress caps could not be created");
+            }
+            if (frame.d3d11_memory) {
+                gst_caps_set_features(
+                    replacement_caps, 0U,
+                    gst_caps_features_new(
+                        GST_CAPS_FEATURE_MEMORY_D3D11_MEMORY, nullptr));
             }
             if (frame.pixel_format == VideoFramePixelFormat::nv12) {
                 gst_caps_set_simple(replacement_caps, "colorimetry", G_TYPE_STRING,
@@ -1150,11 +1203,18 @@ class GStreamerSourceRuntime final : public SourceRuntime {
             content_frame_width_ = frame.width;
             content_frame_height_ = frame.height;
             content_frame_pixel_format_ = frame.pixel_format;
+            content_frame_d3d11_ = frame.d3d11_memory;
         }
         GST_BUFFER_PTS(buffer) = GST_CLOCK_TIME_NONE;
         GST_BUFFER_DTS(buffer) = GST_CLOCK_TIME_NONE;
         GST_BUFFER_OFFSET(buffer) = frame.media_epoch;
-        GST_BUFFER_DURATION(buffer) = static_cast<GstClockTime>(kContentFrameInterval.count());
+        // Carry the ingress sequence through negotiation and conversion so the
+        // producer can distinguish an accepted appsrc push from a frame that
+        // actually reached the appsink. A lone still-image sample may otherwise
+        // be lost while dynamic caps are renegotiated and never retried.
+        GST_BUFFER_OFFSET_END(buffer) = frame.sequence;
+        GST_BUFFER_DURATION(buffer) =
+            static_cast<GstClockTime>(kContentFrameInterval.count());
         if (last_content_sequence_ == 0U ||
             frame.sequence != last_content_sequence_ + 1U) {
             GST_BUFFER_FLAG_SET(buffer, GST_BUFFER_FLAG_DISCONT);
@@ -1169,8 +1229,155 @@ class GStreamerSourceRuntime final : public SourceRuntime {
         if (flow != GST_FLOW_OK) {
             throw std::runtime_error("content ingress rejected a frame");
         }
-        content_pipeline_sequence_ = frame.sequence;
+        content_submitted_sequence_ = frame.sequence;
         last_content_sequence_ = frame.sequence;
+    }
+
+    void push_system_content_frame() {
+        auto frame_lease = frame_channel_reader_->read_latest(
+            content_submitted_sequence_);
+        const auto confirmed_sequence =
+            content_confirmed_sequence_.load(std::memory_order_acquire);
+        if (!frame_lease.has_value() &&
+            confirmed_sequence < content_submitted_sequence_) {
+            frame_lease =
+                frame_channel_reader_->read_latest(confirmed_sequence);
+        }
+        if (!frame_lease.has_value()) {
+            return;
+        }
+        const auto frame = frame_lease->frame();
+        GstBuffer* buffer = nullptr;
+        if (use_d3d11_) {
+            auto lifetime = std::make_unique<FrameChannelFrameLease>(
+                std::move(frame_lease.value()));
+            buffer = gst_buffer_new_wrapped_full(
+                GST_MEMORY_FLAG_READONLY,
+                const_cast<std::uint8_t*>(lifetime->frame().bytes.data()),
+                lifetime->frame().bytes.size(), 0U,
+                lifetime->frame().bytes.size(), lifetime.get(),
+                [](gpointer value) {
+                    delete static_cast<FrameChannelFrameLease*>(value);
+                });
+            if (buffer != nullptr) {
+                static_cast<void>(lifetime.release());
+            }
+        } else {
+            buffer = gst_buffer_new_memdup(frame.bytes.data(), frame.bytes.size());
+        }
+        push_content_buffer(
+            buffer,
+            {.sequence = frame.sequence,
+             .media_epoch = frame.media_epoch,
+             .width = frame.width,
+             .height = frame.height,
+             .pixel_format = frame.pixel_format,
+             .plane_strides = frame.plane_strides,
+             .plane_offsets = frame.plane_offsets,
+             .d3d11_memory = false});
+    }
+
+#ifdef _WIN32
+    void push_d3d11_content_frame() {
+        auto frame_lease = d3d11_frame_channel_reader_->read_latest(
+            content_submitted_sequence_);
+        const auto confirmed_sequence =
+            content_confirmed_sequence_.load(std::memory_order_acquire);
+        if (!frame_lease.has_value() &&
+            confirmed_sequence < content_submitted_sequence_) {
+            frame_lease = d3d11_frame_channel_reader_->read_latest(
+                confirmed_sequence);
+        }
+        if (!frame_lease.has_value()) {
+            return;
+        }
+        const auto frame = frame_lease->frame();
+        const bool resource_changed =
+            content_d3d11_layout_generation_ != frame.resource_generation;
+        auto lifetime = std::make_unique<D3d11FrameChannelFrameLease>(
+            std::move(frame_lease.value()));
+        auto* memory = gst_d3d11_allocator_alloc_wrapped(
+            nullptr, d3d11_device_.get(), lifetime->frame().texture,
+            resource_changed ? 0U : content_d3d11_mapped_size_, lifetime.get(),
+            [](gpointer value) {
+                delete static_cast<D3d11FrameChannelFrameLease*>(value);
+            });
+        if (memory == nullptr) {
+            throw std::runtime_error(
+                "content D3D11 memory wrapping failed");
+        }
+        static_cast<void>(lifetime.release());
+        if (resource_changed) {
+            gsize memory_offset = 0U;
+            gsize mapped_size = 0U;
+            static_cast<void>(
+                gst_memory_get_sizes(memory, &memory_offset, &mapped_size));
+            guint resource_stride = 0U;
+            if (memory_offset != 0U || mapped_size == 0U ||
+                gst_d3d11_memory_get_resource_stride(
+                    GST_D3D11_MEMORY_CAST(memory), &resource_stride) == FALSE ||
+                resource_stride == 0U) {
+                gst_memory_unref(memory);
+                throw std::runtime_error(
+                    "content D3D11 mapped layout is invalid");
+            }
+            const auto minimum_size =
+                static_cast<std::uint64_t>(resource_stride) * frame.height *
+                (frame.pixel_format == VideoFramePixelFormat::nv12 ? 3U : 1U);
+            const auto denominator =
+                frame.pixel_format == VideoFramePixelFormat::nv12 ? 2U : 1U;
+            if (minimum_size / denominator > mapped_size) {
+                gst_memory_unref(memory);
+                throw std::runtime_error(
+                    "content D3D11 mapped layout is too small");
+            }
+            content_d3d11_layout_generation_ = frame.resource_generation;
+            content_d3d11_mapped_size_ = mapped_size;
+            content_d3d11_stride_ = resource_stride;
+        }
+        auto* buffer = gst_buffer_new();
+        if (buffer == nullptr) {
+            gst_memory_unref(memory);
+            throw std::runtime_error("content ingress buffer allocation failed");
+        }
+        gst_buffer_append_memory(buffer, memory);
+        const auto second_offset =
+            frame.pixel_format == VideoFramePixelFormat::nv12
+                ? static_cast<std::uint64_t>(content_d3d11_stride_) * frame.height
+                : 0U;
+        push_content_buffer(
+            buffer,
+            {.sequence = frame.sequence,
+             .media_epoch = frame.media_epoch,
+             .width = frame.width,
+             .height = frame.height,
+             .pixel_format = frame.pixel_format,
+             .plane_strides = {content_d3d11_stride_,
+                               frame.pixel_format == VideoFramePixelFormat::nv12
+                                   ? content_d3d11_stride_
+                                   : 0U},
+             .plane_offsets = {0U, second_offset},
+             .d3d11_memory = true});
+    }
+#endif
+
+    void push_content_frame() {
+        if (content_appsrc_ == nullptr ||
+            (frame_channel_reader_ == nullptr
+#ifdef _WIN32
+             && d3d11_frame_channel_reader_ == nullptr
+#endif
+             )) {
+            throw std::runtime_error("content_ingress_unavailable");
+        }
+        update_content_control_state();
+#ifdef _WIN32
+        if (d3d11_frame_channel_reader_ != nullptr) {
+            push_d3d11_content_frame();
+            return;
+        }
+#endif
+        push_system_content_frame();
     }
 
     void release_content_frame() noexcept {
@@ -1183,7 +1390,12 @@ class GStreamerSourceRuntime final : public SourceRuntime {
         content_frame_width_ = 0U;
         content_frame_height_ = 0U;
         content_frame_pixel_format_ = VideoFramePixelFormat::bgra;
-        content_pipeline_sequence_ = 0U;
+        content_frame_d3d11_ = false;
+        content_d3d11_layout_generation_ = 0U;
+        content_d3d11_mapped_size_ = 0U;
+        content_d3d11_stride_ = 0U;
+        content_submitted_sequence_ = 0U;
+        content_confirmed_sequence_.store(0U, std::memory_order_release);
         last_content_sequence_ = 0U;
         content_requested_media_epoch_.store(0U, std::memory_order_release);
         content_transition_ = PresentationTransition{kMediaPresentationTransition};
@@ -1597,7 +1809,7 @@ class GStreamerSourceRuntime final : public SourceRuntime {
     }
 
     [[nodiscard]] std::shared_ptr<SourceFrame> republish_content_frame(
-        const std::shared_ptr<SourceFrame>& frame) noexcept {
+        const std::shared_ptr<const SourceFrame>& frame) noexcept {
         if (frame == nullptr) {
             return {};
         }
@@ -1619,8 +1831,21 @@ class GStreamerSourceRuntime final : public SourceRuntime {
         reset_content_transition_pipeline();
         content_transition_black_output_observed_ = false;
         content_transition_first_frame_watchdog_.acknowledge();
-        if (const auto recovered =
-                republish_content_frame(content_frozen_outgoing_);
+        std::shared_ptr<const SourceFrame> stable_failed_epoch;
+        try {
+            std::scoped_lock lock{state_mutex_};
+            if (latest_frame_ != nullptr &&
+                latest_frame_->media_epoch == failed_epoch) {
+                stable_failed_epoch = latest_frame_;
+            }
+        } catch (...) {
+        }
+        // A watchdog recovery may stabilize only pixels already authored by the
+        // failed projection epoch. Giving the outgoing video's pixels a fresh
+        // sequence makes every downstream consumer accept stale content as the
+        // new image/idle owner and can strand Program there indefinitely.
+        content_frozen_outgoing_.reset();
+        if (const auto recovered = republish_content_frame(stable_failed_epoch);
             recovered != nullptr) {
             content_transition_.restore_stable(PresentationIdentity{
                 .bus = OutputBus::media_windows,
@@ -1870,7 +2095,8 @@ class GStreamerSourceRuntime final : public SourceRuntime {
     [[nodiscard]] GstElement* build_pipeline() {
         content_appsrc_ = nullptr;
         content_canonical_caps_filter_ = nullptr;
-        content_pipeline_sequence_ = 0U;
+        content_submitted_sequence_ = 0U;
+        content_confirmed_sequence_.store(0U, std::memory_order_release);
         auto* raw_pipeline = gst_pipeline_new(nullptr);
         if (raw_pipeline == nullptr) {
             throw std::runtime_error("source pipeline could not be created");
@@ -1912,6 +2138,11 @@ class GStreamerSourceRuntime final : public SourceRuntime {
     [[nodiscard]] const char* stream_error_code() const noexcept {
         switch (source_.kind) {
         case SceneSourceKind::solin_content:
+#ifdef _WIN32
+            if (d3d11_frame_channel_reader_ != nullptr) {
+                return "content_d3d11_ingress_failed";
+            }
+#endif
             return "content_ingress_failed";
         case SceneSourceKind::local_camera:
             return "local_camera_stream_failed";
@@ -1932,6 +2163,14 @@ class GStreamerSourceRuntime final : public SourceRuntime {
                               std::chrono::milliseconds{configuration.latency_ms * 3U} + 2s);
         }
         return source_.kind == SceneSourceKind::color ? 2s : 5s;
+    }
+
+    [[nodiscard]] bool requires_d3d11_ingress() const noexcept {
+#ifdef _WIN32
+        return d3d11_frame_channel_reader_ != nullptr;
+#else
+        return false;
+#endif
     }
 
     void publish_failure(const char* error_code) {
@@ -1961,6 +2200,16 @@ class GStreamerSourceRuntime final : public SourceRuntime {
         auto reconnect_delay = kInitialReconnectDelay;
         while (!stop_requested_.load()) {
             if (use_d3d11_ && !d3d11_manager_->is_current(d3d11_device_)) {
+                if (requires_d3d11_ingress()) {
+                    publish_failure("content_d3d11_device_lost");
+                    std::unique_lock lock{reconnect_mutex_};
+                    reconnect_wakeup_.wait_for(
+                        lock, reconnect_delay,
+                        [this] { return stop_requested_.load(); });
+                    reconnect_delay =
+                        (std::min)(reconnect_delay * 2, kMaximumReconnectDelay);
+                    continue;
+                }
                 use_d3d11_ = false;
                 d3d11_device_.reset();
                 std::scoped_lock lock{state_mutex_};
@@ -1983,7 +2232,9 @@ class GStreamerSourceRuntime final : public SourceRuntime {
                 if (state_change == GST_STATE_CHANGE_FAILURE) {
                     auto* state_error = gst_bus_timed_pop_filtered(bus.get(), 100U * GST_MSECOND,
                                                                    GST_MESSAGE_ERROR);
-                    use_system_memory_fallback = use_d3d11_ && is_d3d11_failure_origin(state_error);
+                    use_system_memory_fallback =
+                        use_d3d11_ && !requires_d3d11_ingress() &&
+                        is_d3d11_failure_origin(state_error);
                     if (state_error != nullptr) {
                         gst_message_unref(state_error);
                     }
@@ -1994,7 +2245,7 @@ class GStreamerSourceRuntime final : public SourceRuntime {
                 while (!stop_requested_.load()) {
                     if (use_d3d11_ && !d3d11_manager_->is_current(d3d11_device_)) {
                         pipeline_failed = true;
-                        use_system_memory_fallback = true;
+                        use_system_memory_fallback = !requires_d3d11_ingress();
                         break;
                     }
                     if (source_.kind == SceneSourceKind::solin_content) {
@@ -2006,10 +2257,21 @@ class GStreamerSourceRuntime final : public SourceRuntime {
                             std::chrono::steady_clock::now());
                     GstMessage* message = nullptr;
                     if (source_.kind == SceneSourceKind::solin_content) {
-                        static_cast<void>(frame_channel_reader_->wait_for_frame(
-                            content_transition_active
-                                ? kContentTransitionFrameInterval
-                                : kBusPollInterval));
+#ifdef _WIN32
+                        if (d3d11_frame_channel_reader_ != nullptr) {
+                            static_cast<void>(
+                                d3d11_frame_channel_reader_->wait_for_frame(
+                                    content_transition_active
+                                        ? kContentTransitionFrameInterval
+                                        : kBusPollInterval));
+                        } else
+#endif
+                        {
+                            static_cast<void>(frame_channel_reader_->wait_for_frame(
+                                content_transition_active
+                                    ? kContentTransitionFrameInterval
+                                    : kBusPollInterval));
+                        }
                         message = gst_bus_pop_filtered(
                             bus.get(), static_cast<GstMessageType>(GST_MESSAGE_ERROR |
                                                                   GST_MESSAGE_EOS));
@@ -2030,7 +2292,7 @@ class GStreamerSourceRuntime final : public SourceRuntime {
                         const auto now = monotonic_nanoseconds();
                         const auto retained_content_frame =
                             source_.kind == SceneSourceKind::solin_content &&
-                            content_pipeline_sequence_ != 0U &&
+                            content_submitted_sequence_ != 0U &&
                             current_sequence > sequence_before_attempt;
                         if (!retained_content_frame && reference <= now &&
                             now - reference > static_cast<std::uint64_t>(frame_timeout().count())) {
@@ -2041,7 +2303,9 @@ class GStreamerSourceRuntime final : public SourceRuntime {
                         continue;
                     }
                     pipeline_failed = true;
-                    use_system_memory_fallback = use_d3d11_ && is_d3d11_failure_origin(message);
+                    use_system_memory_fallback =
+                        use_d3d11_ && !requires_d3d11_ingress() &&
+                        is_d3d11_failure_origin(message);
                     gst_message_unref(message);
                     break;
                 }
@@ -2061,7 +2325,8 @@ class GStreamerSourceRuntime final : public SourceRuntime {
                 }
             } catch (const D3d11PipelineError&) {
                 pipeline_failed = true;
-                use_system_memory_fallback = use_d3d11_;
+                use_system_memory_fallback =
+                    use_d3d11_ && !requires_d3d11_ingress();
             } catch (const std::exception&) {
                 pipeline_failed = true;
             }
@@ -2070,8 +2335,10 @@ class GStreamerSourceRuntime final : public SourceRuntime {
             if (stop_requested_.load()) {
                 break;
             }
-            use_system_memory_fallback = use_system_memory_fallback ||
-                                         (use_d3d11_ && !d3d11_manager_->is_current(d3d11_device_));
+            use_system_memory_fallback =
+                use_system_memory_fallback ||
+                (use_d3d11_ && !requires_d3d11_ingress() &&
+                 !d3d11_manager_->is_current(d3d11_device_));
             if (pipeline_failed) {
                 const auto current_health = health();
                 if (current_health.error_code != "source_frame_timeout") {
@@ -2141,6 +2408,11 @@ class GStreamerSourceRuntime final : public SourceRuntime {
                         GST_BUFFER_OFFSET(buffer) != GST_BUFFER_OFFSET_NONE
                     ? GST_BUFFER_OFFSET(buffer)
                     : 0U;
+            const auto content_ingress_sequence =
+                source_.kind == SceneSourceKind::solin_content &&
+                        GST_BUFFER_OFFSET_END(buffer) != GST_BUFFER_OFFSET_NONE
+                    ? GST_BUFFER_OFFSET_END(buffer)
+                    : 0U;
             const auto* raw_pixel_format = gst_video_format_to_string(GST_VIDEO_INFO_FORMAT(&info));
             if (raw_pixel_format == nullptr) {
                 return GST_FLOW_ERROR;
@@ -2177,6 +2449,14 @@ class GStreamerSourceRuntime final : public SourceRuntime {
                 std::scoped_lock lock{state_mutex_};
                 if (source_.kind == SceneSourceKind::solin_content) {
                     content_decoded_frame_ = frame;
+                    auto confirmed = content_confirmed_sequence_.load(
+                        std::memory_order_relaxed);
+                    while (content_ingress_sequence > confirmed &&
+                           !content_confirmed_sequence_.compare_exchange_weak(
+                               confirmed, content_ingress_sequence,
+                               std::memory_order_release,
+                               std::memory_order_relaxed)) {
+                    }
                 } else {
                     latest_frame_ = frame;
                 }
@@ -2198,6 +2478,12 @@ class GStreamerSourceRuntime final : public SourceRuntime {
                 frame_channel_reader_ != nullptr) {
                 frame_channel_reader_->wake();
             }
+#ifdef _WIN32
+            if (source_.kind == SceneSourceKind::solin_content &&
+                d3d11_frame_channel_reader_ != nullptr) {
+                d3d11_frame_channel_reader_->wake();
+            }
+#endif
             frame_signal_->notify();
             return GST_FLOW_OK;
         } catch (const std::exception&) {
@@ -2230,12 +2516,21 @@ class GStreamerSourceRuntime final : public SourceRuntime {
     std::shared_ptr<GStreamerFrameSignal> frame_signal_{};
     LocalCameraFormatResolver camera_format_resolver_{};
     std::unique_ptr<FrameChannelReader> frame_channel_reader_{};
+#ifdef _WIN32
+    std::unique_ptr<D3d11FrameChannelReader> d3d11_frame_channel_reader_{};
+#endif
     GstAppSrc* content_appsrc_{nullptr};
     GstElement* content_canonical_caps_filter_{nullptr};
     GstCaps* content_frame_caps_{nullptr};
     std::uint32_t content_frame_width_{0U};
     std::uint32_t content_frame_height_{0U};
     VideoFramePixelFormat content_frame_pixel_format_{VideoFramePixelFormat::bgra};
+    bool content_frame_d3d11_{false};
+#ifdef _WIN32
+    std::uint64_t content_d3d11_layout_generation_{0U};
+    gsize content_d3d11_mapped_size_{0U};
+    guint content_d3d11_stride_{0U};
+#endif
     std::atomic_uint64_t content_requested_media_epoch_{0U};
     FrameChannelImageTransform content_requested_image_transform_{};
     ContentImageTransformAnimation content_image_transform_animation_{};
@@ -2277,7 +2572,8 @@ class GStreamerSourceRuntime final : public SourceRuntime {
     PresentationReadinessWatchdog content_transition_first_frame_watchdog_{
         kPresentationFirstFrameTimeout};
     std::uint64_t last_content_sequence_{0U};
-    std::uint64_t content_pipeline_sequence_{0U};
+    std::uint64_t content_submitted_sequence_{0U};
+    std::atomic_uint64_t content_confirmed_sequence_{0U};
     std::mutex reconnect_mutex_{};
     std::condition_variable reconnect_wakeup_{};
 };

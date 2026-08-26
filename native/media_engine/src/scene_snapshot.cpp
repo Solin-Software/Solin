@@ -702,10 +702,16 @@ parse_frame_channel(const Json& value, const std::string_view expected_producer)
     require_one_of(result.pixel_format, {"dynamic", "bgra", "nv12"}, "frame channel pixel format");
     require_one_of(result.color_space, {"srgb", "bt709"}, "frame channel color space");
     require_one_of(result.color_range, {"full", "limited"}, "frame channel color range");
-    if (result.transport == "shared_memory_bgra" && result.pixel_format != "bgra") {
-        invalid("frame channel shared-memory pixel format");
-    }
-    if ((result.transport == "shared_memory_video") != (result.pixel_format == "dynamic")) {
+    const auto fixed_bgra = result.transport == "shared_memory_bgra" &&
+                            result.pixel_format == "bgra";
+    const auto dynamic_video =
+        (result.transport == "shared_memory_video" ||
+         result.transport == "d3d11_shared_texture") &&
+        result.pixel_format == "dynamic";
+    const auto fixed_d3d11 =
+        result.transport == "d3d11_shared_texture" &&
+        (result.pixel_format == "bgra" || result.pixel_format == "nv12");
+    if (!fixed_bgra && !dynamic_video && !fixed_d3d11) {
         invalid("frame channel dynamic pixel format");
     }
     return result;
@@ -773,6 +779,19 @@ void validate_scene_reference_graph(
 }
 
 } // namespace
+
+bool same_scene_document_source_definition(const SceneSource& left,
+                                           const SceneSource& right) noexcept {
+    if (left.id != right.id || left.kind != right.kind ||
+        left.enabled != right.enabled || left.configuration != right.configuration) {
+        return false;
+    }
+    if (left.kind == SceneSourceKind::solin_content &&
+        left.id == kSolinContentSourceId) {
+        return true;
+    }
+    return left.frame_channel == right.frame_channel;
+}
 
 SceneHydrationSnapshot
 parse_scene_hydration_snapshot(const Json& payload,

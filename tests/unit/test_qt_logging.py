@@ -125,6 +125,19 @@ def test_router_suppresses_known_benign_native_child_warning() -> None:
     assert handler.messages == []
 
 
+def test_router_suppresses_repeated_ffmpeg_missing_pts_warning() -> None:
+    router, handler = _router()
+    router.mark_file_logging_ready()
+
+    router.handle(
+        _Mode.QtWarningMsg,
+        _Context(category="default", file="", line=0, function=""),
+        "QFFmpeg::Demuxer received AVPacket with pts == AV_NOPTS_VALUE",
+    )
+
+    assert handler.messages == []
+
+
 def test_router_bounds_repeated_warnings_but_never_suppresses_critical() -> None:
     now = [0.0]
     router, handler = _router(clock=lambda: now[0])

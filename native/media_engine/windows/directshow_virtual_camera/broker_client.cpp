@@ -48,6 +48,9 @@ class UniqueHandle final {
         value_ = value;
     }
     [[nodiscard]] HANDLE get() const noexcept { return value_; }
+    [[nodiscard]] HANDLE release() noexcept {
+        return std::exchange(value_, nullptr);
+    }
     [[nodiscard]] explicit operator bool() const noexcept {
         return value_ != nullptr && value_ != INVALID_HANDLE_VALUE;
     }
@@ -181,7 +184,8 @@ class UniqueHandle final {
 
 [[nodiscard]] bool open_broker_generation(
     const std::wstring& pipe_name, VirtualCameraBrokerResponse& response,
-    std::unique_ptr<SharedVideoFrameReader>& reader) noexcept {
+    std::unique_ptr<SharedVideoFrameReader>& reader,
+    std::uintptr_t& broker_connection) noexcept {
     try {
         VirtualCameraBrokerRequest request{};
         if (BCryptGenRandom(nullptr, request.nonce.data(),
@@ -206,12 +210,28 @@ class UniqueHandle final {
             return false;
         }
         auto opened_reader = open_frame_reader(decoded);
+        // Protocol v3 originally ended the broker exchange after this response.
+        // A one-byte marker extends it into a presence lease without changing
+        // the framed handshake, so new filters remain compatible with older
+        // engines while new engines can distinguish legacy clients exactly.
+        std::array<std::uint8_t, 1U> presence_marker{
+            kVirtualCameraBrokerPresenceMarker};
+        static_cast<void>(pipe_io(pipe.get(), presence_marker, true));
         response = std::move(decoded);
         reader = std::move(opened_reader);
+        broker_connection = reinterpret_cast<std::uintptr_t>(pipe.release());
         return true;
     } catch (...) {
         return false;
     }
+}
+
+void close_broker_connection(std::uintptr_t& connection) noexcept {
+    if (connection == 0U) {
+        return;
+    }
+    static_cast<void>(CloseHandle(reinterpret_cast<HANDLE>(connection)));
+    connection = 0U;
 }
 
 } // namespace
@@ -220,7 +240,6 @@ BrokerFrameProvider::BrokerFrameProvider() noexcept
     : last_progress_(std::chrono::steady_clock::now()) {
     try {
         pipe_name_ = current_user_broker_pipe_name();
-        reconnect_worker_ = std::thread([this]() noexcept { reconnect_loop(); });
     } catch (...) {
         // Identity or thread creation failure must not prevent an offline camera
         // graph from opening and receiving its pre-rendered standby frame.
@@ -228,11 +247,40 @@ BrokerFrameProvider::BrokerFrameProvider() noexcept
     }
 }
 
-BrokerFrameProvider::~BrokerFrameProvider() {
+BrokerFrameProvider::~BrokerFrameProvider() { stop(); }
+
+void BrokerFrameProvider::start() noexcept {
+    try {
+        std::scoped_lock lifecycle_lock{lifecycle_mutex_};
+        if (reconnect_worker_.joinable() || pipe_name_.empty()) {
+            return;
+        }
+        {
+            std::scoped_lock lock{mutex_};
+            stop_requested_.store(false);
+            reconnect_requested_ = true;
+        }
+        reconnect_worker_ = std::thread([this]() noexcept { reconnect_loop(); });
+        reconnect_wakeup_.notify_one();
+    } catch (...) {
+    }
+}
+
+void BrokerFrameProvider::stop() noexcept {
+    std::scoped_lock lifecycle_lock{lifecycle_mutex_};
     stop_requested_.store(true);
     reconnect_wakeup_.notify_all();
     if (reconnect_worker_.joinable()) {
         reconnect_worker_.join();
+    }
+    try {
+        std::scoped_lock lock{mutex_};
+        reader_.reset();
+        close_broker_connection(broker_connection_);
+        generation_.store(0U);
+        last_heartbeat_ = 0U;
+        reconnect_requested_ = false;
+    } catch (...) {
     }
 }
 
@@ -254,6 +302,7 @@ bool BrokerFrameProvider::visit_live_frame(
         }
         if (now - last_progress_ >= kProducerStaleTimeout) {
             reader_.reset();
+            close_broker_connection(broker_connection_);
             generation_.store(0U);
             last_heartbeat_ = 0U;
             reconnect_requested_ = true;
@@ -265,6 +314,7 @@ bool BrokerFrameProvider::visit_live_frame(
         try {
             std::scoped_lock lock{mutex_};
             reader_.reset();
+            close_broker_connection(broker_connection_);
             generation_.store(0U);
             last_heartbeat_ = 0U;
             reconnect_requested_ = true;
@@ -298,14 +348,20 @@ void BrokerFrameProvider::reconnect_loop() noexcept {
 
         VirtualCameraBrokerResponse response{};
         std::unique_ptr<SharedVideoFrameReader> reader;
-        if (open_broker_generation(pipe_name_, response, reader)) {
+        std::uintptr_t broker_connection = 0U;
+        if (open_broker_generation(pipe_name_, response, reader,
+                                   broker_connection)) {
             std::scoped_lock lock{mutex_};
             if (!stop_requested_.load()) {
+                reader_.reset();
+                close_broker_connection(broker_connection_);
                 reader_ = std::move(reader);
+                broker_connection_ = std::exchange(broker_connection, 0U);
                 generation_.store(response.generation);
                 last_heartbeat_ = reader_->heartbeat();
                 last_progress_ = std::chrono::steady_clock::now();
             }
+            close_broker_connection(broker_connection);
         } else {
             std::unique_lock lock{mutex_};
             reconnect_wakeup_.wait_for(lock, kReconnectInterval, [this]() {

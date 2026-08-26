@@ -34,6 +34,9 @@ DEFAULT_VIRTUAL_CAMERA_FILTER_X86 = (
     / "Release"
     / "solin-virtual-camera.dll"
 )
+DEFAULT_QT_MEDIA_BRIDGE_DIRECTORY = (
+    REPOSITORY_ROOT / "build" / "native" / "qt-media-bridge" / "Release"
+)
 DEFAULT_GSTREAMER_ROOT = (
     REPOSITORY_ROOT / "build" / "dependencies" / "gstreamer-runtime" / "msvc_x86_64"
 )
@@ -111,6 +114,7 @@ def _parser() -> argparse.ArgumentParser:
         description="Stage the native media engine and private GStreamer runtime."
     )
     parser.add_argument("--engine", type=Path, default=DEFAULT_ENGINE_EXECUTABLE)
+    parser.add_argument("--qt-media-bridge", type=Path)
     parser.add_argument(
         "--virtual-camera-filter-x64",
         type=Path,
@@ -146,8 +150,28 @@ def _resolve_filter_sources(options: argparse.Namespace) -> tuple[Path, Path]:
     return filter_x64, filter_x86
 
 
+def _resolve_qt_media_bridge(options: argparse.Namespace) -> Path:
+    if options.qt_media_bridge is not None:
+        return options.qt_media_bridge
+    if options.engine != DEFAULT_ENGINE_EXECUTABLE:
+        raise NativeEnginePackagingError(
+            "A custom --engine requires --qt-media-bridge from the matching build"
+        )
+    candidates = tuple(
+        path
+        for path in DEFAULT_QT_MEDIA_BRIDGE_DIRECTORY.glob("solin_qt_media_bridge*.pyd")
+        if path.is_file()
+    )
+    if len(candidates) != 1:
+        raise NativeEnginePackagingError(
+            f"Expected one Qt media bridge extension, found {len(candidates)}"
+        )
+    return candidates[0]
+
+
 def _validate_inputs(
     engine: Path,
+    qt_media_bridge: Path,
     virtual_camera_filter_x64: Path,
     virtual_camera_filter_x86: Path,
     runtime_root: Path,
@@ -158,6 +182,14 @@ def _validate_inputs(
         raise NativeEnginePackagingError("Windows packaging must run on Windows")
     if not engine.is_file():
         raise NativeEnginePackagingError(f"Native engine executable is missing: {engine}")
+    if not qt_media_bridge.is_file():
+        raise NativeEnginePackagingError(
+            f"Qt media bridge extension is missing: {qt_media_bridge}"
+        )
+    if _pe_machine(qt_media_bridge) != PE_MACHINE_X64:
+        raise NativeEnginePackagingError(
+            f"Qt media bridge has the wrong PE architecture: {qt_media_bridge}"
+        )
     if not virtual_camera_filter_x64.is_file():
         raise NativeEnginePackagingError(
             f"Native x64 virtual-camera filter is missing: {virtual_camera_filter_x64}"
@@ -542,6 +574,7 @@ def _verify_staged_engine(engine_root: Path) -> None:
 def package_native_engine(
     *,
     engine: Path,
+    qt_media_bridge: Path,
     virtual_camera_filter_x64: Path,
     virtual_camera_filter_x86: Path,
     runtime_root: Path,
@@ -550,6 +583,7 @@ def package_native_engine(
     verify: bool,
 ) -> Path:
     engine = engine.resolve()
+    qt_media_bridge = qt_media_bridge.resolve()
     virtual_camera_filter_x64 = virtual_camera_filter_x64.resolve()
     virtual_camera_filter_x86 = virtual_camera_filter_x86.resolve()
     runtime_root = runtime_root.resolve()
@@ -557,6 +591,7 @@ def package_native_engine(
     application_dir = application_dir.resolve()
     _validate_inputs(
         engine,
+        qt_media_bridge,
         virtual_camera_filter_x64,
         virtual_camera_filter_x86,
         runtime_root,
@@ -572,6 +607,9 @@ def package_native_engine(
     staging = Path(tempfile.mkdtemp(prefix="media-engine-staging-", dir=native_directory))
     try:
         shutil.copy2(engine, staging / "solin-media-engine.exe")
+        qt_bridge_directory = staging / "qt-media-bridge"
+        qt_bridge_directory.mkdir()
+        shutil.copy2(qt_media_bridge, qt_bridge_directory / qt_media_bridge.name)
         virtual_camera_directory = staging / "virtual-camera"
         virtual_camera_directory.mkdir()
         (virtual_camera_directory / "x64").mkdir()
@@ -636,8 +674,10 @@ def main(arguments: Sequence[str] | None = None) -> int:
         virtual_camera_filter_x64, virtual_camera_filter_x86 = (
             _resolve_filter_sources(options)
         )
+        qt_media_bridge = _resolve_qt_media_bridge(options)
         destination = package_native_engine(
             engine=options.engine,
+            qt_media_bridge=qt_media_bridge,
             virtual_camera_filter_x64=virtual_camera_filter_x64,
             virtual_camera_filter_x86=virtual_camera_filter_x86,
             runtime_root=options.gstreamer_root,

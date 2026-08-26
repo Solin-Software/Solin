@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QCoreApplication, QObject, Signal
-from PySide6.QtMultimedia import QMediaPlayer
+from PySide6.QtGui import QImage
+from PySide6.QtMultimedia import QMediaPlayer, QVideoFrame
 
 import solin.core.media.playback as playback_module
 from solin.core.media.cache import MediaCacheManager
@@ -101,6 +102,54 @@ def test_playback_request_can_force_temporary_download(tmp_path):
     assert downloader.started == [("https://cdn.example/song.mp3", False)]
     assert controller.stream_persist is False
     controller.stop()
+
+
+def test_decoded_frame_gate_tracks_playback_session_trim_and_stop(tmp_path):
+    controller, _downloader, _played = _controller_with_downloader(
+        tmp_path,
+        auto_download=False,
+    )
+    states: list[tuple[int, bool]] = []
+    controller.decoded_frame_acceptance_changed.connect(
+        lambda session_id, accepting: states.append((session_id, accepting))
+    )
+
+    _start(controller, str(tmp_path / "plain.mp4"))
+    active_session = controller.session_id
+    controller._gate_output()
+    controller._trim_gate_open = True
+    controller._publish_decoded_frame_acceptance()
+    controller.stop()
+
+    assert states == [
+        (active_session, True),
+        (active_session, False),
+        (active_session, True),
+        (active_session + 1, False),
+    ]
+
+
+def test_python_frame_delivery_disconnects_and_hydrates_on_restore(tmp_path):
+    controller, _downloader, _played = _controller_with_downloader(
+        tmp_path,
+        auto_download=False,
+    )
+    frames: list[QVideoFrame] = []
+    controller.frame_ready.connect(frames.append)
+    frame = QVideoFrame(QImage(16, 16, QImage.Format.Format_ARGB32))
+
+    controller.set_python_frame_delivery_required(False)
+    controller.video_sink.setVideoFrame(frame)
+    QCoreApplication.processEvents()
+
+    assert frames == []
+    assert controller.python_frame_delivery_required is False
+
+    controller.set_python_frame_delivery_required(True)
+
+    assert len(frames) == 1
+    assert frames[0].isValid()
+    assert controller.python_frame_delivery_required is True
 
 
 def test_download_error_clears_buffer_and_reports_streaming_fallback(tmp_path):

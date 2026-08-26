@@ -22,7 +22,7 @@ def _fixture_manifest(path: Path) -> dict:
             "path": str(path),
             "sha256": benchmark._sha256(path),
             "bytes": path.stat().st_size,
-            "container": "avi",
+            "container": "mp4",
             "video_codec": "H.264 (OpenH264)",
             "width": 1280,
             "height": 720,
@@ -42,6 +42,7 @@ def _configuration(path: Path) -> dict:
         "playback": {
             "adapter": "QtMultimedia",
             "decode_path": "automatic",
+            "content_ingress_transport": "d3d11_shared_texture",
             "loop_fixture": False,
         },
         "outputs": {
@@ -124,7 +125,7 @@ def test_collect_buckets_uses_cumulative_cpu_deltas_and_host_normalization(
 
 
 def test_configuration_records_and_verifies_the_fixture(tmp_path: Path) -> None:
-    asset = tmp_path / "fixture.avi"
+    asset = tmp_path / "fixture.mp4"
     asset.write_bytes(b"deterministic-fixture")
     manifest_path = tmp_path / "fixture.json"
     benchmark._write_json(manifest_path, _fixture_manifest(asset))
@@ -140,6 +141,7 @@ def test_configuration_records_and_verifies_the_fixture(tmp_path: Path) -> None:
         consumer_architecture="x64",
         consumer_profile="NV12 1920x1080 30 fps",
         decode_path="hardware",
+        ingress_transport="d3d11_shared_texture",
     )
 
     assert configuration["fixture"]["asset"]["sha256"] == benchmark._sha256(asset)
@@ -156,7 +158,7 @@ def test_configuration_records_and_verifies_the_fixture(tmp_path: Path) -> None:
 
 
 def test_virtual_camera_configuration_rejects_placeholder_consumer(tmp_path: Path) -> None:
-    asset = tmp_path / "fixture.avi"
+    asset = tmp_path / "fixture.mp4"
     asset.write_bytes(b"fixture")
     manifest_path = tmp_path / "fixture.json"
     benchmark._write_json(manifest_path, _fixture_manifest(asset))
@@ -172,11 +174,12 @@ def test_virtual_camera_configuration_rejects_placeholder_consumer(tmp_path: Pat
             consumer_architecture="x64",
             consumer_profile="NV12 1920x1080 30 fps",
             decode_path="automatic",
+            ingress_transport="d3d11_shared_texture",
         )
 
 
 def test_build_report_keeps_raw_buckets_and_process_percentiles(tmp_path: Path) -> None:
-    asset = tmp_path / "fixture.avi"
+    asset = tmp_path / "fixture.mp4"
     asset.write_bytes(b"fixture")
     configuration = _configuration(asset)
     targets = (
@@ -204,9 +207,7 @@ def test_build_report_keeps_raw_buckets_and_process_percentiles(tmp_path: Path) 
         targets=targets,
         initial_snapshots={
             "solin": benchmark.ProcessSnapshot(0.0, 0, "solin.exe"),
-            "media_engine": benchmark.ProcessSnapshot(
-                0.0, 0, "solin-media-engine.exe"
-            ),
+            "media_engine": benchmark.ProcessSnapshot(0.0, 0, "solin-media-engine.exe"),
         },
         buckets=buckets,
         warmup_seconds=10,

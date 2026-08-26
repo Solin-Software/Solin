@@ -36,7 +36,7 @@ Install the repository-pinned GStreamer development runtime as described in
 
 ```powershell
 python scripts/benchmark_native_media_route.py fixture `
-  --output build/benchmarks/native-media-route/fixture-720p30.avi `
+  --output build/benchmarks/native-media-route/fixture-720p30.mp4 `
   --manifest build/benchmarks/native-media-route/fixture-720p30.json
 ```
 
@@ -44,7 +44,7 @@ The generator reads the GStreamer version and installer digest from
 `scripts/install_gstreamer_windows.ps1`, rejects a different reported version, and records the
 pinned installer digest, actual `gst-launch` SHA-256, and complete pipeline. The input is a
 deterministic 1280x720, 30 fps,
-180-second H.264/AVI stream generated with a single-threaded OpenH264 encoder. The manifest
+180-second H.264/MP4 stream generated with a single-threaded OpenH264 encoder. The manifest
 records the final asset SHA-256, dimensions, frame count, codec, and duration. Generated
 fixtures and reports stay under ignored `build/` output and are not committed.
 
@@ -66,12 +66,13 @@ python scripts/benchmark_native_media_route.py configure `
   --consumer-application "OBS Studio" `
   --consumer-architecture x64 `
   --consumer-profile "NV12 1920x1080 30 fps" `
-  --decode-path automatic
+  --decode-path automatic `
+  --ingress-transport d3d11_shared_texture
 ```
 
 Use the real consumer name, architecture, negotiated profile, presenter count, Preview state,
-and intended decode path. The command rejects placeholder consumer metadata. Create separate
-configurations instead of changing outputs during a measurement.
+decode path, and content-ingress transport. The command rejects placeholder consumer metadata.
+Create separate configurations instead of changing outputs during a measurement.
 
 Then:
 
@@ -79,8 +80,10 @@ Then:
 2. Open the generated fixture through the normal Solin playback workflow without repeat.
 3. Select the intended Program scene and enable only the outputs in the configuration.
 4. Open the configured virtual-camera consumer and verify that it receives moving video.
-5. Allow source preparation, shader compilation, and consumer negotiation to settle.
-6. Record the exact PIDs from Task Manager or `Get-Process`.
+5. Confirm that the log entry `Native content ingress transport selected` matches the
+   configuration. A fallback run is a separate measurement, not an accelerated-run sample.
+6. Allow source preparation, shader compilation, and consumer negotiation to settle.
+7. Record the exact PIDs from Task Manager or `Get-Process`.
 
 Start the recording early enough that warmup plus measurement ends before the fixture reaches
 EOF. Looping is rejected by the steady-state configuration because a seek/replay seam is a
@@ -118,7 +121,7 @@ Every report includes:
 Compare two reports only when all of the following match:
 
 - hardware, power mode, display topology, and driver versions;
-- fixture SHA-256 and playback/decode configuration;
+- fixture SHA-256, playback/decode configuration, and content-ingress transport;
 - presenter, Preview, virtual-camera, consumer, and negotiated-profile configuration;
 - Release configuration, warmup, duration, and process-role coverage.
 
@@ -131,7 +134,7 @@ Run at least these distinct configurations rather than enabling everything in on
 
 - playback only;
 - playback plus one and two native presenters;
-- virtual camera disabled/enabled with its consumer sampled;
+- virtual camera disabled, enabled without a consumer, and enabled with its consumer sampled;
 - editor Preview closed/open;
 - steady state and a separate transition/reconnect trace.
 

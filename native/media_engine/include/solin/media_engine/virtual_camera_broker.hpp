@@ -18,6 +18,8 @@ struct VirtualCameraBrokerEndpoint final {
 
 struct VirtualCameraBrokerHealth final {
     bool running{false};
+    std::uint64_t active_connections{0U};
+    bool legacy_consumer_present{false};
     std::uint64_t accepted_connections{0U};
     std::uint64_t denied_connections{0U};
     std::uint64_t failed_connections{0U};

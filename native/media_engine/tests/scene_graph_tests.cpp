@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <exception>
 #include <iostream>
@@ -9,6 +10,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <utility>
 
 namespace {
@@ -82,6 +84,7 @@ class FakeRuntimeFactory final : public solin::media_engine::SourceRuntimeFactor
             throw std::runtime_error("synthetic source failure");
         }
         if (source.kind != solin::media_engine::SceneSourceKind::color &&
+            source.kind != solin::media_engine::SceneSourceKind::solin_content &&
             source.kind != solin::media_engine::SceneSourceKind::local_camera &&
             source.kind != solin::media_engine::SceneSourceKind::rtsp_camera) {
             throw std::runtime_error("source_runtime_not_implemented");
@@ -100,8 +103,10 @@ class FakePreparedRenderGraph final
     : public solin::media_engine::PreparedSceneRenderGraph {
   public:
     FakePreparedRenderGraph(std::string scene_id_value,
-                            const solin::media_engine::OutputBus bus_value)
-        : scene_id(std::move(scene_id_value)), bus(bus_value) {}
+                            const solin::media_engine::OutputBus bus_value,
+                            const bool output_ready_value)
+        : scene_id(std::move(scene_id_value)), bus(bus_value),
+          output_ready(output_ready_value) {}
 
     [[nodiscard]] bool preview_layer_geometry(
         const std::string_view edited_scene_id,
@@ -121,12 +126,30 @@ class FakePreparedRenderGraph final
         ++direct_output_change_count;
     }
 
+    void set_rendering_enabled(const bool enabled) noexcept override {
+        rendering_enabled = enabled;
+    }
+
+    [[nodiscard]] bool wait_for_frame(
+        std::uint64_t, std::stop_token,
+        std::chrono::steady_clock::time_point) const noexcept override {
+        return output_ready;
+    }
+
+    [[nodiscard]] bool wait_for_gpu_frame(
+        std::uint64_t, std::stop_token,
+        std::chrono::steady_clock::time_point) const noexcept override {
+        return output_ready;
+    }
+
     std::string scene_id{};
     solin::media_engine::OutputBus bus{solin::media_engine::OutputBus::media_windows};
     std::string preview_layer_id{};
     solin::media_engine::SceneLayerGeometry preview_geometry{};
     std::uint64_t preview_count{0U};
     bool direct_output_enabled{true};
+    bool rendering_enabled{true};
+    bool output_ready{true};
     std::uint64_t direct_output_change_count{0U};
 };
 
@@ -135,6 +158,7 @@ struct TransitionCounters final {
     std::uint64_t stopped{0U};
     std::uint64_t active{0U};
     std::uint64_t maximum_active{0U};
+    bool origin_rendering_enabled_at_start{false};
 };
 
 class FakePreparedTransition final
@@ -158,6 +182,12 @@ class FakePreparedTransition final
         ++counters_->active;
         counters_->maximum_active =
             (std::max)(counters_->maximum_active, counters_->active);
+        if (const auto origin =
+                std::dynamic_pointer_cast<FakePreparedRenderGraph>(origin_);
+            origin != nullptr) {
+            counters_->origin_rendering_enabled_at_start =
+                origin->rendering_enabled;
+        }
         if (origin_ != nullptr) {
             origin_->set_direct_output_enabled(false);
         }
@@ -235,8 +265,9 @@ class FakeRenderer final : public solin::media_engine::SceneRenderer {
             }
         }
         ++prepare_count;
-        return std::make_shared<FakePreparedRenderGraph>(preparation.graph->scene_id,
-                                                         preparation.bus);
+        return std::make_shared<FakePreparedRenderGraph>(
+            preparation.graph->scene_id, preparation.bus,
+            prepared_output_ready);
     }
 
     [[nodiscard]] solin::media_engine::SceneRenderTransitionPreparation
@@ -326,6 +357,8 @@ class FakeRenderer final : public solin::media_engine::SceneRenderer {
         active = {};
         ++shutdown_count;
     }
+
+    bool prepared_output_ready{true};
 
     void fail_scene(std::string scene_id) { failing_scene_id_ = std::move(scene_id); }
 
@@ -435,6 +468,58 @@ layer(std::string id, std::string source_id, const bool visible = true) {
     return value;
 }
 
+[[nodiscard]] solin::media_engine::SceneHydrationSnapshot content_snapshot(
+    std::string handle_token) {
+    auto value = snapshot();
+    value.sources = {{
+        .id = std::string{solin::media_engine::kSolinContentSourceId},
+        .kind = solin::media_engine::SceneSourceKind::solin_content,
+        .enabled = true,
+        .frame_channel = solin::media_engine::FrameChannelConfiguration{
+            .channel_id = "content-channel",
+            .generation = 1U,
+            .producer_kind = "solin_offscreen",
+            .transport = "shared_memory_video",
+            .handle_token = std::move(handle_token),
+            .width = 1920U,
+            .height = 1080U,
+            .pixel_format = "nv12",
+            .color_space = "bt709",
+            .color_range = "limited",
+        },
+    }};
+    value.scenes = {{
+        .id = "content-scene",
+        .layers = {layer("content-layer", std::string{
+            solin::media_engine::kSolinContentSourceId})},
+    }};
+    value.active_scene_ids = {"content-scene", "content-scene"};
+    value.outputs[0].default_scene_id = "content-scene";
+    value.outputs[1].default_scene_id = "content-scene";
+    return value;
+}
+
+[[nodiscard]] solin::media_engine::SceneHydrationSnapshot content_return_snapshot(
+    std::string handle_token, const std::string_view active_scene_id) {
+    auto value = content_snapshot(std::move(handle_token));
+    value.sources.push_back({
+        .id = "default-color",
+        .kind = solin::media_engine::SceneSourceKind::color,
+        .enabled = true,
+        .configuration =
+            solin::media_engine::ColorSourceConfiguration{"#000000FF"},
+    });
+    value.scenes.push_back({
+        .id = "default-scene",
+        .layers = {layer("default-layer", "default-color")},
+    });
+    value.active_scene_ids = {std::string{active_scene_id},
+                              std::string{active_scene_id}};
+    value.outputs[0].default_scene_id = "default-scene";
+    value.outputs[1].default_scene_id = "default-scene";
+    return value;
+}
+
 void test_compiler_preserves_reference_groups_without_expanding_the_graph() {
     const auto compiled = solin::media_engine::compile_scene_document(snapshot());
     const auto scene = compiled->scenes.at("scene-a");
@@ -517,6 +602,60 @@ void test_hydrate_prepare_cancel_and_take_are_transactional() {
                                        false, 1U, 11U);
         },
         "stale_command_sequence", "stale output commands are rejected");
+}
+
+void test_hydration_replaces_runtime_content_transport_at_the_same_document_revision() {
+    auto counters = std::make_shared<RuntimeCounters>();
+    auto factory = std::make_shared<FakeRuntimeFactory>(counters);
+    auto renderer = std::make_shared<FakeRenderer>();
+    solin::media_engine::SceneGraphRuntime runtime{factory, renderer};
+    runtime.hydrate(content_snapshot("shm-token"), 1U);
+    renderer->prepared_output_ready = false;
+    expect_error(
+        [&runtime] { runtime.hydrate(content_snapshot("d3d11-token"), 2U); },
+        "content_ingress_output_unavailable",
+        "a content transport handoff rejects graphs that produced no causal output");
+    expect(renderer->hydration_commit_count == 1U,
+           "a rejected content handoff preserves the previously committed graphs");
+
+    renderer->prepared_output_ready = true;
+    runtime.hydrate(content_snapshot("d3d11-token"), 2U);
+
+    expect(runtime.document_revision() == 1U &&
+               renderer->hydration_commit_count == 2U &&
+               counters->created == 3U,
+           "a runtime-only content channel switch atomically rebuilds the active graphs without changing the scene revision");
+}
+
+void test_retired_scene_graph_is_not_reused_after_content_transport_changes() {
+    using solin::media_engine::OutputBus;
+
+    auto counters = std::make_shared<RuntimeCounters>();
+    auto factory = std::make_shared<FakeRuntimeFactory>(counters);
+    auto renderer = std::make_shared<FakeRenderer>();
+    solin::media_engine::SceneGraphRuntime runtime{factory, renderer};
+
+    runtime.hydrate(content_return_snapshot("d3d11-token", "content-scene"),
+                    1U);
+    const auto away = runtime.prepare(OutputBus::virtual_camera,
+                                      "default-scene", 1U, "leave-content", 2U);
+    runtime.take(away, 1U, 3U);
+
+    // Runtime transport is deliberately not part of the authored document
+    // revision. Hydration must nevertheless retire every prepared graph that
+    // still leases the previous source generation.
+    runtime.hydrate(content_return_snapshot("shm-token", "default-scene"), 4U);
+    const auto preparations_before_return = renderer->prepare_count;
+    const auto runtimes_before_return = counters->created.load();
+
+    const auto returned = runtime.prepare(OutputBus::virtual_camera,
+                                          "content-scene", 1U,
+                                          "return-to-content", 5U);
+
+    expect(renderer->prepare_count == preparations_before_return + 1U &&
+               counters->created.load() == runtimes_before_return + 1U,
+           "a prompt return after a content transport handoff prepares the current source generation instead of reclaiming the retired graph");
+    runtime.take(returned, 1U, 6U);
 }
 
 void test_failed_or_stale_prepare_preserves_the_previous_preparation() {
@@ -764,6 +903,74 @@ void test_recent_scene_graph_is_reused_for_a_return_cut() {
            "the retained graph remains committable as the active scene");
 }
 
+void test_inactive_scene_graph_remains_warm_beyond_transition_safety_window() {
+    using namespace std::chrono_literals;
+    auto counters = std::make_shared<RuntimeCounters>();
+    auto factory = std::make_shared<FakeRuntimeFactory>(counters);
+    auto renderer = std::make_shared<FakeRenderer>();
+    solin::media_engine::SceneGraphRuntime runtime{factory, renderer};
+    runtime.hydrate(snapshot(), 1U);
+
+    const auto away = runtime.prepare(
+        solin::media_engine::OutputBus::virtual_camera, "scene-c", 1U,
+        "prepare-cold-away", 2U);
+    runtime.take(away, 1U, 3U);
+    const auto preparations_before_return = renderer->prepare_count;
+
+    std::this_thread::sleep_for(3'200ms);
+    const auto back = runtime.prepare(
+        solin::media_engine::OutputBus::virtual_camera, "scene-a", 1U,
+        "prepare-warm-return", 4U);
+
+    expect(renderer->prepare_count == preparations_before_return,
+           "a bounded inactive scene cache avoids a cold compositor rebuild after three seconds");
+    runtime.take(back, 1U, 5U);
+}
+
+void test_only_the_immediately_previous_on_air_graph_remains_warm() {
+    using solin::media_engine::OutputBus;
+    auto counters = std::make_shared<RuntimeCounters>();
+    auto factory = std::make_shared<FakeRuntimeFactory>(counters);
+    auto renderer = std::make_shared<FakeRenderer>();
+    solin::media_engine::SceneGraphRuntime runtime{factory, renderer};
+    runtime.hydrate(snapshot(), 1U);
+
+    const auto first = runtime.prepare(OutputBus::virtual_camera, "scene-c", 1U,
+                                       "bounded-first", 2U);
+    runtime.take(first, 1U, 3U);
+    const auto second = runtime.prepare(OutputBus::virtual_camera, "scene-b", 1U,
+                                        "bounded-second", 4U);
+    runtime.take(second, 1U, 5U);
+    const auto preparations_before_historical_return = renderer->prepare_count;
+
+    const auto historical = runtime.prepare(OutputBus::virtual_camera, "scene-a", 1U,
+                                             "bounded-historical", 6U);
+
+    expect(renderer->prepare_count == preparations_before_historical_return + 1U,
+           "a third historical graph is rebuilt instead of retaining an unbounded pipeline history");
+    runtime.take(historical, 1U, 7U);
+}
+
+void test_cancelled_preparations_never_enter_the_warm_graph_slot() {
+    using solin::media_engine::OutputBus;
+    auto counters = std::make_shared<RuntimeCounters>();
+    auto factory = std::make_shared<FakeRuntimeFactory>(counters);
+    auto renderer = std::make_shared<FakeRenderer>();
+    solin::media_engine::SceneGraphRuntime runtime{factory, renderer};
+    runtime.hydrate(snapshot(), 1U);
+
+    static_cast<void>(runtime.prepare(OutputBus::virtual_camera, "scene-c", 1U,
+                                      "cancelled-warm-candidate", 2U));
+    const auto preparations_before_cancel = renderer->prepare_count;
+    runtime.cancel("cancelled-warm-candidate");
+    const auto replacement = runtime.prepare(OutputBus::virtual_camera, "scene-c", 1U,
+                                             "fresh-after-cancel", 3U);
+
+    expect(renderer->prepare_count == preparations_before_cancel + 1U,
+           "a graph that was never on air is destroyed instead of becoming a warm return candidate");
+    runtime.take(replacement, 1U, 4U);
+}
+
 void test_renderer_failure_preserves_applied_and_pending_graphs() {
     auto counters = std::make_shared<RuntimeCounters>();
     auto factory = std::make_shared<FakeRuntimeFactory>(counters);
@@ -872,7 +1079,9 @@ void test_transition_contract_is_bound_during_program_preparation() {
            "Program preparation binds the resolved transition before Take");
     runtime.take(animated, 1U, 8U);
     expect(runtime.active_scene(OutputBus::virtual_camera) == "scene-b",
-           "Take consumes the token without accepting a replacement transition");
+            "Take consumes the token without accepting a replacement transition");
+    expect(renderer->transition_counters->origin_rendering_enabled_at_start,
+           "Take transfers A/B ownership before retiring the former on-air graph");
 }
 
 void test_rapid_program_retargets_are_latest_wins_and_resource_bounded() {
@@ -952,6 +1161,8 @@ void test_rapid_program_retargets_are_latest_wins_and_resource_bounded() {
 int main() {
     test_compiler_preserves_reference_groups_without_expanding_the_graph();
     test_hydrate_prepare_cancel_and_take_are_transactional();
+    test_hydration_replaces_runtime_content_transport_at_the_same_document_revision();
+    test_retired_scene_graph_is_not_reused_after_content_transport_changes();
     test_preview_geometry_updates_the_active_renderer_without_rebuilding_it();
     test_failed_or_stale_prepare_preserves_the_previous_preparation();
     test_failed_hydration_preserves_the_previous_applied_graph();
@@ -960,6 +1171,9 @@ int main() {
     test_renderer_prepare_and_commits_follow_scene_transactions();
     test_hidden_program_takes_skip_animated_transition_work();
     test_recent_scene_graph_is_reused_for_a_return_cut();
+    test_inactive_scene_graph_remains_warm_beyond_transition_safety_window();
+    test_only_the_immediately_previous_on_air_graph_remains_warm();
+    test_cancelled_preparations_never_enter_the_warm_graph_slot();
     test_renderer_failure_preserves_applied_and_pending_graphs();
     test_transition_contract_is_bound_during_program_preparation();
     test_rapid_program_retargets_are_latest_wins_and_resource_bounded();

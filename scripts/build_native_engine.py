@@ -21,6 +21,17 @@ DEFAULT_FILTER_X86_BUILD_DIRECTORY = (
 DEFAULT_GSTREAMER_ROOT = (
     REPOSITORY_ROOT / "build" / "dependencies" / "gstreamer" / "msvc_x86_64"
 )
+DEFAULT_QT_BRIDGE_BUILD_DIRECTORY = (
+    REPOSITORY_ROOT / "build" / "native" / "qt-media-bridge"
+)
+DEFAULT_QT_BRIDGE_SDK_ROOT = (
+    REPOSITORY_ROOT
+    / "build"
+    / "dependencies"
+    / "qt-bridge-sdk"
+    / "6.11.1"
+    / "msvc2022_64"
+)
 
 
 class NativeEngineBuildError(RuntimeError):
@@ -62,10 +73,21 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--gstreamer-root", type=Path, default=DEFAULT_GSTREAMER_ROOT)
     parser.add_argument(
+        "--qt-bridge-build-dir",
+        type=Path,
+        default=DEFAULT_QT_BRIDGE_BUILD_DIRECTORY,
+    )
+    parser.add_argument(
+        "--qt-bridge-sdk-root",
+        type=Path,
+        default=DEFAULT_QT_BRIDGE_SDK_ROOT,
+    )
+    parser.add_argument(
         "--skip-gstreamer-bootstrap",
         action="store_true",
         help="Fail instead of installing the pinned development runtime when it is absent.",
     )
+    parser.add_argument("--skip-qt-bridge-bootstrap", action="store_true")
     parser.add_argument("--skip-tests", action="store_true")
     parser.add_argument("--jobs", type=int, default=0)
     return parser
@@ -125,7 +147,10 @@ def build_native_engine(
     build_directory: Path,
     filter_x86_build_directory: Path,
     gstreamer_root: Path,
+    qt_bridge_build_directory: Path,
+    qt_bridge_sdk_root: Path,
     bootstrap_gstreamer: bool,
+    bootstrap_qt_bridge: bool,
     run_tests: bool,
     jobs: int,
 ) -> Path:
@@ -189,6 +214,22 @@ def build_native_engine(
                 "--output-on-failure",
             ]
         )
+
+    bridge_command = [
+        sys.executable,
+        str(REPOSITORY_ROOT / "scripts" / "build_qt_media_bridge.py"),
+        "--configuration",
+        configuration,
+        "--build-dir",
+        str(qt_bridge_build_directory.resolve()),
+        "--sdk-root",
+        str(qt_bridge_sdk_root.resolve()),
+    ]
+    if not bootstrap_qt_bridge:
+        bridge_command.append("--skip-sdk-bootstrap")
+    if jobs > 0:
+        bridge_command.extend(("--jobs", str(jobs)))
+    _run(bridge_command)
 
     _run(
         [
@@ -262,7 +303,10 @@ def main(arguments: Sequence[str] | None = None) -> int:
             build_directory=options.build_dir,
             filter_x86_build_directory=options.filter_x86_build_dir,
             gstreamer_root=options.gstreamer_root,
+            qt_bridge_build_directory=options.qt_bridge_build_dir,
+            qt_bridge_sdk_root=options.qt_bridge_sdk_root,
             bootstrap_gstreamer=not options.skip_gstreamer_bootstrap,
+            bootstrap_qt_bridge=not options.skip_qt_bridge_bootstrap,
             run_tests=not options.skip_tests,
             jobs=options.jobs,
         )

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import ctypes
+import sys
 from collections.abc import Callable
 
 from PySide6.QtCore import (
@@ -20,9 +22,10 @@ from PySide6.QtGui import (
     QKeyEvent,
     QMouseEvent,
     QPainter,
-    QPixmap,
+    QPen,
 )
-from PySide6.QtMultimedia import QMediaPlayer
+from PySide6.QtMultimedia import QMediaPlayer, QVideoFrame
+from PySide6.QtMultimediaWidgets import QVideoWidget
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -52,58 +55,154 @@ from solin.widgets.common.themed_slider import ThemedHorizontalSlider
 from solin.widgets.common.buffered_slider import BufferedSlider
 
 from .controls import SPEED_CHOICES, icon_button, projection_menu_style
+from .native_surface import NativeVideoSurface
+
+
+_DWM_FLUSH: Callable[[], int] | None = None
+if sys.platform == "win32":
+    try:
+        _dwm_flush = ctypes.WinDLL("dwmapi").DwmFlush
+        _dwm_flush.argtypes = []
+        _dwm_flush.restype = ctypes.c_long
+        _DWM_FLUSH = _dwm_flush
+    except OSError:
+        pass
+
+
+def _flush_window_compositor() -> None:
+    """Commit Qt window operations before advancing fullscreen lifecycle."""
+
+    QGuiApplication.sync()
+    if _DWM_FLUSH is not None:
+        _DWM_FLUSH()
+
+
+class _FullscreenChromeFrame(QFrame):
+    """DWM-composited rounded chrome above the native video presenter."""
+
+    def __init__(
+        self,
+        object_name: str,
+        *,
+        background_opacity: float,
+        border_opacity: float,
+    ) -> None:
+        super().__init__(
+            None,
+            Qt.WindowType.Tool
+            | Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.NoDropShadowWindowHint,
+        )
+        self._background_opacity = background_opacity
+        self._border_opacity = border_opacity
+        self.setObjectName(object_name)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
+        self.setAutoFillBackground(False)
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+
+        background = QColor(PALETTE.bg0)
+        background.setAlphaF(self._background_opacity)
+        border = QColor(PALETTE.border)
+        border.setAlphaF(self._border_opacity)
+
+        painter.setBrush(background)
+        painter.setPen(QPen(border, 1.0))
+        painter.drawRoundedRect(
+            QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5),
+            8.0,
+            8.0,
+        )
+        painter.end()
+        event.accept()
 
 
 class FullscreenVideoSurface(QWidget):
+    """GPU-first video plane with a zero-materialization Qt fallback."""
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self._pixmap: QPixmap | None = None
         self.setMouseTracking(True)
         self.setStyleSheet(f"background: {PALETTE.black};")
 
-    def set_frame(self, frame) -> None:
-        image = frame.toImage()
-        if image.isNull():
+        self._video_widget = QVideoWidget(self)
+        self._video_widget.setAspectRatioMode(
+            Qt.AspectRatioMode.KeepAspectRatio
+        )
+        self._video_widget.setAttribute(
+            Qt.WidgetAttribute.WA_TransparentForMouseEvents,
+            True,
+        )
+
+        self._native_surface = NativeVideoSurface(self)
+        self._native_surface.setStyleSheet(f"background: {PALETTE.black};")
+        self._native_surface.set_input_target(self)
+        self._native_output_active = False
+
+    @property
+    def video_widget(self) -> QVideoWidget:
+        return self._video_widget
+
+    @property
+    def native_video_surface(self) -> NativeVideoSurface:
+        return self._native_surface
+
+    @property
+    def native_output_active(self) -> bool:
+        return self._native_output_active
+
+    def set_native_output_active(self, active: bool) -> bool:
+        active = bool(active)
+        if active == self._native_output_active:
+            return False
+        self._native_output_active = active
+        if active:
+            self._video_widget.videoSink().setVideoFrame(QVideoFrame())
+            self._video_widget.hide()
+            self._native_surface.show()
+            self._native_surface.raise_()
+        else:
+            self._native_surface.hide()
+            self._video_widget.show()
+        return True
+
+    def set_frame(self, frame: QVideoFrame) -> None:
+        if self._native_output_active or not frame.isValid():
             return
-        self._pixmap = QPixmap.fromImage(image)
-        self.update()
+        self._video_widget.videoSink().setVideoFrame(frame)
 
     def clear(self) -> None:
-        self._pixmap = None
-        self.update()
+        self._video_widget.videoSink().setVideoFrame(QVideoFrame())
 
     def apply_theme(self) -> None:
         self.setStyleSheet(f"background: {PALETTE.black};")
+        self._native_surface.setStyleSheet(f"background: {PALETTE.black};")
         self.update()
 
-    def paintEvent(self, _event) -> None:
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
-        painter.fillRect(self.rect(), QColor(PALETTE.black))
+    def set_interaction_cursor(self, cursor: Qt.CursorShape) -> None:
+        self.setCursor(cursor)
+        self._video_widget.setCursor(cursor)
+        self._native_surface.set_interaction_cursor(cursor)
 
-        pixmap = self._pixmap
-        if pixmap is None or pixmap.isNull():
-            painter.end()
-            return
+    def unset_interaction_cursor(self) -> None:
+        self.unsetCursor()
+        self._video_widget.unsetCursor()
+        self._native_surface.unsetCursor()
+        input_overlay = self._native_surface.input_overlay
+        if input_overlay is not None:
+            input_overlay.unsetCursor()
 
-        w, h = self.width(), self.height()
-        pw, ph = pixmap.width(), pixmap.height()
-        if w <= 0 or h <= 0 or pw <= 0 or ph <= 0:
-            painter.end()
-            return
-
-        scale = min(w / pw, h / ph)
-        draw_w = pw * scale
-        draw_h = ph * scale
-        painter.drawPixmap(
-            QRectF((w - draw_w) / 2.0, (h - draw_h) / 2.0, draw_w, draw_h),
-            pixmap,
-            QRectF(0, 0, pw, ph),
-        )
-        painter.end()
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._video_widget.setGeometry(self.rect())
+        self._native_surface.setGeometry(self.rect())
 
 
 class FullscreenVideoOverlay(QWidget):
+    visibility_changed = Signal(bool)
     exit_requested = Signal()
     seek_requested = Signal(int)
     toggle_requested = Signal()
@@ -149,6 +248,10 @@ class FullscreenVideoOverlay(QWidget):
         self._surface = FullscreenVideoSurface(self)
         self._title_bar = self._build_title_bar()
         self._controls = self._build_controls()
+        self._chrome_presentation_generation = 0
+        self._queued_chrome_generation: int | None = None
+        self._chrome_presentation_ready = False
+        self._prepared = False
 
         self._hide_timer = QTimer(self)
         self._hide_timer.setSingleShot(True)
@@ -156,24 +259,6 @@ class FullscreenVideoOverlay(QWidget):
         self._hide_timer.timeout.connect(self._hide_chrome_if_idle)
 
         self._install_activity_filters()
-
-    def _title_bar_stylesheet(self) -> str:
-        return (
-            "QFrame#FullscreenTitleBar {"
-            f" background: {qss_rgba(PALETTE.bg0, 0.62)};"
-            f" border: 1px solid {qss_rgba(PALETTE.border, 0.72)};"
-            " border-radius: 8px;"
-            "}"
-        )
-
-    def _controls_stylesheet(self) -> str:
-        return (
-            "QFrame#FullscreenPlaybackControls {"
-            f" background: {qss_rgba(PALETTE.bg0, 0.72)};"
-            f" border: 1px solid {qss_rgba(PALETTE.border, 0.78)};"
-            " border-radius: 8px;"
-            "}"
-        )
 
     def _stop_button_stylesheet(self) -> str:
         return (
@@ -203,10 +288,45 @@ class FullscreenVideoOverlay(QWidget):
         ):
             button.setStyleSheet(self._icon_button_stylesheet(button))
 
+    def _chrome_frame(
+        self,
+        object_name: str,
+        *,
+        background_opacity: float,
+        border_opacity: float,
+    ) -> _FullscreenChromeFrame:
+        """Create a DWM-composited plane above the native video child HWND."""
+
+        frame = _FullscreenChromeFrame(
+            object_name,
+            background_opacity=background_opacity,
+            border_opacity=border_opacity,
+        )
+        self.destroyed.connect(frame.deleteLater)
+        return frame
+
+    def _bind_chrome_windows(self) -> None:
+        owner_handle = self.windowHandle()
+        if owner_handle is None:
+            self.winId()
+            owner_handle = self.windowHandle()
+        if owner_handle is None:
+            return
+        for frame in (self._title_bar, self._controls):
+            frame.winId()
+            frame_handle = frame.windowHandle()
+            if (
+                frame_handle is not None
+                and frame_handle.transientParent() is not owner_handle
+            ):
+                frame_handle.setTransientParent(owner_handle)
+
     def _build_title_bar(self) -> QFrame:
-        bar = QFrame(self)
-        bar.setObjectName("FullscreenTitleBar")
-        bar.setStyleSheet(self._title_bar_stylesheet())
+        bar = self._chrome_frame(
+            "FullscreenTitleBar",
+            background_opacity=0.62,
+            border_opacity=0.72,
+        )
         layout = QHBoxLayout(bar)
         layout.setContentsMargins(14, 0, 8, 0)
         layout.setSpacing(8)
@@ -237,9 +357,11 @@ class FullscreenVideoOverlay(QWidget):
         return bar
 
     def _build_controls(self) -> QFrame:
-        controls = QFrame(self)
-        controls.setObjectName("FullscreenPlaybackControls")
-        controls.setStyleSheet(self._controls_stylesheet())
+        controls = self._chrome_frame(
+            "FullscreenPlaybackControls",
+            background_opacity=0.72,
+            border_opacity=0.78,
+        )
         layout = QHBoxLayout(controls)
         layout.setContentsMargins(12, 8, 12, 8)
         layout.setSpacing(10)
@@ -356,20 +478,39 @@ class FullscreenVideoOverlay(QWidget):
             widget.installEventFilter(self)
 
     def show_fullscreen(self) -> None:
+        self._suspend_chrome_presentation()
+        self.prepare()
         self._place_on_source_screen()
-        self._show_chrome()
         self.showFullScreen()
         self.raise_()
         self.activateWindow()
         self.setFocus()
+        self._position_chrome()
+        self._queue_chrome_presentation()
 
     def hide_fullscreen(self, *, clear_frame: bool = False) -> None:
-        self._hide_timer.stop()
+        self._suspend_chrome_presentation()
         self.unsetCursor()
-        self._surface.unsetCursor()
+        self._surface.unset_interaction_cursor()
+        # The chrome is hosted by independent DWM surfaces. Flush their hide
+        # requests before removing the fullscreen owner so neither surface can
+        # outlive the frame it decorates.
+        _flush_window_compositor()
         self.hide()
         if clear_frame:
             self._surface.clear()
+
+    def prepare(self) -> None:
+        """Materialize fullscreen native resources outside the click path."""
+
+        if self._prepared:
+            return
+        self._place_on_source_screen()
+        self.winId()
+        self._surface.video_widget.winId()
+        self._surface.native_video_surface.winId()
+        self._bind_chrome_windows()
+        self._prepared = True
 
     def reset(self) -> None:
         self.hide_fullscreen(clear_frame=True)
@@ -390,6 +531,17 @@ class FullscreenVideoOverlay(QWidget):
 
     def clear_frame(self) -> None:
         self._surface.clear()
+
+    @property
+    def native_video_surface(self) -> NativeVideoSurface:
+        return self._surface.native_video_surface
+
+    @property
+    def native_output_active(self) -> bool:
+        return self._surface.native_output_active
+
+    def set_native_output_active(self, active: bool) -> bool:
+        return self._surface.set_native_output_active(active)
 
     def set_playback_state(self, state) -> None:
         self._playback_state = state
@@ -470,8 +622,8 @@ class FullscreenVideoOverlay(QWidget):
             f"QWidget#AppFullscreenVideoOverlay {{ background: {PALETTE.black}; }}"
         )
         self._surface.apply_theme()
-        self._title_bar.setStyleSheet(self._title_bar_stylesheet())
-        self._controls.setStyleSheet(self._controls_stylesheet())
+        self._title_bar.update()
+        self._controls.update()
         self.title_label.setStyleSheet(
             f"background: transparent; color: {PALETTE.text_primary};"
             " font-size: 13px; font-weight: 600;"
@@ -523,15 +675,36 @@ class FullscreenVideoOverlay(QWidget):
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
         self._surface.setGeometry(self.rect())
+        self._position_chrome()
+
+    def moveEvent(self, event) -> None:
+        super().moveEvent(event)
+        self._position_chrome()
+
+    def _position_chrome(self) -> None:
+        origin = self.mapToGlobal(QPoint(0, 0))
         margin = 26
         top_width = max(240, min(780, self.width() - margin * 2))
-        self._title_bar.setGeometry(margin, margin, top_width, 44)
+        self._title_bar.setGeometry(
+            origin.x() + margin,
+            origin.y() + margin,
+            top_width,
+            44,
+        )
 
         controls_width = max(360, min(1040, self.width() - 40))
         controls_height = 66
-        controls_x = (self.width() - controls_width) // 2
-        controls_y = self.height() - controls_height - 30
-        self._controls.setGeometry(controls_x, max(margin, controls_y), controls_width, controls_height)
+        controls_x = origin.x() + (self.width() - controls_width) // 2
+        controls_y = origin.y() + max(
+            margin,
+            self.height() - controls_height - 30,
+        )
+        self._controls.setGeometry(
+            controls_x,
+            controls_y,
+            controls_width,
+            controls_height,
+        )
 
     def eventFilter(self, obj, event) -> bool:
         event_type = event.type()
@@ -577,21 +750,71 @@ class FullscreenVideoOverlay(QWidget):
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
-        self._show_chrome()
+        self._position_chrome()
+        self._queue_chrome_presentation()
+        self.visibility_changed.emit(True)
 
     def hideEvent(self, event) -> None:
-        self._hide_timer.stop()
+        self._suspend_chrome_presentation()
         self.unsetCursor()
-        self._surface.unsetCursor()
+        self._surface.unset_interaction_cursor()
         super().hideEvent(event)
+        self.visibility_changed.emit(False)
+
+    def _suspend_chrome_presentation(self) -> None:
+        self._chrome_presentation_generation += 1
+        self._chrome_presentation_ready = False
+        self._hide_timer.stop()
+        self._title_bar.hide()
+        self._controls.hide()
+
+    def _queue_chrome_presentation(self) -> None:
+        if self._chrome_presentation_ready or not self.isFullScreen():
+            return
+        generation = self._chrome_presentation_generation
+        if self._queued_chrome_generation == generation:
+            return
+        self._queued_chrome_generation = generation
+        QTimer.singleShot(
+            0,
+            lambda expected=generation: self._present_chrome_after_owner(
+                expected
+            ),
+        )
+
+    def _present_chrome_after_owner(self, expected_generation: int) -> None:
+        if self._queued_chrome_generation == expected_generation:
+            self._queued_chrome_generation = None
+        if (
+            expected_generation != self._chrome_presentation_generation
+            or not self.isVisible()
+            or not self.isFullScreen()
+        ):
+            return
+        # The owner show has returned and Qt is back in its event loop. Flush
+        # that DWM work before releasing the independent chrome surfaces so
+        # they cannot lead the fullscreen frame in the compositor timeline.
+        _flush_window_compositor()
+        if expected_generation != self._chrome_presentation_generation:
+            return
+        self._chrome_presentation_ready = True
+        self._position_chrome()
+        self._show_chrome()
 
     def _show_chrome(self) -> None:
-        if not self.isVisible() and not self.isFullScreen():
+        if (
+            not self._chrome_presentation_ready
+            or not self.isVisible()
+            or not self.isFullScreen()
+        ):
             return
+        self._bind_chrome_windows()
         self._title_bar.setVisible(True)
         self._controls.setVisible(True)
+        self._title_bar.raise_()
+        self._controls.raise_()
         self.unsetCursor()
-        self._surface.unsetCursor()
+        self._surface.unset_interaction_cursor()
         self._hide_timer.start()
 
     def _hide_chrome_if_idle(self) -> None:
@@ -601,13 +824,12 @@ class FullscreenVideoOverlay(QWidget):
         self._title_bar.setVisible(False)
         self._controls.setVisible(False)
         self.setCursor(Qt.CursorShape.BlankCursor)
-        self._surface.setCursor(Qt.CursorShape.BlankCursor)
+        self._surface.set_interaction_cursor(Qt.CursorShape.BlankCursor)
 
     def _cursor_over_chrome(self) -> bool:
-        pos = self.mapFromGlobal(QCursor.pos())
         return (
-            self._title_bar.geometry().contains(pos)
-            or self._controls.geometry().contains(pos)
+            self._title_bar.frameGeometry().contains(QCursor.pos())
+            or self._controls.frameGeometry().contains(QCursor.pos())
         )
 
     def _show_more_menu(self) -> None:

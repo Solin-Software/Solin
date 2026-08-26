@@ -232,6 +232,27 @@ class BlockingStopFactory final : public solin::media_engine::SourceRuntimeFacto
     };
 }
 
+[[nodiscard]] solin::media_engine::SceneSource content_source(
+    std::string handle_token) {
+    return {
+        .id = std::string{solin::media_engine::kSolinContentSourceId},
+        .kind = solin::media_engine::SceneSourceKind::solin_content,
+        .enabled = true,
+        .frame_channel = solin::media_engine::FrameChannelConfiguration{
+            .channel_id = "content-channel",
+            .generation = 1U,
+            .producer_kind = "solin_offscreen",
+            .transport = "shared_memory_video",
+            .handle_token = std::move(handle_token),
+            .width = 1920U,
+            .height = 1080U,
+            .pixel_format = "nv12",
+            .color_space = "bt709",
+            .color_range = "limited",
+        },
+    };
+}
+
 [[nodiscard]] solin::media_engine::SceneHydrationSnapshot snapshot(
     const std::uint64_t revision,
     std::vector<solin::media_engine::SceneSource> sources) {
@@ -416,6 +437,33 @@ void test_idempotent_revisions_preserve_generations_and_conflicts_are_rejected()
     registry.replace_snapshot(snapshot(5U, color_source("#000000FF")));
     expect(registry.entries()[0].generation == initial_generation,
            "unchanged definitions keep their generation across document revisions");
+}
+
+void test_runtime_content_channel_can_change_without_forging_a_document_revision() {
+    auto counters = std::make_shared<RuntimeCounters>();
+    auto factory = std::make_shared<FakeRuntimeFactory>(counters);
+    solin::media_engine::SourceRegistry registry{factory};
+    registry.replace_snapshot(snapshot(4U, content_source("shm-token")));
+    auto previous = registry.acquire(solin::media_engine::kSolinContentSourceId,
+                                     "previous-graph");
+    const auto initial_generation = registry.entries()[0].generation;
+    expect(registry.is_current(previous),
+           "a lease acquired from the installed content route is current");
+
+    registry.replace_snapshot(snapshot(4U, content_source("d3d11-token")));
+    auto replacement = registry.acquire(solin::media_engine::kSolinContentSourceId,
+                                         "replacement-graph");
+    const auto entries = registry.entries();
+    const auto current = std::ranges::find_if(
+        entries, [](const solin::media_engine::SourceRegistryEntry& entry) {
+            return entry.current;
+        });
+    expect(registry.document_revision() == 4U &&
+               current != entries.end() &&
+               current->generation != initial_generation,
+           "runtime content transport replacement keeps the document revision and advances the source generation");
+    expect(!registry.is_current(previous) && registry.is_current(replacement),
+           "content transport replacement makes the retired graph lease observably stale");
 }
 
 void test_new_document_identity_resets_revision_order_and_reuses_stable_sources() {
@@ -778,6 +826,7 @@ int main() {
     test_configuration_changes_create_a_new_generation_without_invalidating_old_leases();
     test_staged_updates_are_isolated_until_commit();
     test_idempotent_revisions_preserve_generations_and_conflicts_are_rejected();
+    test_runtime_content_channel_can_change_without_forging_a_document_revision();
     test_new_document_identity_resets_revision_order_and_reuses_stable_sources();
     test_creation_failure_does_not_poison_the_registry_cache();
     test_staged_creation_failure_remains_source_scoped_until_recovery();

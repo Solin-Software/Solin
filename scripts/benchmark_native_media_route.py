@@ -34,13 +34,12 @@ from typing import Any, Callable, Sequence
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 GSTREAMER_BOOTSTRAP = REPOSITORY_ROOT / "scripts" / "install_gstreamer_windows.ps1"
-DEFAULT_GSTREAMER_ROOT = (
-    REPOSITORY_ROOT / "build" / "dependencies" / "gstreamer" / "msvc_x86_64"
-)
+DEFAULT_GSTREAMER_ROOT = REPOSITORY_ROOT / "build" / "dependencies" / "gstreamer" / "msvc_x86_64"
 FIXTURE_SCHEMA = "solin.native-media-route-fixture.v1"
-CONFIGURATION_SCHEMA = "solin.native-media-route-configuration.v1"
+CONFIGURATION_SCHEMA = "solin.native-media-route-configuration.v2"
 REPORT_SCHEMA = "solin.native-media-route-benchmark.v1"
 CURRENT_ROUTE = "qt_media_to_native_program"
+INGRESS_TRANSPORTS = frozenset({"d3d11_shared_texture", "shared_memory_fallback"})
 BUCKET_SECONDS = 1.0
 MINIMUM_MEASUREMENT_BUCKETS = 60
 _PLACEHOLDER = "replace-me"
@@ -186,10 +185,7 @@ def _fixture_pipeline(
         "pattern=ball",
         "is-live=false",
         "!",
-        (
-            "video/x-raw,format=I420,"
-            f"width={width},height={height},framerate={frames_per_second}/1"
-        ),
+        (f"video/x-raw,format=I420,width={width},height={height},framerate={frames_per_second}/1"),
         "!",
         "openh264enc",
         f"bitrate={bitrate}",
@@ -201,9 +197,10 @@ def _fixture_pipeline(
         "h264parse",
         "config-interval=-1",
         "!",
-        "video/x-h264,stream-format=byte-stream,alignment=au",
+        "video/x-h264,stream-format=avc,alignment=au",
         "!",
-        "avimux",
+        "mp4mux",
+        "faststart=true",
         "!",
         "filesink",
         # gst-launch parses backslashes in property values as escapes. POSIX-style
@@ -231,16 +228,14 @@ def generate_fixture(
         raise ValueError("Fixture duration must be positive")
     if bitrate < 100_000:
         raise ValueError("Fixture bitrate must be at least 100000 bits/s")
-    if output.suffix.casefold() != ".avi":
-        raise ValueError("The deterministic fixture output must use the .avi extension")
+    if output.suffix.casefold() != ".mp4":
+        raise ValueError("The deterministic fixture output must use the .mp4 extension")
 
     pinned_version, installer_sha256 = _pinned_gstreamer_version()
     launch, inspect = _gstreamer_tools(gstreamer_root.resolve())
     reported_version = _reported_gstreamer_version(inspect)
     if reported_version != pinned_version:
-        raise RuntimeError(
-            f"GStreamer {reported_version} does not match pinned {pinned_version}"
-        )
+        raise RuntimeError(f"GStreamer {reported_version} does not match pinned {pinned_version}")
 
     output = output.resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -279,7 +274,7 @@ def generate_fixture(
             "path": str(output),
             "sha256": _sha256(output),
             "bytes": output.stat().st_size,
-            "container": "avi",
+            "container": "mp4",
             "video_codec": "H.264 (OpenH264)",
             "width": width,
             "height": height,
@@ -304,6 +299,7 @@ def write_configuration(
     consumer_architecture: str | None,
     consumer_profile: str | None,
     decode_path: str,
+    ingress_transport: str,
 ) -> dict[str, Any]:
     fixture = _read_json(fixture_manifest_path)
     _validate_fixture_manifest(fixture)
@@ -320,6 +316,8 @@ def write_configuration(
         raise ValueError(
             "Virtual-camera runs require consumer application, architecture, and profile"
         )
+    if ingress_transport not in INGRESS_TRANSPORTS:
+        raise ValueError("Content ingress transport is invalid")
 
     configuration = {
         "schema": CONFIGURATION_SCHEMA,
@@ -328,6 +326,7 @@ def write_configuration(
         "playback": {
             "adapter": "QtMultimedia",
             "decode_path": decode_path,
+            "content_ingress_transport": ingress_transport,
             # The default fixture is longer than warmup + the recommended run.
             # Avoiding a loop seam keeps steady-state results separate from seek/replay cost.
             "loop_fixture": False,
@@ -388,6 +387,8 @@ def _validate_configuration(configuration: dict[str, Any]) -> None:
         raise ValueError("Steady-state measurements must not loop the fixture")
     if playback.get("decode_path") not in {"automatic", "hardware", "software"}:
         raise ValueError("Decode path must be automatic, hardware, or software")
+    if playback.get("content_ingress_transport") not in INGRESS_TRANSPORTS:
+        raise ValueError("Content ingress transport is invalid")
     presenter_count = outputs.get("native_presenters")
     if (
         isinstance(presenter_count, bool)
@@ -614,9 +615,7 @@ def collect_buckets(
     for index in range(bucket_count):
         deadline += bucket_seconds
         sleep(max(0.0, deadline - monotonic()))
-        current_by_role = {
-            target.role: snapshot_reader(target.pid) for target in targets
-        }
+        current_by_role = {target.role: snapshot_reader(target.pid) for target in targets}
         sampled_at = monotonic()
         elapsed = sampled_at - previous_sampled_at
         if elapsed <= 0:
@@ -704,6 +703,7 @@ def _cpu_name() -> str:
 
 def _total_memory_bytes() -> int | None:
     if sys.platform == "win32":
+
         class MemoryStatus(ctypes.Structure):
             _fields_ = [
                 ("dwLength", wintypes.DWORD),
@@ -974,9 +974,7 @@ def _build_parser() -> argparse.ArgumentParser:
     configure.add_argument("--fixture-manifest", type=Path, required=True)
     configure.add_argument("--output", type=Path, required=True)
     configure.add_argument("--native-presenters", type=int, required=True)
-    configure.add_argument(
-        "--editor-preview", choices=("open", "closed"), required=True
-    )
+    configure.add_argument("--editor-preview", choices=("open", "closed"), required=True)
     configure.add_argument("--virtual-camera", choices=("on", "off"), required=True)
     configure.add_argument("--consumer-application")
     configure.add_argument("--consumer-architecture", choices=("x86", "x64"))
@@ -985,6 +983,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "--decode-path",
         choices=("automatic", "hardware", "software"),
         default="automatic",
+    )
+    configure.add_argument(
+        "--ingress-transport",
+        choices=tuple(sorted(INGRESS_TRANSPORTS)),
+        required=True,
     )
 
     recorder = subparsers.add_parser("record", help="sample explicit process IDs")
@@ -1028,6 +1031,7 @@ def main(arguments: Sequence[str] | None = None) -> int:
             consumer_architecture=args.consumer_architecture,
             consumer_profile=args.consumer_profile,
             decode_path=args.decode_path,
+            ingress_transport=args.ingress_transport,
         )
         print(json.dumps(configuration, ensure_ascii=False, indent=2, sort_keys=True))
         return 0

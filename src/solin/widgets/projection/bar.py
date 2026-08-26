@@ -10,6 +10,7 @@ from PySide6.QtCore import (
     QDateTime,
     QEvent,
     QObject,
+    QSize,
     Qt,
     QTimer,
     Signal,
@@ -92,6 +93,7 @@ from .controls import (
     projection_menu_style,
 )
 from .fullscreen import FullscreenVideoOverlay
+from .native_surface import NativeVideoSurface
 from .playlist import ProjectionPlaylistMixin, playback_order_has_pending_item
 from .preview import ImagePreviewWidget
 from solin.widgets.common.buffered_slider import BufferedSlider
@@ -111,6 +113,8 @@ class _ThemedVideoPreview(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(f"background: {PALETTE.bg0};")
         self._aspect_ratio = self._DEFAULT_ASPECT_RATIO
+        self._native_output_active = False
+        self._native_surface: NativeVideoSurface | None = None
         self._video_widget = QVideoWidget(self)
         # The child always has the video's exact aspect ratio, so the multimedia
         # backend has no letterbox pixels of its own to paint black.
@@ -124,7 +128,8 @@ class _ThemedVideoPreview(QWidget):
 
     def set_frame(self, frame: QVideoFrame) -> None:
         if not frame.isValid():
-            self.clear_frame()
+            if not self._native_output_active:
+                self.clear_frame()
             return
         viewport = frame.surfaceFormat().viewport()
         frame_size = viewport.size() if viewport.isValid() else frame.size()
@@ -132,13 +137,57 @@ class _ThemedVideoPreview(QWidget):
         height = frame_size.height()
         if frame.rotation().value in (90, 270):
             width, height = height, width
-        if width > 0 and height > 0:
-            self._aspect_ratio = width / height
-            self._apply_video_geometry()
+        self.set_video_size(QSize(width, height))
+        if self._native_output_active:
+            return
         self._video_widget.videoSink().setVideoFrame(frame)
+
+    @Slot(QSize)
+    def set_video_size(self, size: QSize) -> None:
+        """Fit both presenters without materializing the decoded frame."""
+
+        width = size.width()
+        height = size.height()
+        if width <= 0 or height <= 0:
+            return
+        aspect_ratio = width / height
+        self._aspect_ratio = aspect_ratio
+        self._apply_video_geometry()
 
     def clear_frame(self) -> None:
         self._video_widget.videoSink().setVideoFrame(QVideoFrame())
+
+    def set_native_output_active(self, active: bool) -> bool:
+        active = bool(active)
+        if active == self._native_output_active:
+            return False
+        self._native_output_active = active
+        if active:
+            surface = self._ensure_native_surface()
+            self.clear_frame()
+            self._video_widget.hide()
+            surface.show()
+            surface.raise_()
+        else:
+            if self._native_surface is not None:
+                self._native_surface.hide()
+            self._video_widget.show()
+        return True
+
+    @property
+    def native_output_active(self) -> bool:
+        return self._native_output_active
+
+    @property
+    def native_surface(self) -> NativeVideoSurface | None:
+        return self._native_surface
+
+    def _ensure_native_surface(self) -> NativeVideoSurface:
+        if self._native_surface is None:
+            self._native_surface = NativeVideoSurface(self)
+            self._native_surface.set_input_target(self)
+            self._apply_video_geometry()
+        return self._native_surface
 
     def apply_theme(self) -> None:
         self.setStyleSheet(f"background: {PALETTE.bg0};")
@@ -157,18 +206,23 @@ class _ThemedVideoPreview(QWidget):
         available_height = max(0, self.height())
         if available_width == 0 or available_height == 0:
             self._video_widget.setGeometry(0, 0, 0, 0)
+            if self._native_surface is not None:
+                self._native_surface.setGeometry(0, 0, 0, 0)
             return
         target_width = available_width
         target_height = round(target_width / self._aspect_ratio)
         if target_height > available_height:
             target_height = available_height
             target_width = round(target_height * self._aspect_ratio)
-        self._video_widget.setGeometry(
+        target_geometry = (
             (available_width - target_width) // 2,
             (available_height - target_height) // 2,
             target_width,
             target_height,
         )
+        self._video_widget.setGeometry(*target_geometry)
+        if self._native_surface is not None:
+            self._native_surface.setGeometry(*target_geometry)
 
 
 # Projection bar (bottom-right projection control)
@@ -198,6 +252,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
     obs_scene_toggle_requested = Signal()    # usuário quer alternar entre cena de mídia e cena anterior
     set_as_idle_requested      = Signal(str) # path — usuário quer definir mídia como idle screen
     expanded_changed           = Signal(bool)
+    video_output_target_changed = Signal()
 
     _BAR_H = 48
 
@@ -238,9 +293,11 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._image_pixmap: QPixmap | None = None
         self._image_file_path: str = ""   # caminho do arquivo salvo para imagens sem URL
         self._is_audio: bool = False
+        self._video_preview_route_requested = False
         self._audio_cover_pixmap: QPixmap | None = None
         self._is_live_tab: bool = False   # True quando projetando aba ao vivo do browser
         self._fullscreen_overlay: FullscreenVideoOverlay | None = None
+        self._fullscreen_preparation_scheduled = False
         self._last_buffer_progress: tuple[int, int] = (0, 0)
         self._playback_recovering: bool = False
 
@@ -329,7 +386,8 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
 
         self.setObjectName("StatusBar")
         self.setFixedHeight(self._BAR_H)
-        # Cursor is ArrowCursor in inactive state; PointingHandCursor when media is active
+        # The shell is not interactive. Each visible state owns its cursor so
+        # native child-window materialization cannot replace the active hint.
         self.setCursor(Qt.CursorShape.ArrowCursor)
 
         self._build_bar_ui()
@@ -416,6 +474,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
 
         # ── Estado inativo ────────────────────────────────────────────────
         self.inactive_widget = QWidget()
+        self.inactive_widget.setCursor(Qt.CursorShape.ArrowCursor)
         self.inactive_widget.setStyleSheet("background: transparent;")
         inact_lay = QHBoxLayout(self.inactive_widget)
         inact_lay.setContentsMargins(0, 0, 0, 0)
@@ -439,6 +498,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
 
         # ── Estado ativo ──────────────────────────────────────────────────
         self.active_widget = QWidget()
+        self.active_widget.setCursor(Qt.CursorShape.PointingHandCursor)
         self.active_widget.setStyleSheet("background: transparent;")
         self.active_widget.setVisible(False)
         act_lay = QHBoxLayout(self.active_widget)
@@ -701,12 +761,23 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.video_preview.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
+        self.media.video_sink.videoSizeChanged.connect(
+            self._sync_video_preview_size
+        )
+        self._sync_video_preview_size()
         self.video_preview.setVisible(False)
         self.video_preview.installEventFilter(self)
         preview_layout.addWidget(self.preview_content)
         preview_layout.addWidget(self.video_preview)
         self.overlay_stack.addWidget(self.preview_host)   # index 0
         startup_timeline().mark("projection_overlay_preview_constructed")
+
+    @Slot()
+    def _sync_video_preview_size(self) -> None:
+        preview = getattr(self, "video_preview", None)
+        if preview is None:
+            return
+        preview.set_video_size(self.media.video_sink.videoSize())
 
     def _build_overlay_timer(self) -> None:
         from solin.bootstrap.startup_timeline import startup_timeline
@@ -824,6 +895,61 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
                 video_preview.clear_frame()
         if preview_content is not None:
             preview_content.setVisible(not video_visible)
+        if video_visible != getattr(
+            self,
+            "_video_preview_route_requested",
+            False,
+        ):
+            self._video_preview_route_requested = video_visible
+            self.video_output_target_changed.emit()
+
+    @property
+    def native_video_output_requested(self) -> bool:
+        return self.app_fullscreen_active() or getattr(
+            self,
+            "_video_preview_route_requested",
+            False,
+        )
+
+    @property
+    def native_video_output_surface(self) -> NativeVideoSurface | None:
+        overlay = getattr(self, "_fullscreen_overlay", None)
+        if overlay is not None and overlay.is_active():
+            return overlay.native_video_surface
+        preview = getattr(self, "video_preview", None)
+        return preview.native_surface if preview is not None else None
+
+    @property
+    def python_video_frame_delivery_required(self) -> bool:
+        """Whether an active Qt-only surface still needs decoded video frames."""
+
+        if self._mode != "video" or self._is_audio:
+            return False
+        if self.app_fullscreen_active():
+            overlay = getattr(self, "_fullscreen_overlay", None)
+            return overlay is None or not overlay.native_output_active
+        if not self._video_preview_desired():
+            return False
+        preview = getattr(self, "video_preview", None)
+        return preview is None or not preview.native_output_active
+
+    def set_native_video_output_active(self, active: bool) -> None:
+        fullscreen_active = self.app_fullscreen_active()
+        overlay = getattr(self, "_fullscreen_overlay", None)
+        if overlay is not None:
+            overlay.set_native_output_active(bool(active) and fullscreen_active)
+
+        preview = getattr(self, "video_preview", None)
+        if preview is None:
+            return
+        effective = (
+            bool(active)
+            and not fullscreen_active
+            and getattr(self, "_video_preview_route_requested", False)
+        )
+        changed = preview.set_native_output_active(effective)
+        if changed and not effective and not fullscreen_active:
+            self._present_current_video_frame()
 
     def _present_current_video_frame(self) -> None:
         if not self._video_preview_desired():
@@ -946,7 +1072,12 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
     def enter_app_fullscreen(self) -> None:
         if not self._is_app_fullscreen_available():
             return
+        self._fullscreen_preparation_scheduled = False
         overlay = self._ensure_fullscreen_overlay()
+        preview = getattr(self, "video_preview", None)
+        overlay.set_native_output_active(
+            bool(preview is not None and preview.native_output_active)
+        )
         self._hydrate_fullscreen_overlay(overlay)
         overlay.show_fullscreen()
 
@@ -976,8 +1107,30 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         overlay.speed_selected.connect(self._set_speed)
         overlay.loop_toggled.connect(self._toggle_loop)
         overlay.playback_order_selected.connect(self._set_playback_order)
+        overlay.visibility_changed.connect(
+            self._on_fullscreen_visibility_changed
+        )
         self._fullscreen_overlay = overlay
         return overlay
+
+    def _schedule_fullscreen_preparation(self) -> None:
+        if (
+            not self._is_app_fullscreen_available()
+            or self._fullscreen_preparation_scheduled
+        ):
+            return
+        self._fullscreen_preparation_scheduled = True
+        QTimer.singleShot(0, self._prepare_fullscreen_when_idle)
+
+    def _prepare_fullscreen_when_idle(self) -> None:
+        self._fullscreen_preparation_scheduled = False
+        if not self._is_app_fullscreen_available():
+            return
+        self._ensure_fullscreen_overlay().prepare()
+
+    @Slot(bool)
+    def _on_fullscreen_visibility_changed(self, _visible: bool) -> None:
+        self.video_output_target_changed.emit()
 
     def _hydrate_fullscreen_overlay(self, overlay: FullscreenVideoOverlay) -> None:
         title = self.ov_title.text() or self.proj_title.toolTip() or self.proj_title.text()
@@ -1076,8 +1229,8 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._ensure_overlay_ready()
         self.cancel_auto_share_playback_wait()
         self._cancel_announcement_mode()
-        self._enter_mode("video")
         self._is_audio = is_audio
+        self._enter_mode("video")
         self._image_pixmap = None
         self._stop_wave_animation()   # para animação da faixa anterior (se houver)
         self._last_buffer_progress = (0, 0)
@@ -1115,8 +1268,6 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.inactive_widget.setVisible(False)
         self.active_widget.setVisible(True)
         self.overlay_stack.setCurrentIndex(0)
-        # Bar is clickable to expand when active
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
         self._sync_app_fullscreen_availability()
 
         # Aplica velocidade salva
@@ -1149,6 +1300,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         # Agenda captura one-shot de thumbnail ao vivo, se o item ainda não tem miniatura
         self._live_thumb_timer.stop()
         self._schedule_live_thumb()
+        self._schedule_fullscreen_preparation()
 
     def activate_image(
         self,
@@ -1223,7 +1375,6 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.inactive_widget.setVisible(False)
         self.active_widget.setVisible(True)
         self.overlay_stack.setCurrentIndex(0)
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
         # Botão OBS: visível se disponível; ao entrar no modo imagem, assume cena de mídia ativa
         self._obs_scene_is_media = True
         self._refresh_obs_scene_btn()
@@ -1313,8 +1464,6 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.inactive_widget.setVisible(False)
         self.active_widget.setVisible(True)
         self.overlay_stack.setCurrentIndex(0)
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-
         if self._expanded:
             if keep_expanded:
                 self._update_overlay_geometry()
@@ -1377,7 +1526,6 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.ov_set_idle_btn.setVisible(False)        # cronômetro não pode ser idle
         self.inactive_widget.setVisible(False)
         self.active_widget.setVisible(True)
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
         if self._expanded:
             self._collapse()
         self._timer_tick.start()
@@ -1546,8 +1694,6 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.active_widget.setVisible(False)
         self._offline_badge.setVisible(False)
         self.seek_slider.reset()
-        # No clickable expand action when inactive — use arrow cursor
-        self.setCursor(Qt.CursorShape.ArrowCursor)
 
     # ── OBS scene toggle (modo imagem) ────────────────────────────────────
 

@@ -6,7 +6,7 @@ import logging
 from typing import Any, TYPE_CHECKING
 
 from PySide6.QtWidgets import QApplication, QVBoxLayout, QWidget
-from PySide6.QtCore import QObject, QPoint, QTimer, Signal, QEvent, Qt
+from PySide6.QtCore import QObject, QPoint, QTimer, Signal, Slot, QEvent, Qt
 
 from .controllers.auto_key_projection_controller import AutoKeyProjectionController
 from .controllers.language_controller import LanguageContext, LanguageController
@@ -110,8 +110,8 @@ from .controllers.wifi_media_controller import (
 from .controllers.window_state_controller import WindowStateContext, WindowStateController
 from .core.projection.aspect_ratio import projection_aspect_ratio_from_windows
 from .core.projection.application import ObsSceneSession, ProjectionSession
-from .core.scenes.engine import OutputWindowTarget
-from .core.scenes.model import BusId, SceneDocument
+from .core.scenes.engine import MAXIMUM_OUTPUT_WINDOW_TARGETS, OutputWindowTarget
+from .core.scenes.model import BusId, CONTENT_SOURCE_ID, SceneDocument
 from .core.scenes.workspace import SceneWorkspaceService
 from .core.timer.application import TimerSession
 from .core.i18n.manager import LanguageManager
@@ -145,6 +145,7 @@ from .ui.window_focus import raise_projection_window
 
 
 _STARTUP_SCREEN_SETTLE_MS = 900
+_OPERATOR_VIDEO_OUTPUT_TARGET_ID = "media-control-video"
 
 
 def _use_native_media_presentation(
@@ -307,6 +308,39 @@ class MainWindow(QWidget):
             ),
         )
         self.scene_workspace = scene_workspace
+        program_output = self.scene_documents.document.output(BusId.VIRTUAL_CAMERA)
+        self._content_frame_ingress = ContentFrameIngressController(
+            self,
+            canvas_width=program_output.video_format.width,
+            canvas_height=program_output.video_format.height,
+        )
+        self._content_frame_ingress.bind_video_sink(self.media_ctrl.video_sink)
+        self._content_frame_ingress.direct_submission_changed.connect(
+            self._reconcile_python_video_frame_delivery,
+            Qt.ConnectionType.QueuedConnection,
+        )
+        self.media_ctrl.decoded_frame_acceptance_changed.connect(
+            self._content_frame_ingress.set_decoder_frame_gate
+        )
+        self._content_frame_ingress.set_decoder_frame_gate(
+            self.media_ctrl.session_id,
+            self.media_ctrl.decoded_frames_accepted,
+        )
+        self._program_content = ProgramContentController(
+            self.projection_session,
+            self.font_manager,
+            self._content_frame_ingress.submit_frame,
+            self._current_yearly_projection_text,
+            media_epoch_sink=self._content_frame_ingress.begin_presentation,
+            image_transform_sink=self._content_frame_ingress.set_image_transform,
+            width=program_output.video_format.width,
+            height=program_output.video_format.height,
+            parent=self,
+        )
+        # Content identity and retained pixels must advance before the scene
+        # observer prepares Program. ProjectionSession preserves subscription
+        # order, so constructing these owners in data-flow order removes the
+        # first-frame race without coupling either controller to the other.
         self.scene_runtime = SceneRuntimeController(
             scene_workspace,
             self.projection_session,
@@ -314,27 +348,13 @@ class MainWindow(QWidget):
             ptz=ptz_executor,
             parent=self,
         )
-        program_output = self.scene_documents.document.output(BusId.VIRTUAL_CAMERA)
-        self._content_frame_ingress = ContentFrameIngressController(
-            self,
-            canvas_width=program_output.video_format.width,
-            canvas_height=program_output.video_format.height,
-        )
         self._content_frame_ingress.descriptor_changed.connect(
             self.scene_runtime.set_content_ingress
         )
-        self.scene_runtime.set_content_ingress(self._content_frame_ingress.descriptor)
-        self._program_content = ProgramContentController(
-            self.projection_session,
-            self.font_manager,
-            self._content_frame_ingress.submit_frame,
-            self._current_yearly_projection_text,
-            media_epoch_sink=self._content_frame_ingress.set_media_epoch,
-            image_transform_sink=self._content_frame_ingress.set_image_transform,
-            width=program_output.video_format.width,
-            height=program_output.video_format.height,
-            parent=self,
+        self.scene_runtime.source_health_changed.connect(
+            self._on_native_content_source_health_changed
         )
+        self.scene_runtime.set_content_ingress(self._content_frame_ingress.descriptor)
         self.scene_runtime.content_ingress_demand_changed.connect(
             self._on_content_ingress_demand_changed
         )
@@ -1047,10 +1067,16 @@ class MainWindow(QWidget):
         )
 
     def _on_projection_state_changed_for_native(self) -> None:
-        self._content_frame_ingress.set_media_epoch(
-            self.projection_session.session_id
-        )
         self._reconcile_native_scene_surfaces()
+
+    def _on_native_content_source_health_changed(self, source_id: str) -> None:
+        if source_id != CONTENT_SOURCE_ID:
+            return
+        health = self.scene_runtime.source_health(source_id)
+        if health is not None and health.error_code:
+            self._content_frame_ingress.recover_accelerated_transport(
+                health.error_code
+            )
 
     def _reconcile_native_scene_surfaces(self) -> None:
         mirror_enabled = self._program_mirror_enabled()
@@ -1112,13 +1138,35 @@ class MainWindow(QWidget):
                         )
                     )
 
+        projection_bar = getattr(self, "proj_bar", None)
+        if projection_bar is not None:
+            operator_video_native = (
+                native_presentation
+                and projection_bar.native_video_output_requested
+                and len(targets) < MAXIMUM_OUTPUT_WINDOW_TARGETS
+            )
+            projection_bar.set_native_video_output_active(
+                operator_video_native
+            )
+            operator_video_surface = (
+                projection_bar.native_video_output_surface
+            )
+            if operator_video_native and operator_video_surface is not None:
+                targets.append(
+                    self._native_window_target(
+                        operator_video_surface,
+                        _OPERATOR_VIDEO_OUTPUT_TARGET_ID,
+                        BusId.MEDIA_WINDOWS,
+                    )
+                )
+
         fallback_windows = (
             tuple(self.projection_session.all_windows())
             if mirror_enabled
             else ()
         )
         self._native_fallback_mirror_required = any(
-            not getattr(window, "_native_output_active", False)
+            not getattr(window, "native_output_active", False)
             for window in fallback_windows
         )
         if targets:
@@ -1126,6 +1174,32 @@ class MainWindow(QWidget):
         else:
             self.scene_runtime.set_window_targets(())
         self._reconcile_scene_media_egress()
+        self._reconcile_python_video_frame_delivery()
+
+    @Slot()
+    @Slot(bool)
+    def _reconcile_python_video_frame_delivery(
+        self,
+        _direct_active: bool | None = None,
+    ) -> None:
+        """Keep Qt frame delivery only while a Qt surface actually consumes it."""
+
+        delivery_required = True
+        state = self.projection_session.state
+        if (
+            self._content_frame_ingress.direct_submission_active
+            and state.get("type") == "video"
+            and not state.get("is_audio", False)
+        ):
+            projection_bar = getattr(self, "proj_bar", None)
+            bar_requires_frames = (
+                projection_bar is None
+                or projection_bar.python_video_frame_delivery_required
+            )
+            delivery_required = bool(
+                bar_requires_frames or self._raw_projection_windows()
+            )
+        self.media_ctrl.set_python_frame_delivery_required(delivery_required)
 
     def _on_native_scene_engine_ready_changed(self, ready: bool) -> None:
         if ready:
@@ -1155,7 +1229,7 @@ class MainWindow(QWidget):
         if image.isNull():
             return
         for window in self.projection_session.all_windows():
-            if getattr(window, "_native_output_active", False):
+            if getattr(window, "native_output_active", False):
                 continue
             show_image = getattr(window, "show_image_from_qimage", None)
             if callable(show_image):
@@ -1195,7 +1269,7 @@ class MainWindow(QWidget):
         return [
             window
             for window in self.projection_session.all_windows()
-            if not getattr(window, "_native_output_active", False)
+            if not getattr(window, "native_output_active", False)
         ]
 
     def _on_scene_window_route_changed(self, _state) -> None:
@@ -1432,6 +1506,9 @@ class MainWindow(QWidget):
         self._ui_preparation.completed.connect(self._on_ui_preparation_completed)
         self.right_col = resources.right_col
         self.proj_bar = resources.projection_bar
+        self.proj_bar.video_output_target_changed.connect(
+            self._reconcile_native_scene_surfaces
+        )
         self.scene_runtime.engine_ready_changed.connect(
             self._on_native_scene_engine_ready_changed
         )

@@ -58,6 +58,17 @@ struct CompiledSceneGraph;
 
 using VideoFrameVisitor = std::function<void(const VideoFrameView&)>;
 
+// A compositor frame sequence is monotonic only within one active route. Graphs
+// are prepared in parallel, so a retiring graph may legitimately hold a larger
+// internal sequence than its replacement. Consumers must therefore compare the
+// pair, not the frame sequence alone.
+struct SceneOutputFrameCursor {
+    std::uint64_t route_generation{0U};
+    std::uint64_t frame_sequence{0U};
+
+    bool operator==(const SceneOutputFrameCursor&) const = default;
+};
+
 enum class SystemMemoryOutputConsumer : std::uint8_t {
     frame_channel = 0U,
     virtual_camera = 1U,
@@ -212,19 +223,20 @@ class SceneRenderer {
     latest_frame(OutputBus bus) const noexcept = 0;
     [[nodiscard]] virtual std::shared_ptr<const SourceFrame>
     latest_gpu_frame(OutputBus bus) const noexcept = 0;
-    [[nodiscard]] virtual std::optional<std::uint64_t>
-    visit_latest_frame(OutputBus bus, std::uint64_t after_sequence,
+    [[nodiscard]] virtual std::optional<SceneOutputFrameCursor>
+    visit_latest_frame(OutputBus bus, SceneOutputFrameCursor after,
                        const VideoFrameVisitor& visitor) const noexcept {
         static_cast<void>(bus);
-        static_cast<void>(after_sequence);
+        static_cast<void>(after);
         static_cast<void>(visitor);
         return std::nullopt;
     }
     [[nodiscard]] virtual bool wait_for_frame(
-        OutputBus bus, std::uint64_t after_sequence, std::stop_token stop_token,
+        OutputBus bus, SceneOutputFrameCursor after,
+        std::stop_token stop_token,
         std::chrono::steady_clock::time_point deadline) const noexcept {
         static_cast<void>(bus);
-        static_cast<void>(after_sequence);
+        static_cast<void>(after);
         static_cast<void>(stop_token);
         static_cast<void>(deadline);
         return false;

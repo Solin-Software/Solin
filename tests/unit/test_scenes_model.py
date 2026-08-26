@@ -295,6 +295,25 @@ def test_local_camera_frame_rate_is_rational_and_canonical() -> None:
         LocalCameraConfig(device_id="camera://device", width=1920, height=1080)
 
 
+def test_camera_sources_keep_active_by_default_and_preserve_an_explicit_opt_out() -> None:
+    local_record = LocalCameraConfig(keep_active=False).to_record()
+    local_without_preference = dict(local_record)
+    local_without_preference.pop("keep_active")
+    rtsp_record = RtspCameraConfig(
+        uri="rtsp://camera.local/stream",
+        keep_active=False,
+    ).to_record()
+    rtsp_without_preference = dict(rtsp_record)
+    rtsp_without_preference.pop("keep_active")
+
+    assert LocalCameraConfig().keep_active
+    assert RtspCameraConfig(uri="rtsp://camera.local/stream").keep_active
+    assert LocalCameraConfig.from_record(local_without_preference).keep_active
+    assert RtspCameraConfig.from_record(rtsp_without_preference).keep_active
+    assert not LocalCameraConfig.from_record(local_record).keep_active
+    assert not RtspCameraConfig.from_record(rtsp_record).keep_active
+
+
 def test_schema_version_two_infers_the_camera_media_type() -> None:
     record = _document().to_record()
     record["schema_version"] = 2
@@ -831,6 +850,7 @@ def test_engine_snapshot_requires_each_bus_once_and_known_scenes() -> None:
         (FrameChannelTransport.SHARED_MEMORY_VIDEO, VideoPixelFormat.BGRA, False),
         (FrameChannelTransport.D3D11_SHARED_TEXTURE, VideoPixelFormat.BGRA, True),
         (FrameChannelTransport.D3D11_SHARED_TEXTURE, VideoPixelFormat.NV12, True),
+        (FrameChannelTransport.D3D11_SHARED_TEXTURE, VideoPixelFormat.DYNAMIC, True),
     ],
 )
 def test_frame_channel_transport_requires_a_compatible_pixel_layout(

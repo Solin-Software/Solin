@@ -3,6 +3,8 @@
 
 #include "gstreamer_frame_transition.hpp"
 #include "gstreamer_source_runtime.hpp"
+#include "native_window_output_routing.hpp"
+#include "native_window_output_wait.hpp"
 
 #include <algorithm>
 #include <array>
@@ -68,8 +70,6 @@ GstElement* add_element(GstElement* pipeline, const char* factory) {
     return element;
 }
 
-constexpr auto kTransitionFrameInterval = 16ms;
-
 #ifdef _WIN32
 
 constexpr wchar_t kNativeChildWindowClass[] = L"SolinNativeVideoSurface";
@@ -123,18 +123,20 @@ class NativeChildWindow final {
         if (GetClientRect(parent_, &bounds) == FALSE) {
             throw std::runtime_error("native_window_handle_invalid");
         }
-        width_ = std::max<LONG>(1, bounds.right - bounds.left);
-        height_ = std::max<LONG>(1, bounds.bottom - bounds.top);
+        const auto width = std::max<LONG>(1, bounds.right - bounds.left);
+        const auto height = std::max<LONG>(1, bounds.bottom - bounds.top);
+        width_ = width;
+        height_ = height;
         window_ = CreateWindowExW(WS_EX_NOPARENTNOTIFY | WS_EX_NOACTIVATE, kNativeChildWindowClass,
-                                  L"", WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS, 0, 0, width_,
-                                  height_, parent_, nullptr, GetModuleHandleW(nullptr), nullptr);
+                                  L"", WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS, 0, 0, width,
+                                  height, parent_, nullptr, GetModuleHandleW(nullptr), nullptr);
         if (window_ == nullptr) {
             throw std::runtime_error("native_window_child_unavailable");
         }
         // The presenter is a rendering plane.  Keeping it at the bottom of
         // its Qt host allows app-process interaction/decoration planes to sit
         // above it without coupling the engine to a particular target id.
-        if (SetWindowPos(window_, HWND_BOTTOM, 0, 0, width_, height_,
+        if (SetWindowPos(window_, HWND_BOTTOM, 0, 0, width, height,
                          SWP_NOACTIVATE | SWP_NOOWNERZORDER) == FALSE) {
             DestroyWindow(window_);
             window_ = nullptr;
@@ -153,6 +155,26 @@ class NativeChildWindow final {
 
     [[nodiscard]] HWND handle() const noexcept { return window_; }
 
+    [[nodiscard]] bool retarget(
+        const OutputWindowConfiguration& target) noexcept {
+        const auto next_parent =
+            reinterpret_cast<HWND>(static_cast<std::uintptr_t>(target.native_handle));
+        if (next_parent == nullptr || IsWindow(next_parent) == FALSE || window_ == nullptr ||
+            IsWindow(window_) == FALSE) {
+            return false;
+        }
+        const bool parent_changed = next_parent != parent_;
+        if (parent_changed) {
+            SetLastError(ERROR_SUCCESS);
+            const auto previous_parent = SetParent(window_, next_parent);
+            if (previous_parent == nullptr && GetLastError() != ERROR_SUCCESS) {
+                return false;
+            }
+            parent_ = next_parent;
+        }
+        return fit_to_parent(parent_changed);
+    }
+
     [[nodiscard]] bool pump() noexcept {
         if (parent_ == nullptr || IsWindow(parent_) == FALSE || window_ == nullptr ||
             IsWindow(window_) == FALSE) {
@@ -166,24 +188,29 @@ class NativeChildWindow final {
             TranslateMessage(&message);
             DispatchMessageW(&message);
         }
+        return fit_to_parent(false);
+    }
+
+  private:
+    [[nodiscard]] bool fit_to_parent(const bool force) noexcept {
         RECT bounds{};
-        if (GetClientRect(parent_, &bounds) == FALSE) {
+        if (parent_ == nullptr || GetClientRect(parent_, &bounds) == FALSE) {
             return false;
         }
         const auto width = std::max<LONG>(1, bounds.right - bounds.left);
         const auto height = std::max<LONG>(1, bounds.bottom - bounds.top);
-        if (width != width_ || height != height_) {
-            if (SetWindowPos(window_, HWND_BOTTOM, 0, 0, width, height,
-                             SWP_NOACTIVATE | SWP_NOOWNERZORDER) == FALSE) {
-                return false;
-            }
-            width_ = width;
-            height_ = height;
+        if (!force && width == width_ && height == height_) {
+            return true;
         }
+        if (SetWindowPos(window_, HWND_BOTTOM, 0, 0, width, height,
+                         SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_SHOWWINDOW) == FALSE) {
+            return false;
+        }
+        width_ = width;
+        height_ = height;
         return true;
     }
 
-  private:
     HWND parent_{nullptr};
     HWND window_{nullptr};
     LONG width_{1};
@@ -195,7 +222,8 @@ class NativeChildWindow final {
 class NativeTargetPipeline final {
   public:
     explicit NativeTargetPipeline(const OutputWindowConfiguration& target)
-        : target_id_(target.target_id), transition_(kMediaPresentationTransition) {
+        : target_id_(target.target_id), native_handle_(target.native_handle),
+          transition_(kMediaPresentationTransition) {
 #ifdef _WIN32
         window_ = std::make_unique<NativeChildWindow>(target);
 #else
@@ -211,8 +239,6 @@ class NativeTargetPipeline final {
 #ifdef _WIN32
         auto* source = add_element(pipeline, "appsrc");
         auto* queue = add_element(pipeline, "queue");
-        auto* upload = add_element(pipeline, "d3d11upload");
-        auto* convert = add_element(pipeline, "d3d11convert");
         auto* sink = add_element(pipeline, "d3d11videosink");
 #else
         auto* source = add_element(pipeline, "appsrc");
@@ -229,9 +255,17 @@ class NativeTargetPipeline final {
         g_object_set(queue, "max-size-buffers", 1U, "max-size-bytes", 0U,
                      "max-size-time", static_cast<guint64>(0U), "leaky", 2, nullptr);
         require_link(source, queue);
+#ifdef _WIN32
+        // d3d11videosink accepts both D3D11Memory and system-memory samples and
+        // performs only the conversion required by its swap chain. All normal
+        // presenter frames are already canonical D3D11 textures, so an explicit
+        // upload+convert pair duplicated work in every output-window pipeline.
+        require_link(queue, sink);
+#else
         require_link(queue, upload);
         require_link(upload, convert);
         require_link(convert, sink);
+#endif
         g_object_set(sink, "sync", FALSE, "enable-last-sample", FALSE, "force-aspect-ratio", TRUE,
                      nullptr);
         if (GST_IS_VIDEO_OVERLAY(sink) == FALSE) {
@@ -265,6 +299,22 @@ class NativeTargetPipeline final {
 
     NativeTargetPipeline(const NativeTargetPipeline&) = delete;
     NativeTargetPipeline& operator=(const NativeTargetPipeline&) = delete;
+
+    [[nodiscard]] bool apply_target(
+        const OutputWindowConfiguration& target) noexcept {
+#ifdef _WIN32
+        if (window_ == nullptr || !window_->retarget(target)) {
+            return false;
+        }
+#else
+        if (target.native_handle != native_handle_) {
+            return false;
+        }
+#endif
+        native_handle_ = target.native_handle;
+        request(target);
+        return true;
+    }
 
     void request(const OutputWindowConfiguration& target) noexcept {
         const PresentationIdentity requested{
@@ -737,6 +787,7 @@ class NativeTargetPipeline final {
     }
 
     std::string target_id_{};
+    std::uint64_t native_handle_{0U};
     PresentationTransition transition_;
     PresentationTransitionPhase last_transition_phase_{
         PresentationTransitionPhase::waiting_for_first_frame};
@@ -772,23 +823,13 @@ struct NativeWindowRoutingState final {
     std::mutex mutex{};
     std::vector<OutputWindowConfiguration> targets{};
     std::shared_ptr<SourceLease> content_source{};
+    std::shared_ptr<GStreamerFrameSignal> activity_signal{
+        std::make_shared<GStreamerFrameSignal>()};
+    std::shared_ptr<GStreamerFrameSignal> routing_signal{
+        std::make_shared<GStreamerFrameSignal>()};
+    std::stop_source routing_wait_cancellation{};
     std::uint64_t revision{0U};
 };
-
-[[nodiscard]] bool same_window_topology(
-    const std::vector<OutputWindowConfiguration>& current,
-    const std::vector<OutputWindowConfiguration>& next) {
-    if (current.size() != next.size()) {
-        return false;
-    }
-    return std::ranges::all_of(current, [&next](const auto& target) {
-        const auto match = std::ranges::find_if(next, [&target](const auto& candidate) {
-            return candidate.target_id == target.target_id;
-        });
-        return match != next.end() && match->native_handle == target.native_handle &&
-               match->visible == target.visible;
-    });
-}
 
 #endif
 
@@ -830,19 +871,28 @@ class NativeWindowOutputController::Impl final {
                                            ? std::make_shared<SourceLease>(
                                                  std::move(content_source.value()))
                                            : nullptr;
-            if (worker_running_.load() && routing_state_ != nullptr &&
-                same_window_topology(targets_, targets)) {
+            if (worker_running_.load() && routing_state_ != nullptr) {
+                auto previous_content_source = content_source_;
+                std::stop_source previous_routing_wait;
                 targets_ = targets;
                 content_source_ = next_content_source;
                 {
                     std::scoped_lock routing_lock{routing_state_->mutex};
+                    previous_routing_wait = routing_state_->routing_wait_cancellation;
+                    routing_state_->routing_wait_cancellation = std::stop_source{};
                     routing_state_->targets = targets;
                     routing_state_->content_source = next_content_source;
                     ++routing_state_->revision;
                 }
+                static_cast<void>(previous_routing_wait.request_stop());
+                if (previous_content_source != nullptr) {
+                    previous_content_source->runtime().wake_frame_waiters();
+                }
                 if (content_source_ != nullptr) {
                     content_source_->runtime().wake_frame_waiters();
                 }
+                routing_state_->routing_signal->notify();
+                routing_state_->activity_signal->notify();
                 return true;
             }
 #endif
@@ -912,19 +962,28 @@ class NativeWindowOutputController::Impl final {
                           started = std::move(started), running = &worker_running_](
                              const std::stop_token stop_token) mutable {
                 std::vector<std::unique_ptr<NativeTargetPipeline>> pipelines;
+                std::vector<OutputWindowConfiguration> applied_targets;
                 std::uint64_t applied_revision = 0U;
+                std::uint64_t failed_routing_revision = 0U;
+                std::chrono::steady_clock::time_point routing_retry_after{};
+                const auto activity_signal = routing->activity_signal;
+                const auto routing_signal = routing->routing_signal;
                 const auto routing_snapshot = [&routing] {
                     std::scoped_lock lock{routing->mutex};
                     return std::tuple{
                         routing->targets,
                         routing->content_source,
                         routing->revision,
+                        routing->routing_wait_cancellation.get_token(),
                     };
                 };
                 const auto rebuild_pipelines = [&routing_snapshot, &pipelines,
+                                                &applied_targets,
                                                 &applied_revision] {
-                    const auto [targets, content_source, revision] = routing_snapshot();
+                    const auto [targets, content_source, revision,
+                                routing_stop_token] = routing_snapshot();
                     static_cast<void>(content_source);
+                    static_cast<void>(routing_stop_token);
                     std::vector<std::unique_ptr<NativeTargetPipeline>> next;
                     next.reserve(targets.size());
                     for (const auto& target : targets) {
@@ -933,30 +992,98 @@ class NativeWindowOutputController::Impl final {
                         }
                     }
                     pipelines = std::move(next);
+                    applied_targets = targets;
                     applied_revision = revision;
                 };
                 const auto apply_routing = [&routing_snapshot, &pipelines,
-                                           &applied_revision] {
-                    const auto [targets, content_source, revision] = routing_snapshot();
+                                           &applied_targets, &applied_revision,
+                                           &failed_routing_revision,
+                                           &routing_retry_after] {
+                    const auto [targets, content_source, revision,
+                                routing_stop_token] = routing_snapshot();
                     static_cast<void>(content_source);
+                    static_cast<void>(routing_stop_token);
                     if (revision == applied_revision) {
-                        return;
+                        return true;
                     }
-                    for (const auto& target : targets) {
+                    const auto now = std::chrono::steady_clock::now();
+                    if (revision == failed_routing_revision &&
+                        now < routing_retry_after) {
+                        return false;
+                    }
+                    const auto plan = detail::native_window_routing_plan(
+                        applied_targets, targets);
+                    std::vector<std::pair<
+                        std::string,
+                        std::unique_ptr<NativeTargetPipeline>>>
+                        prepared_pipelines;
+                    prepared_pipelines.reserve(
+                        plan.retained_target_ids.size() +
+                        plan.added_target_ids.size());
+                    const auto target_by_id = [&targets](const std::string& id) {
+                        return std::ranges::find_if(
+                            targets, [&id](const auto& target) {
+                                return target.visible && target.target_id == id;
+                            });
+                    };
+                    const auto pipeline_by_id = [&pipelines](const std::string& id) {
+                        return std::ranges::find_if(
+                            pipelines, [&id](const auto& pipeline) {
+                                return pipeline->target_id() == id;
+                            });
+                    };
+                    try {
+                        for (const auto& target_id : plan.retained_target_ids) {
+                            const auto target = target_by_id(target_id);
+                            if (target == targets.end()) {
+                                continue;
+                            }
+                            const auto pipeline = pipeline_by_id(target_id);
+                            if (pipeline == pipelines.end() ||
+                                !(*pipeline)->apply_target(*target)) {
+                                prepared_pipelines.emplace_back(
+                                    target_id,
+                                    std::make_unique<NativeTargetPipeline>(*target));
+                            }
+                        }
+                        for (const auto& target_id : plan.added_target_ids) {
+                            const auto target = target_by_id(target_id);
+                            if (target != targets.end()) {
+                                prepared_pipelines.emplace_back(
+                                    target_id,
+                                    std::make_unique<NativeTargetPipeline>(*target));
+                            }
+                        }
+                    } catch (...) {
+                        failed_routing_revision = revision;
+                        routing_retry_after = now + 250ms;
+                        return false;
+                    }
+                    std::erase_if(pipelines, [&plan](const auto& pipeline) {
+                        return std::ranges::find(
+                                   plan.removed_target_ids,
+                                   pipeline->target_id()) !=
+                               plan.removed_target_ids.end();
+                    });
+                    for (auto& [target_id, prepared] : prepared_pipelines) {
                         const auto pipeline = std::ranges::find_if(
-                            pipelines, [&target](const auto& candidate) {
-                                return candidate->target_id() == target.target_id;
+                            pipelines, [&target_id](const auto& candidate) {
+                                return candidate->target_id() == target_id;
                             });
                         if (pipeline != pipelines.end()) {
-                            (*pipeline)->request(target);
+                            *pipeline = std::move(prepared);
+                        } else {
+                            pipelines.push_back(std::move(prepared));
                         }
                     }
+                    applied_targets = targets;
                     applied_revision = revision;
+                    failed_routing_revision = 0U;
+                    routing_retry_after = {};
+                    return true;
                 };
                 try {
                     rebuild_pipelines();
-                    running->store(!pipelines.empty());
-                    started.set_value(running->load());
                 } catch (...) {
                     running->store(false);
                     started.set_value(false);
@@ -970,9 +1097,147 @@ class NativeWindowOutputController::Impl final {
                     } catch (...) {
                     }
                 };
+                std::jthread content_activity_watcher;
+                std::jthread program_activity_watcher;
+                try {
+                    // Raw and Program expose independent blocking waits. Fold both
+                    // revisions into one latched signal so the presenter sleeps
+                    // without polling either producer or losing an update between
+                    // its frame snapshot and the following wait.
+                    content_activity_watcher = std::jthread{
+                        [&routing_snapshot, activity_signal, routing_signal](
+                            const std::stop_token activity_stop_token) {
+                            std::shared_ptr<SourceLease> observed_source;
+                            std::uint64_t observed_routing_revision = 0U;
+                            std::uint64_t observed_frame_sequence = 0U;
+                            while (!activity_stop_token.stop_requested()) {
+                                const auto routing_signal_revision =
+                                    routing_signal->revision();
+                                const auto [targets, content_source, routing_revision,
+                                            routing_stop_token] =
+                                    routing_snapshot();
+                                if (routing_revision != observed_routing_revision) {
+                                    observed_source = content_source;
+                                    observed_routing_revision = routing_revision;
+                                    observed_frame_sequence = 0U;
+                                }
+                                const auto content_demanded = std::ranges::any_of(
+                                    targets, [](const auto& target) {
+                                        return target.visible &&
+                                               target.bus == OutputBus::media_windows;
+                                    });
+                                if (!content_demanded || observed_source == nullptr) {
+                                    static_cast<void>(routing_signal->wait_after(
+                                        routing_signal_revision,
+                                        activity_stop_token,
+                                        std::chrono::steady_clock::time_point::max()));
+                                    continue;
+                                }
+                                auto& runtime = observed_source->runtime();
+                                if (const auto frame = runtime.latest_frame();
+                                    frame != nullptr &&
+                                    frame->sequence > observed_frame_sequence) {
+                                    observed_frame_sequence = frame->sequence;
+                                    activity_signal->notify();
+                                    continue;
+                                }
+                                std::stop_source wait_cancellation;
+                                std::stop_callback worker_cancel{
+                                    activity_stop_token, [&wait_cancellation] {
+                                        static_cast<void>(
+                                            wait_cancellation.request_stop());
+                                    }};
+                                std::stop_callback routing_cancel{
+                                    routing_stop_token, [&wait_cancellation] {
+                                        static_cast<void>(
+                                            wait_cancellation.request_stop());
+                                    }};
+                                static_cast<void>(runtime.wait_for_frame(
+                                    observed_frame_sequence,
+                                    wait_cancellation.get_token(),
+                                    std::chrono::steady_clock::time_point::max()));
+                                if (wait_cancellation.stop_requested()) {
+                                    continue;
+                                }
+                                if (const auto frame = runtime.latest_frame();
+                                    frame != nullptr &&
+                                    frame->sequence > observed_frame_sequence) {
+                                    observed_frame_sequence = frame->sequence;
+                                    activity_signal->notify();
+                                }
+                            }
+                        }};
+                    program_activity_watcher = std::jthread{
+                        [renderer, &routing_snapshot, activity_signal,
+                         routing_signal](
+                            const std::stop_token activity_stop_token) {
+                            std::uint64_t observed_frame_sequence = 0U;
+                            while (!activity_stop_token.stop_requested()) {
+                                const auto routing_signal_revision =
+                                    routing_signal->revision();
+                                const auto [targets, content_source,
+                                            routing_revision,
+                                            routing_stop_token] = routing_snapshot();
+                                static_cast<void>(content_source);
+                                static_cast<void>(routing_revision);
+                                const auto program_demanded = std::ranges::any_of(
+                                    targets, [](const auto& target) {
+                                        return target.visible &&
+                                               target.bus == OutputBus::virtual_camera;
+                                    });
+                                if (!program_demanded) {
+                                    static_cast<void>(routing_signal->wait_after(
+                                        routing_signal_revision,
+                                        activity_stop_token,
+                                        std::chrono::steady_clock::time_point::max()));
+                                    continue;
+                                }
+                                if (const auto frame = renderer->latest_gpu_frame(
+                                        OutputBus::virtual_camera);
+                                    frame != nullptr &&
+                                    frame->sequence > observed_frame_sequence) {
+                                    observed_frame_sequence = frame->sequence;
+                                    activity_signal->notify();
+                                    continue;
+                                }
+                                std::stop_source wait_cancellation;
+                                std::stop_callback worker_cancel{
+                                    activity_stop_token, [&wait_cancellation] {
+                                        static_cast<void>(
+                                            wait_cancellation.request_stop());
+                                    }};
+                                std::stop_callback routing_cancel{
+                                    routing_stop_token, [&wait_cancellation] {
+                                        static_cast<void>(
+                                            wait_cancellation.request_stop());
+                                    }};
+                                const auto delivered = renderer->wait_for_gpu_frame(
+                                    OutputBus::virtual_camera,
+                                    observed_frame_sequence,
+                                    wait_cancellation.get_token(),
+                                    std::chrono::steady_clock::time_point::max());
+                                if (wait_cancellation.stop_requested()) {
+                                    continue;
+                                }
+                                if (delivered) {
+                                    continue;
+                                }
+                            }
+                        }};
+                    running->store(!pipelines.empty());
+                    started.set_value(running->load());
+                } catch (...) {
+                    running->store(false);
+                    started.set_value(false);
+                    return;
+                }
                 while (!stop_token.stop_requested()) {
+                    static_cast<void>(apply_routing());
                     if (pipelines.empty()) {
-                        recover_pipelines();
+                        const auto routing_revision = routing_signal->revision();
+                        static_cast<void>(routing_signal->wait_after(
+                            routing_revision, stop_token,
+                            std::chrono::steady_clock::now() + 100ms));
                         continue;
                     }
                     bool healthy = true;
@@ -983,11 +1248,12 @@ class NativeWindowOutputController::Impl final {
                         recover_pipelines();
                         continue;
                     }
-                    apply_routing();
-                    const auto [routed_targets, content_source, routed_revision] =
-                        routing_snapshot();
+                    const auto [routed_targets, content_source, routed_revision,
+                                routing_stop_token] = routing_snapshot();
                     static_cast<void>(routed_targets);
                     static_cast<void>(routed_revision);
+                    static_cast<void>(routing_stop_token);
+                    const auto activity_revision = activity_signal->revision();
                     auto* content_runtime = content_source != nullptr
                                                 ? &content_source->runtime()
                                                 : nullptr;
@@ -1024,30 +1290,14 @@ class NativeWindowOutputController::Impl final {
                         pipelines, [](const auto& pipeline) {
                             return pipeline->animation_active();
                         });
+                    const auto wait_plan = detail::native_window_wait_plan(
+                        has_content_target, has_program_target,
+                        has_active_transition);
                     const auto deadline = std::chrono::steady_clock::now() +
-                                          (has_active_transition ||
-                                                   (has_content_target && has_program_target)
-                                               ? kTransitionFrameInterval
-                                               : 100ms);
-                    if (has_content_target && content_runtime != nullptr) {
-                        const auto content_sequence =
-                            frames[static_cast<std::size_t>(OutputBus::media_windows)] == nullptr
-                                ? 0U
-                                : frames[static_cast<std::size_t>(OutputBus::media_windows)]
-                                      ->sequence;
-                        static_cast<void>(content_runtime->wait_for_frame(
-                            content_sequence,
-                            stop_token, deadline));
-                    } else if (has_program_target) {
-                        const auto program_sequence =
-                            frames[static_cast<std::size_t>(OutputBus::virtual_camera)] == nullptr
-                                ? 0U
-                                : frames[static_cast<std::size_t>(OutputBus::virtual_camera)]
-                                      ->sequence;
-                        static_cast<void>(renderer->wait_for_gpu_frame(
-                            OutputBus::virtual_camera,
-                            program_sequence,
-                            stop_token, deadline));
+                                          wait_plan.maximum_interval;
+                    if (wait_plan.wait_for_activity) {
+                        static_cast<void>(activity_signal->wait_after(
+                            activity_revision, stop_token, deadline));
                     } else {
                         std::this_thread::sleep_until(deadline);
                     }

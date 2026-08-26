@@ -614,6 +614,160 @@ def _preview_egress_descriptor() -> FrameChannelDescriptor:
     )
 
 
+def _content_ingress_descriptor(
+    transport: FrameChannelTransport,
+    *,
+    generation: int,
+) -> FrameChannelDescriptor:
+    return FrameChannelDescriptor(
+        channel_id="content-ingress",
+        generation=generation,
+        producer_kind=FrameProducerKind.SOLIN_OFFSCREEN,
+        transport=transport,
+        handle_token=f"content-ingress-{generation}",
+        width=1920,
+        height=1080,
+        pixel_format=(
+            VideoPixelFormat.NV12
+            if transport is FrameChannelTransport.D3D11_SHARED_TEXTURE
+            else VideoPixelFormat.DYNAMIC
+        ),
+        color_space=(
+            VideoColorSpace.BT709
+            if transport is FrameChannelTransport.D3D11_SHARED_TEXTURE
+            else VideoColorSpace.SRGB
+        ),
+        color_range=(
+            VideoColorRange.LIMITED
+            if transport is FrameChannelTransport.D3D11_SHARED_TEXTURE
+            else VideoColorRange.FULL
+        ),
+    )
+
+
+def test_content_transport_hydration_preserves_live_program_before_animated_take() -> None:
+    class _PendingPrepareEngine(_Engine):
+        def __init__(self) -> None:
+            super().__init__()
+            self.prepare_futures: list[Future[ScenePreparation]] = []
+
+        def prepare_scene(self, *args, **kwargs):
+            super().prepare_scene(*args, **kwargs)
+            future: Future[ScenePreparation] = Future()
+            self.prepare_futures.append(future)
+            return future
+
+    projection = _Projection()
+    engine = _PendingPrepareEngine()
+    _documents, _runtime, controller = _runtime_controller(
+        engine,
+        projection,
+        request_ids=(
+            "initial-hydrate",
+            "prepare-program",
+            "transport-hydrate",
+            "prepare-program-current-transport",
+        ),
+    )
+    controller.set_content_ingress(
+        _content_ingress_descriptor(
+            FrameChannelTransport.SHARED_MEMORY_VIDEO,
+            generation=1,
+        )
+    )
+    controller.start_engine()
+    assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
+
+    projection.set_type("video")
+    controller.set_content_ingress(
+        _content_ingress_descriptor(
+            FrameChannelTransport.D3D11_SHARED_TEXTURE,
+            generation=2,
+        )
+    )
+
+    _, handoff = engine.snapshots[-1]
+    assert dict(handoff.active_scenes)[BusId.VIRTUAL_CAMERA] == CAMERA_SCENE_ID
+    assert engine.cancelled == ["prepare-program"]
+    assert engine.preparations[-1][0] == "prepare-program-current-transport"
+    assert engine.preparations[-1][1] is BusId.VIRTUAL_CAMERA
+    assert engine.preparations[-1][-1].kind is not TransitionKind.CUT
+    controller.close()
+
+
+def test_content_transport_retirement_waits_for_the_animated_program_exit() -> None:
+    class _SwitchablePrepareEngine(_Engine):
+        def __init__(self) -> None:
+            super().__init__()
+            self.defer_preparation = False
+            self.prepare_futures: list[Future[ScenePreparation]] = []
+
+        def prepare_scene(self, *args, **kwargs):
+            completed = super().prepare_scene(*args, **kwargs)
+            if not self.defer_preparation:
+                return completed
+            future: Future[ScenePreparation] = Future()
+            self.prepare_futures.append(future)
+            return future
+
+    projection = _Projection()
+    engine = _SwitchablePrepareEngine()
+    _documents, _runtime, controller = _runtime_controller(
+        engine,
+        projection,
+        request_ids=(
+            "initial-hydrate",
+            "prepare-program-exit",
+            "take-program-exit",
+            "transport-hydrate",
+            "prepare-media-exit",
+            "take-media-exit",
+        ),
+    )
+    projection.set_type("video")
+    controller.set_content_ingress(
+        _content_ingress_descriptor(
+            FrameChannelTransport.D3D11_SHARED_TEXTURE,
+            generation=1,
+        )
+    )
+    controller.start_engine()
+    assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
+    engine.defer_preparation = True
+
+    projection.set_type("idle")
+    controller.set_content_ingress(
+        _content_ingress_descriptor(
+            FrameChannelTransport.SHARED_MEMORY_VIDEO,
+            generation=2,
+        )
+    )
+
+    assert len(engine.snapshots) == 1
+    assert engine.cancelled == []
+    request_id, bus_id, scene_id, sequence, transition = engine.preparations[-1]
+    engine.prepare_futures[-1].set_result(
+        ScenePreparation(
+            request_id=request_id,
+            session_id=engine.session_id,
+            process_generation=engine.generation,
+            sequence=sequence,
+            document_revision=controller.document.revision,
+            bus_id=bus_id,
+            scene_id=scene_id,
+            preparation_token="prepared-program-exit",
+            transition=transition,
+        )
+    )
+
+    assert engine.takes[0][0] == "take-program-exit"
+    assert len(engine.snapshots) == 2
+    assert dict(engine.snapshots[-1][1].active_scenes)[BusId.VIRTUAL_CAMERA] == (
+        CAMERA_SCENE_ID
+    )
+    controller.close()
+
+
 def test_projection_categories_are_explicit_and_unknown_types_fail_safe() -> None:
     assert content_category_for_projection({"type": "idle"}) is ContentCategory.IDLE
     assert content_category_for_projection({"type": "removed_projection_type"}) is (
@@ -876,10 +1030,10 @@ def test_runtime_prepares_and_takes_without_full_snapshot_on_hot_path() -> None:
         projection,
         request_ids=(
             "hydrate",
+            "prepare-program",
+            "take-program",
             "prepare-media",
             "take-media",
-            "prepare-vcam",
-            "take-vcam",
             "prepare-pip-media",
             "take-pip-media",
             "prepare-pip-vcam",
@@ -2038,10 +2192,10 @@ def test_rejected_take_keeps_applied_scene_and_reports_sanitized_error() -> None
         projection,
         request_ids=(
             "hydrate",
+            "prepare-program",
+            "take-program",
             "prepare-media",
             "take-media",
-            "prepare-vcam",
-            "take-vcam",
         ),
     )
     errors: list[str] = []
@@ -2069,10 +2223,10 @@ def test_scene_take_waits_for_ptz_positioning_before_cutting() -> None:
         projection,
         request_ids=(
             "hydrate",
+            "prepare-program",
+            "take-program",
             "prepare-media",
             "take-media",
-            "prepare-vcam",
-            "take-vcam",
         ),
         document=_document_with_ptz_action(PtzTimeoutPolicy.KEEP_CURRENT),
         ptz=ptz,
@@ -2084,8 +2238,8 @@ def test_scene_take_waits_for_ptz_positioning_before_cutting() -> None:
     projection.set_type("image")
 
     assert ptz.calls == [(DEFAULT_CAMERA_SOURCE_ID, "preset-wide", 2500)]
-    assert len(engine.takes) == 1
-    assert controller.applied_scene(BusId.MEDIA_WINDOWS) == CONTENT_SCENE_ID
+    assert len(engine.takes) == 0
+    assert controller.applied_scene(BusId.MEDIA_WINDOWS) == CAMERA_SCENE_ID
     assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
 
     ptz.futures[0].set_result(_ptz_result(PtzRecallStatus.SUCCEEDED))
@@ -2133,9 +2287,9 @@ def test_keep_current_ptz_policy_blocks_take_on_failure() -> None:
         projection,
         request_ids=(
             "hydrate",
+            "prepare-program",
             "prepare-media",
             "take-media",
-            "prepare-vcam",
         ),
         document=_document_with_ptz_action(PtzTimeoutPolicy.KEEP_CURRENT),
         ptz=ptz,
@@ -2150,7 +2304,7 @@ def test_keep_current_ptz_policy_blocks_take_on_failure() -> None:
     )
 
     assert len(engine.takes) == 1
-    assert engine.cancelled == ["prepare-vcam"]
+    assert engine.cancelled == ["prepare-program"]
     assert controller.applied_scene(BusId.MEDIA_WINDOWS) == CONTENT_SCENE_ID
     assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
     assert errors == ["Scene PTZ recall blocked Take (ptz_recall_timeout)"]
@@ -2166,10 +2320,10 @@ def test_take_anyway_ptz_policy_cuts_after_failure() -> None:
         projection,
         request_ids=(
             "hydrate",
+            "prepare-program",
+            "take-program",
             "prepare-media",
             "take-media",
-            "prepare-vcam",
-            "take-vcam",
         ),
         document=_document_with_ptz_action(PtzTimeoutPolicy.TAKE_ANYWAY),
         ptz=ptz,
@@ -2195,9 +2349,7 @@ def test_document_change_cancels_in_flight_ptz_and_native_preparation() -> None:
         projection,
         request_ids=(
             "hydrate",
-            "prepare-media",
-            "take-media",
-            "prepare-vcam",
+            "prepare-program",
             "rehydrate",
         ),
         document=_document_with_ptz_action(PtzTimeoutPolicy.KEEP_CURRENT),
@@ -2209,6 +2361,6 @@ def test_document_change_cancels_in_flight_ptz_and_native_preparation() -> None:
     documents.rename_scene(CAMERA_SCENE_ID, "Renamed camera")
 
     assert ptz.cancelled == [ptz.futures[0]]
-    assert engine.cancelled == ["prepare-vcam"]
+    assert engine.cancelled == ["prepare-program"]
     assert len(engine.snapshots) == 2
     controller.close()

@@ -462,6 +462,10 @@ struct CenterNv12Frame final {
                                 std::uint8_t tolerance);
 void test_route_change_cannot_be_lost_before_graph_wait_registration(
     const std::shared_ptr<solin::media_engine::SceneRenderer>& renderer);
+void test_output_cursor_rebases_when_the_active_graph_changes(
+    const std::shared_ptr<solin::media_engine::SceneRenderer>& renderer);
+void test_terminal_graph_wait_is_rate_limited(
+    const std::shared_ptr<solin::media_engine::SceneRenderer>& renderer);
 void test_renderer_hydration_and_output_updates_drive_graph_demand(
     const std::shared_ptr<solin::media_engine::SceneRenderer>& renderer);
 
@@ -701,6 +705,8 @@ void test_scene_renderer_composes_nested_scene_to_shared_d3d11_frame(
     }
     test_renderer_hydration_and_output_updates_drive_graph_demand(renderer);
     test_route_change_cannot_be_lost_before_graph_wait_registration(renderer);
+    test_output_cursor_rebases_when_the_active_graph_changes(renderer);
+    test_terminal_graph_wait_is_rate_limited(renderer);
     renderer->set_system_memory_output_enabled(
         solin::media_engine::OutputBus::virtual_camera,
         solin::media_engine::SystemMemoryOutputConsumer::frame_channel,
@@ -804,18 +810,18 @@ void test_scene_renderer_composes_nested_scene_to_shared_d3d11_frame(
         solin::media_engine::OutputBus::virtual_camera, true, 1U,
         enable_virtual_camera_sequence);
     std::optional<solin::media_engine::PackedVideoFrame> virtual_camera_frame;
-    std::uint64_t virtual_camera_sequence = 0U;
+    solin::media_engine::SceneOutputFrameCursor virtual_camera_cursor{};
     const auto camera_deadline = std::chrono::steady_clock::now() + 5s;
     while (std::chrono::steady_clock::now() < camera_deadline) {
         if (const auto sequence = renderer->visit_latest_frame(
                 solin::media_engine::OutputBus::virtual_camera,
-                virtual_camera_sequence,
+                virtual_camera_cursor,
                 [&virtual_camera_frame](
                     const solin::media_engine::VideoFrameView& frame) {
                     virtual_camera_frame = solin::media_engine::copy_video_frame(frame);
                 });
             sequence.has_value()) {
-            virtual_camera_sequence = sequence.value();
+            virtual_camera_cursor = sequence.value();
         }
         if (virtual_camera_frame.has_value()) {
             break;
@@ -1059,7 +1065,10 @@ void test_first_hardware_camera_publishes_its_exact_selected_format(
     while (std::chrono::steady_clock::now() < deadline) {
         std::optional<solin::media_engine::PackedVideoFrame> packed;
         const auto sequence = renderer->visit_latest_frame(
-            solin::media_engine::OutputBus::virtual_camera, after_sequence,
+            solin::media_engine::OutputBus::virtual_camera,
+            solin::media_engine::SceneOutputFrameCursor{
+                .frame_sequence = after_sequence,
+            },
             [&packed](const solin::media_engine::VideoFrameView& frame) {
                 packed = solin::media_engine::copy_video_frame(frame);
             });
@@ -1077,7 +1086,7 @@ void test_first_hardware_camera_publishes_its_exact_selected_format(
                                   static_cast<std::size_t>(x / 2U) * 2U;
             if (uv_index + 1U < packed->bytes.size()) {
                 return CenterNv12Frame{
-                    .sequence = sequence.value(),
+                    .sequence = sequence->frame_sequence,
                     .yuv = {packed->bytes[y_index], packed->bytes[uv_index],
                             packed->bytes[uv_index + 1U]},
                     .bytes = std::move(packed->bytes),
@@ -1085,7 +1094,10 @@ void test_first_hardware_camera_publishes_its_exact_selected_format(
             }
         }
         static_cast<void>(renderer->wait_for_frame(
-            solin::media_engine::OutputBus::virtual_camera, after_sequence,
+            solin::media_engine::OutputBus::virtual_camera,
+            solin::media_engine::SceneOutputFrameCursor{
+                .frame_sequence = after_sequence,
+            },
             std::stop_token{}, deadline));
     }
     return std::nullopt;
@@ -1150,6 +1162,49 @@ class RouteChangeRaceGraph final
     mutable bool wait_entered_{false};
     mutable bool allow_wait_registration_{false};
     mutable std::uint64_t wake_generation_{0U};
+};
+
+class FixedFrameGraph final
+    : public solin::media_engine::PreparedSceneRenderGraph {
+  public:
+    FixedFrameGraph(const std::uint64_t sequence, const std::uint8_t value) {
+        const auto layout = solin::media_engine::packed_video_frame_layout(
+            4U, 2U, solin::media_engine::VideoFramePixelFormat::nv12);
+        frame_ = {
+            .sequence = sequence,
+            .duration_ns = 16'666'667U,
+            .width = layout.width,
+            .height = layout.height,
+            .pixel_format = layout.pixel_format,
+            .plane_strides = layout.plane_strides,
+            .plane_offsets = layout.plane_offsets,
+            .bytes = std::vector<std::uint8_t>(layout.payload_size, value),
+        };
+    }
+
+    [[nodiscard]] std::optional<std::uint64_t>
+    visit_latest_frame(
+        const std::uint64_t after_sequence,
+        const solin::media_engine::VideoFrameVisitor& visitor) const noexcept override {
+        if (frame_.sequence <= after_sequence) {
+            return std::nullopt;
+        }
+        visitor(solin::media_engine::video_frame_view(frame_));
+        return frame_.sequence;
+    }
+
+  private:
+    solin::media_engine::PackedVideoFrame frame_{};
+};
+
+class ImmediateFailureGraph final
+    : public solin::media_engine::PreparedSceneRenderGraph {
+  public:
+    [[nodiscard]] bool wait_for_frame(
+        std::uint64_t, std::stop_token,
+        std::chrono::steady_clock::time_point) const noexcept override {
+        return false;
+    }
 };
 
 void test_renderer_hydration_and_output_updates_drive_graph_demand(
@@ -1284,7 +1339,7 @@ void test_route_change_cannot_be_lost_before_graph_wait_registration(
     std::thread waiter{[&] {
         const auto started = std::chrono::steady_clock::now();
         static_cast<void>(renderer->wait_for_frame(
-            OutputBus::virtual_camera, 0U, std::stop_token{}, started + 600ms));
+            OutputBus::virtual_camera, {}, std::stop_token{}, started + 600ms));
         elapsed = std::chrono::steady_clock::now() - started;
     }};
     const auto entered = outgoing->wait_until_entered(1s);
@@ -1298,6 +1353,54 @@ void test_route_change_cannot_be_lost_before_graph_wait_registration(
     waiter.join();
     expect(elapsed < 200ms,
            "a route change interrupts an outgoing graph wait without waiting for the heartbeat deadline");
+    expect(!outgoing->rendering_enabled,
+           "a cut suspends the retired graph as soon as the route changes");
+}
+
+void test_output_cursor_rebases_when_the_active_graph_changes(
+    const std::shared_ptr<solin::media_engine::SceneRenderer>& renderer) {
+    using solin::media_engine::OutputBus;
+    auto outgoing = std::make_shared<FixedFrameGraph>(100U, 0x20U);
+    auto incoming = std::make_shared<FixedFrameGraph>(1U, 0xE0U);
+    renderer->commit_hydration({nullptr, outgoing}, {false, true}, 1U);
+
+    solin::media_engine::SceneOutputFrameCursor cursor{};
+    std::uint8_t observed = 0U;
+    const auto outgoing_cursor = renderer->visit_latest_frame(
+        OutputBus::virtual_camera, cursor,
+        [&observed](const solin::media_engine::VideoFrameView& frame) {
+            observed = frame.planes[0].front();
+        });
+    expect(outgoing_cursor.has_value() && observed == 0x20U,
+           "the output cursor observes the active outgoing graph");
+    if (!outgoing_cursor.has_value()) {
+        return;
+    }
+    cursor = outgoing_cursor.value();
+
+    renderer->commit_take(OutputBus::virtual_camera, incoming, nullptr, 2U);
+    const auto incoming_cursor = renderer->visit_latest_frame(
+        OutputBus::virtual_camera, cursor,
+        [&observed](const solin::media_engine::VideoFrameView& frame) {
+            observed = frame.planes[0].front();
+        });
+    expect(incoming_cursor.has_value() && observed == 0xE0U &&
+               incoming_cursor->route_generation > cursor.route_generation &&
+               incoming_cursor->frame_sequence == 1U,
+           "a new route publishes its static frame even when its internal sequence is lower");
+}
+
+void test_terminal_graph_wait_is_rate_limited(
+    const std::shared_ptr<solin::media_engine::SceneRenderer>& renderer) {
+    using solin::media_engine::OutputBus;
+    renderer->commit_hydration(
+        {nullptr, std::make_shared<ImmediateFailureGraph>()}, {false, true}, 1U);
+    const auto started = std::chrono::steady_clock::now();
+    const auto delivered = renderer->wait_for_frame(
+        OutputBus::virtual_camera, {}, std::stop_token{}, started + 250ms);
+    const auto elapsed = std::chrono::steady_clock::now() - started;
+    expect(!delivered && elapsed >= 40ms,
+           "a terminal active graph cannot turn an event-driven consumer into a busy retry loop");
 }
 
 [[nodiscard]] bool near_channel(const std::uint8_t value, const std::uint8_t expected,

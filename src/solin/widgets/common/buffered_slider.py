@@ -34,18 +34,32 @@ class BufferedSlider(QWidget):
         install_themed_tooltip(self)
 
     def setRange(self, min_val, max_val):  # noqa: N802
+        if (min_val, max_val) == (self._min, self._max):
+            return
         self._min = min_val
         self._max = max_val
+        self._value = max(self._min, min(self._max, self._value))
         self.update()
 
     def setValue(self, value):  # noqa: N802
-        if not self._dragging:
-            self._value = max(self._min, min(self._max, value))
+        if self._dragging:
+            return
+        normalized = max(self._min, min(self._max, value))
+        if normalized == self._value:
+            return
+        previous_width = self._progress_width(self._value)
+        self._value = normalized
+        if self._progress_width(normalized) != previous_width:
             self.update()
 
     def setBufferedRatio(self, ratio):  # noqa: N802
-        self._buffered = max(0.0, min(1.0, ratio))
-        self.update()
+        normalized = max(0.0, min(1.0, ratio))
+        if normalized == self._buffered:
+            return
+        previous_width = self._buffered_width(self._buffered)
+        self._buffered = normalized
+        if self._buffered_width(normalized) != previous_width:
+            self.update()
 
     def setReconnectActive(self, active):  # noqa: N802
         active = bool(active)
@@ -88,10 +102,8 @@ class BufferedSlider(QWidget):
         if self._buffered > 0 and self._max > 0:
             painter.setBrush(QColor(110, 110, 120) if dark else QColor(PALETTE.border_strong))
             painter.drawRoundedRect(0, y, int(width * self._buffered), track_height, 2, 2)
-        progress_width = None
-        if self._max > 0 and self._value >= self._min:
-            ratio = (self._value - self._min) / (self._max - self._min)
-            progress_width = int(width * ratio)
+        progress_width = self._progress_width(self._value)
+        if progress_width is not None:
             painter.setBrush(QColor(100, 160, 255) if dark else QColor(PALETTE.accent))
             painter.drawRoundedRect(0, y, progress_width, track_height, 2, 2)
 
@@ -109,6 +121,15 @@ class BufferedSlider(QWidget):
 
     def _should_draw_handle(self) -> bool:
         return self.isEnabled()
+
+    def _progress_width(self, value: int) -> int | None:
+        span = self._max - self._min
+        if span <= 0 or value < self._min:
+            return None
+        return int(self.width() * ((value - self._min) / span))
+
+    def _buffered_width(self, ratio: float) -> int:
+        return int(self.width() * ratio)
 
     def changeEvent(self, event):  # noqa: N802
         if event.type() == QEvent.Type.EnabledChange:
@@ -168,6 +189,9 @@ class BufferedSlider(QWidget):
         if self._max <= 0:
             return
         ratio = max(0.0, min(1.0, pixels / self.width()))
-        self._value = int(self._min + ratio * (self._max - self._min))
-        self.update()
+        value = int(self._min + ratio * (self._max - self._min))
+        previous_width = self._progress_width(self._value)
+        self._value = value
+        if self._progress_width(value) != previous_width:
+            self.update()
         self.sliderMoved.emit(self._value)

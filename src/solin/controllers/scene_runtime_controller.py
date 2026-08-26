@@ -276,6 +276,7 @@ class SceneRuntimeController(QObject):
         self._desired_scenes = self._resolve_desired_scenes()
         self._applied_scenes: tuple[tuple[BusId, str], ...] = ()
         self._pending: dict[BusId, _PendingTake] = {}
+        self._failed_takes: set[tuple[BusId, str]] = set()
         self._ptz_batches: dict[BusId, _PendingPtzBatch] = {}
         self._moving_camera_bindings: dict[str, PtzBinding] = {}
         self._last_destination_enabled = self._destination_enabled()
@@ -666,6 +667,29 @@ class SceneRuntimeController(QObject):
         if descriptor == self._content_ingress:
             return
         self._content_ingress = descriptor
+        if self._pending:
+            desired_program = self.desired_scene(BusId.VIRTUAL_CAMERA)
+            applied_program = self.applied_scene(BusId.VIRTUAL_CAMERA)
+            entering_content_scene = (
+                desired_program != applied_program
+                and _scene_uses_content_source(
+                    self._documents.document,
+                    desired_program,
+                )
+            )
+            if entering_content_scene:
+                # A preparation bound to the previous SHM/D3D11 generation can
+                # only animate stale pixels. Rebuild the currently live scene on
+                # the new registry generation first, then prepare the desired
+                # content scene against that same generation.
+                self._cancel_all_pending(cancel_native=self._engine_ready)
+            else:
+                # When leaving content, the previous generation is precisely the
+                # transition origin. Let Take consume it before retiring the
+                # transport; hydrating now would replace Program with the target
+                # scene as an implicit Cut.
+                self._hydrate_dirty = True
+                return
         self._hydrate_if_ready()
 
     def set_window_targets(
@@ -922,6 +946,7 @@ class SceneRuntimeController(QObject):
         self._hydrate_in_flight = None
         self._hydrate_dirty = False
         self._engine_document_revision = 0
+        self._failed_takes.clear()
         self._preview_geometry_in_flight = None
         self._queued_preview_geometry = None
         self._set_last_engine_error_code("")
@@ -968,6 +993,7 @@ class SceneRuntimeController(QObject):
         self._hydrate_in_flight = None
         self._hydrate_dirty = False
         self._engine_document_revision = 0
+        self._failed_takes.clear()
         self._clear_source_health()
         self._observed_graph_record = scene_engine_graph_signature(self._documents.document)
         self._preview_geometry_in_flight = None
@@ -1055,25 +1081,46 @@ class SceneRuntimeController(QObject):
             self._set_applied_scenes(())
             self._hydrate_in_flight = None
             self._hydrate_dirty = False
+            self._failed_takes.clear()
             self.operational_state_changed.emit()
 
     def _reconcile_desired(self, *, prepare: bool) -> None:
         desired = self._resolve_desired_scenes()
-        if desired == self._desired_scenes:
-            self._reconcile_content_ingress_demand()
-            return
-        previous = dict(self._desired_scenes)
-        self._desired_scenes = desired
-        self.desired_scenes_changed.emit(desired)
+        if desired != self._desired_scenes:
+            self._desired_scenes = desired
+            self._failed_takes.clear()
+            self.desired_scenes_changed.emit(desired)
         self._reconcile_content_ingress_demand()
         if not prepare or not self._engine_ready:
             return
         if self._hydrate_in_flight is not None or not self._applied_scenes:
             self._hydrate_if_ready()
             return
-        for bus_id, scene_id in desired:
-            if previous.get(bus_id) != scene_id:
-                self._prepare_take(bus_id, scene_id)
+        self._schedule_next_take()
+
+    def _schedule_next_take(
+        self,
+        *,
+        skip: tuple[BusId, str] | None = None,
+    ) -> None:
+        """Serialize scene transactions with the live Program bus first."""
+
+        if (
+            not self._engine_ready
+            or self._hydrate_in_flight is not None
+            or not self._applied_scenes
+            or self._pending
+        ):
+            return
+        for bus_id in (BusId.VIRTUAL_CAMERA, BusId.MEDIA_WINDOWS):
+            desired_scene_id = self.desired_scene(bus_id)
+            if skip == (bus_id, desired_scene_id):
+                continue
+            if (bus_id, desired_scene_id) in self._failed_takes:
+                continue
+            if self.applied_scene(bus_id) != desired_scene_id:
+                self._prepare_take(bus_id, desired_scene_id)
+                return
 
     def _reconcile_engine_outputs(self) -> None:
         destinations = self._destination_enabled()
@@ -1138,6 +1185,9 @@ class SceneRuntimeController(QObject):
     def _hydrate_if_ready(self) -> None:
         if self._engine is None or not self._engine_ready:
             return
+        if self._pending:
+            self._hydrate_dirty = True
+            return
         if (
             self._preview_geometry_in_flight is not None
             or self._queued_preview_geometry is not None
@@ -1153,7 +1203,7 @@ class SceneRuntimeController(QObject):
             session_id=self._session_id,
             sequence=sequence,
             document=self._documents.document,
-            active_scenes=self._desired_scenes,
+            active_scenes=self._hydration_active_scenes(),
             render_enabled=self._render_enabled(),
             output_enabled=self._destination_enabled(),
             content_ingress=self._content_ingress,
@@ -1171,6 +1221,16 @@ class SceneRuntimeController(QObject):
             deadline_ms=_HYDRATE_DEADLINE_MS,
         )
         self._track_future(future, "hydrate", context)
+
+    def _hydration_active_scenes(self) -> tuple[tuple[BusId, str], ...]:
+        """Preserve on-air ownership while graph topology is replaced."""
+
+        if len(self._applied_scenes) != len(BusId):
+            return self._desired_scenes
+        scene_ids = {scene.id for scene in self._documents.document.scenes}
+        if all(scene_id in scene_ids for _, scene_id in self._applied_scenes):
+            return self._applied_scenes
+        return self._desired_scenes
 
     def _dispatch_preview_geometry(self) -> None:
         if (
@@ -1472,12 +1532,11 @@ class SceneRuntimeController(QObject):
             return
         self._set_last_engine_error_code("")
         self._engine_document_revision = snapshot.document.revision
+        self._failed_takes.clear()
         self._set_applied_scenes(snapshot.active_scenes)
         if self._hydrate_dirty:
             return
-        for bus_id, desired_scene_id in self._desired_scenes:
-            if self.applied_scene(bus_id) != desired_scene_id:
-                self._prepare_take(bus_id, desired_scene_id)
+        self._schedule_next_take()
 
     def _handle_profile_hydrated(self, context: object, result: object) -> None:
         if not isinstance(context, _PendingProfileActivation):
@@ -1507,6 +1566,7 @@ class SceneRuntimeController(QObject):
             self._profile_preview_scene_id = None
         self._set_last_engine_error_code("")
         self._engine_document_revision = context.snapshot.document.revision
+        self._failed_takes.clear()
         self._observed_graph_record = scene_engine_graph_signature(context.snapshot.document)
         self._set_applied_scenes(context.snapshot.active_scenes)
         delete_collection_id = self._delete_after_profile_activation
@@ -1652,8 +1712,14 @@ class SceneRuntimeController(QObject):
             if self._engine is not None:
                 self._engine.cancel_preparation(context.expected.prepare_request_id)
             self._pending.pop(context.bus_id, None)
+            self._failed_takes.add(
+                (context.bus_id, context.expected.scene_id)
+            )
             self.engine_error.emit(
                 f"Scene PTZ recall blocked Take ({batch.blocking_error_codes[0]})"
+            )
+            self._schedule_next_take(
+                skip=(context.bus_id, context.expected.scene_id),
             )
             return
         self._take_prepared(context.preparation)
@@ -1798,6 +1864,7 @@ class SceneRuntimeController(QObject):
         if self._engine is not None:
             self._engine.cancel_preparation(expected.prepare_request_id)
         self._pending.pop(bus_id, None)
+        self._failed_takes.add((bus_id, expected.scene_id))
         self._continue_pending_reconciliation(bus_id, expected.scene_id)
 
     def _continue_pending_reconciliation(
@@ -1809,12 +1876,13 @@ class SceneRuntimeController(QObject):
             not self._engine_ready
             or self._hydrate_in_flight is not None
             or not self._applied_scenes
-            or bus_id in self._pending
+            or self._pending
         ):
             return
-        desired_scene_id = self.desired_scene(bus_id)
-        if desired_scene_id is not None and desired_scene_id != completed_scene_id:
-            self._prepare_take(bus_id, desired_scene_id)
+        if self._hydrate_dirty:
+            self._hydrate_if_ready()
+            return
+        self._schedule_next_take(skip=(bus_id, completed_scene_id))
 
     def _report_exception(self, operation: object, error: object) -> None:
         if isinstance(error, SceneEngineCommandRejectedError):
@@ -1861,6 +1929,7 @@ class SceneRuntimeController(QObject):
             self._hydrate_if_ready()
             return
         self.operational_state_changed.emit()
+        self._schedule_next_take()
 
     def _finish_preview_geometry(
         self,

@@ -28,6 +28,9 @@ struct SinkState final {
     std::condition_variable wakeup{};
     std::optional<solin::media_engine::VirtualCameraConfiguration> configuration{};
     std::uint64_t published_frames{0U};
+    std::uint64_t rejected_publications_remaining{0U};
+    std::uint64_t consumer_probes{0U};
+    bool consumer_present{false};
     bool started{false};
 };
 
@@ -42,12 +45,23 @@ class FakeVirtualCameraSink final
         state_->started = true;
     }
 
+    [[nodiscard]] bool has_consumer() const noexcept override {
+        std::scoped_lock lock{state_->mutex};
+        ++state_->consumer_probes;
+        return state_->consumer_present;
+    }
+
     [[nodiscard]] bool publish(
         const solin::media_engine::VideoFrameView& frame) noexcept override {
         std::scoped_lock lock{state_->mutex};
         if (!state_->started ||
             frame.pixel_format !=
                 solin::media_engine::VideoFramePixelFormat::nv12) {
+            return false;
+        }
+        if (state_->rejected_publications_remaining != 0U) {
+            --state_->rejected_publications_remaining;
+            state_->wakeup.notify_all();
             return false;
         }
         ++state_->published_frames;
@@ -182,13 +196,13 @@ class FakeRenderer final : public solin::media_engine::SceneRenderer {
         return {};
     }
 
-    [[nodiscard]] std::optional<std::uint64_t>
+    [[nodiscard]] std::optional<solin::media_engine::SceneOutputFrameCursor>
     visit_latest_frame(
         const solin::media_engine::OutputBus bus,
-        const std::uint64_t after_sequence,
+        const solin::media_engine::SceneOutputFrameCursor after,
         const solin::media_engine::VideoFrameVisitor& visitor) const noexcept override {
         if (bus != solin::media_engine::OutputBus::virtual_camera ||
-            after_sequence >= 1U) {
+            after.frame_sequence >= 1U) {
             return std::nullopt;
         }
         const auto layout = solin::media_engine::packed_video_frame_layout(
@@ -204,11 +218,15 @@ class FakeRenderer final : public solin::media_engine::SceneRenderer {
             .bytes = std::vector<std::uint8_t>(layout.payload_size, 0x80U),
         };
         visitor(solin::media_engine::video_frame_view(frame));
-        return frame.sequence;
+        return solin::media_engine::SceneOutputFrameCursor{
+            .route_generation = 1U,
+            .frame_sequence = frame.sequence,
+        };
     }
 
     [[nodiscard]] bool wait_for_frame(
-        solin::media_engine::OutputBus, std::uint64_t,
+        solin::media_engine::OutputBus,
+        solin::media_engine::SceneOutputFrameCursor,
         const std::stop_token stop_token,
         const std::chrono::steady_clock::time_point deadline) const noexcept override {
         std::mutex mutex;
@@ -225,12 +243,8 @@ class FakeRenderer final : public solin::media_engine::SceneRenderer {
     std::atomic_bool system_memory_output_enabled_{false};
 };
 
-void test_controller_normalizes_and_pumps_the_virtual_camera_bus() {
-    auto state = std::make_shared<SinkState>();
-    auto renderer = std::make_shared<FakeRenderer>();
-    solin::media_engine::VirtualCameraOutputController controller{
-        renderer, std::make_unique<FakeVirtualCameraBackend>(state)};
-    const solin::media_engine::SceneOutputDefinition output{
+[[nodiscard]] solin::media_engine::SceneOutputDefinition test_output() {
+    return {
         .bus = solin::media_engine::OutputBus::virtual_camera,
         .default_scene_id = "scene-main",
         .video_format = {
@@ -243,12 +257,32 @@ void test_controller_normalizes_and_pumps_the_virtual_camera_bus() {
             .color_range = "full",
         },
     };
+}
+
+void test_controller_normalizes_and_pumps_the_virtual_camera_bus() {
+    auto state = std::make_shared<SinkState>();
+    state->rejected_publications_remaining = 1U;
+    auto renderer = std::make_shared<FakeRenderer>();
+    solin::media_engine::VirtualCameraOutputController controller{
+        renderer, std::make_unique<FakeVirtualCameraBackend>(state)};
+    const auto output = test_output();
     expect(controller.configure(output),
            "a virtual-camera output route configures without side effects");
     expect(controller.set_enabled(true),
            "enabling the output starts the selected platform backend");
-    expect(renderer->system_memory_output_enabled(),
-           "the virtual camera requests system-memory compositor output");
+    expect(!renderer->system_memory_output_enabled(),
+           "an enabled camera without a consumer keeps GPU readback closed");
+    std::this_thread::sleep_for(160ms);
+    {
+        std::scoped_lock lock{state->mutex};
+        expect(state->consumer_probes <= 6U,
+               "an idle camera probes demand at a bounded cadence instead of "
+               "spinning on newer compositor frames");
+    }
+    {
+        std::scoped_lock lock{state->mutex};
+        state->consumer_present = true;
+    }
     {
         std::unique_lock lock{state->mutex};
         static_cast<void>(state->wakeup.wait_for(lock, 1s, [state] {
@@ -260,8 +294,21 @@ void test_controller_normalizes_and_pumps_the_virtual_camera_bus() {
                    state->configuration->video_format.color_range == "limited",
                "the OS boundary receives the canonical NV12 BT.709 format");
         expect(state->published_frames == 1U,
-               "the pump publishes each new compositor frame once");
+               "a transient sink rejection retries the retained compositor frame once");
     }
+    expect(renderer->system_memory_output_enabled(),
+           "a connected consumer opens system-memory compositor output");
+    {
+        std::scoped_lock lock{state->mutex};
+        state->consumer_present = false;
+    }
+    const auto demand_close_deadline = std::chrono::steady_clock::now() + 1s;
+    while (renderer->system_memory_output_enabled() &&
+           std::chrono::steady_clock::now() < demand_close_deadline) {
+        std::this_thread::sleep_for(10ms);
+    }
+    expect(!renderer->system_memory_output_enabled(),
+           "disconnecting the final consumer closes GPU readback again");
     expect(controller.set_enabled(false),
            "disabling the output stops the platform backend");
     expect(!renderer->system_memory_output_enabled(),

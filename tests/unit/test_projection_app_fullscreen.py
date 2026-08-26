@@ -1,14 +1,43 @@
 import os
+from types import SimpleNamespace
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtWidgets import QApplication, QWidget
+from PySide6.QtCore import QCoreApplication, QEvent, Qt
+from PySide6.QtGui import QShowEvent
+from PySide6.QtWidgets import QApplication, QFrame, QWidget
 
 import solin.widgets.projection.bar as projection_bar
-from solin.widgets.projection.fullscreen import FullscreenVideoOverlay
+from solin.widgets.projection.fullscreen import (
+    FullscreenVideoOverlay,
+    FullscreenVideoSurface,
+)
 
 
 _APP = QApplication.instance() or QApplication([])
+
+
+def test_active_projection_bar_surface_owns_click_cursor():
+    bar = projection_bar.ProjectionBar.__new__(projection_bar.ProjectionBar)
+    QFrame.__init__(bar)
+    bar._container = None
+    bar._volume = 0.5
+    bar.setCursor(Qt.CursorShape.ArrowCursor)
+    try:
+        bar._build_bar_ui()
+
+        assert bar.cursor().shape() is Qt.CursorShape.ArrowCursor
+        assert bar.inactive_widget.testAttribute(Qt.WidgetAttribute.WA_SetCursor)
+        assert bar.inactive_widget.cursor().shape() is Qt.CursorShape.ArrowCursor
+        assert bar.active_widget.testAttribute(Qt.WidgetAttribute.WA_SetCursor)
+        assert (
+            bar.active_widget.cursor().shape()
+            is Qt.CursorShape.PointingHandCursor
+        )
+        assert bar.proj_title.cursor().shape() is Qt.CursorShape.PointingHandCursor
+    finally:
+        bar.deleteLater()
+        QCoreApplication.sendPostedEvents(bar, QEvent.Type.DeferredDelete)
 
 
 class _Button:
@@ -52,8 +81,10 @@ class _ValueSignal:
 
 
 class _Overlay:
-    def __init__(self, *, active=False):
+    def __init__(self, *, active=False, native_output_active=False):
         self.active = active
+        self.native_output_active = native_output_active
+        self.native_video_surface = object()
         self.hidden = []
         self.reset_count = 0
         self.frames = []
@@ -77,6 +108,9 @@ class _Overlay:
 
     def set_frame(self, frame):
         self.frames.append(frame)
+
+    def set_native_output_active(self, active):
+        self.native_output_active = active
 
     def set_reconnect_active(self, active):
         self.reconnect_states.append(active)
@@ -146,6 +180,29 @@ def test_video_state_shows_app_fullscreen_button_without_closing_overlay():
     assert overlay.hidden == []
 
 
+def test_fullscreen_selects_native_presenter_before_showing_its_window(
+    monkeypatch,
+):
+    events: list[tuple[str, bool | None]] = []
+
+    class _EntryOverlay:
+        def set_native_output_active(self, active):
+            events.append(("native", active))
+
+        def show_fullscreen(self):
+            events.append(("show", None))
+
+    overlay = _EntryOverlay()
+    bar = _bar(mode="video", audio=False)
+    bar.video_preview = SimpleNamespace(native_output_active=True)
+    monkeypatch.setattr(bar, "_ensure_fullscreen_overlay", lambda: overlay)
+    monkeypatch.setattr(bar, "_hydrate_fullscreen_overlay", lambda _overlay: None)
+
+    bar.enter_app_fullscreen()
+
+    assert events == [("native", True), ("show", None)]
+
+
 def test_video_frames_reach_active_app_fullscreen_when_overlay_is_collapsed():
     overlay = _Overlay(active=True)
     bar = _bar(mode="video", audio=False, overlay=overlay)
@@ -212,6 +269,179 @@ def test_video_preview_leaves_letterbox_to_the_themed_container(monkeypatch):
     preview.apply_theme()
 
     assert "#f2f4f8" in preview.styleSheet()
+
+
+def test_fullscreen_fallback_presents_qvideo_frame_without_cpu_materialization():
+    from PySide6.QtGui import QImage
+    from PySide6.QtMultimedia import QVideoFrame
+
+    class _NoCpuMaterializationFrame(QVideoFrame):
+        def toImage(self):
+            raise AssertionError("fullscreen fallback must not map frames to a QImage")
+
+    surface = FullscreenVideoSurface()
+    frame = _NoCpuMaterializationFrame(
+        QImage(1600, 900, QImage.Format.Format_ARGB32)
+    )
+
+    surface.set_frame(frame)
+
+    assert surface.video_widget.videoSink().videoFrame().isValid()
+
+
+def test_video_preview_creates_native_surface_only_when_route_is_enabled():
+    preview = projection_bar._ThemedVideoPreview()
+    preview.resize(1000, 800)
+
+    assert preview.native_surface is None
+
+    assert preview.set_native_output_active(True) is True
+
+    assert preview.native_output_active is True
+    assert preview.native_surface is not None
+    assert preview.native_surface.geometry().width() == 1000
+    assert preview.native_surface.geometry().height() == 562
+    assert preview.native_surface.geometry().y() == 119
+    assert preview.native_surface.cursor().shape() == Qt.CursorShape.ArrowCursor
+    assert preview.native_surface.input_overlay is not None
+    assert (
+        preview.native_surface.input_overlay.cursor().shape()
+        == Qt.CursorShape.ArrowCursor
+    )
+    assert preview._video_widget.isHidden()
+
+
+def test_native_video_preview_tracks_source_aspect_without_copying_frames():
+    from PySide6.QtCore import QSize
+
+    preview = projection_bar._ThemedVideoPreview()
+    preview.resize(1000, 800)
+    preview.set_native_output_active(True)
+
+    preview.set_video_size(QSize(4, 3))
+
+    assert preview.native_surface is not None
+    assert preview.native_surface.geometry().getRect() == (0, 25, 1000, 750)
+    assert preview._video_widget.geometry() == preview.native_surface.geometry()
+
+
+def test_video_size_notification_reads_the_sink_property_without_signal_arguments():
+    from PySide6.QtGui import QImage
+    from PySide6.QtMultimedia import QVideoFrame, QVideoSink
+
+    source_sink = QVideoSink()
+    preview = projection_bar._ThemedVideoPreview()
+    preview.resize(1000, 800)
+    bar = _bar()
+    bar.media = SimpleNamespace(video_sink=source_sink)
+    bar.video_preview = preview
+    source_sink.videoSizeChanged.connect(bar._sync_video_preview_size)
+
+    source_sink.setVideoFrame(
+        QVideoFrame(QImage(800, 600, QImage.Format.Format_ARGB32))
+    )
+
+    assert preview._video_widget.geometry().getRect() == (0, 25, 1000, 750)
+
+
+def test_native_video_preview_does_not_feed_the_qt_presenter():
+    from PySide6.QtGui import QImage
+    from PySide6.QtMultimedia import QVideoFrame
+
+    preview = projection_bar._ThemedVideoPreview()
+    frame = QVideoFrame(QImage(1600, 900, QImage.Format.Format_ARGB32))
+
+    preview.set_native_output_active(True)
+    preview.set_frame(frame)
+
+    assert not preview._video_widget.videoSink().videoFrame().isValid()
+
+    preview.set_native_output_active(False)
+    preview.set_frame(frame)
+
+    assert preview._video_widget.videoSink().videoFrame().isValid()
+
+
+def test_collapsed_video_does_not_require_python_frame_delivery():
+    bar = _bar(mode="video", audio=False)
+
+    assert bar.python_video_frame_delivery_required is False
+
+
+def test_expanded_qt_preview_requires_python_frame_delivery():
+    bar = _bar(mode="video", audio=False)
+    bar._expanded = True
+    bar.video_preview = type("Preview", (), {"native_output_active": False})()
+
+    assert bar.python_video_frame_delivery_required is True
+
+
+def test_expanded_native_preview_does_not_require_python_frame_delivery():
+    bar = _bar(mode="video", audio=False)
+    bar._expanded = True
+    bar.video_preview = type("Preview", (), {"native_output_active": True})()
+
+    assert bar.python_video_frame_delivery_required is False
+
+
+def test_qt_app_fullscreen_requires_python_frame_delivery():
+    bar = _bar(mode="video", audio=False, overlay=_Overlay(active=True))
+
+    assert bar.python_video_frame_delivery_required is True
+
+
+def test_native_app_fullscreen_does_not_require_python_frame_delivery():
+    bar = _bar(
+        mode="video",
+        audio=False,
+        overlay=_Overlay(active=True, native_output_active=True),
+    )
+
+    assert bar.python_video_frame_delivery_required is False
+
+
+def test_fullscreen_replaces_expanded_native_target_instead_of_duplicating_it():
+    class _Preview:
+        def __init__(self):
+            self.native_output_active = True
+            self.states = []
+
+        def set_native_output_active(self, active):
+            changed = active != self.native_output_active
+            self.native_output_active = active
+            self.states.append(active)
+            return changed
+
+    overlay = _Overlay(active=True)
+    preview = _Preview()
+    bar = _bar(mode="video", audio=False, overlay=overlay)
+    bar._expanded = True
+    bar._video_preview_route_requested = True
+    bar.video_preview = preview
+
+    bar.set_native_video_output_active(True)
+
+    assert overlay.native_output_active is True
+    assert preview.states == [False]
+    assert bar.native_video_output_surface is overlay.native_video_surface
+    assert bar.python_video_frame_delivery_required is False
+
+
+def test_fullscreen_visibility_notifies_output_routing_without_forwarding_bool():
+    notifications: list[None] = []
+
+    class _Notification:
+        def emit(self) -> None:
+            notifications.append(None)
+
+    host = SimpleNamespace(
+        video_output_target_changed=_Notification()
+    )
+
+    projection_bar.ProjectionBar._on_fullscreen_visibility_changed(host, True)
+    projection_bar.ProjectionBar._on_fullscreen_visibility_changed(host, False)
+
+    assert notifications == [None, None]
 
 
 def test_recovery_feedback_is_mirrored_to_app_fullscreen():
@@ -351,6 +581,22 @@ def test_fullscreen_overlay_uses_parent_translator_and_original_control_order():
     assert overlay.vol_btn.toolTip() == "pt:Volume"
     assert overlay.more_btn.toolTip() == "pt:Playback options"
     assert overlay.time_label.minimumWidth() < 40
+    assert overlay._title_bar.isWindow()
+    assert overlay._controls.isWindow()
+    assert overlay._title_bar.testAttribute(
+        Qt.WidgetAttribute.WA_TranslucentBackground
+    )
+    assert overlay._controls.testAttribute(
+        Qt.WidgetAttribute.WA_TranslucentBackground
+    )
+    assert not overlay._title_bar.testAttribute(
+        Qt.WidgetAttribute.WA_StyledBackground
+    )
+    assert not overlay._controls.testAttribute(
+        Qt.WidgetAttribute.WA_StyledBackground
+    )
+    assert overlay._title_bar.windowFlags() & Qt.WindowType.NoDropShadowWindowHint
+    assert overlay._controls.windowFlags() & Qt.WindowType.NoDropShadowWindowHint
 
     layout = overlay._controls.layout()
     controls = [layout.itemAt(index).widget() for index in range(layout.count())]
@@ -366,3 +612,37 @@ def test_fullscreen_overlay_uses_parent_translator_and_original_control_order():
         overlay.next_btn,
         overlay.stop_btn,
     ]
+
+
+def test_fullscreen_chrome_is_not_shown_from_the_owner_show_event(monkeypatch):
+    overlay = FullscreenVideoOverlay(source_widget=None)
+    calls: list[str] = []
+    monkeypatch.setattr(
+        overlay,
+        "_show_chrome",
+        lambda: calls.append("chrome"),
+    )
+
+    overlay.showEvent(QShowEvent())
+
+    assert calls == []
+
+
+def test_fullscreen_exit_hides_chrome_before_hiding_its_owner(monkeypatch):
+    overlay = FullscreenVideoOverlay(source_widget=None)
+    order: list[str] = []
+    monkeypatch.setattr(
+        overlay._title_bar,
+        "hide",
+        lambda: order.append("title"),
+    )
+    monkeypatch.setattr(
+        overlay._controls,
+        "hide",
+        lambda: order.append("controls"),
+    )
+    monkeypatch.setattr(overlay, "hide", lambda: order.append("owner"))
+
+    overlay.hide_fullscreen()
+
+    assert order == ["title", "controls", "owner"]

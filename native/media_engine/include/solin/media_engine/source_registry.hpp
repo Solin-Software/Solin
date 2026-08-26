@@ -207,6 +207,7 @@ class SourceRegistry final {
     void replace_snapshot(const SceneHydrationSnapshot& snapshot);
     [[nodiscard]] SourceLease acquire(std::string_view source_id,
                                       std::string_view consumer_id);
+    [[nodiscard]] bool is_current(const SourceLease& lease) const noexcept;
     [[nodiscard]] std::vector<SourceRegistryEntry> entries() const;
     [[nodiscard]] std::uint64_t document_revision() const;
     void shutdown() noexcept;

@@ -72,7 +72,6 @@ template <typename Interface> class ComPtr final {
         reset();
         return &value_;
     }
-
   private:
     void reset() noexcept {
         if (value_ != nullptr) {
@@ -295,6 +294,20 @@ class WindowsDirectShowVirtualCameraSink final : public VirtualCameraSink {
 
     [[nodiscard]] bool publish(const VideoFrameView& frame) noexcept override {
         return frame_sink_->publish(frame);
+    }
+
+    [[nodiscard]] bool has_consumer() const noexcept override {
+        try {
+            std::scoped_lock lock{mutex_};
+            if (broker_ == nullptr) {
+                return false;
+            }
+            const auto health = broker_->health();
+            return health.active_connections != 0U ||
+                   health.legacy_consumer_present;
+        } catch (...) {
+            return false;
+        }
     }
 
     void heartbeat() noexcept override { frame_sink_->heartbeat(); }

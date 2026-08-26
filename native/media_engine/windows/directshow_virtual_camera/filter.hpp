@@ -32,6 +32,7 @@ class DirectShowCapturePin final : public CSourceStream,
     HRESULT GetMediaType(int position, CMediaType* media_type) override;
     HRESULT SetMediaType(const CMediaType* media_type) override;
     HRESULT OnThreadCreate() override;
+    HRESULT OnThreadDestroy() override;
 
     STDMETHODIMP SetFormat(AM_MEDIA_TYPE* media_type) override;
     STDMETHODIMP GetFormat(AM_MEDIA_TYPE** media_type) override;

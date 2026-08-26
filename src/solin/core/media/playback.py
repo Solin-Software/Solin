@@ -21,7 +21,7 @@ Comportamento de buffer por modo
 import logging
 import os
 
-from PySide6.QtCore import QObject, Signal, QUrl, QTimer
+from PySide6.QtCore import QMetaObject, QObject, Signal, Slot, QUrl, QTimer
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput, QVideoSink, QVideoFrame
 from PySide6.QtGui import QPixmap, QImage
 
@@ -40,6 +40,7 @@ log = logging.getLogger(__name__)
 
 class MediaController(QObject):
     frame_ready       = Signal(QVideoFrame)
+    decoded_frame_acceptance_changed = Signal(int, bool)
     state_changed     = Signal(QMediaPlayer.PlaybackState)
     duration_changed  = Signal(int)
     source_duration_changed = Signal(int)
@@ -99,8 +100,11 @@ class MediaController(QObject):
         self._gate_previous_muted = False
         self._audio_gate_active = False
         self._source_generation = 0
+        self._published_frame_acceptance: tuple[int, bool] | None = None
+        self._python_frame_delivery_required = True
+        self._python_frame_connection: QMetaObject.Connection | None = None
 
-        self.video_sink.videoFrameChanged.connect(self._on_frame)
+        self._connect_python_frame_delivery()
         self.player.playbackStateChanged.connect(self._on_state)
         self.player.durationChanged.connect(self._on_duration)
         self.player.positionChanged.connect(self._on_position)
@@ -137,6 +141,32 @@ class MediaController(QObject):
     def is_recovering(self) -> bool:
         return self._stream_recovering
 
+    @property
+    def python_frame_delivery_required(self) -> bool:
+        return self._python_frame_delivery_required
+
+    @Slot(bool)
+    def set_python_frame_delivery_required(self, required: bool) -> None:
+        required = bool(required)
+        if required == self._python_frame_delivery_required:
+            return
+        self._python_frame_delivery_required = required
+        if required:
+            self._connect_python_frame_delivery()
+            self._on_frame(self.video_sink.videoFrame())
+            return
+        connection = self._python_frame_connection
+        self._python_frame_connection = None
+        if connection is not None:
+            QObject.disconnect(connection)
+
+    def _connect_python_frame_delivery(self) -> None:
+        if self._python_frame_connection is not None:
+            return
+        self._python_frame_connection = self.video_sink.videoFrameChanged.connect(
+            self._on_frame
+        )
+
     # ── Playback público ──────────────────────────────────────────────────
 
     def start_playback(self, request: MediaPlaybackRequest) -> None:
@@ -162,6 +192,7 @@ class MediaController(QObject):
         self._trim_end_emitted = False
         self._trim_gate_open = request.trim is None or not request.trim.custom
         self._session.begin_playback(url, requested_playing=request.autoplay)
+        self._publish_decoded_frame_acceptance()
         self._last_known_position = 0
         self._remote_playback_started = False
 
@@ -217,6 +248,7 @@ class MediaController(QObject):
         self._reset_reconnect_state()
         self._downloader.cancel()
         self._session.begin_stop()
+        self._publish_decoded_frame_acceptance()
         self.player.stop()
         self._clear_player_source()
         # Apaga tempfile se o player estiver usando um
@@ -547,6 +579,7 @@ class MediaController(QObject):
             attempts[0] += 1
             if abs(self.player.position() - target_position) <= 150:
                 self._trim_gate_open = True
+                self._publish_decoded_frame_acceptance()
                 self._restore_gated_audio()
                 self.duration_changed.emit(playback_range.duration_ms)
                 self.playback_range_changed.emit(
@@ -696,6 +729,22 @@ class MediaController(QObject):
             self.audio_output.setMuted(True)
             self._audio_gate_active = True
         self._trim_gate_open = False
+        self._publish_decoded_frame_acceptance()
+
+    @property
+    def decoded_frames_accepted(self) -> bool:
+        return bool(
+            self._session.current_url
+            and self._trim_gate_open
+            and self._session.accepts_frame()
+        )
+
+    def _publish_decoded_frame_acceptance(self) -> None:
+        state = (self._session.session_id, self.decoded_frames_accepted)
+        if state == self._published_frame_acceptance:
+            return
+        self._published_frame_acceptance = state
+        self.decoded_frame_acceptance_changed.emit(*state)
 
     def _restore_gated_audio(self) -> None:
         if not self._audio_gate_active:
@@ -793,6 +842,7 @@ class MediaController(QObject):
                 <= playback_range.start_ms + tolerance_ms
             ):
                 self._trim_gate_open = True
+                self._publish_decoded_frame_acceptance()
                 self._restore_gated_audio()
                 self._trim_end_emitted = False
                 self.duration_changed.emit(playback_range.duration_ms)

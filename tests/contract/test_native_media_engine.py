@@ -76,9 +76,12 @@ def test_windows_release_builds_and_packages_the_native_engine() -> None:
     assert "python scripts\\package_native_engine_windows.py" in workflow
     assert "-InstallType runtime" in workflow
     assert "native\\media-engine\\solin-media-engine.exe" in workflow
+    assert "native\\media-engine\\qt-media-bridge" in workflow
     assert "virtual-camera\\x64\\solin-virtual-camera.dll" in workflow
     assert "virtual-camera\\x86\\solin-virtual-camera.dll" in workflow
     assert "SOLIN_MEDIA_ENGINE_ENABLE_GSTREAMER=ON" in build_script
+    assert 'scripts" / "build_qt_media_bridge.py' in build_script
+    assert "install_qt_bridge_sdk_windows.ps1" in _read("scripts/build_qt_media_bridge.py")
     assert "GSTREAMER_PLUGIN_FILENAMES = (" in package_script
     assert '"gstd3d11.dll"' in package_script
     assert "_copy_required_runtime_dlls" in package_script

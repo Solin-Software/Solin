@@ -28,7 +28,13 @@ _QT_DIAGNOSTIC_LOGGING_RULES = (
 _QT_DISABLED_LOGGING_RULES = ("qt.multimedia.ffmpeg=false",)
 _LEGACY_DISABLED_RULES = frozenset(_QT_DISABLED_LOGGING_RULES)
 
-_IGNORED_MESSAGE_FRAGMENTS = ("cannot be used as a native child widget",)
+_IGNORED_MESSAGE_FRAGMENTS = (
+    "cannot be used as a native child widget",
+    # Some playable H.264/AVI streams carry no packet PTS. Qt reconstructs the
+    # cadence successfully but emits this warning once per frame, so routing it
+    # through Python creates sustained work without an actionable diagnostic.
+    "QFFmpeg::Demuxer received AVPacket with pts == AV_NOPTS_VALUE",
+)
 _MAX_MESSAGE_LENGTH = 8 * 1024
 _MAX_CONTEXT_LENGTH = 512
 _MAX_PENDING_MESSAGES = 128

@@ -788,7 +788,7 @@ class LocalCameraConfig:
     media_type: CameraMediaType | None = None
     pixel_format: str = ""
     ptz_binding: PtzBinding | None = None
-    keep_active: bool = False
+    keep_active: bool = True
 
     def __post_init__(self) -> None:
         if (
@@ -935,7 +935,7 @@ class LocalCameraConfig:
                 else _ptz_binding_from_record(data["ptz_binding"])
             ),
             keep_active=_boolean(
-                data.get("keep_active", False),
+                data.get("keep_active", True),
                 field_name="source.configuration.keep_active",
             ),
         )
@@ -947,7 +947,7 @@ class RtspCameraConfig:
     transport: RtspTransport = RtspTransport.TCP
     latency_ms: int = 200
     ptz_binding: PtzBinding | None = None
-    keep_active: bool = False
+    keep_active: bool = True
 
     def __post_init__(self) -> None:
         if not isinstance(self.uri, str):
@@ -1017,7 +1017,7 @@ class RtspCameraConfig:
                 else _ptz_binding_from_record(data["ptz_binding"])
             ),
             keep_active=_boolean(
-                data.get("keep_active", False),
+                data.get("keep_active", True),
                 field_name="source.configuration.keep_active",
             ),
         )

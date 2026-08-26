@@ -107,12 +107,17 @@ solin::media_engine::OutputBus output_bus_from_text(const std::string_view value
 
 nlohmann::json graph_capabilities(const solin::media_engine::MediaRuntimeProbe& probe,
                                   const bool graph_available) {
+#ifdef _WIN32
+    const auto d3d11_shared_textures = graph_available && probe.d3d11_compositor;
+#else
+    constexpr auto d3d11_shared_textures = false;
+#endif
     return {
         {"local_cameras", graph_available && probe.local_camera_source},
         {"rtsp_cameras", graph_available && probe.rtsp_source},
         {"hardware_compositing", graph_available && probe.d3d11_compositor},
         {"virtual_camera", graph_available && probe.virtual_camera.operational},
-        {"d3d11_shared_textures", false},
+        {"d3d11_shared_textures", d3d11_shared_textures},
     };
 }
 

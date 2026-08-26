@@ -162,32 +162,42 @@ The current projection content is an internal source, not a screen capture of a 
 window. Solin produces an offscreen frame channel that the sidecar consumes. This prevents
 feedback when a media window itself displays a scene containing Solin content.
 
-The current Windows transport is a versioned shared-memory video channel whose slots carry
-either native NV12 planes or packed BGRA. NV12 `QVideoFrame` input is sampled and bulk-copied
-once per mapped plane; each source stride and plane offset is preserved and described to
-GStreamer with `GstVideoMeta`. It does not pass through `QImage`, color conversion, a
-row-by-row Python loop, or a 1920×1080 staging canvas. Static images and formats that cannot
-be mapped as NV12 use BGRA.
-A keyed D3D11 shared texture remains the preferred future transport, with the current channel
-retained as the device-loss and compatibility fallback.
+The primary Windows video transport is a pinned Qt/D3D11 bridge. The existing Python
+playback acceptance gate still applies trim, session, media-epoch, and demand policy before
+submitting the original `QVideoFrame`; a latest-frame native worker then maps Qt's hardware
+textures without holding the GIL. The bridge is compiled against the exact PySide/Qt 6.11.1
+SDK and contains all use of `QVideoFramePrivate`, `QHwVideoBuffer`, and private texture
+interfaces. Both the PySide package and loaded Qt runtime version are checked before the
+extension loads. A separate code-level feature flag can disable this adapter without
+disabling native Scenes.
 
-The producer increments a generation whenever capacity, device, or transport changes. The
-engine rejects stale generations. The channel is a versioned three-slot latest-frame
-mapping protected by bounded cross-process synchronization. Protocol v6 retains the v5
-per-slot lease contract and adds versioned, epoch-bound image-framing state; every slot has a
-cross-process lease. The D3D11 ingress wraps the leased SHM span directly in a `GstBuffer` and
-releases the lease after upload consumes it; system-memory fallback makes an owned copy.
-The producer attempts the control mutex with a zero timeout, chooses another free slot, or
-drops the new frame when all three slots are leased. A reader crash is distinguished from PID
-reuse with the recorded process creation time, allowing abandoned leases to be reclaimed.
-Named auto-reset frame events replace the former 4 ms content poll, and composed-output
-events replace the Python Preview/Program 60 Hz poll. Each slot carries the actual
-frame size, strides, and plane offsets within that stable capacity, so a 720p source is copied
-as 720p and scaled by D3D11
-rather than expanded into a 1080p CPU canvas. Continuous Qt video is sampled before surface
-materialization and coalesced to at most 30 fps. Accepted NV12 planes are mapped, copied, and
-released inside the delivery callback; BGRA fallback and static content are handed to the
-bounded image worker. The framed JSON pipe remains control-only.
+For hardware NV12, the bridge copies the Qt-owned D3D11 texture GPU-to-GPU into a versioned,
+three-slot ring of bridge-owned named shared textures. Static BGRA images are uploaded once
+into that same dynamic ring. Video, images, and idle therefore keep one descriptor and one
+native source runtime; format and dimensions advance through the resource generation instead
+of replacing scene topology. Cross-process slot leases prevent an
+overwrite while the sidecar retains a frame; keyed mutexes provide the GPU ownership barrier;
+adapter LUID, resource dimensions, and an independent resource generation make device or
+source-size changes explicit. The sidecar opens the shared texture on its GStreamer D3D11
+device, wraps it as `GstD3D11Memory`, and performs the canonical BGRA conversion/scaling once
+before Raw transitions, zoom/pan, scene composition, and presentation fan out. This route has
+no Solin CPU pixel readback, SHM pixel copy, or CPU-to-GPU upload. Qt's own decoder/texture
+converter may still perform internal GPU-to-GPU copies, which remain a measurement target
+rather than a reason to couple the bridge directly to FFmpeg decoder-pool internals.
+
+The public-API compatibility route remains a versioned shared-memory channel. It carries
+mapped NV12 planes with their original strides and offsets, or packed BGRA for static images
+and unsupported video formats. `GstVideoMeta` describes the NV12 layout and the sidecar wraps
+the leased SHM span directly in a `GstBuffer` until upload consumes it; system-memory fallback
+makes an owned copy when required. Both transports preserve the same media epoch and image-
+framing contract, use three latest-frame slots, zero-timeout producer admission, stale-
+generation rejection, process-creation-time lease recovery, and named frame events. A 720p
+source remains 720p until D3D11 scaling instead of becoming a 1080p CPU canvas. Continuous Qt
+video is coalesced to at most 30 fps before native submission. The framed JSON pipe remains
+control-only. An adapter mismatch, failed D3D11 import, or device loss is reported as typed
+content-source health. Solin then retires the incompatible bridge for that controller
+lifetime and atomically replaces its ingress descriptor with the compatibility channel;
+disabling reactivation prevents a per-frame accelerated/fallback retry loop.
 
 ### Playback ownership and one-decode policy
 
@@ -239,11 +249,18 @@ flowchart LR
 ```mermaid
 flowchart LR
     QT["QMediaPlayer: decode, seek, trim, speed, cache, reconnect, audio"] --> SINK["Single QVideoSink"]
-    SINK --> MAP["Public QVideoFrame map: NV12"]
-    MAP --> SHM["Protocol-v5 three-slot SHM: pixels + requested media epoch"]
-    SHM --> APP["Leased GstBuffer: no SHM-to-owned copy"]
-    APP --> UP["One D3D11 upload"]
+    SINK --> GATE["Playback acceptance gate: trim + session + media epoch"]
+    GATE --> BRIDGE["Pinned Qt 6.11.1 bridge: native worker, no GIL"]
+    BRIDGE --> MAPTEX["Private QHwVideoBuffer texture mapping"]
+    MAPTEX --> RING["Protocol-v1 three-slot D3D11 shared-texture ring"]
+    RING --> IMPORT["Direct GstD3D11Memory import"]
+    IMPORT --> CANON["One canonical D3D11 BGRA convert/scale"]
+    GATE -. "unavailable / incompatible frame" .-> MAP["Public QVideoFrame map"]
+    MAP --> SHM["Protocol-v6 NV12/BGRA SHM fallback"]
+    SHM --> APP["Leased GstBuffer"]
+    APP --> UP["One fallback D3D11 upload"]
     CAMERA["Native camera / RTSP D3D11 sources"] --> GPU["Canonical source textures"]
+    CANON --> RAWTRANS
     UP --> RAWTRANS["Canonical Raw D3D11 transition"]
     RAWTRANS --> GPU
     GPU --> WINDOWCOMP["Persistent Raw / Program surface compositor"]
@@ -258,9 +275,11 @@ flowchart LR
     COMP -. "future shared texture" .-> EDITOR
 ```
 
-The output workers are demand-driven. A disabled Preview, presenter, or virtual camera owns
-no polling cadence, and the virtual-camera readback valve opens only while its destination is
-enabled. Raw media-window targets lease `solin.content.current` directly and never depend on,
+The output workers are demand-driven. A disabled Preview or presenter owns no polling
+cadence. Enabling the virtual-camera destination starts its lightweight broker and standby
+contract, but the NV12 conversion/readback valve opens only while at least one authenticated
+DirectShow pin is actively streaming; enumeration and an enabled-but-unused camera do not
+request system-memory frames. Raw media-window targets lease `solin.content.current` directly and never depend on,
 activate, or render an authored scene; editing the Content scene therefore cannot disable the
 GPU presenter or leak scene layers into a raw media window. Program targets consume the
 already-transitioned Program bus. Raw media epochs are resolved once by the canonical
@@ -269,8 +288,8 @@ inside Program therefore consume the same transitioned GPU frame naturally. A se
 persistent per-surface D3D11 compositor owns only Raw/Program ownership changes. Both use the
 same code-level transition policy, currently Fade through black at 200 ms, and the same state
 contract supporting Cut and Dissolve. Ordinary decoded frames and Program scene revisions
-restart neither effect. Qt private ABI (`QVideoFramePrivate` and private texture interfaces)
-is outside this contract.
+restart neither effect. Qt private ABI is isolated inside the version-pinned bridge adapter;
+the playback, frame-channel, fallback, scene, and output contracts do not expose it.
 
 ### UI process responsibilities
 
@@ -325,9 +344,15 @@ The private broker protocol is pointer-size-independent and derived from the cur
 session. The pipe rejects remote clients, permits only SYSTEM and the current user, and
 validates the connecting process token and session before returning a read-only backing-file
 locator. Multiple bounded pipe instances prevent one slow consumer from blocking another.
-Every filter reads the same latest-frame triple buffer without a video queue, repeats the
-latest frame when the producer is slower than 30 fps, samples the newest frame when it is
-faster, and reconnects after a generation change without graph renegotiation.
+Each current streaming DirectShow pin retains its authenticated broker session until the
+stream thread stops. That persistent control-only session is the authoritative consumer-demand
+signal; merely enumerating or instantiating the current filter creates no frame demand. During
+an in-place update, a protocol-v3 filter shipped before presence leases is identified by a
+completed handshake followed by disconnect; to preserve camera output, that legacy demand is
+held until the sidecar restarts. Every filter
+reads the same latest-frame triple buffer without a video queue, repeats the latest frame
+when the producer is slower than 30 fps, samples the newest frame when it is faster, and
+reconnects after a generation change without graph renegotiation.
 
 The shared channel uses acquire/release sequence markers and read-only consumer mappings;
 there is no per-frame kernel mutex and no raw-frame JSON or pipe traffic. A future keyed
@@ -350,7 +375,7 @@ video queue.
 
 | Source | Primary pipeline | Recovery |
 | --- | --- | --- |
-| Solin content | Dynamic NV12/BGRA shared-memory ingress | no-signal fallback after timeout |
+| Solin content | D3D11 shared-texture ingress; dynamic NV12/BGRA SHM fallback | no-signal fallback after timeout |
 | Local camera | device source → caps → D3D11 upload/convert | reconnect with capped backoff |
 | RTSP camera | RTSP source → jitter buffer/depay/decode → D3D11 | reconnect with capped backoff |
 | Solid color | generated texture/shader constant | always available |
@@ -542,10 +567,12 @@ These are regression guards, not optional refinements:
 - Solin-content ingress publishes a stable descriptor before the first image. The native
   `appsrc` repeats the latest immutable buffer at output cadence; a static image or yearly
   text must not expire under the five-second source watchdog.
-- Solin-content ingress uses bounded dynamic-format shared memory (NV12/BGRA) today. The
-  scene-editor Preview uses a fixed BGRA triple buffer in shared memory. A keyed D3D11
-  texture ring remains a future optimization and must retain this RAM path as its
-  compatibility/device-loss fallback. JSON and named-pipe messages remain control-only.
+- On supported Windows systems, Solin-content ingress uses one bounded dynamic-format D3D11
+  texture ring for NV12 video and BGRA image/idle presentations. Resource generations carry
+  format and size changes without replacing the logical source descriptor. Dynamic-format
+  shared memory remains the compatibility/device-loss fallback. The scene-editor Preview
+  uses a fixed BGRA triple buffer in shared memory. JSON and named-pipe messages remain
+  control-only.
 - The virtual-camera publisher emits a heartbeat independently of frame changes. Once the
   heartbeat is stale for 1.5 seconds, the DirectShow filter discards the last real image and
   serves the branded standby frame, preventing a frozen privacy-sensitive frame after Solin
@@ -699,8 +726,12 @@ claims stale applied state, and restores the newest desired state after restart.
   cross-process synchronization, actual-size frames inside a stable capacity, direct mapped
   NV12-plane publication, pre-materialization sampling, latest-frame coalescing, native
   `appsrc` buffer ownership, D3D11 upload/scaling, and real Python-to-sidecar smoke coverage.
-- [ ] Add keyed D3D11 shared-texture ingress under the same frame-channel contract and use
-  shared memory only as the device-loss/compatibility fallback.
+- [x] Add versioned D3D11 shared-texture ingress behind a pinned Qt 6.11.1 bridge, with a
+  native latest-frame worker, three leased/keyed slots, adapter and resource-generation
+  validation, direct `GstD3D11Memory` import, static BGRA upload through the same stable
+  descriptor, exact runtime ABI guards, a separate feature flag, and source-health-driven
+  handoff to the public NV12/BGRA shared-memory compatibility route without retry oscillation
+  after the sidecar rejects the D3D11 device.
 - [x] Implement solid-color and no-signal sources.
 - [x] Implement the generation-aware one-decode/many-consumer source registry with bounded
   latest-frame ownership, asynchronous teardown, and aggregate limits for active frame
@@ -742,11 +773,12 @@ minutes without an unbounded queue, deadlock, source duplication, or memory grow
 - [x] Move raw media-change transitions into the canonical native D3D11 content source,
   before fan-out to physical Raw presenters and authored Program layers. Extend the
   content-ingress control contract with an explicit monotonic media epoch, distinct from and
-  bound to the transport generation. Store the requested epoch independently in the channel
-  header so the engine receives media-switch intent before a destination frame; ordinary frames from the
-  same media epoch must never restart the effect. When Program mirroring is disabled, retain
-  the last stable GPU frame, fade it to opaque black, commit the incoming media epoch at
-  black, wait for its first valid frame within a bounded deadline, and fade it in without
+  bound to the transport generation. Arm that identity in the producer, but commit it to the
+  channel header atomically with the first matching destination frame; ordinary frames from
+  the same media epoch must never restart the effect. This prevents a transport handoff from
+  invalidating the stable outgoing frame while the destination still exists only on another
+  channel. When Program mirroring is disabled, retain the last stable GPU frame, fade it to
+  opaque black, and fade the already-validated incoming frame in without
   per-pixel work or frame materialization in Python/Qt. The state machine must be
   latest-request-wins, cancel cleanly on Stop, output reassignment,
   target loss, engine restart, or device loss, and hand presentation back to the isolated Qt
@@ -766,10 +798,9 @@ minutes without an unbounded queue, deadlock, source duplication, or memory grow
   Keep the expanded in-app player outside this contract: it continues to show the original
   `QVideoFrame` and does not drive physical-output transitions. The Qt opacity cost is absent
   from the native route; this gate restores the visual effect on the GPU while the compatibility
-  fallback retains its local 200 ms fade. It does not claim a steady-state
-  CPU reduction while decoded frames still cross
-  the shared-memory ingress. The separate keyed-texture ingress gate is what can remove that
-  steady-state copy/upload path.
+  fallback retains its local 200 ms fade. This transition work alone does not claim a
+  steady-state CPU reduction. The separately implemented D3D11 shared-texture ingress removes
+  the normal Solin CPU copy/upload path; the compatibility route intentionally retains it.
 - [x] Move projected-image zoom/pan into the canonical Raw source before fan-out. Publish one
   versioned transform target, its media epoch, canvas aspect, duration, and animation intent in
   the content channel header independently from pixels. Bind the target to the image epoch so a
@@ -829,6 +860,9 @@ recover without feedback, black flashes, or a UI-thread stall.
 - [x] Implement the DACL-authorized protocol-v3 broker with a current-user/System DACL,
   SID/session validation, remote-client rejection, bounded parallel instances, I/O deadlines,
   and a read-only temporary file-backed mapping; control only traverses its named pipe.
+- [x] Keep one authenticated broker session for each actively streaming DirectShow pin and
+  use the live-session count to gate NV12 conversion and GPU readback. Enabled cameras with
+  no consumer and filters that are only enumerated publish no system-memory frames.
 - [x] Deliver a branded Solin standby frame after the producer heartbeat expires, reconnect
   in the background, retain the last valid frame only across short delivery gaps, and apply
   bounded allocator backpressure without poisoning the DirectShow stream.

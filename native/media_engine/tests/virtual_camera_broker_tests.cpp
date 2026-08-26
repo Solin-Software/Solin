@@ -51,6 +51,12 @@ class WindowsHandle final {
         }
         return *this;
     }
+    void reset(HANDLE value = nullptr) noexcept {
+        if (value_ != nullptr && value_ != INVALID_HANDLE_VALUE) {
+            static_cast<void>(CloseHandle(value_));
+        }
+        value_ = value;
+    }
     [[nodiscard]] HANDLE get() const noexcept { return value_; }
     [[nodiscard]] explicit operator bool() const noexcept {
         return value_ != nullptr && value_ != INVALID_HANDLE_VALUE;
@@ -80,7 +86,8 @@ class WindowsHandle final {
 }
 
 [[nodiscard]] bool complete_handshake(const std::string& pipe_name,
-                                      const std::uint8_t nonce_value) {
+                                      const std::uint8_t nonce_value,
+                                      const bool persistent = true) {
     WindowsHandle pipe;
     for (int attempt = 0; attempt < 20 && !pipe; ++attempt) {
         pipe = WindowsHandle{CreateFileA(
@@ -109,9 +116,14 @@ class WindowsHandle final {
     }
     const auto response =
         solin::media_engine::decode_virtual_camera_broker_response(response_bytes);
-    return response.status == solin::media_engine::VirtualCameraBrokerStatus::ok &&
-           response.nonce == request.nonce && response.generation == 17U &&
-           !response.mapping_file_path_utf8.empty();
+    if (response.status != solin::media_engine::VirtualCameraBrokerStatus::ok ||
+        response.nonce != request.nonce || response.generation != 17U ||
+        response.mapping_file_path_utf8.empty()) {
+        return false;
+    }
+    std::array<std::uint8_t, 1U> presence_marker{
+        solin::media_engine::kVirtualCameraBrokerPresenceMarker};
+    return !persistent || exact_pipe_io(pipe.get(), presence_marker, true);
 }
 
 void test_broker_authenticates_the_same_user_and_session() {
@@ -187,6 +199,26 @@ void test_broker_authenticates_the_same_user_and_session() {
                    response.nonce == request.nonce && response.generation == 17U &&
                    !response.mapping_file_path_utf8.empty(),
                "the broker discloses transport metadata only after identity validation");
+        std::array<std::uint8_t, 1U> presence_marker{
+            solin::media_engine::kVirtualCameraBrokerPresenceMarker};
+        expect(exact_pipe_io(pipe.get(), presence_marker, true),
+               "the current filter upgrades its broker session into a presence lease");
+        const auto connected_deadline = GetTickCount64() + 1'000U;
+        while (broker->health().active_connections != 1U &&
+               GetTickCount64() < connected_deadline) {
+            Sleep(5U);
+        }
+        expect(broker->health().active_connections == 1U,
+               "the broker reports a live consumer until its session closes");
+        pipe.reset();
+        const auto disconnected_deadline = GetTickCount64() + 1'000U;
+        while (broker->health().active_connections != 0U &&
+               GetTickCount64() < disconnected_deadline) {
+            Sleep(5U);
+        }
+        expect(broker->health().active_connections == 0U &&
+                   !broker->health().legacy_consumer_present,
+               "the broker removes consumer demand when its session closes");
     }
     std::atomic_int concurrent_successes{0};
     std::array<std::thread, 4U> consumers{};
@@ -204,9 +236,20 @@ void test_broker_authenticates_the_same_user_and_session() {
     expect(concurrent_successes.load() ==
                static_cast<int>(consumers.size()),
            "bounded broker instances serve concurrent consumers independently");
+    expect(complete_handshake(pipe_name, 0x7FU, false),
+           "a previously shipped protocol-v3 filter still receives its frame channel");
+    const auto legacy_deadline = GetTickCount64() + 1'000U;
+    while (!broker->health().legacy_consumer_present &&
+           GetTickCount64() < legacy_deadline) {
+        Sleep(5U);
+    }
+    expect(broker->health().legacy_consumer_present,
+           "a legacy filter keeps correctness-first camera demand until engine restart");
     broker->stop();
     const auto health = broker->health();
-    expect(!health.running && health.accepted_connections == 5U &&
+    expect(!health.running && health.active_connections == 0U &&
+               !health.legacy_consumer_present &&
+               health.accepted_connections == 6U &&
                health.denied_connections == 0U,
            "broker health accounts for the authenticated handshake");
     sink->stop();

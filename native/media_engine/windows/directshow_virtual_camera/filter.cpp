@@ -341,6 +341,7 @@ HRESULT DirectShowCapturePin::SetMediaType(const CMediaType* media_type) {
 }
 
 HRESULT DirectShowCapturePin::OnThreadCreate() {
+    provider_.start();
     deadline_epoch_ = std::chrono::steady_clock::now();
     deadline_index_ = 0U;
     frame_index_ = 0U;
@@ -350,6 +351,11 @@ HRESULT DirectShowCapturePin::OnThreadCreate() {
     last_frame_was_direct_ = false;
     have_last_input_sequence_ = false;
     first_sample_ = true;
+    return S_OK;
+}
+
+HRESULT DirectShowCapturePin::OnThreadDestroy() {
+    provider_.stop();
     return S_OK;
 }
 
