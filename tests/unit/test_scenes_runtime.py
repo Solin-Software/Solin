@@ -83,6 +83,16 @@ def test_enabling_automation_can_normalize_a_media_scene_base() -> None:
     assert runtime.resolve_scene(BusId.VIRTUAL_CAMERA, ContentCategory.VIDEO) == CONTENT_SCENE_ID
 
 
+def test_automatic_program_base_can_return_to_the_configured_default() -> None:
+    _documents, runtime = _services()
+    runtime.select_program_scene(CONTENT_CAMERA_PIP_SCENE_ID)
+
+    runtime.select_program_scene(None)
+
+    assert all(output.manual_scene_id == "" for output in runtime.state.outputs)
+    assert runtime.resolve_scene(BusId.VIRTUAL_CAMERA, ContentCategory.IDLE) == CAMERA_SCENE_ID
+
+
 def test_live_take_is_not_part_of_editor_undo_history() -> None:
     documents, runtime = _services()
     documents.rename_scene(CONTENT_SCENE_ID, "Renamed")

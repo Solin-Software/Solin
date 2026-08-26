@@ -65,6 +65,7 @@ from solin.core.scenes.presets import (
     CAMERA_SCENE_ID,
     CONTENT_CAMERA_PIP_SCENE_ID,
     CONTENT_SCENE_ID,
+    NO_SIGNAL_SCENE_ID,
     SceneSeedNames,
     create_default_scene_document,
 )
@@ -1134,7 +1135,7 @@ def test_return_scene_override_does_not_take_program_until_media_ends() -> None:
     controller.close()
 
 
-def test_auto_media_does_not_return_after_operator_takes_another_scene() -> None:
+def test_auto_media_does_not_return_after_operator_takes_a_scene_without_content() -> None:
     projection = _Projection()
     _documents, _runtime, controller = _runtime_controller(
         _Engine(),
@@ -1143,7 +1144,7 @@ def test_auto_media_does_not_return_after_operator_takes_another_scene() -> None
     )
     projection.set_type("image")
 
-    controller.take_program_scene(CONTENT_CAMERA_PIP_SCENE_ID)
+    controller.take_program_scene(NO_SIGNAL_SCENE_ID)
 
     assert controller.program_automation_suspended
     assert not controller.program_return_override_available
@@ -1152,7 +1153,68 @@ def test_auto_media_does_not_return_after_operator_takes_another_scene() -> None
 
     projection.set_type("idle")
 
-    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == (CONTENT_CAMERA_PIP_SCENE_ID)
+    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == NO_SIGNAL_SCENE_ID
+    controller.close()
+
+
+def test_auto_media_returns_after_operator_takes_another_content_scene() -> None:
+    projection = _Projection()
+    _documents, runtime, controller = _runtime_controller(
+        _Engine(),
+        projection,
+        request_ids=(),
+    )
+    projection.set_type("image")
+    return_base_before = runtime.state.output(BusId.VIRTUAL_CAMERA).manual_scene_id
+
+    controller.take_program_scene(CONTENT_CAMERA_PIP_SCENE_ID)
+
+    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CONTENT_CAMERA_PIP_SCENE_ID
+    assert not controller.program_automation_suspended
+    assert controller.program_return_scene_id == CAMERA_SCENE_ID
+    assert runtime.state.output(BusId.VIRTUAL_CAMERA).manual_scene_id == return_base_before
+    controller._set_applied_scenes(((BusId.VIRTUAL_CAMERA, CONTENT_CAMERA_PIP_SCENE_ID),))
+    assert controller.program_return_override_available
+    controller.set_program_return_scene(NO_SIGNAL_SCENE_ID)
+    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CONTENT_CAMERA_PIP_SCENE_ID
+    assert controller.program_return_scene_id == NO_SIGNAL_SCENE_ID
+
+    controller.take_program_scene(CAMERA_SCENE_ID)
+    assert controller.program_automation_suspended
+    controller.take_program_scene(CONTENT_CAMERA_PIP_SCENE_ID)
+    assert not controller.program_automation_suspended
+    assert controller.program_return_scene_id == NO_SIGNAL_SCENE_ID
+
+    projection.set_type("idle")
+
+    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == NO_SIGNAL_SCENE_ID
+    controller.close()
+
+
+def test_taking_a_content_scene_resumes_a_suspended_media_session() -> None:
+    projection = _Projection()
+    _documents, runtime, controller = _runtime_controller(
+        _Engine(),
+        projection,
+        request_ids=(),
+    )
+    projection.set_type("image")
+    return_base_before = runtime.state.output(BusId.VIRTUAL_CAMERA).manual_scene_id
+    controller.take_program_scene(NO_SIGNAL_SCENE_ID)
+    assert controller.program_automation_suspended
+    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == NO_SIGNAL_SCENE_ID
+    assert runtime.state.output(BusId.VIRTUAL_CAMERA).manual_scene_id == NO_SIGNAL_SCENE_ID
+
+    controller.take_program_scene(CONTENT_CAMERA_PIP_SCENE_ID)
+
+    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CONTENT_CAMERA_PIP_SCENE_ID
+    assert not controller.program_automation_suspended
+    assert controller.program_return_scene_id == CAMERA_SCENE_ID
+    assert runtime.state.output(BusId.VIRTUAL_CAMERA).manual_scene_id == return_base_before
+
+    projection.set_type("idle")
+
+    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
     controller.close()
 
 
@@ -1202,13 +1264,39 @@ def test_resume_program_automation_reconciles_when_runtime_state_is_unchanged() 
         request_ids=(),
     )
     projection.set_type("image")
-    controller.take_program_scene(CAMERA_SCENE_ID)
+    controller.take_program_scene(NO_SIGNAL_SCENE_ID)
     assert controller.program_automation_suspended
 
     controller.resume_program_automation()
 
     assert not controller.program_automation_suspended
     assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
+
+    projection.set_type("idle")
+
+    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
+    controller.close()
+
+
+def test_reenabling_program_automation_restores_the_session_return_base() -> None:
+    projection = _Projection()
+    _documents, _runtime, controller = _runtime_controller(
+        _Engine(),
+        projection,
+        request_ids=(),
+    )
+    projection.set_type("image")
+    controller.take_program_scene(NO_SIGNAL_SCENE_ID)
+    assert controller.program_automation_suspended
+
+    controller.set_program_automatic(True)
+
+    assert not controller.program_automation_suspended
+    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
+
+    projection.set_type("idle")
+
+    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
     controller.close()
 
 
