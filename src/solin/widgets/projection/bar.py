@@ -10,6 +10,7 @@ from PySide6.QtCore import (
     QDateTime,
     QEvent,
     QObject,
+    QSize,
     Qt,
     QTimer,
     Signal,
@@ -126,10 +127,9 @@ class _ThemedVideoPreview(QWidget):
         )
 
     def set_frame(self, frame: QVideoFrame) -> None:
-        if self._native_output_active:
-            return
         if not frame.isValid():
-            self.clear_frame()
+            if not self._native_output_active:
+                self.clear_frame()
             return
         viewport = frame.surfaceFormat().viewport()
         frame_size = viewport.size() if viewport.isValid() else frame.size()
@@ -137,10 +137,22 @@ class _ThemedVideoPreview(QWidget):
         height = frame_size.height()
         if frame.rotation().value in (90, 270):
             width, height = height, width
-        if width > 0 and height > 0:
-            self._aspect_ratio = width / height
-            self._apply_video_geometry()
+        self.set_video_size(QSize(width, height))
+        if self._native_output_active:
+            return
         self._video_widget.videoSink().setVideoFrame(frame)
+
+    @Slot(QSize)
+    def set_video_size(self, size: QSize) -> None:
+        """Fit both presenters without materializing the decoded frame."""
+
+        width = size.width()
+        height = size.height()
+        if width <= 0 or height <= 0:
+            return
+        aspect_ratio = width / height
+        self._aspect_ratio = aspect_ratio
+        self._apply_video_geometry()
 
     def clear_frame(self) -> None:
         self._video_widget.videoSink().setVideoFrame(QVideoFrame())
@@ -174,9 +186,6 @@ class _ThemedVideoPreview(QWidget):
         if self._native_surface is None:
             self._native_surface = NativeVideoSurface(self)
             self._native_surface.set_input_target(self)
-            self._native_surface.set_interaction_cursor(
-                Qt.CursorShape.PointingHandCursor
-            )
             self._apply_video_geometry()
         return self._native_surface
 
@@ -200,24 +209,20 @@ class _ThemedVideoPreview(QWidget):
             if self._native_surface is not None:
                 self._native_surface.setGeometry(0, 0, 0, 0)
             return
-        if self._native_surface is not None:
-            self._native_surface.setGeometry(
-                0,
-                0,
-                available_width,
-                available_height,
-            )
         target_width = available_width
         target_height = round(target_width / self._aspect_ratio)
         if target_height > available_height:
             target_height = available_height
             target_width = round(target_height * self._aspect_ratio)
-        self._video_widget.setGeometry(
+        target_geometry = (
             (available_width - target_width) // 2,
             (available_height - target_height) // 2,
             target_width,
             target_height,
         )
+        self._video_widget.setGeometry(*target_geometry)
+        if self._native_surface is not None:
+            self._native_surface.setGeometry(*target_geometry)
 
 
 # Projection bar (bottom-right projection control)
@@ -753,12 +758,23 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.video_preview.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
+        self.media.video_sink.videoSizeChanged.connect(
+            self._sync_video_preview_size
+        )
+        self._sync_video_preview_size()
         self.video_preview.setVisible(False)
         self.video_preview.installEventFilter(self)
         preview_layout.addWidget(self.preview_content)
         preview_layout.addWidget(self.video_preview)
         self.overlay_stack.addWidget(self.preview_host)   # index 0
         startup_timeline().mark("projection_overlay_preview_constructed")
+
+    @Slot()
+    def _sync_video_preview_size(self) -> None:
+        preview = getattr(self, "video_preview", None)
+        if preview is None:
+            return
+        preview.set_video_size(self.media.video_sink.videoSize())
 
     def _build_overlay_timer(self) -> None:
         from solin.bootstrap.startup_timeline import startup_timeline
@@ -1067,10 +1083,14 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         overlay.loop_toggled.connect(self._toggle_loop)
         overlay.playback_order_selected.connect(self._set_playback_order)
         overlay.visibility_changed.connect(
-            self.video_frame_delivery_requirement_changed.emit
+            self._on_fullscreen_visibility_changed
         )
         self._fullscreen_overlay = overlay
         return overlay
+
+    @Slot(bool)
+    def _on_fullscreen_visibility_changed(self, _visible: bool) -> None:
+        self.video_frame_delivery_requirement_changed.emit()
 
     def _hydrate_fullscreen_overlay(self, overlay: FullscreenVideoOverlay) -> None:
         title = self.ov_title.text() or self.proj_title.toolTip() or self.proj_title.text()

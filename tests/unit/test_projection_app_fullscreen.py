@@ -1,7 +1,9 @@
 import os
+from types import SimpleNamespace
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QWidget
 
 import solin.widgets.projection.bar as projection_bar
@@ -225,8 +227,48 @@ def test_video_preview_creates_native_surface_only_when_route_is_enabled():
     assert preview.native_output_active is True
     assert preview.native_surface is not None
     assert preview.native_surface.geometry().width() == 1000
-    assert preview.native_surface.geometry().height() == 800
+    assert preview.native_surface.geometry().height() == 562
+    assert preview.native_surface.geometry().y() == 119
+    assert preview.native_surface.cursor().shape() == Qt.CursorShape.ArrowCursor
+    assert preview.native_surface.input_overlay is not None
+    assert (
+        preview.native_surface.input_overlay.cursor().shape()
+        == Qt.CursorShape.ArrowCursor
+    )
     assert preview._video_widget.isHidden()
+
+
+def test_native_video_preview_tracks_source_aspect_without_copying_frames():
+    from PySide6.QtCore import QSize
+
+    preview = projection_bar._ThemedVideoPreview()
+    preview.resize(1000, 800)
+    preview.set_native_output_active(True)
+
+    preview.set_video_size(QSize(4, 3))
+
+    assert preview.native_surface is not None
+    assert preview.native_surface.geometry().getRect() == (0, 25, 1000, 750)
+    assert preview._video_widget.geometry() == preview.native_surface.geometry()
+
+
+def test_video_size_notification_reads_the_sink_property_without_signal_arguments():
+    from PySide6.QtGui import QImage
+    from PySide6.QtMultimedia import QVideoFrame, QVideoSink
+
+    source_sink = QVideoSink()
+    preview = projection_bar._ThemedVideoPreview()
+    preview.resize(1000, 800)
+    bar = _bar()
+    bar.media = SimpleNamespace(video_sink=source_sink)
+    bar.video_preview = preview
+    source_sink.videoSizeChanged.connect(bar._sync_video_preview_size)
+
+    source_sink.setVideoFrame(
+        QVideoFrame(QImage(800, 600, QImage.Format.Format_ARGB32))
+    )
+
+    assert preview._video_widget.geometry().getRect() == (0, 25, 1000, 750)
 
 
 def test_native_video_preview_does_not_feed_the_qt_presenter():
@@ -273,6 +315,23 @@ def test_app_fullscreen_always_requires_python_frame_delivery():
     bar = _bar(mode="video", audio=False, overlay=_Overlay(active=True))
 
     assert bar.python_video_frame_delivery_required is True
+
+
+def test_fullscreen_visibility_notifies_frame_delivery_without_forwarding_bool():
+    notifications: list[None] = []
+
+    class _Notification:
+        def emit(self) -> None:
+            notifications.append(None)
+
+    host = SimpleNamespace(
+        video_frame_delivery_requirement_changed=_Notification()
+    )
+
+    projection_bar.ProjectionBar._on_fullscreen_visibility_changed(host, True)
+    projection_bar.ProjectionBar._on_fullscreen_visibility_changed(host, False)
+
+    assert notifications == [None, None]
 
 
 def test_recovery_feedback_is_mirrored_to_app_fullscreen():
