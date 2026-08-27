@@ -176,6 +176,77 @@ class SelectiveFailureFactory final : public solin::media_engine::SourceRuntimeF
     std::shared_ptr<solin::media_engine::SourceRuntimeFactory> delegate_{};
 };
 
+class GatedSourceRuntime final : public solin::media_engine::SourceRuntime {
+  public:
+    GatedSourceRuntime(
+        std::shared_ptr<solin::media_engine::SourceRuntime> delegate,
+        std::shared_ptr<solin::media_engine::GStreamerFrameSignal> frame_signal)
+        : delegate_(std::move(delegate)), frame_signal_(std::move(frame_signal)) {}
+
+    void start() override { delegate_->start(); }
+    void stop() noexcept override { delegate_->stop(); }
+
+    [[nodiscard]] solin::media_engine::SourceRuntimeHealth health() const override {
+        if (!released_.load()) {
+            return {.status = solin::media_engine::SourceRuntimeStatus::starting};
+        }
+        return delegate_->health();
+    }
+
+    [[nodiscard]] std::shared_ptr<const solin::media_engine::SourceFrame>
+    latest_frame() const override {
+        return released_.load() ? delegate_->latest_frame() : nullptr;
+    }
+
+    [[nodiscard]] bool wait_for_frame(
+        const std::uint64_t after_sequence, const std::stop_token stop_token,
+        const std::chrono::steady_clock::time_point deadline) const noexcept override {
+        return released_.load() &&
+               delegate_->wait_for_frame(after_sequence, stop_token, deadline);
+    }
+
+    void wake_frame_waiters() noexcept override { delegate_->wake_frame_waiters(); }
+
+    void release() noexcept {
+        released_.store(true);
+        frame_signal_->notify();
+    }
+
+  private:
+    std::shared_ptr<solin::media_engine::SourceRuntime> delegate_{};
+    std::shared_ptr<solin::media_engine::GStreamerFrameSignal> frame_signal_{};
+    std::atomic_bool released_{false};
+};
+
+class StartupGateFactory final : public solin::media_engine::SourceRuntimeFactory {
+  public:
+    explicit StartupGateFactory(
+        std::shared_ptr<solin::media_engine::SourceRuntimeFactory> delegate)
+        : delegate_(std::move(delegate)),
+          frame_signal_(solin::media_engine::gstreamer_frame_signal(delegate_)) {}
+
+    [[nodiscard]] std::shared_ptr<solin::media_engine::SourceRuntime>
+    create(const solin::media_engine::SceneSource& source,
+           const std::uint64_t generation) override {
+        auto runtime = delegate_->create(source, generation);
+        if (source.id != "startup-camera") {
+            return runtime;
+        }
+        auto gated = std::make_shared<GatedSourceRuntime>(std::move(runtime), frame_signal_);
+        camera_ = gated;
+        return gated;
+    }
+
+    [[nodiscard]] std::shared_ptr<GatedSourceRuntime> camera() const noexcept {
+        return camera_.lock();
+    }
+
+  private:
+    std::shared_ptr<solin::media_engine::SourceRuntimeFactory> delegate_{};
+    std::shared_ptr<solin::media_engine::GStreamerFrameSignal> frame_signal_{};
+    std::weak_ptr<GatedSourceRuntime> camera_{};
+};
+
 void test_automatic_camera_format_is_bounded_and_deterministic() {
     const solin::media_engine::LocalCameraDevice device{
         .device_id = "camera-test",
@@ -319,6 +390,60 @@ compositor_with_failed_camera_snapshot() {
             },
         });
     }
+    return value;
+}
+
+[[nodiscard]] solin::media_engine::SceneHydrationSnapshot
+startup_deferred_camera_snapshot() {
+    auto value = compositor_snapshot();
+    value.document_id = "gstreamer-startup-program-cadence-test";
+    value.sources = {
+        {.id = "startup-content",
+         .kind = solin::media_engine::SceneSourceKind::color,
+         .enabled = true,
+         .configuration =
+             solin::media_engine::ColorSourceConfiguration{"#FF0000FF"}},
+        {.id = "startup-camera",
+         .kind = solin::media_engine::SceneSourceKind::color,
+         .enabled = true,
+         .configuration =
+             solin::media_engine::ColorSourceConfiguration{"#0000FFFF"}},
+    };
+    const solin::media_engine::SceneLayerGeometry full{
+        .x = 0.0,
+        .y = 0.0,
+        .width = 1.0,
+        .height = 1.0,
+        .opacity = 1.0,
+        .fit_mode = "stretch",
+        .border_color = "#00000000",
+        .visible = true,
+    };
+    auto inset = full;
+    inset.x = 0.7;
+    inset.y = 0.7;
+    inset.width = 0.25;
+    inset.height = 0.25;
+    value.scenes = {
+        {.id = "startup-camera-scene",
+         .layers = {{.id = "startup-camera-full",
+                     .source_id = "startup-camera",
+                     .geometry = full}}},
+        {.id = "startup-media-scene",
+         .layers = {
+             {.id = "startup-content-full",
+              .source_id = "startup-content",
+              .geometry = full},
+             {.id = "startup-camera-inset",
+              .source_id = "startup-camera",
+              .geometry = inset},
+         }},
+    };
+    value.outputs[0].default_scene_id = "startup-camera-scene";
+    value.outputs[1].default_scene_id = "startup-camera-scene";
+    value.active_scene_ids = {"startup-camera-scene", "startup-camera-scene"};
+    value.render_enabled = {false, true};
+    value.output_enabled = {false, true};
     return value;
 }
 
@@ -892,6 +1017,72 @@ void test_failed_source_does_not_block_healthy_compositor_layers(
     }
     expect(frame != nullptr && rendered_healthy_source,
            "a source that fails before its first frame does not hold back healthy layers");
+}
+
+void test_program_cadence_recovers_when_media_arrives_before_the_startup_camera(
+    solin::media_engine::MediaRuntime& media_runtime) {
+    using solin::media_engine::OutputBus;
+    using solin::media_engine::SceneTransitionKind;
+
+    const auto renderer = media_runtime.scene_renderer();
+    expect(renderer != nullptr,
+           "the deferred startup cadence test has a scene renderer");
+    if (renderer == nullptr) {
+        return;
+    }
+
+    auto factory = std::make_shared<StartupGateFactory>(
+        media_runtime.source_runtime_factory());
+    solin::media_engine::SceneGraphRuntime graph{factory, renderer};
+    graph.hydrate(startup_deferred_camera_snapshot(), 10'000U);
+
+    const auto camera = factory->camera();
+    expect(camera != nullptr,
+           "the startup fixture gates the camera source before its first frame");
+    expect(renderer->latest_frame(OutputBus::virtual_camera) == nullptr,
+           "Program remains deferred while its initial camera has no frame");
+    renderer->set_system_memory_output_enabled(
+        OutputBus::virtual_camera,
+        solin::media_engine::SystemMemoryOutputConsumer::frame_channel, true);
+    if (camera == nullptr) {
+        renderer->set_system_memory_output_enabled(
+            OutputBus::virtual_camera,
+            solin::media_engine::SystemMemoryOutputConsumer::frame_channel, false);
+        return;
+    }
+
+    const auto prepared = graph.prepare(
+        OutputBus::virtual_camera, "startup-media-scene", 1U,
+        "startup-media-before-camera", 10'001U,
+        {.kind = SceneTransitionKind::fade_to_black, .duration_ms = 200U});
+    graph.take(prepared, 1U, 10'002U);
+    std::this_thread::sleep_for(3'500ms);
+    camera->release();
+
+    solin::media_engine::SceneOutputFrameCursor cursor{};
+    std::size_t frame_count = 0U;
+    const auto deadline = std::chrono::steady_clock::now() + 2s;
+    while (std::chrono::steady_clock::now() < deadline) {
+        const auto sequence = renderer->visit_latest_frame(
+            OutputBus::virtual_camera, cursor,
+            [](const solin::media_engine::VideoFrameView&) {});
+        if (sequence.has_value()) {
+            cursor = sequence.value();
+            ++frame_count;
+        }
+        static_cast<void>(renderer->wait_for_frame(
+            OutputBus::virtual_camera, cursor, std::stop_token{},
+            (std::min)(deadline, std::chrono::steady_clock::now() + 20ms)));
+    }
+    expect(frame_count >= 45U,
+           "Program recovers its negotiated cadence when media starts before the camera's first frame");
+    expect(frame_count <= 75U,
+           "Program coalesces simultaneous source revisions to its negotiated cadence");
+
+    graph.shutdown();
+    renderer->set_system_memory_output_enabled(
+        OutputBus::virtual_camera,
+        solin::media_engine::SystemMemoryOutputConsumer::frame_channel, false);
 }
 
 void test_frame_payload_outlives_media_runtime_and_registry_owners() {
@@ -1562,6 +1753,8 @@ int main(const int argc, const char* const argv[]) {
                 test_scene_renderer_composes_nested_scene_to_shared_d3d11_frame(
                     media_runtime);
                 test_failed_source_does_not_block_healthy_compositor_layers(media_runtime);
+                test_program_cadence_recovers_when_media_arrives_before_the_startup_camera(
+                    media_runtime);
             }
             if (argc == 2 && std::string_view{argv[1]} == "--local-camera") {
                 test_first_hardware_camera_publishes_its_exact_selected_format(media_runtime);

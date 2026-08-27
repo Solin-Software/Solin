@@ -9,12 +9,14 @@ namespace solin::media_transport::d3d11_frame_channel {
 
 inline constexpr std::array<std::uint8_t, 8U> kMagic{
     'S', 'L', 'N', 'G', 'P', 'U', '0', '1'};
-inline constexpr std::uint16_t kVersion = 1U;
+inline constexpr std::uint16_t kVersion = 2U;
 inline constexpr std::uint16_t kHeaderSize = 256U;
 inline constexpr std::uint16_t kSlotHeaderSize = 128U;
 inline constexpr std::uint32_t kSlotCount = 3U;
 inline constexpr std::uint64_t kMaximumSequence =
     (std::numeric_limits<std::int64_t>::max)() / 2U;
+inline constexpr std::uint64_t kMaximumResourceGeneration =
+    static_cast<std::uint64_t>((std::numeric_limits<std::int64_t>::max)()) >> 2U;
 
 inline constexpr std::size_t kMagicOffset = 0U;
 inline constexpr std::size_t kVersionOffset = 8U;
@@ -54,9 +56,19 @@ inline constexpr std::size_t kSlotPresentationTimestampOffset = 16U;
 inline constexpr std::size_t kSlotDurationOffset = 24U;
 inline constexpr std::size_t kSlotProducedMonotonicOffset = 32U;
 inline constexpr std::size_t kSlotMediaEpochOffset = 40U;
-inline constexpr std::size_t kSlotLeaseCountOffset = 48U;
-inline constexpr std::size_t kSlotLeaseOwnerProcessIdOffset = 52U;
-inline constexpr std::size_t kSlotLeaseOwnerCreationTimeOffset = 56U;
+inline constexpr std::size_t kSlotLeaseStateOffset = 48U;
+inline constexpr std::size_t kSlotLeaseOwnerProcessIdOffset = 56U;
+inline constexpr std::size_t kSlotLeaseOwnerCreationTimeOffset = 64U;
+
+inline constexpr std::uint64_t kSlotLeaseAvailable = 0U;
+inline constexpr std::uint64_t kSlotLeaseReader = 1U;
+inline constexpr std::uint64_t kSlotLeaseWriter = 2U;
+
+[[nodiscard]] constexpr std::uint64_t slot_lease_state(
+    const std::uint64_t resource_generation,
+    const std::uint64_t owner) noexcept {
+    return (resource_generation << 2U) | owner;
+}
 
 inline constexpr wchar_t kMappingPrefix[] = L"Local\\SolinD3D11Frame.";
 inline constexpr wchar_t kMutexPrefix[] = L"Local\\SolinD3D11FrameMutex.";
@@ -75,7 +87,7 @@ inline constexpr wchar_t kTexturePrefix[] = L"Local\\SolinD3D11Texture.";
 static_assert(kImageTransformNormYOffset + sizeof(double) <= kHeaderSize);
 static_assert(kSlotLeaseOwnerCreationTimeOffset + sizeof(std::uint64_t) <=
               kSlotHeaderSize);
-static_assert(kSlotLeaseCountOffset % alignof(std::int32_t) == 0U);
+static_assert(kSlotLeaseStateOffset % alignof(std::uint64_t) == 0U);
 static_assert(kHeaderSize % alignof(std::uint64_t) == 0U);
 static_assert(mapping_size() == 640U);
 

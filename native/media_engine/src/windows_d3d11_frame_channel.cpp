@@ -104,26 +104,32 @@ class MutexLease final {
 
 class SlotLease final {
   public:
-    SlotLease(volatile LONG* count, std::shared_ptr<UniqueView> view,
+    SlotLease(volatile LONG64* state, const LONG64 reader_state,
+              const LONG64 available_state, std::shared_ptr<UniqueView> view,
               ID3D11Texture2D* texture)
-        : count_(count), view_(std::move(view)), texture_(texture) {
-        if (count_ == nullptr || view_ == nullptr || view_->bytes() == nullptr ||
+        : state_(state), reader_state_(reader_state),
+          available_state_(available_state), view_(std::move(view)),
+          texture_(texture) {
+        if (state_ == nullptr || view_ == nullptr || view_->bytes() == nullptr ||
             texture_ == nullptr) {
             throw std::invalid_argument("d3d11_channel_slot_lease_invalid");
         }
     }
     ~SlotLease() {
-        const auto remaining = InterlockedDecrement(count_);
-        if (remaining < 0L) {
-            static_cast<void>(InterlockedExchange(count_, 0L));
-        }
+        // Resource generations reuse the shared slot headers but not the D3D11
+        // textures. Release only the exact generation acquired by this frame;
+        // a late outgoing-frame destructor must never unlock a newer resource.
+        static_cast<void>(InterlockedCompareExchange64(
+            state_, available_state_, reader_state_));
     }
 
     SlotLease(const SlotLease&) = delete;
     SlotLease& operator=(const SlotLease&) = delete;
 
   private:
-    volatile LONG* count_{nullptr};
+    volatile LONG64* state_{nullptr};
+    LONG64 reader_state_{0};
+    LONG64 available_state_{0};
     std::shared_ptr<UniqueView> view_{};
     // A resource-generation change replaces the reader's texture array while
     // Raw and Program transitions can still retain an outgoing frame. Keep the
@@ -321,9 +327,16 @@ class WindowsD3d11FrameChannelReader final
                 bytes(), offset + protocol::kSlotSequenceOffset) != sequence) {
             return std::nullopt;
         }
-        auto* lease_count = reinterpret_cast<volatile LONG*>(
-            bytes() + offset + protocol::kSlotLeaseCountOffset);
-        if (InterlockedCompareExchange(lease_count, 1L, 0L) != 0L) {
+        auto* lease_state = reinterpret_cast<volatile LONG64*>(
+            bytes() + offset + protocol::kSlotLeaseStateOffset);
+        const auto available_state = static_cast<LONG64>(
+            protocol::slot_lease_state(resource_generation_,
+                                       protocol::kSlotLeaseAvailable));
+        const auto reader_state = static_cast<LONG64>(
+            protocol::slot_lease_state(resource_generation_,
+                                       protocol::kSlotLeaseReader));
+        if (InterlockedCompareExchange64(lease_state, reader_state,
+                                         available_state) != available_state) {
             return std::nullopt;
         }
         write_value(bytes(),
@@ -335,9 +348,11 @@ class WindowsD3d11FrameChannelReader final
         std::shared_ptr<SlotLease> lifetime;
         try {
             lifetime = std::make_shared<SlotLease>(
-                lease_count, view_, textures_[published_slot].Get());
+                lease_state, reader_state, available_state, view_,
+                textures_[published_slot].Get());
         } catch (...) {
-            static_cast<void>(InterlockedExchange(lease_count, 0L));
+            static_cast<void>(InterlockedCompareExchange64(
+                lease_state, available_state, reader_state));
             throw;
         }
         const auto format = video_pixel_format(resource_format_);
@@ -481,7 +496,9 @@ class WindowsD3d11FrameChannelReader final
             bytes(), protocol::kResourceFormatOffset));
         const auto channel_adapter = read_value<std::uint64_t>(
             bytes(), protocol::kAdapterLuidOffset);
-        if (generation == 0U || width == 0U || height == 0U ||
+        if (generation == 0U ||
+            generation > protocol::kMaximumResourceGeneration || width == 0U ||
+            height == 0U ||
             width > configuration_.width || height > configuration_.height ||
             (expected_format_ != DXGI_FORMAT_UNKNOWN &&
              format != expected_format_) ||

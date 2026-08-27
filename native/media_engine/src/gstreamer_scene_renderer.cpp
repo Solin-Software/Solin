@@ -609,6 +609,9 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
                              nullptr);
                 replay_retained_frame = enabled && !previously_enabled;
             }
+            if (replay_retained_frame) {
+                source_replay_requested_.store(true);
+            }
             if (demand_changed) {
                 // A feeder may be waiting for the direct branch that has just
                 // been disabled. Conversely, enabling demand needs a retained
@@ -620,7 +623,6 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
                 // notification after demand opens. Re-submit the retained latest
                 // source frames so the newly negotiated egress gets its first
                 // sample without polling or decoding twice.
-                source_replay_requested_.store(true);
                 source_frame_signal_->notify();
             }
         } catch (...) {
@@ -1238,8 +1240,10 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
     void feed_sources() noexcept {
         auto source_revision = source_frame_signal_->revision();
         std::optional<std::chrono::steady_clock::time_point>
-            render_retry_started_at;
-        std::optional<GstClockTime> render_retry_timestamp;
+            next_render_deadline;
+        std::optional<std::chrono::steady_clock::time_point>
+            pending_render_started_at;
+        std::optional<GstClockTime> pending_render_timestamp;
         bool render_timeout_reported = false;
         while (!stopped_.load()) {
             auto* message = gst_bus_pop_filtered(bus_, GST_MESSAGE_ERROR);
@@ -1249,13 +1253,14 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
                 break;
             }
             if (!rendering_enabled_.load()) {
-                render_retry_started_at.reset();
-                render_retry_timestamp.reset();
+                pending_render_started_at.reset();
+                pending_render_timestamp.reset();
                 render_timeout_reported = false;
+                next_render_deadline.reset();
                 source_revision = source_frame_signal_->wait_after(source_revision);
                 continue;
             }
-            const bool replay_sources = source_replay_requested_.exchange(false);
+            const auto requested_replay = source_replay_requested_.exchange(false);
             const bool source_changed = std::ranges::any_of(
                 sources_, [](const auto& item) {
                     const auto& source = item.second;
@@ -1264,14 +1269,45 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
                            (frame->stream_epoch != source.last_stream_epoch ||
                             frame->sequence != source.last_sequence);
                 });
-            if (!replay_sources && !source_changed) {
-                source_revision = source_frame_signal_->wait_after(source_revision);
+            bool flush_pending_render = false;
+            if (!requested_replay && !source_changed) {
+                if (!pending_render_timestamp.has_value()) {
+                    source_revision =
+                        source_frame_signal_->wait_after(source_revision);
+                    continue;
+                }
+                if (is_render_acknowledged(pending_render_timestamp.value())) {
+                    pending_render_started_at.reset();
+                    pending_render_timestamp.reset();
+                    render_timeout_reported = false;
+                    continue;
+                }
+                if (next_render_deadline.has_value() &&
+                    std::chrono::steady_clock::now() <
+                        next_render_deadline.value()) {
+                    static_cast<void>(source_frame_signal_->wait_after(
+                        source_revision, {}, next_render_deadline.value()));
+                    source_revision = source_frame_signal_->revision();
+                    continue;
+                }
+                // A non-live GstVideoAggregator can retain the newest timestamp
+                // until a following input establishes the next aggregation
+                // interval. Supply that bounded look-ahead once for a static or
+                // paused source; it is not another causal frame to acknowledge.
+                flush_pending_render = true;
+            }
+            const auto pacing_generation = rendering_generation_.load();
+            if (!requested_replay && !flush_pending_render &&
+                next_render_deadline.has_value() &&
+                !wait_for_render_slot(next_render_deadline.value(),
+                                      pacing_generation)) {
                 continue;
             }
             // A non-force-live aggregator consumes one sample from every active input
             // for each render revision. Re-submit retained references together with the
             // changed source so paused/static layers cannot hold the revision back.
             const auto rendering_generation = rendering_generation_.load();
+            const auto acknowledgement_target = pending_render_timestamp;
             const auto presentation_timestamp = next_render_timestamp_;
             bool submitted = false;
             bool caps_changed = false;
@@ -1294,36 +1330,52 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
                 }
             }
             if (submitted) {
-                if (!render_retry_started_at.has_value()) {
-                    render_retry_started_at = std::chrono::steady_clock::now();
-                    render_retry_timestamp = presentation_timestamp;
+                const auto now = std::chrono::steady_clock::now();
+                const auto interval = output_frame_interval();
+                if (!next_render_deadline.has_value() ||
+                    now >= next_render_deadline.value() + interval) {
+                    next_render_deadline = now + interval;
+                } else {
+                    next_render_deadline = next_render_deadline.value() + interval;
                 }
                 next_render_timestamp_ += output_frame_duration();
-                if (!wait_for_render_acknowledgement(
-                        render_retry_timestamp.value(), rendering_generation)) {
+                const auto previous_render_completed =
+                    !acknowledgement_target.has_value() ||
+                    wait_for_render_acknowledgement(
+                        acknowledgement_target.value(), rendering_generation);
+                if (!previous_render_completed) {
                     if (stopped_.load() || failed_.load()) {
                         break;
                     }
                     if (!rendering_enabled_.load() ||
                         rendering_generation_.load() != rendering_generation) {
-                        render_retry_started_at.reset();
-                        render_retry_timestamp.reset();
+                        pending_render_started_at.reset();
+                        pending_render_timestamp.reset();
                         continue;
                     }
-                    // Dynamic caps negotiation is asynchronous. A pushed still
-                    // frame can be consumed while d3d11convert and the compositor
-                    // rebuild their allocation, leaving no future decoder frame
-                    // to complete the render. Replay the retained latest frame at
-                    // a bounded cadence. An output watchdog is diagnostic, not a
-                    // terminal state: images and idle frames are one-shot inputs,
-                    // so abandoning their retained revision would leave Program
-                    // permanently frozen until another video happened to arrive.
-                    if (std::chrono::steady_clock::now() -
-                            render_retry_started_at.value() <
-                        kRenderAcknowledgementFailureTimeout) {
-                        source_replay_requested_.store(true);
-                        continue;
+                }
+
+                // Keep only the latest causal timestamp outstanding. A newer
+                // acknowledgement also proves every earlier timestamp was
+                // published, while the look-ahead-only submission deliberately
+                // remains untracked so a static scene returns to zero work.
+                if (!flush_pending_render) {
+                    pending_render_timestamp = presentation_timestamp;
+                    if (!pending_render_started_at.has_value() ||
+                        previous_render_completed) {
+                        pending_render_started_at = now;
                     }
+                } else if (previous_render_completed) {
+                    pending_render_started_at.reset();
+                    pending_render_timestamp.reset();
+                }
+
+                if (previous_render_completed) {
+                    render_timeout_reported = false;
+                } else if (pending_render_started_at.has_value() &&
+                           std::chrono::steady_clock::now() -
+                                   pending_render_started_at.value() >=
+                               kRenderAcknowledgementFailureTimeout) {
                     if (!render_timeout_reported) {
                         try {
                             std::cerr
@@ -1337,20 +1389,14 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
                         }
                         render_timeout_reported = true;
                     }
-                    source_replay_requested_.store(true);
-                    static_cast<void>(source_frame_signal_->wait_after(
-                        source_revision, {},
-                        std::chrono::steady_clock::now() +
-                            kRenderRecoveryRetryInterval));
-                    source_revision = source_frame_signal_->revision();
-                    continue;
+                    next_render_deadline = std::chrono::steady_clock::now() +
+                                           kRenderRecoveryRetryInterval;
                 }
-                render_retry_started_at.reset();
-                render_retry_timestamp.reset();
-                render_timeout_reported = false;
             }
             open_readiness_gate_when_sources_settle();
-            source_revision = source_frame_signal_->wait_after(source_revision);
+            if (!submitted) {
+                source_revision = source_frame_signal_->wait_after(source_revision);
+            }
         }
     }
 
@@ -1399,37 +1445,73 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
             static_cast<int>(output_.fps_numerator));
     }
 
+    [[nodiscard]] std::chrono::nanoseconds output_frame_interval() const noexcept {
+        return std::chrono::nanoseconds{output_frame_duration()};
+    }
+
+    [[nodiscard]] bool wait_for_render_slot(
+        const std::chrono::steady_clock::time_point deadline,
+        const std::uint64_t rendering_generation) noexcept {
+        try {
+            std::unique_lock lock{render_acknowledgement_mutex_};
+            const auto interrupted = render_acknowledgement_.wait_until(
+                lock, deadline, [this, rendering_generation] {
+                    return stopped_.load() || failed_.load() ||
+                           !rendering_enabled_.load() ||
+                           rendering_generation_.load() != rendering_generation ||
+                           source_replay_requested_.load();
+                });
+            return !interrupted && !stopped_.load() && !failed_.load() &&
+                   rendering_enabled_.load() &&
+                   rendering_generation_.load() == rendering_generation;
+        } catch (...) {
+            return false;
+        }
+    }
+
+    [[nodiscard]] bool render_output_published_locked(
+        const GstClockTime presentation_timestamp) const noexcept {
+        const bool primary_output =
+            bus_id_ == OutputBus::virtual_camera
+                ? gpu_output_received_ &&
+                      last_gpu_output_timestamp_ >= presentation_timestamp
+                : direct_output_received_ &&
+                      last_direct_output_timestamp_ >= presentation_timestamp;
+        const bool demanded_direct_output =
+            bus_id_ != OutputBus::virtual_camera ||
+            !direct_output_enabled_.load() ||
+            (direct_output_received_ &&
+             last_direct_output_timestamp_ >= presentation_timestamp);
+        return primary_output && demanded_direct_output;
+    }
+
+    [[nodiscard]] bool is_render_acknowledged(
+        const GstClockTime presentation_timestamp) noexcept {
+        try {
+            std::scoped_lock lock{render_acknowledgement_mutex_};
+            return render_output_published_locked(presentation_timestamp);
+        } catch (...) {
+            return false;
+        }
+    }
+
     [[nodiscard]] bool wait_for_render_acknowledgement(
         const GstClockTime presentation_timestamp,
         const std::uint64_t rendering_generation) noexcept {
         try {
             std::unique_lock lock{render_acknowledgement_mutex_};
-            const auto output_published = [this, presentation_timestamp] {
-                const bool primary_output =
-                    bus_id_ == OutputBus::virtual_camera
-                        ? gpu_output_received_ &&
-                              last_gpu_output_timestamp_ >= presentation_timestamp
-                        : direct_output_received_ &&
-                              last_direct_output_timestamp_ >= presentation_timestamp;
-                const bool demanded_direct_output =
-                    bus_id_ != OutputBus::virtual_camera ||
-                    !direct_output_enabled_.load() ||
-                    (direct_output_received_ &&
-                     last_direct_output_timestamp_ >= presentation_timestamp);
-                return primary_output && demanded_direct_output;
-            };
             const auto completed = render_acknowledgement_.wait_for(
                 lock, kRenderAcknowledgementProbeInterval,
-                [this, rendering_generation, &output_published] {
+                [this, presentation_timestamp, rendering_generation] {
                     return stopped_.load() || failed_.load() ||
                            !rendering_enabled_.load() ||
                            rendering_generation_.load() != rendering_generation ||
-                           output_published();
+                           render_output_published_locked(presentation_timestamp);
                 });
             return completed && !stopped_.load() && !failed_.load() &&
                    rendering_enabled_.load() &&
                    rendering_generation_.load() == rendering_generation &&
-                   output_published();
+                   render_output_published_locked(presentation_timestamp);
         } catch (...) {
             return false;
         }

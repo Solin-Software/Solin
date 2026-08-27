@@ -231,28 +231,36 @@ enum class PublishResult : std::uint8_t {
 class WriterSlotReservation final {
   public:
     WriterSlotReservation(const std::uint32_t slot,
-                          volatile LONG* lease_count) noexcept
-        : slot_(slot), lease_count_(lease_count) {}
+                          volatile LONG64* lease_state,
+                          const LONG64 writer_state,
+                          const LONG64 available_state) noexcept
+        : slot_(slot), lease_state_(lease_state), writer_state_(writer_state),
+          available_state_(available_state) {}
     ~WriterSlotReservation() { release(); }
 
     WriterSlotReservation(const WriterSlotReservation&) = delete;
     WriterSlotReservation& operator=(const WriterSlotReservation&) = delete;
     WriterSlotReservation(WriterSlotReservation&& other) noexcept
         : slot_(other.slot_),
-          lease_count_(std::exchange(other.lease_count_, nullptr)) {}
+          lease_state_(std::exchange(other.lease_state_, nullptr)),
+          writer_state_(other.writer_state_),
+          available_state_(other.available_state_) {}
     WriterSlotReservation& operator=(WriterSlotReservation&&) = delete;
 
     [[nodiscard]] std::uint32_t slot() const noexcept { return slot_; }
     void release() noexcept {
-        if (lease_count_ != nullptr) {
-            static_cast<void>(InterlockedExchange(lease_count_, 0L));
-            lease_count_ = nullptr;
+        if (lease_state_ != nullptr) {
+            static_cast<void>(InterlockedCompareExchange64(
+                lease_state_, available_state_, writer_state_));
+            lease_state_ = nullptr;
         }
     }
 
   private:
     std::uint32_t slot_{0U};
-    volatile LONG* lease_count_{nullptr};
+    volatile LONG64* lease_state_{nullptr};
+    LONG64 writer_state_{0};
+    LONG64 available_state_{0};
 };
 
 class OffscreenFrame final {
@@ -1019,6 +1027,9 @@ class D3d11FrameBridge final : public FrameBridge {
             gpu.format == source.Format && gpu.resource_generation != 0U) {
             return true;
         }
+        if (gpu.resource_generation >= protocol::kMaximumResourceGeneration) {
+            return false;
+        }
         std::array<SharedTextureSlot, protocol::kSlotCount> replacement{};
         const auto resource_generation = gpu.resource_generation + 1U;
         auto description = source;
@@ -1060,6 +1071,34 @@ class D3d11FrameBridge final : public FrameBridge {
         gpu.height = source.Height;
         gpu.format = source.Format;
         gpu.next_slot = 0U;
+        const auto available_state = static_cast<LONG64>(
+            protocol::slot_lease_state(resource_generation,
+                                       protocol::kSlotLeaseAvailable));
+        for (std::uint32_t slot = 0U; slot < protocol::kSlotCount; ++slot) {
+            const auto offset = protocol::slot_offset(slot);
+            auto* lease_state = reinterpret_cast<volatile LONG64*>(
+                view_->bytes() + offset + protocol::kSlotLeaseStateOffset);
+            static_cast<void>(
+                InterlockedExchange64(lease_state, available_state));
+            write_value(view_->bytes(),
+                        offset + protocol::kSlotLeaseOwnerProcessIdOffset,
+                        std::uint32_t{0U});
+            write_value(view_->bytes(),
+                        offset + protocol::kSlotLeaseOwnerCreationTimeOffset,
+                        std::uint64_t{0U});
+        }
+        // The previous sequence names a slot from the previous resource
+        // generation. Hide it before advertising the replacement ring, or a
+        // reader can pair old metadata with a newly created, uninitialized
+        // texture in the interval before publish_metadata(). The producer's
+        // private sequence remains monotonic and the first completed copy will
+        // publish the next value atomically.
+        write_value(view_->bytes(), protocol::kPublishedSequenceOffset,
+                    std::uint64_t{0U});
+        write_value(view_->bytes(), protocol::kPublishedSlotOffset,
+                    std::uint32_t{0U});
+        write_value(view_->bytes(), protocol::kMediaEpochOffset,
+                    std::uint64_t{0U});
         write_value(view_->bytes(), protocol::kResourceWidthOffset, gpu.width);
         write_value(view_->bytes(), protocol::kResourceHeightOffset, gpu.height);
         write_value(view_->bytes(), protocol::kResourceFormatOffset,
@@ -1071,7 +1110,6 @@ class D3d11FrameBridge final : public FrameBridge {
         resource_width_.store(gpu.width);
         resource_height_.store(gpu.height);
         resource_generation_.store(gpu.resource_generation);
-        static_cast<void>(SetEvent(event_.get()));
         return true;
     }
 
@@ -1085,10 +1123,20 @@ class D3d11FrameBridge final : public FrameBridge {
              ++attempt) {
             const auto slot = (gpu.next_slot + attempt) % protocol::kSlotCount;
             const auto offset = protocol::slot_offset(slot);
-            auto* lease_count = reinterpret_cast<volatile LONG*>(
-                view_->bytes() + offset + protocol::kSlotLeaseCountOffset);
-            auto leases = InterlockedCompareExchange(lease_count, 0L, 0L);
-            if (leases > 0L) {
+            auto* lease_state = reinterpret_cast<volatile LONG64*>(
+                view_->bytes() + offset + protocol::kSlotLeaseStateOffset);
+            const auto available_state = static_cast<LONG64>(
+                protocol::slot_lease_state(gpu.resource_generation,
+                                           protocol::kSlotLeaseAvailable));
+            const auto reader_state = static_cast<LONG64>(
+                protocol::slot_lease_state(gpu.resource_generation,
+                                           protocol::kSlotLeaseReader));
+            const auto writer_state = static_cast<LONG64>(
+                protocol::slot_lease_state(gpu.resource_generation,
+                                           protocol::kSlotLeaseWriter));
+            auto state = InterlockedCompareExchange64(
+                lease_state, available_state, available_state);
+            if (state == reader_state) {
                 const auto owner_pid = read_value<std::uint32_t>(
                     view_->bytes(),
                     offset + protocol::kSlotLeaseOwnerProcessIdOffset);
@@ -1096,14 +1144,20 @@ class D3d11FrameBridge final : public FrameBridge {
                     view_->bytes(),
                     offset + protocol::kSlotLeaseOwnerCreationTimeOffset);
                 if (!process_identity_is_alive(owner_pid, owner_creation)) {
-                    InterlockedExchange(lease_count, 0L);
-                    leases = 0L;
+                    state = InterlockedCompareExchange64(
+                        lease_state, available_state, reader_state);
+                    if (state == reader_state) {
+                        state = available_state;
+                    }
                 }
             }
-            if (leases == 0L &&
-                InterlockedCompareExchange(lease_count, -1L, 0L) == 0L) {
+            if (state == available_state &&
+                InterlockedCompareExchange64(lease_state, writer_state,
+                                             available_state) ==
+                    available_state) {
                 gpu.next_slot = (slot + 1U) % protocol::kSlotCount;
-                return WriterSlotReservation{slot, lease_count};
+                return WriterSlotReservation{slot, lease_state, writer_state,
+                                             available_state};
             }
         }
         return std::nullopt;

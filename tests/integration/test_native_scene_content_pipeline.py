@@ -1,8 +1,12 @@
 from __future__ import annotations
+import ctypes
+import mmap
 import os
+import struct
 import sys
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager, nullcontext
 from dataclasses import replace
 from pathlib import Path
 
@@ -36,6 +40,112 @@ from solin.core.scenes.presets import SceneSeedNames, create_default_scene_docum
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+
+
+@contextmanager
+def _stale_d3d11_reader_leases(handle_token: str) -> Iterator[None]:
+    """Model retained frames from the previous texture generation."""
+    if sys.platform != "win32":
+        yield
+        return
+
+    import ctypes.wintypes as wintypes
+
+    mapping = mmap.mmap(
+        -1,
+        640,
+        tagname=f"Local\\SolinD3D11Frame.{handle_token}",
+        access=mmap.ACCESS_WRITE,
+    )
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.OpenMutexW.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.LPCWSTR)
+    kernel32.OpenMutexW.restype = wintypes.HANDLE
+    kernel32.WaitForSingleObject.argtypes = (wintypes.HANDLE, wintypes.DWORD)
+    kernel32.WaitForSingleObject.restype = wintypes.DWORD
+    kernel32.ReleaseMutex.argtypes = (wintypes.HANDLE,)
+    kernel32.ReleaseMutex.restype = wintypes.BOOL
+    kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+    kernel32.CloseHandle.restype = wintypes.BOOL
+    kernel32.GetProcessTimes.argtypes = (
+        wintypes.HANDLE,
+        ctypes.POINTER(wintypes.FILETIME),
+        ctypes.POINTER(wintypes.FILETIME),
+        ctypes.POINTER(wintypes.FILETIME),
+        ctypes.POINTER(wintypes.FILETIME),
+    )
+    kernel32.GetProcessTimes.restype = wintypes.BOOL
+
+    mutex = kernel32.OpenMutexW(
+        0x00100001,
+        False,
+        f"Local\\SolinD3D11FrameMutex.{handle_token}",
+    )
+    if not mutex:
+        mapping.close()
+        raise ctypes.WinError(ctypes.get_last_error())
+
+    creation = wintypes.FILETIME()
+    exit_time = wintypes.FILETIME()
+    kernel_time = wintypes.FILETIME()
+    user_time = wintypes.FILETIME()
+    if not kernel32.GetProcessTimes(
+        wintypes.HANDLE(-1),
+        ctypes.byref(creation),
+        ctypes.byref(exit_time),
+        ctypes.byref(kernel_time),
+        ctypes.byref(user_time),
+    ):
+        kernel32.CloseHandle(mutex)
+        mapping.close()
+        raise ctypes.WinError(ctypes.get_last_error())
+    process_creation = creation.dwLowDateTime | (creation.dwHighDateTime << 32)
+    process_id = os.getpid()
+    protocol_version = struct.unpack_from("<H", mapping, 8)[0]
+    resource_generation = struct.unpack_from("<Q", mapping, 64)[0]
+    if protocol_version != 2 or resource_generation == 0:
+        kernel32.CloseHandle(mutex)
+        mapping.close()
+        raise RuntimeError("D3D11 channel protocol is not initialized")
+    stale_reader_state = (resource_generation << 2) | 1
+    available_state = resource_generation << 2
+
+    def write_stale_leases() -> None:
+        if kernel32.WaitForSingleObject(mutex, 1_000) != 0:
+            raise RuntimeError("D3D11 channel mutex is unavailable")
+        try:
+            for slot in range(3):
+                base = 256 + slot * 128
+                struct.pack_into("<Q", mapping, base + 48, stale_reader_state)
+                struct.pack_into("<I", mapping, base + 56, process_id)
+                struct.pack_into("<Q", mapping, base + 64, process_creation)
+        finally:
+            kernel32.ReleaseMutex(mutex)
+
+    def clear_stale_leases() -> None:
+        if kernel32.WaitForSingleObject(mutex, 1_000) != 0:
+            return
+        try:
+            for slot in range(3):
+                base = 256 + slot * 128
+                lease_state = struct.unpack_from("<Q", mapping, base + 48)[0]
+                owner_id = struct.unpack_from("<I", mapping, base + 56)[0]
+                owner_creation = struct.unpack_from("<Q", mapping, base + 64)[0]
+                if (
+                    lease_state == stale_reader_state
+                    and owner_id == process_id
+                    and owner_creation == process_creation
+                ):
+                    struct.pack_into("<Q", mapping, base + 48, available_state)
+        finally:
+            kernel32.ReleaseMutex(mutex)
+
+    try:
+        write_stale_leases()
+        yield
+    finally:
+        clear_stale_leases()
+        kernel32.CloseHandle(mutex)
+        mapping.close()
 
 
 def _wait_for(
@@ -402,6 +512,25 @@ def test_hardware_decoded_qt_frame_stays_on_gpu_until_composition(
         assert ingress.descriptor == descriptor
         assert descriptor_changes == []
 
+        # Hydration deliberately completed before the decoder published its first
+        # frame. Program must leave that deferred-preroll state at the producer's
+        # cadence instead of falling into its bounded recovery retry interval.
+        program_sequences: set[int] = set()
+        cadence_deadline = time.monotonic() + 2.0
+        while time.monotonic() < cadence_deadline:
+            application.processEvents()
+            try:
+                program_candidate = program_egress.read_latest()
+            except TimeoutError:
+                program_candidate = None
+            if program_candidate is not None:
+                program_sequences.add(program_candidate.sequence)
+            time.sleep(1 / 240)
+        assert 30 <= len(program_sequences) <= 75, (
+            len(program_sequences),
+            events,
+        )
+
         default_scene = next(
             scene
             for scene in document.scenes
@@ -597,27 +726,31 @@ def test_hardware_decoded_qt_frame_stays_on_gpu_until_composition(
         # black transition frame.
         last_raw_sequence = static_output.sequence
         last_program_sequence = static_program_output.sequence
-        idle_image = QImage(1280, 720, QImage.Format.Format_ARGB32)
+        idle_image = QImage(1024, 768, QImage.Format.Format_ARGB32)
         idle_image.fill(QColor("#d12d3f"))
         for cycle in range(3):
             idle_epoch = 3 + cycle * 2
-            ingress.begin_presentation(idle_epoch)
-            ingress.set_image_transform(
-                None,
-                media_epoch=idle_epoch,
-                canvas_width=1920,
-                canvas_height=1080,
-                animate=False,
+            retained_leases = (
+                _stale_d3d11_reader_leases(descriptor.handle_token) if cycle == 0 else nullcontext()
             )
-            ingress.submit_frame(idle_image)
-            idle_raw, idle_program = _wait_for_raw_and_program_color(
-                egress,
-                program_egress,
-                raw_bgra=bytes((0x3F, 0x2D, 0xD1, 0xFF)),
-                program_match=_nv12_pixel_is_red,
-                raw_after=last_raw_sequence,
-                program_after=last_program_sequence,
-            )
+            with retained_leases:
+                ingress.begin_presentation(idle_epoch)
+                ingress.set_image_transform(
+                    None,
+                    media_epoch=idle_epoch,
+                    canvas_width=1920,
+                    canvas_height=1080,
+                    animate=False,
+                )
+                ingress.submit_frame(idle_image)
+                idle_raw, idle_program = _wait_for_raw_and_program_color(
+                    egress,
+                    program_egress,
+                    raw_bgra=bytes((0x3F, 0x2D, 0xD1, 0xFF)),
+                    program_match=_nv12_pixel_is_red,
+                    raw_after=last_raw_sequence,
+                    program_after=last_program_sequence,
+                )
             assert idle_raw is not None, (cycle, events)
             assert idle_program is not None, (cycle, events)
             last_raw_sequence = idle_raw.sequence
