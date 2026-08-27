@@ -8,7 +8,10 @@ from typing import Any
 from PySide6.QtCore import QDateTime, QTimer
 
 from ..ui.screens import ScreenManager
-from ..core.projection.application import ProjectionSession
+from ..core.projection.application import (
+    ProjectionSession,
+    projection_presentation_type,
+)
 from ..core.projection.image_framing import (
     IDENTITY_IMAGE_TRANSFORM,
     image_transform_from_values,
@@ -171,7 +174,7 @@ class ProjectionWindowController:
         any_visible = any(win.is_idle_visible() for win in self.all_windows())
         if (
             self._context.program_content_requested()
-            and self._session.state_type == "idle"
+            and projection_presentation_type(self._session.state) == "idle"
             and self._session.idle_media_path
         ):
             any_visible = True

@@ -29,6 +29,20 @@ def idle_projection_state() -> ProjectionState:
     return {"type": "idle"}
 
 
+def projection_presentation_type(state: Mapping[str, Any]) -> str:
+    """Return the visual presentation represented by projection state.
+
+    Audio playback is an active transport session, but it does not replace the
+    content shown on projection surfaces. Those surfaces continue presenting
+    idle while the audio-specific controls and playback state remain active.
+    """
+
+    state_type = str(state.get("type", "idle"))
+    if state_type == "video" and bool(state.get("is_audio", False)):
+        return "idle"
+    return state_type
+
+
 class ObsSceneSession:
     """State shared by projection flows that temporarily switch OBS scenes."""
 
@@ -59,6 +73,7 @@ class ProjectionSession:
         self._state: ProjectionState = idle_projection_state()
         self._revision = 0
         self._session_id = 0
+        self._presentation_session_id = 0
         self._image_transform_animate = False
         # Projection observers form an ordered application pipeline: content
         # identity/framing is published before scene reconciliation, which in
@@ -88,16 +103,33 @@ class ProjectionSession:
         """Monotonic identity of the active projection, excluding state updates."""
         return self._session_id
 
+    @property
+    def presentation_session_id(self) -> int:
+        """Identity of the content currently shown on visual outputs.
+
+        Unlike ``session_id``, this remains stable across idle-to-audio and
+        audio-to-idle changes because audio owns transport, not presentation.
+        """
+
+        return self._presentation_session_id
+
     def set_state(self, state: Mapping[str, Any]) -> None:
+        previous_presentation = projection_presentation_type(self._state)
         self._state = dict(state)
         self._image_transform_animate = False
         self._session_id += 1
+        current_presentation = projection_presentation_type(self._state)
+        if previous_presentation != "idle" or current_presentation != "idle":
+            self._presentation_session_id += 1
         self._publish_changed()
 
     def update_state(self, **changes: Any) -> None:
         if not changes or all(self._state.get(key) == value for key, value in changes.items()):
             return
+        previous_presentation = projection_presentation_type(self._state)
         self._state.update(changes)
+        if projection_presentation_type(self._state) != previous_presentation:
+            self._presentation_session_id += 1
         self._publish_changed()
 
     @property
@@ -118,9 +150,12 @@ class ProjectionSession:
         self.update_state(transform=transform)
 
     def reset_state(self) -> None:
+        previous_presentation = projection_presentation_type(self._state)
         self._state = idle_projection_state()
         self._image_transform_animate = False
         self._session_id += 1
+        if previous_presentation != "idle":
+            self._presentation_session_id += 1
         self._publish_changed()
 
     def subscribe(self, listener: Callable[[], None]) -> Callable[[], None]:

@@ -89,6 +89,48 @@ def test_projection_session_identity_excludes_incremental_state_updates() -> Non
     assert session.session_id == active_session_id + 1
 
 
+def test_audio_only_playback_preserves_the_idle_presentation_identity() -> None:
+    session = ProjectionSession()
+    idle_presentation_id = session.presentation_session_id
+
+    session.set_state({"type": "video", "is_audio": True, "title": "Song"})
+
+    assert session.session_id == 1
+    assert session.presentation_session_id == idle_presentation_id
+
+    session.reset_state()
+
+    assert session.session_id == 2
+    assert session.presentation_session_id == idle_presentation_id
+
+
+def test_audio_after_visual_content_creates_one_idle_presentation_identity() -> None:
+    session = ProjectionSession()
+    session.set_state({"type": "image", "data": b"image"})
+    visual_presentation_id = session.presentation_session_id
+
+    session.set_state({"type": "video", "is_audio": True, "title": "Song"})
+    idle_presentation_id = session.presentation_session_id
+
+    assert idle_presentation_id > visual_presentation_id
+
+    session.reset_state()
+
+    assert session.presentation_session_id == idle_presentation_id
+
+
+def test_incremental_audio_flag_change_updates_only_visual_identity() -> None:
+    session = ProjectionSession()
+    session.set_state({"type": "video", "is_audio": False})
+    playback_session_id = session.session_id
+    visual_presentation_id = session.presentation_session_id
+
+    session.update_state(is_audio=True)
+
+    assert session.session_id == playback_session_id
+    assert session.presentation_session_id > visual_presentation_id
+
+
 def test_projection_session_fallback_media_visibility_without_allocation() -> None:
     screen = _Screen("DISPLAY2")
     session = ProjectionSession(media_hidden_screen_names={"DISPLAY2"})

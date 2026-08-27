@@ -127,7 +127,10 @@ class _Projection:
         return lambda: self._listeners.discard(listener)
 
     def set_type(self, state_type: str) -> None:
-        self.state = {"type": state_type}
+        self.set_state({"type": state_type})
+
+    def set_state(self, state: dict[str, object]) -> None:
+        self.state = state
         self.session_id += 1
         for listener in tuple(self._listeners):
             listener()
@@ -771,6 +774,12 @@ def test_content_transport_retirement_waits_for_the_animated_program_exit() -> N
 
 def test_projection_categories_are_explicit_and_unknown_types_fail_safe() -> None:
     assert content_category_for_projection({"type": "idle"}) is ContentCategory.IDLE
+    assert content_category_for_projection(
+        {"type": "video", "is_audio": True}
+    ) is ContentCategory.IDLE
+    assert content_category_for_projection(
+        {"type": "video", "is_audio": False}
+    ) is ContentCategory.VIDEO
     assert content_category_for_projection({"type": "removed_projection_type"}) is (
         ContentCategory.EXTERNAL_STREAM
     )
@@ -1110,6 +1119,20 @@ def test_auto_media_returns_to_the_previous_program_base_scene() -> None:
     projection.set_type("idle")
 
     assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == (CONTENT_CAMERA_PIP_SCENE_ID)
+    controller.close()
+
+
+def test_audio_only_playback_does_not_trigger_native_scene_auto_switch() -> None:
+    projection = _Projection()
+    _documents, _runtime, controller = _runtime_controller(
+        _Engine(),
+        projection,
+        request_ids=(),
+    )
+
+    projection.set_state({"type": "video", "is_audio": True})
+
+    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
     controller.close()
 
 

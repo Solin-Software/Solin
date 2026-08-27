@@ -14,6 +14,7 @@ from solin.core.projection.image_framing import (
     ImageTransform,
     image_transform_from_values,
 )
+from solin.core.projection.application import projection_presentation_type
 from solin.projection.yearly_text import YearlyTextWidget
 from solin.widgets.circular_timer import CircularTimerWidget
 
@@ -33,7 +34,7 @@ class _ProjectionSession(Protocol):
     def state(self) -> Mapping[str, Any]: ...
 
     @property
-    def state_type(self) -> str: ...
+    def presentation_session_id(self) -> int: ...
 
     @property
     def idle_media_path(self) -> str: ...
@@ -71,7 +72,7 @@ class ProgramContentController(QObject):
         self._width = width
         self._height = height
         self._closed = False
-        self._published_projection_session_id = -1
+        self._published_presentation_session_id = -1
         self._published_image_transform_key: tuple[object, ...] | None = None
         self._cached_idle_frame: object | None = None
         self._cached_idle_media_path = ""
@@ -89,7 +90,7 @@ class ProgramContentController(QObject):
     def submit_frame(self, frame: object) -> None:
         if self._closed:
             return
-        media_epoch = self._session.session_id
+        media_epoch = self._session.presentation_session_id
         self._publish_projection_identity(media_epoch)
         self._publish_image_transform(media_epoch, animate=False)
         self._frame_sink(frame)
@@ -108,7 +109,10 @@ class ProgramContentController(QObject):
 
     @Slot(str, str, str)
     def update_yearly_text(self, _quote: str, _reference: str, _api_code: str) -> None:
-        if self._session.state_type == "idle" and not self._session.idle_media_path:
+        if (
+            projection_presentation_type(self._session.state) == "idle"
+            and not self._session.idle_media_path
+        ):
             self._render_yearly()
 
     @Slot(bool)
@@ -125,11 +129,14 @@ class ProgramContentController(QObject):
             return
         self._discard_stale_idle_frame()
         state = self._session.state
-        state_type = str(state.get("type", "idle"))
+        state_type = projection_presentation_type(state)
         if state_type == "image":
-            if self._session.session_id == self._published_projection_session_id:
+            if (
+                self._session.presentation_session_id
+                == self._published_presentation_session_id
+            ):
                 self._publish_image_transform(
-                    self._published_projection_session_id,
+                    self._published_presentation_session_id,
                     animate=False,
                 )
             return
@@ -154,7 +161,7 @@ class ProgramContentController(QObject):
         self._timer_widget.close()
 
     def _on_projection_changed(self) -> None:
-        media_epoch = self._session.session_id
+        media_epoch = self._session.presentation_session_id
         self._publish_projection_identity(media_epoch)
         self._publish_image_transform(
             media_epoch,
@@ -163,10 +170,10 @@ class ProgramContentController(QObject):
         self.refresh()
 
     def _publish_projection_identity(self, media_epoch: int) -> None:
-        if media_epoch == self._published_projection_session_id:
+        if media_epoch == self._published_presentation_session_id:
             return
         self._media_epoch_sink(media_epoch)
-        self._published_projection_session_id = media_epoch
+        self._published_presentation_session_id = media_epoch
 
     def _discard_stale_idle_frame(self) -> None:
         if self._cached_idle_media_path == self._session.idle_media_path:
@@ -178,14 +185,14 @@ class ProgramContentController(QObject):
     def _publish_cached_idle_frame(self) -> None:
         idle_media_path = self._session.idle_media_path
         if (
-            self._session.state_type != "idle"
+            projection_presentation_type(self._session.state) != "idle"
             or not idle_media_path
             or self._cached_idle_frame is None
             or self._cached_idle_media_path != idle_media_path
         ):
             return
         key = (
-            self._session.session_id,
+            self._session.presentation_session_id,
             idle_media_path,
             self._cached_idle_frame_revision,
         )

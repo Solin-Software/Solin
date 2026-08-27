@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 from PySide6.QtCore import QDateTime
 
 from solin.controllers import projection_window_controller as projection_controller
@@ -363,6 +365,32 @@ def test_idle_video_paused_while_hidden_and_resumed_when_visible(tmp_path):
     win.idle_visible_flag = False
     controller._on_idle_visibility_changed(False)
     assert src.playing_calls[-1] is False
+
+
+def test_native_idle_video_keeps_playing_during_audio_only_playback(tmp_path):
+    vid = tmp_path / "idle.mp4"
+    vid.write_bytes(b"fake")
+    src = _StubIdleSource()
+    window = _WindowStub()
+    win = _ProjectionWindowStub()
+    win.idle_visible_flag = False
+    window.projection_session.projection_windows = [win]
+    context = replace(
+        _projection_context(window),
+        program_content_requested=lambda: True,
+    )
+    controller = ProjectionWindowController(
+        context,
+        idle_source_factory=lambda: src,
+    )
+    controller.on_idle_media_changed(str(vid))
+    window.projection_session.set_state(
+        {"type": "video", "is_audio": True, "title": "Song"}
+    )
+
+    controller._sync_idle_playback()
+
+    assert src.playing_calls[-1] is True
 
 
 # ── image zoom/pan transform persistence ─────────────────────────────────────
