@@ -567,6 +567,17 @@ class BaseProjectionView(QWidget):
         self._clear_timer_presentation()
         self._timer_presentation = presentation
         self._accept_video_frames = False
+        if self._native_output_active:
+            # The native route is presentation infrastructure, not state owned
+            # by an individual media item.  Keep its HWND and swap chain stable;
+            # ProgramContentController publishes the timer into the canonical
+            # Raw source and the engine performs the transition there.
+            self._stop_all_anims()
+            self._fallback_media_entry_pending = False
+            self._is_showing_media = True
+            self._stack.setCurrentIndex(self._PAGE_MEDIA)
+            self.native_video_surface.raise_()
+            return
         self.set_native_output_active(False)
         self._fallback_media_entry_pending = False
         self._is_showing_media = False
@@ -772,11 +783,29 @@ class BaseProjectionView(QWidget):
         # point to cut off the pipeline, before any async frames already queued
         # in the Qt event loop can reach update_frame().
         self._accept_video_frames = False
-        native_presentation_was_active = (
-            self._native_output_active or self._fallback_media_entry_pending
-        )
-        self.set_native_output_active(False)
+        native_presentation_is_active = self._native_output_active
+        fallback_media_entry_was_pending = self._fallback_media_entry_pending
+        if not native_presentation_is_active:
+            self.set_native_output_active(False)
         self._fallback_media_entry_pending = False
+        if native_presentation_is_active:
+            # Raw remains a native presentation across media->media and
+            # media->idle changes. Hiding this stable host for each logical
+            # item tears down visibility underneath d3d11videosink; a one-shot
+            # image can then be published while its swap chain is unavailable,
+            # leaving the previous frame on screen until a video supplies more
+            # frames. Route ownership belongs exclusively to the native surface
+            # reconciler, which will disable it when the destination genuinely
+            # changes to the Qt fallback.
+            self._clear_timer_presentation()
+            self._stop_all_anims()
+            self._current_pixmap = None
+            self.display_label.clear()
+            self._media_opacity.setOpacity(1.0)
+            self._is_showing_media = True
+            self._stack.setCurrentIndex(self._PAGE_MEDIA)
+            self.native_video_surface.raise_()
+            return
         if self._yearly_timer_exit_pending:
             return
         if (
@@ -807,7 +836,7 @@ class BaseProjectionView(QWidget):
 
         if self._is_showing_media:
             self._is_showing_media = False
-            if native_presentation_was_active:
+            if fallback_media_entry_was_pending:
                 self.display_label.clear()
                 self._media_opacity.setOpacity(1.0)
                 self._switch_to_idle_immediately()

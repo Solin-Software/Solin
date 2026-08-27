@@ -1105,11 +1105,15 @@ class MainWindow(QWidget):
         )
         physical_windows = tuple(self.projection_session.projection_windows)
         targets: list[OutputWindowTarget] = []
+        raw_fallback_windows: list[object] = []
 
         for index, window in enumerate(physical_windows):
             set_native_active = getattr(window, "set_native_output_active", None)
             if callable(set_native_active):
+                was_native = bool(getattr(window, "native_output_active", False))
                 set_native_active(native_presentation)
+                if was_native and not native_presentation and not mirror_enabled:
+                    raw_fallback_windows.append(window)
             if native_presentation:
                 surface = window.native_video_surface
                 targets.append(
@@ -1124,11 +1128,14 @@ class MainWindow(QWidget):
                 continue
             set_native_active = getattr(window, "set_native_output_active", None)
             if callable(set_native_active):
+                was_native = bool(getattr(window, "native_output_active", False))
                 auxiliary_native = (
                     native_presentation
                     and hasattr(window, "native_video_surface")
                 )
                 set_native_active(auxiliary_native)
+                if was_native and not auxiliary_native and not mirror_enabled:
+                    raw_fallback_windows.append(window)
                 if auxiliary_native:
                     targets.append(
                         self._native_window_target(
@@ -1173,6 +1180,8 @@ class MainWindow(QWidget):
             self.scene_runtime.set_window_targets(tuple(targets))
         else:
             self.scene_runtime.set_window_targets(())
+        for window in raw_fallback_windows:
+            self._projection_targets.restore_state_to_window(window)
         self._reconcile_scene_media_egress()
         self._reconcile_python_video_frame_delivery()
 
