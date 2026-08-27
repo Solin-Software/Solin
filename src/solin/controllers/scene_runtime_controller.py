@@ -9,6 +9,7 @@ from typing import Any, Protocol
 from PySide6.QtCore import QObject, Signal, Slot
 
 from solin.core.foundation.constants import MEMORIZE_PRE_MEDIA_SCENE
+from solin.core.projection.application import projection_presentation_type
 from solin.core.scenes.application import SceneDocumentChange, SceneDocumentService
 from solin.core.scenes.engine import (
     DEFAULT_ENGINE_STARTUP_DEADLINE_MS,
@@ -168,7 +169,7 @@ class _AutomaticMediaSceneSelection:
 
 
 def content_category_for_projection(state: Mapping[str, Any]) -> ContentCategory:
-    state_type = str(state.get("type", "idle"))
+    state_type = projection_presentation_type(state)
     return _CATEGORY_BY_PROJECTION_TYPE.get(
         state_type,
         ContentCategory.EXTERNAL_STREAM,
@@ -2040,7 +2041,11 @@ class SceneRuntimeController(QObject):
         )
 
     def _projection_session_id(self) -> int:
-        value = getattr(self._projection, "session_id", 0)
+        value = getattr(
+            self._projection,
+            "presentation_session_id",
+            getattr(self._projection, "session_id", 0),
+        )
         return value if isinstance(value, int) and not isinstance(value, bool) else 0
 
     def _scene_keeps_media_automation(self, scene_id: str) -> bool:

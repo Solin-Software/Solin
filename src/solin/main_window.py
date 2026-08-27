@@ -109,7 +109,11 @@ from .controllers.wifi_media_controller import (
 )
 from .controllers.window_state_controller import WindowStateContext, WindowStateController
 from .core.projection.aspect_ratio import projection_aspect_ratio_from_windows
-from .core.projection.application import ObsSceneSession, ProjectionSession
+from .core.projection.application import (
+    ObsSceneSession,
+    ProjectionSession,
+    projection_presentation_type,
+)
 from .core.scenes.engine import MAXIMUM_OUTPUT_WINDOW_TARGETS, OutputWindowTarget
 from .core.scenes.model import BusId, CONTENT_SOURCE_ID, SceneDocument
 from .core.scenes.workspace import SceneWorkspaceService
@@ -1084,7 +1088,7 @@ class MainWindow(QWidget):
             BusId.VIRTUAL_CAMERA if mirror_enabled else BusId.MEDIA_WINDOWS
         )
         state = self.projection_session.state
-        raw_visual = state.get("type") in {
+        raw_visual = projection_presentation_type(state) in {
             "idle",
             "video",
             "image",
@@ -1092,7 +1096,7 @@ class MainWindow(QWidget):
             "timer",
             "obs_stream",
             "camera_stream",
-        } and not (state.get("type") == "video" and state.get("is_audio", False))
+        }
         native_window_routing_ready = (
             NATIVE_SCENES_SUPPORTED
             and self.scene_runtime.native_window_routing_ready
@@ -1266,7 +1270,7 @@ class MainWindow(QWidget):
         if not required:
             return
         self._program_content.refresh()
-        if self.projection_session.state_type != "video":
+        if projection_presentation_type(self.projection_session.state) != "video":
             return
         frame = self.media_ctrl.video_sink.videoFrame()
         if frame.isValid():

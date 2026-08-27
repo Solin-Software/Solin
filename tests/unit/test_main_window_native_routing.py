@@ -125,7 +125,37 @@ def test_operator_video_output_keeps_qt_fallback_without_native_routing(
     assert runtime.targets == ()
 
 
-def test_leaving_native_raw_restores_the_existing_window_in_place(monkeypatch) -> None:
+def test_losing_native_routing_restores_the_existing_window_in_place(monkeypatch) -> None:
+    monkeypatch.setattr(main_window, "NATIVE_SCENES_SUPPORTED", True)
+    host, _projection_bar, runtime = _native_preview_host(requested=False)
+    runtime.native_window_routing_ready = False
+    restored: list[object] = []
+
+    class Window:
+        native_output_active = True
+        native_video_surface = object()
+
+        def set_native_output_active(self, active: bool) -> None:
+            self.native_output_active = active
+
+    window = Window()
+    host.projection_session = SimpleNamespace(
+        state={"type": "image"},
+        projection_windows=(window,),
+        all_windows=lambda: (window,),
+    )
+    host._projection_targets = SimpleNamespace(
+        restore_state_to_window=restored.append,
+    )
+
+    MainWindow._reconcile_native_scene_surfaces(cast(MainWindow, host))
+
+    assert not window.native_output_active
+    assert runtime.targets == ()
+    assert restored == [window]
+
+
+def test_audio_only_projection_keeps_the_native_idle_route_stable(monkeypatch) -> None:
     monkeypatch.setattr(main_window, "NATIVE_SCENES_SUPPORTED", True)
     host, _projection_bar, runtime = _native_preview_host(requested=False)
     restored: list[object] = []
@@ -149,9 +179,40 @@ def test_leaving_native_raw_restores_the_existing_window_in_place(monkeypatch) -
 
     MainWindow._reconcile_native_scene_surfaces(cast(MainWindow, host))
 
-    assert not window.native_output_active
-    assert runtime.targets == ()
-    assert restored == [window]
+    assert window.native_output_active
+    assert runtime.targets == (
+        (window.native_video_surface, "media-window-0", BusId.MEDIA_WINDOWS),
+    )
+    assert restored == []
+
+
+def test_audio_only_demand_does_not_republish_a_stale_video_frame() -> None:
+    class Frame:
+        def isValid(self) -> bool:
+            return True
+
+    enabled: list[bool] = []
+    submitted: list[object] = []
+    frame = Frame()
+    host = SimpleNamespace(
+        _content_frame_ingress=SimpleNamespace(set_enabled=enabled.append),
+        _program_content=SimpleNamespace(
+            refresh=lambda: None,
+            submit_frame=submitted.append,
+        ),
+        projection_session=SimpleNamespace(
+            state={"type": "video", "is_audio": True},
+            state_type="video",
+        ),
+        media_ctrl=SimpleNamespace(
+            video_sink=SimpleNamespace(videoFrame=lambda: frame),
+        ),
+    )
+
+    MainWindow._on_content_ingress_demand_changed(cast(MainWindow, host), True)
+
+    assert enabled == [True]
+    assert submitted == []
 
 
 def test_direct_submission_skips_python_when_every_surface_is_native() -> None:

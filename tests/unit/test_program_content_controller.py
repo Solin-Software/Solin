@@ -342,3 +342,71 @@ def test_program_content_does_not_republish_static_video_controls_per_frame() ->
     ]
     assert frames == [first, second]
     controller.close()
+
+
+def test_program_content_keeps_the_idle_epoch_during_audio_only_playback() -> None:
+    session = ProjectionSession()
+    epochs: list[int] = []
+    controller = ProgramContentController(
+        session,
+        _FontManager(),
+        lambda _frame: None,
+        lambda: ("", "", ""),
+        media_epoch_sink=epochs.append,
+        width=320,
+        height=180,
+    )
+    controller.refresh()
+    epochs.clear()
+
+    session.set_state({"type": "video", "is_audio": True, "title": "Song"})
+    session.reset_state()
+
+    assert epochs == []
+    controller.close()
+
+
+def test_program_content_accepts_idle_video_frames_during_audio_only_playback() -> None:
+    session = ProjectionSession()
+    frames: list[object] = []
+    controller = ProgramContentController(
+        session,
+        _FontManager(),
+        frames.append,
+        lambda: ("", "", ""),
+        media_epoch_sink=lambda _epoch: None,
+        width=320,
+        height=180,
+    )
+    session.set_idle_media_path("configured-idle.mp4")
+    session.set_state({"type": "video", "is_audio": True, "title": "Song"})
+    idle_frame = object()
+
+    controller.submit_idle_frame(idle_frame)
+
+    assert frames[-1] is idle_frame
+    controller.close()
+
+
+def test_program_content_publishes_idle_once_when_audio_replaces_visual_media() -> None:
+    session = ProjectionSession()
+    epochs: list[int] = []
+    controller = ProgramContentController(
+        session,
+        _FontManager(),
+        lambda _frame: None,
+        lambda: ("", "", ""),
+        media_epoch_sink=epochs.append,
+        width=320,
+        height=180,
+    )
+    session.set_state({"type": "image", "data": b"image"})
+    controller.submit_frame(QImage(16, 9, QImage.Format.Format_ARGB32))
+    epochs.clear()
+
+    session.set_state({"type": "video", "is_audio": True, "title": "Song"})
+    audio_idle_epoch = session.presentation_session_id
+    session.reset_state()
+
+    assert epochs == [audio_idle_epoch]
+    controller.close()
