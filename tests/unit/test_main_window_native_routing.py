@@ -80,6 +80,9 @@ def _native_preview_host(*, requested: bool):
         ),
         _native_fallback_mirror_required=False,
         _reconcile_scene_media_egress=lambda: None,
+        _projection_targets=SimpleNamespace(
+            restore_state_to_window=lambda _window: None,
+        ),
         _content_frame_ingress=SimpleNamespace(direct_submission_active=True),
         media_ctrl=media_controller,
     )
@@ -120,6 +123,35 @@ def test_operator_video_output_keeps_qt_fallback_without_native_routing(
 
     assert projection_bar.active_states == [False]
     assert runtime.targets == ()
+
+
+def test_leaving_native_raw_restores_the_existing_window_in_place(monkeypatch) -> None:
+    monkeypatch.setattr(main_window, "NATIVE_SCENES_SUPPORTED", True)
+    host, _projection_bar, runtime = _native_preview_host(requested=False)
+    restored: list[object] = []
+
+    class Window:
+        native_output_active = True
+        native_video_surface = object()
+
+        def set_native_output_active(self, active: bool) -> None:
+            self.native_output_active = active
+
+    window = Window()
+    host.projection_session = SimpleNamespace(
+        state={"type": "video", "is_audio": True},
+        projection_windows=(window,),
+        all_windows=lambda: (window,),
+    )
+    host._projection_targets = SimpleNamespace(
+        restore_state_to_window=restored.append,
+    )
+
+    MainWindow._reconcile_native_scene_surfaces(cast(MainWindow, host))
+
+    assert not window.native_output_active
+    assert runtime.targets == ()
+    assert restored == [window]
 
 
 def test_direct_submission_skips_python_when_every_surface_is_native() -> None:

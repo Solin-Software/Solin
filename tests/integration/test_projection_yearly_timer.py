@@ -199,7 +199,9 @@ def test_native_video_output_bypasses_qt_frame_materialization() -> None:
     assert view.display_label._video_frame is None
 
     view.clear()
-    assert not view.native_output_active
+    assert view.native_output_active
+    assert not view.native_video_surface.isHidden()
+    assert view._stack.currentIndex() == view._PAGE_MEDIA
 
 
 def test_new_untransformed_image_resets_zoom_before_clear_fade_finishes():
@@ -260,7 +262,9 @@ def test_native_media_output_never_runs_the_qt_media_fade() -> None:
     view.clear()
 
     assert view._media_anim.state() is QAbstractAnimation.State.Stopped
-    assert view._stack.currentIndex() == view._PAGE_YEARLY
+    assert view.native_output_active
+    assert not view.native_video_surface.isHidden()
+    assert view._stack.currentIndex() == view._PAGE_MEDIA
 
 
 def test_first_fallback_frame_after_native_routing_loss_fades_in() -> None:

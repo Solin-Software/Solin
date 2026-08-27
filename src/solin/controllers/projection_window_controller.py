@@ -474,7 +474,9 @@ class ProjectionWindowController:
             win.clear()
             return
         if kind == "video":
-            if not state.get("is_audio", False):
+            if state.get("is_audio", False):
+                win.clear()
+            else:
                 win.begin_video()
         elif kind == "image":
             win.show_image_from_url_data(

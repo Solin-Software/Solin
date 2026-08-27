@@ -501,6 +501,18 @@ def test_apply_full_state_clears_idle_when_no_path():
     assert win.cleared_idle == 1
 
 
+def test_restore_audio_projection_keeps_visual_surface_on_idle():
+    window = _WindowStub()
+    window.projection_session.set_state({"type": "video", "is_audio": True})
+    controller = ProjectionWindowController(_projection_context(window))
+    win = _ProjectionWindowStub()
+
+    controller.restore_state_to_window(win)
+
+    assert win.cleared == 1
+    assert not win.video_started
+
+
 def test_normalize_expired_state_collapses_dead_timer():
     window = _WindowStub()
     window.projection_session.set_state({
