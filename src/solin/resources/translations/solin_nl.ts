@@ -5501,43 +5501,49 @@ Deze actie kan niet ongedaan worden gemaakt.</translation>
 <context>
     <name>SceneControlPopup</name>
     <message>
-        <location filename="../../widgets/scenes/control_popup.py" line="+247"/>
-        <location line="+544"/>
+        <location filename="../../widgets/scenes/control_popup.py" line="+254"/>
+        <location line="+570"/>
         <source>Solin scenes</source>
         <translation>Solin-scènes</translation>
     </message>
     <message>
-        <location line="-523"/>
-        <location line="+524"/>
+        <location line="-549"/>
+        <location line="+550"/>
         <source>Configured</source>
         <translation>Geconfigureerd</translation>
     </message>
     <message>
-        <location line="-515"/>
-        <location line="+516"/>
+        <location line="-541"/>
+        <location line="+542"/>
+        <source>Camera PiP</source>
+        <translation>Camera-PiP</translation>
+    </message>
+    <message>
+        <location line="-533"/>
+        <location line="+534"/>
         <source>Other scenes</source>
         <translation>Andere scènes</translation>
     </message>
     <message>
-        <location line="-490"/>
-        <location line="+491"/>
+        <location line="-508"/>
+        <location line="+509"/>
         <source>Auto-switch media</source>
         <translation>Automatisch schakelen</translation>
     </message>
     <message>
-        <location line="-486"/>
-        <location line="+487"/>
+        <location line="-504"/>
+        <location line="+505"/>
         <source>Media windows</source>
         <translation>Mediavensters</translation>
     </message>
     <message>
-        <location line="-483"/>
-        <location line="+484"/>
+        <location line="-501"/>
+        <location line="+502"/>
         <source>Show in media windows</source>
         <translation>Tonen in de mediavensters</translation>
     </message>
     <message>
-        <location line="-473"/>
+        <location line="-491"/>
         <source>The scene could not be selected.</source>
         <translation>De scène kon niet worden geselecteerd.</translation>
     </message>
@@ -5623,7 +5629,7 @@ Deze actie kan niet ongedaan worden gemaakt.</translation>
         <translation>Uitvoer uit</translation>
     </message>
     <message>
-        <location line="+73"/>
+        <location line="+90"/>
         <source>Transition override: %1</source>
         <translation>Afwijkende overgang: %1</translation>
     </message>
@@ -5729,7 +5735,7 @@ Deze actie kan niet ongedaan worden gemaakt.</translation>
 <context>
     <name>SceneRuntimeController</name>
     <message>
-        <location filename="../../controllers/scene_runtime_controller.py" line="+1663"/>
+        <location filename="../../controllers/scene_runtime_controller.py" line="+1626"/>
         <source>The selected transition is unavailable. The scene was cut instead.</source>
         <translation>De geselecteerde overgang is niet beschikbaar. De scène is met een harde overgang gewisseld.</translation>
     </message>

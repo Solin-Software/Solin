@@ -5518,49 +5518,49 @@ Esta ação não pode ser desfeita.</translation>
 <context>
     <name>SceneControlPopup</name>
     <message>
-        <location filename="../../widgets/scenes/control_popup.py" line="+247"/>
-        <location line="+544"/>
+        <location filename="../../widgets/scenes/control_popup.py" line="+254"/>
+        <location line="+570"/>
         <source>Solin scenes</source>
         <translation>Cenas do Solin</translation>
     </message>
     <message>
-        <location line="-344"/>
+        <location line="-361"/>
         <location line="+2"/>
         <source>Virtual camera</source>
         <translation>Câmera virtual</translation>
     </message>
     <message>
         <location line="-146"/>
-        <location line="+491"/>
+        <location line="+509"/>
         <source>Auto-switch media</source>
         <translation>Troca automática</translation>
     </message>
     <message>
-        <location line="-486"/>
-        <location line="+487"/>
+        <location line="-504"/>
+        <location line="+505"/>
         <source>Media windows</source>
         <translation>Janelas de mídia</translation>
     </message>
     <message>
-        <location line="-527"/>
-        <location line="+524"/>
+        <location line="-554"/>
+        <location line="+550"/>
         <source>Configured</source>
         <translation>Configuradas</translation>
     </message>
     <message>
-        <location line="-515"/>
-        <location line="+516"/>
+        <location line="-532"/>
+        <location line="+534"/>
         <source>Other scenes</source>
         <translation>Outras cenas</translation>
     </message>
     <message>
-        <location line="-481"/>
-        <location line="+484"/>
+        <location line="-499"/>
+        <location line="+502"/>
         <source>Show in media windows</source>
         <translation>Exibir nas janelas de mídia</translation>
     </message>
     <message>
-        <location line="-473"/>
+        <location line="-491"/>
         <source>The scene could not be selected.</source>
         <translation>Não foi possível selecionar a cena.</translation>
     </message>
@@ -5624,7 +5624,13 @@ Esta ação não pode ser desfeita.</translation>
         <translation>Troca automática pausada nesta sessão de mídia</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="-155"/>
+        <location line="+542"/>
+        <source>Camera PiP</source>
+        <translation>Câmera PiP</translation>
+    </message>
+    <message>
+        <location line="-373"/>
         <source>Paused for this media session after a manual scene change.</source>
         <translation>Pausada nesta sessão de mídia após uma troca manual de cena.</translation>
     </message>
@@ -5644,7 +5650,7 @@ Esta ação não pode ser desfeita.</translation>
         <translation>Saída inativa</translation>
     </message>
     <message>
-        <location line="+86"/>
+        <location line="+103"/>
         <source>LIVE</source>
         <translation>AO VIVO</translation>
     </message>
@@ -5750,7 +5756,7 @@ Esta ação não pode ser desfeita.</translation>
 <context>
     <name>SceneRuntimeController</name>
     <message>
-        <location filename="../../controllers/scene_runtime_controller.py" line="+1663"/>
+        <location filename="../../controllers/scene_runtime_controller.py" line="+1626"/>
         <source>The selected transition is unavailable. The scene was cut instead.</source>
         <translation>A transição selecionada não está disponível. A cena foi trocada com Corte.</translation>
     </message>

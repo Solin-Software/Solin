@@ -11,6 +11,7 @@ from PySide6.QtCore import QObject, Signal, Slot
 from solin.core.foundation.constants import MEMORIZE_PRE_MEDIA_SCENE
 from solin.core.projection.application import projection_presentation_type
 from solin.core.scenes.application import SceneDocumentChange, SceneDocumentService
+from solin.core.scenes.composition import scene_uses_content_source
 from solin.core.scenes.engine import (
     DEFAULT_ENGINE_STARTUP_DEADLINE_MS,
     EngineHealthEvent,
@@ -31,15 +32,12 @@ from solin.core.scenes.engine import (
 from solin.core.scenes.model import (
     AUTOMATIC_MEDIA_CATEGORIES,
     BusId,
-    CONTENT_SOURCE_ID,
     ContentCategory,
     OutputMode,
     PtzBinding,
     SceneDocument,
     SceneLayer,
-    SceneReferenceConfig,
     SceneValidationError,
-    SourceKind,
     TransitionKind,
     TransitionSpec,
     new_identity,
@@ -174,41 +172,6 @@ def content_category_for_projection(state: Mapping[str, Any]) -> ContentCategory
         state_type,
         ContentCategory.EXTERNAL_STREAM,
     )
-
-
-def _scene_uses_content_source(document: SceneDocument, scene_id: str) -> bool:
-    sources = {source.id: source for source in document.sources}
-    scenes = {scene.id: scene for scene in document.scenes}
-    visited: set[str] = set()
-
-    def visit(candidate_id: str) -> bool:
-        if candidate_id in visited:
-            return False
-        visited.add(candidate_id)
-        scene = scenes[candidate_id]
-        for layer in scene.layers:
-            if (
-                not layer.visible
-                or layer.opacity <= 0.0
-                or layer.rect.width <= 0.0
-                or layer.rect.height <= 0.0
-            ):
-                continue
-            source = sources[layer.source_id]
-            if not source.enabled:
-                continue
-            if source.id == CONTENT_SOURCE_ID:
-                return True
-            if source.kind is not SourceKind.SCENE_REFERENCE:
-                continue
-            configuration = source.configuration
-            if isinstance(configuration, SceneReferenceConfig) and visit(
-                configuration.target_scene_id
-            ):
-                return True
-        return False
-
-    return visit(scene_id)
 
 
 class SceneRuntimeController(QObject):
@@ -706,7 +669,7 @@ class SceneRuntimeController(QObject):
             applied_program = self.applied_scene(BusId.VIRTUAL_CAMERA)
             entering_content_scene = (
                 desired_program != applied_program
-                and _scene_uses_content_source(
+                and scene_uses_content_source(
                     self._documents.document,
                     desired_program,
                 )
@@ -2051,7 +2014,7 @@ class SceneRuntimeController(QObject):
     def _scene_keeps_media_automation(self, scene_id: str) -> bool:
         return (
             scene_id == self._documents.program_media_scene_id
-            or _scene_uses_content_source(
+            or scene_uses_content_source(
                 self._documents.document,
                 scene_id,
             )
@@ -2128,7 +2091,7 @@ class SceneRuntimeController(QObject):
         desired = dict(self._desired_scenes)
         return any(
             enabled
-            and _scene_uses_content_source(
+            and scene_uses_content_source(
                 self._documents.document,
                 desired[bus_id],
             )

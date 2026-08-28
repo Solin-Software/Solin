@@ -5532,43 +5532,49 @@ This action cannot be undone.</source>
 <context>
     <name>SceneControlPopup</name>
     <message>
-        <location filename="../../widgets/scenes/control_popup.py" line="+247"/>
-        <location line="+544"/>
+        <location filename="../../widgets/scenes/control_popup.py" line="+254"/>
+        <location line="+570"/>
         <source>Solin scenes</source>
         <translation>Сцени Solin</translation>
     </message>
     <message>
-        <location line="-523"/>
-        <location line="+524"/>
+        <location line="-549"/>
+        <location line="+550"/>
         <source>Configured</source>
         <translation>Налаштовані</translation>
     </message>
     <message>
-        <location line="-515"/>
-        <location line="+516"/>
+        <location line="-541"/>
+        <location line="+542"/>
+        <source>Camera PiP</source>
+        <translation>Камера PiP</translation>
+    </message>
+    <message>
+        <location line="-533"/>
+        <location line="+534"/>
         <source>Other scenes</source>
         <translation>Інші сцени</translation>
     </message>
     <message>
-        <location line="-490"/>
-        <location line="+491"/>
+        <location line="-508"/>
+        <location line="+509"/>
         <source>Auto-switch media</source>
         <translation>Автоперемикання</translation>
     </message>
     <message>
-        <location line="-486"/>
-        <location line="+487"/>
+        <location line="-504"/>
+        <location line="+505"/>
         <source>Media windows</source>
         <translation>Вікна медіа</translation>
     </message>
     <message>
-        <location line="-483"/>
-        <location line="+484"/>
+        <location line="-501"/>
+        <location line="+502"/>
         <source>Show in media windows</source>
         <translation>Показувати у вікнах медіа</translation>
     </message>
     <message>
-        <location line="-473"/>
+        <location line="-491"/>
         <source>The scene could not be selected.</source>
         <translation>Не вдалося вибрати сцену.</translation>
     </message>
@@ -5654,7 +5660,7 @@ This action cannot be undone.</source>
         <translation>Вивід вимкнено</translation>
     </message>
     <message>
-        <location line="+73"/>
+        <location line="+90"/>
         <source>Transition override: %1</source>
         <translation>Змінений перехід: %1</translation>
     </message>
@@ -5760,7 +5766,7 @@ This action cannot be undone.</source>
 <context>
     <name>SceneRuntimeController</name>
     <message>
-        <location filename="../../controllers/scene_runtime_controller.py" line="+1663"/>
+        <location filename="../../controllers/scene_runtime_controller.py" line="+1626"/>
         <source>The selected transition is unavailable. The scene was cut instead.</source>
         <translation>Вибраний перехід недоступний. Сцену перемкнуто різкою зміною.</translation>
     </message>
