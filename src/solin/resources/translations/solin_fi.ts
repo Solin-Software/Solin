@@ -4035,26 +4035,26 @@ Lopeta heijastaminen ja yritä uudelleen.</translation>
     <message>
         <location line="+4"/>
         <source>A playlist named &quot;{name}&quot; already exists.</source>
-        <translation>Soittolista nimeltä "{name}" on jo olemassa.</translation>
+        <translation>Soittolista nimeltä &quot;{name}&quot; on jo olemassa.</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Playlist &quot;{name}&quot;
 created successfully!</source>
-        <translation>Soittolista "{name}"
+        <translation>Soittolista &quot;{name}&quot;
 luotiin onnistuneesti!</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Could not add media to playlist &quot;{name}&quot; because the selected location no longer exists.</source>
-        <translation>Mediaa ei voitu lisätä soittolistaan "{name}", koska valittua sijaintia ei ole enää olemassa.</translation>
+        <translation>Mediaa ei voitu lisätä soittolistaan &quot;{name}&quot;, koska valittua sijaintia ei ole enää olemassa.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>This media is already in
 playlist &quot;{name}&quot;</source>
         <translation>Tämä media on jo
-soittolistalla "{name}"</translation>
+soittolistalla &quot;{name}&quot;</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -4157,7 +4157,7 @@ Luo alakansioita linkitetyn kansion sisälle käyttääksesi niitä soittolistoi
     <message>
         <location line="+1"/>
         <source>A playlist named &quot;{name}&quot; already exists.</source>
-        <translation>Soittolista nimeltä "{name}" on jo olemassa.</translation>
+        <translation>Soittolista nimeltä &quot;{name}&quot; on jo olemassa.</translation>
     </message>
     <message>
         <location line="+20"/>
@@ -4506,12 +4506,12 @@ Tätä toimintoa ei voi peruuttaa.</translation>
     <message>
         <location filename="../../widgets/playlist/widget.py" line="+353"/>
         <source>No media files found in &quot;{name}&quot;.</source>
-        <translation>Kohteesta "{name}" ei löytynyt mediatiedostoja.</translation>
+        <translation>Kohteesta &quot;{name}&quot; ei löytynyt mediatiedostoja.</translation>
     </message>
     <message>
         <location line="+99"/>
         <source>A playlist named &quot;{name}&quot; already exists.</source>
-        <translation>Soittolista nimeltä "{name}" on jo olemassa.</translation>
+        <translation>Soittolista nimeltä &quot;{name}&quot; on jo olemassa.</translation>
     </message>
 </context>
 <context>
@@ -5737,7 +5737,7 @@ Tätä toimintoa ei voi peruuttaa.</translation>
 <context>
     <name>ScenesBridge</name>
     <message>
-        <location filename="../../ui/qml/scenes_bridge.py" line="+277"/>
+        <location filename="../../ui/qml/scenes_bridge.py" line="+309"/>
         <source>Switching</source>
         <translation>Vaihdetaan</translation>
     </message>
@@ -5778,12 +5778,12 @@ Tätä toimintoa ei voi peruuttaa.</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+1228"/>
+        <location line="+1442"/>
         <source>Automatic</source>
         <translation>Automaattinen</translation>
     </message>
     <message>
-        <location line="-1218"/>
+        <location line="-1432"/>
         <source>Looking for cameras…</source>
         <translation>Etsitään kameroita…</translation>
     </message>
@@ -5803,7 +5803,7 @@ Tätä toimintoa ei voi peruuttaa.</translation>
         <translation>Kameroita ei löytynyt. Automaattinen kamera on edelleen käytettävissä.</translation>
     </message>
     <message>
-        <location line="+145"/>
+        <location line="+148"/>
         <source>%1 copy</source>
         <translation>%1 (kopio)</translation>
     </message>
@@ -5819,7 +5819,7 @@ Tätä toimintoa ei voi peruuttaa.</translation>
         <translation>Valitse kelvollinen siirtymä ja kesto.</translation>
     </message>
     <message>
-        <location line="+377"/>
+        <location line="+522"/>
         <source>Check the camera name, connection and PTZ settings.</source>
         <translation>Tarkista kameran nimi, yhteys ja PTZ-asetukset.</translation>
     </message>
@@ -5849,7 +5849,7 @@ Tätä toimintoa ei voi peruuttaa.</translation>
         <translation>PTZ-esiasetuksen palauttaminen epäonnistui.</translation>
     </message>
     <message>
-        <location line="+122"/>
+        <location line="+124"/>
         <source>Default</source>
         <translation>Oletus</translation>
     </message>
@@ -5879,12 +5879,37 @@ Tätä toimintoa ei voi peruuttaa.</translation>
         <translation>Häivytys mustan kautta</translation>
     </message>
     <message>
-        <location line="+69"/>
+        <location line="+23"/>
+        <source>Unlock the source to frame it.</source>
+        <translation>Avaa lähteen lukitus rajausta varten.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Show the source to frame it.</source>
+        <translation>Näytä lähde rajausta varten.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Reset rotation before framing.</source>
+        <translation>Palauta kierto ennen rajausta.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Move or resize the source into the canvas first.</source>
+        <translation>Siirrä lähde ensin työalueelle tai muuta sen kokoa.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>The visible source area is too small to frame.</source>
+        <translation>Lähteen näkyvä alue on liian pieni rajattavaksi.</translation>
+    </message>
+    <message>
+        <location line="+97"/>
         <source>Camera unavailable. Check its connection, privacy permissions, or whether another application is using it.</source>
         <translation>Kamera ei käytettävissä. Tarkista yhteys, tietosuoja-asetukset tai onko jokin toinen sovellus käyttämässä sitä.</translation>
     </message>
     <message>
-        <location line="+116"/>
+        <location line="+118"/>
         <source>%1 (virtual)</source>
         <translation>%1 (virtuaalinen)</translation>
     </message>
@@ -5940,7 +5965,7 @@ Tätä toimintoa ei voi peruuttaa.</translation>
     <message>
         <location line="+6"/>
         <location filename="../../qml/ScenesPtzInspector.qml" line="+10"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+1599"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+1624"/>
         <source>Name</source>
         <translation>Nimi</translation>
     </message>
@@ -6068,12 +6093,13 @@ Tätä toimintoa ei voi peruuttaa.</translation>
     </message>
     <message>
         <location line="+17"/>
+        <location filename="../../qml/ScenesCanvas.qml" line="+694"/>
         <location filename="../../qml/ScenesPtzInspector.qml" line="+33"/>
         <location line="+65"/>
         <location line="+29"/>
         <location filename="../../qml/ScenesTransformDialog.qml" line="+94"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-875"/>
-        <location line="+416"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-900"/>
+        <location line="+441"/>
         <location line="+89"/>
         <location line="+68"/>
         <location line="+309"/>
@@ -6091,9 +6117,35 @@ Tätä toimintoa ei voi peruuttaa.</translation>
         <translation>Tallenna</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesCanvas.qml" line="+90"/>
+        <location filename="../../qml/ScenesCanvas.qml" line="-529"/>
         <source>Waiting for the first frame</source>
         <translation>Odotetaan ensimmäistä kuvaa</translation>
+    </message>
+    <message>
+        <location line="+515"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-188"/>
+        <source>Frame…</source>
+        <translation>Rajaa…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Frame and fill the canvas (F)</source>
+        <translation>Rajaa ja täytä työalue (F)</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Cancel framing (Esc)</source>
+        <translation>Peruuta rajaus (Esc)</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Drag to compose · Scroll to zoom</source>
+        <translation>Sommittele vetämällä · Zoomaa vierittämällä</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Apply framing (Enter)</source>
+        <translation>Käytä rajausta (Enter)</translation>
     </message>
     <message>
         <location filename="../../qml/ScenesPtzInspector.qml" line="-303"/>
@@ -6275,7 +6327,7 @@ Tätä toimintoa ei voi peruuttaa.</translation>
     </message>
     <message>
         <location line="+7"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+48"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+236"/>
         <location line="+68"/>
         <source>Delete</source>
         <translation>Poista</translation>
@@ -6352,7 +6404,7 @@ Tätä toimintoa ei voi peruuttaa.</translation>
     </message>
     <message>
         <location filename="../../qml/ScenesScenePanel.qml" line="+172"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-1148"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-1173"/>
         <location line="+301"/>
         <location line="+102"/>
         <source>Scenes</source>
@@ -6560,18 +6612,19 @@ Lisää sisältöä, kamera tai toinen näkymä.</translation>
     </message>
     <message>
         <location line="+15"/>
-        <location line="+419"/>
+        <location line="+444"/>
         <source>ms</source>
         <translation>ms</translation>
     </message>
     <message>
-        <location line="-403"/>
-        <location line="+416"/>
+        <location filename="../../qml/ScenesCanvas.qml" line="-3"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-428"/>
+        <location line="+441"/>
         <source>Apply</source>
         <translation>Käytä</translation>
     </message>
     <message>
-        <location line="-379"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-404"/>
         <source>Rename…</source>
         <translation>Nimeä uudelleen…</translation>
     </message>
@@ -6686,7 +6739,12 @@ Lisää sisältöä, kamera tai toinen näkymä.</translation>
         <translation>Pidä kamera aktiivisena</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+20"/>
+        <source>Fill canvas from crop</source>
+        <translation>Täytä työalue rajauksella</translation>
+    </message>
+    <message>
+        <location line="+5"/>
         <source>Precise transform…</source>
         <translation>Tarkka muunnos…</translation>
     </message>
@@ -6701,7 +6759,12 @@ Lisää sisältöä, kamera tai toinen näkymä.</translation>
         <translation>Keskitä</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+4"/>
+        <source>Mirror horizontally</source>
+        <translation>Peilaa vaakasuunnassa</translation>
+    </message>
+    <message>
+        <location line="+8"/>
         <source>Fit</source>
         <translation>Sovita</translation>
     </message>

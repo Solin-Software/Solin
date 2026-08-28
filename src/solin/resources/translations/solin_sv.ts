@@ -4035,26 +4035,26 @@ Stoppa projiceringen och försök igen.</translation>
     <message>
         <location line="+4"/>
         <source>A playlist named &quot;{name}&quot; already exists.</source>
-        <translation>Det finns redan en spellista som heter "{name}".</translation>
+        <translation>Det finns redan en spellista som heter &quot;{name}&quot;.</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Playlist &quot;{name}&quot;
 created successfully!</source>
-        <translation>Spellistan "{name}"
+        <translation>Spellistan &quot;{name}&quot;
 har skapats!</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Could not add media to playlist &quot;{name}&quot; because the selected location no longer exists.</source>
-        <translation>Det gick inte att lägga till media i spellistan "{name}" eftersom den valda platsen inte längre finns.</translation>
+        <translation>Det gick inte att lägga till media i spellistan &quot;{name}&quot; eftersom den valda platsen inte längre finns.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>This media is already in
 playlist &quot;{name}&quot;</source>
         <translation>Denna media finns redan i
-spellistan "{name}"</translation>
+spellistan &quot;{name}&quot;</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -4157,7 +4157,7 @@ Skapa undermappar i den länkade mappen för att använda dem som spellistor.</t
     <message>
         <location line="+1"/>
         <source>A playlist named &quot;{name}&quot; already exists.</source>
-        <translation>Det finns redan en spellista som heter "{name}".</translation>
+        <translation>Det finns redan en spellista som heter &quot;{name}&quot;.</translation>
     </message>
     <message>
         <location line="+20"/>
@@ -4505,12 +4505,12 @@ Den här åtgärden kan inte ångras.</translation>
     <message>
         <location filename="../../widgets/playlist/widget.py" line="+353"/>
         <source>No media files found in &quot;{name}&quot;.</source>
-        <translation>Inga mediefiler hittades i "{name}".</translation>
+        <translation>Inga mediefiler hittades i &quot;{name}&quot;.</translation>
     </message>
     <message>
         <location line="+99"/>
         <source>A playlist named &quot;{name}&quot; already exists.</source>
-        <translation>Det finns redan en spellista som heter "{name}".</translation>
+        <translation>Det finns redan en spellista som heter &quot;{name}&quot;.</translation>
     </message>
 </context>
 <context>
@@ -5736,7 +5736,7 @@ Den här åtgärden kan inte ångras.</translation>
 <context>
     <name>ScenesBridge</name>
     <message>
-        <location filename="../../ui/qml/scenes_bridge.py" line="+277"/>
+        <location filename="../../ui/qml/scenes_bridge.py" line="+309"/>
         <source>Switching</source>
         <translation>Byter</translation>
     </message>
@@ -5777,12 +5777,12 @@ Den här åtgärden kan inte ångras.</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+1228"/>
+        <location line="+1442"/>
         <source>Automatic</source>
         <translation>Automatisk</translation>
     </message>
     <message>
-        <location line="-1218"/>
+        <location line="-1432"/>
         <source>Looking for cameras…</source>
         <translation>Söker efter kameror…</translation>
     </message>
@@ -5802,7 +5802,7 @@ Den här åtgärden kan inte ångras.</translation>
         <translation>Inga kameror hittades. Den automatiska kameran är fortfarande tillgänglig.</translation>
     </message>
     <message>
-        <location line="+145"/>
+        <location line="+148"/>
         <source>%1 copy</source>
         <translation>%1 (kopia)</translation>
     </message>
@@ -5818,7 +5818,7 @@ Den här åtgärden kan inte ångras.</translation>
         <translation>Välj en giltig övergång och längd.</translation>
     </message>
     <message>
-        <location line="+377"/>
+        <location line="+522"/>
         <source>Check the camera name, connection and PTZ settings.</source>
         <translation>Kontrollera kamerans namn, anslutning och PTZ-inställningar.</translation>
     </message>
@@ -5848,7 +5848,7 @@ Den här åtgärden kan inte ångras.</translation>
         <translation>Det gick inte att hämta PTZ-förinställningen.</translation>
     </message>
     <message>
-        <location line="+122"/>
+        <location line="+124"/>
         <source>Default</source>
         <translation>Standard</translation>
     </message>
@@ -5878,12 +5878,37 @@ Den här åtgärden kan inte ångras.</translation>
         <translation>Toning via svart</translation>
     </message>
     <message>
-        <location line="+69"/>
+        <location line="+23"/>
+        <source>Unlock the source to frame it.</source>
+        <translation>Lås upp källan för att rama in den.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Show the source to frame it.</source>
+        <translation>Visa källan för att rama in den.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Reset rotation before framing.</source>
+        <translation>Återställ rotationen före inramning.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Move or resize the source into the canvas first.</source>
+        <translation>Flytta eller ändra först storlek på källan så att den ligger i arbetsytan.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>The visible source area is too small to frame.</source>
+        <translation>Den synliga delen av källan är för liten för inramning.</translation>
+    </message>
+    <message>
+        <location line="+97"/>
         <source>Camera unavailable. Check its connection, privacy permissions, or whether another application is using it.</source>
         <translation>Kameran är inte tillgänglig. Kontrollera anslutningen, sekretessbehörigheterna eller om ett annat program använder den.</translation>
     </message>
     <message>
-        <location line="+116"/>
+        <location line="+118"/>
         <source>%1 (virtual)</source>
         <translation>%1 (virtuell)</translation>
     </message>
@@ -5939,7 +5964,7 @@ Den här åtgärden kan inte ångras.</translation>
     <message>
         <location line="+6"/>
         <location filename="../../qml/ScenesPtzInspector.qml" line="+10"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+1599"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+1624"/>
         <source>Name</source>
         <translation>Namn</translation>
     </message>
@@ -6067,12 +6092,13 @@ Den här åtgärden kan inte ångras.</translation>
     </message>
     <message>
         <location line="+17"/>
+        <location filename="../../qml/ScenesCanvas.qml" line="+694"/>
         <location filename="../../qml/ScenesPtzInspector.qml" line="+33"/>
         <location line="+65"/>
         <location line="+29"/>
         <location filename="../../qml/ScenesTransformDialog.qml" line="+94"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-875"/>
-        <location line="+416"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-900"/>
+        <location line="+441"/>
         <location line="+89"/>
         <location line="+68"/>
         <location line="+309"/>
@@ -6090,9 +6116,35 @@ Den här åtgärden kan inte ångras.</translation>
         <translation>Spara</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesCanvas.qml" line="+90"/>
+        <location filename="../../qml/ScenesCanvas.qml" line="-529"/>
         <source>Waiting for the first frame</source>
         <translation>Väntar på första bilden</translation>
+    </message>
+    <message>
+        <location line="+515"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-188"/>
+        <source>Frame…</source>
+        <translation>Rama in…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Frame and fill the canvas (F)</source>
+        <translation>Rama in och fyll arbetsytan (F)</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Cancel framing (Esc)</source>
+        <translation>Avbryt inramning (Esc)</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Drag to compose · Scroll to zoom</source>
+        <translation>Dra för att komponera · Rulla för att zooma</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Apply framing (Enter)</source>
+        <translation>Verkställ inramning (Enter)</translation>
     </message>
     <message>
         <location filename="../../qml/ScenesPtzInspector.qml" line="-303"/>
@@ -6274,7 +6326,7 @@ Den här åtgärden kan inte ångras.</translation>
     </message>
     <message>
         <location line="+7"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+48"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+236"/>
         <location line="+68"/>
         <source>Delete</source>
         <translation>Ta bort</translation>
@@ -6351,7 +6403,7 @@ Den här åtgärden kan inte ångras.</translation>
     </message>
     <message>
         <location filename="../../qml/ScenesScenePanel.qml" line="+172"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-1148"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-1173"/>
         <location line="+301"/>
         <location line="+102"/>
         <source>Scenes</source>
@@ -6559,18 +6611,19 @@ Lägg till innehåll, en kamera eller en annan scen.</translation>
     </message>
     <message>
         <location line="+15"/>
-        <location line="+419"/>
+        <location line="+444"/>
         <source>ms</source>
         <translation>ms</translation>
     </message>
     <message>
-        <location line="-403"/>
-        <location line="+416"/>
+        <location filename="../../qml/ScenesCanvas.qml" line="-3"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-428"/>
+        <location line="+441"/>
         <source>Apply</source>
         <translation>Tillämpa</translation>
     </message>
     <message>
-        <location line="-379"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-404"/>
         <source>Rename…</source>
         <translation>Byt namn…</translation>
     </message>
@@ -6685,7 +6738,12 @@ Lägg till innehåll, en kamera eller en annan scen.</translation>
         <translation>Håll kameran aktiv</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+20"/>
+        <source>Fill canvas from crop</source>
+        <translation>Fyll arbetsytan från beskärningen</translation>
+    </message>
+    <message>
+        <location line="+5"/>
         <source>Precise transform…</source>
         <translation>Exakt transformering…</translation>
     </message>
@@ -6700,7 +6758,12 @@ Lägg till innehåll, en kamera eller en annan scen.</translation>
         <translation>Centrera</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+4"/>
+        <source>Mirror horizontally</source>
+        <translation>Spegelvänd horisontellt</translation>
+    </message>
+    <message>
+        <location line="+8"/>
         <source>Fit</source>
         <translation>Anpassa</translation>
     </message>

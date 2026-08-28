@@ -3,15 +3,30 @@
 from __future__ import annotations
 
 from concurrent.futures import Future
-from dataclasses import replace
+from dataclasses import dataclass, replace
 import logging
+import math
 from typing import Any, Protocol
 
 from PySide6.QtCore import QObject, Property, Signal, Slot
 from PySide6.QtGui import QImage
 
 from solin.controllers.scene_runtime_controller import SceneRuntimeController
-from solin.core.scenes.editor_geometry import crop_geometry, resize_rect, snap_move_rect
+from solin.core.scenes.editor_geometry import (
+    MINIMUM_LAYER_SIZE,
+    MINIMUM_VISIBLE_SOURCE,
+    NORMALIZED_CANVAS_ASPECT,
+    crop_for_framing_rect,
+    crop_geometry,
+    fill_crop_to_canvas,
+    inscribed_aspect_rect,
+    intersect_rect,
+    move_framing_rect,
+    resize_framing_rect,
+    resize_rect,
+    scale_framing_rect,
+    snap_move_rect,
+)
 from solin.core.scenes.engine import (
     LocalCameraDevice,
     LocalVideoFormat,
@@ -87,12 +102,24 @@ class ScenePreviewStore(Protocol):
     def clear(self) -> str: ...
 
 
+@dataclass(slots=True)
+class _LayerFramingSession:
+    document_id: str
+    document_revision: int
+    scene_id: str
+    layer: SceneLayer
+    bounds: NormalizedRect
+    frame: NormalizedRect
+    minimum_width: float
+
+
 class ScenesBridge(QObject):
     """Expose presentation state and validated commands without leaking domain objects."""
 
     changed = Signal()
     previewChanged = Signal()
     documentGenerationChanged = Signal()
+    framingChanged = Signal()
     pointerCursorEntered = Signal(str, int)
     pointerCursorChanged = Signal(str, int)
     pointerCursorExited = Signal(str)
@@ -124,6 +151,7 @@ class ScenesBridge(QObject):
         self._preview_available = False
         self._document_generation = 0
         self._active_guides: tuple[tuple[str, float], ...] = ()
+        self._framing_session: _LayerFramingSession | None = None
         self._ptz_recall_futures: set[Future[PtzRecallResult]] = set()
         self._controller_connections: tuple[tuple[Any, Any], ...] = ()
         self._connect_controller()
@@ -179,6 +207,10 @@ class ScenesBridge(QObject):
     def selectedLayer(self) -> dict[str, object]:
         layer = self._selected_layer()
         return {} if layer is None else self._layer_record(layer)
+
+    @Property(bool, notify=framingChanged)
+    def framingActive(self) -> bool:
+        return self._framing_session is not None
 
     @Property(str, notify=previewChanged)
     def previewUrl(self) -> str:
@@ -420,6 +452,7 @@ class ScenesBridge(QObject):
         self._active = active
         self._controller.set_preview_scene(self._selected_scene_id if active else None)
         if not active:
+            self._clear_framing_session()
             self.stopAllPtz()
 
     @Slot(str)
@@ -427,6 +460,7 @@ class ScenesBridge(QObject):
         if scene_id == self._selected_scene_id:
             return
         self._controller.document.scene(scene_id)
+        self._clear_framing_session()
         self._selected_scene_id = scene_id
         self._selected_layer_id = ""
         self._active_guides = ()
@@ -441,6 +475,7 @@ class ScenesBridge(QObject):
             return
         if layer_id == self._selected_layer_id:
             return
+        self._clear_framing_session()
         self._selected_layer_id = layer_id
         self.changed.emit()
 
@@ -743,6 +778,13 @@ class ScenesBridge(QObject):
     def setLayerFit(self, layer_id: str, fit_mode: str) -> None:
         self._update_layer(layer_id, lambda layer: replace(layer, fit_mode=FitMode(fit_mode)))
 
+    @Slot(str, bool)
+    def setLayerMirrored(self, layer_id: str, mirrored: bool) -> None:
+        self._update_layer(
+            layer_id,
+            lambda layer: replace(layer, mirror_x=bool(mirrored)),
+        )
+
     @Slot(str)
     def resetLayerTransform(self, layer_id: str) -> None:
         self._update_layer(
@@ -770,6 +812,144 @@ class ScenesBridge(QObject):
                     y=(1.0 - layer.rect.height) / 2.0,
                 ),
             ),
+        )
+
+    @Slot(str, result="QVariantMap")
+    def beginLayerFraming(self, layer_id: str) -> dict[str, object]:
+        layer = self._layer(layer_id)
+        if layer is None or self._framing_unavailable_reason(layer):
+            return {}
+        bounds = intersect_rect(layer.rect, NormalizedRect())
+        if bounds is None:
+            return {}
+        frame = inscribed_aspect_rect(bounds, aspect=NORMALIZED_CANVAS_ASPECT)
+        minimum_width = self._minimum_framing_width(layer)
+        if frame.width < minimum_width:
+            return {}
+        self._clear_framing_session()
+        document = self._controller.document
+        self._framing_session = _LayerFramingSession(
+            document_id=document.document_id,
+            document_revision=document.revision,
+            scene_id=self._selected_scene_id,
+            layer=layer,
+            bounds=bounds,
+            frame=frame,
+            minimum_width=minimum_width,
+        )
+        self.framingChanged.emit()
+        return self._framing_record(self._framing_session)
+
+    @Slot("QVariantMap", result="QVariantMap")  # type: ignore[arg-type]
+    def updateLayerFraming(self, values: dict[str, object]) -> dict[str, object]:
+        session = self._validated_framing_session()
+        if session is None:
+            return {}
+        try:
+            operation = str(values.get("operation", ""))
+            if operation == "move":
+                session.frame = move_framing_rect(
+                    session.frame,
+                    session.bounds,
+                    _qml_float(values.get("dx", 0.0)),
+                    _qml_float(values.get("dy", 0.0)),
+                )
+            elif operation == "resize":
+                session.frame = resize_framing_rect(
+                    session.frame,
+                    session.bounds,
+                    str(values.get("handle", "")),
+                    _qml_float(values.get("dx", 0.0)),
+                    _qml_float(values.get("dy", 0.0)),
+                    aspect=NORMALIZED_CANVAS_ASPECT,
+                    minimum_width=session.minimum_width,
+                )
+            elif operation == "scale":
+                session.frame = scale_framing_rect(
+                    session.frame,
+                    session.bounds,
+                    _qml_float(values.get("scale", 1.0)),
+                    _qml_float(values.get("anchorX", session.frame.x + session.frame.width / 2.0)),
+                    _qml_float(values.get("anchorY", session.frame.y + session.frame.height / 2.0)),
+                    aspect=NORMALIZED_CANVAS_ASPECT,
+                    minimum_width=session.minimum_width,
+                )
+            else:
+                return self._framing_record(session)
+        except (TypeError, ValueError, SceneValidationError):
+            log.debug("Rejected invalid layer framing update", exc_info=True)
+        return self._framing_record(session)
+
+    @Slot(result=bool)
+    def commitLayerFraming(self) -> bool:
+        session = self._validated_framing_session()
+        if session is None:
+            return False
+        layer = session.layer
+        try:
+            crop = crop_for_framing_rect(
+                layer.rect,
+                layer.crop,
+                session.frame,
+                mirror_x=layer.mirror_x,
+                mirror_y=layer.mirror_y,
+            )
+            updated = replace(
+                layer,
+                rect=NormalizedRect(),
+                crop=crop,
+                fit_mode=FitMode.COVER,
+            )
+        except (ValueError, SceneValidationError):
+            log.exception("Could not finalize layer framing geometry")
+            return False
+        self._clear_framing_session()
+        if updated == layer:
+            return False
+        self._selected_layer_id = layer.id
+        return self._run_edit(
+            lambda: self._controller.documents.update_layer(
+                session.scene_id,
+                layer.id,
+                updated,
+            )
+        )
+
+    @Slot()
+    def cancelLayerFraming(self) -> None:
+        self._clear_framing_session()
+
+    @Slot(str, result=bool)
+    def fillLayerFromCrop(self, layer_id: str) -> bool:
+        layer = self._layer(layer_id)
+        if layer is None or self._framing_unavailable_reason(layer):
+            return False
+        try:
+            updated = replace(
+                layer,
+                rect=NormalizedRect(),
+                crop=fill_crop_to_canvas(
+                    layer.rect,
+                    layer.crop,
+                    mirror_x=layer.mirror_x,
+                    mirror_y=layer.mirror_y,
+                    aspect=NORMALIZED_CANVAS_ASPECT,
+                ),
+                fit_mode=FitMode.COVER,
+            )
+        except (ValueError, SceneValidationError):
+            log.exception("Could not fit layer crop to the canvas")
+            return False
+        if updated == layer:
+            return False
+        self._clear_framing_session()
+        self._selected_layer_id = layer_id
+        return self._run_edit(
+            lambda: self._controller.documents.update_layer(
+                self._selected_scene_id,
+                layer_id,
+                updated,
+            )
         )
 
     @Slot(str, "QVariantMap")
@@ -1250,6 +1430,7 @@ class ScenesBridge(QObject):
         if self._closed:
             return
         self._closed = True
+        self._clear_framing_session()
         self._disconnect_controller()
         self.stopAllPtz()
         for future in tuple(self._ptz_recall_futures):
@@ -1261,6 +1442,7 @@ class ScenesBridge(QObject):
         self._clear_preview()
 
     def _on_document_changed(self, _document: object) -> None:
+        self._clear_framing_session()
         document = self._controller.document
         previous_document_id = getattr(self, "_document_id", "")
         self._document_id = document.document_id
@@ -1393,6 +1575,66 @@ class ScenesBridge(QObject):
             None,
         )
 
+    def _framing_unavailable_reason(self, layer: SceneLayer) -> str:
+        if layer.locked:
+            return self.tr("Unlock the source to frame it.")
+        if not layer.visible:
+            return self.tr("Show the source to frame it.")
+        rotation = layer.rotation_degrees % 360.0
+        if not math.isclose(rotation, 0.0, abs_tol=1e-6):
+            return self.tr("Reset rotation before framing.")
+        bounds = intersect_rect(layer.rect, NormalizedRect())
+        if bounds is None:
+            return self.tr("Move or resize the source into the canvas first.")
+        frame = inscribed_aspect_rect(bounds, aspect=NORMALIZED_CANVAS_ASPECT)
+        if frame.width < self._minimum_framing_width(layer):
+            return self.tr("The visible source area is too small to frame.")
+        return ""
+
+    @staticmethod
+    def _minimum_framing_width(layer: SceneLayer) -> float:
+        visible_x = 1.0 - layer.crop.left - layer.crop.right
+        visible_y = 1.0 - layer.crop.top - layer.crop.bottom
+        minimum_source_width = layer.rect.width * MINIMUM_VISIBLE_SOURCE / visible_x
+        minimum_source_height = layer.rect.height * MINIMUM_VISIBLE_SOURCE / visible_y
+        return max(
+            MINIMUM_LAYER_SIZE,
+            minimum_source_width,
+            minimum_source_height * NORMALIZED_CANVAS_ASPECT,
+        )
+
+    def _validated_framing_session(self) -> _LayerFramingSession | None:
+        session = self._framing_session
+        if session is None:
+            return None
+        document = self._controller.document
+        if (
+            document.document_id != session.document_id
+            or document.revision != session.document_revision
+            or self._selected_scene_id != session.scene_id
+            or self._selected_layer_id != session.layer.id
+        ):
+            self._clear_framing_session()
+            return None
+        return session
+
+    def _clear_framing_session(self) -> None:
+        if self._framing_session is None:
+            return
+        self._framing_session = None
+        self.framingChanged.emit()
+
+    @staticmethod
+    def _framing_record(session: _LayerFramingSession) -> dict[str, object]:
+        frame = session.frame
+        return {
+            "layerId": session.layer.id,
+            "x": frame.x,
+            "y": frame.y,
+            "width": frame.width,
+            "height": frame.height,
+        }
+
     def _layer_record(
         self,
         layer: SceneLayer,
@@ -1415,6 +1657,7 @@ class ScenesBridge(QObject):
                 in {SourceHealthStatus.DEGRADED, SourceHealthStatus.FAILED}
             )
         )
+        framing_unavailable_reason = self._framing_unavailable_reason(layer)
         return {
             "id": layer.id,
             "source_id": source.id,
@@ -1431,6 +1674,7 @@ class ScenesBridge(QObject):
             "crop_right": layer.crop.right,
             "crop_bottom": layer.crop.bottom,
             "fit_mode": layer.fit_mode.value,
+            "mirror_x": layer.mirror_x,
             "rotation": layer.rotation_degrees,
             "opacity": layer.opacity,
             "color": _SOURCE_COLORS[source.kind],
@@ -1447,6 +1691,8 @@ class ScenesBridge(QObject):
                 if source_warning
                 else ""
             ),
+            "framing_available": not framing_unavailable_reason,
+            "framing_unavailable_reason": framing_unavailable_reason,
         }
 
     def _add_source_layer(self, source_id: str) -> None:

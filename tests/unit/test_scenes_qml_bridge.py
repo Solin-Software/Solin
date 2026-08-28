@@ -349,6 +349,211 @@ def test_bridge_preserves_enums_and_transform_contracts(tmp_path: Path) -> None:
     controller.close()
 
 
+def test_bridge_toggles_horizontal_layer_mirroring_with_undo(tmp_path: Path) -> None:
+    _workspace, controller, bridge, _preview_store = _bridge(tmp_path)
+    layer_id = controller.document.scene(bridge.selectedSceneId).layers[0].id
+    bridge.selectLayer(layer_id)
+    revision = controller.document.revision
+
+    bridge.setLayerMirrored(layer_id, True)
+
+    mirrored = controller.document.scene(bridge.selectedSceneId).layers[0]
+    assert mirrored.mirror_x
+    assert not mirrored.mirror_y
+    assert bridge.selectedLayer["mirror_x"] is True
+    assert controller.document.revision == revision + 1
+
+    bridge.undo()
+    restored = controller.document.scene(bridge.selectedSceneId).layers[0]
+    assert not restored.mirror_x
+    assert controller.document.revision == revision + 2
+
+    bridge.setLayerLocked(layer_id, True)
+    locked_revision = controller.document.revision
+    bridge.setLayerMirrored(layer_id, True)
+    locked = controller.document.scene(bridge.selectedSceneId).layers[0]
+    assert not locked.mirror_x
+    assert controller.document.revision == locked_revision
+    bridge.close()
+    controller.close()
+
+
+def test_bridge_framing_session_commits_one_revision_and_undoes_cleanly(
+    tmp_path: Path,
+) -> None:
+    _workspace, controller, bridge, _preview_store = _bridge(tmp_path)
+    layer_id = controller.document.scene(bridge.selectedSceneId).layers[0].id
+    bridge.selectLayer(layer_id)
+    seed = controller.document.scene(bridge.selectedSceneId).layers[0]
+    controller.documents.update_layer(
+        bridge.selectedSceneId,
+        layer_id,
+        replace(
+            seed,
+            opacity=0.64,
+            mirror_x=True,
+            mirror_y=True,
+            border_color="#3B82F6FF",
+            border_width=0.008,
+            corner_radius=0.04,
+        ),
+    )
+    original = controller.document.scene(bridge.selectedSceneId).layers[0]
+    revision = controller.document.revision
+
+    draft = bridge.beginLayerFraming(layer_id)
+    updated_draft = bridge.updateLayerFraming(
+        {
+            "operation": "scale",
+            "scale": 0.5,
+            "anchorX": 0.5,
+            "anchorY": 0.5,
+        }
+    )
+
+    assert draft["width"] == 1.0
+    assert bridge.framingActive
+    assert updated_draft["x"] == 0.25
+    assert updated_draft["width"] == 0.5
+    assert controller.document.revision == revision
+    assert controller.document.scene(bridge.selectedSceneId).layers[0] == original
+
+    assert bridge.commitLayerFraming()
+
+    framed = controller.document.scene(bridge.selectedSceneId).layers[0]
+    assert controller.document.revision == revision + 1
+    assert not bridge.framingActive
+    assert framed.rect == NormalizedRect()
+    assert framed.crop == Crop(left=0.25, top=0.25, right=0.25, bottom=0.25)
+    assert framed.fit_mode is FitMode.COVER
+    assert (
+        framed.opacity,
+        framed.mirror_x,
+        framed.mirror_y,
+        framed.border_color,
+        framed.border_width,
+        framed.corner_radius,
+    ) == (
+        original.opacity,
+        original.mirror_x,
+        original.mirror_y,
+        original.border_color,
+        original.border_width,
+        original.corner_radius,
+    )
+
+    bridge.undo()
+    assert controller.document.scene(bridge.selectedSceneId).layers[0] == original
+    bridge.close()
+    controller.close()
+
+
+def test_bridge_cancels_and_invalidates_framing_without_document_mutation(
+    tmp_path: Path,
+) -> None:
+    _workspace, controller, bridge, _preview_store = _bridge(tmp_path)
+    layer_id = controller.document.scene(bridge.selectedSceneId).layers[0].id
+    bridge.selectLayer(layer_id)
+    revision = controller.document.revision
+
+    assert bridge.beginLayerFraming(layer_id)
+    bridge.updateLayerFraming({"operation": "move", "dx": -0.2, "dy": 0.1})
+    bridge.cancelLayerFraming()
+
+    assert not bridge.framingActive
+    assert controller.document.revision == revision
+
+    assert bridge.beginLayerFraming(layer_id)
+    bridge.selectScene(CONTENT_SCENE_ID)
+    assert not bridge.framingActive
+    assert controller.document.revision == revision
+
+    bridge.selectScene(CAMERA_SCENE_ID)
+    bridge.selectLayer(layer_id)
+    assert bridge.beginLayerFraming(layer_id)
+    layer = controller.document.scene(bridge.selectedSceneId).layers[0]
+    controller.documents.update_layer(
+        bridge.selectedSceneId,
+        layer_id,
+        replace(layer, opacity=0.8),
+    )
+
+    assert not bridge.framingActive
+    assert bridge.updateLayerFraming({"operation": "move", "dx": 0.1, "dy": 0.1}) == {}
+    bridge.close()
+    controller.close()
+
+
+def test_bridge_fill_from_crop_expands_then_fills_without_source_kind_coupling(
+    tmp_path: Path,
+) -> None:
+    _workspace, controller, bridge, _preview_store = _bridge(tmp_path)
+    bridge.selectScene(CONTENT_SCENE_ID)
+    content_layer_id = controller.document.scene(CONTENT_SCENE_ID).layers[0].id
+    bridge.selectLayer(content_layer_id)
+    layer = controller.document.scene(CONTENT_SCENE_ID).layers[0]
+    controller.documents.update_layer(
+        CONTENT_SCENE_ID,
+        content_layer_id,
+        replace(
+            layer,
+            rect=NormalizedRect(x=0.3, y=0.1, width=0.3, height=0.8),
+            crop=Crop(left=0.3, top=0.1, right=0.4, bottom=0.1),
+        ),
+    )
+    revision = controller.document.revision
+
+    assert bridge.selectedLayer["kind"] == SourceKind.SOLIN_CONTENT.value
+    assert bridge.fillLayerFromCrop(content_layer_id)
+
+    filled = controller.document.scene(CONTENT_SCENE_ID).layers[0]
+    assert controller.document.revision == revision + 1
+    assert filled.rect == NormalizedRect()
+    assert abs(filled.crop.left - 0.05) < 1e-9
+    assert abs(filled.crop.right - 0.15) < 1e-9
+    assert abs(filled.crop.top - 0.1) < 1e-9
+    assert abs(filled.crop.bottom - 0.1) < 1e-9
+    assert filled.fit_mode is FitMode.COVER
+    bridge.close()
+    controller.close()
+
+
+def test_bridge_explains_why_rotated_layers_cannot_be_framed(tmp_path: Path) -> None:
+    _workspace, controller, bridge, _preview_store = _bridge(tmp_path)
+    layer = controller.document.scene(bridge.selectedSceneId).layers[0]
+    controller.documents.update_layer(
+        bridge.selectedSceneId,
+        layer.id,
+        replace(layer, rotation_degrees=15.0),
+    )
+    bridge.selectLayer(layer.id)
+
+    assert bridge.selectedLayer["framing_available"] is False
+    assert "rotation" in str(bridge.selectedLayer["framing_unavailable_reason"]).lower()
+    assert bridge.beginLayerFraming(layer.id) == {}
+    assert not bridge.fillLayerFromCrop(layer.id)
+    bridge.close()
+    controller.close()
+
+
+def test_bridge_explains_why_locked_layers_cannot_be_framed(tmp_path: Path) -> None:
+    _workspace, controller, bridge, _preview_store = _bridge(tmp_path)
+    layer = controller.document.scene(bridge.selectedSceneId).layers[0]
+    controller.documents.update_layer(
+        bridge.selectedSceneId,
+        layer.id,
+        replace(layer, locked=True),
+    )
+    bridge.selectLayer(layer.id)
+
+    assert bridge.selectedLayer["framing_available"] is False
+    assert "unlock" in str(bridge.selectedLayer["framing_unavailable_reason"]).lower()
+    assert bridge.beginLayerFraming(layer.id) == {}
+    assert not bridge.fillLayerFromCrop(layer.id)
+    bridge.close()
+    controller.close()
+
+
 def test_bridge_geometry_preview_commits_exactly_one_revision(tmp_path: Path) -> None:
     _workspace, controller, bridge, _preview_store = _bridge(tmp_path)
     layer_id = controller.document.scene(bridge.selectedSceneId).layers[0].id

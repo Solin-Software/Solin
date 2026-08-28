@@ -4062,26 +4062,26 @@ Stop the projection and try again.</source>
     <message>
         <location line="+4"/>
         <source>A playlist named &quot;{name}&quot; already exists.</source>
-        <translation>Плейліст із назвою "{name}" уже існує.</translation>
+        <translation>Плейліст із назвою &quot;{name}&quot; уже існує.</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Playlist &quot;{name}&quot;
 created successfully!</source>
-        <translation>Плейліст "{name}"
+        <translation>Плейліст &quot;{name}&quot;
 успішно створено!</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Could not add media to playlist &quot;{name}&quot; because the selected location no longer exists.</source>
-        <translation>Не вдалося додати медіа до плейліста "{name}", оскільки вибране розташування більше не існує.</translation>
+        <translation>Не вдалося додати медіа до плейліста &quot;{name}&quot;, оскільки вибране розташування більше не існує.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>This media is already in
 playlist &quot;{name}&quot;</source>
         <translation>Це медіа вже є в
-плейлісті "{name}"</translation>
+плейлісті &quot;{name}&quot;</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -4184,7 +4184,7 @@ Create subfolders inside the linked folder to use as playlists.</source>
     <message>
         <location line="+1"/>
         <source>A playlist named &quot;{name}&quot; already exists.</source>
-        <translation>Плейліст із назвою "{name}" уже існує.</translation>
+        <translation>Плейліст із назвою &quot;{name}&quot; уже існує.</translation>
     </message>
     <message>
         <location line="+20"/>
@@ -4535,12 +4535,12 @@ This action cannot be undone.</source>
     <message>
         <location filename="../../widgets/playlist/widget.py" line="+353"/>
         <source>No media files found in &quot;{name}&quot;.</source>
-        <translation>У "{name}" не знайдено медіафайлів.</translation>
+        <translation>У &quot;{name}&quot; не знайдено медіафайлів.</translation>
     </message>
     <message>
         <location line="+99"/>
         <source>A playlist named &quot;{name}&quot; already exists.</source>
-        <translation>Плейліст із назвою "{name}" уже існує.</translation>
+        <translation>Плейліст із назвою &quot;{name}&quot; уже існує.</translation>
     </message>
 </context>
 <context>
@@ -5768,7 +5768,7 @@ This action cannot be undone.</source>
 <context>
     <name>ScenesBridge</name>
     <message>
-        <location filename="../../ui/qml/scenes_bridge.py" line="+277"/>
+        <location filename="../../ui/qml/scenes_bridge.py" line="+309"/>
         <source>Switching</source>
         <translation>Перемикання</translation>
     </message>
@@ -5809,12 +5809,12 @@ This action cannot be undone.</source>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+1228"/>
+        <location line="+1442"/>
         <source>Automatic</source>
         <translation>Автоматично</translation>
     </message>
     <message>
-        <location line="-1218"/>
+        <location line="-1432"/>
         <source>Looking for cameras…</source>
         <translation>Пошук камер…</translation>
     </message>
@@ -5834,7 +5834,7 @@ This action cannot be undone.</source>
         <translation>Камер не знайдено. Автоматична камера залишається доступною.</translation>
     </message>
     <message>
-        <location line="+145"/>
+        <location line="+148"/>
         <source>%1 copy</source>
         <translation>%1 (копія)</translation>
     </message>
@@ -5850,7 +5850,7 @@ This action cannot be undone.</source>
         <translation>Виберіть дійсний перехід і тривалість.</translation>
     </message>
     <message>
-        <location line="+377"/>
+        <location line="+522"/>
         <source>Check the camera name, connection and PTZ settings.</source>
         <translation>Перевірте назву камери, з’єднання та налаштування PTZ.</translation>
     </message>
@@ -5880,7 +5880,7 @@ This action cannot be undone.</source>
         <translation>Не вдалося викликати передналаштування PTZ.</translation>
     </message>
     <message>
-        <location line="+122"/>
+        <location line="+124"/>
         <source>Default</source>
         <translation>За замовчуванням</translation>
     </message>
@@ -5910,12 +5910,37 @@ This action cannot be undone.</source>
         <translation>Затемнення через чорний</translation>
     </message>
     <message>
-        <location line="+69"/>
+        <location line="+23"/>
+        <source>Unlock the source to frame it.</source>
+        <translation>Розблокуйте джерело, щоб налаштувати кадр.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Show the source to frame it.</source>
+        <translation>Покажіть джерело, щоб налаштувати кадр.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Reset rotation before framing.</source>
+        <translation>Скиньте поворот перед налаштуванням кадру.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Move or resize the source into the canvas first.</source>
+        <translation>Спочатку перемістіть джерело на полотно або змініть його розмір.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>The visible source area is too small to frame.</source>
+        <translation>Видима область джерела надто мала для налаштування кадру.</translation>
+    </message>
+    <message>
+        <location line="+97"/>
         <source>Camera unavailable. Check its connection, privacy permissions, or whether another application is using it.</source>
         <translation>Камера недоступна. Перевірте з’єднання, дозволи конфіденційності або чи не використовує її інша програма.</translation>
     </message>
     <message>
-        <location line="+116"/>
+        <location line="+118"/>
         <source>%1 (virtual)</source>
         <translation>%1 (віртуальна)</translation>
     </message>
@@ -5971,7 +5996,7 @@ This action cannot be undone.</source>
     <message>
         <location line="+6"/>
         <location filename="../../qml/ScenesPtzInspector.qml" line="+10"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+1599"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+1624"/>
         <source>Name</source>
         <translation>Назва</translation>
     </message>
@@ -6099,12 +6124,13 @@ This action cannot be undone.</source>
     </message>
     <message>
         <location line="+17"/>
+        <location filename="../../qml/ScenesCanvas.qml" line="+694"/>
         <location filename="../../qml/ScenesPtzInspector.qml" line="+33"/>
         <location line="+65"/>
         <location line="+29"/>
         <location filename="../../qml/ScenesTransformDialog.qml" line="+94"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-875"/>
-        <location line="+416"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-900"/>
+        <location line="+441"/>
         <location line="+89"/>
         <location line="+68"/>
         <location line="+309"/>
@@ -6122,9 +6148,35 @@ This action cannot be undone.</source>
         <translation>Зберегти</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesCanvas.qml" line="+90"/>
+        <location filename="../../qml/ScenesCanvas.qml" line="-529"/>
         <source>Waiting for the first frame</source>
         <translation>Очікування першого кадру</translation>
+    </message>
+    <message>
+        <location line="+515"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-188"/>
+        <source>Frame…</source>
+        <translation>Налаштувати кадр…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Frame and fill the canvas (F)</source>
+        <translation>Налаштувати кадр і заповнити полотно (F)</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Cancel framing (Esc)</source>
+        <translation>Скасувати налаштування кадру (Esc)</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Drag to compose · Scroll to zoom</source>
+        <translation>Перетягніть для композиції · Прокрутіть для масштабу</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Apply framing (Enter)</source>
+        <translation>Застосувати налаштування кадру (Enter)</translation>
     </message>
     <message>
         <location filename="../../qml/ScenesPtzInspector.qml" line="-303"/>
@@ -6306,7 +6358,7 @@ This action cannot be undone.</source>
     </message>
     <message>
         <location line="+7"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+48"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+236"/>
         <location line="+68"/>
         <source>Delete</source>
         <translation>Видалити</translation>
@@ -6383,7 +6435,7 @@ This action cannot be undone.</source>
     </message>
     <message>
         <location filename="../../qml/ScenesScenePanel.qml" line="+172"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-1148"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-1173"/>
         <location line="+301"/>
         <location line="+102"/>
         <source>Scenes</source>
@@ -6591,18 +6643,19 @@ Add content, a camera, or another scene.</source>
     </message>
     <message>
         <location line="+15"/>
-        <location line="+419"/>
+        <location line="+444"/>
         <source>ms</source>
         <translation>мс</translation>
     </message>
     <message>
-        <location line="-403"/>
-        <location line="+416"/>
+        <location filename="../../qml/ScenesCanvas.qml" line="-3"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-428"/>
+        <location line="+441"/>
         <source>Apply</source>
         <translation>Застосувати</translation>
     </message>
     <message>
-        <location line="-379"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-404"/>
         <source>Rename…</source>
         <translation>Перейменувати…</translation>
     </message>
@@ -6717,7 +6770,12 @@ Add content, a camera, or another scene.</source>
         <translation>Тримати камеру активною</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+20"/>
+        <source>Fill canvas from crop</source>
+        <translation>Заповнити полотно з обрізаної області</translation>
+    </message>
+    <message>
+        <location line="+5"/>
         <source>Precise transform…</source>
         <translation>Точне перетворення…</translation>
     </message>
@@ -6732,7 +6790,12 @@ Add content, a camera, or another scene.</source>
         <translation>По центру</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+4"/>
+        <source>Mirror horizontally</source>
+        <translation>Віддзеркалити горизонтально</translation>
+    </message>
+    <message>
+        <location line="+8"/>
         <source>Fit</source>
         <translation>Вписати</translation>
     </message>

@@ -873,24 +873,24 @@
     <message>
         <location line="-108"/>
         <source>Looking for cameras...</source>
-        <translation>Camera's zoeken...</translation>
+        <translation>Camera&apos;s zoeken...</translation>
     </message>
     <message>
         <location line="+13"/>
         <source>No cameras found</source>
-        <translation>Geen camera's gevonden</translation>
+        <translation>Geen camera&apos;s gevonden</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>No cameras found.</source>
-        <translation>Geen camera's gevonden.</translation>
+        <translation>Geen camera&apos;s gevonden.</translation>
     </message>
     <message numerus="yes">
         <location line="+13"/>
         <source>%n camera(s) found.</source>
         <translation>
             <numerusform>%n camera gevonden.</numerusform>
-            <numerusform>%n camera's gevonden.</numerusform>
+            <numerusform>%n camera&apos;s gevonden.</numerusform>
         </translation>
     </message>
     <message>
@@ -1342,7 +1342,7 @@
         <source>Download %n music video(s) for offline playback?</source>
         <translation>
             <numerusform>%n muziekvideo downloaden voor offline afspelen?</numerusform>
-            <numerusform>%n muziekvideo's downloaden voor offline afspelen?</numerusform>
+            <numerusform>%n muziekvideo&apos;s downloaden voor offline afspelen?</numerusform>
         </translation>
     </message>
     <message numerus="yes">
@@ -1489,7 +1489,7 @@
         <source>%n video(s)</source>
         <translation>
             <numerusform>%n video</numerusform>
-            <numerusform>%n video's</numerusform>
+            <numerusform>%n video&apos;s</numerusform>
         </translation>
     </message>
     <message numerus="yes">
@@ -3569,7 +3569,7 @@ Handmatig toegevoegde inhoud, bijgesneden delen, kadrering en de uitgeklapte sta
         <source>File format not supported. Use videos (mp4, mkv, mov…) or images (jpg, png, webp…).
 
 {files}</source>
-        <translation>Bestandsformaat wordt niet ondersteund. Gebruik video's (mp4, mkv, mov…) of afbeeldingen (jpg, png, webp…).
+        <translation>Bestandsformaat wordt niet ondersteund. Gebruik video&apos;s (mp4, mkv, mov…) of afbeeldingen (jpg, png, webp…).
 
 {files}</translation>
     </message>
@@ -3789,7 +3789,7 @@ Handmatig toegevoegde inhoud, bijgesneden delen, kadrering en de uitgeklapte sta
         <source>{name}: %n page(s) opened</source>
         <translation>
             <numerusform>{name}: %n pagina geopend</numerusform>
-            <numerusform>{name}: %n pagina's geopend</numerusform>
+            <numerusform>{name}: %n pagina&apos;s geopend</numerusform>
         </translation>
     </message>
     <message>
@@ -3820,7 +3820,7 @@ Handmatig toegevoegde inhoud, bijgesneden delen, kadrering en de uitgeklapte sta
         <source>%n video(s)</source>
         <translation>
             <numerusform>%n video</numerusform>
-            <numerusform>%n video's</numerusform>
+            <numerusform>%n video&apos;s</numerusform>
         </translation>
     </message>
     <message>
@@ -4035,26 +4035,26 @@ Stop de projectie en probeer het opnieuw.</translation>
     <message>
         <location line="+4"/>
         <source>A playlist named &quot;{name}&quot; already exists.</source>
-        <translation>Er bestaat al een afspeellijst met de naam "{name}".</translation>
+        <translation>Er bestaat al een afspeellijst met de naam &quot;{name}&quot;.</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Playlist &quot;{name}&quot;
 created successfully!</source>
-        <translation>Afspeellijst "{name}"
+        <translation>Afspeellijst &quot;{name}&quot;
 is aangemaakt!</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Could not add media to playlist &quot;{name}&quot; because the selected location no longer exists.</source>
-        <translation>Kan geen media toevoegen aan afspeellijst "{name}" omdat de geselecteerde locatie niet meer bestaat.</translation>
+        <translation>Kan geen media toevoegen aan afspeellijst &quot;{name}&quot; omdat de geselecteerde locatie niet meer bestaat.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>This media is already in
 playlist &quot;{name}&quot;</source>
         <translation>Deze media staat al in
-afspeellijst "{name}"</translation>
+afspeellijst &quot;{name}&quot;</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -4074,7 +4074,7 @@ afspeellijst "{name}"</translation>
     <message>
         <location line="+4"/>
         <source>PDF conversion finished without any pages.</source>
-        <translation>De PDF-conversie is voltooid zonder pagina's.</translation>
+        <translation>De PDF-conversie is voltooid zonder pagina&apos;s.</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -4157,7 +4157,7 @@ Maak submappen aan in de gekoppelde map om deze als afspeellijsten te gebruiken.
     <message>
         <location line="+1"/>
         <source>A playlist named &quot;{name}&quot; already exists.</source>
-        <translation>Er bestaat al een afspeellijst met de naam "{name}".</translation>
+        <translation>Er bestaat al een afspeellijst met de naam &quot;{name}&quot;.</translation>
     </message>
     <message>
         <location line="+20"/>
@@ -4506,12 +4506,12 @@ Deze actie kan niet ongedaan worden gemaakt.</translation>
     <message>
         <location filename="../../widgets/playlist/widget.py" line="+353"/>
         <source>No media files found in &quot;{name}&quot;.</source>
-        <translation>Geen mediabestanden gevonden in "{name}".</translation>
+        <translation>Geen mediabestanden gevonden in &quot;{name}&quot;.</translation>
     </message>
     <message>
         <location line="+99"/>
         <source>A playlist named &quot;{name}&quot; already exists.</source>
-        <translation>Er bestaat al een afspeellijst met de naam "{name}".</translation>
+        <translation>Er bestaat al een afspeellijst met de naam &quot;{name}&quot;.</translation>
     </message>
 </context>
 <context>
@@ -5737,7 +5737,7 @@ Deze actie kan niet ongedaan worden gemaakt.</translation>
 <context>
     <name>ScenesBridge</name>
     <message>
-        <location filename="../../ui/qml/scenes_bridge.py" line="+277"/>
+        <location filename="../../ui/qml/scenes_bridge.py" line="+309"/>
         <source>Switching</source>
         <translation>Schakelen</translation>
     </message>
@@ -5778,32 +5778,32 @@ Deze actie kan niet ongedaan worden gemaakt.</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+1228"/>
+        <location line="+1442"/>
         <source>Automatic</source>
         <translation>Automatisch</translation>
     </message>
     <message>
-        <location line="-1218"/>
+        <location line="-1432"/>
         <source>Looking for cameras…</source>
-        <translation>Camera's zoeken…</translation>
+        <translation>Camera&apos;s zoeken…</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Camera discovery is available when the scene engine is ready.</source>
-        <translation>Het zoeken naar camera's is beschikbaar zodra de scène-engine gereed is.</translation>
+        <translation>Het zoeken naar camera&apos;s is beschikbaar zodra de scène-engine gereed is.</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Camera discovery could not be completed.</source>
-        <translation>Het zoeken naar camera's kon niet worden voltooid.</translation>
+        <translation>Het zoeken naar camera&apos;s kon niet worden voltooid.</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>No cameras found. The automatic camera remains available.</source>
-        <translation>Geen camera's gevonden. De automatische camera blijft beschikbaar.</translation>
+        <translation>Geen camera&apos;s gevonden. De automatische camera blijft beschikbaar.</translation>
     </message>
     <message>
-        <location line="+145"/>
+        <location line="+148"/>
         <source>%1 copy</source>
         <translation>%1 (kopie)</translation>
     </message>
@@ -5819,14 +5819,14 @@ Deze actie kan niet ongedaan worden gemaakt.</translation>
         <translation>Kies een geldige overgang en duur.</translation>
     </message>
     <message>
-        <location line="+377"/>
+        <location line="+522"/>
         <source>Check the camera name, connection and PTZ settings.</source>
         <translation>Controleer de cameranaam, de verbinding en de PTZ-instellingen.</translation>
     </message>
     <message>
         <location line="+29"/>
         <source>Camera discovery could not be refreshed.</source>
-        <translation>Het zoeken naar camera's kon niet worden vernieuwd.</translation>
+        <translation>Het zoeken naar camera&apos;s kon niet worden vernieuwd.</translation>
     </message>
     <message>
         <location line="+22"/>
@@ -5849,7 +5849,7 @@ Deze actie kan niet ongedaan worden gemaakt.</translation>
         <translation>Oproepen van de PTZ-voorinstelling mislukt.</translation>
     </message>
     <message>
-        <location line="+122"/>
+        <location line="+124"/>
         <source>Default</source>
         <translation>Standaard</translation>
     </message>
@@ -5879,12 +5879,37 @@ Deze actie kan niet ongedaan worden gemaakt.</translation>
         <translation>Uitvloeien via zwart</translation>
     </message>
     <message>
-        <location line="+69"/>
+        <location line="+23"/>
+        <source>Unlock the source to frame it.</source>
+        <translation>Ontgrendel de bron om deze te kaderen.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Show the source to frame it.</source>
+        <translation>Toon de bron om deze te kaderen.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Reset rotation before framing.</source>
+        <translation>Herstel de rotatie vóór het kaderen.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Move or resize the source into the canvas first.</source>
+        <translation>Verplaats of vergroot/verklein de bron eerst binnen het canvas.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>The visible source area is too small to frame.</source>
+        <translation>Het zichtbare brongebied is te klein om te kaderen.</translation>
+    </message>
+    <message>
+        <location line="+97"/>
         <source>Camera unavailable. Check its connection, privacy permissions, or whether another application is using it.</source>
         <translation>Camera niet beschikbaar. Controleer de verbinding, de privacyrechten of of een andere toepassing de camera gebruikt.</translation>
     </message>
     <message>
-        <location line="+116"/>
+        <location line="+118"/>
         <source>%1 (virtual)</source>
         <translation>%1 (virtueel)</translation>
     </message>
@@ -5940,7 +5965,7 @@ Deze actie kan niet ongedaan worden gemaakt.</translation>
     <message>
         <location line="+6"/>
         <location filename="../../qml/ScenesPtzInspector.qml" line="+10"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+1599"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+1624"/>
         <source>Name</source>
         <translation>Naam</translation>
     </message>
@@ -5957,7 +5982,7 @@ Deze actie kan niet ongedaan worden gemaakt.</translation>
     <message>
         <location line="+16"/>
         <source>Refresh cameras</source>
-        <translation>Camera's vernieuwen</translation>
+        <translation>Camera&apos;s vernieuwen</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -6068,12 +6093,13 @@ Deze actie kan niet ongedaan worden gemaakt.</translation>
     </message>
     <message>
         <location line="+17"/>
+        <location filename="../../qml/ScenesCanvas.qml" line="+694"/>
         <location filename="../../qml/ScenesPtzInspector.qml" line="+33"/>
         <location line="+65"/>
         <location line="+29"/>
         <location filename="../../qml/ScenesTransformDialog.qml" line="+94"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-875"/>
-        <location line="+416"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-900"/>
+        <location line="+441"/>
         <location line="+89"/>
         <location line="+68"/>
         <location line="+309"/>
@@ -6091,9 +6117,35 @@ Deze actie kan niet ongedaan worden gemaakt.</translation>
         <translation>Opslaan</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesCanvas.qml" line="+90"/>
+        <location filename="../../qml/ScenesCanvas.qml" line="-529"/>
         <source>Waiting for the first frame</source>
         <translation>Wachten op het eerste beeld</translation>
+    </message>
+    <message>
+        <location line="+515"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-188"/>
+        <source>Frame…</source>
+        <translation>Kaderen…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Frame and fill the canvas (F)</source>
+        <translation>Kaderen en canvas vullen (F)</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Cancel framing (Esc)</source>
+        <translation>Kaderen annuleren (Esc)</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Drag to compose · Scroll to zoom</source>
+        <translation>Sleep om de compositie te bepalen · Scroll om te zoomen</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Apply framing (Enter)</source>
+        <translation>Kadering toepassen (Enter)</translation>
     </message>
     <message>
         <location filename="../../qml/ScenesPtzInspector.qml" line="-303"/>
@@ -6275,7 +6327,7 @@ Deze actie kan niet ongedaan worden gemaakt.</translation>
     </message>
     <message>
         <location line="+7"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+48"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+236"/>
         <location line="+68"/>
         <source>Delete</source>
         <translation>Verwijderen</translation>
@@ -6352,7 +6404,7 @@ Deze actie kan niet ongedaan worden gemaakt.</translation>
     </message>
     <message>
         <location filename="../../qml/ScenesScenePanel.qml" line="+172"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-1148"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-1173"/>
         <location line="+301"/>
         <location line="+102"/>
         <source>Scenes</source>
@@ -6470,7 +6522,7 @@ Voeg inhoud, een camera of een andere scène toe.</translation>
     <message>
         <location line="+23"/>
         <source>Compose cameras and projected content</source>
-        <translation>Samenstelling van camera's en geprojecteerde inhoud</translation>
+        <translation>Samenstelling van camera&apos;s en geprojecteerde inhoud</translation>
     </message>
     <message>
         <location line="+20"/>
@@ -6560,18 +6612,19 @@ Voeg inhoud, een camera of een andere scène toe.</translation>
     </message>
     <message>
         <location line="+15"/>
-        <location line="+419"/>
+        <location line="+444"/>
         <source>ms</source>
         <translation>ms</translation>
     </message>
     <message>
-        <location line="-403"/>
-        <location line="+416"/>
+        <location filename="../../qml/ScenesCanvas.qml" line="-3"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-428"/>
+        <location line="+441"/>
         <source>Apply</source>
         <translation>Toepassen</translation>
     </message>
     <message>
-        <location line="-379"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-404"/>
         <source>Rename…</source>
         <translation>Naam wijzigen…</translation>
     </message>
@@ -6658,7 +6711,7 @@ Voeg inhoud, een camera of een andere scène toe.</translation>
     <message>
         <location line="+4"/>
         <source>Cameras</source>
-        <translation>Camera's</translation>
+        <translation>Camera&apos;s</translation>
     </message>
     <message>
         <location line="+12"/>
@@ -6686,7 +6739,12 @@ Voeg inhoud, een camera of een andere scène toe.</translation>
         <translation>Camera actief houden</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+20"/>
+        <source>Fill canvas from crop</source>
+        <translation>Canvas vullen vanuit uitsnede</translation>
+    </message>
+    <message>
+        <location line="+5"/>
         <source>Precise transform…</source>
         <translation>Precieze transformatie…</translation>
     </message>
@@ -6701,7 +6759,12 @@ Voeg inhoud, een camera of een andere scène toe.</translation>
         <translation>Centreren</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+4"/>
+        <source>Mirror horizontally</source>
+        <translation>Horizontaal spiegelen</translation>
+    </message>
+    <message>
+        <location line="+8"/>
         <source>Fit</source>
         <translation>Passend maken</translation>
     </message>
@@ -8606,7 +8669,7 @@ Beide apparaten moeten verbonden zijn met hetzelfde wifinetwerk.</translation>
         <source>{name}: %n page(s) converted</source>
         <translation>
             <numerusform>{name}: %n pagina geconverteerd</numerusform>
-            <numerusform>{name}: %n pagina's geconverteerd</numerusform>
+            <numerusform>{name}: %n pagina&apos;s geconverteerd</numerusform>
         </translation>
     </message>
     <message numerus="yes">

@@ -1014,9 +1014,34 @@ Item {
             onTriggered: root.bridge.setCameraKeepActive(
                 root.bridge.selectedLayer.source_id, checked)
         }
+        ScenesMenuSeparator { theme: root.theme }
+        ScenesMenuItem {
+            objectName: "scenesFrameLayerMenuItem"
+            theme: root.theme
+            text: qsTr("Frame…")
+            enabled: root.bridge && root.bridge.selectedLayer.framing_available === true
+            onTriggered: canvas.beginFraming()
+        }
+        ScenesMenuItem {
+            objectName: "scenesFillCropMenuItem"
+            theme: root.theme
+            text: qsTr("Fill canvas from crop")
+            enabled: root.bridge && root.bridge.selectedLayer.framing_available === true
+            onTriggered: root.bridge.fillLayerFromCrop(root.bridge.selectedLayerId)
+        }
+        ScenesMenuSeparator { theme: root.theme }
         ScenesMenuItem { theme: root.theme; text: qsTr("Precise transform…"); onTriggered: transformDialog.openForLayer() }
         ScenesMenuItem { theme: root.theme; text: qsTr("Reset transform"); onTriggered: root.bridge.resetLayerTransform(root.bridge.selectedLayerId) }
         ScenesMenuItem { theme: root.theme; text: qsTr("Center"); onTriggered: root.bridge.centerLayer(root.bridge.selectedLayerId) }
+        ScenesMenuItem {
+            objectName: "scenesMirrorLayerMenuItem"
+            theme: root.theme
+            text: qsTr("Mirror horizontally")
+            checkable: true
+            checked: root.bridge && root.bridge.selectedLayer.mirror_x === true
+            enabled: root.bridge && root.bridge.selectedLayer.locked !== true
+            onTriggered: root.bridge.setLayerMirrored(root.bridge.selectedLayerId, checked)
+        }
         ScenesMenuSeparator { theme: root.theme }
         Menu {
             title: qsTr("Fit")

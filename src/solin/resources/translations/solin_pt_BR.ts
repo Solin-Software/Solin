@@ -4039,26 +4039,26 @@ Pare a projeção e tente novamente.</translation>
     <message>
         <location line="+4"/>
         <source>A playlist named &quot;{name}&quot; already exists.</source>
-        <translation>Já existe uma playlist chamada "{name}".</translation>
+        <translation>Já existe uma playlist chamada &quot;{name}&quot;.</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Playlist &quot;{name}&quot;
 created successfully!</source>
-        <translation>Playlist "{name}"
+        <translation>Playlist &quot;{name}&quot;
 criada com sucesso!</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Could not add media to playlist &quot;{name}&quot; because the selected location no longer exists.</source>
-        <translation>Não foi possível adicionar mídias à playlist "{name}" porque o local selecionado não existe mais.</translation>
+        <translation>Não foi possível adicionar mídias à playlist &quot;{name}&quot; porque o local selecionado não existe mais.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>This media is already in
 playlist &quot;{name}&quot;</source>
         <translation>Esta mídia já está na
-playlist "{name}"</translation>
+playlist &quot;{name}&quot;</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -5758,7 +5758,7 @@ Esta ação não pode ser desfeita.</translation>
 <context>
     <name>ScenesBridge</name>
     <message>
-        <location filename="../../ui/qml/scenes_bridge.py" line="+277"/>
+        <location filename="../../ui/qml/scenes_bridge.py" line="+309"/>
         <source>Switching</source>
         <translation>Trocando</translation>
     </message>
@@ -5799,12 +5799,12 @@ Esta ação não pode ser desfeita.</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+1228"/>
+        <location line="+1442"/>
         <source>Automatic</source>
         <translation>Automática</translation>
     </message>
     <message>
-        <location line="-1218"/>
+        <location line="-1432"/>
         <source>Looking for cameras…</source>
         <translation>Procurando câmeras…</translation>
     </message>
@@ -5824,7 +5824,7 @@ Esta ação não pode ser desfeita.</translation>
         <translation>Nenhuma câmera encontrada. A câmera automática continua disponível.</translation>
     </message>
     <message>
-        <location line="+145"/>
+        <location line="+148"/>
         <source>%1 copy</source>
         <translation>%1 (cópia)</translation>
     </message>
@@ -5834,7 +5834,7 @@ Esta ação não pode ser desfeita.</translation>
         <translation>Escolha qual cena deve substituir a cena ao vivo.</translation>
     </message>
     <message>
-        <location line="+445"/>
+        <location line="+590"/>
         <source>Check the camera name, connection and PTZ settings.</source>
         <translation>Verifique o nome da câmera, a conexão e as configurações de PTZ.</translation>
     </message>
@@ -5864,7 +5864,7 @@ Esta ação não pode ser desfeita.</translation>
         <translation>Falha ao acionar a predefinição PTZ.</translation>
     </message>
     <message>
-        <location line="+122"/>
+        <location line="+124"/>
         <source>Default</source>
         <translation>Padrão</translation>
     </message>
@@ -5894,12 +5894,37 @@ Esta ação não pode ser desfeita.</translation>
         <translation>Fade</translation>
     </message>
     <message>
-        <location line="+69"/>
+        <location line="+23"/>
+        <source>Unlock the source to frame it.</source>
+        <translation>Desbloqueie a fonte para enquadrá-la.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Show the source to frame it.</source>
+        <translation>Mostre a fonte para enquadrá-la.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Reset rotation before framing.</source>
+        <translation>Redefina a rotação antes de enquadrar.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Move or resize the source into the canvas first.</source>
+        <translation>Primeiro mova ou redimensione a fonte para dentro do canvas.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>The visible source area is too small to frame.</source>
+        <translation>A área visível da fonte é pequena demais para enquadrar.</translation>
+    </message>
+    <message>
+        <location line="+97"/>
         <source>Camera unavailable. Check its connection, privacy permissions, or whether another application is using it.</source>
         <translation>Câmera indisponível. Verifique a conexão, as permissões de privacidade ou se outro aplicativo está usando-a.</translation>
     </message>
     <message>
-        <location line="+116"/>
+        <location line="+118"/>
         <source>%1 (virtual)</source>
         <translation>%1 (virtual)</translation>
     </message>
@@ -5934,7 +5959,7 @@ Esta ação não pode ser desfeita.</translation>
         <translation>Cenas</translation>
     </message>
     <message>
-        <location line="-1330"/>
+        <location line="-1541"/>
         <location line="+26"/>
         <source>Choose a valid transition and duration.</source>
         <translation>Escolha uma transição e duração válidas.</translation>
@@ -5943,13 +5968,13 @@ Esta ação não pode ser desfeita.</translation>
 <context>
     <name>ScenesEditorView</name>
     <message>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+1444"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+1469"/>
         <location line="+6"/>
         <source>Program transition: %1</source>
         <translation>Transição de cena: %1</translation>
     </message>
     <message>
-        <location line="-796"/>
+        <location line="-821"/>
         <source>Program transition</source>
         <translation>Transição de cena</translation>
     </message>
@@ -6051,12 +6076,12 @@ Esta ação não pode ser desfeita.</translation>
     </message>
     <message>
         <location line="+15"/>
-        <location line="+419"/>
+        <location line="+444"/>
         <source>ms</source>
         <translation>ms</translation>
     </message>
     <message>
-        <location line="-366"/>
+        <location line="-391"/>
         <source>Rename…</source>
         <translation>Renomear…</translation>
     </message>
@@ -6171,7 +6196,12 @@ Esta ação não pode ser desfeita.</translation>
         <translation>Manter câmera ativa</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+20"/>
+        <source>Fill canvas from crop</source>
+        <translation>Preencher canvas com o recorte</translation>
+    </message>
+    <message>
+        <location line="+5"/>
         <source>Precise transform…</source>
         <translation>Transformação precisa…</translation>
     </message>
@@ -6186,7 +6216,12 @@ Esta ação não pode ser desfeita.</translation>
         <translation>Centralizar</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+4"/>
+        <source>Mirror horizontally</source>
+        <translation>Espelhar horizontalmente</translation>
+    </message>
+    <message>
+        <location line="+8"/>
         <source>Fit</source>
         <translation>Ajustar</translation>
     </message>
@@ -6433,12 +6468,13 @@ Esta ação não pode ser desfeita.</translation>
     </message>
     <message>
         <location line="+17"/>
+        <location filename="../../qml/ScenesCanvas.qml" line="+694"/>
         <location filename="../../qml/ScenesPtzInspector.qml" line="+33"/>
         <location line="+65"/>
         <location line="+29"/>
         <location filename="../../qml/ScenesTransformDialog.qml" line="+94"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-875"/>
-        <location line="+416"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-900"/>
+        <location line="+441"/>
         <location line="+89"/>
         <location line="+68"/>
         <location line="+309"/>
@@ -6456,13 +6492,40 @@ Esta ação não pode ser desfeita.</translation>
         <translation>Salvar</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-454"/>
-        <location line="+416"/>
+        <location filename="../../qml/ScenesCanvas.qml" line="-14"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-188"/>
+        <source>Frame…</source>
+        <translation>Enquadrar…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Frame and fill the canvas (F)</source>
+        <translation>Enquadrar e preencher o canvas (F)</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Cancel framing (Esc)</source>
+        <translation>Cancelar enquadramento (Esc)</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Drag to compose · Scroll to zoom</source>
+        <translation>Arraste para compor · Role para ajustar o zoom</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-291"/>
+        <location line="+441"/>
         <source>Apply</source>
         <translation>Aplicar</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesCanvas.qml" line="+90"/>
+        <location line="+3"/>
+        <source>Apply framing (Enter)</source>
+        <translation>Aplicar enquadramento (Enter)</translation>
+    </message>
+    <message>
+        <location line="-552"/>
         <source>Waiting for the first frame</source>
         <translation>Aguardando o primeiro quadro</translation>
     </message>
@@ -6723,7 +6786,7 @@ Esta ação não pode ser desfeita.</translation>
     </message>
     <message>
         <location filename="../../qml/ScenesScenePanel.qml" line="+172"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-1148"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-1173"/>
         <location line="+301"/>
         <location line="+102"/>
         <source>Scenes</source>

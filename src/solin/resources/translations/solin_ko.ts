@@ -4008,26 +4008,26 @@ Stop the projection and try again.</source>
     <message>
         <location line="+4"/>
         <source>A playlist named &quot;{name}&quot; already exists.</source>
-        <translation>"{name}"(이)라는 재생목록이 이미 있습니다.</translation>
+        <translation>&quot;{name}&quot;(이)라는 재생목록이 이미 있습니다.</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Playlist &quot;{name}&quot;
 created successfully!</source>
-        <translation>재생목록 "{name}"이(가)
+        <translation>재생목록 &quot;{name}&quot;이(가)
 생성되었습니다!</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Could not add media to playlist &quot;{name}&quot; because the selected location no longer exists.</source>
-        <translation>선택한 위치가 더 이상 존재하지 않아 재생목록 "{name}"에 미디어를 추가할 수 없습니다.</translation>
+        <translation>선택한 위치가 더 이상 존재하지 않아 재생목록 &quot;{name}&quot;에 미디어를 추가할 수 없습니다.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>This media is already in
 playlist &quot;{name}&quot;</source>
         <translation>이 미디어는 이미
-재생목록 "{name}"에 있습니다</translation>
+재생목록 &quot;{name}&quot;에 있습니다</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -4130,7 +4130,7 @@ Create subfolders inside the linked folder to use as playlists.</source>
     <message>
         <location line="+1"/>
         <source>A playlist named &quot;{name}&quot; already exists.</source>
-        <translation>"{name}"(이)라는 재생목록이 이미 있습니다.</translation>
+        <translation>&quot;{name}&quot;(이)라는 재생목록이 이미 있습니다.</translation>
     </message>
     <message>
         <location line="+20"/>
@@ -4477,12 +4477,12 @@ This action cannot be undone.</source>
     <message>
         <location filename="../../widgets/playlist/widget.py" line="+353"/>
         <source>No media files found in &quot;{name}&quot;.</source>
-        <translation>"{name}"에서 미디어 파일을 찾을 수 없습니다.</translation>
+        <translation>&quot;{name}&quot;에서 미디어 파일을 찾을 수 없습니다.</translation>
     </message>
     <message>
         <location line="+99"/>
         <source>A playlist named &quot;{name}&quot; already exists.</source>
-        <translation>"{name}"(이)라는 재생목록이 이미 있습니다.</translation>
+        <translation>&quot;{name}&quot;(이)라는 재생목록이 이미 있습니다.</translation>
     </message>
 </context>
 <context>
@@ -5706,7 +5706,7 @@ This action cannot be undone.</source>
 <context>
     <name>ScenesBridge</name>
     <message>
-        <location filename="../../ui/qml/scenes_bridge.py" line="+277"/>
+        <location filename="../../ui/qml/scenes_bridge.py" line="+309"/>
         <source>Switching</source>
         <translation>전환 중</translation>
     </message>
@@ -5747,12 +5747,12 @@ This action cannot be undone.</source>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+1228"/>
+        <location line="+1442"/>
         <source>Automatic</source>
         <translation>자동</translation>
     </message>
     <message>
-        <location line="-1218"/>
+        <location line="-1432"/>
         <source>Looking for cameras…</source>
         <translation>카메라를 찾는 중…</translation>
     </message>
@@ -5772,7 +5772,7 @@ This action cannot be undone.</source>
         <translation>카메라를 찾을 수 없습니다. 자동 카메라는 계속 사용할 수 있습니다.</translation>
     </message>
     <message>
-        <location line="+145"/>
+        <location line="+148"/>
         <source>%1 copy</source>
         <translation>%1 (사본)</translation>
     </message>
@@ -5788,7 +5788,7 @@ This action cannot be undone.</source>
         <translation>올바른 전환과 시간을 선택하십시오.</translation>
     </message>
     <message>
-        <location line="+377"/>
+        <location line="+522"/>
         <source>Check the camera name, connection and PTZ settings.</source>
         <translation>카메라 이름, 연결, PTZ 설정을 확인하십시오.</translation>
     </message>
@@ -5818,7 +5818,7 @@ This action cannot be undone.</source>
         <translation>PTZ 프리셋 호출에 실패했습니다.</translation>
     </message>
     <message>
-        <location line="+122"/>
+        <location line="+124"/>
         <source>Default</source>
         <translation>기본</translation>
     </message>
@@ -5848,12 +5848,37 @@ This action cannot be undone.</source>
         <translation>검은 화면 페이드</translation>
     </message>
     <message>
-        <location line="+69"/>
+        <location line="+23"/>
+        <source>Unlock the source to frame it.</source>
+        <translation>프레이밍하려면 소스 잠금을 해제하세요.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Show the source to frame it.</source>
+        <translation>프레이밍하려면 소스를 표시하세요.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Reset rotation before framing.</source>
+        <translation>프레이밍하기 전에 회전을 초기화하세요.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Move or resize the source into the canvas first.</source>
+        <translation>먼저 소스를 캔버스 안으로 이동하거나 크기를 조절하세요.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>The visible source area is too small to frame.</source>
+        <translation>표시되는 소스 영역이 너무 작아 프레이밍할 수 없습니다.</translation>
+    </message>
+    <message>
+        <location line="+97"/>
         <source>Camera unavailable. Check its connection, privacy permissions, or whether another application is using it.</source>
         <translation>카메라를 사용할 수 없습니다. 연결, 개인 정보 권한, 다른 프로그램이 사용 중인지 확인하십시오.</translation>
     </message>
     <message>
-        <location line="+116"/>
+        <location line="+118"/>
         <source>%1 (virtual)</source>
         <translation>%1 (가상)</translation>
     </message>
@@ -5909,7 +5934,7 @@ This action cannot be undone.</source>
     <message>
         <location line="+6"/>
         <location filename="../../qml/ScenesPtzInspector.qml" line="+10"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+1599"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+1624"/>
         <source>Name</source>
         <translation>이름</translation>
     </message>
@@ -6037,12 +6062,13 @@ This action cannot be undone.</source>
     </message>
     <message>
         <location line="+17"/>
+        <location filename="../../qml/ScenesCanvas.qml" line="+694"/>
         <location filename="../../qml/ScenesPtzInspector.qml" line="+33"/>
         <location line="+65"/>
         <location line="+29"/>
         <location filename="../../qml/ScenesTransformDialog.qml" line="+94"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-875"/>
-        <location line="+416"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-900"/>
+        <location line="+441"/>
         <location line="+89"/>
         <location line="+68"/>
         <location line="+309"/>
@@ -6060,9 +6086,35 @@ This action cannot be undone.</source>
         <translation>저장</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesCanvas.qml" line="+90"/>
+        <location filename="../../qml/ScenesCanvas.qml" line="-529"/>
         <source>Waiting for the first frame</source>
         <translation>첫 프레임을 기다리는 중</translation>
+    </message>
+    <message>
+        <location line="+515"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-188"/>
+        <source>Frame…</source>
+        <translation>프레이밍…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Frame and fill the canvas (F)</source>
+        <translation>프레이밍하고 캔버스 채우기 (F)</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Cancel framing (Esc)</source>
+        <translation>프레이밍 취소 (Esc)</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Drag to compose · Scroll to zoom</source>
+        <translation>드래그하여 구도 조정 · 스크롤하여 확대/축소</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Apply framing (Enter)</source>
+        <translation>프레이밍 적용 (Enter)</translation>
     </message>
     <message>
         <location filename="../../qml/ScenesPtzInspector.qml" line="-303"/>
@@ -6244,7 +6296,7 @@ This action cannot be undone.</source>
     </message>
     <message>
         <location line="+7"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+48"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+236"/>
         <location line="+68"/>
         <source>Delete</source>
         <translation>삭제</translation>
@@ -6321,7 +6373,7 @@ This action cannot be undone.</source>
     </message>
     <message>
         <location filename="../../qml/ScenesScenePanel.qml" line="+172"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-1148"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-1173"/>
         <location line="+301"/>
         <location line="+102"/>
         <source>Scenes</source>
@@ -6529,18 +6581,19 @@ Add content, a camera, or another scene.</source>
     </message>
     <message>
         <location line="+15"/>
-        <location line="+419"/>
+        <location line="+444"/>
         <source>ms</source>
         <translation>밀리초</translation>
     </message>
     <message>
-        <location line="-403"/>
-        <location line="+416"/>
+        <location filename="../../qml/ScenesCanvas.qml" line="-3"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-428"/>
+        <location line="+441"/>
         <source>Apply</source>
         <translation>적용</translation>
     </message>
     <message>
-        <location line="-379"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-404"/>
         <source>Rename…</source>
         <translation>이름 바꾸기…</translation>
     </message>
@@ -6655,7 +6708,12 @@ Add content, a camera, or another scene.</source>
         <translation>카메라를 계속 활성 상태로 유지</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+20"/>
+        <source>Fill canvas from crop</source>
+        <translation>자른 영역으로 캔버스 채우기</translation>
+    </message>
+    <message>
+        <location line="+5"/>
         <source>Precise transform…</source>
         <translation>정밀 변형…</translation>
     </message>
@@ -6670,7 +6728,12 @@ Add content, a camera, or another scene.</source>
         <translation>가운데 정렬</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+4"/>
+        <source>Mirror horizontally</source>
+        <translation>수평으로 뒤집기</translation>
+    </message>
+    <message>
+        <location line="+8"/>
         <source>Fit</source>
         <translation>맞추기</translation>
     </message>

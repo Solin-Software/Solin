@@ -4035,26 +4035,26 @@ Acha kuonyesha na ujaribu tena.</translation>
     <message>
         <location line="+4"/>
         <source>A playlist named &quot;{name}&quot; already exists.</source>
-        <translation>Orodha ya kucheza yenye jina "{name}" tayari ipo.</translation>
+        <translation>Orodha ya kucheza yenye jina &quot;{name}&quot; tayari ipo.</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Playlist &quot;{name}&quot;
 created successfully!</source>
-        <translation>Orodha ya kucheza "{name}"
+        <translation>Orodha ya kucheza &quot;{name}&quot;
 imeundwa!</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Could not add media to playlist &quot;{name}&quot; because the selected location no longer exists.</source>
-        <translation>Haikuweza kuongeza media kwenye orodha ya kucheza "{name}" kwa sababu mahali palipochaguliwa hapapo tena.</translation>
+        <translation>Haikuweza kuongeza media kwenye orodha ya kucheza &quot;{name}&quot; kwa sababu mahali palipochaguliwa hapapo tena.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>This media is already in
 playlist &quot;{name}&quot;</source>
         <translation>Media hii tayari ipo kwenye
-orodha ya kucheza "{name}"</translation>
+orodha ya kucheza &quot;{name}&quot;</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -4157,7 +4157,7 @@ Tengeneza folda ndogo ndani ya folda iliyounganishwa ili kutumia kama orodha za 
     <message>
         <location line="+1"/>
         <source>A playlist named &quot;{name}&quot; already exists.</source>
-        <translation>Orodha ya kucheza yenye jina "{name}" tayari ipo.</translation>
+        <translation>Orodha ya kucheza yenye jina &quot;{name}&quot; tayari ipo.</translation>
     </message>
     <message>
         <location line="+20"/>
@@ -4506,12 +4506,12 @@ Hutaweza kurudisha hatua hii.</translation>
     <message>
         <location filename="../../widgets/playlist/widget.py" line="+353"/>
         <source>No media files found in &quot;{name}&quot;.</source>
-        <translation>Hakuna faili za media zilizopatikana katika "{name}".</translation>
+        <translation>Hakuna faili za media zilizopatikana katika &quot;{name}&quot;.</translation>
     </message>
     <message>
         <location line="+99"/>
         <source>A playlist named &quot;{name}&quot; already exists.</source>
-        <translation>Orodha ya kucheza yenye jina "{name}" tayari ipo.</translation>
+        <translation>Orodha ya kucheza yenye jina &quot;{name}&quot; tayari ipo.</translation>
     </message>
 </context>
 <context>
@@ -5737,7 +5737,7 @@ Hutaweza kurudisha hatua hii.</translation>
 <context>
     <name>ScenesBridge</name>
     <message>
-        <location filename="../../ui/qml/scenes_bridge.py" line="+277"/>
+        <location filename="../../ui/qml/scenes_bridge.py" line="+309"/>
         <source>Switching</source>
         <translation>Inabadilisha</translation>
     </message>
@@ -5778,12 +5778,12 @@ Hutaweza kurudisha hatua hii.</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+1228"/>
+        <location line="+1442"/>
         <source>Automatic</source>
         <translation>Otomatiki</translation>
     </message>
     <message>
-        <location line="-1218"/>
+        <location line="-1432"/>
         <source>Looking for cameras…</source>
         <translation>Inatafuta kamera…</translation>
     </message>
@@ -5803,7 +5803,7 @@ Hutaweza kurudisha hatua hii.</translation>
         <translation>Hakuna kamera zilizopatikana. Kamera ya otomatiki bado inapatikana.</translation>
     </message>
     <message>
-        <location line="+145"/>
+        <location line="+148"/>
         <source>%1 copy</source>
         <translation>%1 (nakala)</translation>
     </message>
@@ -5819,7 +5819,7 @@ Hutaweza kurudisha hatua hii.</translation>
         <translation>Chagua mpito na muda sahihi.</translation>
     </message>
     <message>
-        <location line="+377"/>
+        <location line="+522"/>
         <source>Check the camera name, connection and PTZ settings.</source>
         <translation>Angalia jina la kamera, muunganisho, na mipangilio ya PTZ.</translation>
     </message>
@@ -5849,7 +5849,7 @@ Hutaweza kurudisha hatua hii.</translation>
         <translation>Kuita mpangilio uliohifadhiwa wa PTZ kumeshindikana.</translation>
     </message>
     <message>
-        <location line="+122"/>
+        <location line="+124"/>
         <source>Default</source>
         <translation>Chaguomsingi</translation>
     </message>
@@ -5879,12 +5879,37 @@ Hutaweza kurudisha hatua hii.</translation>
         <translation>Fifisha kupitia weusi</translation>
     </message>
     <message>
-        <location line="+69"/>
+        <location line="+23"/>
+        <source>Unlock the source to frame it.</source>
+        <translation>Fungua chanzo ili ukipangie fremu.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Show the source to frame it.</source>
+        <translation>Onyesha chanzo ili ukipangie fremu.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Reset rotation before framing.</source>
+        <translation>Weka upya mzunguko kabla ya kupanga fremu.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Move or resize the source into the canvas first.</source>
+        <translation>Kwanza sogeza au badili ukubwa wa chanzo ndani ya turubai.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>The visible source area is too small to frame.</source>
+        <translation>Sehemu inayoonekana ya chanzo ni ndogo sana kupangiwa fremu.</translation>
+    </message>
+    <message>
+        <location line="+97"/>
         <source>Camera unavailable. Check its connection, privacy permissions, or whether another application is using it.</source>
         <translation>Kamera haipatikani. Angalia muunganisho, ruhusa za faragha, au kama programu nyingine inaitumia.</translation>
     </message>
     <message>
-        <location line="+116"/>
+        <location line="+118"/>
         <source>%1 (virtual)</source>
         <translation>%1 (pepe)</translation>
     </message>
@@ -5940,7 +5965,7 @@ Hutaweza kurudisha hatua hii.</translation>
     <message>
         <location line="+6"/>
         <location filename="../../qml/ScenesPtzInspector.qml" line="+10"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+1599"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+1624"/>
         <source>Name</source>
         <translation>Jina</translation>
     </message>
@@ -6068,12 +6093,13 @@ Hutaweza kurudisha hatua hii.</translation>
     </message>
     <message>
         <location line="+17"/>
+        <location filename="../../qml/ScenesCanvas.qml" line="+694"/>
         <location filename="../../qml/ScenesPtzInspector.qml" line="+33"/>
         <location line="+65"/>
         <location line="+29"/>
         <location filename="../../qml/ScenesTransformDialog.qml" line="+94"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-875"/>
-        <location line="+416"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-900"/>
+        <location line="+441"/>
         <location line="+89"/>
         <location line="+68"/>
         <location line="+309"/>
@@ -6091,9 +6117,35 @@ Hutaweza kurudisha hatua hii.</translation>
         <translation>Hifadhi</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesCanvas.qml" line="+90"/>
+        <location filename="../../qml/ScenesCanvas.qml" line="-529"/>
         <source>Waiting for the first frame</source>
         <translation>Inasubiri fremu ya kwanza</translation>
+    </message>
+    <message>
+        <location line="+515"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-188"/>
+        <source>Frame…</source>
+        <translation>Panga fremu…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Frame and fill the canvas (F)</source>
+        <translation>Panga fremu na ujaze turubai (F)</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Cancel framing (Esc)</source>
+        <translation>Ghairi upangaji wa fremu (Esc)</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Drag to compose · Scroll to zoom</source>
+        <translation>Buruta ili kupanga · Sogeza gurudumu ili kukuza</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Apply framing (Enter)</source>
+        <translation>Tumia upangaji wa fremu (Enter)</translation>
     </message>
     <message>
         <location filename="../../qml/ScenesPtzInspector.qml" line="-303"/>
@@ -6275,7 +6327,7 @@ Hutaweza kurudisha hatua hii.</translation>
     </message>
     <message>
         <location line="+7"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+48"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+236"/>
         <location line="+68"/>
         <source>Delete</source>
         <translation>Futa</translation>
@@ -6352,7 +6404,7 @@ Hutaweza kurudisha hatua hii.</translation>
     </message>
     <message>
         <location filename="../../qml/ScenesScenePanel.qml" line="+172"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-1148"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-1173"/>
         <location line="+301"/>
         <location line="+102"/>
         <source>Scenes</source>
@@ -6560,18 +6612,19 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
     </message>
     <message>
         <location line="+15"/>
-        <location line="+419"/>
+        <location line="+444"/>
         <source>ms</source>
         <translation>ms</translation>
     </message>
     <message>
-        <location line="-403"/>
-        <location line="+416"/>
+        <location filename="../../qml/ScenesCanvas.qml" line="-3"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-428"/>
+        <location line="+441"/>
         <source>Apply</source>
         <translation>Tumia</translation>
     </message>
     <message>
-        <location line="-379"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-404"/>
         <source>Rename…</source>
         <translation>Badilisha jina…</translation>
     </message>
@@ -6686,7 +6739,12 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
         <translation>Weka kamera ikiwa hai</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+20"/>
+        <source>Fill canvas from crop</source>
+        <translation>Jaza turubai kutokana na sehemu iliyopunguzwa</translation>
+    </message>
+    <message>
+        <location line="+5"/>
         <source>Precise transform…</source>
         <translation>Ubadilishaji sahihi…</translation>
     </message>
@@ -6701,7 +6759,12 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
         <translation>Weka katikati</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+4"/>
+        <source>Mirror horizontally</source>
+        <translation>Geuza kwa mlalo</translation>
+    </message>
+    <message>
+        <location line="+8"/>
         <source>Fit</source>
         <translation>Linganisha</translation>
     </message>
