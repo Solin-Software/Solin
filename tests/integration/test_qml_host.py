@@ -1052,7 +1052,7 @@ def test_media_countdown_portuguese_catalog_covers_ui_and_runtime_feedback(
     root.setProperty("automationExpanded", True)
     QTest.qWait(20)
     visible_text = _visible_texts(root)
-    assert "Quanto tempo antes da reunião o cronômetro deve começar?" in visible_text
+    assert "Quanto tempo antes da reunião a contagem regressiva deve começar?" in visible_text
     assert meeting_weekday_names()[0] == "Segunda-feira"
     assert meeting_kind_label("midweek") == "Reunião do meio de semana"
     assert QCoreApplication.translate(
