@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
 )
 
 from solin.controllers.scene_runtime_controller import SceneRuntimeController
+from solin.core.scenes.composition import SceneComposition, analyze_scene_compositions
 from solin.core.scenes.model import BusId, OutputMode, TransitionKind, TransitionSpec
 from solin.styles.icons import ICON_CLAPPERBOARD, make_icon
 from solin.styles.theme import PALETTE, qss_rgba
@@ -209,7 +210,13 @@ class SceneControlPopup(QWidget):
         self._success_flash = ButtonSuccessFlash(self)
         self._scene_rows: dict[str, _SceneChipButton] = {}
         self._scene_order: tuple[str, ...] = ()
-        self._scene_layout_signature: tuple[tuple[str, ...], str, str] | None = None
+        self._scene_layout_signature: tuple[
+            tuple[str, ...],
+            tuple[str, ...],
+            tuple[str, ...],
+        ] | None = None
+        self._composition_document_key: tuple[str, int] | None = None
+        self._scene_compositions: dict[str, SceneComposition] = {}
 
         opacity = QGraphicsOpacityEffect(self)
         opacity.setOpacity(1.0)
@@ -274,6 +281,15 @@ class SceneControlPopup(QWidget):
         )
         self._configured_cards.setObjectName("SceneControlCardGrid")
         self._list_layout.addWidget(self._configured_cards)
+        self._pip_label = QLabel(self.tr("Camera PiP"))
+        self._pip_label.setObjectName("SceneControlSectionLabel")
+        self._list_layout.addWidget(self._pip_label)
+        self._pip_cards = FlowContainer(
+            horizontal_spacing=8,
+            vertical_spacing=6,
+        )
+        self._pip_cards.setObjectName("SceneControlCardGrid")
+        self._list_layout.addWidget(self._pip_cards)
         self._other_label = QLabel(self.tr("Other scenes"))
         self._other_label.setObjectName("SceneControlSectionLabel")
         self._list_layout.addWidget(self._other_label)
@@ -464,16 +480,38 @@ class SceneControlPopup(QWidget):
         return_scene_id: str,
         return_override_available: bool,
     ) -> None:
-        scenes = self._controller.document.scenes
+        document = self._controller.document
+        scenes = document.scenes
         source_order = tuple(scene.id for scene in scenes)
-        layout_signature = (
-            source_order,
-            default_scene_id or "",
-            media_scene_id or "",
+        configured_ids = {
+            scene_id
+            for scene_id in (default_scene_id, media_scene_id)
+            if scene_id is not None and scene_id in source_order
+        }
+        configured_order = tuple(
+            scene_id for scene_id in source_order if scene_id in configured_ids
         )
+        composition_document_key = (document.document_id, document.revision)
+        if composition_document_key != self._composition_document_key:
+            self._scene_compositions = analyze_scene_compositions(document)
+            self._composition_document_key = composition_document_key
+        pip_order = tuple(
+            scene_id
+            for scene_id in source_order
+            if scene_id not in configured_ids
+            and self._scene_compositions[scene_id].has_camera_over_content
+        )
+        pip_ids = set(pip_order)
+        other_order = tuple(
+            scene_id
+            for scene_id in source_order
+            if scene_id not in configured_ids and scene_id not in pip_ids
+        )
+        layout_signature = (configured_order, pip_order, other_order)
         if layout_signature != self._scene_layout_signature:
             scroll_value = self._scroll.verticalScrollBar().value()
             self._configured_cards.clear_items(delete=False)
+            self._pip_cards.clear_items(delete=False)
             self._other_cards.clear_items(delete=False)
             for removed_id in set(self._scene_rows) - set(source_order):
                 self._scene_rows.pop(removed_id).deleteLater()
@@ -486,27 +524,22 @@ class SceneControlPopup(QWidget):
                 row.return_requested.connect(self._set_return_scene)
                 self._scene_rows[scene.id] = row
 
-            configured_order = tuple(
-                scene_id
-                for scene_id in (default_scene_id, media_scene_id)
-                if scene_id is not None and scene_id in self._scene_rows
-            )
-            configured_order = tuple(dict.fromkeys(configured_order))
-            configured_ids = set(configured_order)
-            other_order = tuple(
-                scene_id for scene_id in source_order if scene_id not in configured_ids
-            )
             for scene_id in configured_order:
                 self._configured_cards.add_widget(self._scene_rows[scene_id])
+            for scene_id in pip_order:
+                self._pip_cards.add_widget(self._scene_rows[scene_id])
             for scene_id in other_order:
                 self._other_cards.add_widget(self._scene_rows[scene_id])
             has_configured = bool(configured_order)
+            has_pip = bool(pip_order)
             has_other = bool(other_order)
             self._configured_label.setVisible(has_configured)
             self._configured_cards.setVisible(has_configured)
+            self._pip_label.setVisible(has_pip)
+            self._pip_cards.setVisible(has_pip)
             self._other_label.setVisible(has_other)
             self._other_cards.setVisible(has_other)
-            self._scene_order = configured_order + other_order
+            self._scene_order = configured_order + pip_order + other_order
             self._scene_layout_signature = layout_signature
             QTimer.singleShot(
                 0,
@@ -617,7 +650,7 @@ class SceneControlPopup(QWidget):
         )
         self._info.setFixedWidth(content_width)
         self._set_info_text(self._info_full_text)
-        for flow in (self._configured_cards, self._other_cards):
+        for flow in (self._configured_cards, self._pip_cards, self._other_cards):
             if not flow.isVisible():
                 continue
             flow.setFixedSize(
@@ -790,6 +823,7 @@ class SceneControlPopup(QWidget):
             self._set_operation_error("")
             self._title.setText(self.tr("Solin scenes"))
             self._configured_label.setText(self.tr("Configured"))
+            self._pip_label.setText(self.tr("Camera PiP"))
             self._other_label.setText(self.tr("Other scenes"))
             self._automatic.setText(self.tr("Auto-switch media"))
             self._media_mirror.setText(self.tr("Media windows"))

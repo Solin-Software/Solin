@@ -5501,43 +5501,49 @@ Cette action est irréversible.</translation>
 <context>
     <name>SceneControlPopup</name>
     <message>
-        <location filename="../../widgets/scenes/control_popup.py" line="+247"/>
-        <location line="+544"/>
+        <location filename="../../widgets/scenes/control_popup.py" line="+254"/>
+        <location line="+570"/>
         <source>Solin scenes</source>
         <translation>Scènes Solin</translation>
     </message>
     <message>
-        <location line="-523"/>
-        <location line="+524"/>
+        <location line="-549"/>
+        <location line="+550"/>
         <source>Configured</source>
         <translation>Configurées</translation>
     </message>
     <message>
-        <location line="-515"/>
-        <location line="+516"/>
+        <location line="-541"/>
+        <location line="+542"/>
+        <source>Camera PiP</source>
+        <translation>Caméra PiP</translation>
+    </message>
+    <message>
+        <location line="-533"/>
+        <location line="+534"/>
         <source>Other scenes</source>
         <translation>Autres scènes</translation>
     </message>
     <message>
-        <location line="-490"/>
-        <location line="+491"/>
+        <location line="-508"/>
+        <location line="+509"/>
         <source>Auto-switch media</source>
         <translation>Changement automatique</translation>
     </message>
     <message>
-        <location line="-486"/>
-        <location line="+487"/>
+        <location line="-504"/>
+        <location line="+505"/>
         <source>Media windows</source>
         <translation>Fenêtres de médias</translation>
     </message>
     <message>
-        <location line="-483"/>
-        <location line="+484"/>
+        <location line="-501"/>
+        <location line="+502"/>
         <source>Show in media windows</source>
         <translation>Afficher dans les fenêtres de médias</translation>
     </message>
     <message>
-        <location line="-473"/>
+        <location line="-491"/>
         <source>The scene could not be selected.</source>
         <translation>La scène n’a pas pu être sélectionnée.</translation>
     </message>
@@ -5623,7 +5629,7 @@ Cette action est irréversible.</translation>
         <translation>Sortie désactivée</translation>
     </message>
     <message>
-        <location line="+73"/>
+        <location line="+90"/>
         <source>Transition override: %1</source>
         <translation>Transition personnalisée : %1</translation>
     </message>
@@ -5729,7 +5735,7 @@ Cette action est irréversible.</translation>
 <context>
     <name>SceneRuntimeController</name>
     <message>
-        <location filename="../../controllers/scene_runtime_controller.py" line="+1663"/>
+        <location filename="../../controllers/scene_runtime_controller.py" line="+1626"/>
         <source>The selected transition is unavailable. The scene was cut instead.</source>
         <translation>La transition sélectionnée est indisponible. La scène a été basculée en coupe.</translation>
     </message>

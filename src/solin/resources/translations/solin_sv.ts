@@ -5500,43 +5500,49 @@ Den här åtgärden kan inte ångras.</translation>
 <context>
     <name>SceneControlPopup</name>
     <message>
-        <location filename="../../widgets/scenes/control_popup.py" line="+247"/>
-        <location line="+544"/>
+        <location filename="../../widgets/scenes/control_popup.py" line="+254"/>
+        <location line="+570"/>
         <source>Solin scenes</source>
         <translation>Solin-scener</translation>
     </message>
     <message>
-        <location line="-523"/>
-        <location line="+524"/>
+        <location line="-549"/>
+        <location line="+550"/>
         <source>Configured</source>
         <translation>Konfigurerade</translation>
     </message>
     <message>
-        <location line="-515"/>
-        <location line="+516"/>
+        <location line="-541"/>
+        <location line="+542"/>
+        <source>Camera PiP</source>
+        <translation>Kamera-PiP</translation>
+    </message>
+    <message>
+        <location line="-533"/>
+        <location line="+534"/>
         <source>Other scenes</source>
         <translation>Andra scener</translation>
     </message>
     <message>
-        <location line="-490"/>
-        <location line="+491"/>
+        <location line="-508"/>
+        <location line="+509"/>
         <source>Auto-switch media</source>
         <translation>Automatiskt byte</translation>
     </message>
     <message>
-        <location line="-486"/>
-        <location line="+487"/>
+        <location line="-504"/>
+        <location line="+505"/>
         <source>Media windows</source>
         <translation>Mediafönster</translation>
     </message>
     <message>
-        <location line="-483"/>
-        <location line="+484"/>
+        <location line="-501"/>
+        <location line="+502"/>
         <source>Show in media windows</source>
         <translation>Visa i mediafönstren</translation>
     </message>
     <message>
-        <location line="-473"/>
+        <location line="-491"/>
         <source>The scene could not be selected.</source>
         <translation>Det gick inte att välja scenen.</translation>
     </message>
@@ -5622,7 +5628,7 @@ Den här åtgärden kan inte ångras.</translation>
         <translation>Utgång av</translation>
     </message>
     <message>
-        <location line="+73"/>
+        <location line="+90"/>
         <source>Transition override: %1</source>
         <translation>Avvikande övergång: %1</translation>
     </message>
@@ -5728,7 +5734,7 @@ Den här åtgärden kan inte ångras.</translation>
 <context>
     <name>SceneRuntimeController</name>
     <message>
-        <location filename="../../controllers/scene_runtime_controller.py" line="+1663"/>
+        <location filename="../../controllers/scene_runtime_controller.py" line="+1626"/>
         <source>The selected transition is unavailable. The scene was cut instead.</source>
         <translation>Den valda övergången är inte tillgänglig. Scenen byttes med klipp i stället.</translation>
     </message>

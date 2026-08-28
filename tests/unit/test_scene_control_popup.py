@@ -8,7 +8,18 @@ from PySide6.QtTest import QTest
 
 from solin.controllers.scene_runtime_controller import SceneRuntimeController
 from solin.core.foundation.runtime_paths import ProfilePaths
-from solin.core.scenes.model import BusId, OutputMode, TransitionKind, TransitionSpec
+from solin.core.scenes.model import (
+    CONTENT_SOURCE_ID,
+    DEFAULT_CAMERA_SOURCE_ID,
+    BusId,
+    OutputMode,
+    SceneLayer,
+    SceneReferenceConfig,
+    SourceDefinition,
+    SourceKind,
+    TransitionKind,
+    TransitionSpec,
+)
 from solin.core.scenes.presets import SceneSeedNames
 from solin.core.scenes.workspace import SceneWorkspaceService
 from solin.widgets.scenes.control_popup import SceneControlPopup
@@ -58,6 +69,31 @@ def _controller(
         ),
     )
     return SceneRuntimeController(workspace, projection or _Projection())
+
+
+def _add_camera_pip_scene(
+    controller: SceneRuntimeController,
+    scene_id: str,
+    *,
+    camera_source_id: str = DEFAULT_CAMERA_SOURCE_ID,
+) -> None:
+    controller.documents.create_scene("Camera PiP", scene_id=scene_id)
+    controller.documents.add_layer(
+        scene_id,
+        SceneLayer(
+            id=f"{scene_id}-content",
+            source_id=CONTENT_SOURCE_ID,
+            name="Content",
+        ),
+    )
+    controller.documents.add_layer(
+        scene_id,
+        SceneLayer(
+            id=f"{scene_id}-camera",
+            source_id=camera_source_id,
+            name="Camera",
+        ),
+    )
 
 
 def test_scene_toolbar_popup_controls_one_program_and_two_destinations(
@@ -153,26 +189,141 @@ def test_scene_chips_keep_identity_and_move_roles_out_of_visible_text(
     controller.close()
 
 
-def test_configured_scenes_are_pinned_above_other_scene_chips(
+def test_configured_scenes_are_pinned_in_scene_list_order(
     tmp_path: Path,
 ) -> None:
     controller = _controller(tmp_path)
     controller.documents.create_scene("Speaker + reader", scene_id="speaker-reader")
     controller.documents.create_scene("Audience overview", scene_id="audience-overview")
-    popup = SceneControlPopup(controller)
     default_scene_id = controller.documents.program_default_scene_id
     media_scene_id = controller.documents.program_media_scene_id
     assert default_scene_id is not None
     assert media_scene_id is not None
+    controller.documents.reorder_scene(media_scene_id, 0)
+    popup = SceneControlPopup(controller)
 
     assert popup._configured_cards.widgets == (
-        popup._scene_rows[default_scene_id],
         popup._scene_rows[media_scene_id],
+        popup._scene_rows[default_scene_id],
     )
     assert popup._other_cards.widgets == (
         popup._scene_rows["speaker-reader"],
         popup._scene_rows["audience-overview"],
     )
+    popup.deleteLater()
+    QCoreApplication.processEvents()
+    controller.close()
+
+
+def test_camera_pip_scenes_are_grouped_between_configured_and_other_scenes(
+    tmp_path: Path,
+) -> None:
+    controller = _controller(tmp_path)
+    controller.documents.create_scene("Before", scene_id="before")
+    _add_camera_pip_scene(controller, "speaker-pip")
+    controller.documents.create_scene("After", scene_id="after")
+
+    popup = SceneControlPopup(controller)
+
+    assert popup._pip_label.text() == "Camera PiP"
+    assert popup._pip_cards.widgets == (popup._scene_rows["speaker-pip"],)
+    assert popup._other_cards.widgets == (
+        popup._scene_rows["before"],
+        popup._scene_rows["after"],
+    )
+    assert popup._scene_order == (
+        *(scene.id for scene in controller.document.scenes[:2]),
+        "speaker-pip",
+        "before",
+        "after",
+    )
+    popup.deleteLater()
+    QCoreApplication.processEvents()
+    controller.close()
+
+
+def test_configured_role_takes_precedence_over_camera_pip_group(tmp_path: Path) -> None:
+    controller = _controller(tmp_path)
+    _add_camera_pip_scene(controller, "configured-pip")
+    controller.documents.set_program_media_scene("configured-pip")
+
+    popup = SceneControlPopup(controller)
+
+    assert popup._scene_rows["configured-pip"] in popup._configured_cards.widgets
+    assert popup._pip_cards.widgets == ()
+    popup.deleteLater()
+    QCoreApplication.processEvents()
+    controller.close()
+
+
+def test_camera_pip_group_follows_nested_camera_sources_and_live_edits(
+    tmp_path: Path,
+) -> None:
+    controller = _controller(tmp_path)
+    camera_scene_id = controller.documents.program_default_scene_id
+    assert camera_scene_id is not None
+    nested_source = SourceDefinition(
+        id="nested-camera-source",
+        kind=SourceKind.SCENE_REFERENCE,
+        name="Nested camera",
+        configuration=SceneReferenceConfig(target_scene_id=camera_scene_id),
+    )
+    controller.documents.create_source(nested_source)
+    controller.documents.create_scene("Nested PiP", scene_id="nested-pip")
+    popup = SceneControlPopup(controller)
+
+    assert popup._pip_cards.widgets == ()
+    assert popup._scene_rows["nested-pip"] in popup._other_cards.widgets
+
+    controller.documents.add_layer(
+        "nested-pip",
+        SceneLayer(
+            id="nested-pip-content",
+            source_id=CONTENT_SOURCE_ID,
+            name="Content",
+        ),
+    )
+    controller.documents.add_layer(
+        "nested-pip",
+        SceneLayer(
+            id="nested-pip-camera",
+            source_id=nested_source.id,
+            name="Nested camera",
+        ),
+    )
+    QCoreApplication.processEvents()
+
+    assert popup._pip_cards.widgets == (popup._scene_rows["nested-pip"],)
+    assert popup._scene_rows["nested-pip"] not in popup._other_cards.widgets
+    popup.deleteLater()
+    QCoreApplication.processEvents()
+    controller.close()
+
+
+def test_camera_below_content_stays_in_other_scenes(tmp_path: Path) -> None:
+    controller = _controller(tmp_path)
+    controller.documents.create_scene("Camera below", scene_id="camera-below")
+    controller.documents.add_layer(
+        "camera-below",
+        SceneLayer(
+            id="camera-below-camera",
+            source_id=DEFAULT_CAMERA_SOURCE_ID,
+            name="Camera",
+        ),
+    )
+    controller.documents.add_layer(
+        "camera-below",
+        SceneLayer(
+            id="camera-below-content",
+            source_id=CONTENT_SOURCE_ID,
+            name="Content",
+        ),
+    )
+
+    popup = SceneControlPopup(controller)
+
+    assert popup._pip_cards.widgets == ()
+    assert popup._other_cards.widgets == (popup._scene_rows["camera-below"],)
     popup.deleteLater()
     QCoreApplication.processEvents()
     controller.close()
