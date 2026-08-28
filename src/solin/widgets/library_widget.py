@@ -486,7 +486,10 @@ class LibraryWidget(QWidget):
             active_section=section,
             section_title=self.tr("Songs") if is_songs else self.tr("Original Songs"),
             section_subtitle=state.publication_name,
-            search_placeholder=(f"{search_label}  ·  {tr_item_count(len(state.items))}"),
+            search_placeholder=self.tr("{search} · {count}").format(
+                search=search_label,
+                count=tr_item_count(len(state.items)),
+            ),
             search_text=state.query,
             status_text=status,
             loading=state.loading,
@@ -664,12 +667,16 @@ class LibraryWidget(QWidget):
 
     def _download_all_confirmation(self, section: str, mode: str, count: int) -> str:
         if section == "clips":
-            template = self.tr("Download {count} music videos for offline playback?")
-        elif mode == "audio":
-            template = self.tr("Download {count} audio songs for offline playback?")
-        else:
-            template = self.tr("Download {count} video songs for offline playback?")
-        return template.replace("{count}", str(count))
+            return self.tr(
+                "Download %n music video(s) for offline playback?", "", count
+            )
+        if mode == "audio":
+            return self.tr(
+                "Download %n audio song(s) for offline playback?", "", count
+            )
+        return self.tr(
+            "Download %n video song(s) for offline playback?", "", count
+        )
 
     def _download_all_complete_text(self, section: str, mode: str) -> str:
         if section == "clips":
@@ -932,12 +939,16 @@ class LibraryWidget(QWidget):
         all_visible_selected = bool(visible_paths) and visible_paths.issubset(
             self._downloads_selected
         )
-        summary = (
-            self.tr("{size} · {count} files")
-            .replace("{size}", format_file_size(total_size))
-            .replace("{count}", str(len(self._downloads_items)))
+        summary = self.tr(
+            "{size} · %n file(s)",
+            "",
+            len(self._downloads_items),
+        ).format(size=format_file_size(total_size))
+        selection = self.tr(
+            "%n file(s) selected",
+            "",
+            selected_count,
         )
-        selection = self.tr("{count} selected").replace("{count}", str(selected_count))
         status = ""
         if self._downloads_error_text:
             status = self.tr("Could not load downloaded media. Try again.")
@@ -958,10 +969,14 @@ class LibraryWidget(QWidget):
             status_text=status,
             downloads_summary=summary,
             downloads_filter=self._downloads_filter,
-            downloads_all_label=f"{self.tr('All')}  {len(self._downloads_items)}",
-            downloads_video_label=f"{self.tr('Videos')}  {counts['video']}",
-            downloads_audio_label=f"{self.tr('Audio')}  {counts['audio']}",
-            downloads_image_label=f"{self.tr('Images')}  {counts['image']}",
+            downloads_all_label=self.tr(
+                "All · %n file(s)", "", len(self._downloads_items)
+            ),
+            downloads_video_label=self.tr("%n video(s)", "", counts["video"]),
+            downloads_audio_label=self.tr(
+                "%n audio file(s)", "", counts["audio"]
+            ),
+            downloads_image_label=self.tr("%n image(s)", "", counts["image"]),
             downloads_selection_text=selection,
             downloads_selection_size=format_file_size(selected_size),
             downloads_select_all_text=(
@@ -1031,8 +1046,10 @@ class LibraryWidget(QWidget):
         reply = QMessageBox.question(
             self,
             self.tr("Confirm deletion"),
-            self.tr("Delete {count} downloaded files from this computer?").replace(
-                "{count}", str(count)
+            self.tr(
+                "Delete %n downloaded file(s) from this computer?",
+                "",
+                count,
             ),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
             QMessageBox.StandardButton.Cancel,

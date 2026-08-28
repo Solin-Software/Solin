@@ -63,14 +63,12 @@ class PlaylistEditActionsMixin:
             return
         items = self._pl.get("items", [])
         n = len(items)
-        word = self.tr("item") if n == 1 else self.tr("items")
         self.bridge.set_state(
             name=self._pl.get("name", ""),
             is_temp=self._is_temp,
             is_watched=self._is_watched,
             is_loading=False,
             item_count=n,
-            item_word=word,
             has_entries=bool(
                 items
                 or self._pl.get("sections")
@@ -168,23 +166,17 @@ class PlaylistEditActionsMixin:
             self._sync_playlist_chrome(emit_data_changed=False)
             QTimer.singleShot(0, self._request_missing_thumbnails)
         if added:
-            if added == 1:
-                msg = self.tr("1 file added")
-            else:
-                msg = self.tr("{count} files added").replace("{count}", str(added))
-            if skipped == 1:
-                msg += "  " + self.tr("(1 duplicate skipped)")
-            elif skipped > 1:
-                msg += "  " + self.tr("({count} duplicates skipped)").replace(
-                    "{count}",
-                    str(skipped),
+            msg = self.tr("%n file(s) added", "", added)
+            if skipped:
+                msg = self.tr("{added} · {skipped}").format(
+                    added=msg,
+                    skipped=self.tr("%n duplicate(s) skipped", "", skipped),
                 )
             self._notifications.success(msg)
         elif skipped:
-            if skipped == 1:
-                self._notifications.warning(self.tr("File already in playlist"))
-            else:
-                self._notifications.warning(self.tr("Files already in playlist"))
+            self._notifications.warning(
+                self.tr("%n file(s) already in playlist", "", skipped)
+            )
 
     def _queue_watched_media_copy(
         self,

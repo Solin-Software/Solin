@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from PySide6.QtCore import QCoreApplication, QT_TRANSLATE_NOOP
 from PySide6.QtGui import QImage
 from PySide6.QtWidgets import QMessageBox
 
@@ -36,6 +37,20 @@ _TRANSFORMABLE_STATES = frozenset({"image"})
 #: Identity transform (no zoom, no pan).
 _IDENTITY_TRANSFORM = (1.0, 0.0, 0.0)
 
+_TR_CONTEXT = "MediaProjection"
+_SHOWING_IMAGE_SOURCE = QT_TRANSLATE_NOOP(
+    "MediaProjection",
+    "Showing image",
+)
+_LIVE_TAB_SOURCE = QT_TRANSLATE_NOOP(
+    "MediaProjection",
+    "Browser — Live Tab",
+)
+
+
+def _tr(source: str) -> str:
+    return QCoreApplication.translate(_TR_CONTEXT, source)
+
 
 def _default_projection_aspect_ratio() -> ProjectionAspectRatio:
     return DEFAULT_PROJECTION_ASPECT_RATIO
@@ -57,7 +72,6 @@ class MediaProjectionContext:
     playlist_edit_is_temp: Callable[[], bool]
     meeting_service: Callable[[], Any]
     dialog_parent: Any
-    translate: Callable[[str], str]
     sjjm_announce_mode: Callable[[], bool]
     start_videos_paused: Callable[[], bool]
     playback_protection: Any
@@ -385,7 +399,7 @@ class MediaProjectionController:
         return True
 
     def project_image_bytes(self, data: bytes) -> None:
-        title = self._context.translate("Showing image")
+        title = _tr(_SHOWING_IMAGE_SOURCE)
         self._project_image_data(title, data, playlist=[])
 
     def project_generated_image(
@@ -433,7 +447,7 @@ class MediaProjectionController:
             context.projection_bar.set_playlist([])
             for projection_window in context.projection_windows():
                 projection_window.clear()
-            live_tab_title = context.translate("Browser — Live Tab")
+            live_tab_title = _tr(_LIVE_TAB_SOURCE)
             context.projection_bar.activate_image(live_tab_title)
             context.projection_bar.hide_add_to_destination_action()
             context.projection_bar.set_live_tab_mode(True)

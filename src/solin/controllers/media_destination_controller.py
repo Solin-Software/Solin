@@ -8,7 +8,14 @@ from datetime import date
 from typing import Any
 from uuid import uuid4
 
-from PySide6.QtCore import QObject, QTimer, Signal, Slot
+from PySide6.QtCore import (
+    QCoreApplication,
+    QObject,
+    QTimer,
+    QT_TRANSLATE_NOOP,
+    Signal,
+    Slot,
+)
 from PySide6.QtWidgets import QDialog
 
 from solin.core.media.destinations import (
@@ -27,7 +34,10 @@ from solin.core.media.insertion import MediaInsertResult
 from solin.core.media.placement import build_media_placement_options
 from solin.core.i18n.media_placement import translate_media_placement
 from solin.core.playlists.items import create_playlist_item
-from solin.ui.media_insertion_feedback import notify_media_duplicate
+from solin.ui.media_insertion_feedback import (
+    notify_media_duplicate,
+    tr_media_already_added_count,
+)
 from solin.ui.qml.media_destination import (
     MediaDestinationBridge,
     MediaDestinationDialog,
@@ -40,6 +50,40 @@ PrepareMedia = Callable[[PreparedCallback, FailedCallback], None]
 CompletionCallback = Callable[[MediaDestinationOutcome], None]
 DialogFactory = Callable[[MediaDestinationBridge, Any], Any]
 
+_TR_CONTEXT = "MediaDestinationNotifications"
+_PREPARATION_ERROR_SOURCE = QT_TRANSLATE_NOOP(
+    "MediaDestinationNotifications",
+    "Could not prepare this media.",
+)
+_PLAYLIST_UNAVAILABLE_SOURCE = QT_TRANSLATE_NOOP(
+    "MediaDestinationNotifications",
+    "This playlist is no longer available. Choose another one.",
+)
+_INVALID_WEEK_SOURCE = QT_TRANSLATE_NOOP(
+    "MediaDestinationNotifications",
+    "Invalid meeting week.",
+)
+_MEETING_NOT_READY_SOURCE = QT_TRANSLATE_NOOP(
+    "MediaDestinationNotifications",
+    "This meeting is not available yet. Try loading the week again.",
+)
+_MEETING_UNAVAILABLE_SOURCE = QT_TRANSLATE_NOOP(
+    "MediaDestinationNotifications",
+    "The selected meeting is no longer available.",
+)
+_ITEMS_ADDED_TO_MEETING_SOURCE = QT_TRANSLATE_NOOP(
+    "MediaDestinationNotifications",
+    "%n item(s) added to the meeting",
+)
+_NO_MEDIA_SOURCE = QT_TRANSLATE_NOOP(
+    "MediaDestinationNotifications",
+    "No media was available to add.",
+)
+
+
+def _tr(source: str, *, n: int = -1) -> str:
+    return QCoreApplication.translate(_TR_CONTEXT, source, "", n)
+
 
 @dataclass(frozen=True, slots=True)
 class MediaDestinationContext:
@@ -48,7 +92,6 @@ class MediaDestinationContext:
     meetings_widget: Any
     playlist_imports: Any
     notifications: Any
-    translate: Callable[..., str]
     dialog_factory: DialogFactory = MediaDestinationDialog
 
 
@@ -193,7 +236,7 @@ class MediaDestinationController(QObject):
     def _on_preparation_failed(self, token: str, error: str) -> None:
         if token != self._active_token or self._active_bridge is None:
             return
-        message = error.strip() or self._context.translate("Could not prepare this media.")
+        message = error.strip() or _tr(_PREPARATION_ERROR_SOURCE)
         self._active_bridge.showError(message)
 
     @Slot(str, bool)
@@ -241,9 +284,7 @@ class MediaDestinationController(QObject):
         )
         if playlist_ref is None:
             bridge.showError(
-                self._context.translate(
-                    "This playlist is no longer available. Choose another one."
-                )
+                _tr(_PLAYLIST_UNAVAILABLE_SOURCE)
             )
             return
         options = build_media_placement_options(
@@ -264,7 +305,7 @@ class MediaDestinationController(QObject):
         try:
             monday = date.fromisoformat(monday_text)
         except ValueError:
-            bridge.show_meeting_error(self._context.translate("Invalid meeting week."))
+            bridge.show_meeting_error(_tr(_INVALID_WEEK_SOURCE))
             return
 
         self._close_pending_meeting_session()
@@ -274,9 +315,7 @@ class MediaDestinationController(QObject):
         )
         if session is None:
             bridge.show_meeting_error(
-                self._context.translate(
-                    "This meeting is not available yet. Try loading the week again."
-                )
+                _tr(_MEETING_NOT_READY_SOURCE)
             )
             return
         self._pending_meeting_session = session
@@ -349,7 +388,7 @@ class MediaDestinationController(QObject):
             )
         if session is None:
             self._context.notifications.error(
-                self._context.translate("The selected meeting is no longer available.")
+                _tr(_MEETING_UNAVAILABLE_SOURCE)
             )
             return
 
@@ -384,7 +423,7 @@ class MediaDestinationController(QObject):
             )
             if count:
                 self._context.notifications.success(
-                    self._context.translate("%n item(s) added to the meeting", "", count)
+                    _tr(_ITEMS_ADDED_TO_MEETING_SOURCE, n=count)
                 )
             if result.duplicate_count == 1:
                 duplicate = result.duplicate_items[0]
@@ -396,11 +435,7 @@ class MediaDestinationController(QObject):
                 )
             elif result.duplicate_count > 1:
                 self._context.notifications.warning(
-                    self._context.translate(
-                        "%n media item(s) were already added",
-                        "",
-                        result.duplicate_count,
-                    )
+                    tr_media_already_added_count(result.duplicate_count)
                 )
             if completed is not None:
                 completed(
@@ -425,7 +460,7 @@ class MediaDestinationController(QObject):
     ) -> None:
         if not request.assets:
             self._context.notifications.error(
-                self._context.translate("No media was available to add.")
+                _tr(_NO_MEDIA_SOURCE)
             )
             completed(PreparedMediaBatch())
             return

@@ -39,6 +39,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..core.i18n.manager import LanguageManager
+from ..core.i18n.strings import tr_document_page_title
 from ..core.foundation.exception_logging import log_ignored_exception
 from ..core.foundation.qt_threads import stop_owned_qthread
 from ..core.foundation.constants import (
@@ -1015,12 +1016,16 @@ class WifiReceiveWidget(QWidget):
 
     def _build_html_labels(self) -> dict[str, str]:
         return {
+            "lang": str(getattr(self._lang, "current_code", "en")),
             "title": self.tr("Send Media"),
             "subtitle": self.tr("Select or drag photos, videos or audio files"),
             "btn_label": self.tr("Send media"),
             "drop_hint": self.tr("Drag files here"),
             "success": self.tr("✓ File sent!"),
             "error": self.tr("Upload error"),
+            "no_port": self.tr(
+                "No network port is available in the configured range."
+            ),
         }
 
     def _build_html_theme(self) -> dict[str, str]:
@@ -1112,7 +1117,10 @@ class WifiReceiveWidget(QWidget):
         )
         thread.conversion_failed.connect(
             lambda err, n=orig_name: self._notifications.error(
-                f"Erro ao converter PDF: {Path(n).name}\n{err}"
+                self.tr("Could not convert {name}.\n{error}").format(
+                    name=Path(n).name,
+                    error=err,
+                )
             )
         )
         # Manter referência viva enquanto roda
@@ -1129,13 +1137,15 @@ class WifiReceiveWidget(QWidget):
             return
         n = len(pages)
         for i, page_path in enumerate(pages):
-            title = f"{pdf_stem} — p. {i + 1}"
+            title = tr_document_page_title(pdf_stem, i + 1)
             self._received_files.append(
                 {"path": page_path, "title": title, "orig_name": title + ".jpg"}
             )
             self._add_card(page_path, title, orig_name=title + ".jpg")
         short_name = orig_name if len(orig_name) <= 28 else orig_name[:26] + "…"
-        self._notifications.success(f"{short_name}  ({n} p.)")
+        self._notifications.success(
+            self.tr("{name}: %n page(s) converted", "", n).format(name=short_name)
+        )
 
     # ── Expansão de JWPUB ──────────────────────────────────────────────────
 
@@ -1180,13 +1190,24 @@ class WifiReceiveWidget(QWidget):
                 self._add_card(item_path, item_title, orig_name=item_title)
                 added += 1
             if added:
-                self._notifications.success(f"{file_stem}  ({added} items)")
+                self._notifications.success(
+                    self.tr("{name}: %n item(s) added", "", added).format(
+                        name=file_stem
+                    )
+                )
             else:
-                self._notifications.warning(f"No media in {file_stem}")
+                self._notifications.warning(
+                    self.tr("No media found in {name}.").replace("{name}", file_stem)
+                )
 
         @thread.failed.connect
         def _on_fail(err: str):
-            self._notifications.error(f"Could not open {stem}\n{err}")
+            self._notifications.error(
+                self.tr("Could not open {name}.\n{error}").format(
+                    name=stem,
+                    error=err,
+                )
+            )
 
         thread.start()
 
@@ -1205,7 +1226,12 @@ class WifiReceiveWidget(QWidget):
                 fallback_lang_code=fallback_lang,
             )
         except (zipfile.BadZipFile, OSError, ValueError) as exc:
-            self._notifications.error(f"Erro ao ler playlist: {Path(orig_name).name}\n{exc}")
+            self._notifications.error(
+                self.tr("Could not read playlist {name}.\n{error}").format(
+                    name=Path(orig_name).name,
+                    error=exc,
+                )
+            )
             return
 
         def _save_embedded(
@@ -1232,7 +1258,7 @@ class WifiReceiveWidget(QWidget):
 
         for item in result.items:
             item_path = str(item.get("url") or "")
-            title = str(item.get("title") or Path(item_path).stem or "Item")
+            title = str(item.get("title") or Path(item_path).stem or self.tr("Item"))
             orig_item_name = str(item.get("original_filename") or title)
             entry = {
                 "path": item_path,
@@ -1250,13 +1276,27 @@ class WifiReceiveWidget(QWidget):
 
         pl_name = document.name or Path(orig_name).stem
         if result.items:
-            self._notifications.success(f"{pl_name}  ({len(result.items)} itens)")
+            self._notifications.success(
+                self.tr(
+                    "{name}: %n item(s) imported",
+                    "",
+                    len(result.items),
+                ).format(name=pl_name)
+            )
         if result.skipped_titles:
-            self._notifications.warning(f"{len(result.skipped_titles)} item(ns) não resolvido(s)")
+            self._notifications.warning(
+                self.tr(
+                    "%n item(s) could not be resolved.",
+                    "",
+                    len(result.skipped_titles),
+                )
+            )
 
     @Slot(str)
     def _on_error(self, msg: str) -> None:
-        self._idle_subtitle.setText(self.tr("Could not start the server.") + f"\n{msg}")
+        self._idle_subtitle.setText(
+            self.tr("Could not start the server.\n{error}").format(error=msg)
+        )
         self._stack.setCurrentIndex(2)
         self._notifications.error(
             msg,
@@ -1509,6 +1549,10 @@ class WifiReceiveWidget(QWidget):
             self.tr("The server stops automatically after 15 minutes outside this screen.")
         )
         self._stop_btn.setText(self.tr("  Stop server"))
+        self._server.update_upload_page(
+            self._build_html_labels(),
+            self._build_html_theme(),
+        )
         self._idle_title.setText(self.tr("Receive media via Wi-Fi"))
         self._idle_subtitle.setText(
             self.tr(

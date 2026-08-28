@@ -2,17 +2,43 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QCoreApplication
+from PySide6.QtCore import QCoreApplication, QT_TRANSLATE_NOOP
+
+_TR_CONTEXT = "MediaInsertionFeedback"
+_THIS_MEDIA_SOURCE = QT_TRANSLATE_NOOP("MediaInsertionFeedback", "This media")
+_MEDIA_SOURCE = QT_TRANSLATE_NOOP("MediaInsertionFeedback", "Media")
+_DUPLICATE_SOURCE = QT_TRANSLATE_NOOP(
+    "MediaInsertionFeedback",
+    "“{title}” is already added.",
+)
+_ADDED_SOURCE = QT_TRANSLATE_NOOP("MediaInsertionFeedback", "{title} added")
+_FAILED_SOURCE = QT_TRANSLATE_NOOP(
+    "MediaInsertionFeedback",
+    "Could not add “{title}”.",
+)
+_ALREADY_ADDED_COUNT_SOURCE = QT_TRANSLATE_NOOP(
+    "MediaInsertionFeedback",
+    "%n media item(s) were already added",
+)
 
 
 def _tr(source: str) -> str:
-    return QCoreApplication.translate("MediaInsertionFeedback", source)
+    return QCoreApplication.translate(_TR_CONTEXT, source)
+
+
+def tr_media_already_added_count(count: int) -> str:
+    return QCoreApplication.translate(
+        _TR_CONTEXT,
+        _ALREADY_ADDED_COUNT_SOURCE,
+        "",
+        max(0, int(count)),
+    )
 
 
 def notify_media_duplicate(notifications, title: str, identity_token: str) -> None:
-    display_title = title or _tr("This media")
+    display_title = title or _tr(_THIS_MEDIA_SOURCE)
     notifications.warning(
-        _tr("“{title}” is already added.").replace("{title}", display_title),
+        _tr(_DUPLICATE_SOURCE).format(title=display_title),
         dedupe_key=f"media-duplicate:{identity_token}",
     )
 
@@ -22,18 +48,18 @@ def connect_media_picker_feedback(bridge, notifications) -> None:
         return
 
     def added(title: str) -> None:
-        display_title = title or _tr("Media")
+        display_title = title or _tr(_MEDIA_SOURCE)
         notifications.success(
-            _tr("{title} added").replace("{title}", f"“{display_title}”")
+            _tr(_ADDED_SOURCE).format(title=f"“{display_title}”")
         )
 
     def duplicate(title: str, identity_token: str) -> None:
         notify_media_duplicate(notifications, title, identity_token)
 
     def failed(title: str) -> None:
-        display_title = title or _tr("This media")
+        display_title = title or _tr(_THIS_MEDIA_SOURCE)
         notifications.error(
-            _tr("Could not add “{title}”.").replace("{title}", display_title)
+            _tr(_FAILED_SOURCE).format(title=display_title)
         )
 
     bridge.mediaAdded.connect(added)
@@ -41,4 +67,8 @@ def connect_media_picker_feedback(bridge, notifications) -> None:
     bridge.mediaInsertionFailed.connect(failed)
 
 
-__all__ = ["connect_media_picker_feedback", "notify_media_duplicate"]
+__all__ = [
+    "connect_media_picker_feedback",
+    "notify_media_duplicate",
+    "tr_media_already_added_count",
+]

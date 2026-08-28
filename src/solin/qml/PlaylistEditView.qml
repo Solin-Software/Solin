@@ -47,10 +47,6 @@ Rectangle {
         return "image://playlisticons/" + name + "/" + size + "/" + colorHex
     }
 
-    function commonTr(context, source) {
-        return qsTranslate(context, source)
-    }
-
     function iconHex(colorValue) {
         return String(colorValue).replace("#", "")
     }

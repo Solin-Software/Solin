@@ -946,7 +946,6 @@ class PlaylistEditView(
             is_watched=True,
             is_loading=True,
             item_count=0,
-            item_word=self.tr("items"),
         )
         self.refresh_watched_folder()
 

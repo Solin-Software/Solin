@@ -12,15 +12,10 @@ Fluxo:
 
 Conceito fundamental:
   • O idioma FONTE (inglês) é o que está escrito em self.tr("...").
-    Ele não precisa de .ts nem de .qm — é o fallback nativo do Qt.
-  • Somente os idiomas de destino (pt_BR, es, ja, …) precisam de .ts/.qm.
-
-Quirks conhecidos do toolchain (tratados automaticamente):
-  • pyside6-lupdate <= 6.7.x emite <n>ContextName</n> dentro de <context>
-    em vez do tag canônico <name>ContextName</name> exigido pelo lrelease.
-    A função _sanitize_ts() é chamada automaticamente após todo lupdate e
-    antes de todo save(), tornando o pipeline robusto a qualquer versão.
-    Ref: https://bugreports.qt.io/browse/PYSIDE-2418
+    O texto literal é o fallback nativo para mensagens comuns.
+  • O catálogo inglês ainda é necessário para mensagens numerus: ele contém
+    as formas reais "item"/"items" usadas no lugar do source neutro
+    "%n item(s)". Portanto, todos os idiomas disponíveis têm .ts/.qm.
 
 Uso:
     python tools/translation_editor/main.py
@@ -33,6 +28,7 @@ import os
 import re
 import subprocess
 import sys
+from collections import Counter
 from typing import Optional
 
 log = logging.getLogger(__name__)
@@ -62,8 +58,9 @@ _TRANS_DIR    = os.path.join(
     "translations",
 )
 _LANG_DIR     = os.path.join(_TRANS_DIR, "locales")
+_GLOSSARY_PATH = os.path.join(_HERE, "jw_glossary.json")
 
-# ── Source language — never needs .ts/.qm ─────────────────────────────────────
+# ── Source language — ordinary strings fall back to their source text ─────────
 SOURCE_LANG = "en"
 
 # ── Colours ────────────────────────────────────────────────────────────────────
@@ -136,360 +133,68 @@ QFormLayout QLabel{{color:{C['text_sec']};}}
 # Auto-translate empty .ts entries via Gemini
 # ══════════════════════════════════════════════════════════════════════════════
 
-_JW_TERMINOLOGY: dict[str, dict[str, str]] = {
-"S": {
-        "Original_Songs": "Canciones Originales",
-        "Songs": "Canciones",
-        "Song": "Canción",
-        "public_talk": "Discurso Público",
-        "Treasures Talk": "Discurso de Tesoros",
-        "Watchtower Study": "Estudio de La Atalaya",
-        "WATCHTOWER STUDY": "ESTUDIO DE LA ATALAYA",
-        "Memorial": "Conmemoración",
-        "Memorial of Jesus’ Death": "Conmemoración de la muerte de Jesús",
-        "TREASURES FROM GOD'S WORD": "TESOROS DE LA BIBLIA",
-        "APPLY YOURSELF TO THE FIELD MINISTRY": "SEAMOS MEJORES MAESTROS",
-        "LIVING AS CHRISTIANS": "NUESTRA VIDA CRISTIANA",
-        "Life & Ministry": "Vida y Ministerio",
-        "Opening Comments": "Palabras de introducción",
-        "Spiritual Gems": "Busquemos perlas escondidas",
-        "Bible Reading": "Lectura de la Biblia",
-        "Congregation Bible Study": "Estudio bíblico de la congregación",
-        "Concluding Comments": "Palabras de conclusión"
-    },
-    "F": {
-        "Original_Songs": "Chansons",
-        "Songs": "Cantiques",
-        "Song": "Cantique",
-        "public_talk": "Discours Public",
-        "Treasures Talk": "Discours des joyaux",
-        "Watchtower Study": "Étude de La Tour",
-        "WATCHTOWER STUDY": "ÉTUDE DE LA TOUR DE GARDE",
-        "Memorial": "Commémoration",
-        "Memorial of Jesus’ Death": "Commémoration de la mort de Jésus",
-        "TREASURES FROM GOD'S WORD": "JOYAUX DE LA PAROLE DE DIEU",
-        "APPLY YOURSELF TO THE FIELD MINISTRY": "APPLIQUE-TOI AU MINISTÈRE",
-        "LIVING AS CHRISTIANS": "VIE CHRÉTIENNE",
-        "Life & Ministry": "Vie et ministère",
-        "Opening Comments": "Paroles d’introduction",
-        "Spiritual Gems": "Perles spirituelles",
-        "Bible Reading": "Lecture de la Bible",
-        "Congregation Bible Study": "Étude biblique de l’assemblée",
-        "Concluding Comments": "Paroles de conclusion"
-    },
-    "I": {
-        "Original_Songs": "Canzoni",
-        "Songs": "Cantici",
-        "Song": "Cantico",
-        "public_talk": "Discorso Pubblico",
-        "Treasures Talk": "Discorso dei tesori",
-        "Watchtower Study": "Studio della Torre di Guardia",
-        "WATCHTOWER STUDY": "STUDIO DELLA TORRE DI GUARDIA",
-        "Memorial": "Commemorazione",
-        "Memorial of Jesus’ Death": "Commemorazione della morte di Gesù",
-        "TREASURES FROM GOD'S WORD": "TESORI DELLA PAROLA DI DIO",
-        "APPLY YOURSELF TO THE FIELD MINISTRY": "EFFICACI NEL MINISTERO",
-        "LIVING AS CHRISTIANS": "VITA CRISTIANA",
-        "Life & Ministry": "Vita e ministero",
-        "Opening Comments": "Commenti introduttivi",
-        "Spiritual Gems": "Gemme spirituali",
-        "Bible Reading": "Lettura biblica",
-        "Congregation Bible Study": "Studio biblico di congregazione",
-        "Concluding Comments": "Commenti conclusivi"
-    },
-    "J": {
-        "Original_Songs": "オリジナルソング",
-        "Songs": "歌",
-        "Song": "歌",
-        "public_talk": "公開講演",
-        "Treasures Talk": "宝の講演",
-        "Watchtower Study": "「ものみの塔」研究",
-        "WATCHTOWER STUDY": "「ものみの塔」研究",
-        "Memorial": "記念式",
-        "Memorial of Jesus’ Death": "イエスの死の記念式",
-        "TREASURES FROM GOD'S WORD": "神の言葉の宝",
-        "APPLY YOURSELF TO THE FIELD MINISTRY": "野外奉仕に励む",
-        "LIVING AS CHRISTIANS": "クリスチャンとして生活する",
-        "Life & Ministry": "生活と奉仕",
-        "Opening Comments": "開会の言葉",
-        "Spiritual Gems": "宝石を探し出す",
-        "Bible Reading": "聖書朗読",
-        "Congregation Bible Study": "会衆の聖書研究",
-        "Concluding Comments": "閉会の言葉"
-    },
-    "T": {
-        "Original_Songs": "Clipes Musicais",
-        "Songs": "Cânticos",
-        "Song": "Cântico",
-        "public_talk": "Discurso Público",
-        "Treasures Talk": "Discurso de Tesouros",
-        "Watchtower Study": "Estudo de A Sentinela",
-        "WATCHTOWER STUDY": "ESTUDO DE A SENTINELA",
-        "Memorial": "Celebração",
-        "Memorial of Jesus’ Death": "Celebração da morte de Jesus",
-        "TREASURES FROM GOD'S WORD": "TESOUROS DA PALAVRA DE DEUS",
-        "APPLY YOURSELF TO THE FIELD MINISTRY": "FAÇA SEU MELHOR NO MINISTÉRIO",
-        "LIVING AS CHRISTIANS": "NOSSA VIDA CRISTÃ",
-        "Life & Ministry": "Vida e Ministério",
-        "Opening Comments": "Comentários iniciais",
-        "Spiritual Gems": "Joias espirituais",
-        "Bible Reading": "Leitura da Bíblia",
-        "Congregation Bible Study": "Estudo bíblico de congregação",
-        "Concluding Comments": "Comentários finais"
-    },
-    "CHS": {
-        "Original_Songs": "原创歌曲",
-        "Songs": "诗歌",
-        "Song": "诗歌",
-        "public_talk": "公众演讲",
-        "Treasures Talk": "宝藏演讲",
-        "Watchtower Study": "守望台研读",
-        "WATCHTOWER STUDY": "守望台研读",
-        "Memorial": "纪念",
-        "Memorial of Jesus’ Death": "耶稣死亡的纪念",
-        "TREASURES FROM GOD'S WORD": "上帝话语的宝藏",
-        "APPLY YOURSELF TO THE FIELD MINISTRY": "用心准备传道工作",
-        "LIVING AS CHRISTIANS": "基督徒的生活",
-        "Life & Ministry": "传道与生活聚会",
-        "Opening Comments": "开场白",
-        "Spiritual Gems": "经文宝石",
-        "Bible Reading": "经文朗读",
-        "Congregation Bible Study": "会众研经班",
-        "Concluding Comments": "结语"
-    },
-    "U": {
-        "Original_Songs": "Оригинальные песни",
-        "Songs": "Песни",
-        "Song": "Песня",
-        "public_talk": "Публичная речь",
-        "Treasures Talk": "Речь о сокровищах",
-        "Watchtower Study": "Сторожевая башня",
-        "WATCHTOWER STUDY": "СТОРОЖЕВАЯ БАШНЯ",
-        "Memorial": "Вечеря воспоминания",
-        "Memorial of Jesus’ Death": "Вечеря воспоминания смерти Иисуса Христа",
-        "TREASURES FROM GOD'S WORD": "СОКРОВИЩА ИЗ СЛОВА БОГА",
-        "APPLY YOURSELF TO THE FIELD MINISTRY": "ОТТАЧИВАЕМ НАВЫКИ СЛУЖЕНИЯ",
-        "LIVING AS CHRISTIANS": "ХРИСТИАНСКАЯ ЖИЗНЬ",
-        "Life & Ministry": "Жизнь и служение",
-        "Opening Comments": "Вступительные слова",
-        "Spiritual Gems": "Духовные жемчужины",
-        "Bible Reading": "Чтение Библии",
-        "Congregation Bible Study": "Изучение Библии в собрании",
-        "Concluding Comments": "Заключительные слова"
-    },
-    "KO": {
-        "Original_Songs": "오리지널 노래",
-        "Songs": "노래",
-        "Song": "노래",
-        "public_talk": "공개 강연",
-        "Treasures Talk": "보물 강연",
-        "Watchtower Study": "파수대 연구",
-        "WATCHTOWER STUDY": "파수대 연구",
-        "Memorial": "기념식",
-        "Memorial of Jesus’ Death": "예수의 죽음의 기념식",
-        "TREASURES FROM GOD'S WORD": "성경에 담긴 보물",
-        "APPLY YOURSELF TO THE FIELD MINISTRY": "야외 봉사에 힘쓰십시오",
-        "LIVING AS CHRISTIANS": "그리스도인 생활",
-        "Life & Ministry": "생활과 봉사",
-        "Opening Comments": "소개말",
-        "Spiritual Gems": "영적 보물 찾기",
-        "Bible Reading": "성경 낭독",
-        "Congregation Bible Study": "회중 성서 연구",
-        "Concluding Comments": "맺음말"
-    },
-    "Z": {
-        "Original_Songs": "Originalsånger",
-        "Songs": "Sånger",
-        "Song": "Sång",
-        "public_talk": "Offentligt tal",
-        "Treasures Talk": "Höjdpunkter-tal",
-        "Watchtower Study": "Vakttornsstudiet",
-        "WATCHTOWER STUDY": "VAKTTORNSSTUDIET",
-        "Memorial": "Minnesmåltiden",
-        "Memorial of Jesus’ Death": "Minnesmåltid till minne av Jesu död",
-        "TREASURES FROM GOD'S WORD": "HÖJDPUNKTER FRÅN BIBELN",
-        "APPLY YOURSELF TO THE FIELD MINISTRY": "ÖVNING FÖR TJÄNSTEN",
-        "LIVING AS CHRISTIANS": "LIVET SOM KRISTEN",
-        "Life & Ministry": "Livet och tjänsten som kristen",
-        "Opening Comments": "Inledande ord",
-        "Spiritual Gems": "Andliga guldkorn",
-        "Bible Reading": "Bibelläsning",
-        "Congregation Bible Study": "Församlingens bibelstudium",
-        "Concluding Comments": "Avslutande ord"
-    },
-    "X": {
-        "Original_Songs": "Besondere Lieder",
-        "Songs": "Lieder",
-        "Song": "Lied",
-        "public_talk": "Öffentlicher Vortrag",
-        "Treasures Talk": "Schätze-Vortrag",
-        "Watchtower Study": "Wachtturm-Studium",
-        "WATCHTOWER STUDY": "WACHTTURM-STUDIUM",
-        "Memorial": "Gedächtnismahl",
-        "Memorial of Jesus’ Death": "Gedächtnismahl des Todes Jesu",
-        "TREASURES FROM GOD'S WORD": "SCHÄTZE AUS GOTTES WORT",
-        "APPLY YOURSELF TO THE FIELD MINISTRY": "UNS IM DIENST VERBESSERN",
-        "LIVING AS CHRISTIANS": "UNSER LEBEN ALS CHRIST",
-        "Life & Ministry": "Leben und Dienst",
-        "Opening Comments": "Einleitende Worte",
-        "Spiritual Gems": "Nach geistigen Schätzen graben",
-        "Bible Reading": "Bibellesung",
-        "Congregation Bible Study": "Versammlungs­bibelstudium",
-        "Concluding Comments": "Schlussworte"
-    },
-    "P": {
-        "Original_Songs": "Piosenki",
-        "Songs": "Pieśni",
-        "Song": "Pieśń",
-        "public_talk": "Wykład publiczny",
-        "Treasures Talk": "Wykład ze skarbów",
-        "Watchtower Study": "Studium Strażnicy",
-        "WATCHTOWER STUDY": "STUDIUM STRAŻNICY",
-        "Memorial": "Pamiątka",
-        "Memorial of Jesus’ Death": "Pamiątka śmierci Jezusa",
-        "TREASURES FROM GOD'S WORD": "SKARBY ZE SŁOWA BOŻEGO",
-        "APPLY YOURSELF TO THE FIELD MINISTRY": "ULEPSZAJMY SWOJĄ SŁUŻBĘ",
-        "LIVING AS CHRISTIANS": "CHRZEŚCIJAŃSKI TRYB ŻYCIA",
-        "Life & Ministry": "Życie i służba",
-        "Opening Comments": "Uwagi wstępne",
-        "Spiritual Gems": "Wyszukujemy duchowe skarby",
-        "Bible Reading": "Czytanie Biblii",
-        "Congregation Bible Study": "Zborowe studium Biblii",
-        "Concluding Comments": "Uwagi końcowe"
-    },
-    "FI": {
-        "Original_Songs": "ALKUPERÄISMUSIIKKI",
-        "Songs": "Laulut",
-        "Song": "Laulu",
-        "public_talk": "julkinen puhe",
-        "Treasures Talk": "Aarteita-puhe",
-        "Watchtower Study": "Vartiotornin tutkistelu",
-        "WATCHTOWER STUDY": "VARTIOTORNIN TUTKISTELU",
-        "Memorial": "Muistoateria",
-        "Memorial of Jesus’ Death": "Muistoateria Jeesuksen kuolemasta",
-        "TREASURES FROM GOD'S WORD": "JUMALAN SANAN AARTEITA",
-        "APPLY YOURSELF TO THE FIELD MINISTRY": "VALMENNUSTA KENTTÄTYÖHÖN",
-        "LIVING AS CHRISTIANS": "ELÄMÄ KRISTITTYNÄ",
-        "Life & Ministry": "Elämä ja palvelus",
-        "Opening Comments": "Alkusanat",
-        "Spiritual Gems": "Hengellisiä helmiä",
-        "Bible Reading": "Raamatun lukeminen",
-        "Congregation Bible Study": "Seurakunnan raamatuntutkistelu",
-        "Concluding Comments": "Loppusanat"
-    },
-    "TG": {
-        "Original_Songs": "Mga Original Song",
-        "Songs": "Mga Awit",
-        "Song": "Awit",
-        "public_talk": "Pahayag Pangmadla",
-        "Treasures Talk": "Pahayag sa Kayamanan",
-        "Watchtower Study": "Pag-aaral sa Bantayan",
-        "WATCHTOWER STUDY": "PAG-AARAL SA BANTAYAN",
-        "Memorial": "Paggunita",
-        "Memorial of Jesus’ Death": "Paggunita sa Kamatayan ni Jesus",
-        "TREASURES FROM GOD'S WORD": "KAYAMANAN MULA SA SALITA NG DIYOS",
-        "APPLY YOURSELF TO THE FIELD MINISTRY": "MAGING MAHUSAY SA MINISTERYO",
-        "LIVING AS CHRISTIANS": "PAMUMUHAY BILANG KRISTIYANO",
-        "Life & Ministry": "Buhay at Ministeryo",
-        "Opening Comments": "Pambungad na Komento",
-        "Spiritual Gems": "Espirituwal na Hiyas",
-        "Bible Reading": "Pagbabasa ng Bibliya",
-        "Congregation Bible Study": "Pag-aaral ng Kongregasyon sa Bibliya",
-        "Concluding Comments": "Pangwakas na Komento"
-    },
-    "O": {
-        "Original Songs": "Original songs",
-        "Songs": "Liederen",
-        "Song": "Lied",
-        "Public talk": "Openbare lezing",
-        "Treasures Talk": "Schatten-lezing",
-        "Watchtower Study": "Wachttoren-studie",
-        "WATCHTOWER STUDY": "WACHTTOREN-STUDIE",
-        "Memorial": "Herdenking",
-        "Memorial of Jesus’ Death": "Herdenking van Jezus' dood",
-        "TREASURES FROM GOD'S WORD": "SCHATTEN UIT GODS WOORD",
-        "APPLY YOURSELF TO THE FIELD MINISTRY": "LEG JE TOE OP DE VELDDIENST",
-        "LIVING AS CHRISTIANS": "LEVEN ALS CHRISTENEN",
-        "Life & Ministry": "Leven en dienen",
-        "Opening Comments": "Inleiding",
-        "Spiritual Gems": "Geestelijke juweeltjes",
-        "Bible Reading": "Bijbellezen",
-        "Congregation Bible Study": "Gemeentebijbelstudie",
-        "Concluding Comments": "Slotopmerkingen"
-    },
-    "IN": {
-        "Original Songs": "Lagu Baru",
-        "Songs": "Lagu-Lagu",
-        "Song": "Lagu",
-        "Public talk": "Khotbah Umum",
-        "Treasures Talk": "Khotbah Harta",
-        "Watchtower Study": "Pelajaran Menara Pengawal",
-        "WATCHTOWER STUDY": "PELAJARAN MENARA PENGAWAL",
-        "Memorial": "Peringatan",
-        "Memorial of Jesus’ Death": "Peringatan Kematian Yesus",
-        "TREASURES FROM GOD'S WORD": "HARTA DALAM FIRMAN ALLAH",
-        "APPLY YOURSELF TO THE FIELD MINISTRY": "BERSEMANGATLAH DALAM PELAYANAN",
-        "LIVING AS CHRISTIANS": "KEHIDUPAN KRISTEN",
-        "Life & Ministry": "Pelayanan dan Kehidupan",
-        "Opening Comments": "Bagian Pembuka",
-        "Spiritual Gems": "Permata Rohani",
-        "Bible Reading": "Pembacaan Alkitab",
-        "Congregation Bible Study": "Pelajaran Alkitab Sidang",
-        "Concluding Comments": "Bagian Penutup"
-    },
-    "K": {
-        "Original Songs": "РІЗНІ ПІСНІ",
-        "Songs": "Пісні",
-        "Song": "Пісня",
-        "Public talk": "Публічна промова",
-        "Treasures Talk": "Промова зі скарбів",
-        "Watchtower Study": "Вивчення «Вартової башти»",
-        "WATCHTOWER STUDY": "ВИВЧЕННЯ «ВАРТОВОЇ БАШТИ»",
-        "Memorial": "Спомин",
-        "Memorial of Jesus’ Death": "Спомин Ісусової смерті",
-        "TREASURES FROM GOD'S WORD": "СКАРБИ З БОЖОГО СЛОВА",
-        "APPLY YOURSELF TO THE FIELD MINISTRY": "ВДОСКОНАЛЮЙМО СВОЄ СЛУЖІННЯ",
-        "LIVING AS CHRISTIANS": "ХРИСТИЯНСЬКЕ ЖИТТЯ",
-        "Life & Ministry": "Життя і служіння",
-        "Opening Comments": "Вступні слова",
-        "Spiritual Gems": "Духовні перлини",
-        "Bible Reading": "Читання Біблії",
-        "Congregation Bible Study": "Вивчення Біблії у зборі",
-        "Concluding Comments": "Кінцеві слова"
-    },
-    "SW": {
-        "Original Songs": "Nyimbo Zilizotungwa",
-        "Songs": "Nyimbo",
-        "Song": "Wimbo",
-        "Public talk": "Hotuba ya Watu Wote",
-        "Treasures Talk": "Hotuba ya Hazina",
-        "Watchtower Study": "Funzo la Mnara wa Mlinzi",
-        "WATCHTOWER STUDY": "FUNZO LA MNARA WA MLINZI",
-        "Memorial": "Ukumbusho",
-        "Memorial of Jesus’ Death": "Ukumbusho wa Kifo cha Yesu",
-        "TREASURES FROM GOD'S WORD": "HAZINA ZA NENO LA MUNGU",
-        "APPLY YOURSELF TO THE FIELD MINISTRY": "BORESHA HUDUMA YAKO",
-        "LIVING AS CHRISTIANS": "MAISHA YA MKRISTO",
-        "Life & Ministry": "Huduma na Maisha",
-        "Opening Comments": "Utangulizi",
-        "Spiritual Gems": "Hazina za Kiroho",
-        "Bible Reading": "Usomaji wa Biblia",
-        "Congregation Bible Study": "Funzo la Biblia la Kutaniko",
-        "Concluding Comments": "Umalizio"
-    }
-}
+
+class TranslationGlossaryError(ValueError):
+    """Raised when the curated translation glossary cannot be used safely."""
 
 
-def _build_ts_system_prompt(lang_name: str, lang_code: str, api_code: str) -> str:
+def _load_jw_terminology(path: str = _GLOSSARY_PATH) -> dict[str, dict[str, str]]:
+    """Load and validate terminology indexed by the canonical application locale."""
+
+    try:
+        with open(path, encoding="utf-8") as stream:
+            payload = json.load(stream)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise TranslationGlossaryError(f"could not read {path}: {exc}") from exc
+
+    if not isinstance(payload, dict) or payload.get("schema_version") != 1:
+        raise TranslationGlossaryError("unsupported or missing glossary schema_version")
+    if payload.get("source_locale") != SOURCE_LANG:
+        raise TranslationGlossaryError(
+            f"glossary source_locale must be {SOURCE_LANG!r}"
+        )
+
+    locales = payload.get("locales")
+    if not isinstance(locales, dict):
+        raise TranslationGlossaryError("glossary locales must be an object")
+
+    validated: dict[str, dict[str, str]] = {}
+    for locale, terms in locales.items():
+        if not isinstance(locale, str) or not locale.strip() or locale != locale.strip():
+            raise TranslationGlossaryError("glossary locale keys must be non-empty strings")
+        if not isinstance(terms, dict) or not terms:
+            raise TranslationGlossaryError(
+                f"glossary locale {locale!r} must contain at least one term"
+            )
+
+        validated_terms: dict[str, str] = {}
+        for source, translation in terms.items():
+            if (
+                not isinstance(source, str)
+                or not source.strip()
+                or not isinstance(translation, str)
+                or not translation.strip()
+            ):
+                raise TranslationGlossaryError(
+                    f"glossary locale {locale!r} contains an empty or invalid term"
+                )
+            validated_terms[source] = translation
+        validated[locale] = validated_terms
+
+    return validated
+
+
+
+def _build_ts_system_prompt(lang_name: str, lang_code: str) -> str:
     glossary_section = ""
-    terms = _JW_TERMINOLOGY.get(api_code.upper())
+    terms = _load_jw_terminology().get(lang_code)
     if terms:
         term_lines = "\n".join(
             '  "{}" -> "{}"'.format(src, tgt) for src, tgt in terms.items()
         )
         glossary_section = (
             "\n\nOFFICIAL JW GLOSSARY — always use these exact terms for "
-            f"{lang_name} (api_code: {api_code}):\n{term_lines}"
+            f"{lang_name} (locale: {lang_code}):\n{term_lines}"
         )
 
     return (
@@ -497,18 +202,21 @@ def _build_ts_system_prompt(lang_name: str, lang_code: str, api_code: str) -> st
         "for Jehovah's Witnesses.\n\n"
         "STYLE RULES:\n"
         "- Use neutral, impersonal, formal language that still reads naturally.\n"
+        "- The glossary is authoritative but not exhaustive. For Jehovah's Witnesses-specific concepts not listed there, use the established official terminology found in target-language JW publications; never invent institutional terms.\n"
         "- Perhaps some words can be kept in the translation, such as “Changelog” in Brazilian Portuguese.\n"
         "- Avoid first- and second-person pronouns; prefer impersonal constructions.\n"
         "- Treat personal names used purely as illustrative placeholders (e.g., “John Doe”) as non-specific and adapt or replace them with natural equivalents in the target language when appropriate; however, preserve real person names, brand names, and product names unchanged, unless a widely accepted localized form exists. \n"
+        "- Transliterate foreign names or terms only when the target language normally uses another writing system and an official or well-established target-language spelling exists. Never invent a transliteration or transliterate glossary terms, brands, product names, placeholders, URLs, filenames, commands, or identifiers unless authoritative usage explicitly requires it.\n"
         "- The translation must sound native and idiomatic, never word-for-word literal.\n"
         "- Preserve the urgency and tone of the source.\n"
-        "- Keep any {variable} or %n placeholders exactly as-is.\n"
-        "- For entries marked with ' | (plural)': return a JSON array of strings for the plural forms of that language.\n"
-        "- For plain entries return a plain string.\n"
+        "- Preserve every placeholder exactly, including repetitions: {variable}, %n, %Ln, %1, and %L1.\n"
+        "- Use each entry's context and comments only to disambiguate meaning; do not translate that metadata.\n"
+        "- For plural entries, return a JSON array with exactly plural_form_count strings.\n"
+        "- For non-plural entries, return a plain string.\n"
         + glossary_section
         + f"\n\nTARGET LANGUAGE: {lang_name} ({lang_code})\n\n"
         "RESPONSE FORMAT:\n"
-        "Return ONLY a valid JSON object mapping each original English source key "
+        "Return ONLY a valid JSON object mapping each opaque entry ID "
         "to its translation (string or array). No markdown, no code fences, no explanation."
     )
 
@@ -517,7 +225,6 @@ def _run_ts_auto_translate(
     entries: list["Entry"],
     lang_name: str,
     lang_code: str,
-    api_code: str,
     api_key: str,
     only_empty: bool = False,
 ) -> tuple[bool, str, dict]:
@@ -534,8 +241,12 @@ def _run_ts_auto_translate(
     if not empty:
         return True, "No empty entries to translate.", {}
 
+    try:
+        system_prompt = _build_ts_system_prompt(lang_name, lang_code)
+    except TranslationGlossaryError as exc:
+        return False, f"Could not load translation glossary: {exc}", {}
+
     client = genai.Client(api_key=api_key)
-    system_prompt = _build_ts_system_prompt(lang_name, lang_code, api_code)
 
     BATCH_SIZE = 60
     all_results = {}
@@ -543,14 +254,17 @@ def _run_ts_auto_translate(
 
     for i in range(0, len(empty), BATCH_SIZE):
         chunk = empty[i : i + BATCH_SIZE]
-        batch: dict[str, str] = {}
+        batch: dict[str, dict[str, object]] = {}
         
         for e in chunk:
-            key = e.source
-            if e.is_plural:
-                batch[key] = f"{e.source} | (plural)"
-            else:
-                batch[key] = e.source
+            batch[e.entry_id] = {
+                "source": e.source,
+                "context": e.context,
+                "disambiguation": e.comment,
+                "translator_comment": e.extra_comment,
+                "is_plural": e.is_plural,
+                "plural_form_count": len(e.forms) if e.is_plural else 0,
+            }
 
         user_msg = (
             "Translate each value to {lang} ({code}).\n\n"
@@ -665,32 +379,6 @@ def _collect_translation_sources(root: str) -> list[str]:
     return result
 
 
-def _sanitize_ts(ts_path: str) -> None:
-    """
-    Corrige bugs conhecidos do pyside6-lupdate no arquivo .ts gerado.
-
-    Bug #1 — <n> em vez de <name> (PySide6 <= 6.7.x):
-        O lupdate emite <n>ContextName</n> dentro de <context>, mas o
-        lrelease (e o padrão Qt TS) exige <name>ContextName</name>.
-        Referência: https://bugreports.qt.io/browse/PYSIDE-2418
-
-    A correção é feita via substituição de texto puro (não via ET.parse)
-    para preservar exatamente o restante do conteúdo sem re-serialização.
-    O arquivo só é reescrito se realmente houver algo a corrigir.
-    """
-    with open(ts_path, "r", encoding="utf-8") as fh:
-        original = fh.read()
-
-    # Substitui <n> e </n> apenas quando forem a tag inteira
-    # (não dentro de outras palavras como <name>, <next>, etc.)
-    fixed = re.sub(r'<n>(?=[^/])', '<name>', original)
-    fixed = re.sub(r'</n>',        '</name>', fixed)
-
-    if fixed != original:
-        with open(ts_path, "w", encoding="utf-8") as fh:
-            fh.write(fixed)
-
-
 def run_lupdate(project_root: str, ts_path: str) -> tuple[bool, str]:
     import shutil
     import importlib.util
@@ -739,7 +427,6 @@ def run_lupdate(project_root: str, ts_path: str) -> tuple[bool, str]:
         if r.returncode != 0 or not os.path.isfile(ts_path):
             return False, f"Falha no lupdate (código {r.returncode}):\n{out}\nExecutável: {cmd_exe}"
             
-        _sanitize_ts(ts_path)
         return True, out
 
     except subprocess.TimeoutExpired:
@@ -793,14 +480,13 @@ class _Worker(QRunnable):
         self.signals.done.emit(*self._fn(*self._args))
 
 class _AutoTranslateWorker(QRunnable):
-    def __init__(self, entries, lang_name, lang_code, api_code, api_key,
+    def __init__(self, entries, lang_name, lang_code, api_key,
                  only_empty: bool = False):
         super().__init__()
         self.signals    = _SigAT()
         self._entries   = entries
         self._lang_name = lang_name
         self._lang_code = lang_code
-        self._api_code  = api_code
         self._api_key   = api_key
         self._only_empty = only_empty
 
@@ -808,7 +494,7 @@ class _AutoTranslateWorker(QRunnable):
     def run(self):
         ok, msg, results = _run_ts_auto_translate(
             self._entries, self._lang_name, self._lang_code,
-            self._api_code, self._api_key, self._only_empty,
+            self._api_key, self._only_empty,
         )
         self.signals.done.emit(ok, msg, json.dumps(results))
 
@@ -816,6 +502,50 @@ class _AutoTranslateWorker(QRunnable):
 # ══════════════════════════════════════════════════════════════════════════════
 # .ts I/O
 # ══════════════════════════════════════════════════════════════════════════════
+
+_PLACEHOLDER_RE = re.compile(r"\{[A-Za-z_][A-Za-z0-9_]*\}|%L?n|%L?[1-9]\d*")
+
+
+def _placeholder_counts(text: str) -> Counter[str]:
+    return Counter(_PLACEHOLDER_RE.findall(text or ""))
+
+
+def _placeholder_mismatches(source: str, translations: list[str]) -> list[str]:
+    expected = _placeholder_counts(source)
+    mismatches: list[str] = []
+    for index, translation in enumerate(translations):
+        actual = _placeholder_counts(translation)
+        if actual == expected:
+            continue
+        missing = expected - actual
+        extra = actual - expected
+        details = []
+        if missing:
+            details.append("missing " + ", ".join(missing.elements()))
+        if extra:
+            details.append("extra " + ", ".join(extra.elements()))
+        label = f"form {index + 1}" if len(translations) > 1 else "translation"
+        mismatches.append(f"{label}: {'; '.join(details)}")
+    return mismatches
+
+
+def _validated_translation(entry: "Entry", value: object) -> str | list[str] | None:
+    if entry.is_plural:
+        if not isinstance(value, list) or len(value) != len(entry.forms):
+            return None
+        forms = [str(form).strip() for form in value]
+        if not forms or any(not form for form in forms):
+            return None
+        if _placeholder_mismatches(entry.source, forms):
+            return None
+        return forms
+    if not isinstance(value, str) or not value.strip():
+        return None
+    translation = value.strip()
+    if _placeholder_mismatches(entry.source, [translation]):
+        return None
+    return translation
+
 
 class Entry:
     """
@@ -831,13 +561,30 @@ class Entry:
       • self.forms      = []
       • self.translation = "texto traduzido"
     """
-    def __init__(self, elem, context, source, translation, finished,
-                 is_plural: bool = False, forms: list[str] | None = None):
+    def __init__(
+        self,
+        elem,
+        entry_id: str,
+        context: str,
+        source: str,
+        translation: str,
+        finished: bool,
+        *,
+        comment: str = "",
+        extra_comment: str = "",
+        location: str = "",
+        is_plural: bool = False,
+        forms: list[str] | None = None,
+    ):
         self._elem        = elem
+        self.entry_id     = entry_id
         self.context      = context
         self.source       = source
         self.translation  = translation
         self.finished     = finished
+        self.comment      = comment
+        self.extra_comment = extra_comment
+        self.location     = location
         self.modified     = False
         self.is_plural    = is_plural
         self.forms: list[str] = forms or []
@@ -845,14 +592,14 @@ class Entry:
     @property
     def status(self):
         if self.is_plural:
-            if not self.forms or all(f == "" for f in self.forms):
+            if not self.forms or all(not f.strip() for f in self.forms):
                 return "empty"
-            if any(f == "" for f in self.forms):
+            if any(not f.strip() for f in self.forms):
                 return "unfinished"
             if not self.finished:
                 return "unfinished"
             return "ok"
-        if not self.translation:            return "empty"
+        if not self.translation.strip():    return "empty"
         if not self.finished:               return "unfinished"
         if self.translation == self.source: return "same"
         return "ok"
@@ -872,15 +619,20 @@ class Entry:
         return self.translation
 
     @property
-    def vars_missing(self) -> list[str]:
-        """Variáveis %n/%1/%2 ou {x} presentes no source mas ausentes na tradução."""
-        src_vars = set(re.findall(r"\{(\w+)\}", self.source))
-        if self.is_plural:
-            all_tr = " ".join(self.forms)
-            tr_vars = set(re.findall(r"\{(\w+)\}", all_tr))
-        else:
-            tr_vars = set(re.findall(r"\{(\w+)\}", self.translation))
-        return sorted(src_vars - tr_vars)
+    def placeholder_mismatches(self) -> list[str]:
+        translations = self.forms if self.is_plural else [self.translation]
+        return _placeholder_mismatches(self.source, translations)
+
+    @property
+    def details(self) -> str:
+        parts = [self.context]
+        if self.comment:
+            parts.append(f"Disambiguation: {self.comment}")
+        if self.extra_comment:
+            parts.append(f"Translator note: {self.extra_comment}")
+        if self.location:
+            parts.append(self.location)
+        return "\n".join(part for part in parts if part)
 
 
 class TsFileSaveError(RuntimeError):
@@ -890,9 +642,8 @@ class TsFileSaveError(RuntimeError):
 class TsFile:
     def __init__(self, path: str):
         self.path  = path
-        # Sanitiza antes de parsear para garantir XML válido independente
-        # da versão do lupdate que gerou o arquivo.
-        _sanitize_ts(path)
+        with open(path, encoding="utf-8", newline="") as stream:
+            self._source_text = stream.read()
         self._tree = ET.parse(path)
         self._root = self._tree.getroot()
         self.entries: list[Entry] = []
@@ -900,19 +651,19 @@ class TsFile:
 
     def _parse(self) -> None:
         self.entries.clear()
-        for ctx in self._root.iter("context"):
+        for context_index, ctx in enumerate(self._root.iter("context")):
             name_el  = ctx.find("name")
             ctx_name = (name_el.text or "").strip() if name_el is not None else ""
 
-            for msg in ctx.findall("message"):
+            for message_index, msg in enumerate(ctx.findall("message")):
                 src_el = msg.find("source")
                 tr_el  = msg.find("translation")
                 if src_el is None or tr_el is None:
                     continue
-                source = (src_el.text or "").strip()
+                source = src_el.text or ""
 
-                # Se for obsoleta, pula (mas preserva no XML)
-                if tr_el.get("type") == "obsolete":
+                # Inactive messages stay preserved in XML but are not editable.
+                if tr_el.get("type") in {"obsolete", "vanished"}:
                     continue
 
                 finished = tr_el.get("type") != "unfinished"
@@ -922,44 +673,133 @@ class TsFile:
                 forms: list[str] = []
                 if is_plural:
                     for nf in tr_el.findall("numerusform"):
-                        forms.append((nf.text or "").strip())
+                        forms.append(nf.text or "")
                     translation = ""   # não usado para plurais
                 else:
-                    translation = (tr_el.text or "").strip()
+                    translation = tr_el.text or ""
 
-                # Prioridade de contexto: comment > <n> > location
-                cmt = msg.find("comment")
-                if cmt is not None and cmt.text:
-                    ctx_str = cmt.text.strip()
-                elif ctx_name:
-                    ctx_str = ctx_name
-                else:
-                    loc = msg.find("location")
-                    ctx_str = (
-                        f"{os.path.basename(loc.get('filename', ''))}"
-                        f":{loc.get('line', '')}"
-                        if loc is not None else ""
-                    )
+                cmt = msg.findtext("comment", default="").strip()
+                extra_cmt = msg.findtext("extracomment", default="").strip()
+                loc = msg.find("location")
+                location = (
+                    f"{os.path.basename(loc.get('filename', ''))}"
+                    f":{loc.get('line', '')}"
+                    if loc is not None
+                    else ""
+                )
 
                 self.entries.append(Entry(
-                    msg, ctx_str, source, translation, finished,
-                    is_plural=is_plural, forms=forms,
+                    msg,
+                    f"{context_index}:{message_index}",
+                    ctx_name,
+                    source,
+                    translation,
+                    finished,
+                    comment=cmt,
+                    extra_comment=extra_cmt,
+                    location=location,
+                    is_plural=is_plural,
+                    forms=forms,
                 ))
+
+    @staticmethod
+    def _translation_spans(source: str) -> dict[str, tuple[int, int]]:
+        """Map stable entry IDs to their lexical ``<translation>`` spans."""
+        context_pattern = re.compile(
+            r"<context(?:\s[^>]*)?>.*?</context\s*>",
+            re.DOTALL,
+        )
+        message_pattern = re.compile(
+            r"<message(?:\s[^>]*)?>.*?</message\s*>",
+            re.DOTALL,
+        )
+        translation_pattern = re.compile(
+            r"<translation\b[^>]*(?:/\s*>|>.*?</translation\s*>)",
+            re.DOTALL,
+        )
+
+        spans: dict[str, tuple[int, int]] = {}
+        for context_index, context_match in enumerate(context_pattern.finditer(source)):
+            context_text = context_match.group(0)
+            for message_index, message_match in enumerate(
+                message_pattern.finditer(context_text)
+            ):
+                message_text = message_match.group(0)
+                translation_matches = list(translation_pattern.finditer(message_text))
+                if len(translation_matches) != 1:
+                    continue
+                translation_match = translation_matches[0]
+                start = (
+                    context_match.start()
+                    + message_match.start()
+                    + translation_match.start()
+                )
+                end = (
+                    context_match.start()
+                    + message_match.start()
+                    + translation_match.end()
+                )
+                spans[f"{context_index}:{message_index}"] = (start, end)
+        return spans
+
+    @staticmethod
+    def _serialize_translation(entry: Entry) -> str:
+        translation = entry._elem.find("translation")
+        if translation is None:
+            raise ValueError(f"Entry {entry.entry_id} has no translation element")
+
+        original_tail = translation.tail
+        try:
+            # ElementTree includes an element's tail in tostring(); the tail is
+            # outside the replacement span and must remain in the source file.
+            translation.tail = None
+            return ET.tostring(
+                translation,
+                encoding="unicode",
+                short_empty_elements=False,
+            )
+        finally:
+            translation.tail = original_tail
+
     def save(self) -> None:
         """
-        Persiste o .ts de forma segura:
-          1. Serializa para arquivo temporário na mesma pasta (evita
-             corrupção se o processo for interrompido).
-          2. Aplica _sanitize_ts() no temporário (garante que qualquer
-             re-serialização pelo ET não reintroduza tags inválidas).
-          3. Faz rename atômico sobre o arquivo original.
+        Persist only modified translations without reformatting the catalog.
+
+        The untouched XML remains byte-for-byte identical. A same-directory
+        temporary file keeps the final replacement atomic, and an external
+        modification check prevents this editor from overwriting another tool.
         """
         tmp_path = self.path + ".tmp"
         try:
-            ET.indent(self._tree, space="  ")
-            self._tree.write(tmp_path, encoding="utf-8", xml_declaration=True)
-            _sanitize_ts(tmp_path)
-            os.replace(tmp_path, self.path)   # atômico em todos os SO modernos
+            with open(self.path, encoding="utf-8", newline="") as stream:
+                current_text = stream.read()
+            if current_text != self._source_text:
+                raise RuntimeError(
+                    "the translation file changed outside this editor"
+                )
+
+            modified = [entry for entry in self.entries if entry.modified]
+            if not modified:
+                return
+
+            spans = self._translation_spans(self._source_text)
+            replacements: list[tuple[int, int, str]] = []
+            for entry in modified:
+                span = spans.get(entry.entry_id)
+                if span is None:
+                    raise RuntimeError(
+                        f"could not locate translation entry {entry.entry_id}"
+                    )
+                replacements.append((*span, self._serialize_translation(entry)))
+
+            serialized = self._source_text
+            for start, end, replacement in sorted(replacements, reverse=True):
+                serialized = serialized[:start] + replacement + serialized[end:]
+
+            with open(tmp_path, "w", encoding="utf-8", newline="") as stream:
+                stream.write(serialized)
+            os.replace(tmp_path, self.path)
+            self._source_text = serialized
         except Exception as exc:  # noqa: BLE001 - atomic-save rollback boundary
             try:
                 if os.path.exists(tmp_path):
@@ -1070,14 +910,16 @@ class Model(QAbstractTableModel):
             if col == self.COL_ST:  return QColor(_SC.get(e.status, C["text_sec"]))
             if col == self.COL_CTX: return QColor(C["text_muted"])
             if e.modified:          return QColor(C["accent"])
-            if e.vars_missing:      return QColor(C["orange"])
+            if e.placeholder_mismatches: return QColor(C["orange"])
 
         if role == Qt.ItemDataRole.BackgroundRole:
             if e.modified:     return QColor(C["accent_dim"])
 
         if role == Qt.ItemDataRole.ToolTipRole:
-            if e.vars_missing:
-                return f"⚠ Variáveis ausentes na tradução: {', '.join(e.vars_missing)}"
+            if e.placeholder_mismatches:
+                return "⚠ Placeholder mismatch: " + " | ".join(
+                    e.placeholder_mismatches
+                )
 
         if role == Qt.ItemDataRole.UserRole:
             return e
@@ -1094,24 +936,21 @@ class Model(QAbstractTableModel):
         e = self._rows[row]
         if e.is_plural:
             new_forms = value if isinstance(value, list) else [value]
+            if len(new_forms) != len(e.forms):
+                raise ValueError(
+                    "Plural form count cannot change while editing a TS entry"
+                )
             if new_forms == e.forms:
                 return
             e.forms    = new_forms
-            e.finished = any(f.strip() for f in new_forms)
+            e.finished = bool(new_forms) and all(f.strip() for f in new_forms)
             e.modified = True
             tr_el = e._elem.find("translation")
             if tr_el is not None:
                 # Atualiza cada <numerusform> individualmente
                 existing = tr_el.findall("numerusform")
                 for i, form_text in enumerate(new_forms):
-                    if i < len(existing):
-                        existing[i].text = form_text or None
-                    else:
-                        nf = ET.SubElement(tr_el, "numerusform")
-                        nf.text = form_text or None
-                # Remove formas extras se o novo valor tiver menos
-                for nf in existing[len(new_forms):]:
-                    tr_el.remove(nf)
+                    existing[i].text = form_text or None
                 if e.finished:
                     tr_el.attrib.pop("type", None)
                 else:
@@ -1159,7 +998,7 @@ class Model(QAbstractTableModel):
         ok   = sum(1 for e in self._rows if e.status == "ok")
         pend = sum(1 for e in self._rows if e.status in ("unfinished","empty"))
         same = sum(1 for e in self._rows if e.status == "same")
-        warn = sum(1 for e in self._rows if e.vars_missing)
+        warn = sum(1 for e in self._rows if e.placeholder_mismatches)
         return {"ok":ok,"pending":pend,"same":same,"warnings":warn,"total":len(self._rows)}
 
 
@@ -1191,7 +1030,18 @@ class Proxy(QSortFilterProxyModel):
         if self._pend     and e.status not in ("unfinished", "empty"): return False
         if self._modified and not e.modified:                           return False
         if self._txt:
-            return self._txt in f"{e.context} {e.source} {e.translation}".lower()
+            haystack = " ".join(
+                [
+                    e.context,
+                    e.comment,
+                    e.extra_comment,
+                    e.location,
+                    e.source,
+                    e.translation,
+                    *e.forms,
+                ]
+            )
+            return self._txt in haystack.lower()
         return True
 
 
@@ -1234,6 +1084,7 @@ class DetailPanel(QFrame):
         super().__init__(parent)
         self._row: Optional[int] = None
         self._loading = False
+        self._is_plural = False
         self._plural_edits: list[QTextEdit] = []   # edits ativos no modo plural
         self._build()
 
@@ -1385,14 +1236,13 @@ class DetailPanel(QFrame):
 
     def load(self, row: int, entry: "Entry"):
         self._row, self._loading = row, True
+        self._is_plural = entry.is_plural
 
-        self._ctx.setText(entry.context or "—")
+        self._ctx.setText(entry.details or "—")
         self._src.setPlainText(entry.source)
 
         if entry.is_plural:
-            # Garante que sempre há pelo menos 2 formas no UI
-            forms = entry.forms if entry.forms else ["", ""]
-            self._show_plural_mode(forms)
+            self._show_plural_mode(entry.forms)
             self._copy_btn.hide()
         else:
             self._show_simple_mode()
@@ -1404,6 +1254,7 @@ class DetailPanel(QFrame):
 
     def clear(self):
         self._row, self._loading = None, True
+        self._is_plural = False
         self._ctx.setText("—")
         self._src.clear()
         self._show_simple_mode()
@@ -1415,9 +1266,9 @@ class DetailPanel(QFrame):
     # ── internos ──────────────────────────────────────────────────────────
 
     def _update_warn(self, entry: "Entry"):
-        mv = entry.vars_missing
+        mv = entry.placeholder_mismatches
         self._warn.setText(
-            f"⚠ Variáveis ausentes: {', '.join(mv)}" if mv else "")
+            f"⚠ Placeholders inconsistentes: {' | '.join(mv)}" if mv else "")
 
     def _do_copy_source(self):
         """Copia o source para o campo de tradução simples."""
@@ -1430,11 +1281,13 @@ class DetailPanel(QFrame):
     def _commit(self):
         if self._row is None:
             return
-        if self._plural_edits:
+        if self._is_plural:
+            if not self._plural_edits:
+                return
             # Coleta todas as formas
-            value: list[str] = [ed.toPlainText().strip() for ed in self._plural_edits]
+            value: list[str] = [ed.toPlainText() for ed in self._plural_edits]
         else:
-            value: str = self._tr.toPlainText().strip()
+            value: str = self._tr.toPlainText()
         self.committed.emit(self._row, value)
         self._save_btn.setEnabled(False)
 
@@ -1578,6 +1431,9 @@ class TranslationEditor(QMainWindow):
         self._proxy  = Proxy()
         self._proxy.setSourceModel(self._model)
         self._pool   = QThreadPool.globalInstance()
+        self._busy_operation: str | None = None
+        self._auto_translate_target: tuple[str, str, int] | None = None
+        self._auto_translate_entry_ids: set[str] = set()
 
         self._build_ui()
         self._model.dirty_changed.connect(self._on_dirty)
@@ -1784,6 +1640,10 @@ class TranslationEditor(QMainWindow):
     def _load_lang(self, lang: dict):
         """Carrega idioma. Trata idioma fonte e .ts ausente."""
         self._current = lang
+        self._tsfile = None
+        self._model.load([])
+        self._detail.clear()
+        self._update_stats()
 
         self._btn_lu.setEnabled(True)
         self._btn_lr.setEnabled(True)
@@ -1791,21 +1651,18 @@ class TranslationEditor(QMainWindow):
 
         ts = lang.get("ts")
         if not ts or not os.path.isfile(ts):
-            self._tsfile = None
-            self._model.load([])
-            self._detail.clear()
-            self._update_stats()
             self._set_status(
                 f"solin_{lang['code']}.ts não existe — "
                 f"clique em '↻ Extrair strings' para criá-lo.")
             return
 
         try:
-            self._tsfile = TsFile(ts)
+            tsfile = TsFile(ts)
         except (OSError, ET.ParseError, ValueError) as exc:
             self._set_status(f"Erro ao abrir {ts}: {exc}", error=True)
             return
 
+        self._tsfile = tsfile
         self._model.load(self._tsfile.entries)
         # Força atualização completa do proxy e da view
         self._proxy.invalidateFilter()
@@ -1821,6 +1678,8 @@ class TranslationEditor(QMainWindow):
 
     def _on_lang_changed(self, idx: int):
         if idx < 0 or idx >= len(self._langs): return
+        if self._busy_operation:
+            return
         if self._model.dirty:
             r = QMessageBox.question(
                 self, "Salvar?",
@@ -1837,7 +1696,13 @@ class TranslationEditor(QMainWindow):
                 self._combo.blockSignals(False)
                 return
             if r == QMessageBox.StandardButton.Save:
-                self._do_save()
+                if not self._do_save():
+                    self._combo.blockSignals(True)
+                    old = next((i for i, lg in enumerate(self._langs)
+                                if lg is self._current), 0)
+                    self._combo.setCurrentIndex(old)
+                    self._combo.blockSignals(False)
+                    return
         self._load_lang(self._langs[idx])
 
     def _on_row(self, current: QModelIndex, _prev):
@@ -1891,7 +1756,7 @@ class TranslationEditor(QMainWindow):
     # ── Toolchain ──────────────────────────────────────────────────────────
 
     def _do_lupdate(self):
-        if not self._current:
+        if not self._current or self._busy_operation:
             return
 
         ts_path = (self._current.get("ts") or
@@ -1905,7 +1770,8 @@ class TranslationEditor(QMainWindow):
                 QMessageBox.StandardButton.Discard |
                 QMessageBox.StandardButton.Cancel)
             if r == QMessageBox.StandardButton.Cancel: return
-            if r == QMessageBox.StandardButton.Save:   self._do_save()
+            if r == QMessageBox.StandardButton.Save and not self._do_save():
+                return
 
         self._set_busy(True, "lu")
         w = _Worker(run_lupdate, _PROJECT_ROOT, ts_path)
@@ -1918,18 +1784,8 @@ class TranslationEditor(QMainWindow):
         ts_path = getattr(self, "_pending_ts_path", "")
         self._set_busy(False, "lu")
 
-        # Informa se a sanitização corrigiu o arquivo
-        note = ""
-        if ok and os.path.isfile(ts_path):
-            note = (
-                "\n\n─────────────────────────────\n"
-                "\u2139\ufe0f  Sanitização automática aplicada: quaisquer tags\n"
-                "   inválidas geradas pelo lupdate foram corrigidas\n"
-                "   (ex: <n> \u2192 <name>).  O arquivo está pronto para uso."
-            )
-
         OutputDialog("lupdate — " + ("OK" if ok else "Falhou"),
-                     output + note, ok, self).exec()
+                     output, ok, self).exec()
 
         if ok:
             # Atualiza a referência em ambos os lugares de forma consistente
@@ -1945,23 +1801,28 @@ class TranslationEditor(QMainWindow):
                 idx,
                 f"{self._current['name']}  ({self._current['code']})  ✓")
 
-    def _do_save(self):
+    def _do_save(self) -> bool:
         if not self._tsfile:
-            return
+            return False
         try:
             self._tsfile.save()
             self._model.mark_clean()
             self._set_status(f"✓  Salvo: {os.path.basename(self._tsfile.path)}")
+            return True
         except TsFileSaveError as exc:
             log.error("Could not save translation file", exc_info=True)
             self._set_status(f"Erro ao salvar: {exc}", error=True)
+            return False
 
     def _do_lrelease(self):
         if not self._current or not self._current.get("ts"):
             QMessageBox.warning(self, "Sem .ts",
                 "Rode o lupdate primeiro para gerar o .ts.")
             return
-        if self._model.dirty: self._do_save()
+        if self._busy_operation:
+            return
+        if self._model.dirty and not self._do_save():
+            return
         self._set_busy(True, "lr")
         w = _Worker(run_lrelease, self._current["ts"])
         w.signals.done.connect(self._lr_done)
@@ -1979,7 +1840,7 @@ class TranslationEditor(QMainWindow):
             self._set_status(f"✓  Compilado: {os.path.basename(qm)}  ({kb} KB)")
 
     def _do_auto_translate(self):
-        if not self._current or not self._tsfile:
+        if not self._current or not self._tsfile or self._busy_operation:
             return
 
         api_key = os.environ.get("GEMINI_API_KEY", "").strip()
@@ -2025,12 +1886,23 @@ class TranslationEditor(QMainWindow):
         else:
             return
 
+        eligible = [
+            entry
+            for entry in self._tsfile.entries
+            if entry.status == "empty"
+            or (not only_empty and entry.status == "unfinished")
+        ]
+        self._auto_translate_target = (
+            self._current["code"],
+            self._tsfile.path,
+            id(self._tsfile),
+        )
+        self._auto_translate_entry_ids = {entry.entry_id for entry in eligible}
         self._set_busy(True, "auto_tr")
         w = _AutoTranslateWorker(
-            self._tsfile.entries,
+            eligible,
             self._current["name"],
             self._current["code"],
-            self._current.get("api_code", "E"),
             api_key,
             only_empty,
         )
@@ -2040,6 +1912,21 @@ class TranslationEditor(QMainWindow):
     @Slot(bool, str, str)
     def _auto_translate_done(self, ok: bool, message: str, json_results: str):
         self._set_busy(False, "auto_tr")
+        target = self._auto_translate_target
+        eligible_entry_ids = self._auto_translate_entry_ids
+        self._auto_translate_target = None
+        self._auto_translate_entry_ids = set()
+        current_target = (
+            self._current["code"],
+            self._tsfile.path,
+            id(self._tsfile),
+        ) if self._current and self._tsfile else None
+        if target is None or current_target != target:
+            self._set_status(
+                "Resultado descartado: o idioma de destino foi alterado.",
+                error=True,
+            )
+            return
         if not ok:
             self._set_status(f"Erro no preenchimento: {message}", error=True)
             QMessageBox.warning(self, "Erro no preenchimento", message)
@@ -2056,18 +1943,19 @@ class TranslationEditor(QMainWindow):
             return
 
         applied = 0
+        rejected = 0
         for idx, entry in enumerate(self._tsfile.entries):
-            if entry.source not in results:
+            if (
+                entry.entry_id not in eligible_entry_ids
+                or entry.entry_id not in results
+            ):
                 continue
-            translated = results[entry.source]
-            if entry.is_plural:
-                if isinstance(translated, list) and any(s.strip() for s in translated):
-                    self._model.update_entry(idx, [str(s).strip() for s in translated])
-                    applied += 1
-            else:
-                if isinstance(translated, str) and translated.strip():
-                    self._model.update_entry(idx, translated.strip())
-                    applied += 1
+            translated = _validated_translation(entry, results[entry.entry_id])
+            if translated is None:
+                rejected += 1
+                continue
+            self._model.update_entry(idx, translated)
+            applied += 1
 
         self._proxy.invalidateFilter()
         self._table.viewport().update()
@@ -2078,22 +1966,43 @@ class TranslationEditor(QMainWindow):
 
         self._set_status(
             f"✦  {applied} string(s) preenchida(s) em {self._current['name']} — "
-            "revise e clique em 💾 Salvar quando terminar."
+            f"{rejected} resultado(s) rejeitado(s) por formato ou placeholders. "
+            "Revise e clique em 💾 Salvar quando terminar."
         )
 
     # ── Helpers ────────────────────────────────────────────────────────────
 
     def _set_busy(self, busy: bool, which: str):
+        self._busy_operation = which if busy else None
+        self._combo.setEnabled(not busy)
+        self._btn_new.setEnabled(not busy)
+        self._table.setEnabled(not busy)
+        self._detail.setEnabled(not busy)
+        self._btn_lu.setEnabled(not busy and self._current is not None)
+        self._btn_lr.setEnabled(
+            not busy and self._current is not None and bool(self._current.get("ts"))
+        )
+        self._btn_sv.setEnabled(not busy and self._model.dirty)
+        has_pending = bool(
+            self._tsfile
+            and any(
+                entry.status in ("empty", "unfinished")
+                for entry in self._tsfile.entries
+            )
+        )
+        self._btn_auto_tr.setEnabled(
+            not busy
+            and has_pending
+            and self._current is not None
+            and not self._current["is_source"]
+        )
         if which == "lu":
-            self._btn_lu.setEnabled(not busy)
             self._btn_lu.setText("⏳  Rodando lupdate…" if busy
                                   else "↻  Extrair strings  (lupdate)")
         elif which == "lr":
-            self._btn_lr.setEnabled(not busy)
             self._btn_lr.setText("⏳  Compilando…" if busy
                                   else "▶  Compilar .qm  (lrelease)")
         elif which == "auto_tr":
-            self._btn_auto_tr.setEnabled(not busy)
             self._btn_auto_tr.setText("⏳  Traduzindo…" if busy
                                       else "✦  Preencher vazios")
 
@@ -2124,7 +2033,10 @@ class TranslationEditor(QMainWindow):
                 QMessageBox.StandardButton.Discard |
                 QMessageBox.StandardButton.Cancel)
             if r == QMessageBox.StandardButton.Save:
-                self._do_save(); ev.accept()
+                if self._do_save():
+                    ev.accept()
+                else:
+                    ev.ignore()
             elif r == QMessageBox.StandardButton.Discard:
                 ev.accept()
             else:

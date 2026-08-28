@@ -8,7 +8,14 @@ from collections.abc import Callable
 from concurrent.futures import CancelledError
 from dataclasses import dataclass
 from time import monotonic
-from PySide6.QtCore import QCoreApplication, QObject, QThread, Signal, Slot
+from PySide6.QtCore import (
+    QCoreApplication,
+    QObject,
+    QT_TRANSLATE_NOOP,
+    QThread,
+    Signal,
+    Slot,
+)
 
 from solin.core.foundation.thread_workers import CancellationFlag
 from solin.core.playlists.native_types import NativePlaylistTransferCancelled
@@ -16,9 +23,13 @@ from solin.ui.dialogs.playlist_transfer import PlaylistTransferDialog
 
 log = logging.getLogger(__name__)
 
+_TR_CONTEXT = "PlaylistTransfer"
+_CANCELLED_SOURCE = QT_TRANSLATE_NOOP("PlaylistTransfer", "Operation cancelled")
+_PROCESSING_SOURCE = QT_TRANSLATE_NOOP("PlaylistTransfer", "Processing…")
+
 
 def _tr(text: str) -> str:
-    return QCoreApplication.translate("PlaylistTransfer", text)
+    return QCoreApplication.translate(_TR_CONTEXT, text)
 
 
 @dataclass(frozen=True, slots=True)
@@ -198,7 +209,7 @@ class PlaylistTransferController(QObject):
     @Slot()
     def _on_cancelled(self) -> None:
         self._dialog.finish()
-        self._notifications.information(_tr("Operation cancelled"))
+        self._notifications.information(_tr(_CANCELLED_SOURCE))
         self._start_next_after_finish = True
 
     @Slot()
@@ -221,7 +232,7 @@ class PlaylistTransferController(QObject):
         if isinstance(value, PlaylistTransferProgress):
             return value
         return PlaylistTransferProgress(
-            stage=str(getattr(value, "stage", "") or _tr("Processing…")),
+            stage=str(getattr(value, "stage", "") or _tr(_PROCESSING_SOURCE)),
             detail=str(getattr(value, "detail", "") or ""),
             completed=int(getattr(value, "completed", 0) or 0),
             total=int(getattr(value, "total", 0) or 0),

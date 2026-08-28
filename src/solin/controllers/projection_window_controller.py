@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import os
 from typing import Any
 
-from PySide6.QtCore import QDateTime, QTimer
+from PySide6.QtCore import QCoreApplication, QDateTime, QTimer, QT_TRANSLATE_NOOP
 
 from ..ui.screens import ScreenManager
 from ..core.projection.application import (
@@ -19,6 +19,25 @@ from ..core.projection.image_framing import (
 from ..core.timer.models import MediaCountdownPresentation
 from ..projection.idle_source import IdleMediaSource
 from ..projection.window import FloatingPreviewWindow, ProjectionWindow
+
+_TR_CONTEXT = "ProjectionWindowManagement"
+_THIS_MONITOR_SOURCE = QT_TRANSLATE_NOOP(
+    "ProjectionWindowManagement",
+    "this monitor",
+)
+_MONITOR_IN_USE_TITLE = QT_TRANSLATE_NOOP(
+    "ProjectionWindowManagement",
+    "Monitor in use by the timer",
+)
+_TAKE_TIMER_MONITOR_SOURCE = QT_TRANSLATE_NOOP(
+    "ProjectionWindowManagement",
+    "The timer is currently using {monitor}. Move media here and hide the "
+    "timer on this monitor?",
+)
+
+
+def _tr(source: str) -> str:
+    return QCoreApplication.translate(_TR_CONTEXT, source)
 
 
 def _no_object() -> Any | None:
@@ -51,7 +70,6 @@ class ProjectionWindowContext:
     set_toolbar_screen_count: Callable[[int], None]
     monitor_popup: Callable[[], Any | None]
     monitor_anchor: Callable[[], Any]
-    translate: Callable[[str], str]
     dialog_parent: Any | None = None
     timer_output: Callable[[], Any | None] = _no_object
     timer_bridge: Callable[[], Any | None] = _no_object
@@ -441,15 +459,12 @@ class ProjectionWindowController:
         """Native confirmation before media displaces the timer on a screen."""
         from PySide6.QtWidgets import QMessageBox
 
-        name = screen.name() or self._context.translate("this monitor")
+        name = screen.name() or _tr(_THIS_MONITOR_SOURCE)
         box = QMessageBox(self._context.dialog_parent)
         box.setIcon(QMessageBox.Icon.Warning)
-        box.setWindowTitle(self._context.translate("Monitor in use by the timer"))
+        box.setWindowTitle(_tr(_MONITOR_IN_USE_TITLE))
         box.setText(
-            self._context.translate(
-                "The timer is currently using {monitor}. Move media here and "
-                "hide the timer on this monitor?"
-            ).replace("{monitor}", str(name))
+            _tr(_TAKE_TIMER_MONITOR_SOURCE).format(monitor=name)
         )
         box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         box.setDefaultButton(QMessageBox.StandardButton.No)

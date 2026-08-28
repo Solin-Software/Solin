@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 )
 
 from solin.core.jw.background_song_service import BackgroundSongService
+from solin.core.jw.background_song_status import BackgroundSongStatus
 from solin.ui.background_song_status import translate_background_song_status
 from solin.styles.icons import (
     ICON_MUSIC,
@@ -269,7 +270,7 @@ class BackgroundSongPopup(QWidget):
     def _sync_all(self) -> None:
         self._set_playing(self._service.is_playing)
         self._set_current_song(self._service.current_title)
-        self._set_status(self._service.status_text)
+        self._set_status(self._service.status)
         self._set_volume(self._service.volume_percent)
         self._set_fade_seconds(self._service.fade_seconds)
         self._set_stop_before_seconds(self._service.stop_before_seconds)
@@ -287,8 +288,8 @@ class BackgroundSongPopup(QWidget):
         )
         self._song_lbl.setText(elided)
 
-    def _set_status(self, source: str) -> None:
-        self._status_lbl.setText(translate_background_song_status(source))
+    def _set_status(self, status: BackgroundSongStatus | None) -> None:
+        self._status_lbl.setText(translate_background_song_status(status))
 
     def _set_volume(self, value: int) -> None:
         value = int(value)
@@ -415,7 +416,7 @@ class BackgroundSongPopup(QWidget):
             self._fade_lbl.setText(self.tr("Fade duration"))
             self._fade_spin.setToolTip(self.tr("Lowers the volume before playback stops."))
             self._set_current_song(self._service.current_title)
-            self._set_status(self._service.status_text)
+            self._set_status(self._service.status)
             self._sync_buttons()
         super().changeEvent(event)
 

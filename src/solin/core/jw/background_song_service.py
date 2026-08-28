@@ -19,20 +19,8 @@ from solin.core.jw.background_song_settings import (
     clamp_background_song_volume,
 )
 from solin.core.jw.background_song_status import (
-    STATUS_CONFIGURE_MEETING,
-    STATUS_DISABLED,
-    STATUS_ENABLE_IN_SETTINGS,
-    STATUS_LOAD_FAILED,
-    STATUS_LOADING_AUDIO,
-    STATUS_NO_AUDIO,
-    STATUS_PLAYING,
-    STATUS_READY,
-    STATUS_SIGN_LANGUAGE_UNAVAILABLE,
-    STATUS_STOPPED,
-    STATUS_STOPPED_BEFORE_MEETING,
-    STATUS_STOPPED_FOR_MEETING,
-    STATUS_STOPPING,
-    STATUS_WAITING_FOR_MEETING,
+    BackgroundSongStatus,
+    BackgroundSongStatusCode,
 )
 from solin.core.jw.language_context import jw_media_language_context
 from solin.core.jw.songs import JWSongsStore
@@ -86,7 +74,7 @@ class BackgroundSongService(QObject):
     enabled_changed = Signal(bool)
     playback_changed = Signal(bool)
     current_song_changed = Signal(str)
-    status_changed = Signal(str)
+    status_changed = Signal(object)
     volume_changed = Signal(int)
     fade_seconds_changed = Signal(int)
     stop_before_seconds_changed = Signal(int)
@@ -120,7 +108,7 @@ class BackgroundSongService(QObject):
         self._desired_playing = False
         self._manual_session = False
         self._current_title = ""
-        self._status_text = ""
+        self._status: BackgroundSongStatus | None = None
         self._active_occurrence: MeetingOccurrence | None = None
         self._scheduled_fade_deadline: datetime | None = None
         self._suppressed_slot_id = ""
@@ -177,8 +165,8 @@ class BackgroundSongService(QObject):
         return self._current_title
 
     @property
-    def status_text(self) -> str:
-        return self._status_text
+    def status(self) -> BackgroundSongStatus | None:
+        return self._status
 
     @property
     def volume_percent(self) -> int:
@@ -231,7 +219,7 @@ class BackgroundSongService(QObject):
 
         if not self._enabled:
             self.stop(immediate=True)
-            self._set_status(STATUS_DISABLED)
+            self._set_status(BackgroundSongStatusCode.DISABLED)
             return
 
         self._ensure_songs_loaded()
@@ -265,7 +253,7 @@ class BackgroundSongService(QObject):
     @Slot()
     def start_manual(self) -> None:
         if not self._enabled:
-            self._set_status(STATUS_ENABLE_IN_SETTINGS)
+            self._set_status(BackgroundSongStatusCode.ENABLE_IN_SETTINGS)
             return
         self._suppressed_slot_id = ""
         self._desired_playing = True
@@ -300,7 +288,7 @@ class BackgroundSongService(QObject):
             self._finish_stop()
             return
         self._fade_to(0.0, self._fade_seconds, stop_after=True)
-        self._set_status(STATUS_STOPPING)
+        self._set_status(BackgroundSongStatusCode.STOPPING)
 
     @Slot()
     def evaluate_auto_playback(self) -> None:
@@ -311,7 +299,7 @@ class BackgroundSongService(QObject):
         if not schedule.has_configured_slot:
             self._auto_stop_timer.stop()
             if not self.is_playing:
-                self._set_status(STATUS_CONFIGURE_MEETING)
+                self._set_status(BackgroundSongStatusCode.CONFIGURE_MEETING)
             return
 
         occurrence = schedule.pre_meeting_occurrence(datetime.now().astimezone())
@@ -320,14 +308,14 @@ class BackgroundSongService(QObject):
             self._scheduled_fade_deadline = None
             self._auto_stop_timer.stop()
             if not self.is_playing:
-                self._set_status(STATUS_WAITING_FOR_MEETING)
+                self._set_status(BackgroundSongStatusCode.WAITING_FOR_MEETING)
             return
 
         if self._suppressed_slot_id == occurrence.slot_id:
             self._scheduled_fade_deadline = None
             self._auto_stop_timer.stop()
             if not self.is_playing:
-                self._set_status(STATUS_STOPPED_FOR_MEETING)
+                self._set_status(BackgroundSongStatusCode.STOPPED_FOR_MEETING)
             return
 
         fade_start_delay_ms, stop_delay_ms = _scheduled_stop_delays_ms(
@@ -342,7 +330,7 @@ class BackgroundSongService(QObject):
             self._suppressed_slot_id = occurrence.slot_id
             if self.is_playing or self._desired_playing:
                 self.stop(immediate=True)
-            self._set_status(STATUS_STOPPED_BEFORE_MEETING)
+            self._set_status(BackgroundSongStatusCode.STOPPED_BEFORE_MEETING)
             return
 
         if fade_start_delay_ms <= 0:
@@ -379,7 +367,7 @@ class BackgroundSongService(QObject):
             self._queue = []
             self._active_key = ""
             self.stop(immediate=True)
-            self._set_status(STATUS_SIGN_LANGUAGE_UNAVAILABLE)
+            self._set_status(BackgroundSongStatusCode.SIGN_LANGUAGE_UNAVAILABLE)
             return
 
         request = self._store.request_for(
@@ -395,9 +383,12 @@ class BackgroundSongService(QObject):
         if snapshot.items:
             self._set_songs(snapshot.items)
         elif snapshot.error:
-            self._set_status(snapshot.error)
+            self._set_status(
+                BackgroundSongStatusCode.LOAD_FAILED,
+                detail=snapshot.error,
+            )
         elif snapshot.is_loading:
-            self._set_status(STATUS_LOADING_AUDIO)
+            self._set_status(BackgroundSongStatusCode.LOADING_AUDIO)
 
     @Slot(str)
     def _on_language_changed(self, *_args) -> None:
@@ -433,14 +424,14 @@ class BackgroundSongService(QObject):
         if self._desired_playing and not self.is_playing and not track_in_flight:
             self._play_next()
         elif not self.is_playing and not track_in_flight:
-            self._set_status(STATUS_READY)
+            self._set_status(BackgroundSongStatusCode.READY)
 
     @Slot(str, str)
     def _on_songs_failed(self, key: str, error: str) -> None:
         if key != self._active_key:
             return
         self._loading = False
-        self._set_status(error or STATUS_LOAD_FAILED)
+        self._set_status(BackgroundSongStatusCode.LOAD_FAILED, detail=error)
 
     @Slot(str, bool)
     def _on_loading_changed(self, key: str, loading: bool) -> None:
@@ -448,7 +439,7 @@ class BackgroundSongService(QObject):
             return
         self._loading = bool(loading)
         if loading:
-            self._set_status(STATUS_LOADING_AUDIO)
+            self._set_status(BackgroundSongStatusCode.LOADING_AUDIO)
 
     def _set_songs(self, items: list) -> None:
         songs = [
@@ -468,9 +459,9 @@ class BackgroundSongService(QObject):
         self._retry_timer.stop()
         if not self._songs:
             self._set_status(
-                STATUS_NO_AUDIO
+                BackgroundSongStatusCode.NO_AUDIO
                 if not self._loading
-                else STATUS_LOADING_AUDIO
+                else BackgroundSongStatusCode.LOADING_AUDIO
             )
             return
         self._fade_timer.stop()
@@ -493,7 +484,7 @@ class BackgroundSongService(QObject):
         if self._scheduled_fade_deadline is not None:
             self._start_scheduled_fade()
         else:
-            self._set_status(STATUS_PLAYING)
+            self._set_status(BackgroundSongStatusCode.PLAYING)
 
     def _can_start_new_track(self) -> bool:
         now = datetime.now().astimezone()
@@ -503,7 +494,7 @@ class BackgroundSongService(QObject):
             if not self._manual_session and active is not None and now >= active.starts_at:
                 self._suppressed_slot_id = active.slot_id
                 self._desired_playing = False
-                self._set_status(STATUS_STOPPED_BEFORE_MEETING)
+                self._set_status(BackgroundSongStatusCode.STOPPED_BEFORE_MEETING)
                 return False
             return True
 
@@ -526,7 +517,7 @@ class BackgroundSongService(QObject):
             self._suppressed_slot_id = occurrence.slot_id
             self._desired_playing = False
             self._manual_session = False
-            self._set_status(STATUS_STOPPED_BEFORE_MEETING)
+            self._set_status(BackgroundSongStatusCode.STOPPED_BEFORE_MEETING)
             return False
 
         self._auto_stop_timer.stop()
@@ -543,13 +534,13 @@ class BackgroundSongService(QObject):
         remaining_seconds = (deadline - datetime.now().astimezone()).total_seconds()
         if remaining_seconds <= 0:
             self.stop(immediate=True)
-            self._set_status(STATUS_STOPPED_BEFORE_MEETING)
+            self._set_status(BackgroundSongStatusCode.STOPPED_BEFORE_MEETING)
             return
 
         self._desired_playing = False
         self._manual_session = False
         self._fade_to(0.0, remaining_seconds, stop_after=True)
-        self._set_status(STATUS_STOPPING)
+        self._set_status(BackgroundSongStatusCode.STOPPING)
 
     @Slot()
     def _on_media_ended(self) -> None:
@@ -564,7 +555,10 @@ class BackgroundSongService(QObject):
 
     def _on_player_error(self, error_string: str) -> None:
         if error_string:
-            self._set_status(error_string)
+            self._set_status(
+                BackgroundSongStatusCode.PLAYBACK_ERROR,
+                detail=error_string,
+            )
         if self._enabled and self._desired_playing:
             self._retry_timer.start()
 
@@ -638,13 +632,19 @@ class BackgroundSongService(QObject):
         self._current_title = ""
         self.current_song_changed.emit("")
         self.playback_changed.emit(False)
-        self._set_status(STATUS_STOPPED)
+        self._set_status(BackgroundSongStatusCode.STOPPED)
 
-    def _set_status(self, text: str) -> None:
-        if text == self._status_text:
+    def _set_status(
+        self,
+        code: BackgroundSongStatusCode,
+        *,
+        detail: str = "",
+    ) -> None:
+        status = BackgroundSongStatus(code, detail.strip())
+        if status == self._status:
             return
-        self._status_text = text
-        self.status_changed.emit(text)
+        self._status = status
+        self.status_changed.emit(status)
 
 
 __all__ = [

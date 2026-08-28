@@ -5,7 +5,7 @@ import threading
 from http.server import HTTPServer
 from pathlib import Path
 
-from solin.core.ingest.wifi_server import make_handler
+from solin.core.ingest.wifi_server import build_upload_html, make_handler
 from solin.core.ingest.wifi_uploads import (
     is_allowed_upload_filename,
     parse_multipart,
@@ -22,6 +22,48 @@ def _multipart(filename: str, payload: bytes = b"data") -> tuple[bytes, str]:
         "\r\n"
     ).encode("utf-8") + payload + f"\r\n--{boundary}--\r\n".encode("utf-8")
     return body, boundary
+
+
+def _upload_theme() -> dict[str, str]:
+    return {
+        "bg": "#000000",
+        "surface": "#111111",
+        "surface2": "#222222",
+        "border": "#333333",
+        "border2": "#444444",
+        "accent": "#555555",
+        "accent_hover": "#666666",
+        "accent_soft": "#777777",
+        "accent_subtle": "#888888",
+        "accent_subtle_hover": "#999999",
+        "text": "#ffffff",
+        "text_on_accent": "#ffffff",
+        "muted": "#aaaaaa",
+        "ok": "#00ff00",
+        "err": "#ff0000",
+    }
+
+
+def test_upload_html_uses_locale_and_escapes_translated_content():
+    generated = build_upload_html(
+        {
+            "lang": "pt_BR",
+            "title": "Enviar <mídia>",
+            "subtitle": "Fotos & vídeos",
+            "btn_label": "Enviar",
+            "drop_hint": "Solte aqui",
+            "success": "Arquivo d'usuário enviado!",
+            "error": "</script><script>alert(1)</script>",
+        },
+        _upload_theme(),
+    )
+
+    assert '<html lang="pt-BR">' in generated
+    assert "Enviar &lt;mídia&gt;" in generated
+    assert "Fotos &amp; vídeos" in generated
+    assert '"Arquivo d\'usu\\u00e1rio enviado!"' in generated
+    assert "\\u003c/script\\u003e" in generated
+    assert "</script><script>alert(1)</script>" not in generated
 
 
 def testparse_multipart_sanitizes_uploaded_filename():

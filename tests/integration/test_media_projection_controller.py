@@ -300,7 +300,6 @@ def _controller(window, *, content_frame_sink=None):
             ),
             meeting_service=lambda: window.meeting_service,
             dialog_parent=window,
-            translate=window.tr,
             sjjm_announce_mode=window.settings_widget.get_sjjm_announce_mode,
             start_videos_paused=window.settings_widget.get_start_videos_paused,
             playback_protection=window.playback_protection,

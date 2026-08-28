@@ -161,7 +161,6 @@ def _controller(window):
             media_controller=window.media_ctrl,
             quick_toolbar=lambda: window._quick_toolbar,
             projection_windows=lambda: [],
-            translate=window.tr,
             playback_protection=window.playback_protection,
             content_frame_sink=window.content_frames.append,
         ),

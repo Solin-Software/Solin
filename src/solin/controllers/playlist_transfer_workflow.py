@@ -399,11 +399,7 @@ class PlaylistTransferWorkflow(QObject):
             initial_stage=self.tr("Validating playlist…"),
             runner=run,
             completed=commit,
-            succeeded_message=(
-                self.tr("1 playlist imported")
-                if count == 1
-                else self.tr("{count} playlists imported").replace("{count}", str(count))
-            ),
+            succeeded_message=self.tr("%n playlist(s) imported", "", count),
         )
 
     def _jwl_import_job(
@@ -439,11 +435,7 @@ class PlaylistTransferWorkflow(QObject):
             initial_stage=self.tr("Opening playlist…"),
             runner=self._jwl_playlist_import_runner(paths),
             completed=commit,
-            succeeded_message=(
-                self.tr("1 playlist imported")
-                if count == 1
-                else self.tr("{count} playlists imported").replace("{count}", str(count))
-            ),
+            succeeded_message=self.tr("%n playlist(s) imported", "", count),
         )
 
     def _jwl_playlist_import_runner(self, paths: list[str]):

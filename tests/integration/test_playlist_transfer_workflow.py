@@ -250,7 +250,7 @@ def test_native_workflow_imports_persists_and_opens_atomically(tmp_path: Path) -
     assert repository.load_strict() == playlists
     assert refreshed == [True]
     assert opened == [playlists[0]["id"]]
-    assert notifications.successes == ["1 playlist imported"]
+    assert notifications.successes == ["1 playlist(s) imported"]
     workflow.shutdown()
     parent.deleteLater()
 

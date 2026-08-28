@@ -30,7 +30,9 @@ def _fake_library(
         _active_section=section,
         _catalogs=catalogs,
         _cache_manager=cache_manager,
-        tr=lambda text: text,
+        tr=lambda text, _disambiguation=None, count=-1: text.replace(
+            "%n", str(count)
+        ),
     )
     fake._ordered_items = lambda current: LibraryWidget._ordered_items(fake, current)
     fake._songs_support_audio = lambda: supports_audio
@@ -120,5 +122,5 @@ def test_download_all_text_changes_with_collection_and_media_mode(tmp_path):
     )
     assert (
         LibraryWidget._download_all_confirmation(clips_library, "clips", "clips", 3)
-        == "Download 3 music videos for offline playback?"
+        == "Download 3 music video(s) for offline playback?"
     )

@@ -22,6 +22,10 @@ do Qt. O método t(key) foi removido. O fluxo de atualização de traduções é
       → Qt Linguist (traduzir)
       → lrelease → .qm
 
+O catálogo inglês também é carregado. Strings comuns podem usar o fallback do
+source, mas mensagens numerus precisam do solin_en.qm para converter sources
+neutros como "%n item(s)" nas formas inglesas "item" e "items".
+
 Arquivos necessários em produção
 ─────────────────────────────────
   src/solin/resources/translations/solin_<code>.qm   ← binários compilados pelo lrelease

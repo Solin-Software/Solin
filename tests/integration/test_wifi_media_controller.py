@@ -71,7 +71,6 @@ def _controller(window):
         WifiMediaContext(
             destination_controller=window.destination_controller,
             wifi_receive_widget=lambda: window.wifi_receive_widget,
-            translate=lambda text: text,
         ),
         WifiMediaHandlers(
             play_cached_media=window._media_projection.on_cache_play,

@@ -1732,8 +1732,9 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
 
     def set_screen_count(self, n: int):
         self._screen_count = n
-        label = self.tr("secondary screen") if n == 1 else self.tr("secondary screens")
-        self.screen_count_label.setText(f"{n} {label}")
+        self.screen_count_label.setText(
+            self.tr("%n secondary screen(s)", "", max(0, n))
+        )
 
     def apply_theme(self) -> None:
         self.monitor_icon.setPixmap(

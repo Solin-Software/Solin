@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 )
 
 from solin.ui.helpers import make_rounded_thumb
+from solin.core.i18n.strings import tr_media_item_count
 from solin.core.media.formats import media_type_from_path
 from solin.styles.icons import ICON_IMAGE, ICON_MUSIC, ICON_VIDEO, make_icon
 from solin.styles.theme import PALETTE
@@ -167,7 +168,7 @@ class PlaylistPanel(QWidget):
         header.setStyleSheet(f"background:{PALETTE.surface};border-bottom:1px solid {PALETTE.border};")
         header_layout = QHBoxLayout(header)
         header_layout.setContentsMargins(10, 0, 10, 0)
-        self._count_lbl = QLabel("Playlist")
+        self._count_lbl = QLabel(tr_media_item_count(0))
         self._count_lbl.setStyleSheet(
             f"background:transparent;color:{PALETTE.text_muted};"
             "font-size:10px;font-weight:600;letter-spacing:0.5px;"
@@ -254,7 +255,7 @@ class PlaylistPanel(QWidget):
         return self.tr("Video")
 
     def _update_count_label(self, count: int) -> None:
-        self._count_lbl.setText(self.tr("%n media item(s)", "", count))
+        self._count_lbl.setText(tr_media_item_count(count))
 
     def refresh_language(self, lang=None) -> None:
         if lang:

@@ -195,7 +195,6 @@ def _controller(
             notifications=window.notifications,
             playlist_widget=window.playlist_widget,
             thread_registry=OwnedQThreadRegistry(),
-            translate=window.tr,
         ),
         PlaylistImportHandlers(
             switch_to_playlist=lambda: window._navigation.switch_page(7),
@@ -273,7 +272,7 @@ def test_add_items_to_playlist_target_counts_added_items():
     assert outcome.added_count == 2
     assert outcome.referenced_urls == ("a.mp4", "c.mp4")
     assert window.notifications.events == [
-        ("success", '2 file(s) added\nto playlist "Target"', {}),
+        ("success", "Target: 2 file(s) added", {}),
         ("warning", "1 media item(s) were already added", {}),
     ]
 

@@ -298,10 +298,16 @@ def profile_label(text: str, size: int = 13, color: str = PROFILE_TEXT,
 
 
 class ProfileNameDialog(QDialog):
-    def __init__(self, current: str = "", parent=None,
-                 title: str = "Profile", label: str = "Profile name"):
+    def __init__(
+        self,
+        current: str = "",
+        parent=None,
+        *,
+        title: str,
+        label: str,
+    ):
         super().__init__(parent)
-        self.setWindowTitle(self.tr(title))
+        self.setWindowTitle(title)
         self.setModal(True)
         self.setFixedWidth(380)
         self.setStyleSheet(f"background: {PROFILE_SURFACE}; color: {PROFILE_TEXT};")
@@ -310,13 +316,13 @@ class ProfileNameDialog(QDialog):
         lay.setContentsMargins(24, 24, 24, 24)
         lay.setSpacing(14)
 
-        title_label = QLabel(self.tr(title))
+        title_label = QLabel(title)
         title_label.setStyleSheet(
             f"color: {PROFILE_TEXT}; font-size: 16px; font-weight: 700; background: transparent;"
         )
         lay.addWidget(title_label)
 
-        lbl = QLabel(self.tr(label))
+        lbl = QLabel(label)
         lbl.setStyleSheet(f"color: {PROFILE_MUTED}; font-size: 12px; background: transparent;")
         lay.addWidget(lbl)
 

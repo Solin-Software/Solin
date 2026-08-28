@@ -36,6 +36,7 @@ from PySide6.QtGui import QDesktopServices, QImage, QPixmap
 from PySide6.QtWidgets import QFileDialog, QMessageBox, QDialog
 
 from ...core.media.cache import MediaCacheManager
+from ...core.i18n.strings import tr_document_page_title, tr_item_count
 from ...core.media.profile_store import ProfileMediaStore
 from ...core.media.thumbnail_store import ThumbnailStore
 from ...core.media.thumbnail_identity import (
@@ -525,8 +526,7 @@ class MeetingTreeController(QObject):
     @Property(str, notify=chromeChanged)
     def itemCountText(self):
         count = count_media(self._nodes)
-        word = _tr("_PlaylistEditView", "items")
-        return f"{count} {word}"
+        return tr_item_count(count)
 
     def placement_playlist_ref(self) -> MeetingCatalogPlaylistRef:
         return build_meeting_catalog_playlist_ref(
@@ -1236,7 +1236,10 @@ class MeetingTreeController(QObject):
 
     def _page_nodes(self, pages: list[str], stem: str) -> list[Node]:
         return [
-            self._manual_media_node(page, title=f"{stem} - p. {idx + 1}")
+            self._manual_media_node(
+                page,
+                title=tr_document_page_title(stem, idx + 1),
+            )
             for idx, page in enumerate(pages)
         ]
 
@@ -1626,7 +1629,10 @@ class MeetingTreeController(QObject):
         insert_index: int,
     ) -> None:
         nodes = [
-            self._manual_media_node(page, title=f"{pdf_stem} - p. {idx + 1}")
+            self._manual_media_node(
+                page,
+                title=tr_document_page_title(pdf_stem, idx + 1),
+            )
             for idx, page in enumerate(pages)
         ]
         if nodes:
@@ -1667,7 +1673,10 @@ class MeetingTreeController(QObject):
         insert_index: int,
     ) -> None:
         nodes = [
-            self._manual_media_node(page, title=f"{stem} - p. {idx + 1}")
+            self._manual_media_node(
+                page,
+                title=tr_document_page_title(stem, idx + 1),
+            )
             for idx, page in enumerate(pages)
         ]
         if nodes:

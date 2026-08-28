@@ -16,8 +16,20 @@ OFFLINE_QUEUED_SOURCE = QT_TRANSLATE_NOOP(
     "_OfflineDownload",
     "Queued for download",
 )
-_ITEM_COUNT_SINGULAR_SOURCE = "1 item"
-_ITEM_COUNT_PLURAL_SOURCE = "%n items"
+JW_PLAYLIST_CONTEXT = "JwPlaylistImport"
+JW_PLAYLIST_TITLE_SOURCE = QT_TRANSLATE_NOOP(
+    "JwPlaylistImport",
+    "JW Library Playlist",
+)
+JW_PLAYLIST_UNRESOLVED_SOURCE = QT_TRANSLATE_NOOP(
+    "JwPlaylistImport",
+    "Some items could not be resolved. Check the internet connection:\n\n{items}",
+)
+DOCUMENT_PAGES_CONTEXT = "DocumentPages"
+DOCUMENT_PAGE_TITLE_SOURCE = QT_TRANSLATE_NOOP(
+    "DocumentPages",
+    "{name} — page {page}",
+)
 
 
 def tr_offline_download() -> str:
@@ -38,7 +50,7 @@ def tr_offline_downloading_progress(pct: int | str) -> str:
     return QCoreApplication.translate(
         OFFLINE_DOWNLOAD_CONTEXT,
         OFFLINE_DOWNLOADING_PROGRESS_SOURCE,
-    ).replace("{pct}", str(pct))
+    ).format(pct=pct)
 
 
 def tr_offline_queued() -> str:
@@ -49,19 +61,45 @@ def tr_offline_queued() -> str:
 
 
 def tr_item_count(count: int) -> str:
-    """Return the established application-wide singular/plural item count."""
+    """Return the application-wide standalone item-count label."""
 
     normalized_count = max(0, int(count))
-    # Keep the long-established context so every locale reuses the same
-    # vocabulary. MediaDestinationBridge owns the lupdate-visible numerus call.
-    if normalized_count == 1:
-        return QCoreApplication.translate(
-            "MediaDestinationBridge",
-            _ITEM_COUNT_SINGULAR_SOURCE,
-        )
     return QCoreApplication.translate(
-        "MediaDestinationBridge",
-        _ITEM_COUNT_PLURAL_SOURCE,
+        "CommonCounts",
+        "%n item(s)",
         "",
         normalized_count,
     )
+
+
+def tr_media_item_count(count: int) -> str:
+    """Return the established application-wide media-item count."""
+
+    normalized_count = max(0, int(count))
+    return QCoreApplication.translate(
+        "CommonCounts",
+        "%n media item(s)",
+        "",
+        normalized_count,
+    )
+
+
+def tr_jw_playlist_title() -> str:
+    return QCoreApplication.translate(
+        JW_PLAYLIST_CONTEXT,
+        JW_PLAYLIST_TITLE_SOURCE,
+    )
+
+
+def tr_jw_playlist_unresolved(item_names: str) -> str:
+    return QCoreApplication.translate(
+        JW_PLAYLIST_CONTEXT,
+        JW_PLAYLIST_UNRESOLVED_SOURCE,
+    ).format(items=item_names)
+
+
+def tr_document_page_title(name: str, page: int) -> str:
+    return QCoreApplication.translate(
+        DOCUMENT_PAGES_CONTEXT,
+        DOCUMENT_PAGE_TITLE_SOURCE,
+    ).format(name=name, page=max(1, int(page)))

@@ -8,11 +8,16 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
 
-from PySide6.QtCore import Slot
+from PySide6.QtCore import QCoreApplication, Slot, QT_TRANSLATE_NOOP
 from PySide6.QtWidgets import QMessageBox
 
 from ..core.foundation.constants import JWPUB_EXTS, PDF_EXTS, PLAYLIST_EXTS
 from ..core.foundation.qt_threads import OwnedQThreadRegistry
+from ..core.i18n.strings import (
+    tr_document_page_title,
+    tr_jw_playlist_title,
+    tr_jw_playlist_unresolved,
+)
 from ..core.jw.language_context import (
     JWMediaLanguageContext,
     jw_media_language_context,
@@ -31,10 +36,96 @@ from ..core.media.destinations import (
     PreparedMediaBatch,
 )
 from ..core.media.placement import END_OF_LIST_INDEX
+from ..ui.media_insertion_feedback import tr_media_already_added_count
 
 if TYPE_CHECKING:
     from ..core.jw.jwpub_import_thread import JwpubImportThreadFactory
     from ..core.rendering.document_conversion import DocumentConversionService
+
+
+_NOTIFICATION_CONTEXT = "PlaylistImportNotifications"
+_FILES_ADDED_SOURCE = QT_TRANSLATE_NOOP(
+    "PlaylistImportNotifications",
+    "{playlist}: %n file(s) added",
+)
+_FILE_NOT_FOUND_SOURCE = QT_TRANSLATE_NOOP(
+    "PlaylistImportNotifications",
+    "File not found: {name}",
+)
+_UNSUPPORTED_FILE_SOURCE = QT_TRANSLATE_NOOP(
+    "PlaylistImportNotifications",
+    "Unsupported file: {name}",
+)
+_UNSUPPORTED_FILE_TITLE = QT_TRANSLATE_NOOP(
+    "PlaylistImportNotifications",
+    "Unsupported file",
+)
+_INVALID_PLAYLIST_SOURCE = QT_TRANSLATE_NOOP(
+    "PlaylistImportNotifications",
+    "Invalid or corrupted .jwlplaylist file:\n{name}",
+)
+_READ_PLAYLIST_ERROR_SOURCE = QT_TRANSLATE_NOOP(
+    "PlaylistImportNotifications",
+    "Could not read {name}.\n{error}",
+)
+_NO_MEDIA_SOURCE = QT_TRANSLATE_NOOP(
+    "PlaylistImportNotifications",
+    "No media found in {name}",
+)
+_PLAYLIST_EXISTS_SOURCE = QT_TRANSLATE_NOOP(
+    "PlaylistImportNotifications",
+    'A playlist named "{name}" already exists.',
+)
+_PLAYLIST_CREATED_SOURCE = QT_TRANSLATE_NOOP(
+    "PlaylistImportNotifications",
+    'Playlist "{name}"\ncreated successfully!',
+)
+_LOCATION_MISSING_SOURCE = QT_TRANSLATE_NOOP(
+    "PlaylistImportNotifications",
+    'Could not add media to playlist "{name}" because the selected location '
+    "no longer exists.",
+)
+_ALREADY_IN_PLAYLIST_SOURCE = QT_TRANSLATE_NOOP(
+    "PlaylistImportNotifications",
+    'This media is already in\nplaylist "{name}"',
+)
+_OPENING_SOURCE = QT_TRANSLATE_NOOP(
+    "PlaylistImportNotifications",
+    "Opening {name}...",
+)
+_PDF_CONVERSION_ERROR_SOURCE = QT_TRANSLATE_NOOP(
+    "PlaylistImportNotifications",
+    "Error converting PDF: {error}",
+)
+_PDF_ERROR_TITLE = QT_TRANSLATE_NOOP(
+    "PlaylistImportNotifications",
+    "Error opening PDF",
+)
+_PDF_NO_PAGES_SOURCE = QT_TRANSLATE_NOOP(
+    "PlaylistImportNotifications",
+    "PDF conversion finished without any pages.",
+)
+_JWPUB_OPEN_ERROR_SOURCE = QT_TRANSLATE_NOOP(
+    "PlaylistImportNotifications",
+    "Could not open .jwpub: {error}",
+)
+_JWPUB_ERROR_TITLE = QT_TRANSLATE_NOOP(
+    "PlaylistImportNotifications",
+    "Error opening .jwpub",
+)
+_JWPUB_NO_MEDIA_SOURCE = QT_TRANSLATE_NOOP(
+    "PlaylistImportNotifications",
+    "The .jwpub file contained no usable media.",
+)
+def _tr(source: str, *, n: int = -1) -> str:
+    return QCoreApplication.translate(_NOTIFICATION_CONTEXT, source, "", n)
+
+
+def _tr_files_added(playlist_name: str, count: int) -> str:
+    return _tr(
+        _FILES_ADDED_SOURCE,
+        n=max(0, int(count)),
+    ).format(playlist=playlist_name)
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,7 +140,6 @@ class PlaylistImportContext:
     notifications: Any
     playlist_widget: Any
     thread_registry: OwnedQThreadRegistry
-    translate: Callable[[str], str]
 
 
 @dataclass(frozen=True, slots=True)
@@ -101,9 +191,7 @@ class PlaylistImportController:
                 path = asset.import_path
                 if not path or not os.path.isfile(path):
                     self._notify_import_error(
-                        self._context.translate("File not found: {name}").replace(
-                            "{name}", asset.title
-                        )
+                        _tr(_FILE_NOT_FOUND_SOURCE).format(name=asset.title)
                     )
                     continue
 
@@ -131,9 +219,7 @@ class PlaylistImportController:
                     return
 
                 self._notify_import_error(
-                    self._context.translate("Unsupported file: {name}").replace(
-                        "{name}", asset.title
-                    )
+                    _tr(_UNSUPPORTED_FILE_SOURCE).format(name=asset.title)
                 )
 
             completed(
@@ -155,19 +241,20 @@ class PlaylistImportController:
         except BadZipFile:
             QMessageBox.warning(
                 context.dialog_parent,
-                context.translate("Unsupported file"),
-                context.translate(
-                    "Invalid or corrupted .jwlplaylist file:\n%1"
-                ).replace("%1", os.path.basename(jwl_path)),
+                _tr(_UNSUPPORTED_FILE_TITLE),
+                _tr(_INVALID_PLAYLIST_SOURCE).format(
+                    name=os.path.basename(jwl_path)
+                ),
             )
             return []
         except (OSError, ValueError) as error:
             QMessageBox.warning(
                 context.dialog_parent,
-                context.translate("Unsupported file"),
-                context.translate("Error reading %1:\n%2")
-                .replace("%1", os.path.basename(jwl_path))
-                .replace("%2", str(error)),
+                _tr(_UNSUPPORTED_FILE_TITLE),
+                _tr(_READ_PLAYLIST_ERROR_SOURCE).format(
+                    name=os.path.basename(jwl_path),
+                    error=error,
+                ),
             )
             return []
 
@@ -188,8 +275,8 @@ class PlaylistImportController:
             names = "\n".join(f"  • {name}" for name in result.skipped_titles)
             QMessageBox.warning(
                 context.dialog_parent,
-                "JW Library Playlist",
-                f"Itens não resolvidos (sem conexão com a internet?):\n\n{names}",
+                tr_jw_playlist_title(),
+                tr_jw_playlist_unresolved(names),
             )
         return result.items
 
@@ -203,10 +290,7 @@ class PlaylistImportController:
         playlist_widget = context.playlist_widget
         if not items:
             context.notifications.warning(
-                context.translate("No media found in {name}").replace(
-                    "{name}",
-                    source_name,
-                )
+                _tr(_NO_MEDIA_SOURCE).format(name=source_name)
             )
             return MediaDestinationOutcome(0)
 
@@ -218,9 +302,7 @@ class PlaylistImportController:
                 )
             except PlaylistNameConflictError as exc:
                 context.notifications.warning(
-                    context.translate(
-                        'A playlist named "{name}" already exists.'
-                    ).replace("{name}", exc.name)
+                    _tr(_PLAYLIST_EXISTS_SOURCE).format(name=exc.name)
                 )
                 return MediaDestinationOutcome(0, destination_accepted=False)
             referenced_urls = [str(items[0].get("url") or "")]
@@ -237,10 +319,7 @@ class PlaylistImportController:
                     str(item.get("url") or "") for item in result.added_items
                 )
             context.notifications.success(
-                context.translate('Playlist "%1"\ncreated successfully!').replace(
-                    "%1",
-                    target.playlist_name,
-                )
+                _tr(_PLAYLIST_CREATED_SOURCE).format(name=target.playlist_name)
             )
             return MediaDestinationOutcome(
                 added,
@@ -261,28 +340,20 @@ class PlaylistImportController:
         added = len(result.added_items)
         if added:
             context.notifications.success(
-                context.translate('%1 file(s) added\nto playlist "%2"')
-                .replace("%1", str(added))
-                .replace("%2", target.playlist_name)
+                _tr_files_added(target.playlist_name, added)
             )
             if result.duplicate_count:
                 context.notifications.warning(
-                    context.translate(
-                        "{count} media item(s) were already added"
-                    ).replace("{count}", str(result.duplicate_count))
+                    tr_media_already_added_count(result.duplicate_count)
                 )
         elif not result.target_valid:
             context.notifications.error(
-                context.translate(
-                    'Could not add media to playlist "%1" because the selected location no longer exists.'
-                ).replace("%1", target.playlist_name)
+                _tr(_LOCATION_MISSING_SOURCE).format(name=target.playlist_name)
             )
             return MediaDestinationOutcome(0, destination_accepted=False)
         else:
             context.notifications.warning(
-                context.translate(
-                    'This media is already in\nplaylist "%1"'
-                ).replace("%1", target.playlist_name)
+                _tr(_ALREADY_IN_PLAYLIST_SOURCE).format(name=target.playlist_name)
             )
         return MediaDestinationOutcome(added, tuple(referenced_urls))
 
@@ -299,7 +370,7 @@ class PlaylistImportController:
             return self._items_from_pages(pages, pdf_stem)
 
         context.notifications.information(
-            context.translate("Opening {name}...").replace("{name}", pdf_stem)
+            _tr(_OPENING_SOURCE).format(name=pdf_stem)
         )
         thread = context.document_conversion_service.create_pdf_thread(
             pdf_path,
@@ -324,10 +395,8 @@ class PlaylistImportController:
         @thread.conversion_failed.connect
         def on_conversion_failed(error: str) -> None:
             self._notify_import_error(
-                context.translate("Error converting PDF: {error}").replace(
-                    "{error}", str(error)
-                ),
-                title=context.translate("Error opening PDF"),
+                _tr(_PDF_CONVERSION_ERROR_SOURCE).format(error=error),
+                title=_tr(_PDF_ERROR_TITLE),
             )
             finish([])
 
@@ -336,8 +405,8 @@ class PlaylistImportController:
             if resolved:
                 return
             self._notify_import_error(
-                context.translate("PDF conversion finished without any pages."),
-                title=context.translate("Error opening PDF"),
+                _tr(_PDF_NO_PAGES_SOURCE),
+                title=_tr(_PDF_ERROR_TITLE),
             )
             finish([])
 
@@ -353,7 +422,7 @@ class PlaylistImportController:
         jwpub_path = asset.import_path
         stem = Path(jwpub_path).stem
         context.notifications.information(
-            context.translate("Opening {name}...").replace("{name}", stem)
+            _tr(_OPENING_SOURCE).format(name=stem)
         )
         thread = context.jwpub_import_thread_factory.create(
             jwpub_path,
@@ -382,11 +451,8 @@ class PlaylistImportController:
         @thread.failed.connect
         def _on_fail(error: str) -> None:
             self._notify_import_error(
-                context.translate("Could not open .jwpub: {err}").replace(
-                    "{err}",
-                    error[:120],
-                ),
-                title=context.translate("Error opening .jwpub"),
+                _tr(_JWPUB_OPEN_ERROR_SOURCE).format(error=error[:120]),
+                title=_tr(_JWPUB_ERROR_TITLE),
             )
             finish([])
 
@@ -395,8 +461,8 @@ class PlaylistImportController:
             if resolved:
                 return
             self._notify_import_error(
-                context.translate("The .jwpub file contained no usable media."),
-                title=context.translate("Error opening .jwpub"),
+                _tr(_JWPUB_NO_MEDIA_SOURCE),
+                title=_tr(_JWPUB_ERROR_TITLE),
             )
             finish([])
 
@@ -423,7 +489,7 @@ class PlaylistImportController:
     def _items_from_pages(pages: list[str], stem: str) -> list:
         return [
             create_playlist_item(
-                title=f"{stem} - p. {index + 1}",
+                title=tr_document_page_title(stem, index + 1),
                 url=page_path,
                 type="image",
             )
