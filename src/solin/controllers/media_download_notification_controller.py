@@ -5,10 +5,41 @@ from __future__ import annotations
 from pathlib import PurePosixPath
 from urllib.parse import unquote, urlparse
 
-from PySide6.QtCore import QCoreApplication, QObject, Slot
+from PySide6.QtCore import QCoreApplication, QObject, QT_TRANSLATE_NOOP, Slot
 
 from ..core.media.cache import MediaCacheManager
 from ..ui.notifications import NotificationCenter
+
+_TR_CONTEXT = "MediaDownloadNotifications"
+_UNKNOWN_ERROR_SOURCE = QT_TRANSLATE_NOOP(
+    "MediaDownloadNotifications",
+    "Unknown error",
+)
+_MEDIA_SOURCE = QT_TRANSLATE_NOOP("MediaDownloadNotifications", "media")
+_DOWNLOAD_FAILED_SOURCE = QT_TRANSLATE_NOOP(
+    "MediaDownloadNotifications",
+    "Download failed",
+)
+_DOWNLOAD_ERROR_SOURCE = QT_TRANSLATE_NOOP(
+    "MediaDownloadNotifications",
+    "Could not download {name}.\n{error}",
+)
+_LOCAL_COPY_FAILED_SOURCE = QT_TRANSLATE_NOOP(
+    "MediaDownloadNotifications",
+    "Local copy failed",
+)
+_DISK_FULL_SOURCE = QT_TRANSLATE_NOOP(
+    "MediaDownloadNotifications",
+    "Could not save {name} locally because there is not enough disk space.\n"
+    "Playback will continue by streaming.\n"
+    "{error}",
+)
+_LOCAL_COPY_ERROR_SOURCE = QT_TRANSLATE_NOOP(
+    "MediaDownloadNotifications",
+    "Could not save {name} locally.\n"
+    "Playback will continue by streaming.\n"
+    "{error}",
+)
 
 
 class MediaDownloadNotificationController(QObject):
@@ -53,13 +84,15 @@ class MediaDownloadNotificationController(QObject):
 
     @Slot(str, str)
     def on_prefetch_error(self, url: str, message: str) -> None:
-        display_name = self._display_name(url)
-        error_detail = (message or "").strip() or self._tr("Unknown error")
-        detail = self._tr("Could not download {name}.\n{error}")
-        detail = detail.replace("{name}", display_name).replace("{error}", error_detail)
+        display_name = self._display_name(url, self._tr(_MEDIA_SOURCE))
+        error_detail = (message or "").strip() or self._tr(_UNKNOWN_ERROR_SOURCE)
+        detail = self._tr(_DOWNLOAD_ERROR_SOURCE).format(
+            name=display_name,
+            error=error_detail,
+        )
         self._notifications.error(
             detail,
-            title=self._tr("Download failed"),
+            title=self._tr(_DOWNLOAD_FAILED_SOURCE),
             dedupe_key=f"media-prefetch:{url}",
         )
 
@@ -71,35 +104,27 @@ class MediaDownloadNotificationController(QObject):
         persist: bool,
     ) -> None:
         del persist
-        display_name = self._display_name(url)
-        error_detail = (message or "").strip() or self._tr("Unknown error")
+        display_name = self._display_name(url, self._tr(_MEDIA_SOURCE))
+        error_detail = (message or "").strip() or self._tr(_UNKNOWN_ERROR_SOURCE)
         if self._is_disk_full_error(error_detail):
-            template = self._tr(
-                "Could not save {name} locally because there is not enough disk space.\n"
-                "Playback will continue by streaming.\n"
-                "{error}"
-            )
+            template = self._tr(_DISK_FULL_SOURCE)
         else:
-            template = self._tr(
-                "Could not save {name} locally.\n"
-                "Playback will continue by streaming.\n"
-                "{error}"
-            )
-        detail = template.replace("{name}", display_name).replace(
-            "{error}",
-            error_detail,
+            template = self._tr(_LOCAL_COPY_ERROR_SOURCE)
+        detail = template.format(
+            name=display_name,
+            error=error_detail,
         )
         self._notifications.warning(
             detail,
-            title=self._tr("Local copy failed"),
+            title=self._tr(_LOCAL_COPY_FAILED_SOURCE),
             dedupe_key=f"media-playback-download:{url}:{error_detail}",
         )
 
     @staticmethod
-    def _display_name(url: str) -> str:
+    def _display_name(url: str, fallback: str) -> str:
         parsed = urlparse(url)
         filename = unquote(PurePosixPath(parsed.path).name).strip()
-        return filename or parsed.netloc or url or "media"
+        return filename or parsed.netloc or url or fallback
 
     @staticmethod
     def _is_disk_full_error(message: str) -> bool:
@@ -114,4 +139,4 @@ class MediaDownloadNotificationController(QObject):
 
     @staticmethod
     def _tr(text: str) -> str:
-        return QCoreApplication.translate("MediaDownloadNotificationController", text)
+        return QCoreApplication.translate(_TR_CONTEXT, text)

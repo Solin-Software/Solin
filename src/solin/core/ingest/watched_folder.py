@@ -961,7 +961,9 @@ class WatchedFolderDocConverter(QThread):
             if not pdf_out.exists():
                 pdfs = list(tmp_path.glob("*.pdf"))
                 if not pdfs:
-                    raise RuntimeError(f"LibreOffice não gerou PDF para '{lo_path.name}'.")
+                    raise RuntimeError(
+                        f"LibreOffice did not generate a PDF for '{lo_path.name}'."
+                    )
                 pdf_out = pdfs[0]
 
             return _render_document_pages(

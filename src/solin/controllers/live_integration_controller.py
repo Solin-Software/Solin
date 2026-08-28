@@ -6,13 +6,42 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from PySide6.QtCore import Slot
+from PySide6.QtCore import QCoreApplication, Slot, QT_TRANSLATE_NOOP
 from PySide6.QtGui import QImage
 
 from ..core.foundation.constants import MEMORIZE_PRE_MEDIA_SCENE
 from ..core.integrations.camera_options import CameraOption
 
 log = logging.getLogger(__name__)
+
+_TR_CONTEXT = "LiveIntegration"
+_ZOOM_SHARING_FAILED_SOURCE = QT_TRANSLATE_NOOP(
+    "LiveIntegration",
+    "Zoom sharing failed",
+)
+_OBS_NOT_CONFIGURED_SOURCE = QT_TRANSLATE_NOOP(
+    "LiveIntegration",
+    "OBS stream is not configured.",
+)
+_OBS_STREAM_TITLE_SOURCE = QT_TRANSLATE_NOOP(
+    "LiveIntegration",
+    "OBS Program Stream",
+)
+_CAMERA_DISABLED_SOURCE = QT_TRANSLATE_NOOP(
+    "LiveIntegration",
+    "Camera is not enabled.",
+)
+_NO_CAMERA_SOURCE = QT_TRANSLATE_NOOP(
+    "LiveIntegration",
+    "No camera selected.",
+)
+_CAMERA_TITLE_SOURCE = QT_TRANSLATE_NOOP("LiveIntegration", "Camera")
+_CAMERA_ERROR_SOURCE = QT_TRANSLATE_NOOP("LiveIntegration", "Camera error")
+_OBS_ERROR_SOURCE = QT_TRANSLATE_NOOP("LiveIntegration", "OBS stream error")
+
+
+def _tr(source: str) -> str:
+    return QCoreApplication.translate(_TR_CONTEXT, source)
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,7 +59,6 @@ class LiveIntegrationContext:
     media_controller: Any
     quick_toolbar: Callable[[], Any | None]
     projection_windows: Callable[[], list[Any]]
-    translate: Callable[[str], str]
     playback_protection: Any
     content_frame_sink: Callable[[object], None]
     platform: str = sys.platform
@@ -102,7 +130,7 @@ class LiveIntegrationController:
         context = self._context
         context.notifications.error(
             message,
-            title=context.translate("Zoom sharing failed"),
+            title=_tr(_ZOOM_SHARING_FAILED_SOURCE),
             dedupe_key=f"zoom-share:{message}",
         )
 
@@ -220,7 +248,7 @@ class LiveIntegrationController:
         source = context.obs_settings.ndi_source()
         if not context.obs_settings.ndi_stream_configured():
             context.notifications.warning(
-                context.translate("OBS stream is not configured.")
+                _tr(_OBS_NOT_CONFIGURED_SOURCE)
             )
             self.refresh_obs_stream_availability()
             return
@@ -236,7 +264,7 @@ class LiveIntegrationController:
         context.projection_bar.set_playlist([])
         for win in context.projection_windows():
             win.clear()
-        title = context.translate("OBS Program Stream")
+        title = _tr(_OBS_STREAM_TITLE_SOURCE)
         context.projection_bar.activate_live_stream(
             title,
             keep_expanded=context.projection_bar.is_expanded(),
@@ -261,12 +289,12 @@ class LiveIntegrationController:
         if not context.playback_protection.allow_manual_projection_change():
             return
         if not context.camera_settings.is_enabled():
-            context.notifications.warning(context.translate("Camera is not enabled."))
+            context.notifications.warning(_tr(_CAMERA_DISABLED_SOURCE))
             return
 
         option = self.selected_camera_option()
         if option is None:
-            context.notifications.warning(context.translate("No camera selected."))
+            context.notifications.warning(_tr(_NO_CAMERA_SOURCE))
             return
 
         self._session.set_tab_projection_active(False)
@@ -280,7 +308,7 @@ class LiveIntegrationController:
         context.projection_bar.set_playlist([])
         for window in context.projection_windows():
             window.clear()
-        title = context.translate("Camera")
+        title = _tr(_CAMERA_TITLE_SOURCE)
         context.projection_bar.activate_live_stream(
             title,
             keep_expanded=context.projection_bar.is_expanded(),
@@ -312,7 +340,7 @@ class LiveIntegrationController:
         context = self._context
         context.notifications.error(
             message,
-            title=context.translate("Camera error"),
+            title=_tr(_CAMERA_ERROR_SOURCE),
             dedupe_key=f"camera:{message}",
         )
         self._handlers.stop_projection()
@@ -336,7 +364,7 @@ class LiveIntegrationController:
             context = self._context
             context.notifications.error(
                 message,
-                title=context.translate("OBS stream error"),
+                title=_tr(_OBS_ERROR_SOURCE),
                 dedupe_key=f"obs-stream:{message}",
             )
             self._handlers.stop_projection()

@@ -43,6 +43,7 @@ export function collectionLabel(kind) {
 }
 
 const WEEK_RANGE_FORMATTERS = new Map();
+const RELATIVE_WEEK_FORMATTERS = new Map();
 const DAY_MILLISECONDS = 24 * 60 * 60 * 1000;
 const WEEK_MILLISECONDS = 7 * DAY_MILLISECONDS;
 
@@ -72,6 +73,17 @@ function weekRangeFormatter(locale, includeYear) {
     );
   }
   return WEEK_RANGE_FORMATTERS.get(key);
+}
+
+function relativeWeekFormatter(locale) {
+  const localeName = localeKey(locale);
+  if (!RELATIVE_WEEK_FORMATTERS.has(localeName)) {
+    RELATIVE_WEEK_FORMATTERS.set(
+      localeName,
+      new Intl.RelativeTimeFormat(localeName, { numeric: "auto" }),
+    );
+  }
+  return RELATIVE_WEEK_FORMATTERS.get(localeName);
 }
 
 function parseIsoDate(isoDate) {
@@ -110,6 +122,11 @@ export function meetingWeekRelation(weekStart, currentWeekStart) {
   const current = parseIsoDate(currentWeekStart);
   if (!week || !current) return "";
   const offset = Math.round((week.getTime() - current.getTime()) / WEEK_MILLISECONDS);
+  try {
+    return relativeWeekFormatter(currentLocale()).format(offset, "week");
+  } catch (error) {
+    if (!(error instanceof RangeError) && !(error instanceof TypeError)) throw error;
+  }
   if (offset === 0) return t("week.this");
   if (offset === 1) return t("week.next");
   if (offset === -1) return t("week.previous");

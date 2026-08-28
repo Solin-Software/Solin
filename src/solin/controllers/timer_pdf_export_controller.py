@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from PySide6.QtCore import QStandardPaths
+from PySide6.QtCore import QCoreApplication, QT_TRANSLATE_NOOP, QStandardPaths
 from PySide6.QtWidgets import QFileDialog, QMessageBox
 
 from ..core.rendering.timer_report_pdf import (
@@ -14,6 +14,21 @@ from ..core.rendering.timer_report_pdf import (
 )
 
 log = logging.getLogger(__name__)
+
+_TR_CONTEXT = "TimerPdfExport"
+_EXPORT_PDF_SOURCE = QT_TRANSLATE_NOOP("TimerPdfExport", "Export PDF")
+_PDF_FILES_SOURCE = QT_TRANSLATE_NOOP("TimerPdfExport", "PDF files (*.pdf)")
+_EXPORT_FAILED_SOURCE = QT_TRANSLATE_NOOP("TimerPdfExport", "Export failed")
+_EXPORT_ERROR_SOURCE = QT_TRANSLATE_NOOP(
+    "TimerPdfExport",
+    "Could not export the timer PDF:\n{error}",
+)
+_EXPORTED_SOURCE = QT_TRANSLATE_NOOP("TimerPdfExport", "PDF exported")
+_SAVED_TO_SOURCE = QT_TRANSLATE_NOOP("TimerPdfExport", "Saved to:\n{path}")
+
+
+def _tr(source: str) -> str:
+    return QCoreApplication.translate(_TR_CONTEXT, source)
 
 
 class TimerPdfExportController:
@@ -36,9 +51,9 @@ class TimerPdfExportController:
         default_path = base_dir / default_pdf_filename(schedule)
         path, _ = QFileDialog.getSaveFileName(
             self._parent,
-            self._parent.tr("Export PDF"),
+            _tr(_EXPORT_PDF_SOURCE),
             str(default_path),
-            self._parent.tr("PDF files (*.pdf)"),
+            _tr(_PDF_FILES_SOURCE),
         )
         if not path:
             return
@@ -58,15 +73,13 @@ class TimerPdfExportController:
             log.exception("Timer PDF export failed")
             QMessageBox.critical(
                 self._parent,
-                self._parent.tr("Export failed"),
-                self._parent.tr(
-                    "Could not export the timer PDF:\n{error}"
-                ).replace("{error}", str(exc)),
+                _tr(_EXPORT_FAILED_SOURCE),
+                _tr(_EXPORT_ERROR_SOURCE).format(error=exc),
             )
             return
 
         QMessageBox.information(
             self._parent,
-            self._parent.tr("PDF exported"),
-            self._parent.tr("Saved to:\n{path}").replace("{path}", path),
+            _tr(_EXPORTED_SOURCE),
+            _tr(_SAVED_TO_SOURCE).format(path=path),
         )

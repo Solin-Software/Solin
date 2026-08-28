@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from ...core.i18n.strings import tr_document_page_title
 from ...core.jw.language_context import jw_media_language_context
 from ...core.playlists.items import create_playlist_item
 
@@ -60,7 +61,7 @@ class PlaylistEditImportMixin:
             return
         new_items = [
             create_playlist_item(
-                title=f"{pdf_stem} — p. {i + 1}",
+                title=tr_document_page_title(pdf_stem, i + 1),
                 url=page_path,
                 type="image",
                 section_id=section_id,
@@ -76,9 +77,9 @@ class PlaylistEditImportMixin:
         self._save()
         self._reconcile_playlist()
         self._notifications.success(
-            self.tr("{name} opened ({pages} pages)")
-            .replace("{name}", str(pdf_stem))
-            .replace("{pages}", str(len(new_items)))
+            self.tr("{name}: %n page(s) opened", "", len(new_items)).format(
+                name=pdf_stem
+            )
         )
 
     def _on_pdf_failed(self, error_msg: str) -> None:
@@ -161,12 +162,26 @@ class PlaylistEditImportMixin:
             n_vid = sum(1 for it in new_items if it.get("type") != "image" and it.get("url"))
             n_bad = sum(1 for it in new_items if it.get("type") != "image" and not it.get("url"))
             if n_img:
-                parts.append(f"{n_img} " + self.tr("images"))
+                parts.append(self.tr("%n image(s)", "", n_img))
             if n_vid:
-                parts.append(f"{n_vid} " + self.tr("videos"))
-            msg = file_stem + " — " + ", ".join(parts) if parts else file_stem
+                parts.append(self.tr("%n video(s)", "", n_vid))
+            if len(parts) == 2:
+                summary = self.tr("{first}, {second}").format(
+                    first=parts[0],
+                    second=parts[1],
+                )
+            else:
+                summary = parts[0] if parts else ""
+            msg = (
+                self.tr("{name}: {summary}").format(name=file_stem, summary=summary)
+                if summary
+                else file_stem
+            )
             if n_bad:
-                msg += f"  ({n_bad} " + self.tr("unresolved") + ")"
+                msg = self.tr("{summary} · {unresolved}").format(
+                    summary=msg,
+                    unresolved=self.tr("%n unresolved item(s)", "", n_bad),
+                )
                 self._notifications.warning(msg)
             else:
                 self._notifications.success(msg)
@@ -229,7 +244,7 @@ class PlaylistEditImportMixin:
             return
         new_items = [
             create_playlist_item(
-                title=f"{stem} — p. {i + 1}",
+                title=tr_document_page_title(stem, i + 1),
                 url=page_path,
                 type="image",
                 section_id=section_id,
@@ -245,9 +260,9 @@ class PlaylistEditImportMixin:
         self._save()
         self._reconcile_playlist()
         self._notifications.success(
-            self.tr("{name} opened ({pages} pages)")
-            .replace("{name}", str(stem))
-            .replace("{pages}", str(len(new_items)))
+            self.tr("{name}: %n page(s) opened", "", len(new_items)).format(
+                name=stem
+            )
         )
 
     def _import_jwlplaylists_drop(
@@ -289,9 +304,6 @@ class PlaylistEditImportMixin:
             self._reconcile_playlist()
             raise
         self._reconcile_playlist()
-        if len(items) == 1:
-            self._notifications.success(self.tr("1 item imported"))
-        else:
-            self._notifications.success(
-                self.tr("{count} items imported").replace("{count}", str(len(items)))
-            )
+        self._notifications.success(
+            self.tr("%n item(s) imported", "", len(items))
+        )

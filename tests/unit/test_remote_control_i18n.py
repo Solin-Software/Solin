@@ -7,6 +7,7 @@ from PySide6.QtCore import QCoreApplication, QTranslator
 from solin.core.foundation.resources import application_translation_root
 from solin.core.i18n.remote_control import (
     REMOTE_CONTROL_TRANSLATION_SOURCES,
+    _valid_remote_translation,
     remote_control_localization,
     remote_control_message_sources,
 )
@@ -64,7 +65,7 @@ def test_remote_localization_uses_active_qt_catalog_and_preserves_placeholders()
         assert set(_PLACEHOLDER.findall(messages[key])) == set(_PLACEHOLDER.findall(source))
 
 
-def test_remote_localization_reuses_existing_solin_vocabulary() -> None:
+def test_remote_localization_uses_its_dedicated_web_context() -> None:
     app = QCoreApplication.instance() or QCoreApplication([])
     translator = QTranslator(app)
     assert translator.load(str(application_translation_root() / "solin_es.qm"))
@@ -77,6 +78,40 @@ def test_remote_localization_reuses_existing_solin_vocabulary() -> None:
     assert isinstance(messages, dict)
     assert messages["nav.meetings"] == "Reuniones"
     assert messages["library.chooseMeeting"] == "Elegir una reunión"
+
+
+def test_remote_translation_validation_preserves_placeholder_multiplicity() -> None:
+    assert _valid_remote_translation(
+        "Could not add {title}: {error}",
+        "{error}: não foi possível adicionar {title}",
+    )
+    assert not _valid_remote_translation("{count} items", "{count} de {count} itens")
+    assert not _valid_remote_translation("{count} items", "um | alguns | muitos")
+
+
+def test_remote_localization_rejects_unstructured_plural_variants() -> None:
+    app = QCoreApplication.instance() or QCoreApplication([])
+    translator = QTranslator(app)
+    assert translator.load(
+        str(application_translation_root() / "solin_ru.qm")
+    )
+    app.installTranslator(translator)
+    try:
+        messages = remote_control_localization("ru")["messages"]
+    finally:
+        app.removeTranslator(translator)
+
+    assert isinstance(messages, dict)
+    sources = remote_control_message_sources()
+    for key in (
+        "count.playlist.other",
+        "count.item.other",
+        "count.media.other",
+        "week.in",
+        "week.ago",
+    ):
+        assert messages[key] == sources[key]
+        assert "|" not in messages[key]
 
 
 def test_every_non_english_catalog_compiles_the_new_remote_control_copy() -> None:

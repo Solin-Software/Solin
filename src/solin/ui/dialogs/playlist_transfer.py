@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QCoreApplication, Qt, Signal
+from PySide6.QtCore import QCoreApplication, QT_TRANSLATE_NOOP, Qt, Signal
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
     QDialog,
@@ -15,9 +15,26 @@ from PySide6.QtWidgets import (
 
 from solin.styles.theme import PALETTE
 
+_TR_CONTEXT = "PlaylistTransfer"
+_TITLE_SOURCE = QT_TRANSLATE_NOOP("PlaylistTransfer", "Playlist transfer")
+_CANCEL_SOURCE = QT_TRANSLATE_NOOP("PlaylistTransfer", "Cancel")
+_CANCELLING_SOURCE = QT_TRANSLATE_NOOP(
+    "PlaylistTransfer",
+    "Cancelling safely…",
+)
+_REMOVING_TEMP_SOURCE = QT_TRANSLATE_NOOP(
+    "PlaylistTransfer",
+    "Temporary files are being removed.",
+)
+_FAILED_SOURCE = QT_TRANSLATE_NOOP(
+    "PlaylistTransfer",
+    "The operation could not be completed.",
+)
+_CLOSE_SOURCE = QT_TRANSLATE_NOOP("PlaylistTransfer", "Close")
+
 
 def _tr(text: str) -> str:
-    return QCoreApplication.translate("PlaylistTransfer", text)
+    return QCoreApplication.translate(_TR_CONTEXT, text)
 
 
 class PlaylistTransferDialog(QDialog):
@@ -32,7 +49,7 @@ class PlaylistTransferDialog(QDialog):
         self.setObjectName("PlaylistTransferDialog")
         self.setWindowModality(Qt.WindowModality.ApplicationModal)
         self.setWindowFlag(Qt.WindowType.WindowContextHelpButtonHint, False)
-        self.setWindowTitle(_tr("Playlist transfer"))
+        self.setWindowTitle(_tr(_TITLE_SOURCE))
         self.setMinimumWidth(480)
 
         layout = QVBoxLayout(self)
@@ -64,7 +81,7 @@ class PlaylistTransferDialog(QDialog):
 
         buttons = QHBoxLayout()
         buttons.addStretch(1)
-        self._cancel = QPushButton(_tr("Cancel"), self)
+        self._cancel = QPushButton(_tr(_CANCEL_SOURCE), self)
         self._cancel.clicked.connect(self._request_cancel)
         buttons.addWidget(self._cancel)
         layout.addLayout(buttons)
@@ -76,7 +93,7 @@ class PlaylistTransferDialog(QDialog):
         self._title.setText(title)
         self._stage.setText(stage)
         self._detail.clear()
-        self._cancel.setText(_tr("Cancel"))
+        self._cancel.setText(_tr(_CANCEL_SOURCE))
         self._cancel.setEnabled(True)
         self._progress.setRange(0, 0)
         self._progress.setFormat("")
@@ -109,19 +126,19 @@ class PlaylistTransferDialog(QDialog):
     def show_cancelling(self) -> None:
         self._can_cancel = False
         self._cancel.setEnabled(False)
-        self._stage.setText(_tr("Cancelling safely…"))
-        self._detail.setText(_tr("Temporary files are being removed."))
+        self._stage.setText(_tr(_CANCELLING_SOURCE))
+        self._detail.setText(_tr(_REMOVING_TEMP_SOURCE))
 
     def show_error(self, message: str) -> None:
         self._terminal = True
         self._can_cancel = False
-        self._stage.setText(_tr("The operation could not be completed."))
+        self._stage.setText(_tr(_FAILED_SOURCE))
         self._detail.setText(message)
         self._progress.setRange(0, 1)
         self._progress.setValue(0)
         self._progress.setFormat("")
         self._cancel.setEnabled(True)
-        self._cancel.setText(_tr("Close"))
+        self._cancel.setText(_tr(_CLOSE_SOURCE))
 
     def finish(self) -> None:
         self._terminal = True

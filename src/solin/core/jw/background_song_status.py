@@ -1,19 +1,33 @@
-"""Status source strings emitted by the background-song service."""
+"""Presentation-independent background-song status contract."""
 
 from __future__ import annotations
 
-STATUS_DISABLED = "Automatic background song is disabled."
-STATUS_ENABLE_IN_SETTINGS = "Enable automatic background song in Settings."
-STATUS_STOPPING = "Stopping background song..."
-STATUS_CONFIGURE_MEETING = "Configure the meeting day/time in Settings."
-STATUS_WAITING_FOR_MEETING = "Waiting for the next configured meeting."
-STATUS_STOPPED_FOR_MEETING = "Stopped for this meeting."
-STATUS_STOPPED_BEFORE_MEETING = "Stopped before the meeting."
-STATUS_SIGN_LANGUAGE_UNAVAILABLE = "Audio songs are unavailable for sign-language media."
-STATUS_LOADING_AUDIO = "Loading audio songs..."
-STATUS_READY = "Ready."
-STATUS_LOAD_FAILED = "Could not load audio songs."
-STATUS_NO_AUDIO = "No audio songs available."
-STATUS_PLAYING = "Playing background song."
-STATUS_STOPPED = "Background song stopped."
+from dataclasses import dataclass
+from enum import StrEnum
 
+
+class BackgroundSongStatusCode(StrEnum):
+    DISABLED = "disabled"
+    ENABLE_IN_SETTINGS = "enable_in_settings"
+    STOPPING = "stopping"
+    CONFIGURE_MEETING = "configure_meeting"
+    WAITING_FOR_MEETING = "waiting_for_meeting"
+    STOPPED_FOR_MEETING = "stopped_for_meeting"
+    STOPPED_BEFORE_MEETING = "stopped_before_meeting"
+    SIGN_LANGUAGE_UNAVAILABLE = "sign_language_unavailable"
+    LOADING_AUDIO = "loading_audio"
+    READY = "ready"
+    LOAD_FAILED = "load_failed"
+    NO_AUDIO = "no_audio"
+    PLAYING = "playing"
+    PLAYBACK_ERROR = "playback_error"
+    STOPPED = "stopped"
+
+
+@dataclass(frozen=True, slots=True)
+class BackgroundSongStatus:
+    code: BackgroundSongStatusCode
+    detail: str = ""
+
+
+__all__ = ["BackgroundSongStatus", "BackgroundSongStatusCode"]

@@ -23,6 +23,7 @@ from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtWidgets import QDialog, QVBoxLayout
 
 from solin.core.i18n.date import week_label
+from solin.core.i18n.strings import tr_item_count
 from solin.core.media.destinations import (
     MediaDestinationKind,
     MediaDestinationSelection,
@@ -111,9 +112,7 @@ class MediaDestinationBridge(QObject):
 
     @Property(str, notify=changed)
     def itemSummary(self) -> str:  # noqa: N802 - QML API
-        if self._item_count == 1:
-            return self.tr("1 item")
-        return self.tr("%n items", "", self._item_count)
+        return tr_item_count(self._item_count)
 
     @Property(bool, notify=changed)
     def canPlay(self) -> bool:  # noqa: N802 - QML API

@@ -364,8 +364,8 @@ class ProfileScreen(QWidget):
         dialog = ProfileNameDialog(
             current=profile.name,
             parent=self,
-            title="Rename profile",
-            label="Profile name",
+            title=self.tr("Rename profile"),
+            label=self.tr("Profile name"),
         )
         if dialog.exec() == QDialog.DialogCode.Accepted and dialog.result_name():
             self._profiles.rename_profile(profile_id, dialog.result_name())

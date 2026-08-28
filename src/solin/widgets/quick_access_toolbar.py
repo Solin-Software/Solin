@@ -652,11 +652,11 @@ class QuickAccessToolbar(QQuickWidget):
         self._bridge.set_remote_control_warning(self._remote_enabled and not self._remote_running)
         if not self._remote_running:
             tooltip = self.tr("Remote control unavailable")
-        elif session_count == 1:
-            tooltip = self.tr("Remote control · 1 signed-in device")
-        elif session_count > 1:
-            tooltip = self.tr("Remote control · %1 signed-in devices").replace(
-                "%1", str(session_count)
+        elif session_count:
+            tooltip = self.tr(
+                "Remote control · %n signed-in device(s)",
+                "",
+                session_count,
             )
         else:
             tooltip = self.tr("Remote control · no signed-in devices")
@@ -675,7 +675,7 @@ class QuickAccessToolbar(QQuickWidget):
             self._bridge.set_background_song_icon_color(
                 _icon_hex(PALETTE.accent if service.is_playing else PALETTE.text_muted)
             )
-            status_text = translate_background_song_status(service.status_text)
+            status_text = translate_background_song_status(service.status)
             tooltip = service.current_title or status_text or self.tr("Background Song")
             self._bridge.set_background_song_tooltip(tooltip)
         self._reposition()

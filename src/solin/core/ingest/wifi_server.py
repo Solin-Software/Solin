@@ -19,6 +19,8 @@ Decisões técnicas:
 """
 from __future__ import annotations
 
+import html
+import json
 import logging
 import re
 import socket
@@ -99,6 +101,22 @@ def _upload_theme(theme: dict[str, str]) -> dict[str, str]:
     return {key: theme[key] for key in _UPLOAD_THEME_KEYS}
 
 
+def _html_language_tag(value: str) -> str:
+    candidate = str(value or "en").replace("_", "-")
+    if re.fullmatch(r"[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*", candidate):
+        return candidate
+    return "en"
+
+
+def _javascript_string(value: str) -> str:
+    return (
+        json.dumps(str(value), ensure_ascii=True)
+        .replace("<", r"\u003c")
+        .replace(">", r"\u003e")
+        .replace("&", r"\u0026")
+    )
+
+
 def build_upload_html(
     labels: dict[str, str],
     theme: dict[str, str],
@@ -106,23 +124,24 @@ def build_upload_html(
     """
     Gera o HTML da página de upload com textos localizados e tema injetado.
 
-    Chaves esperadas: title, subtitle, btn_label, success, error, drop_hint.
+    Chaves esperadas: lang, title, subtitle, btn_label, success, error,
+    drop_hint e no_port.
     """
-    title      = labels.get("title",     "Enviar Mídias")
-    subtitle   = labels.get("subtitle",  "Selecione ou arraste fotos, vídeos ou áudios")
-    btn_label  = labels.get("btn_label", "Enviar mídias")
-    drop_hint  = labels.get("drop_hint", "Arraste arquivos aqui")
-    success    = labels.get("success",   "Arquivo recebido!")
-    error_lbl  = labels.get("error",     "Erro ao enviar")
-    
-    # Escapar aspas simples no JS:
-    safe_success = success.replace("'", "\\'")
-    safe_error_lbl = error_lbl.replace("'", "\\'")
+    lang = _html_language_tag(labels.get("lang", "en"))
+    title = html.escape(labels.get("title", "Send Media"), quote=True)
+    subtitle = html.escape(
+        labels.get("subtitle", "Select or drag photos, videos or audio files"),
+        quote=True,
+    )
+    btn_label = html.escape(labels.get("btn_label", "Send media"), quote=True)
+    drop_hint = html.escape(labels.get("drop_hint", "Drag files here"), quote=True)
+    success = _javascript_string(labels.get("success", "File sent!"))
+    error_label = _javascript_string(labels.get("error", "Upload error"))
     t = _upload_theme(theme)
 
     return (
         "<!DOCTYPE html>"
-        '<html lang="pt"><head>'
+        f'<html lang="{lang}"><head>'
         '<meta charset="UTF-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">'
         f"<title>{title}</title>"
@@ -278,10 +297,10 @@ def build_upload_html(
         "if(!queue.length){"
         "busy=false;ub.disabled=false;"
         "pb.style.width='100%';"
-        f"if(batchOk>0&&batchErr===0){{toast('{safe_success}','ok');}}"
-        f"else if(batchErr>0&&batchOk===0){{toast('{safe_error_lbl}','err');}}"
+        f"if(batchOk>0&&batchErr===0){{toast({success},'ok');}}"
+        f"else if(batchErr>0&&batchOk===0){{toast({error_label},'err');}}"
         f"else if(batchOk>0){{toast(batchOk+' \\u2714  '+batchErr+' \\u2716','ok');}}"
-        f"else{{toast('{safe_error_lbl}','err');}}"
+        f"else{{toast({error_label},'err');}}"
         "setTimeout(function(){pw.style.display='none';pb.style.width='0';},2200);"
         "return;}"
         "var item=queue.shift();"
@@ -496,6 +515,17 @@ class WifiReceiveServer(QObject):
             # Janela fechada → começa a contar a partir de agora
             self._last_activity = time.monotonic()
 
+    def update_upload_page(
+        self,
+        html_labels: dict[str, str],
+        html_theme: dict[str, str],
+    ) -> None:
+        """Replace the page served by the current session without restarting it."""
+        if self._server is None:
+            return
+        html_bytes = build_upload_html(html_labels, html_theme).encode("utf-8")
+        self._server.RequestHandlerClass._html_bytes = html_bytes
+
     def start(
         self,
         html_labels: dict[str, str],
@@ -516,7 +546,12 @@ class WifiReceiveServer(QObject):
 
         port = _find_free_port(*_PORT_RANGE)
         if port is None:
-            self.error_occurred.emit("Nenhuma porta disponível em 8766-8864.")
+            self.error_occurred.emit(
+                html_labels.get(
+                    "no_port",
+                    "No network port is available in the configured range.",
+                )
+            )
             return False
 
         self._token = uuid.uuid4().hex[:12]   # token curto mas suficientemente aleatório

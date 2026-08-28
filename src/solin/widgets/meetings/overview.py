@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
 )
 
 from ...core.i18n.date import format_single_date
+from ...core.i18n.strings import tr_media_item_count
 from ...styles.icons import ICON_CHEVRON_RIGHT, make_icon
 from ...styles.theme import PALETTE
 from .visuals import (
@@ -248,8 +249,7 @@ class _PubCard(QFrame):
 
         self._title_lbl.setText(title)
         self._sub_lbl.setText("")
-        word = self.tr("item") if n_items == 1 else self.tr("items")
-        self._status_lbl.setText(f"{n_items} media {word}")
+        self._status_lbl.setText(tr_media_item_count(n_items))
         self._status_lbl.setStyleSheet(
             f"color:{PALETTE.text_muted};font-size:10px;background:transparent;"
         )
@@ -278,8 +278,7 @@ class _PubCard(QFrame):
         self._title_lbl.setText(snapshot.overview.title or fallback_title)
         self._sub_lbl.setText("")
         n_items = snapshot.media_count
-        word = self.tr("item") if n_items == 1 else self.tr("items")
-        self._status_lbl.setText(f"{n_items} media {word}")
+        self._status_lbl.setText(tr_media_item_count(n_items))
         self._status_lbl.setStyleSheet(
             f"color:{PALETTE.text_muted};font-size:10px;background:transparent;"
         )
@@ -353,7 +352,9 @@ class _PubCard(QFrame):
             self._arrow.setVisible(False)
             self._progress_style_set = True
 
-        self._status_lbl.setText(self.tr("Downloading… {}%").format(pct))
+        self._status_lbl.setText(
+            self.tr("Downloading… {percent}%").format(percent=pct)
+        )
 
 
 class _MemorialCard(QFrame):
@@ -503,8 +504,7 @@ class _MemorialCard(QFrame):
         self._title_lbl.setText(self.tr("Memorial of Jesus’ Death"))
         self._sub_lbl.setText(date_str)
         n = len(md.videos)
-        word = self.tr("item") if n == 1 else self.tr("items")
-        self._status_lbl.setText(f"{n} media {word}")
+        self._status_lbl.setText(tr_media_item_count(n))
         self._status_lbl.setStyleSheet(
             f"color:{PALETTE.text_muted};font-size:10px;background:transparent;"
         )
@@ -582,7 +582,9 @@ class _MemorialCard(QFrame):
             )
             self._arrow.setVisible(False)
             self._progress_style_set = True
-        self._status_lbl.setText(self.tr("Downloading… {}%").format(pct))
+        self._status_lbl.setText(
+            self.tr("Downloading… {percent}%").format(percent=pct)
+        )
 
     def set_not_yet(self):
         self.setVisible(False)

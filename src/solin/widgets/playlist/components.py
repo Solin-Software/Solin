@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ...core.i18n.strings import tr_item_count
 from ...styles.icons import (
     ICON_EDIT,
     ICON_EXPORT,
@@ -139,8 +140,7 @@ class PlaylistCard(QFrame):
         self._set_style(self._hovered)
 
     def _count_str(self, count: int) -> str:
-        word = self.tr("item") if count == 1 else self.tr("items")
-        return f"{count} {word}"
+        return tr_item_count(count)
 
     def update_info(self, name: str, count: int) -> None:
         self.name_lbl.setText(
@@ -391,8 +391,7 @@ class WatchedFolderCard(QFrame):
         self._set_style(self._hovered)
 
     def _count_str(self, count: int) -> str:
-        word = self.tr("item") if count == 1 else self.tr("items")
-        return f"{count} {word}"
+        return tr_item_count(count)
 
     def update_info(self, name: str, count: int) -> None:
         self.name_lbl.setText(

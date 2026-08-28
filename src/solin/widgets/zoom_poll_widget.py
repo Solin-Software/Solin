@@ -494,7 +494,18 @@ class ZoomPollWindow(QDialog):
                 # cada card mostra sempre: base → base − delta_desta_família
                 after_this       = base - fam_delta
                 delta_str        = f"  (−{fam_delta})" if fam_delta > 0 else ""
-                correction_note  = self.tr("max({count} members, max {max_val}) = {corrected}  ·  total: {running} → {after}{delta}").replace("{count}", str(a.family_count)).replace("{max_val}", str(a.family_max_value)).replace("{corrected}", str(a.family_corrected)).replace("{running}", str(base)).replace("{after}", str(after_this)).replace("{delta}", str(delta_str))
+                correction_note = self.tr(
+                    "max(%n member(s), max {max_value}) = {corrected}  ·  "
+                    "total: {running} → {after}{delta}",
+                    "",
+                    a.family_count,
+                ).format(
+                    max_value=a.family_max_value,
+                    corrected=a.family_corrected,
+                    running=base,
+                    after=after_this,
+                    delta=delta_str,
+                )
 
                 members_str = "  ·  ".join(f"{m.name} ({m.value})" for m in a.members)
                 v.addWidget(self._alert_row(
@@ -530,7 +541,14 @@ class ZoomPollWindow(QDialog):
         if dup_delta:
             details.append((
                 "🔁",
-                self.tr("{n} duplicate response(s) removed  −{delta} person(s)").replace("{n}", str(len(r.duplicate_alerts))).replace("{delta}", str(dup_delta)),
+                self.tr("{summary}  {impact}").format(
+                    summary=self.tr(
+                        "%n duplicate response(s) removed",
+                        "",
+                        len(r.duplicate_alerts),
+                    ),
+                    impact=self.tr("−%n person(s)", "", dup_delta),
+                ),
                 PALETTE.danger,
             ))
         div_raw   = sum(sum(a.values) for a in r.divergence_alerts)
@@ -539,7 +557,14 @@ class ZoomPollWindow(QDialog):
         if div_delta:
             details.append((
                 "🔀",
-                self.tr("{n} conflicting response(s) resolved  −{delta} person(s)").replace("{n}", str(len(r.divergence_alerts))).replace("{delta}", str(div_delta)),
+                self.tr("{summary}  {impact}").format(
+                    summary=self.tr(
+                        "%n conflicting response(s) resolved",
+                        "",
+                        len(r.divergence_alerts),
+                    ),
+                    impact=self.tr("−%n person(s)", "", div_delta),
+                ),
                 PALETTE.warning,
             ))
         return details
@@ -755,7 +780,7 @@ class ZoomPollWindow(QDialog):
         removed = valid_count - len(r.responses)
         if removed > 0:
             hl.addWidget(_body_lbl(
-                self.tr("{n} removed as duplicate(s)").replace("{n}", str(removed)),
+                self.tr("%n response(s) removed as duplicates", "", removed),
                 11, PALETTE.text_dim
             ))
         v.addWidget(hrow)

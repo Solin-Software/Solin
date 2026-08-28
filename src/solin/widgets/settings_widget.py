@@ -311,22 +311,30 @@ class SettingsWidget(
 
     def _add_settings_section(self, title: str, attr: str, card: QWidget) -> None:
         layout = self._settings_sections_layout
-        layout.addWidget(self._section_title(self.tr(title), attr))
+        layout.addWidget(self._section_title(title, attr))
         layout.addSpacing(8)
         layout.addWidget(card)
         layout.addSpacing(20)
 
     def _build_language_settings_unit(self) -> None:
-        self._add_settings_section("Language", "_lang_section_title", self._build_lang_card())
+        self._add_settings_section(
+            self.tr("Language"),
+            "_lang_section_title",
+            self._build_lang_card(),
+        )
         self._mark_startup("settings_language_constructed")
 
     def _build_media_settings_unit(self) -> None:
-        self._add_settings_section("Media", "_media_section_title", self._build_media_card())
+        self._add_settings_section(
+            self.tr("Media"),
+            "_media_section_title",
+            self._build_media_card(),
+        )
         self._mark_startup("settings_media_constructed")
 
     def _build_meeting_settings_unit(self) -> None:
         self._add_settings_section(
-            "Meetings",
+            self.tr("Meetings"),
             "_meetings_section_title",
             self._build_meeting_schedule_card(),
         )
@@ -334,7 +342,7 @@ class SettingsWidget(
 
     def _build_folder_settings_unit(self) -> None:
         self._add_settings_section(
-            "Folders",
+            self.tr("Folders"),
             "_folders_section_title",
             self._build_watched_folder_card(),
         )
@@ -342,7 +350,7 @@ class SettingsWidget(
 
     def _build_remote_settings_unit(self) -> None:
         self._add_settings_section(
-            "Remote access",
+            self.tr("Remote access"),
             "_remote_control_section_title",
             self._build_remote_control_card(),
         )
@@ -380,7 +388,7 @@ class SettingsWidget(
 
     def _build_yeartext_settings_unit(self) -> None:
         self._add_settings_section(
-            "Annual Text",
+            self.tr("Annual Text"),
             "_yearly_section_title",
             self._build_yearly_text_card(),
         )
@@ -389,7 +397,11 @@ class SettingsWidget(
     def _build_screens_settings_unit(self) -> None:
         self._screens_card, self._screens_card_lay = self._card()
         self._populate_screens()
-        self._add_settings_section("Screens", "_screens_section_title", self._screens_card)
+        self._add_settings_section(
+            self.tr("Screens"),
+            "_screens_section_title",
+            self._screens_card,
+        )
         self._mark_startup("settings_screens_constructed")
 
     def _build_about_settings_unit(self) -> None:
@@ -496,7 +508,7 @@ class SettingsWidget(
             return self.tr("Dark")
         if theme.id == "light":
             return self.tr("Light")
-        return self.tr(theme.display_name)
+        return theme.display_name
 
     def _on_theme_selected(self, index: int) -> None:
         theme_id = self._theme_combo.itemData(index)

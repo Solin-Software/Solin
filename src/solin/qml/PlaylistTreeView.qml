@@ -121,10 +121,6 @@ Item {
         return root.alphaColor(root.mediaToneColor(mediaType, missing), missing ? alpha + 0.04 : alpha)
     }
 
-    function commonTr(context, source) {
-        return qsTranslate(context, source)
-    }
-
     function currentPlaylistNodes() {
         return root.playlistNodes
     }
@@ -2025,7 +2021,7 @@ Item {
                                     }
                                 }
                                 MenuItem {
-                                    text: root.commonTr("_WatchedFolderCard", "Rename")
+                                    text: qsTr("Rename")
                                     icon.source: root.picon("edit", 13, root.iconHex(root.textMuted))
                                     onTriggered: if (root.hasController) root.playlistController.renameItem(mediaRoot.nodeId)
                                     contentItem: MenuLabel { label: parent.text; iconSrc: parent.icon.source }
@@ -2033,7 +2029,7 @@ Item {
                                 }
                                 MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: root.borderStrong } }
                                 MenuItem {
-                                    text: root.commonTr("_WatchedFolderCard", "Delete")
+                                    text: qsTr("Delete")
                                     icon.source: root.picon("trash", 13, root.iconHex(root.danger))
                                     onTriggered: if (root.hasController) root.playlistController.removeItem(mediaRoot.nodeId)
                                     contentItem: MenuLabel { label: parent.text; iconSrc: parent.icon.source; danger: true }

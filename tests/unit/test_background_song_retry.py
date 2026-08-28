@@ -23,7 +23,7 @@ def test_player_error_schedules_retry_only_while_playback_is_desired():
         _enabled=True,
         _desired_playing=True,
         _retry_timer=timer,
-        _set_status=lambda _text: None,
+        _set_status=lambda _code, **_kwargs: None,
     )
 
     BackgroundSongService._on_player_error(service, "network error")

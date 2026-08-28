@@ -401,7 +401,6 @@ class MainWindow(QWidget):
                 ),
                 monitor_popup=lambda: self._monitor_popup,
                 monitor_anchor=lambda: self._quick_toolbar._monitor_btn,
-                translate=self.tr,
                 dialog_parent=self,
                 timer_output=lambda: getattr(self, "timer_output", None),
                 timer_bridge=lambda: getattr(self, "timer_bridge", None),
@@ -703,7 +702,6 @@ class MainWindow(QWidget):
                 notifications=self.notifications,
                 playlist_widget=self.playlist_widget,
                 thread_registry=self._conversion_threads,
-                translate=self.tr,
             ),
             PlaylistImportHandlers(
                 switch_to_playlist=lambda: self._navigation.switch_page(int(MainPage.PLAYLISTS)),
@@ -716,7 +714,6 @@ class MainWindow(QWidget):
                 meetings_widget=self.meetings_widget,
                 playlist_imports=self._playlist_imports,
                 notifications=self.notifications,
-                translate=self.tr,
             ),
             parent=self,
         )
@@ -724,7 +721,6 @@ class MainWindow(QWidget):
             WifiMediaContext(
                 destination_controller=self._media_destinations,
                 wifi_receive_widget=lambda: self._lazy_pages.wifi_receive_widget,
-                translate=self.tr,
             ),
             WifiMediaHandlers(
                 play_cached_media=lambda *args, **kwargs: self._media_projection.on_cache_play(
@@ -745,7 +741,6 @@ class MainWindow(QWidget):
                 notifications=self.notifications,
                 thread_registry=self._conversion_threads,
                 temp_files=self._jwl_tmp_files,
-                translate=self.tr,
             ),
             OpenMediaHandlers(
                 switch_to_playlist=lambda: self._navigation.switch_page(int(MainPage.PLAYLISTS)),
@@ -802,7 +797,6 @@ class MainWindow(QWidget):
                 ),
                 meeting_service=lambda: self.meetings_widget.get_service(),
                 dialog_parent=self,
-                translate=self.tr,
                 sjjm_announce_mode=self.settings_widget.get_sjjm_announce_mode,
                 start_videos_paused=self.settings_widget.get_start_videos_paused,
                 playback_protection=self.playback_protection,
@@ -864,7 +858,6 @@ class MainWindow(QWidget):
                 media_controller=self.media_ctrl,
                 quick_toolbar=lambda: getattr(self, "_quick_toolbar", None),
                 projection_windows=self._raw_projection_windows,
-                translate=self.tr,
                 playback_protection=self.playback_protection,
                 content_frame_sink=self._program_content.submit_frame,
                 camera_settings=self._camera_settings,
@@ -884,7 +877,6 @@ class MainWindow(QWidget):
                 ndi_service=self._ndi_service,
                 camera_service=self._camera_service,
                 projection_windows=self._raw_projection_windows,
-                translate=self.tr,
                 playback_protection=self.playback_protection,
                 program_content=self._program_content,
             ),

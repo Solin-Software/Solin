@@ -940,13 +940,15 @@ def test_linked_folder_rejects_a_previously_copied_source_as_duplicate(tmp_path)
             warning=warnings.append,
             success=lambda _message: None,
         ),
-        tr=lambda message: message,
+        tr=lambda message, _disambiguation=None, count=-1: message.replace(
+            "%n", str(count)
+        ),
     )
 
     PlaylistEditActionsMixin._add_files(view, [str(source)])
 
     assert queued == []
-    assert warnings == ["File already in playlist"]
+    assert warnings == ["1 file(s) already in playlist"]
 
 
 def test_linked_folder_accepts_distinct_local_jw_filename_variants(tmp_path):
@@ -1468,7 +1470,6 @@ def test_initial_watched_folder_open_defers_all_disk_reads():
             "is_watched": True,
             "is_loading": True,
             "item_count": 0,
-            "item_word": "items",
         }
     ]
     assert rebuilt[0] == rebuilt[1]

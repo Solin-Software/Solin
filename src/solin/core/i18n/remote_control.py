@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from collections import Counter
 from functools import lru_cache
 from types import MappingProxyType
 from typing import Final, Mapping
@@ -19,43 +20,6 @@ log = logging.getLogger(__name__)
 
 REMOTE_CONTROL_CONTEXT: Final = "_RemoteControlWeb"
 _PLACEHOLDER: Final = re.compile(r"\{[A-Za-z][A-Za-z0-9_]*\}")
-
-# Reuse established Solin vocabulary while dedicated web translations are
-# completed in each locale. Contexts are explicit because Qt translations are
-# context-sensitive; arbitrary cross-context lookup would be unpredictable.
-_SHARED_TRANSLATION_CONTEXTS: Final = {
-    "Audio": "LibraryWidget",
-    "Browser": "MainWindow",
-    "Choose a meeting": "MediaDestinationDialog",
-    "Choose a playlist": "MediaDestinationDialog",
-    "Connecting…": "OBSConnectionStatus",
-    "Image": "PlaylistPanel",
-    "Linked folder": "PlaylistEditView",
-    "Loading": "JWMediaCatalogBridge",
-    "Marker": "_PlaylistEditView",
-    "Media": "SettingsWidget",
-    "Meetings": "MainWindow",
-    "Midweek meeting": "MeetingScheduleSectionMixin",
-    "Next": "ProjectionBar",
-    "Next week": "AdvancedTimerPage",
-    "PROJECTION": "ScreensSectionMixin",
-    "Pause": "MediaTrimDialog",
-    "Play": "MediaCard",
-    "Playlist": "NameDialog",
-    "Playlists": "MainWindow",
-    "Previous": "ProjectionBar",
-    "Remote control": "RemoteControlSectionMixin",
-    "Section": "MediaPlacement",
-    "Stop": "BackgroundSongPopup",
-    "This week": "MediaDestinationDialog",
-    "Try again": "MediaDestinationDialog",
-    "Unavailable": "_PubCard",
-    "Username": "RemoteControlSectionMixin",
-    "Video": "PlaylistPanel",
-    "Volume": "ProjectionBar",
-    "Watchtower Study": "_PubCard",
-    "Weekend meeting": "MeetingScheduleSectionMixin",
-}
 
 # Literal extraction markers for lupdate. The English JSON is shared with the
 # browser; a contract test keeps both source sets synchronized.
@@ -323,9 +287,7 @@ def remote_control_localization(locale_code: str) -> JsonObject:
     messages: dict[str, str] = {}
     for key, source in remote_control_message_sources().items():
         translated = QCoreApplication.translate(REMOTE_CONTROL_CONTEXT, source) or source
-        if translated == source and (shared_context := _SHARED_TRANSLATION_CONTEXTS.get(source)):
-            translated = QCoreApplication.translate(shared_context, source) or source
-        if set(_PLACEHOLDER.findall(translated)) != set(_PLACEHOLDER.findall(source)):
+        if not _valid_remote_translation(source, translated):
             log.warning("Ignoring invalid remote-control translation for %s", key)
             translated = source
         messages[key] = translated
@@ -333,6 +295,14 @@ def remote_control_localization(locale_code: str) -> JsonObject:
         "locale": str(locale_code or "en").replace("_", "-"),
         "messages": messages,
     }
+
+
+def _valid_remote_translation(source: str, translated: str) -> bool:
+    placeholders_match = Counter(_PLACEHOLDER.findall(source)) == Counter(
+        _PLACEHOLDER.findall(translated)
+    )
+    has_unstructured_plural_variants = "|" in translated and "|" not in source
+    return placeholders_match and not has_unstructured_plural_variants
 
 
 __all__ = [

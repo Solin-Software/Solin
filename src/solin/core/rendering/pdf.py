@@ -124,11 +124,11 @@ def render_pdf_pages_sync(
     try:
         error = doc.load(str(pdf_path))
         if error != QPdfDocument.Error.None_:
-            raise RuntimeError(f"Não foi possível abrir '{pdf_path.name}' ({error.name}).")
+            raise RuntimeError(f"Could not open '{pdf_path.name}' ({error.name}).")
 
         total = doc.pageCount()
         if total <= 0:
-            raise RuntimeError(f"PDF sem páginas: '{pdf_path.name}'.")
+            raise RuntimeError(f"PDF has no pages: '{pdf_path.name}'.")
 
         paths: list[str] = []
         fmt = image_format.upper() if image_format else None
@@ -140,11 +140,15 @@ def render_pdf_pages_sync(
             image = doc.render(idx, _render_size_for_page(doc, idx, dpi))
             image = _flatten_to_rgb(image)
             if image.isNull():
-                raise RuntimeError(f"Falha ao renderizar página {idx + 1} de '{pdf_path.name}'.")
+                raise RuntimeError(
+                    f"Could not render page {idx + 1} of '{pdf_path.name}'."
+                )
 
             out_path = output_dir / page_name_format.format(stem=output_stem, n=idx + 1)
             if not image.save(str(out_path), fmt, save_quality):
-                raise RuntimeError(f"Falha ao salvar página {idx + 1} de '{pdf_path.name}'.")
+                raise RuntimeError(
+                    f"Could not save page {idx + 1} of '{pdf_path.name}'."
+                )
             paths.append(str(out_path))
         return paths
     finally:
@@ -206,7 +210,7 @@ def convert_pdf_sync(
         import shutil
 
         shutil.rmtree(str(cache_dir), ignore_errors=True)
-        raise RuntimeError(f"Erro ao converter PDF: {exc}") from exc
+        raise RuntimeError(f"Could not convert PDF: {exc}") from exc
 
 
 # ── Thread assíncrona ──────────────────────────────────────────────────────────

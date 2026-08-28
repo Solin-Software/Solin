@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, QTimer, QRect, QSize
+from PySide6.QtCore import QCoreApplication, QT_TRANSLATE_NOOP, Qt, QTimer, QRect, QSize
 from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -27,6 +27,8 @@ _BORDER_STRONG = palette_token("border")
 _MUTED = palette_token("text_muted")
 _TEXT = palette_token("text_primary")
 _ACCENT = palette_token("accent")
+_PICKER_TR_CONTEXT = "LanguagePicker"
+_CANCEL_SOURCE = QT_TRANSLATE_NOOP("LanguagePicker", "Cancel")
 
 
 def picker_primary_button_stylesheet() -> str:
@@ -128,7 +130,9 @@ class _LangItemDelegate(QStyledItemDelegate):
 def _make_picker_btn_row(dialog, ok_label: str):
     row = QHBoxLayout()
     row.setSpacing(8)
-    cancel = QPushButton(dialog.tr("Cancel"))
+    cancel = QPushButton(
+        QCoreApplication.translate(_PICKER_TR_CONTEXT, _CANCEL_SOURCE)
+    )
     cancel.setMinimumHeight(36)
     cancel.setStyleSheet(picker_secondary_button_stylesheet())
     cancel.clicked.connect(dialog.reject)

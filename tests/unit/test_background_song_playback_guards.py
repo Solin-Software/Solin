@@ -6,8 +6,8 @@ from types import SimpleNamespace
 import solin.core.jw.background_song_service as service_module
 from solin.core.jw.background_song_service import BackgroundSongService
 from solin.core.jw.background_song_status import (
-    STATUS_STOPPED_BEFORE_MEETING,
-    STATUS_STOPPING,
+    BackgroundSongStatus,
+    BackgroundSongStatusCode,
 )
 from solin.core.meetings.schedule import MIDWEEK, MeetingOccurrence, MeetingSlot
 from solin.ui.background_song_status import translate_background_song_status
@@ -32,7 +32,7 @@ def _occurrence(seconds_until_start: int) -> MeetingOccurrence:
 
 
 def _guard_service(occurrence: MeetingOccurrence):
-    statuses: list[str] = []
+    statuses: list[BackgroundSongStatusCode] = []
     timer = _TimerStub()
     service = SimpleNamespace(
         _fade_seconds=5,
@@ -109,12 +109,12 @@ def test_delayed_automatic_track_is_rejected_after_meeting_start():
 
     assert allowed is False
     assert service._desired_playing is False
-    assert statuses == [STATUS_STOPPED_BEFORE_MEETING]
+    assert statuses == [BackgroundSongStatusCode.STOPPED_BEFORE_MEETING]
 
 
 def test_scheduled_fade_uses_only_time_remaining_until_cutoff():
     faded: list[tuple[float, float, bool]] = []
-    statuses: list[str] = []
+    statuses: list[BackgroundSongStatusCode] = []
     service = SimpleNamespace(
         _scheduled_fade_deadline=datetime.now().astimezone() + timedelta(seconds=2),
         _desired_playing=True,
@@ -132,7 +132,7 @@ def test_scheduled_fade_uses_only_time_remaining_until_cutoff():
     assert faded[0][0] == 0.0
     assert 1.0 <= faded[0][1] <= 2.0
     assert faded[0][2] is True
-    assert statuses == [STATUS_STOPPING]
+    assert statuses == [BackgroundSongStatusCode.STOPPING]
 
 
 def test_auto_start_inside_fade_window_loads_song_and_schedules_short_fade():
@@ -239,5 +239,28 @@ def test_songs_ready_starts_playback_when_idle_and_waiting():
 
 
 def test_background_song_status_translation_renders_at_ui_boundary():
-    assert translate_background_song_status(STATUS_STOPPING) == STATUS_STOPPING
-    assert translate_background_song_status("network error") == "network error"
+    status = BackgroundSongStatus(BackgroundSongStatusCode.STOPPING)
+
+    assert translate_background_song_status(status) == "Stopping background song..."
+
+
+def test_background_song_error_detail_renders_at_ui_boundary():
+    status = BackgroundSongStatus(
+        BackgroundSongStatusCode.PLAYBACK_ERROR,
+        "network error",
+    )
+
+    assert translate_background_song_status(status) == (
+        "Background-song playback error:\nnetwork error"
+    )
+
+
+def test_background_song_load_error_detail_is_a_complete_ui_message():
+    status = BackgroundSongStatus(
+        BackgroundSongStatusCode.LOAD_FAILED,
+        "network error",
+    )
+
+    assert translate_background_song_status(status) == (
+        "Could not load audio songs.\nnetwork error"
+    )

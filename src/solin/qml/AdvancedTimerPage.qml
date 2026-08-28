@@ -97,8 +97,10 @@ Item {
     }
 
     function analogStyleLabel(id) {
-        if (id === "signature")
+        if (id === "signature") {
+            //: "Signature" is the proper name of this clock face. Keep it unchanged.
             return qsTr("Signature")
+        }
         if (id === "classic")
             return qsTr("Classic")
         return id

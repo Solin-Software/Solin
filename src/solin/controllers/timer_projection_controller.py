@@ -4,10 +4,22 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from PySide6.QtCore import QDateTime
+from PySide6.QtCore import QCoreApplication, QDateTime, QT_TRANSLATE_NOOP
 
 from ..core.foundation.time_utils import ceil_remaining_seconds
 from ..core.timer.models import MediaCountdownPresentation
+
+
+_TR_CONTEXT = "TimerProjection"
+_TIMER_SOURCE = QT_TRANSLATE_NOOP("TimerProjection", "Timer")
+_TIMER_STATUS_SOURCE = QT_TRANSLATE_NOOP(
+    "TimerProjection",
+    "Timer → {time}",
+)
+
+
+def _tr(source: str) -> str:
+    return QCoreApplication.translate(_TR_CONTEXT, source)
 
 
 @dataclass(frozen=True, slots=True)
@@ -19,7 +31,6 @@ class TimerProjectionContext:
     media_controller: Any
     ndi_service: Any
     projection_windows: Callable[[], list[Any]]
-    translate: Callable[[str], str]
     playback_protection: Any
     program_content: Any
     camera_service: Any | None = None
@@ -94,12 +105,14 @@ class TimerProjectionController:
 
         self._handlers.update_projection_status(
             True,
-            f"Cronômetro → {target_dt.time().toString('HH:mm')}",
+            _tr(_TIMER_STATUS_SOURCE).format(
+                time=target_dt.time().toString("HH:mm"),
+            ),
             auto_keys_media=False,
         )
         state = {
             "type": "timer",
-            "title": context.translate("Timer"),
+            "title": _tr(_TIMER_SOURCE),
             "target_dt": target_dt,
             "total": total,
             "presentation": presentation.value,

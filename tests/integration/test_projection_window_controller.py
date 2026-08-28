@@ -230,7 +230,6 @@ def _projection_context(window: _WindowStub) -> ProjectionWindowContext:
         set_toolbar_screen_count=window._quick_toolbar.set_screen_count,
         monitor_popup=lambda: window._monitor_popup,
         monitor_anchor=lambda: window._quick_toolbar._monitor_btn,
-        translate=window.tr,
         dialog_parent=window,
         timer_output=lambda: getattr(window, "timer_output", None),
         timer_bridge=lambda: getattr(window, "timer_bridge", None),

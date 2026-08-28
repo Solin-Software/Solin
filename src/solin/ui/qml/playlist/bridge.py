@@ -10,6 +10,7 @@ from typing import Any, TYPE_CHECKING
 
 from PySide6.QtCore import QObject, Property, Signal, Slot
 
+from solin.core.i18n.strings import tr_item_count
 from solin.core.projection.aspect_ratio import (
     DEFAULT_PROJECTION_ASPECT_RATIO,
     ProjectionAspectRatio,
@@ -127,14 +128,14 @@ class PlaylistEditBridge(QObject):
     def set_state(self, *, name: str = "", is_temp: bool = False,
                   is_watched: bool = False, is_loading: bool = False,
                   item_count: int = 0,
-                  item_word: str = "items", has_entries: bool | None = None,
+                  has_entries: bool | None = None,
                   emit_data_changed: bool = True) -> None:
         self._playlist_name = name
         self._is_temp = is_temp
         self._is_watched = is_watched
         self._is_loading = is_loading
         self._has_items = (item_count > 0 if has_entries is None else has_entries)
-        self._item_count_text = f"{item_count} {item_word}"
+        self._item_count_text = tr_item_count(item_count)
         self.chromeChanged.emit()
         if emit_data_changed:
             self.stateChanged.emit()

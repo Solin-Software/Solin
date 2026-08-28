@@ -140,7 +140,6 @@ def _controller(drive, *, playlist_ref=None):
             meetings_widget=meetings,
             playlist_imports=playlist_imports,
             notifications=notifications,
-            translate=lambda text, *_args: text,
             dialog_factory=lambda bridge, parent: _DialogStub(bridge, parent, drive),
         )
     )

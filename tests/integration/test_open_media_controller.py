@@ -178,7 +178,6 @@ def _controller(
             notifications=window.notifications,
             thread_registry=OwnedQThreadRegistry(),
             temp_files=window._jwl_tmp_files,
-            translate=window.tr,
         ),
         OpenMediaHandlers(
             switch_to_playlist=lambda: window._navigation.switch_page(7),
@@ -366,8 +365,8 @@ def test_on_pdf_ready_builds_temp_playlist_and_switches_page():
     assert stem == "document"
     assert window._navigation.pages == [7]
     assert [(item["title"], item["url"], item["type"]) for item in items] == [
-        ("document — p. 1", "/tmp/page-1.png", "image"),
-        ("document — p. 2", "/tmp/page-2.png", "image"),
+        ("document — page 1", "/tmp/page-1.png", "image"),
+        ("document — page 2", "/tmp/page-2.png", "image"),
     ]
 
 

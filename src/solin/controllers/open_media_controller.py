@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, TYPE_CHECKING
 from urllib.parse import urlparse
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QCoreApplication, QObject, QTimer, QT_TRANSLATE_NOOP
 from PySide6.QtWidgets import QMessageBox
 
 from ..core.foundation.constants import (
@@ -21,6 +21,11 @@ from ..core.foundation.constants import (
     SOLIN_PLAYLIST_EXTS,
 )
 from ..core.foundation.qt_threads import OwnedQThreadRegistry
+from ..core.i18n.strings import (
+    tr_document_page_title,
+    tr_jw_playlist_title,
+    tr_jw_playlist_unresolved,
+)
 from ..core.jw.language_context import (
     JWMediaLanguageContext,
     jw_media_language_context,
@@ -39,6 +44,66 @@ if TYPE_CHECKING:
     from ..core.rendering.document_conversion import DocumentConversionService
 
 
+class OpenMediaNotifications(QObject):
+    """Qt translation context for file-open notifications."""
+
+    @staticmethod
+    def items_added(name: str, count: int) -> str:
+        return OpenMediaNotifications.tr(
+            "{name}: %n item(s) added",
+            "",
+            max(0, int(count)),
+        ).format(name=name)
+
+
+_NOTIFICATION_CONTEXT = OpenMediaNotifications.__name__
+_UNSUPPORTED_FILE_TITLE = QT_TRANSLATE_NOOP(
+    "OpenMediaNotifications",
+    "Unsupported file",
+)
+_UNSUPPORTED_FILES_SOURCE = QT_TRANSLATE_NOOP(
+    "OpenMediaNotifications",
+    "File format not supported. Use videos (mp4, mkv, mov…) "
+    "or images (jpg, png, webp…).\n\n{files}",
+)
+_NO_MEDIA_TITLE = QT_TRANSLATE_NOOP(
+    "OpenMediaNotifications",
+    "No media found",
+)
+_NO_MEDIA_SOURCE = QT_TRANSLATE_NOOP(
+    "OpenMediaNotifications",
+    "No media items found in {name}.",
+)
+_JWPUB_ERROR_TITLE = QT_TRANSLATE_NOOP(
+    "OpenMediaNotifications",
+    "Error opening .jwpub",
+)
+_OPEN_ERROR_SOURCE = QT_TRANSLATE_NOOP(
+    "OpenMediaNotifications",
+    "Could not open {name}.\n{error}",
+)
+_INVALID_PLAYLIST_SOURCE = QT_TRANSLATE_NOOP(
+    "OpenMediaNotifications",
+    "Invalid or corrupted .jwlplaylist file:\n{name}",
+)
+_READ_PLAYLIST_ERROR_SOURCE = QT_TRANSLATE_NOOP(
+    "OpenMediaNotifications",
+    "Could not read {name}.\n{error}",
+)
+_PDF_ERROR_TITLE = QT_TRANSLATE_NOOP(
+    "OpenMediaNotifications",
+    "Error opening PDF",
+)
+_PDF_CONVERSION_ERROR_SOURCE = QT_TRANSLATE_NOOP(
+    "OpenMediaNotifications",
+    "Could not convert PDF.\n{error}",
+)
+
+
+def _tr(source: str) -> str:
+    return QCoreApplication.translate(_NOTIFICATION_CONTEXT, source)
+
+
 @dataclass(frozen=True, slots=True)
 class OpenMediaContext:
     """Stable services and paths used by file-open workflows."""
@@ -50,7 +115,6 @@ class OpenMediaContext:
     notifications: Any
     thread_registry: OwnedQThreadRegistry
     temp_files: set[str]
-    translate: Callable[[str], str]
 
 
 @dataclass(frozen=True, slots=True)
@@ -141,17 +205,10 @@ class OpenMediaController:
 
         if unsupported:
             names = "\n".join(f"  • {os.path.basename(path)}" for path in unsupported)
-            translate = self._context.translate
             QMessageBox.warning(
                 self._context.dialog_parent,
-                translate("Unsupported file"),
-                (
-                    translate(
-                        "File format not supported. Use videos (mp4, mkv, mov…) "
-                        "or images (jpg, png, webp…)."
-                    )
-                    + f"\n\n{names}"
-                ),
+                _tr(_UNSUPPORTED_FILE_TITLE),
+                _tr(_UNSUPPORTED_FILES_SOURCE).format(files=names),
             )
 
         if not playlist:
@@ -211,11 +268,8 @@ class OpenMediaController:
             if not new_items:
                 QMessageBox.information(
                     context.dialog_parent,
-                    context.translate("No media found"),
-                    context.translate("No media items found in {name}.").replace(
-                        "{name}",
-                        file_stem,
-                    ),
+                    _tr(_NO_MEDIA_TITLE),
+                    _tr(_NO_MEDIA_SOURCE).format(name=file_stem),
                 )
                 return
             if not self._handlers.append_temp_playlist_items(
@@ -224,14 +278,16 @@ class OpenMediaController:
             ):
                 return
             loaded_count = sum(1 for item in new_items if item.get("url"))
-            context.notifications.success(f"{file_stem} — {loaded_count} items")
+            context.notifications.success(
+                OpenMediaNotifications.items_added(file_stem, loaded_count)
+            )
 
         @thread.failed.connect
         def _on_fail(error: str) -> None:
             QMessageBox.warning(
                 context.dialog_parent,
-                context.translate("Error opening .jwpub"),
-                f"⚠  {stem}: {error}",
+                _tr(_JWPUB_ERROR_TITLE),
+                _tr(_OPEN_ERROR_SOURCE).format(name=stem, error=error),
             )
 
         thread.start()
@@ -271,20 +327,18 @@ class OpenMediaController:
         except BadZipFile:
             QMessageBox.warning(
                 context.dialog_parent,
-                context.translate("Unsupported file"),
-                context.translate("Invalid or corrupted .jwlplaylist file:\n%1").replace(
-                    "%1",
-                    os.path.basename(path),
-                ),
+                _tr(_UNSUPPORTED_FILE_TITLE),
+                _tr(_INVALID_PLAYLIST_SOURCE).format(name=os.path.basename(path)),
             )
             return []
         except (OSError, ValueError) as error:
             QMessageBox.warning(
                 context.dialog_parent,
-                context.translate("Unsupported file"),
-                context.translate("Error reading %1:\n%2")
-                .replace("%1", os.path.basename(path))
-                .replace("%2", str(error)),
+                _tr(_UNSUPPORTED_FILE_TITLE),
+                _tr(_READ_PLAYLIST_ERROR_SOURCE).format(
+                    name=os.path.basename(path),
+                    error=error,
+                ),
             )
             return []
 
@@ -299,8 +353,8 @@ class OpenMediaController:
             names = "\n".join(f"  • {title}" for title in result.skipped_titles)
             QMessageBox.warning(
                 context.dialog_parent,
-                "JW Library Playlist",
-                f"Itens não resolvidos (sem conexão com a internet?):\n\n{names}",
+                tr_jw_playlist_title(),
+                tr_jw_playlist_unresolved(names),
             )
         return [self._temp_playlist_entry(item) for item in result.items]
 
@@ -308,18 +362,15 @@ class OpenMediaController:
         context = self._context
         QMessageBox.warning(
             context.dialog_parent,
-            context.translate("Error opening PDF"),
-            context.translate("⚠  Error converting PDF: {error}").replace(
-                "{error}",
-                str(error),
-            ),
+            _tr(_PDF_ERROR_TITLE),
+            _tr(_PDF_CONVERSION_ERROR_SOURCE).format(error=error),
         )
 
     @staticmethod
     def _page_items(pages: list, stem: str) -> list[dict]:
         return [
             create_playlist_item(
-                title=f"{stem} — p. {index + 1}",
+                title=tr_document_page_title(stem, index + 1),
                 url=page_path,
                 type="image",
             )

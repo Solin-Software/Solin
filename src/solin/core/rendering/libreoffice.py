@@ -254,17 +254,17 @@ def convert_lo_sync(
         except subprocess.TimeoutExpired as exc:
             shutil.rmtree(str(cache_dir), ignore_errors=True)
             raise RuntimeError(
-                f"LibreOffice demorou demais ao converter '{lo_path.name}'. "
-                "O arquivo pode estar corrompido."
+                f"LibreOffice timed out while converting '{lo_path.name}'. "
+                "The file may be corrupted."
             ) from exc
         except FileNotFoundError as exc:
             shutil.rmtree(str(cache_dir), ignore_errors=True)
-            raise RuntimeError(f"Executável do LibreOffice não encontrado: {soffice}") from exc
+            raise RuntimeError(f"LibreOffice executable not found: {soffice}") from exc
 
         if result.returncode != 0:
             shutil.rmtree(str(cache_dir), ignore_errors=True)
             raise RuntimeError(
-                f"LibreOffice retornou erro ao converter '{lo_path.name}':\n"
+                f"LibreOffice failed to convert '{lo_path.name}':\n"
                 f"{result.stderr.strip() or result.stdout.strip()}"
             )
 
@@ -273,7 +273,9 @@ def convert_lo_sync(
             pdfs = list(Path(tmp_dir).glob("*.pdf"))
             if not pdfs:
                 shutil.rmtree(str(cache_dir), ignore_errors=True)
-                raise RuntimeError(f"LibreOffice não gerou PDF para '{lo_path.name}'.")
+                raise RuntimeError(
+                    f"LibreOffice did not generate a PDF for '{lo_path.name}'."
+                )
             pdf_out = pdfs[0]
 
         for stale_page in cache_dir.glob("page_*.jpg"):
@@ -289,7 +291,9 @@ def convert_lo_sync(
             )
         except Exception as exc:  # noqa: BLE001 - conversion API normalizes subprocess/Qt failures
             shutil.rmtree(str(cache_dir), ignore_errors=True)
-            raise RuntimeError(f"Erro ao renderizar páginas de '{lo_path.name}': {exc}") from exc
+            raise RuntimeError(
+                f"Could not render pages from '{lo_path.name}': {exc}"
+            ) from exc
 
     marker.touch()
     return pdf_pages

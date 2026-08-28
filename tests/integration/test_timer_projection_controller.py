@@ -106,7 +106,6 @@ def _controller(window):
             media_controller=window.media_ctrl,
             ndi_service=window._ndi_service,
             projection_windows=window._all_windows,
-            translate=window.tr,
             playback_protection=window.playback_protection,
             program_content=window.program_content,
         ),
@@ -151,7 +150,7 @@ def test_start_timer_stops_active_sources_and_broadcasts_timer():
     }
     args, kwargs = window._projection_integrations.statuses[0]
     assert args[0] is True
-    assert args[1].startswith("Cronômetro → ")
+    assert args[1].startswith("Timer → ")
     assert kwargs == {"auto_keys_media": False}
 
 
