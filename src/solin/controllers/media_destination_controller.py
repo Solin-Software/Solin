@@ -50,7 +50,20 @@ PrepareMedia = Callable[[PreparedCallback, FailedCallback], None]
 CompletionCallback = Callable[[MediaDestinationOutcome], None]
 DialogFactory = Callable[[MediaDestinationBridge, Any], Any]
 
-_TR_CONTEXT = "MediaDestinationNotifications"
+
+class MediaDestinationNotifications(QObject):
+    """Qt translation context for destination notifications."""
+
+    @staticmethod
+    def items_added_to_meeting(count: int) -> str:
+        return MediaDestinationNotifications.tr(
+            "%n item(s) added to the meeting",
+            "",
+            max(0, int(count)),
+        )
+
+
+_TR_CONTEXT = MediaDestinationNotifications.__name__
 _PREPARATION_ERROR_SOURCE = QT_TRANSLATE_NOOP(
     "MediaDestinationNotifications",
     "Could not prepare this media.",
@@ -71,18 +84,14 @@ _MEETING_UNAVAILABLE_SOURCE = QT_TRANSLATE_NOOP(
     "MediaDestinationNotifications",
     "The selected meeting is no longer available.",
 )
-_ITEMS_ADDED_TO_MEETING_SOURCE = QT_TRANSLATE_NOOP(
-    "MediaDestinationNotifications",
-    "%n item(s) added to the meeting",
-)
 _NO_MEDIA_SOURCE = QT_TRANSLATE_NOOP(
     "MediaDestinationNotifications",
     "No media was available to add.",
 )
 
 
-def _tr(source: str, *, n: int = -1) -> str:
-    return QCoreApplication.translate(_TR_CONTEXT, source, "", n)
+def _tr(source: str) -> str:
+    return QCoreApplication.translate(_TR_CONTEXT, source)
 
 
 @dataclass(frozen=True, slots=True)
@@ -423,7 +432,7 @@ class MediaDestinationController(QObject):
             )
             if count:
                 self._context.notifications.success(
-                    _tr(_ITEMS_ADDED_TO_MEETING_SOURCE, n=count)
+                    MediaDestinationNotifications.items_added_to_meeting(count)
                 )
             if result.duplicate_count == 1:
                 duplicate = result.duplicate_items[0]

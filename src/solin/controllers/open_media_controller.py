@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, TYPE_CHECKING
 from urllib.parse import urlparse
 
-from PySide6.QtCore import QCoreApplication, QTimer, QT_TRANSLATE_NOOP
+from PySide6.QtCore import QCoreApplication, QObject, QTimer, QT_TRANSLATE_NOOP
 from PySide6.QtWidgets import QMessageBox
 
 from ..core.foundation.constants import (
@@ -44,11 +44,19 @@ if TYPE_CHECKING:
     from ..core.rendering.document_conversion import DocumentConversionService
 
 
-_NOTIFICATION_CONTEXT = "OpenMediaNotifications"
-_ITEMS_ADDED_SOURCE = QT_TRANSLATE_NOOP(
-    "OpenMediaNotifications",
-    "{name}: %n item(s) added",
-)
+class OpenMediaNotifications(QObject):
+    """Qt translation context for file-open notifications."""
+
+    @staticmethod
+    def items_added(name: str, count: int) -> str:
+        return OpenMediaNotifications.tr(
+            "{name}: %n item(s) added",
+            "",
+            max(0, int(count)),
+        ).format(name=name)
+
+
+_NOTIFICATION_CONTEXT = OpenMediaNotifications.__name__
 _UNSUPPORTED_FILE_TITLE = QT_TRANSLATE_NOOP(
     "OpenMediaNotifications",
     "Unsupported file",
@@ -90,12 +98,10 @@ _PDF_CONVERSION_ERROR_SOURCE = QT_TRANSLATE_NOOP(
     "OpenMediaNotifications",
     "Could not convert PDF.\n{error}",
 )
-def _tr(source: str, *, n: int = -1) -> str:
-    return QCoreApplication.translate(_NOTIFICATION_CONTEXT, source, "", n)
 
 
-def _tr_items_added(name: str, count: int) -> str:
-    return _tr(_ITEMS_ADDED_SOURCE, n=max(0, int(count))).format(name=name)
+def _tr(source: str) -> str:
+    return QCoreApplication.translate(_NOTIFICATION_CONTEXT, source)
 
 
 @dataclass(frozen=True, slots=True)
@@ -272,7 +278,9 @@ class OpenMediaController:
             ):
                 return
             loaded_count = sum(1 for item in new_items if item.get("url"))
-            context.notifications.success(_tr_items_added(file_stem, loaded_count))
+            context.notifications.success(
+                OpenMediaNotifications.items_added(file_stem, loaded_count)
+            )
 
         @thread.failed.connect
         def _on_fail(error: str) -> None:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QCoreApplication, QT_TRANSLATE_NOOP
+from PySide6.QtCore import QCoreApplication, QObject, QT_TRANSLATE_NOOP
 
 OFFLINE_DOWNLOAD_CONTEXT = "_OfflineDownload"
 OFFLINE_DOWNLOAD_SOURCE = QT_TRANSLATE_NOOP(
@@ -30,6 +30,18 @@ DOCUMENT_PAGE_TITLE_SOURCE = QT_TRANSLATE_NOOP(
     "DocumentPages",
     "{name} — page {page}",
 )
+
+
+class CommonCounts(QObject):
+    """Qt translation context for shared standalone counts."""
+
+    @staticmethod
+    def item_count(count: int) -> str:
+        return CommonCounts.tr("%n item(s)", "", max(0, int(count)))
+
+    @staticmethod
+    def media_item_count(count: int) -> str:
+        return CommonCounts.tr("%n media item(s)", "", max(0, int(count)))
 
 
 def tr_offline_download() -> str:
@@ -63,25 +75,13 @@ def tr_offline_queued() -> str:
 def tr_item_count(count: int) -> str:
     """Return the application-wide standalone item-count label."""
 
-    normalized_count = max(0, int(count))
-    return QCoreApplication.translate(
-        "CommonCounts",
-        "%n item(s)",
-        "",
-        normalized_count,
-    )
+    return CommonCounts.item_count(count)
 
 
 def tr_media_item_count(count: int) -> str:
     """Return the established application-wide media-item count."""
 
-    normalized_count = max(0, int(count))
-    return QCoreApplication.translate(
-        "CommonCounts",
-        "%n media item(s)",
-        "",
-        normalized_count,
-    )
+    return CommonCounts.media_item_count(count)
 
 
 def tr_jw_playlist_title() -> str:

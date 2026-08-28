@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
 
-from PySide6.QtCore import QCoreApplication, Slot, QT_TRANSLATE_NOOP
+from PySide6.QtCore import QCoreApplication, QObject, Slot, QT_TRANSLATE_NOOP
 from PySide6.QtWidgets import QMessageBox
 
 from ..core.foundation.constants import JWPUB_EXTS, PDF_EXTS, PLAYLIST_EXTS
@@ -43,11 +43,19 @@ if TYPE_CHECKING:
     from ..core.rendering.document_conversion import DocumentConversionService
 
 
-_NOTIFICATION_CONTEXT = "PlaylistImportNotifications"
-_FILES_ADDED_SOURCE = QT_TRANSLATE_NOOP(
-    "PlaylistImportNotifications",
-    "{playlist}: %n file(s) added",
-)
+class PlaylistImportNotifications(QObject):
+    """Qt translation context for playlist-import notifications."""
+
+    @staticmethod
+    def files_added(playlist_name: str, count: int) -> str:
+        return PlaylistImportNotifications.tr(
+            "{playlist}: %n file(s) added",
+            "",
+            max(0, int(count)),
+        ).format(playlist=playlist_name)
+
+
+_NOTIFICATION_CONTEXT = PlaylistImportNotifications.__name__
 _FILE_NOT_FOUND_SOURCE = QT_TRANSLATE_NOOP(
     "PlaylistImportNotifications",
     "File not found: {name}",
@@ -117,15 +125,10 @@ _JWPUB_NO_MEDIA_SOURCE = QT_TRANSLATE_NOOP(
     "PlaylistImportNotifications",
     "The .jwpub file contained no usable media.",
 )
-def _tr(source: str, *, n: int = -1) -> str:
-    return QCoreApplication.translate(_NOTIFICATION_CONTEXT, source, "", n)
 
 
-def _tr_files_added(playlist_name: str, count: int) -> str:
-    return _tr(
-        _FILES_ADDED_SOURCE,
-        n=max(0, int(count)),
-    ).format(playlist=playlist_name)
+def _tr(source: str) -> str:
+    return QCoreApplication.translate(_NOTIFICATION_CONTEXT, source)
 
 
 @dataclass(frozen=True, slots=True)
@@ -340,7 +343,7 @@ class PlaylistImportController:
         added = len(result.added_items)
         if added:
             context.notifications.success(
-                _tr_files_added(target.playlist_name, added)
+                PlaylistImportNotifications.files_added(target.playlist_name, added)
             )
             if result.duplicate_count:
                 context.notifications.warning(

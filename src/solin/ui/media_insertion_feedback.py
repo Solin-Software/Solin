@@ -2,9 +2,22 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QCoreApplication, QT_TRANSLATE_NOOP
+from PySide6.QtCore import QCoreApplication, QObject, QT_TRANSLATE_NOOP
 
-_TR_CONTEXT = "MediaInsertionFeedback"
+
+class MediaInsertionFeedback(QObject):
+    """Qt translation context for media-insertion feedback."""
+
+    @staticmethod
+    def already_added_count(count: int) -> str:
+        return MediaInsertionFeedback.tr(
+            "%n media item(s) were already added",
+            "",
+            max(0, int(count)),
+        )
+
+
+_TR_CONTEXT = MediaInsertionFeedback.__name__
 _THIS_MEDIA_SOURCE = QT_TRANSLATE_NOOP("MediaInsertionFeedback", "This media")
 _MEDIA_SOURCE = QT_TRANSLATE_NOOP("MediaInsertionFeedback", "Media")
 _DUPLICATE_SOURCE = QT_TRANSLATE_NOOP(
@@ -16,10 +29,6 @@ _FAILED_SOURCE = QT_TRANSLATE_NOOP(
     "MediaInsertionFeedback",
     "Could not add “{title}”.",
 )
-_ALREADY_ADDED_COUNT_SOURCE = QT_TRANSLATE_NOOP(
-    "MediaInsertionFeedback",
-    "%n media item(s) were already added",
-)
 
 
 def _tr(source: str) -> str:
@@ -27,12 +36,7 @@ def _tr(source: str) -> str:
 
 
 def tr_media_already_added_count(count: int) -> str:
-    return QCoreApplication.translate(
-        _TR_CONTEXT,
-        _ALREADY_ADDED_COUNT_SOURCE,
-        "",
-        max(0, int(count)),
-    )
+    return MediaInsertionFeedback.already_added_count(count)
 
 
 def notify_media_duplicate(notifications, title: str, identity_token: str) -> None:

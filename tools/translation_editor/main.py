@@ -28,6 +28,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 from collections import Counter
 from typing import Optional
 
@@ -361,16 +362,16 @@ def _collect_translation_sources(root: str) -> list[str]:
     result = []
     for dirpath, dirs, files in os.walk(root):
         # 1. Ignora pastas exatas listadas no skip e qualquer pasta que comece com "venv" ou "env"
-        dirs[:] = [
+        dirs[:] = sorted(
             d for d in dirs 
             if d not in skip and not d.startswith("venv") and not d.startswith("env")
-        ]
+        )
         
         # 2. Segurança extra: ignora se por acaso entrar em um site-packages
         if "site-packages" in dirpath.lower():
             continue
             
-        for f in files:
+        for f in sorted(files):
             if f.startswith("test_"):
                 continue
             if f.endswith((".py", ".qml")):
@@ -380,53 +381,57 @@ def _collect_translation_sources(root: str) -> list[str]:
 
 
 def run_lupdate(project_root: str, ts_path: str) -> tuple[bool, str]:
-    import shutil
-    import importlib.util
-
-    # 1. Encontra o executável garantindo a extensão .exe no Windows
-    exe_name = "pyside6-lupdate.exe" if os.name == 'nt' else "pyside6-lupdate"
-    cmd_exe = shutil.which(exe_name)
-    
-    if not cmd_exe:
-        spec = importlib.util.find_spec("PySide6")
-        if spec and spec.submodule_search_locations:
-            pdir = list(spec.submodule_search_locations)[0]
-            int_exe = os.path.join(pdir, "lupdate.exe" if os.name == 'nt' else "lupdate")
-            if os.path.isfile(int_exe):
-                cmd_exe = int_exe
-
-    if not cmd_exe:
-        return False, "Executável do lupdate (.exe) não encontrado no ambiente Anaconda/Python."
+    project_root = os.path.abspath(project_root)
+    ts_path = os.path.abspath(ts_path)
+    cmd_base = _find_tool("pyside6-lupdate")
+    if not cmd_base:
+        return False, (
+            "pyside6-lupdate não encontrado.\n\n"
+            f"Python: {sys.executable}\n\n"
+            "Instale com:  pip install pyside6"
+        )
 
     source_files = _collect_translation_sources(project_root)
     if not source_files:
         return False, f"Nenhum arquivo .py/.qml encontrado em: {project_root}"
 
     os.makedirs(os.path.dirname(ts_path), exist_ok=True)
-
-    # 2. Cria um arquivo de texto comum (.lst) em vez de .pro
-    # O lupdate lê a lista diretamente sem tentar acionar o qmake
-    lst_name = "_temp_files.lst"
-    lst_path = os.path.join(project_root, lst_name)
+    lst_path: str | None = None
 
     try:
-        with open(lst_path, "w", encoding="utf-8") as f:
+        # O arquivo de resposta precisa estar fechado no Windows antes de o
+        # lupdate abri-lo. Um nome único também permite execuções concorrentes.
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            newline="\n",
+            prefix=".solin-lupdate-",
+            suffix=".lst",
+            dir=project_root,
+            delete=False,
+        ) as source_list:
+            lst_path = source_list.name
             for source in source_files:
-                # Pode mandar o caminho absoluto direto, não tem problema!
-                rel_path = os.path.relpath(source, project_root).replace('\\', '/')
-                f.write(f"{rel_path}\n")
+                rel_path = os.path.relpath(source, project_root).replace("\\", "/")
+                source_list.write(f"{rel_path}\n")
 
-        # 3. O "pulo do gato": usamos o "@" antes do nome do arquivo
-        cmd = [cmd_exe, f"@{lst_path}", "-ts", ts_path]
-        
-        r = subprocess.run(cmd, capture_output=True, text=True,
-                           timeout=60, cwd=project_root)
-        
+        cmd = [*cmd_base, f"@{lst_path}", "-ts", ts_path]
+        r = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            cwd=project_root,
+        )
         out = (r.stdout + "\n" + r.stderr).strip()
-        
+
         if r.returncode != 0 or not os.path.isfile(ts_path):
-            return False, f"Falha no lupdate (código {r.returncode}):\n{out}\nExecutável: {cmd_exe}"
-            
+            executable = " ".join(cmd_base)
+            return False, (
+                f"Falha no lupdate (código {r.returncode}):\n{out}\n"
+                f"Executável: {executable}"
+            )
+
         return True, out
 
     except subprocess.TimeoutExpired:
@@ -434,10 +439,13 @@ def run_lupdate(project_root: str, ts_path: str) -> tuple[bool, str]:
     except (OSError, subprocess.SubprocessError) as exc:
         return False, f"Erro executando o comando: {exc}"
     finally:
-        # 4. Exclui o arquivo de lista temporário
-        if os.path.exists(lst_path):
-            try: os.remove(lst_path)
-            except OSError: pass
+        if lst_path is not None:
+            try:
+                os.remove(lst_path)
+            except FileNotFoundError:
+                pass
+            except OSError as exc:
+                log.warning("Could not remove lupdate response file %s: %s", lst_path, exc)
 
 
 def run_lrelease(ts_path: str) -> tuple[bool, str]:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -14,6 +15,7 @@ from tools.translation_editor.main import (
     _load_jw_terminology,
     _placeholder_mismatches,
     _validated_translation,
+    run_lupdate,
 )
 
 
@@ -174,6 +176,39 @@ def test_plural_validation_preserves_catalog_form_count(tmp_path):
 
     assert _validated_translation(entry, ["%n item"]) is None
     assert _validated_translation(entry, ["%n item", "%n itens", "%n itens"]) is None
+
+
+def test_lupdate_extracts_every_percent_n_source_as_numerus(tmp_path):
+    project_root = Path(__file__).parents[2]
+    source_catalog = (
+        project_root
+        / "src"
+        / "solin"
+        / "resources"
+        / "translations"
+        / "solin_en.ts"
+    )
+    generated_catalog = tmp_path / source_catalog.name
+    shutil.copy2(source_catalog, generated_catalog)
+    response_files_before = set(project_root.glob(".solin-lupdate-*.lst"))
+
+    succeeded, output = run_lupdate(
+        str(project_root),
+        str(generated_catalog),
+    )
+
+    assert succeeded, output
+    assert set(project_root.glob(".solin-lupdate-*.lst")) == response_files_before
+    root = ET.parse(generated_catalog).getroot()
+    violations: list[str] = []
+    for context in root.findall("context"):
+        context_name = context.findtext("name") or ""
+        for message in context.findall("message"):
+            source = message.findtext("source") or ""
+            if "%n" in source and message.get("numerus") != "yes":
+                violations.append(f"{context_name}: {source}")
+
+    assert violations == []
 
 
 def test_ts_save_preserves_inactive_messages(tmp_path):

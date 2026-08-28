@@ -7,7 +7,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from PySide6.QtCore import QCoreApplication, QT_TRANSLATE_NOOP
+from PySide6.QtCore import QCoreApplication, QObject, QT_TRANSLATE_NOOP
 
 from solin.core.foundation.constants import JWPUB_EXTS, PDF_EXTS, PLAYLIST_EXTS
 from solin.core.media.destinations import (
@@ -20,21 +20,16 @@ from solin.core.playlists.items import create_playlist_item
 from solin.core.playlists.items import PlaylistMediaItem
 
 
-_TR_CONTEXT = "WifiMedia"
-_RECEIVED_ITEMS_SOURCE = QT_TRANSLATE_NOOP(
-    "WifiMedia",
-    "%n received item(s)",
-)
+class WifiMedia(QObject):
+    """Qt translation context for received Wi-Fi media."""
+
+    @staticmethod
+    def received_items(count: int) -> str:
+        return WifiMedia.tr("%n received item(s)", "", max(0, int(count)))
+
+
+_TR_CONTEXT = WifiMedia.__name__
 _MEDIA_SOURCE = QT_TRANSLATE_NOOP("WifiMedia", "Media")
-
-
-def _tr_received_items(count: int) -> str:
-    return QCoreApplication.translate(
-        _TR_CONTEXT,
-        _RECEIVED_ITEMS_SOURCE,
-        "",
-        max(0, int(count)),
-    )
 
 
 def _tr_media() -> str:
@@ -238,7 +233,7 @@ class WifiMediaController:
     def _batch_title(self, entries: list[dict[str, Any]]) -> str:
         if len(entries) == 1:
             return str(entries[0].get("title") or _tr_media())
-        return _tr_received_items(len(entries))
+        return WifiMedia.received_items(len(entries))
 
 
 __all__ = ["WifiMediaContext", "WifiMediaController", "WifiMediaHandlers"]
