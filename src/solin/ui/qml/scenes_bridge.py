@@ -778,6 +778,13 @@ class ScenesBridge(QObject):
     def setLayerFit(self, layer_id: str, fit_mode: str) -> None:
         self._update_layer(layer_id, lambda layer: replace(layer, fit_mode=FitMode(fit_mode)))
 
+    @Slot(str, bool)
+    def setLayerMirrored(self, layer_id: str, mirrored: bool) -> None:
+        self._update_layer(
+            layer_id,
+            lambda layer: replace(layer, mirror_x=bool(mirrored)),
+        )
+
     @Slot(str)
     def resetLayerTransform(self, layer_id: str) -> None:
         self._update_layer(
@@ -1667,6 +1674,7 @@ class ScenesBridge(QObject):
             "crop_right": layer.crop.right,
             "crop_bottom": layer.crop.bottom,
             "fit_mode": layer.fit_mode.value,
+            "mirror_x": layer.mirror_x,
             "rotation": layer.rotation_degrees,
             "opacity": layer.opacity,
             "color": _SOURCE_COLORS[source.kind],

@@ -180,6 +180,7 @@ def test_canvas_framing_shortcuts_overlay_and_responsive_actions(tmp_path: Path)
     begin_button = root.findChild(QQuickItem, "scenesBeginFramingButton")
     overlay = root.findChild(QQuickItem, "scenesFramingOverlay")
     fill_menu_item = root.findChild(QObject, "scenesFillCropMenuItem")
+    mirror_menu_item = root.findChild(QObject, "scenesMirrorLayerMenuItem")
     drawer_toggle = root.findChild(QQuickItem, "scenesDrawerToggle")
     assert canvas is not None
     assert toolbar is not None and toolbar.isVisible()
@@ -187,7 +188,21 @@ def test_canvas_framing_shortcuts_overlay_and_responsive_actions(tmp_path: Path)
     assert overlay is not None and not overlay.isVisible()
     assert fill_menu_item is not None
     assert fill_menu_item.property("text") == "Fill canvas from crop"
+    assert mirror_menu_item is not None
+    assert mirror_menu_item.property("text") == "Mirror horizontally"
+    assert mirror_menu_item.property("checkable") is True
+    assert mirror_menu_item.property("checked") is False
     assert drawer_toggle is not None
+
+    widget.bridge.setLayerMirrored(layer_id, True)
+    QCoreApplication.processEvents()
+    assert mirror_menu_item.property("checked") is True
+    widget.bridge.setLayerLocked(layer_id, True)
+    QCoreApplication.processEvents()
+    assert mirror_menu_item.property("enabled") is False
+    widget.bridge.setLayerLocked(layer_id, False)
+    widget.bridge.setLayerMirrored(layer_id, False)
+    QCoreApplication.processEvents()
 
     revision = controller.document.revision
     drawer_toggle.forceActiveFocus()

@@ -5747,12 +5747,12 @@ This action cannot be undone.</source>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+1434"/>
+        <location line="+1442"/>
         <source>Automatic</source>
         <translation>自动</translation>
     </message>
     <message>
-        <location line="-1424"/>
+        <location line="-1432"/>
         <source>Looking for cameras…</source>
         <translation>正在查找摄像机……</translation>
     </message>
@@ -5788,7 +5788,7 @@ This action cannot be undone.</source>
         <translation>请选择有效的转场和时长。</translation>
     </message>
     <message>
-        <location line="+515"/>
+        <location line="+522"/>
         <source>Check the camera name, connection and PTZ settings.</source>
         <translation>请检查摄像机名称、连接和 PTZ 设置。</translation>
     </message>
@@ -5873,7 +5873,7 @@ This action cannot be undone.</source>
         <translation>来源的可见区域太小，无法构图。</translation>
     </message>
     <message>
-        <location line="+96"/>
+        <location line="+97"/>
         <source>Camera unavailable. Check its connection, privacy permissions, or whether another application is using it.</source>
         <translation>摄像机不可用。请检查连接、隐私权限，或是否有其他程序正在使用它。</translation>
     </message>
@@ -5934,7 +5934,7 @@ This action cannot be undone.</source>
     <message>
         <location line="+6"/>
         <location filename="../../qml/ScenesPtzInspector.qml" line="+10"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+1615"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+1624"/>
         <source>Name</source>
         <translation>名称</translation>
     </message>
@@ -6062,13 +6062,13 @@ This action cannot be undone.</source>
     </message>
     <message>
         <location line="+17"/>
-        <location filename="../../qml/ScenesCanvas.qml" line="+693"/>
+        <location filename="../../qml/ScenesCanvas.qml" line="+694"/>
         <location filename="../../qml/ScenesPtzInspector.qml" line="+33"/>
         <location line="+65"/>
         <location line="+29"/>
         <location filename="../../qml/ScenesTransformDialog.qml" line="+94"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-891"/>
-        <location line="+432"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-900"/>
+        <location line="+441"/>
         <location line="+89"/>
         <location line="+68"/>
         <location line="+309"/>
@@ -6092,7 +6092,7 @@ This action cannot be undone.</source>
     </message>
     <message>
         <location line="+515"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-179"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-188"/>
         <source>Frame…</source>
         <translation>构图…</translation>
     </message>
@@ -6296,7 +6296,7 @@ This action cannot be undone.</source>
     </message>
     <message>
         <location line="+7"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+227"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+236"/>
         <location line="+68"/>
         <source>Delete</source>
         <translation>删除</translation>
@@ -6373,7 +6373,7 @@ This action cannot be undone.</source>
     </message>
     <message>
         <location filename="../../qml/ScenesScenePanel.qml" line="+172"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-1164"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-1173"/>
         <location line="+301"/>
         <location line="+102"/>
         <source>Scenes</source>
@@ -6581,19 +6581,19 @@ Add content, a camera, or another scene.</source>
     </message>
     <message>
         <location line="+15"/>
-        <location line="+435"/>
+        <location line="+444"/>
         <source>ms</source>
         <translation>毫秒</translation>
     </message>
     <message>
         <location filename="../../qml/ScenesCanvas.qml" line="-3"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-419"/>
-        <location line="+432"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-428"/>
+        <location line="+441"/>
         <source>Apply</source>
         <translation>应用</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-395"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-404"/>
         <source>Rename…</source>
         <translation>重命名……</translation>
     </message>
@@ -6728,7 +6728,12 @@ Add content, a camera, or another scene.</source>
         <translation>居中</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+4"/>
+        <source>Mirror horizontally</source>
+        <translation>水平镜像</translation>
+    </message>
+    <message>
+        <location line="+8"/>
         <source>Fit</source>
         <translation>适应</translation>
     </message>

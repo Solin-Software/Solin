@@ -5777,12 +5777,12 @@ Den här åtgärden kan inte ångras.</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+1434"/>
+        <location line="+1442"/>
         <source>Automatic</source>
         <translation>Automatisk</translation>
     </message>
     <message>
-        <location line="-1424"/>
+        <location line="-1432"/>
         <source>Looking for cameras…</source>
         <translation>Söker efter kameror…</translation>
     </message>
@@ -5818,7 +5818,7 @@ Den här åtgärden kan inte ångras.</translation>
         <translation>Välj en giltig övergång och längd.</translation>
     </message>
     <message>
-        <location line="+515"/>
+        <location line="+522"/>
         <source>Check the camera name, connection and PTZ settings.</source>
         <translation>Kontrollera kamerans namn, anslutning och PTZ-inställningar.</translation>
     </message>
@@ -5903,7 +5903,7 @@ Den här åtgärden kan inte ångras.</translation>
         <translation>Den synliga delen av källan är för liten för inramning.</translation>
     </message>
     <message>
-        <location line="+96"/>
+        <location line="+97"/>
         <source>Camera unavailable. Check its connection, privacy permissions, or whether another application is using it.</source>
         <translation>Kameran är inte tillgänglig. Kontrollera anslutningen, sekretessbehörigheterna eller om ett annat program använder den.</translation>
     </message>
@@ -5964,7 +5964,7 @@ Den här åtgärden kan inte ångras.</translation>
     <message>
         <location line="+6"/>
         <location filename="../../qml/ScenesPtzInspector.qml" line="+10"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+1615"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+1624"/>
         <source>Name</source>
         <translation>Namn</translation>
     </message>
@@ -6092,13 +6092,13 @@ Den här åtgärden kan inte ångras.</translation>
     </message>
     <message>
         <location line="+17"/>
-        <location filename="../../qml/ScenesCanvas.qml" line="+693"/>
+        <location filename="../../qml/ScenesCanvas.qml" line="+694"/>
         <location filename="../../qml/ScenesPtzInspector.qml" line="+33"/>
         <location line="+65"/>
         <location line="+29"/>
         <location filename="../../qml/ScenesTransformDialog.qml" line="+94"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-891"/>
-        <location line="+432"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-900"/>
+        <location line="+441"/>
         <location line="+89"/>
         <location line="+68"/>
         <location line="+309"/>
@@ -6122,7 +6122,7 @@ Den här åtgärden kan inte ångras.</translation>
     </message>
     <message>
         <location line="+515"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-179"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-188"/>
         <source>Frame…</source>
         <translation>Rama in…</translation>
     </message>
@@ -6326,7 +6326,7 @@ Den här åtgärden kan inte ångras.</translation>
     </message>
     <message>
         <location line="+7"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+227"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+236"/>
         <location line="+68"/>
         <source>Delete</source>
         <translation>Ta bort</translation>
@@ -6403,7 +6403,7 @@ Den här åtgärden kan inte ångras.</translation>
     </message>
     <message>
         <location filename="../../qml/ScenesScenePanel.qml" line="+172"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-1164"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-1173"/>
         <location line="+301"/>
         <location line="+102"/>
         <source>Scenes</source>
@@ -6611,19 +6611,19 @@ Lägg till innehåll, en kamera eller en annan scen.</translation>
     </message>
     <message>
         <location line="+15"/>
-        <location line="+435"/>
+        <location line="+444"/>
         <source>ms</source>
         <translation>ms</translation>
     </message>
     <message>
         <location filename="../../qml/ScenesCanvas.qml" line="-3"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-419"/>
-        <location line="+432"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-428"/>
+        <location line="+441"/>
         <source>Apply</source>
         <translation>Tillämpa</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-395"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-404"/>
         <source>Rename…</source>
         <translation>Byt namn…</translation>
     </message>
@@ -6758,7 +6758,12 @@ Lägg till innehåll, en kamera eller en annan scen.</translation>
         <translation>Centrera</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+4"/>
+        <source>Mirror horizontally</source>
+        <translation>Spegelvänd horisontellt</translation>
+    </message>
+    <message>
+        <location line="+8"/>
         <source>Fit</source>
         <translation>Anpassa</translation>
     </message>

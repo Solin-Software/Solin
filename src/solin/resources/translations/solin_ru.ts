@@ -5808,12 +5808,12 @@ This action cannot be undone.</source>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+1434"/>
+        <location line="+1442"/>
         <source>Automatic</source>
         <translation>Автоматически</translation>
     </message>
     <message>
-        <location line="-1424"/>
+        <location line="-1432"/>
         <source>Looking for cameras…</source>
         <translation>Поиск камер…</translation>
     </message>
@@ -5849,7 +5849,7 @@ This action cannot be undone.</source>
         <translation>Выберите допустимый переход и длительность.</translation>
     </message>
     <message>
-        <location line="+515"/>
+        <location line="+522"/>
         <source>Check the camera name, connection and PTZ settings.</source>
         <translation>Проверьте название камеры, подключение и настройки PTZ.</translation>
     </message>
@@ -5934,7 +5934,7 @@ This action cannot be undone.</source>
         <translation>Видимая область источника слишком мала для настройки кадра.</translation>
     </message>
     <message>
-        <location line="+96"/>
+        <location line="+97"/>
         <source>Camera unavailable. Check its connection, privacy permissions, or whether another application is using it.</source>
         <translation>Камера недоступна. Проверьте подключение, разрешения конфиденциальности или используется ли она другим приложением.</translation>
     </message>
@@ -5995,7 +5995,7 @@ This action cannot be undone.</source>
     <message>
         <location line="+6"/>
         <location filename="../../qml/ScenesPtzInspector.qml" line="+10"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+1615"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+1624"/>
         <source>Name</source>
         <translation>Название</translation>
     </message>
@@ -6123,13 +6123,13 @@ This action cannot be undone.</source>
     </message>
     <message>
         <location line="+17"/>
-        <location filename="../../qml/ScenesCanvas.qml" line="+693"/>
+        <location filename="../../qml/ScenesCanvas.qml" line="+694"/>
         <location filename="../../qml/ScenesPtzInspector.qml" line="+33"/>
         <location line="+65"/>
         <location line="+29"/>
         <location filename="../../qml/ScenesTransformDialog.qml" line="+94"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-891"/>
-        <location line="+432"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-900"/>
+        <location line="+441"/>
         <location line="+89"/>
         <location line="+68"/>
         <location line="+309"/>
@@ -6153,7 +6153,7 @@ This action cannot be undone.</source>
     </message>
     <message>
         <location line="+515"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-179"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-188"/>
         <source>Frame…</source>
         <translation>Настроить кадр…</translation>
     </message>
@@ -6357,7 +6357,7 @@ This action cannot be undone.</source>
     </message>
     <message>
         <location line="+7"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+227"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+236"/>
         <location line="+68"/>
         <source>Delete</source>
         <translation>Удалить</translation>
@@ -6434,7 +6434,7 @@ This action cannot be undone.</source>
     </message>
     <message>
         <location filename="../../qml/ScenesScenePanel.qml" line="+172"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-1164"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-1173"/>
         <location line="+301"/>
         <location line="+102"/>
         <source>Scenes</source>
@@ -6642,19 +6642,19 @@ Add content, a camera, or another scene.</source>
     </message>
     <message>
         <location line="+15"/>
-        <location line="+435"/>
+        <location line="+444"/>
         <source>ms</source>
         <translation>мс</translation>
     </message>
     <message>
         <location filename="../../qml/ScenesCanvas.qml" line="-3"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-419"/>
-        <location line="+432"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-428"/>
+        <location line="+441"/>
         <source>Apply</source>
         <translation>Применить</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-395"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-404"/>
         <source>Rename…</source>
         <translation>Переименовать…</translation>
     </message>
@@ -6789,7 +6789,12 @@ Add content, a camera, or another scene.</source>
         <translation>По центру</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+4"/>
+        <source>Mirror horizontally</source>
+        <translation>Отразить по горизонтали</translation>
+    </message>
+    <message>
+        <location line="+8"/>
         <source>Fit</source>
         <translation>Вписать</translation>
     </message>

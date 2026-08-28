@@ -5778,12 +5778,12 @@ Deze actie kan niet ongedaan worden gemaakt.</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+1434"/>
+        <location line="+1442"/>
         <source>Automatic</source>
         <translation>Automatisch</translation>
     </message>
     <message>
-        <location line="-1424"/>
+        <location line="-1432"/>
         <source>Looking for cameras…</source>
         <translation>Camera&apos;s zoeken…</translation>
     </message>
@@ -5819,7 +5819,7 @@ Deze actie kan niet ongedaan worden gemaakt.</translation>
         <translation>Kies een geldige overgang en duur.</translation>
     </message>
     <message>
-        <location line="+515"/>
+        <location line="+522"/>
         <source>Check the camera name, connection and PTZ settings.</source>
         <translation>Controleer de cameranaam, de verbinding en de PTZ-instellingen.</translation>
     </message>
@@ -5904,7 +5904,7 @@ Deze actie kan niet ongedaan worden gemaakt.</translation>
         <translation>Het zichtbare brongebied is te klein om te kaderen.</translation>
     </message>
     <message>
-        <location line="+96"/>
+        <location line="+97"/>
         <source>Camera unavailable. Check its connection, privacy permissions, or whether another application is using it.</source>
         <translation>Camera niet beschikbaar. Controleer de verbinding, de privacyrechten of of een andere toepassing de camera gebruikt.</translation>
     </message>
@@ -5965,7 +5965,7 @@ Deze actie kan niet ongedaan worden gemaakt.</translation>
     <message>
         <location line="+6"/>
         <location filename="../../qml/ScenesPtzInspector.qml" line="+10"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+1615"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+1624"/>
         <source>Name</source>
         <translation>Naam</translation>
     </message>
@@ -6093,13 +6093,13 @@ Deze actie kan niet ongedaan worden gemaakt.</translation>
     </message>
     <message>
         <location line="+17"/>
-        <location filename="../../qml/ScenesCanvas.qml" line="+693"/>
+        <location filename="../../qml/ScenesCanvas.qml" line="+694"/>
         <location filename="../../qml/ScenesPtzInspector.qml" line="+33"/>
         <location line="+65"/>
         <location line="+29"/>
         <location filename="../../qml/ScenesTransformDialog.qml" line="+94"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-891"/>
-        <location line="+432"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-900"/>
+        <location line="+441"/>
         <location line="+89"/>
         <location line="+68"/>
         <location line="+309"/>
@@ -6123,7 +6123,7 @@ Deze actie kan niet ongedaan worden gemaakt.</translation>
     </message>
     <message>
         <location line="+515"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-179"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-188"/>
         <source>Frame…</source>
         <translation>Kaderen…</translation>
     </message>
@@ -6327,7 +6327,7 @@ Deze actie kan niet ongedaan worden gemaakt.</translation>
     </message>
     <message>
         <location line="+7"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+227"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+236"/>
         <location line="+68"/>
         <source>Delete</source>
         <translation>Verwijderen</translation>
@@ -6404,7 +6404,7 @@ Deze actie kan niet ongedaan worden gemaakt.</translation>
     </message>
     <message>
         <location filename="../../qml/ScenesScenePanel.qml" line="+172"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-1164"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-1173"/>
         <location line="+301"/>
         <location line="+102"/>
         <source>Scenes</source>
@@ -6612,19 +6612,19 @@ Voeg inhoud, een camera of een andere scène toe.</translation>
     </message>
     <message>
         <location line="+15"/>
-        <location line="+435"/>
+        <location line="+444"/>
         <source>ms</source>
         <translation>ms</translation>
     </message>
     <message>
         <location filename="../../qml/ScenesCanvas.qml" line="-3"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-419"/>
-        <location line="+432"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-428"/>
+        <location line="+441"/>
         <source>Apply</source>
         <translation>Toepassen</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-395"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-404"/>
         <source>Rename…</source>
         <translation>Naam wijzigen…</translation>
     </message>
@@ -6759,7 +6759,12 @@ Voeg inhoud, een camera of een andere scène toe.</translation>
         <translation>Centreren</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+4"/>
+        <source>Mirror horizontally</source>
+        <translation>Horizontaal spiegelen</translation>
+    </message>
+    <message>
+        <location line="+8"/>
         <source>Fit</source>
         <translation>Passend maken</translation>
     </message>

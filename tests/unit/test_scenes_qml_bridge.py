@@ -349,6 +349,35 @@ def test_bridge_preserves_enums_and_transform_contracts(tmp_path: Path) -> None:
     controller.close()
 
 
+def test_bridge_toggles_horizontal_layer_mirroring_with_undo(tmp_path: Path) -> None:
+    _workspace, controller, bridge, _preview_store = _bridge(tmp_path)
+    layer_id = controller.document.scene(bridge.selectedSceneId).layers[0].id
+    bridge.selectLayer(layer_id)
+    revision = controller.document.revision
+
+    bridge.setLayerMirrored(layer_id, True)
+
+    mirrored = controller.document.scene(bridge.selectedSceneId).layers[0]
+    assert mirrored.mirror_x
+    assert not mirrored.mirror_y
+    assert bridge.selectedLayer["mirror_x"] is True
+    assert controller.document.revision == revision + 1
+
+    bridge.undo()
+    restored = controller.document.scene(bridge.selectedSceneId).layers[0]
+    assert not restored.mirror_x
+    assert controller.document.revision == revision + 2
+
+    bridge.setLayerLocked(layer_id, True)
+    locked_revision = controller.document.revision
+    bridge.setLayerMirrored(layer_id, True)
+    locked = controller.document.scene(bridge.selectedSceneId).layers[0]
+    assert not locked.mirror_x
+    assert controller.document.revision == locked_revision
+    bridge.close()
+    controller.close()
+
+
 def test_bridge_framing_session_commits_one_revision_and_undoes_cleanly(
     tmp_path: Path,
 ) -> None:

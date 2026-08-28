@@ -1033,6 +1033,15 @@ Item {
         ScenesMenuItem { theme: root.theme; text: qsTr("Precise transform…"); onTriggered: transformDialog.openForLayer() }
         ScenesMenuItem { theme: root.theme; text: qsTr("Reset transform"); onTriggered: root.bridge.resetLayerTransform(root.bridge.selectedLayerId) }
         ScenesMenuItem { theme: root.theme; text: qsTr("Center"); onTriggered: root.bridge.centerLayer(root.bridge.selectedLayerId) }
+        ScenesMenuItem {
+            objectName: "scenesMirrorLayerMenuItem"
+            theme: root.theme
+            text: qsTr("Mirror horizontally")
+            checkable: true
+            checked: root.bridge && root.bridge.selectedLayer.mirror_x === true
+            enabled: root.bridge && root.bridge.selectedLayer.locked !== true
+            onTriggered: root.bridge.setLayerMirrored(root.bridge.selectedLayerId, checked)
+        }
         ScenesMenuSeparator { theme: root.theme }
         Menu {
             title: qsTr("Fit")

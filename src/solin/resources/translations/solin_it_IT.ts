@@ -5778,12 +5778,12 @@ L&apos;azione è irreversibile.</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+1434"/>
+        <location line="+1442"/>
         <source>Automatic</source>
         <translation>Automatica</translation>
     </message>
     <message>
-        <location line="-1424"/>
+        <location line="-1432"/>
         <source>Looking for cameras…</source>
         <translation>Ricerca delle videocamere…</translation>
     </message>
@@ -5819,7 +5819,7 @@ L&apos;azione è irreversibile.</translation>
         <translation>Scegliere una transizione e una durata valide.</translation>
     </message>
     <message>
-        <location line="+515"/>
+        <location line="+522"/>
         <source>Check the camera name, connection and PTZ settings.</source>
         <translation>Verificare il nome della videocamera, la connessione e le impostazioni PTZ.</translation>
     </message>
@@ -5891,20 +5891,20 @@ L&apos;azione è irreversibile.</translation>
     <message>
         <location line="+3"/>
         <source>Reset rotation before framing.</source>
-        <translation>Reimposta la rotazione prima dell'inquadratura.</translation>
+        <translation>Reimposta la rotazione prima dell&apos;inquadratura.</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>Move or resize the source into the canvas first.</source>
-        <translation>Sposta o ridimensiona prima la fonte all'interno dell'area di lavoro.</translation>
+        <translation>Sposta o ridimensiona prima la fonte all&apos;interno dell&apos;area di lavoro.</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>The visible source area is too small to frame.</source>
-        <translation>L'area visibile della fonte è troppo piccola per l'inquadratura.</translation>
+        <translation>L&apos;area visibile della fonte è troppo piccola per l&apos;inquadratura.</translation>
     </message>
     <message>
-        <location line="+96"/>
+        <location line="+97"/>
         <source>Camera unavailable. Check its connection, privacy permissions, or whether another application is using it.</source>
         <translation>Videocamera non disponibile. Verificare la connessione, le autorizzazioni sulla privacy o se un’altra applicazione la sta usando.</translation>
     </message>
@@ -5965,7 +5965,7 @@ L&apos;azione è irreversibile.</translation>
     <message>
         <location line="+6"/>
         <location filename="../../qml/ScenesPtzInspector.qml" line="+10"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+1615"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+1624"/>
         <source>Name</source>
         <translation>Nome</translation>
     </message>
@@ -6093,13 +6093,13 @@ L&apos;azione è irreversibile.</translation>
     </message>
     <message>
         <location line="+17"/>
-        <location filename="../../qml/ScenesCanvas.qml" line="+693"/>
+        <location filename="../../qml/ScenesCanvas.qml" line="+694"/>
         <location filename="../../qml/ScenesPtzInspector.qml" line="+33"/>
         <location line="+65"/>
         <location line="+29"/>
         <location filename="../../qml/ScenesTransformDialog.qml" line="+94"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-891"/>
-        <location line="+432"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-900"/>
+        <location line="+441"/>
         <location line="+89"/>
         <location line="+68"/>
         <location line="+309"/>
@@ -6123,14 +6123,14 @@ L&apos;azione è irreversibile.</translation>
     </message>
     <message>
         <location line="+515"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-179"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-188"/>
         <source>Frame…</source>
         <translation>Inquadra…</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Frame and fill the canvas (F)</source>
-        <translation>Inquadra e riempi l'area di lavoro (F)</translation>
+        <translation>Inquadra e riempi l&apos;area di lavoro (F)</translation>
     </message>
     <message>
         <location line="+12"/>
@@ -6327,7 +6327,7 @@ L&apos;azione è irreversibile.</translation>
     </message>
     <message>
         <location line="+7"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+227"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+236"/>
         <location line="+68"/>
         <source>Delete</source>
         <translation>Elimina</translation>
@@ -6404,7 +6404,7 @@ L&apos;azione è irreversibile.</translation>
     </message>
     <message>
         <location filename="../../qml/ScenesScenePanel.qml" line="+172"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-1164"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-1173"/>
         <location line="+301"/>
         <location line="+102"/>
         <source>Scenes</source>
@@ -6612,19 +6612,19 @@ Aggiungere contenuto, una videocamera o un’altra scena.</translation>
     </message>
     <message>
         <location line="+15"/>
-        <location line="+435"/>
+        <location line="+444"/>
         <source>ms</source>
         <translation>ms</translation>
     </message>
     <message>
         <location filename="../../qml/ScenesCanvas.qml" line="-3"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-419"/>
-        <location line="+432"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-428"/>
+        <location line="+441"/>
         <source>Apply</source>
         <translation>Applica</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-395"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-404"/>
         <source>Rename…</source>
         <translation>Rinomina…</translation>
     </message>
@@ -6741,7 +6741,7 @@ Aggiungere contenuto, una videocamera o un’altra scena.</translation>
     <message>
         <location line="+20"/>
         <source>Fill canvas from crop</source>
-        <translation>Riempi l'area di lavoro dal ritaglio</translation>
+        <translation>Riempi l&apos;area di lavoro dal ritaglio</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -6759,7 +6759,12 @@ Aggiungere contenuto, una videocamera o un’altra scena.</translation>
         <translation>Centra</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+4"/>
+        <source>Mirror horizontally</source>
+        <translation>Rifletti orizzontalmente</translation>
+    </message>
+    <message>
+        <location line="+8"/>
         <source>Fit</source>
         <translation>Adatta</translation>
     </message>

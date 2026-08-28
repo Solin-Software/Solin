@@ -5799,12 +5799,12 @@ Esta ação não pode ser desfeita.</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+1434"/>
+        <location line="+1442"/>
         <source>Automatic</source>
         <translation>Automática</translation>
     </message>
     <message>
-        <location line="-1424"/>
+        <location line="-1432"/>
         <source>Looking for cameras…</source>
         <translation>Procurando câmeras…</translation>
     </message>
@@ -5834,7 +5834,7 @@ Esta ação não pode ser desfeita.</translation>
         <translation>Escolha qual cena deve substituir a cena ao vivo.</translation>
     </message>
     <message>
-        <location line="+583"/>
+        <location line="+590"/>
         <source>Check the camera name, connection and PTZ settings.</source>
         <translation>Verifique o nome da câmera, a conexão e as configurações de PTZ.</translation>
     </message>
@@ -5919,7 +5919,7 @@ Esta ação não pode ser desfeita.</translation>
         <translation>A área visível da fonte é pequena demais para enquadrar.</translation>
     </message>
     <message>
-        <location line="+96"/>
+        <location line="+97"/>
         <source>Camera unavailable. Check its connection, privacy permissions, or whether another application is using it.</source>
         <translation>Câmera indisponível. Verifique a conexão, as permissões de privacidade ou se outro aplicativo está usando-a.</translation>
     </message>
@@ -5959,7 +5959,7 @@ Esta ação não pode ser desfeita.</translation>
         <translation>Cenas</translation>
     </message>
     <message>
-        <location line="-1533"/>
+        <location line="-1541"/>
         <location line="+26"/>
         <source>Choose a valid transition and duration.</source>
         <translation>Escolha uma transição e duração válidas.</translation>
@@ -5968,13 +5968,13 @@ Esta ação não pode ser desfeita.</translation>
 <context>
     <name>ScenesEditorView</name>
     <message>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+1460"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+1469"/>
         <location line="+6"/>
         <source>Program transition: %1</source>
         <translation>Transição de cena: %1</translation>
     </message>
     <message>
-        <location line="-812"/>
+        <location line="-821"/>
         <source>Program transition</source>
         <translation>Transição de cena</translation>
     </message>
@@ -6076,12 +6076,12 @@ Esta ação não pode ser desfeita.</translation>
     </message>
     <message>
         <location line="+15"/>
-        <location line="+435"/>
+        <location line="+444"/>
         <source>ms</source>
         <translation>ms</translation>
     </message>
     <message>
-        <location line="-382"/>
+        <location line="-391"/>
         <source>Rename…</source>
         <translation>Renomear…</translation>
     </message>
@@ -6216,7 +6216,12 @@ Esta ação não pode ser desfeita.</translation>
         <translation>Centralizar</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+4"/>
+        <source>Mirror horizontally</source>
+        <translation>Espelhar horizontalmente</translation>
+    </message>
+    <message>
+        <location line="+8"/>
         <source>Fit</source>
         <translation>Ajustar</translation>
     </message>
@@ -6463,13 +6468,13 @@ Esta ação não pode ser desfeita.</translation>
     </message>
     <message>
         <location line="+17"/>
-        <location filename="../../qml/ScenesCanvas.qml" line="+693"/>
+        <location filename="../../qml/ScenesCanvas.qml" line="+694"/>
         <location filename="../../qml/ScenesPtzInspector.qml" line="+33"/>
         <location line="+65"/>
         <location line="+29"/>
         <location filename="../../qml/ScenesTransformDialog.qml" line="+94"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-891"/>
-        <location line="+432"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-900"/>
+        <location line="+441"/>
         <location line="+89"/>
         <location line="+68"/>
         <location line="+309"/>
@@ -6488,7 +6493,7 @@ Esta ação não pode ser desfeita.</translation>
     </message>
     <message>
         <location filename="../../qml/ScenesCanvas.qml" line="-14"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-179"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-188"/>
         <source>Frame…</source>
         <translation>Enquadrar…</translation>
     </message>
@@ -6510,7 +6515,7 @@ Esta ação não pode ser desfeita.</translation>
     <message>
         <location line="+11"/>
         <location filename="../../qml/ScenesWorkspace.qml" line="-291"/>
-        <location line="+432"/>
+        <location line="+441"/>
         <source>Apply</source>
         <translation>Aplicar</translation>
     </message>
@@ -6781,7 +6786,7 @@ Esta ação não pode ser desfeita.</translation>
     </message>
     <message>
         <location filename="../../qml/ScenesScenePanel.qml" line="+172"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-1164"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-1173"/>
         <location line="+301"/>
         <location line="+102"/>
         <source>Scenes</source>
