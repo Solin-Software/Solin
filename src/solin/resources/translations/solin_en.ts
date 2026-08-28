@@ -5074,7 +5074,7 @@ This action cannot be undone.</source>
 <context>
     <name>ScenesBridge</name>
     <message>
-        <location filename="../../ui/qml/scenes_bridge.py" line="+277"/>
+        <location filename="../../ui/qml/scenes_bridge.py" line="+309"/>
         <source>Switching</source>
         <translation type="unfinished"></translation>
     </message>
@@ -5115,12 +5115,12 @@ This action cannot be undone.</source>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+1228"/>
+        <location line="+1434"/>
         <source>Automatic</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1218"/>
+        <location line="-1424"/>
         <source>Looking for cameras…</source>
         <translation type="unfinished"></translation>
     </message>
@@ -5140,7 +5140,7 @@ This action cannot be undone.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+145"/>
+        <location line="+148"/>
         <source>%1 copy</source>
         <translation type="unfinished"></translation>
     </message>
@@ -5156,7 +5156,7 @@ This action cannot be undone.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+377"/>
+        <location line="+515"/>
         <source>Check the camera name, connection and PTZ settings.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -5186,7 +5186,7 @@ This action cannot be undone.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+122"/>
+        <location line="+124"/>
         <source>Default</source>
         <translation type="unfinished"></translation>
     </message>
@@ -5216,12 +5216,37 @@ This action cannot be undone.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+69"/>
+        <location line="+23"/>
+        <source>Unlock the source to frame it.</source>
+        <translation>Unlock the source to frame it.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Show the source to frame it.</source>
+        <translation>Show the source to frame it.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Reset rotation before framing.</source>
+        <translation>Reset rotation before framing.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Move or resize the source into the canvas first.</source>
+        <translation>Move or resize the source into the canvas first.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>The visible source area is too small to frame.</source>
+        <translation>The visible source area is too small to frame.</translation>
+    </message>
+    <message>
+        <location line="+96"/>
         <source>Camera unavailable. Check its connection, privacy permissions, or whether another application is using it.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+116"/>
+        <location line="+118"/>
         <source>%1 (virtual)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -5277,7 +5302,7 @@ This action cannot be undone.</source>
     <message>
         <location line="+6"/>
         <location filename="../../qml/ScenesPtzInspector.qml" line="+10"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+1599"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+1615"/>
         <source>Name</source>
         <translation type="unfinished">Name</translation>
     </message>
@@ -5405,12 +5430,13 @@ This action cannot be undone.</source>
     </message>
     <message>
         <location line="+17"/>
+        <location filename="../../qml/ScenesCanvas.qml" line="+693"/>
         <location filename="../../qml/ScenesPtzInspector.qml" line="+33"/>
         <location line="+65"/>
         <location line="+29"/>
         <location filename="../../qml/ScenesTransformDialog.qml" line="+94"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-875"/>
-        <location line="+416"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-891"/>
+        <location line="+432"/>
         <location line="+89"/>
         <location line="+68"/>
         <location line="+309"/>
@@ -5428,9 +5454,35 @@ This action cannot be undone.</source>
         <translation type="unfinished">Save</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesCanvas.qml" line="+90"/>
+        <location filename="../../qml/ScenesCanvas.qml" line="-529"/>
         <source>Waiting for the first frame</source>
         <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+515"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-179"/>
+        <source>Frame…</source>
+        <translation>Frame…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Frame and fill the canvas (F)</source>
+        <translation>Frame and fill the canvas (F)</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Cancel framing (Esc)</source>
+        <translation>Cancel framing (Esc)</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Drag to compose · Scroll to zoom</source>
+        <translation>Drag to compose · Scroll to zoom</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Apply framing (Enter)</source>
+        <translation>Apply framing (Enter)</translation>
     </message>
     <message>
         <location filename="../../qml/ScenesPtzInspector.qml" line="-303"/>
@@ -5612,7 +5664,7 @@ This action cannot be undone.</source>
     </message>
     <message>
         <location line="+7"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+48"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+227"/>
         <location line="+68"/>
         <source>Delete</source>
         <translation type="unfinished">Delete</translation>
@@ -5689,7 +5741,7 @@ This action cannot be undone.</source>
     </message>
     <message>
         <location filename="../../qml/ScenesScenePanel.qml" line="+172"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-1148"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-1164"/>
         <location line="+301"/>
         <location line="+102"/>
         <source>Scenes</source>
@@ -5896,18 +5948,19 @@ Add content, a camera, or another scene.</source>
     </message>
     <message>
         <location line="+15"/>
-        <location line="+419"/>
+        <location line="+435"/>
         <source>ms</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-403"/>
-        <location line="+416"/>
+        <location filename="../../qml/ScenesCanvas.qml" line="-3"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-419"/>
+        <location line="+432"/>
         <source>Apply</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-379"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-395"/>
         <source>Rename…</source>
         <translation type="unfinished"></translation>
     </message>
@@ -6022,7 +6075,12 @@ Add content, a camera, or another scene.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+20"/>
+        <source>Fill canvas from crop</source>
+        <translation>Fill canvas from crop</translation>
+    </message>
+    <message>
+        <location line="+5"/>
         <source>Precise transform…</source>
         <translation type="unfinished"></translation>
     </message>

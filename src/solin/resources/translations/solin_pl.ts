@@ -4062,26 +4062,26 @@ Zatrzymaj prezentację i spróbuj ponownie.</translation>
     <message>
         <location line="+4"/>
         <source>A playlist named &quot;{name}&quot; already exists.</source>
-        <translation>Playlista o nazwie "{name}" już istnieje.</translation>
+        <translation>Playlista o nazwie &quot;{name}&quot; już istnieje.</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Playlist &quot;{name}&quot;
 created successfully!</source>
-        <translation>Playlista "{name}"
+        <translation>Playlista &quot;{name}&quot;
 została utworzona!</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Could not add media to playlist &quot;{name}&quot; because the selected location no longer exists.</source>
-        <translation>Nie udało się dodać multimediów do playlisty "{name}", ponieważ wybrana lokalizacja już nie istnieje.</translation>
+        <translation>Nie udało się dodać multimediów do playlisty &quot;{name}&quot;, ponieważ wybrana lokalizacja już nie istnieje.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>This media is already in
 playlist &quot;{name}&quot;</source>
         <translation>Te multimedia są już na
-playliście "{name}"</translation>
+playliście &quot;{name}&quot;</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -4184,7 +4184,7 @@ Utwórz podfoldery w połączonym folderze, aby używać ich jako playlist.</tra
     <message>
         <location line="+1"/>
         <source>A playlist named &quot;{name}&quot; already exists.</source>
-        <translation>Playlista o nazwie "{name}" już istnieje.</translation>
+        <translation>Playlista o nazwie &quot;{name}&quot; już istnieje.</translation>
     </message>
     <message>
         <location line="+20"/>
@@ -4535,12 +4535,12 @@ Tej akcji nie można cofnąć.</translation>
     <message>
         <location filename="../../widgets/playlist/widget.py" line="+353"/>
         <source>No media files found in &quot;{name}&quot;.</source>
-        <translation>Nie znaleziono plików multimedialnych w "{name}".</translation>
+        <translation>Nie znaleziono plików multimedialnych w &quot;{name}&quot;.</translation>
     </message>
     <message>
         <location line="+99"/>
         <source>A playlist named &quot;{name}&quot; already exists.</source>
-        <translation>Playlista o nazwie "{name}" już istnieje.</translation>
+        <translation>Playlista o nazwie &quot;{name}&quot; już istnieje.</translation>
     </message>
 </context>
 <context>
@@ -5768,7 +5768,7 @@ Tej akcji nie można cofnąć.</translation>
 <context>
     <name>ScenesBridge</name>
     <message>
-        <location filename="../../ui/qml/scenes_bridge.py" line="+277"/>
+        <location filename="../../ui/qml/scenes_bridge.py" line="+309"/>
         <source>Switching</source>
         <translation>Przełączanie</translation>
     </message>
@@ -5809,12 +5809,12 @@ Tej akcji nie można cofnąć.</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+1228"/>
+        <location line="+1434"/>
         <source>Automatic</source>
         <translation>Automatyczna</translation>
     </message>
     <message>
-        <location line="-1218"/>
+        <location line="-1424"/>
         <source>Looking for cameras…</source>
         <translation>Wyszukiwanie kamer…</translation>
     </message>
@@ -5834,7 +5834,7 @@ Tej akcji nie można cofnąć.</translation>
         <translation>Nie znaleziono kamer. Kamera automatyczna pozostaje dostępna.</translation>
     </message>
     <message>
-        <location line="+145"/>
+        <location line="+148"/>
         <source>%1 copy</source>
         <translation>%1 (kopia)</translation>
     </message>
@@ -5850,7 +5850,7 @@ Tej akcji nie można cofnąć.</translation>
         <translation>Wybierz prawidłowe przejście i czas trwania.</translation>
     </message>
     <message>
-        <location line="+377"/>
+        <location line="+515"/>
         <source>Check the camera name, connection and PTZ settings.</source>
         <translation>Sprawdź nazwę kamery, połączenie i ustawienia PTZ.</translation>
     </message>
@@ -5880,7 +5880,7 @@ Tej akcji nie można cofnąć.</translation>
         <translation>Nie udało się przywołać ustawienia wstępnego PTZ.</translation>
     </message>
     <message>
-        <location line="+122"/>
+        <location line="+124"/>
         <source>Default</source>
         <translation>Domyślna</translation>
     </message>
@@ -5910,12 +5910,37 @@ Tej akcji nie można cofnąć.</translation>
         <translation>Przejście przez czerń</translation>
     </message>
     <message>
-        <location line="+69"/>
+        <location line="+23"/>
+        <source>Unlock the source to frame it.</source>
+        <translation>Odblokuj źródło, aby je wykadrować.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Show the source to frame it.</source>
+        <translation>Pokaż źródło, aby je wykadrować.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Reset rotation before framing.</source>
+        <translation>Zresetuj obrót przed kadrowaniem.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Move or resize the source into the canvas first.</source>
+        <translation>Najpierw przenieś źródło do obszaru roboczego lub zmień jego rozmiar.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>The visible source area is too small to frame.</source>
+        <translation>Widoczny obszar źródła jest zbyt mały do wykadrowania.</translation>
+    </message>
+    <message>
+        <location line="+96"/>
         <source>Camera unavailable. Check its connection, privacy permissions, or whether another application is using it.</source>
         <translation>Kamera niedostępna. Sprawdź połączenie, uprawnienia prywatności lub czy nie używa jej inna aplikacja.</translation>
     </message>
     <message>
-        <location line="+116"/>
+        <location line="+118"/>
         <source>%1 (virtual)</source>
         <translation>%1 (wirtualna)</translation>
     </message>
@@ -5971,7 +5996,7 @@ Tej akcji nie można cofnąć.</translation>
     <message>
         <location line="+6"/>
         <location filename="../../qml/ScenesPtzInspector.qml" line="+10"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+1599"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+1615"/>
         <source>Name</source>
         <translation>Nazwa</translation>
     </message>
@@ -6099,12 +6124,13 @@ Tej akcji nie można cofnąć.</translation>
     </message>
     <message>
         <location line="+17"/>
+        <location filename="../../qml/ScenesCanvas.qml" line="+693"/>
         <location filename="../../qml/ScenesPtzInspector.qml" line="+33"/>
         <location line="+65"/>
         <location line="+29"/>
         <location filename="../../qml/ScenesTransformDialog.qml" line="+94"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-875"/>
-        <location line="+416"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-891"/>
+        <location line="+432"/>
         <location line="+89"/>
         <location line="+68"/>
         <location line="+309"/>
@@ -6122,9 +6148,35 @@ Tej akcji nie można cofnąć.</translation>
         <translation>Zapisz</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesCanvas.qml" line="+90"/>
+        <location filename="../../qml/ScenesCanvas.qml" line="-529"/>
         <source>Waiting for the first frame</source>
         <translation>Oczekiwanie na pierwszą klatkę</translation>
+    </message>
+    <message>
+        <location line="+515"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-179"/>
+        <source>Frame…</source>
+        <translation>Kadruj…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Frame and fill the canvas (F)</source>
+        <translation>Wykadruj i wypełnij obszar roboczy (F)</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Cancel framing (Esc)</source>
+        <translation>Anuluj kadrowanie (Esc)</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Drag to compose · Scroll to zoom</source>
+        <translation>Przeciągnij, aby ustawić kadr · Przewiń, aby powiększyć</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Apply framing (Enter)</source>
+        <translation>Zastosuj kadrowanie (Enter)</translation>
     </message>
     <message>
         <location filename="../../qml/ScenesPtzInspector.qml" line="-303"/>
@@ -6306,7 +6358,7 @@ Tej akcji nie można cofnąć.</translation>
     </message>
     <message>
         <location line="+7"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+48"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+227"/>
         <location line="+68"/>
         <source>Delete</source>
         <translation>Usuń</translation>
@@ -6383,7 +6435,7 @@ Tej akcji nie można cofnąć.</translation>
     </message>
     <message>
         <location filename="../../qml/ScenesScenePanel.qml" line="+172"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-1148"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-1164"/>
         <location line="+301"/>
         <location line="+102"/>
         <source>Scenes</source>
@@ -6591,18 +6643,19 @@ Dodaj treść, kamerę lub inną scenę.</translation>
     </message>
     <message>
         <location line="+15"/>
-        <location line="+419"/>
+        <location line="+435"/>
         <source>ms</source>
         <translation>ms</translation>
     </message>
     <message>
-        <location line="-403"/>
-        <location line="+416"/>
+        <location filename="../../qml/ScenesCanvas.qml" line="-3"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-419"/>
+        <location line="+432"/>
         <source>Apply</source>
         <translation>Zastosuj</translation>
     </message>
     <message>
-        <location line="-379"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-395"/>
         <source>Rename…</source>
         <translation>Zmień nazwę…</translation>
     </message>
@@ -6717,7 +6770,12 @@ Dodaj treść, kamerę lub inną scenę.</translation>
         <translation>Utrzymuj kamerę aktywną</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+20"/>
+        <source>Fill canvas from crop</source>
+        <translation>Wypełnij obszar roboczy z przycięcia</translation>
+    </message>
+    <message>
+        <location line="+5"/>
         <source>Precise transform…</source>
         <translation>Precyzyjne przekształcenie…</translation>
     </message>

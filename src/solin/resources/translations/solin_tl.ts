@@ -4035,25 +4035,25 @@ Ihinto ang projection at subukang muli.</translation>
     <message>
         <location line="+4"/>
         <source>A playlist named &quot;{name}&quot; already exists.</source>
-        <translation>May playlist nang nagngangalang "{name}".</translation>
+        <translation>May playlist nang nagngangalang &quot;{name}&quot;.</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Playlist &quot;{name}&quot;
 created successfully!</source>
         <translation>Matagumpay na nagawa ang
-playlist na "{name}"!</translation>
+playlist na &quot;{name}&quot;!</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Could not add media to playlist &quot;{name}&quot; because the selected location no longer exists.</source>
-        <translation>Hindi maidagdag ang media sa playlist na "{name}" dahil wala na ang napiling lokasyon.</translation>
+        <translation>Hindi maidagdag ang media sa playlist na &quot;{name}&quot; dahil wala na ang napiling lokasyon.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>This media is already in
 playlist &quot;{name}&quot;</source>
-        <translation>Nasa playlist nang "{name}"
+        <translation>Nasa playlist nang &quot;{name}&quot;
 ang media na ito</translation>
     </message>
     <message>
@@ -4157,7 +4157,7 @@ Gumawa ng mga subfolder sa loob ng naka-link na folder para magamit bilang mga p
     <message>
         <location line="+1"/>
         <source>A playlist named &quot;{name}&quot; already exists.</source>
-        <translation>May playlist nang nagngangalang "{name}".</translation>
+        <translation>May playlist nang nagngangalang &quot;{name}&quot;.</translation>
     </message>
     <message>
         <location line="+20"/>
@@ -4506,12 +4506,12 @@ Hindi na ito maibabalik.</translation>
     <message>
         <location filename="../../widgets/playlist/widget.py" line="+353"/>
         <source>No media files found in &quot;{name}&quot;.</source>
-        <translation>Walang nakitang media file sa "{name}".</translation>
+        <translation>Walang nakitang media file sa &quot;{name}&quot;.</translation>
     </message>
     <message>
         <location line="+99"/>
         <source>A playlist named &quot;{name}&quot; already exists.</source>
-        <translation>May playlist nang nagngangalang "{name}".</translation>
+        <translation>May playlist nang nagngangalang &quot;{name}&quot;.</translation>
     </message>
 </context>
 <context>
@@ -5737,7 +5737,7 @@ Hindi na ito maibabalik.</translation>
 <context>
     <name>ScenesBridge</name>
     <message>
-        <location filename="../../ui/qml/scenes_bridge.py" line="+277"/>
+        <location filename="../../ui/qml/scenes_bridge.py" line="+309"/>
         <source>Switching</source>
         <translation>Lumilipat</translation>
     </message>
@@ -5778,12 +5778,12 @@ Hindi na ito maibabalik.</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+1228"/>
+        <location line="+1434"/>
         <source>Automatic</source>
         <translation>Awtomatiko</translation>
     </message>
     <message>
-        <location line="-1218"/>
+        <location line="-1424"/>
         <source>Looking for cameras…</source>
         <translation>Naghahanap ng camera…</translation>
     </message>
@@ -5803,7 +5803,7 @@ Hindi na ito maibabalik.</translation>
         <translation>Walang nakitang camera. Available pa rin ang awtomatikong camera.</translation>
     </message>
     <message>
-        <location line="+145"/>
+        <location line="+148"/>
         <source>%1 copy</source>
         <translation>%1 (kopya)</translation>
     </message>
@@ -5819,7 +5819,7 @@ Hindi na ito maibabalik.</translation>
         <translation>Pumili ng wastong transition at tagal.</translation>
     </message>
     <message>
-        <location line="+377"/>
+        <location line="+515"/>
         <source>Check the camera name, connection and PTZ settings.</source>
         <translation>Tingnan ang pangalan ng camera, koneksyon, at mga setting ng PTZ.</translation>
     </message>
@@ -5849,7 +5849,7 @@ Hindi na ito maibabalik.</translation>
         <translation>Nabigong tawagin ang PTZ preset.</translation>
     </message>
     <message>
-        <location line="+122"/>
+        <location line="+124"/>
         <source>Default</source>
         <translation>Default</translation>
     </message>
@@ -5879,12 +5879,37 @@ Hindi na ito maibabalik.</translation>
         <translation>Fade sa itim</translation>
     </message>
     <message>
-        <location line="+69"/>
+        <location line="+23"/>
+        <source>Unlock the source to frame it.</source>
+        <translation>I-unlock ang source para mai-frame ito.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Show the source to frame it.</source>
+        <translation>I-show ang source para mai-frame ito.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Reset rotation before framing.</source>
+        <translation>I-reset ang rotation bago mag-frame.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Move or resize the source into the canvas first.</source>
+        <translation>Ilipat o i-resize muna ang source papasok sa canvas.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>The visible source area is too small to frame.</source>
+        <translation>Masyadong maliit ang nakikitang bahagi ng source para mai-frame.</translation>
+    </message>
+    <message>
+        <location line="+96"/>
         <source>Camera unavailable. Check its connection, privacy permissions, or whether another application is using it.</source>
         <translation>Hindi available ang camera. Tingnan ang koneksyon, mga pahintulot sa privacy, o kung may ibang application na gumagamit nito.</translation>
     </message>
     <message>
-        <location line="+116"/>
+        <location line="+118"/>
         <source>%1 (virtual)</source>
         <translation>%1 (virtual)</translation>
     </message>
@@ -5940,7 +5965,7 @@ Hindi na ito maibabalik.</translation>
     <message>
         <location line="+6"/>
         <location filename="../../qml/ScenesPtzInspector.qml" line="+10"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+1599"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+1615"/>
         <source>Name</source>
         <translation>Pangalan</translation>
     </message>
@@ -6068,12 +6093,13 @@ Hindi na ito maibabalik.</translation>
     </message>
     <message>
         <location line="+17"/>
+        <location filename="../../qml/ScenesCanvas.qml" line="+693"/>
         <location filename="../../qml/ScenesPtzInspector.qml" line="+33"/>
         <location line="+65"/>
         <location line="+29"/>
         <location filename="../../qml/ScenesTransformDialog.qml" line="+94"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-875"/>
-        <location line="+416"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-891"/>
+        <location line="+432"/>
         <location line="+89"/>
         <location line="+68"/>
         <location line="+309"/>
@@ -6091,9 +6117,35 @@ Hindi na ito maibabalik.</translation>
         <translation>I-save</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesCanvas.qml" line="+90"/>
+        <location filename="../../qml/ScenesCanvas.qml" line="-529"/>
         <source>Waiting for the first frame</source>
         <translation>Hinihintay ang unang frame</translation>
+    </message>
+    <message>
+        <location line="+515"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-179"/>
+        <source>Frame…</source>
+        <translation>I-frame…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Frame and fill the canvas (F)</source>
+        <translation>I-frame at punuin ang canvas (F)</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Cancel framing (Esc)</source>
+        <translation>Kanselahin ang pag-frame (Esc)</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Drag to compose · Scroll to zoom</source>
+        <translation>I-drag para ayusin ang komposisyon · Mag-scroll para mag-zoom</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Apply framing (Enter)</source>
+        <translation>Ilapat ang pag-frame (Enter)</translation>
     </message>
     <message>
         <location filename="../../qml/ScenesPtzInspector.qml" line="-303"/>
@@ -6275,7 +6327,7 @@ Hindi na ito maibabalik.</translation>
     </message>
     <message>
         <location line="+7"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+48"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+227"/>
         <location line="+68"/>
         <source>Delete</source>
         <translation>Burahin</translation>
@@ -6352,7 +6404,7 @@ Hindi na ito maibabalik.</translation>
     </message>
     <message>
         <location filename="../../qml/ScenesScenePanel.qml" line="+172"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-1148"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-1164"/>
         <location line="+301"/>
         <location line="+102"/>
         <source>Scenes</source>
@@ -6560,18 +6612,19 @@ Magdagdag ng nilalaman, camera, o ibang eksena.</translation>
     </message>
     <message>
         <location line="+15"/>
-        <location line="+419"/>
+        <location line="+435"/>
         <source>ms</source>
         <translation>ms</translation>
     </message>
     <message>
-        <location line="-403"/>
-        <location line="+416"/>
+        <location filename="../../qml/ScenesCanvas.qml" line="-3"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-419"/>
+        <location line="+432"/>
         <source>Apply</source>
         <translation>Ilapat</translation>
     </message>
     <message>
-        <location line="-379"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-395"/>
         <source>Rename…</source>
         <translation>Palitan ang pangalan…</translation>
     </message>
@@ -6686,7 +6739,12 @@ Magdagdag ng nilalaman, camera, o ibang eksena.</translation>
         <translation>Panatilihing aktibo ang camera</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+20"/>
+        <source>Fill canvas from crop</source>
+        <translation>Punuin ang canvas mula sa crop</translation>
+    </message>
+    <message>
+        <location line="+5"/>
         <source>Precise transform…</source>
         <translation>Tumpak na transform…</translation>
     </message>

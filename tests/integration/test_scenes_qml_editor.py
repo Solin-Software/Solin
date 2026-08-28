@@ -155,6 +155,83 @@ def test_scenes_qml_editor_loads_with_the_real_workspace(tmp_path: Path) -> None
     controller.close()
 
 
+def test_canvas_framing_shortcuts_overlay_and_responsive_actions(tmp_path: Path) -> None:
+    workspace = SceneWorkspaceService(_profile_paths(tmp_path), seed_names=_seed_names())
+    controller = SceneRuntimeController(workspace, _Projection())
+    widget = ScenesEditorWidget(controller)
+    widget.resize(1280, 760)
+    widget.show()
+    assert _wait_until(lambda: widget._qml.status() is QQuickWidget.Status.Ready)
+
+    root = widget._qml.rootObject()
+    assert root is not None
+    camera_scene_id = next(
+        str(widget.bridge.scenesModel.get(row)["id"])
+        for row in range(widget.bridge.scenesModel.rowCount())
+        if widget.bridge.scenesModel.get(row)["name"] == "Camera"
+    )
+    widget.bridge.selectScene(camera_scene_id)
+    layer_id = str(widget.bridge.layersModel.get(0)["id"])
+    widget.bridge.selectLayer(layer_id)
+    QCoreApplication.processEvents()
+
+    canvas = root.findChild(QQuickItem, "scenesCanvas")
+    toolbar = root.findChild(QQuickItem, "scenesFramingToolbar")
+    begin_button = root.findChild(QQuickItem, "scenesBeginFramingButton")
+    overlay = root.findChild(QQuickItem, "scenesFramingOverlay")
+    fill_menu_item = root.findChild(QObject, "scenesFillCropMenuItem")
+    drawer_toggle = root.findChild(QQuickItem, "scenesDrawerToggle")
+    assert canvas is not None
+    assert toolbar is not None and toolbar.isVisible()
+    assert begin_button is not None and begin_button.property("actionEnabled") is True
+    assert overlay is not None and not overlay.isVisible()
+    assert fill_menu_item is not None
+    assert fill_menu_item.property("text") == "Fill canvas from crop"
+    assert drawer_toggle is not None
+
+    revision = controller.document.revision
+    drawer_toggle.forceActiveFocus()
+    QTest.keyClick(widget._qml, Qt.Key.Key_F)
+    QCoreApplication.processEvents()
+    assert not widget.bridge.framingActive
+
+    canvas.forceActiveFocus()
+    QTest.keyClick(widget._qml, Qt.Key.Key_F)
+    QCoreApplication.processEvents()
+    assert widget.bridge.framingActive
+    assert overlay.isVisible()
+
+    QTest.keyClick(widget._qml, Qt.Key.Key_Escape)
+    QCoreApplication.processEvents()
+    assert not widget.bridge.framingActive
+    assert not overlay.isVisible()
+    assert controller.document.revision == revision
+
+    canvas.forceActiveFocus()
+    QTest.keyClick(widget._qml, Qt.Key.Key_F)
+    widget.bridge.updateLayerFraming(
+        {
+            "operation": "scale",
+            "scale": 0.5,
+            "anchorX": 0.5,
+            "anchorY": 0.5,
+        }
+    )
+    QTest.keyClick(widget._qml, Qt.Key.Key_Return)
+    QCoreApplication.processEvents()
+    assert not widget.bridge.framingActive
+    assert controller.document.revision == revision + 1
+
+    widget.resize(450, 620)
+    QCoreApplication.processEvents()
+    assert begin_button.property("showLabel") is False
+
+    widget.cleanup()
+    widget.deleteLater()
+    QCoreApplication.processEvents()
+    controller.close()
+
+
 def test_responsive_drawer_toggle_reflects_the_drawer_state(tmp_path: Path) -> None:
     workspace = SceneWorkspaceService(_profile_paths(tmp_path), seed_names=_seed_names())
     controller = SceneRuntimeController(workspace, _Projection())

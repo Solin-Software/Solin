@@ -4035,26 +4035,26 @@ Detenga la proyección e inténtelo de nuevo.</translation>
     <message>
         <location line="+4"/>
         <source>A playlist named &quot;{name}&quot; already exists.</source>
-        <translation>Ya existe una lista de reproducción llamada "{name}".</translation>
+        <translation>Ya existe una lista de reproducción llamada &quot;{name}&quot;.</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Playlist &quot;{name}&quot;
 created successfully!</source>
-        <translation>¡Lista de reproducción "{name}"
+        <translation>¡Lista de reproducción &quot;{name}&quot;
 creada correctamente!</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Could not add media to playlist &quot;{name}&quot; because the selected location no longer exists.</source>
-        <translation>No se pudo añadir multimedia a la lista de reproducción "{name}" porque la ubicación seleccionada ya no existe.</translation>
+        <translation>No se pudo añadir multimedia a la lista de reproducción &quot;{name}&quot; porque la ubicación seleccionada ya no existe.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>This media is already in
 playlist &quot;{name}&quot;</source>
         <translation>Esta multimedia ya está en la
-lista de reproducción "{name}"</translation>
+lista de reproducción &quot;{name}&quot;</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -4157,7 +4157,7 @@ Cree subcarpetas dentro de la carpeta vinculada para usarlas como listas de repr
     <message>
         <location line="+1"/>
         <source>A playlist named &quot;{name}&quot; already exists.</source>
-        <translation>Ya existe una lista de reproducción llamada "{name}".</translation>
+        <translation>Ya existe una lista de reproducción llamada &quot;{name}&quot;.</translation>
     </message>
     <message>
         <location line="+20"/>
@@ -4506,12 +4506,12 @@ Esta acción no se puede deshacer.</translation>
     <message>
         <location filename="../../widgets/playlist/widget.py" line="+353"/>
         <source>No media files found in &quot;{name}&quot;.</source>
-        <translation>No se encontraron archivos multimedia en "{name}".</translation>
+        <translation>No se encontraron archivos multimedia en &quot;{name}&quot;.</translation>
     </message>
     <message>
         <location line="+99"/>
         <source>A playlist named &quot;{name}&quot; already exists.</source>
-        <translation>Ya existe una lista de reproducción llamada "{name}".</translation>
+        <translation>Ya existe una lista de reproducción llamada &quot;{name}&quot;.</translation>
     </message>
 </context>
 <context>
@@ -5737,7 +5737,7 @@ Esta acción no se puede deshacer.</translation>
 <context>
     <name>ScenesBridge</name>
     <message>
-        <location filename="../../ui/qml/scenes_bridge.py" line="+277"/>
+        <location filename="../../ui/qml/scenes_bridge.py" line="+309"/>
         <source>Switching</source>
         <translation>Cambiando</translation>
     </message>
@@ -5778,12 +5778,12 @@ Esta acción no se puede deshacer.</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+1228"/>
+        <location line="+1434"/>
         <source>Automatic</source>
         <translation>Automática</translation>
     </message>
     <message>
-        <location line="-1218"/>
+        <location line="-1424"/>
         <source>Looking for cameras…</source>
         <translation>Buscando cámaras…</translation>
     </message>
@@ -5803,7 +5803,7 @@ Esta acción no se puede deshacer.</translation>
         <translation>No se encontraron cámaras. La cámara automática sigue disponible.</translation>
     </message>
     <message>
-        <location line="+145"/>
+        <location line="+148"/>
         <source>%1 copy</source>
         <translation>%1 (copia)</translation>
     </message>
@@ -5819,7 +5819,7 @@ Esta acción no se puede deshacer.</translation>
         <translation>Elija una transición y una duración válidas.</translation>
     </message>
     <message>
-        <location line="+377"/>
+        <location line="+515"/>
         <source>Check the camera name, connection and PTZ settings.</source>
         <translation>Compruebe el nombre de la cámara, la conexión y los ajustes PTZ.</translation>
     </message>
@@ -5849,7 +5849,7 @@ Esta acción no se puede deshacer.</translation>
         <translation>Error al activar el ajuste preestablecido PTZ.</translation>
     </message>
     <message>
-        <location line="+122"/>
+        <location line="+124"/>
         <source>Default</source>
         <translation>Predeterminada</translation>
     </message>
@@ -5879,12 +5879,37 @@ Esta acción no se puede deshacer.</translation>
         <translation>Fundido a negro</translation>
     </message>
     <message>
-        <location line="+69"/>
+        <location line="+23"/>
+        <source>Unlock the source to frame it.</source>
+        <translation>Desbloquear la fuente para encuadrarla.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Show the source to frame it.</source>
+        <translation>Mostrar la fuente para encuadrarla.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Reset rotation before framing.</source>
+        <translation>Restablecer la rotación antes de encuadrar.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Move or resize the source into the canvas first.</source>
+        <translation>Mover o redimensionar primero la fuente dentro del lienzo.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>The visible source area is too small to frame.</source>
+        <translation>El área visible de la fuente es demasiado pequeña para encuadrarla.</translation>
+    </message>
+    <message>
+        <location line="+96"/>
         <source>Camera unavailable. Check its connection, privacy permissions, or whether another application is using it.</source>
         <translation>Cámara no disponible. Compruebe la conexión, los permisos de privacidad o si otra aplicación la está usando.</translation>
     </message>
     <message>
-        <location line="+116"/>
+        <location line="+118"/>
         <source>%1 (virtual)</source>
         <translation>%1 (virtual)</translation>
     </message>
@@ -5940,7 +5965,7 @@ Esta acción no se puede deshacer.</translation>
     <message>
         <location line="+6"/>
         <location filename="../../qml/ScenesPtzInspector.qml" line="+10"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+1599"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+1615"/>
         <source>Name</source>
         <translation>Nombre</translation>
     </message>
@@ -6068,12 +6093,13 @@ Esta acción no se puede deshacer.</translation>
     </message>
     <message>
         <location line="+17"/>
+        <location filename="../../qml/ScenesCanvas.qml" line="+693"/>
         <location filename="../../qml/ScenesPtzInspector.qml" line="+33"/>
         <location line="+65"/>
         <location line="+29"/>
         <location filename="../../qml/ScenesTransformDialog.qml" line="+94"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-875"/>
-        <location line="+416"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-891"/>
+        <location line="+432"/>
         <location line="+89"/>
         <location line="+68"/>
         <location line="+309"/>
@@ -6091,9 +6117,35 @@ Esta acción no se puede deshacer.</translation>
         <translation>Guardar</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesCanvas.qml" line="+90"/>
+        <location filename="../../qml/ScenesCanvas.qml" line="-529"/>
         <source>Waiting for the first frame</source>
         <translation>Esperando el primer fotograma</translation>
+    </message>
+    <message>
+        <location line="+515"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-179"/>
+        <source>Frame…</source>
+        <translation>Encuadrar…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Frame and fill the canvas (F)</source>
+        <translation>Encuadrar y rellenar el lienzo (F)</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Cancel framing (Esc)</source>
+        <translation>Cancelar el encuadre (Esc)</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Drag to compose · Scroll to zoom</source>
+        <translation>Arrastrar para componer · Desplazar para ampliar</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Apply framing (Enter)</source>
+        <translation>Aplicar el encuadre (Enter)</translation>
     </message>
     <message>
         <location filename="../../qml/ScenesPtzInspector.qml" line="-303"/>
@@ -6275,7 +6327,7 @@ Esta acción no se puede deshacer.</translation>
     </message>
     <message>
         <location line="+7"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+48"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+227"/>
         <location line="+68"/>
         <source>Delete</source>
         <translation>Eliminar</translation>
@@ -6352,7 +6404,7 @@ Esta acción no se puede deshacer.</translation>
     </message>
     <message>
         <location filename="../../qml/ScenesScenePanel.qml" line="+172"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-1148"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-1164"/>
         <location line="+301"/>
         <location line="+102"/>
         <source>Scenes</source>
@@ -6560,18 +6612,19 @@ Añada contenido, una cámara u otra escena.</translation>
     </message>
     <message>
         <location line="+15"/>
-        <location line="+419"/>
+        <location line="+435"/>
         <source>ms</source>
         <translation>ms</translation>
     </message>
     <message>
-        <location line="-403"/>
-        <location line="+416"/>
+        <location filename="../../qml/ScenesCanvas.qml" line="-3"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-419"/>
+        <location line="+432"/>
         <source>Apply</source>
         <translation>Aplicar</translation>
     </message>
     <message>
-        <location line="-379"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-395"/>
         <source>Rename…</source>
         <translation>Cambiar nombre…</translation>
     </message>
@@ -6686,7 +6739,12 @@ Añada contenido, una cámara u otra escena.</translation>
         <translation>Mantener la cámara activa</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+20"/>
+        <source>Fill canvas from crop</source>
+        <translation>Rellenar el lienzo desde el recorte</translation>
+    </message>
+    <message>
+        <location line="+5"/>
         <source>Precise transform…</source>
         <translation>Transformación precisa…</translation>
     </message>

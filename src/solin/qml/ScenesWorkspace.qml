@@ -1014,6 +1014,22 @@ Item {
             onTriggered: root.bridge.setCameraKeepActive(
                 root.bridge.selectedLayer.source_id, checked)
         }
+        ScenesMenuSeparator { theme: root.theme }
+        ScenesMenuItem {
+            objectName: "scenesFrameLayerMenuItem"
+            theme: root.theme
+            text: qsTr("Frame…")
+            enabled: root.bridge && root.bridge.selectedLayer.framing_available === true
+            onTriggered: canvas.beginFraming()
+        }
+        ScenesMenuItem {
+            objectName: "scenesFillCropMenuItem"
+            theme: root.theme
+            text: qsTr("Fill canvas from crop")
+            enabled: root.bridge && root.bridge.selectedLayer.framing_available === true
+            onTriggered: root.bridge.fillLayerFromCrop(root.bridge.selectedLayerId)
+        }
+        ScenesMenuSeparator { theme: root.theme }
         ScenesMenuItem { theme: root.theme; text: qsTr("Precise transform…"); onTriggered: transformDialog.openForLayer() }
         ScenesMenuItem { theme: root.theme; text: qsTr("Reset transform"); onTriggered: root.bridge.resetLayerTransform(root.bridge.selectedLayerId) }
         ScenesMenuItem { theme: root.theme; text: qsTr("Center"); onTriggered: root.bridge.centerLayer(root.bridge.selectedLayerId) }

@@ -15,6 +15,7 @@ Item {
     readonly property color hover: theme ? theme.hover : "#233043"
     readonly property color borderColor: theme ? theme.border_ : "#2c394b"
     readonly property color textPrimary: theme ? theme.textPrimary : "#f3f5fa"
+    readonly property color textSecondary: theme ? theme.textSecondary : "#aeb8c8"
     readonly property color textMuted: theme ? theme.textMuted : "#768397"
     readonly property color accent: theme ? theme.accent : "#3b82f6"
     readonly property color danger: theme ? theme.danger : "#ef6a6a"
@@ -23,8 +24,47 @@ Item {
         ? bridge.outputWidth / bridge.outputHeight : 16 / 9
     property real guideX: -1
     property real guideY: -1
+    property var framingDraft: ({})
+    readonly property bool hasSelectedLayer: bridge && bridge.selectedLayerId.length > 0
+    readonly property bool framingAvailable: hasSelectedLayer
+        && bridge.selectedLayer.framing_available === true
 
     function iconHex(colorValue) { return String(colorValue).replace("#", "") }
+
+    function acceptFramingDraft(values) {
+        if (!values || !values.layerId)
+            return false
+        framingDraft = values
+        return true
+    }
+
+    function beginFraming() {
+        if (!framingAvailable)
+            return
+        if (acceptFramingDraft(bridge.beginLayerFraming(bridge.selectedLayerId)))
+            forceActiveFocus()
+    }
+
+    function updateFraming(values) {
+        if (bridge && bridge.framingActive)
+            acceptFramingDraft(bridge.updateLayerFraming(values))
+    }
+
+    function commitFraming() {
+        if (!bridge || !bridge.framingActive)
+            return
+        bridge.commitLayerFraming()
+        if (!bridge.framingActive)
+            framingDraft = ({})
+        forceActiveFocus()
+    }
+
+    function cancelFraming() {
+        if (bridge && bridge.framingActive)
+            bridge.cancelLayerFraming()
+        framingDraft = ({})
+        forceActiveFocus()
+    }
 
     Connections {
         target: root.bridge
@@ -32,6 +72,41 @@ Item {
         function onDocumentGenerationChanged() {
             root.guideX = -1
             root.guideY = -1
+        }
+        function onFramingChanged() {
+            if (!root.bridge.framingActive)
+                root.framingDraft = ({})
+        }
+    }
+
+    Keys.onPressed: function(event) {
+        if (root.bridge && root.bridge.framingActive) {
+            var step = (event.modifiers & Qt.ShiftModifier) !== 0 ? 10 : 1
+            if (event.key === Qt.Key_Left) {
+                root.updateFraming({ operation: "move", dx: -step / canvasFrame.width, dy: 0 })
+            } else if (event.key === Qt.Key_Right) {
+                root.updateFraming({ operation: "move", dx: step / canvasFrame.width, dy: 0 })
+            } else if (event.key === Qt.Key_Up) {
+                root.updateFraming({ operation: "move", dx: 0, dy: -step / canvasFrame.height })
+            } else if (event.key === Qt.Key_Down) {
+                root.updateFraming({ operation: "move", dx: 0, dy: step / canvasFrame.height })
+            } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                root.commitFraming()
+            } else if (event.key === Qt.Key_Escape) {
+                root.cancelFraming()
+            } else {
+                return
+            }
+            event.accepted = true
+            return
+        }
+        if (event.key === Qt.Key_F && event.modifiers === Qt.NoModifier
+                && root.framingAvailable) {
+            root.beginFraming()
+            event.accepted = true
+        } else if (event.key === Qt.Key_Escape && root.hasSelectedLayer) {
+            root.bridge.selectLayer("")
+            event.accepted = true
         }
     }
 
@@ -328,7 +403,9 @@ Item {
                         hoverEnabled: true
                         cursorShape: layerBox.layerLocked ? Qt.ArrowCursor
                             : layerBox.interactionActive ? Qt.ClosedHandCursor : Qt.OpenHandCursor
+                        enabled: !root.bridge || !root.bridge.framingActive
                         onPressed: function(mouse) {
+                            root.forceActiveFocus()
                             root.bridge.selectLayer(layerBox.layerId)
                             if (mouse.button === Qt.RightButton) {
                                 root.requestLayerMenu(
@@ -356,6 +433,7 @@ Item {
                         delegate: Rectangle {
                             required property var modelData
                             visible: layerBox.selected && !layerBox.layerLocked
+                                && (!root.bridge || !root.bridge.framingActive)
                             width: 9; height: 9; radius: 2
                             x: modelData.x * layerBox.width - width / 2
                             y: modelData.y * layerBox.height - height / 2
@@ -383,8 +461,179 @@ Item {
                 }
             }
 
+            Item {
+                id: framingOverlay
+                objectName: "scenesFramingOverlay"
+                anchors.fill: parent
+                visible: root.bridge && root.bridge.framingActive
+                    && String(root.framingDraft.layerId || "").length > 0
+                enabled: visible
+                z: 4000
+
+                readonly property real frameX: Number(root.framingDraft.x || 0)
+                    * canvasFrame.width
+                readonly property real frameY: Number(root.framingDraft.y || 0)
+                    * canvasFrame.height
+                readonly property real frameWidth: Number(root.framingDraft.width || 0)
+                    * canvasFrame.width
+                readonly property real frameHeight: Number(root.framingDraft.height || 0)
+                    * canvasFrame.height
+
+                MouseArea {
+                    anchors.fill: parent
+                    acceptedButtons: Qt.AllButtons
+                    onPressed: function(mouse) {
+                        root.forceActiveFocus()
+                        mouse.accepted = true
+                    }
+                }
+
+                Rectangle {
+                    x: 0; y: 0; width: parent.width; height: framingOverlay.frameY
+                    color: "#9902070d"
+                }
+                Rectangle {
+                    x: 0; y: framingOverlay.frameY
+                    width: framingOverlay.frameX; height: framingOverlay.frameHeight
+                    color: "#9902070d"
+                }
+                Rectangle {
+                    x: framingOverlay.frameX + framingOverlay.frameWidth
+                    y: framingOverlay.frameY
+                    width: Math.max(0, parent.width - x)
+                    height: framingOverlay.frameHeight
+                    color: "#9902070d"
+                }
+                Rectangle {
+                    x: 0; y: framingOverlay.frameY + framingOverlay.frameHeight
+                    width: parent.width; height: Math.max(0, parent.height - y)
+                    color: "#9902070d"
+                }
+
+                Item {
+                    id: framingBox
+                    objectName: "scenesFramingBox"
+                    x: framingOverlay.frameX
+                    y: framingOverlay.frameY
+                    width: framingOverlay.frameWidth
+                    height: framingOverlay.frameHeight
+                    z: 2
+
+                    Rectangle {
+                        anchors.fill: parent
+                        color: "transparent"
+                        border.width: 2
+                        border.color: root.accent
+                    }
+
+                    Repeater {
+                        model: [1 / 3, 2 / 3]
+                        Rectangle {
+                            required property real modelData
+                            x: modelData * framingBox.width
+                            width: 1
+                            anchors.top: parent.top
+                            anchors.bottom: parent.bottom
+                            color: "#99ffffff"
+                        }
+                    }
+                    Repeater {
+                        model: [1 / 3, 2 / 3]
+                        Rectangle {
+                            required property real modelData
+                            y: modelData * framingBox.height
+                            height: 1
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            color: "#99ffffff"
+                        }
+                    }
+
+                    MouseArea {
+                        id: framingMoveArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        acceptedButtons: Qt.LeftButton
+                        cursorShape: pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
+                        property point lastCanvasPoint: Qt.point(0, 0)
+                        onPressed: function(mouse) {
+                            root.forceActiveFocus()
+                            lastCanvasPoint = mapToItem(canvasFrame, mouse.x, mouse.y)
+                            mouse.accepted = true
+                        }
+                        onPositionChanged: function(mouse) {
+                            if ((mouse.buttons & Qt.LeftButton) === 0)
+                                return
+                            var point = mapToItem(canvasFrame, mouse.x, mouse.y)
+                            root.updateFraming({
+                                operation: "move",
+                                dx: (point.x - lastCanvasPoint.x) / canvasFrame.width,
+                                dy: (point.y - lastCanvasPoint.y) / canvasFrame.height
+                            })
+                            lastCanvasPoint = point
+                        }
+                        onWheel: function(wheel) {
+                            var anchor = mapToItem(canvasFrame, wheel.x, wheel.y)
+                            root.updateFraming({
+                                operation: "scale",
+                                scale: Math.exp(-wheel.angleDelta.y / 1200),
+                                anchorX: anchor.x / canvasFrame.width,
+                                anchorY: anchor.y / canvasFrame.height
+                            })
+                            wheel.accepted = true
+                        }
+                    }
+
+                    Repeater {
+                        model: [
+                            { name: "top_left", x: 0, y: 0, cursor: Qt.SizeFDiagCursor },
+                            { name: "top_right", x: 1, y: 0, cursor: Qt.SizeBDiagCursor },
+                            { name: "bottom_right", x: 1, y: 1, cursor: Qt.SizeFDiagCursor },
+                            { name: "bottom_left", x: 0, y: 1, cursor: Qt.SizeBDiagCursor }
+                        ]
+                        delegate: Rectangle {
+                            required property var modelData
+                            width: 12; height: 12; radius: 3
+                            x: modelData.x * framingBox.width - width / 2
+                            y: modelData.y * framingBox.height - height / 2
+                            color: "white"
+                            border.width: 2
+                            border.color: root.accent
+                            z: 4
+                            MouseArea {
+                                id: framingHandleArea
+                                anchors.fill: parent
+                                anchors.margins: -6
+                                hoverEnabled: true
+                                acceptedButtons: Qt.LeftButton
+                                cursorShape: modelData.cursor
+                                preventStealing: true
+                                property point lastCanvasPoint: Qt.point(0, 0)
+                                onPressed: function(mouse) {
+                                    root.forceActiveFocus()
+                                    lastCanvasPoint = mapToItem(canvasFrame, mouse.x, mouse.y)
+                                    mouse.accepted = true
+                                }
+                                onPositionChanged: function(mouse) {
+                                    if ((mouse.buttons & Qt.LeftButton) === 0)
+                                        return
+                                    var point = mapToItem(canvasFrame, mouse.x, mouse.y)
+                                    root.updateFraming({
+                                        operation: "resize",
+                                        handle: modelData.name,
+                                        dx: (point.x - lastCanvasPoint.x) / canvasFrame.width,
+                                        dy: (point.y - lastCanvasPoint.y) / canvasFrame.height
+                                    })
+                                    lastCanvasPoint = point
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             Rectangle {
-                visible: root.guideX >= 0
+                visible: root.guideX >= 0 && (!root.bridge || !root.bridge.framingActive)
                 x: root.guideX * canvasFrame.width
                 width: 1
                 anchors.top: parent.top
@@ -393,7 +642,7 @@ Item {
                 z: 3000
             }
             Rectangle {
-                visible: root.guideY >= 0
+                visible: root.guideY >= 0 && (!root.bridge || !root.bridge.framingActive)
                 y: root.guideY * canvasFrame.height
                 height: 1
                 anchors.left: parent.left
@@ -402,16 +651,137 @@ Item {
                 z: 3000
             }
         }
+
+        Rectangle {
+            id: framingToolbar
+            objectName: "scenesFramingToolbar"
+            visible: root.hasSelectedLayer
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.bottom: parent.bottom
+            anchors.bottomMargin: 12
+            width: Math.min(parent.width - 24, framingActions.implicitWidth + 8)
+            height: 38
+            radius: 11
+            color: "#ed111927"
+            border.width: 1
+            border.color: root.bridge && root.bridge.framingActive
+                ? root.accent : root.borderColor
+            z: 6000
+
+            Row {
+                id: framingActions
+                anchors.centerIn: parent
+                spacing: 5
+
+                CanvasActionButton {
+                    objectName: "scenesBeginFramingButton"
+                    visible: !root.bridge || !root.bridge.framingActive
+                    iconName: "crop"
+                    label: qsTr("Frame…")
+                    showLabel: root.width >= 520
+                    actionEnabled: root.framingAvailable
+                    toolTipText: actionEnabled
+                        ? qsTr("Frame and fill the canvas (F)")
+                        : root.bridge
+                            ? root.bridge.selectedLayer.framing_unavailable_reason : ""
+                    onClicked: root.beginFraming()
+                }
+
+                CanvasActionButton {
+                    objectName: "scenesCancelFramingButton"
+                    visible: root.bridge && root.bridge.framingActive
+                    iconName: "close"
+                    label: qsTr("Cancel")
+                    showLabel: root.width >= 620
+                    toolTipText: qsTr("Cancel framing (Esc)")
+                    onClicked: root.cancelFraming()
+                }
+
+                Text {
+                    visible: root.bridge && root.bridge.framingActive && root.width >= 720
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: qsTr("Drag to compose · Scroll to zoom")
+                    color: root.textMuted
+                    font.pixelSize: 9
+                    leftPadding: 5
+                    rightPadding: 5
+                }
+
+                CanvasActionButton {
+                    objectName: "scenesCommitFramingButton"
+                    visible: root.bridge && root.bridge.framingActive
+                    iconName: "check"
+                    label: qsTr("Apply")
+                    showLabel: root.width >= 480
+                    accentButton: true
+                    toolTipText: qsTr("Apply framing (Enter)")
+                    onClicked: root.commitFraming()
+                }
+            }
+        }
+    }
+
+    component CanvasActionButton: Rectangle {
+        id: actionButton
+        property string iconName: ""
+        property string label: ""
+        property string toolTipText: ""
+        property bool showLabel: true
+        property bool accentButton: false
+        property bool actionEnabled: true
+        signal clicked()
+
+        implicitWidth: showLabel ? actionLabel.implicitWidth + 42 : 30
+        width: implicitWidth
+        height: 30
+        radius: 8
+        opacity: actionEnabled ? 1.0 : 0.45
+        color: accentButton
+            ? root.accent
+            : actionMouse.pressed
+                ? root.borderColor
+                : actionMouse.containsMouse ? root.hover : "transparent"
+
+        Image {
+            id: actionIcon
+            width: 15; height: 15
+            anchors.left: parent.left
+            anchors.leftMargin: actionButton.showLabel ? 10 : 7.5
+            anchors.verticalCenter: parent.verticalCenter
+            source: "image://sceneicons/" + actionButton.iconName + "/16/"
+                + root.iconHex(actionButton.accentButton ? "white" : root.textSecondary)
+        }
+        Text {
+            id: actionLabel
+            visible: actionButton.showLabel
+            anchors.left: actionIcon.right
+            anchors.leftMargin: 7
+            anchors.verticalCenter: parent.verticalCenter
+            text: actionButton.label
+            color: actionButton.accentButton ? "white" : root.textPrimary
+            font.pixelSize: 10
+            font.weight: Font.DemiBold
+        }
+        MouseArea {
+            id: actionMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: actionButton.actionEnabled
+                ? Qt.PointingHandCursor : Qt.ArrowCursor
+            onClicked: {
+                if (actionButton.actionEnabled)
+                    actionButton.clicked()
+            }
+        }
+        ToolTip.visible: actionMouse.containsMouse && actionButton.toolTipText.length > 0
+        ToolTip.text: actionButton.toolTipText
+        ToolTip.delay: 350
     }
 
     Shortcut {
         sequence: "Ctrl+R"
         enabled: root.bridge && root.bridge.selectedLayerId.length > 0
+            && !root.bridge.framingActive
         onActivated: root.bridge.resetLayerTransform(root.bridge.selectedLayerId)
-    }
-    Shortcut {
-        sequence: "Esc"
-        enabled: root.bridge && root.bridge.selectedLayerId.length > 0
-        onActivated: root.bridge.selectLayer("")
     }
 }
