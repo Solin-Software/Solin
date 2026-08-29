@@ -302,6 +302,48 @@ void test_aac_encoder_selection_prefers_media_foundation_and_falls_back() {
            "recording capability fails closed when no supported AAC encoder exists");
 }
 
+void test_video_bitrate_budget_tracks_resolution_and_frame_rate() {
+    auto configuration = solin::media_engine::ProgramRecordingConfiguration{
+        .width = 1'280U,
+        .height = 720U,
+        .fps_numerator = 30U,
+        .fps_denominator = 1U,
+    };
+    expect(solin::media_engine::program_recording_target_video_bitrate_kbps(
+               configuration) == 4'000U,
+           "720p30 recording uses the high-quality minimum video bitrate");
+    configuration.width = 1'920U;
+    configuration.height = 1'080U;
+    expect(solin::media_engine::program_recording_target_video_bitrate_kbps(
+               configuration) == 7'465U,
+           "1080p30 recording converts bits per second to kilobits per second");
+    configuration.fps_numerator = 30'000U;
+    configuration.fps_denominator = 1'001U;
+    expect(solin::media_engine::program_recording_target_video_bitrate_kbps(
+               configuration) == 7'458U,
+           "fractional frame rates preserve their precise video budget");
+    configuration.fps_numerator = 60U;
+    configuration.fps_denominator = 1U;
+    expect(solin::media_engine::program_recording_target_video_bitrate_kbps(
+               configuration) == 14'930U,
+           "1080p60 recording scales the video budget with frame rate");
+    configuration.width = 3'840U;
+    configuration.height = 2'160U;
+    expect(solin::media_engine::program_recording_target_video_bitrate_kbps(
+               configuration) == 24'000U,
+           "4K60 recording stays inside the encoder safety ceiling");
+    configuration.width = (std::numeric_limits<std::uint32_t>::max)();
+    configuration.height = (std::numeric_limits<std::uint32_t>::max)();
+    configuration.fps_numerator = (std::numeric_limits<std::uint32_t>::max)();
+    expect(solin::media_engine::program_recording_target_video_bitrate_kbps(
+               configuration) == 24'000U,
+           "overflowing invalid formats saturate safely at the maximum budget");
+    configuration = {};
+    expect(solin::media_engine::program_recording_target_video_bitrate_kbps(
+               configuration) == 4'000U,
+           "invalid zero-valued formats fail closed to the minimum budget");
+}
+
 void test_libav_aac_fallback_records_when_media_foundation_aac_is_absent() {
     auto* libav_factory = gst_element_factory_find("avenc_aac");
     if (libav_factory == nullptr) {
@@ -607,6 +649,7 @@ int main() {
     }
     test_configuration_and_staging_path_are_strict();
     test_aac_encoder_selection_prefers_media_foundation_and_falls_back();
+    test_video_bitrate_budget_tracks_resolution_and_frame_rate();
     test_static_program_is_duplicated_and_finalized();
     test_audio_pair_update_rolls_back_when_second_branch_fails();
     test_recording_latency_budgets_and_live_metrics();

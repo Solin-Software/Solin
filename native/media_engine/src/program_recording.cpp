@@ -32,6 +32,9 @@ using namespace std::chrono_literals;
 constexpr auto kFirstFrameTimeout = 3s;
 constexpr auto kFinalizationTimeout = 8s;
 constexpr std::uintmax_t kMinimumRecordingFreeSpaceBytes = 64ULL * 1024ULL * 1024ULL;
+constexpr std::uint32_t kMinimumVideoBitrateKbps = 4'000U;
+constexpr std::uint32_t kMaximumVideoBitrateKbps = 24'000U;
+constexpr std::uint32_t kVideoEncoderQualityVsSpeed = 75U;
 
 [[nodiscard]] std::uint64_t monotonic_nanoseconds() noexcept {
     return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -196,6 +199,46 @@ void require_link(GstElement* left, GstElement* right) {
                 .empty();
 }
 
+[[nodiscard]] std::optional<gint> enum_property_value(
+    GObject* const object, const char* const property_name,
+    const char* const value_nick) noexcept {
+    auto* const specification =
+        g_object_class_find_property(G_OBJECT_GET_CLASS(object), property_name);
+    if (specification == nullptr || G_IS_PARAM_SPEC_ENUM(specification) == FALSE ||
+        (specification->flags & G_PARAM_READWRITE) != G_PARAM_READWRITE) {
+        return std::nullopt;
+    }
+    auto* const enumeration = G_PARAM_SPEC_ENUM(specification)->enum_class;
+    const auto* const value = g_enum_get_value_by_nick(enumeration, value_nick);
+    return value == nullptr ? std::nullopt : std::optional<gint>{value->value};
+}
+
+[[nodiscard]] bool writable_unsigned_property(
+    GObject* const object, const char* const property_name) noexcept {
+    const auto* const specification =
+        g_object_class_find_property(G_OBJECT_GET_CLASS(object), property_name);
+    return specification != nullptr && G_IS_PARAM_SPEC_UINT(specification) != FALSE &&
+           (specification->flags & G_PARAM_WRITABLE) != 0U;
+}
+
+void configure_video_encoder(
+    GstElement* const encoder,
+    const ProgramRecordingConfiguration& configuration) noexcept {
+    const auto target_bitrate =
+        static_cast<guint>(program_recording_target_video_bitrate_kbps(configuration));
+    g_object_set(encoder, "bitrate", target_bitrate, nullptr);
+
+    auto* const object = G_OBJECT(encoder);
+    if (const auto variable_bitrate = enum_property_value(object, "rc-mode", "uvbr");
+        variable_bitrate.has_value()) {
+        g_object_set(encoder, "rc-mode", variable_bitrate.value(), nullptr);
+    }
+    if (writable_unsigned_property(object, "quality-vs-speed")) {
+        g_object_set(encoder, "quality-vs-speed",
+                     static_cast<guint>(kVideoEncoderQualityVsSpeed), nullptr);
+    }
+}
+
 #endif
 
 } // namespace
@@ -237,6 +280,33 @@ std::string_view program_recording_aac_encoder_factory(
         return "mfaacenc";
     }
     return libav_available ? std::string_view{"avenc_aac"} : std::string_view{};
+}
+
+std::uint32_t program_recording_target_video_bitrate_kbps(
+    const ProgramRecordingConfiguration& configuration) noexcept {
+    if (configuration.width == 0U || configuration.height == 0U ||
+        configuration.fps_numerator == 0U || configuration.fps_denominator == 0U) {
+        return kMinimumVideoBitrateKbps;
+    }
+    constexpr std::uint64_t bits_per_pixel_numerator = 12U;
+    constexpr std::uint64_t bits_per_pixel_denominator = 100U;
+    constexpr std::uint64_t bits_per_kilobit = 1'000U;
+    const auto saturating_multiply = [](const std::uint64_t left,
+                                        const std::uint64_t right) noexcept {
+        return right != 0U && left > (std::numeric_limits<std::uint64_t>::max)() / right
+                   ? (std::numeric_limits<std::uint64_t>::max)()
+                   : left * right;
+    };
+    auto numerator = saturating_multiply(configuration.width, configuration.height);
+    numerator = saturating_multiply(numerator, configuration.fps_numerator);
+    numerator = saturating_multiply(numerator, bits_per_pixel_numerator);
+    const auto denominator = static_cast<std::uint64_t>(configuration.fps_denominator) *
+                             bits_per_pixel_denominator * bits_per_kilobit;
+    const auto rounded_up_kbps =
+        numerator / denominator + (numerator % denominator == 0U ? 0U : 1U);
+    return static_cast<std::uint32_t>((std::clamp)(
+        rounded_up_kbps, static_cast<std::uint64_t>(kMinimumVideoBitrateKbps),
+        static_cast<std::uint64_t>(kMaximumVideoBitrateKbps)));
 }
 
 void validate_program_recording_configuration(
@@ -788,12 +858,7 @@ class ProgramRecordingController::Impl final {
                      "block", FALSE, "max-buffers", static_cast<guint64>(3U),
                      "max-bytes", static_cast<guint64>(0U), "max-time",
                      static_cast<guint64>(0U), "leaky-type", 2, nullptr);
-        const auto bitrate_kbps = static_cast<guint>((std::clamp)(
-            static_cast<std::uint64_t>(configuration_.width) * configuration_.height *
-                configuration_.fps_numerator /
-                configuration_.fps_denominator * 12U / 100U,
-            4'000ULL, 24'000ULL));
-        g_object_set(video_encoder, "bitrate", bitrate_kbps, nullptr);
+        configure_video_encoder(video_encoder, configuration_);
         GstCaps* encoded_video_caps = gst_caps_new_simple(
             "video/x-raw", "format", G_TYPE_STRING, "NV12", "width", G_TYPE_INT,
             static_cast<int>(configuration_.width), "height", G_TYPE_INT,

@@ -98,6 +98,8 @@ program_recording_staging_path(const std::filesystem::path& final_path);
 [[nodiscard]] bool program_recording_runtime_supported() noexcept;
 [[nodiscard]] std::string_view program_recording_aac_encoder_factory(
     bool media_foundation_available, bool libav_available) noexcept;
+[[nodiscard]] std::uint32_t program_recording_target_video_bitrate_kbps(
+    const ProgramRecordingConfiguration& configuration) noexcept;
 void validate_program_recording_configuration(
     const ProgramRecordingConfiguration& configuration);
 
