@@ -419,11 +419,12 @@ class ContentGpuTransitionPipeline final {
                 return false;
             }
             const auto submission = submission_sequence_.fetch_add(1U) + 1U;
+            const auto alphas = scene_transition_source_over_alphas(weights);
             g_object_set(pads_[0], "alpha",
-                         outgoing != nullptr ? weights.outgoing : weights.incoming,
+                         outgoing != nullptr ? alphas.outgoing : alphas.incoming,
                          nullptr);
             if (pads_[1] != nullptr) {
-                g_object_set(pads_[1], "alpha", two_inputs ? weights.incoming : 0.0,
+                g_object_set(pads_[1], "alpha", two_inputs ? alphas.incoming : 0.0,
                              nullptr);
             }
             if (outgoing != nullptr &&

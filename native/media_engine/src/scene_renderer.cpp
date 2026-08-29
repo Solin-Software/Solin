@@ -62,6 +62,19 @@ SceneTransitionWeights scene_transition_weights(const SceneTransitionSpec& trans
     return {.outgoing = 0.0, .incoming = 1.0};
 }
 
+SceneTransitionPadAlphas scene_transition_source_over_alphas(
+    const SceneTransitionWeights weights) noexcept {
+    const auto incoming = std::clamp(weights.incoming, 0.0, 1.0);
+    if (incoming >= 1.0) {
+        return {.outgoing = 0.0, .incoming = 1.0};
+    }
+    return {
+        .outgoing =
+            std::clamp(weights.outgoing / (1.0 - incoming), 0.0, 1.0),
+        .incoming = incoming,
+    };
+}
+
 BgraPixel scene_transition_blend_pixel(const SceneTransitionSpec& transition,
                                        const double progress,
                                        const BgraPixel& outgoing,

@@ -1024,6 +1024,20 @@ void test_transition_contract_is_bound_during_program_preparation() {
     expect(dissolve_midpoint ==
                solin::media_engine::BgraPixel{128U, 0U, 128U, 255U},
            "Dissolve produces the expected purple BGRA midpoint from red and blue");
+    const auto dissolve_midpoint_alphas =
+        solin::media_engine::scene_transition_source_over_alphas(
+            solin::media_engine::scene_transition_weights(
+                {.kind = SceneTransitionKind::dissolve, .duration_ms = 350U},
+                0.5));
+    expect(dissolve_midpoint_alphas ==
+               solin::media_engine::SceneTransitionPadAlphas{1.0, 0.5},
+           "Dissolve keeps the opaque outgoing frame under the incoming source-over pad");
+    const auto identical_midpoint =
+        solin::media_engine::scene_transition_blend_pixel(
+            {.kind = SceneTransitionKind::dissolve, .duration_ms = 350U}, 0.5,
+            red, red);
+    expect(identical_midpoint == red,
+           "Dissolve preserves pixels shared by both scenes without a luminance dip");
     const auto fade_midpoint = solin::media_engine::scene_transition_blend_pixel(
         {.kind = SceneTransitionKind::fade_to_black, .duration_ms = 350U}, 0.5,
         red, blue);
