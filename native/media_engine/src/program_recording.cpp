@@ -36,11 +36,13 @@ constexpr std::uint32_t kMinimumVideoBitrateKbps = 4'000U;
 constexpr std::uint32_t kMaximumVideoBitrateKbps = 24'000U;
 constexpr std::uint32_t kVideoEncoderQualityVsSpeed = 75U;
 
+#ifdef SOLIN_MEDIA_ENGINE_HAS_GSTREAMER
 [[nodiscard]] std::uint64_t monotonic_nanoseconds() noexcept {
     return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
                                           std::chrono::steady_clock::now().time_since_epoch())
                                           .count());
 }
+#endif
 
 template <std::size_t Size>
 [[nodiscard]] std::uint64_t p95_nanoseconds(
@@ -72,6 +74,7 @@ template <std::size_t Size>
 
 [[nodiscard]] ProgramRecordingOperationResult applied() { return {.applied = true}; }
 
+#ifdef SOLIN_MEDIA_ENGINE_HAS_GSTREAMER
 struct ResolvedAudioSelection final {
     std::optional<std::string> device_id{};
     bool silence{false};
@@ -113,6 +116,7 @@ struct ResolvedAudioSelection final {
     }
     return {.device_id = match->device_id};
 }
+#endif
 
 #ifdef SOLIN_MEDIA_ENGINE_HAS_GSTREAMER
 
