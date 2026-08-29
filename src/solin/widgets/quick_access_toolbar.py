@@ -298,6 +298,11 @@ class QuickAccessToolbar(QQuickWidget):
         # ── Solin Scene Popup ─────────────────────────────────────────────
         self._solin_scene_popup = None
         self._bridge.set_scenes_visible(self._scene_runtime is not None)
+        self._bridge.set_scenes_recording(
+            self._program_recording.busy if self._program_recording is not None else False
+        )
+        if self._program_recording is not None:
+            self._program_recording.busy_changed.connect(self._sync_program_recording_state)
         if self._scene_runtime is not None:
             self._scene_runtime.engine_ready_changed.connect(
                 lambda _ready: self._sync_solin_scene_state()
@@ -706,6 +711,9 @@ class QuickAccessToolbar(QQuickWidget):
         self._bridge.set_scenes_tooltip(tooltip)
         self._update_separator()
         self._reposition()
+
+    def _sync_program_recording_state(self, busy: bool) -> None:
+        self._bridge.set_scenes_recording(bool(busy))
 
     def set_obs_current_scene(self, scene_name: str):
         self._obs_current_scene = str(scene_name or "")

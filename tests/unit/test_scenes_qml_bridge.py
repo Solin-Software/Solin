@@ -49,6 +49,7 @@ from solin.core.scenes.recording import (
 )
 from solin.core.scenes.ptz import PtzControlKind, PtzControlResult, PtzRecallStatus
 from solin.core.scenes.workspace import SceneWorkspaceService
+from solin.styles.icons import ICON_FOLDER, ICON_FOLDER_LINK, make_icon
 from solin.ui.qml.scenes_bridge import ScenesBridge
 
 
@@ -85,6 +86,13 @@ class _Notifications:
 
     def warning(self, message: str, **options: str) -> None:
         self.warnings.append((message, options))
+
+
+def test_recording_directory_uses_a_plain_folder_icon() -> None:
+    assert ICON_FOLDER != ICON_FOLDER_LINK
+    assert "M22 19" in ICON_FOLDER
+    assert "M10 13" not in ICON_FOLDER
+    assert not make_icon(ICON_FOLDER, 16, "#ffffff").isNull()
 
 
 class _Recording(QObject):

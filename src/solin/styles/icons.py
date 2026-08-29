@@ -219,6 +219,7 @@ _ICON_NAMES = frozenset(
         "ICON_OBS",
         "ICON_REC_CIRCLE",
         "ICON_REC_STOP",
+        "ICON_FOLDER",
         "ICON_FOLDER_LINK",
         "ICON_ZOOM",
         "ICON_PEOPLE",
@@ -1032,19 +1033,21 @@ def _build_icon_svg(name: str) -> str:
             '<rect x="6" y="6" width="12" height="12" rx="2"/>'
             "</svg>"
         )
-    elif name == "ICON_FOLDER_LINK":
+    elif name in {"ICON_FOLDER", "ICON_FOLDER_LINK"}:
+        link = (
+            ""
+            if name == "ICON_FOLDER"
+            else (
+                '  <path d="M10 13H8a1 1 0 0 0 0 2h2"/>\n'
+                '  <path d="M14 13h2a1 1 0 0 1 0 2h-2"/>\n'
+                '  <line x1="11" y1="14" x2="13" y2="14"/>\n'
+            )
+        )
         return (
             '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" '
             'stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">\n'
-            "  \n"
             '  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>\n'
-            "  \n"
-            "  \n"
-            '  <path d="M10 13H8a1 1 0 0 0 0 2h2"/>\n'
-            "  \n"
-            '  <path d="M14 13h2a1 1 0 0 1 0 2h-2"/>\n'
-            "  \n"
-            '  <line x1="11" y1="14" x2="13" y2="14"/>\n'
+            f"{link}"
             "</svg>"
         )
     elif name == "ICON_ZOOM":

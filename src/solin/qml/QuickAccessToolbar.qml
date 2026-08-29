@@ -27,6 +27,7 @@ Item {
     readonly property color accent: appTheme.accent
     readonly property color success: appTheme.success
     readonly property color warning: appTheme.warning
+    readonly property color danger: appTheme.danger
     readonly property color iconMuted: appTheme.textDim
     readonly property color iconSecondary: appTheme.textMuted
 
@@ -212,6 +213,17 @@ Item {
                     source: "image://icons/scenes/14/" + bridge.scenesIconColor
                     sourceSize: Qt.size(14, 14)
                     cache: false
+                }
+                Rectangle {
+                    visible: bridge.scenesRecording
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    anchors.rightMargin: 2
+                    anchors.bottomMargin: 2
+                    width: 7; height: 7; radius: 3.5
+                    color: root.danger
+                    border.width: 1.5
+                    border.color: root.withAlpha(root.toolbarSurface, 0.95)
                 }
                 MouseArea {
                     id: scenesMA; anchors.fill: parent

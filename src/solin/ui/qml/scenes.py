@@ -112,7 +112,7 @@ class ScenesEditorWidget(QWidget):
             "warning": icons.ICON_INFO_CIRCLE,
             "record": icons.ICON_REC_CIRCLE,
             "record-stop": icons.ICON_REC_STOP,
-            "folder": icons.ICON_FOLDER_LINK,
+            "folder": icons.ICON_FOLDER,
         }
         self.qml_load_handle = configure_qml_host(
             self._qml,

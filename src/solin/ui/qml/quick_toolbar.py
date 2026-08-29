@@ -70,6 +70,7 @@ class QuickToolbarBridge(QObject):
         self._obs_dot_visible: bool = False
         self._scenes_visible: bool = False
         self._scenes_icon_color: str = "484f58"
+        self._scenes_recording: bool = False
         self._zoom_visible: bool = False
         self._zoom_icon_color: str = "484f58"
         self._camera_visible: bool = False
@@ -139,6 +140,10 @@ class QuickToolbarBridge(QObject):
     @Property(bool, notify=stateChanged)
     def scenesVisible(self) -> bool:  # noqa: N802
         return self._scenes_visible
+
+    @Property(bool, notify=stateChanged)
+    def scenesRecording(self) -> bool:  # noqa: N802
+        return self._scenes_recording
 
     @Property(bool, notify=stateChanged)
     def backgroundSongVisible(self) -> bool:  # noqa: N802
@@ -329,6 +334,12 @@ class QuickToolbarBridge(QObject):
         color = color.lstrip("#")
         if self._scenes_icon_color != color:
             self._scenes_icon_color = color
+            self.stateChanged.emit()
+
+    def set_scenes_recording(self, recording: bool) -> None:
+        recording = bool(recording)
+        if self._scenes_recording != recording:
+            self._scenes_recording = recording
             self.stateChanged.emit()
 
     def set_zoom_visible(self, visible: bool) -> None:
