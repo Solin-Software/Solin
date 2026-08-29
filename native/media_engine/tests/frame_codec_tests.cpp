@@ -84,7 +84,7 @@ void test_control_envelope_round_trip() {
 
 void test_control_envelope_rejects_duplicate_keys() {
     constexpr std::string_view duplicate =
-        R"({"protocol_version":3,"protocol_version":3,"message_type":"hello","request_id":"r","session_id":"s","process_generation":"g","sequence":0,"document_revision":0,"deadline_monotonic_ms":1,"payload":{}})";
+        R"({"protocol_version":4,"protocol_version":4,"message_type":"hello","request_id":"r","session_id":"s","process_generation":"g","sequence":0,"document_revision":0,"deadline_monotonic_ms":1,"payload":{}})";
     try {
         static_cast<void>(solin::media_engine::parse_control_envelope(duplicate));
         expect(false, "duplicate JSON keys are rejected");
@@ -95,7 +95,7 @@ void test_control_envelope_rejects_duplicate_keys() {
 
 void test_control_envelope_rejects_the_previous_protocol_generation() {
     constexpr std::string_view previous_generation =
-        R"({"protocol_version":2,"message_type":"hello","request_id":"r","session_id":"s","process_generation":"g","sequence":0,"document_revision":0,"deadline_monotonic_ms":1,"payload":{}})";
+        R"({"protocol_version":3,"message_type":"hello","request_id":"r","session_id":"s","process_generation":"g","sequence":0,"document_revision":0,"deadline_monotonic_ms":1,"payload":{}})";
     try {
         static_cast<void>(solin::media_engine::parse_control_envelope(previous_generation));
         expect(false, "the previous control protocol generation is rejected");
@@ -187,6 +187,9 @@ void test_control_session_dispatches_validated_graph_commands() {
                     {"hardware_compositing", false},
                     {"virtual_camera", false},
                     {"d3d11_shared_textures", false},
+                    {"program_recording", true},
+                    {"audio_input_capture", true},
+                    {"system_audio_capture", true},
                 };
             },
             .hydrate = [&hydrated](const nlohmann::json&, const std::uint64_t revision,
@@ -445,6 +448,117 @@ void test_transition_contract_rejects_invalid_and_legacy_payloads() {
     }
 }
 
+void test_program_recording_protocol_is_strict_and_atomic() {
+    bool listed = false;
+    bool started = false;
+    bool audio_updated = false;
+    bool stopped = false;
+    solin::media_engine::ControlSession session{
+        "generation-1",
+        {
+            .capabilities = [] {
+                return nlohmann::json{{"local_cameras", true},
+                                      {"rtsp_cameras", true},
+                                      {"hardware_compositing", true},
+                                      {"virtual_camera", true},
+                                      {"d3d11_shared_textures", true},
+                                      {"program_recording", true},
+                                      {"audio_input_capture", true},
+                                      {"system_audio_capture", true}};
+            },
+            .list_audio_devices = [&listed] {
+                listed = true;
+                return nlohmann::json{
+                    {"supported", true},
+                    {"ready", true},
+                    {"generation", 2U},
+                    {"devices",
+                     nlohmann::json::array(
+                         {{{"device_id", "endpoint-1"},
+                           {"display_name", "Microphone"},
+                           {"direction", "input"},
+                           {"is_default", true}}})},
+                    {"error_code", ""},
+                };
+            },
+            .start_program_recording = [&started](const nlohmann::json& payload) {
+                started = payload.at("width") == 1'920U &&
+                          payload.at("microphone").at("mode") == "system_default";
+                return nlohmann::json{{"applied", true},
+                                      {"error_code", ""},
+                                      {"error_message", ""}};
+            },
+            .set_program_recording_audio =
+                [&audio_updated](const nlohmann::json& payload) {
+                    audio_updated = payload.at("microphone").at("mode") == "none" &&
+                                    payload.at("system_audio").at("device_id") == "output-1";
+                    return nlohmann::json{{"applied", true},
+                                          {"error_code", ""},
+                                          {"error_message", ""}};
+                },
+            .stop_program_recording = [&stopped] {
+                stopped = true;
+                return nlohmann::json{{"applied", true},
+                                      {"error_code", ""},
+                                      {"error_message", ""}};
+            },
+        }};
+    static_cast<void>(session.handle(hello_envelope()));
+
+    auto request = hello_envelope();
+    request.request_id = "audio-list";
+    request.sequence = 1U;
+    request.message_type = "list_audio_devices";
+    request.payload = nlohmann::json::object();
+    const auto listed_reply = session.handle(request);
+    expect(listed && listed_reply.response.has_value() &&
+               listed_reply.response->message_type == "audio_device_list",
+           "audio devices use their strict discovery response");
+
+    request.request_id = "recording-start";
+    request.sequence = 2U;
+    request.message_type = "start_program_recording";
+    request.payload = {
+        {"path", "C:/Videos/Solin/recording.mp4"},
+        {"width", 1'920U},
+        {"height", 1'080U},
+        {"fps_numerator", 30U},
+        {"fps_denominator", 1U},
+        {"microphone", {{"mode", "system_default"}, {"device_id", ""}}},
+        {"system_audio", {{"mode", "none"}, {"device_id", ""}}},
+    };
+    static_cast<void>(session.handle(request));
+    expect(started, "validated Program recording start is dispatched");
+
+    request.request_id = "recording-audio";
+    request.sequence = 3U;
+    request.message_type = "set_program_recording_audio";
+    request.payload = {
+        {"microphone", {{"mode", "none"}, {"device_id", ""}}},
+        {"system_audio", {{"mode", "device"}, {"device_id", "output-1"}}},
+    };
+    static_cast<void>(session.handle(request));
+    expect(audio_updated, "both recording audio selections update atomically");
+
+    auto malformed = request;
+    malformed.request_id = "recording-audio-malformed";
+    malformed.sequence = 4U;
+    malformed.payload["legacy_device"] = "input-1";
+    try {
+        static_cast<void>(session.handle(malformed));
+        expect(false, "unknown recording audio fields are rejected");
+    } catch (const std::exception&) {
+        expect(true, "unknown recording audio fields are rejected");
+    }
+
+    request.request_id = "recording-stop";
+    request.sequence = 5U;
+    request.message_type = "stop_program_recording";
+    request.payload = nlohmann::json::object();
+    static_cast<void>(session.handle(request));
+    expect(stopped, "Program recording stop is dispatched");
+}
+
 } // namespace
 
 int main() {
@@ -459,6 +573,7 @@ int main() {
     test_control_session_handshake_and_heartbeat();
     test_control_session_dispatches_validated_graph_commands();
     test_transition_contract_rejects_invalid_and_legacy_payloads();
+    test_program_recording_protocol_is_strict_and_atomic();
     if (failures != 0) {
         std::cerr << failures << " native protocol test(s) failed\n";
         return 1;

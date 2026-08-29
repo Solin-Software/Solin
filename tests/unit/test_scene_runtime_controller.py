@@ -219,6 +219,9 @@ class _Engine:
                 hardware_compositing=True,
                 virtual_camera=True,
                 d3d11_shared_textures=True,
+                program_recording=True,
+                audio_input_capture=True,
+                system_audio_capture=True,
             )
         )
 

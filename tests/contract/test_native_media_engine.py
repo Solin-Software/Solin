@@ -84,6 +84,9 @@ def test_windows_release_builds_and_packages_the_native_engine() -> None:
     assert "install_qt_bridge_sdk_windows.ps1" in _read("scripts/build_qt_media_bridge.py")
     assert "GSTREAMER_PLUGIN_FILENAMES = (" in package_script
     assert '"gstd3d11.dll"' in package_script
+    assert '"gstwasapi2.dll"' in package_script
+    assert '"gstisomp4.dll"' in package_script
+    assert '"gstaudiomixer.dll"' in package_script
     assert "_copy_required_runtime_dlls" in package_script
     assert "_audit_plugin_licenses" in package_script
     assert "FORBIDDEN_GSTREAMER_FILENAMES" in package_script

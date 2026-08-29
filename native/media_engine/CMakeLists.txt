@@ -26,6 +26,7 @@ set(SOLIN_MEDIA_ENGINE_SOURCES
     include/solin/media_engine/media_runtime.hpp
     include/solin/media_engine/native_window_output.hpp
     include/solin/media_engine/presentation_transition.hpp
+    include/solin/media_engine/program_recording.hpp
     include/solin/media_engine/render_geometry.hpp
     include/solin/media_engine/scene_graph.hpp
     include/solin/media_engine/scene_renderer.hpp
@@ -55,6 +56,7 @@ set(SOLIN_MEDIA_ENGINE_SOURCES
     src/windows_d3d11_frame_channel.cpp
     src/windows_d3d11_frame_channel.hpp
     src/presentation_transition.cpp
+    src/program_recording.cpp
     src/render_geometry.cpp
     src/scene_graph.cpp
     src/scene_renderer.cpp
@@ -183,6 +185,7 @@ add_library(solin_media_engine_runtime STATIC
     src/gstreamer_source_runtime.cpp
     src/media_runtime.cpp
     src/native_window_output.cpp
+    src/program_recording.cpp
 )
 target_include_directories(solin_media_engine_runtime
     PUBLIC
@@ -684,6 +687,29 @@ if(SOLIN_MEDIA_ENGINE_BUILD_TESTS)
     add_test(NAME scene-graph COMMAND solin-media-engine-scene-graph-tests)
     add_test(NAME executable-self-test COMMAND solin-media-engine --self-test)
     if(SOLIN_MEDIA_ENGINE_ENABLE_GSTREAMER)
+        add_executable(solin-media-engine-program-recording-tests
+            tests/program_recording_tests.cpp
+        )
+        target_link_libraries(
+            solin-media-engine-program-recording-tests
+            PRIVATE solin_media_engine_runtime Solin::GStreamer
+        )
+        target_compile_features(
+            solin-media-engine-program-recording-tests PRIVATE cxx_std_20
+        )
+        if(MSVC)
+            target_compile_options(
+                solin-media-engine-program-recording-tests
+                PRIVATE /W4 /WX /permissive- /EHsc
+            )
+        else()
+            target_compile_options(
+                solin-media-engine-program-recording-tests
+                PRIVATE -Wall -Wextra -Wpedantic -Werror
+            )
+        endif()
+        add_test(NAME program-recording
+                 COMMAND solin-media-engine-program-recording-tests)
         add_executable(solin-media-engine-gstreamer-source-tests
             tests/gstreamer_source_runtime_tests.cpp
         )
@@ -728,6 +754,13 @@ if(SOLIN_MEDIA_ENGINE_BUILD_TESTS)
             "GST_PLUGIN_PATH_1_0=set:"
             "GST_PLUGIN_SYSTEM_PATH_1_0=set:${SOLIN_GSTREAMER_ROOT}/lib/gstreamer-1.0"
             "GST_REGISTRY_1_0=set:${CMAKE_CURRENT_BINARY_DIR}/gst-registry.bin"
+        )
+        set_property(TEST program-recording PROPERTY ENVIRONMENT_MODIFICATION
+            "PATH=path_list_prepend:${SOLIN_GSTREAMER_ROOT}/bin"
+            "PATH=path_list_prepend:${SOLIN_GSTREAMER_ROOT}/lib/libproxy"
+            "GST_PLUGIN_PATH_1_0=set:"
+            "GST_PLUGIN_SYSTEM_PATH_1_0=set:${SOLIN_GSTREAMER_ROOT}/lib/gstreamer-1.0"
+            "GST_REGISTRY_1_0=set:${CMAKE_CURRENT_BINARY_DIR}/gst-recording-registry.bin"
         )
     endif()
 endif()

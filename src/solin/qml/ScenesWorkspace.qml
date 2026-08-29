@@ -200,6 +200,18 @@ Item {
                 onClicked: transitionPopover.openFor(transitionButton)
             }
 
+            RecordingButton {
+                id: recordingButton
+                objectName: "scenesProgramRecordingButton"
+                visible: root.bridge && root.bridge.recordingAvailable
+                status: root.bridge ? root.bridge.recordingStatus : "idle"
+                canToggle: root.bridge && root.bridge.recordingCanToggle
+                unavailableReason: root.bridge
+                    ? root.bridge.recordingToggleUnavailableReason : ""
+                onToggleRequested: root.bridge.toggleProgramRecording()
+                onSettingsRequested: recordingPopover.openFor(recordingButton)
+            }
+
             OutputButton {
                 id: outputButton
                 stateLabel: root.bridge ? root.bridge.outputStateLabel : qsTr("Off")
@@ -741,6 +753,14 @@ Item {
                 }
             }
         }
+    }
+
+    ScenesRecordingPopover {
+        id: recordingPopover
+        parent: root
+        bridge: root.bridge
+        theme: root.theme
+        z: 500
     }
 
     Menu {
@@ -1473,6 +1493,145 @@ Item {
         }
         ToolTip.visible: transitionMouse.containsMouse && !button.expanded
         ToolTip.text: qsTr("Program transition: %1").arg(button.label)
+    }
+
+    component RecordingButton: Rectangle {
+        id: button
+        property string status: "idle"
+        property bool canToggle: false
+        property string unavailableReason: ""
+        property int clockTick: 0
+        signal toggleRequested()
+        signal settingsRequested()
+
+        readonly property bool expanded: root.width >= 1100
+        readonly property bool active: status === "starting"
+            || status === "recording" || status === "stopping"
+        readonly property bool transitioning: status === "starting" || status === "stopping"
+        readonly property string actionLabel: status === "recording"
+            ? qsTr("Stop recording")
+            : status === "failed" ? qsTr("Try recording again")
+            : status === "starting" ? qsTr("Starting recording…")
+            : status === "stopping" ? qsTr("Finishing recording…")
+            : qsTr("Start recording")
+
+        Layout.preferredWidth: expanded ? 144 : 64
+        Layout.preferredHeight: 38
+        radius: 11
+        color: button.active
+            ? Qt.rgba(root.danger.r, root.danger.g, root.danger.b, 0.10)
+            : recordMouse.containsMouse || settingsMouse.containsMouse
+                ? root.hover : root.surface
+        border.width: 1
+        border.color: button.active
+            ? Qt.rgba(root.danger.r, root.danger.g, root.danger.b, 0.60)
+            : root.borderStrong
+
+        function elapsedText() {
+            button.clockTick
+            var total = root.bridge ? root.bridge.recordingElapsedSeconds : 0
+            var hours = Math.floor(total / 3600)
+            var minutes = Math.floor((total % 3600) / 60)
+            var seconds = total % 60
+            var mm = minutes < 10 ? "0" + minutes : String(minutes)
+            var ss = seconds < 10 ? "0" + seconds : String(seconds)
+            return hours > 0 ? String(hours) + ":" + mm + ":" + ss : mm + ":" + ss
+        }
+
+        Timer {
+            interval: 1000
+            repeat: true
+            running: button.active
+            onTriggered: button.clockTick += 1
+        }
+
+        RowLayout {
+            anchors.fill: parent
+            spacing: 0
+            Item {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                Row {
+                    anchors.centerIn: parent
+                    spacing: 7
+                    Image {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 14
+                        height: 14
+                        source: "image://sceneicons/"
+                            + (button.status === "recording" ? "record-stop" : "record")
+                            + "/16/" + root.iconHex(root.danger)
+                    }
+                    Text {
+                        visible: button.expanded
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: button.status === "recording"
+                            ? "REC " + button.elapsedText()
+                            : button.status === "starting" ? qsTr("Starting…")
+                            : button.status === "stopping" ? qsTr("Finishing…")
+                            : button.status === "failed" ? qsTr("Retry")
+                            : qsTr("Record")
+                        color: button.active ? root.danger : root.textPrimary
+                        font.pixelSize: 10
+                        font.weight: Font.DemiBold
+                    }
+                }
+                MouseArea {
+                    id: recordMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    activeFocusOnTab: button.visible && button.enabled
+                    cursorShape: button.canToggle ? Qt.PointingHandCursor : Qt.ArrowCursor
+                    Accessible.role: Accessible.Button
+                    Accessible.name: button.actionLabel
+                    Accessible.description: button.unavailableReason
+                    onClicked: if (button.canToggle) button.toggleRequested()
+                    Keys.onSpacePressed: if (button.canToggle) button.toggleRequested()
+                    Keys.onReturnPressed: if (button.canToggle) button.toggleRequested()
+                }
+                ToolTip.visible: recordMouse.containsMouse
+                    && (!button.expanded || button.transitioning
+                        || button.unavailableReason.length > 0)
+                ToolTip.text: button.actionLabel
+                    + (button.unavailableReason.length > 0
+                        ? "\n" + button.unavailableReason : "")
+            }
+            Rectangle {
+                Layout.preferredWidth: 25
+                Layout.fillHeight: true
+                color: "transparent"
+                Rectangle {
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 1
+                    height: 20
+                    color: button.active
+                        ? Qt.rgba(root.danger.r, root.danger.g, root.danger.b, 0.35)
+                        : root.borderColor
+                }
+                Image {
+                    anchors.centerIn: parent
+                    width: 10
+                    height: 10
+                    source: "image://sceneicons/chevron-down/16/"
+                        + root.iconHex(button.active ? root.danger : root.textMuted)
+                }
+                MouseArea {
+                    id: settingsMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    activeFocusOnTab: button.visible && button.enabled
+                    cursorShape: Qt.PointingHandCursor
+                    Accessible.role: Accessible.Button
+                    Accessible.name: qsTr("Recording settings")
+                    onClicked: button.settingsRequested()
+                    Keys.onSpacePressed: button.settingsRequested()
+                    Keys.onReturnPressed: button.settingsRequested()
+                }
+                ToolTip.visible: settingsMouse.containsMouse
+                ToolTip.text: qsTr("Recording settings")
+            }
+        }
     }
 
     component TransitionChoice: Rectangle {

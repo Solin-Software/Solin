@@ -144,7 +144,8 @@ keys, invalid identities, stale sessions, mismatched process generations, and ex
 deadlines. Local-camera discovery, immutable scene-graph hydration, transactional
 preparation, cancellation, output state, hot native-window target updates, rendered Program
 transitions, media-window egress,
-and Windows virtual-camera publication are available. Protocol version 3 binds Cut,
+Windows virtual-camera publication, audio-endpoint discovery, and Program recording are
+available. Protocol version 4 binds Cut,
 Dissolve, or Fade through black to `prepare_scene`; `take_prepared` consumes the resulting
 token without accepting replacement effect parameters. If an animated effect cannot be
 prepared, the response reports a typed fallback and Take still converges to the prepared
@@ -156,6 +157,17 @@ composition is advertised only when the runtime D3D11 compositor probe succeeds;
 layer features remain schema-bounded. Virtual-camera readiness is probe-driven: a missing or
 invalid x86/x64 DirectShow registration, unsupported Windows build, or unavailable
 cross-process transport keeps that capability false and exposes a stable diagnostic code.
+
+Program recording writes H.264 video and a continuous 48 kHz stereo AAC track to a
+fragmented MP4 staging file, then atomically renames it after EOS finalization. The video
+pump keeps a constant output cadence by repeating the latest composed Program frame. It
+uses the D3D11-backed frame directly when Media Foundation exposes a compatible encoder
+path and enables the renderer's bounded system-memory output only as a compatibility
+fallback. Microphone capture and system-output loopback use WASAPI2 branches that can be
+replaced during a recording; unavailable or disabled branches contribute silence without
+interrupting the file.
+Media Foundation is preferred for AAC encoding; the packaged LGPL libav AAC encoder is
+used as a capability-checked fallback when the Media Foundation AAC MFT is unavailable.
 
 The build fetches the pinned nlohmann/json 3.12.0 release and verifies its SHA-256 digest.
 It is used only for low-frequency control messages, never for video frames.

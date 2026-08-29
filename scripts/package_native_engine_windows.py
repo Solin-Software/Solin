@@ -52,12 +52,18 @@ DEFAULT_GSTREAMER_LICENSES = (
 DEFAULT_APPLICATION_DIRECTORY = REPOSITORY_ROOT / "build" / "main.dist"
 GSTREAMER_PLUGIN_FILENAMES = (
     "gstapp.dll",
+    "gstaudioconvert.dll",
+    "gstaudiomixer.dll",
+    "gstaudioparsers.dll",
+    "gstaudioresample.dll",
+    "gstaudiotestsrc.dll",
     "gstautodetect.dll",
     "gstcoreelements.dll",
     "gstd3d11.dll",
     "gstjpeg.dll",
     "gstlibav.dll",
     "gstmediafoundation.dll",
+    "gstisomp4.dll",
     "gstplayback.dll",
     "gstrawparse.dll",
     "gstrtp.dll",
@@ -70,6 +76,8 @@ GSTREAMER_PLUGIN_FILENAMES = (
     "gstvideocrop.dll",
     "gstvideoparsersbad.dll",
     "gstvideotestsrc.dll",
+    "gstvolume.dll",
+    "gstwasapi2.dll",
 )
 GSTREAMER_RUNTIME_DLL_SEEDS = ("gstreamer-1.0-0.dll",)
 GSTREAMER_RUNTIME_EXECUTABLES = (

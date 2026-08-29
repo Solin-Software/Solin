@@ -86,6 +86,7 @@ class MainWindowUiContext:
     profile_paths: Any
     projection_session: Any
     scene_runtime: Any
+    program_recording: Any
     ptz_credentials: Any
     runtime_paths: Any
     media_cache_manager: Any
@@ -563,6 +564,7 @@ class MainWindowUiController:
         timeline.mark("page_meetings_constructed")
         scenes_widget = DeferredScenesWidget(
             context.scene_runtime,
+            recording=context.program_recording,
             credentials=context.ptz_credentials,
             notifications=context.notifications,
             parent=context.parent,
@@ -710,6 +712,9 @@ class MainWindowUiController:
             obs_settings=context.obs_settings,
             background_song_service=context.background_song_service,
             scene_runtime=(context.scene_runtime if NATIVE_SCENES_SUPPORTED else None),
+            program_recording=(
+                context.program_recording if NATIVE_SCENES_SUPPORTED else None
+            ),
             camera_service=context.camera_service,
             camera_settings=context.camera_settings,
         )

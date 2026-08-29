@@ -46,6 +46,7 @@ from solin.core.scenes.resources import (
     SceneResourceCatalog,
     cameras_from_document_sources,
 )
+from solin.core.scenes.recording import SceneRecordingConfig
 from solin.core.scenes.runtime import (
     OutputRuntimeState,
     SceneRuntimeService,
@@ -110,6 +111,7 @@ class SceneWorkspaceService:
         )
         self._credential_cleaner: Callable[[str], None] | None = None
         self._listeners: set[Callable[[SceneWorkspaceChange], None]] = set()
+        self._catalog_mutation_guards: set[Callable[[str], str]] = set()
         self._catalog = self._load_or_migrate_catalog()
         self._resources = self._load_or_migrate_resources()
         self._normalize_collection_storage()
@@ -165,6 +167,41 @@ class SceneWorkspaceService:
 
         self._credential_cleaner = cleaner
         self._flush_pending_credential_deletions()
+
+    def register_catalog_mutation_guard(
+        self,
+        guard: Callable[[str], str],
+    ) -> Callable[[], None]:
+        """Register a domain-level blocker for Scene-profile lifecycle changes."""
+
+        self._catalog_mutation_guards.add(guard)
+
+        def unsubscribe() -> None:
+            self._catalog_mutation_guards.discard(guard)
+
+        return unsubscribe
+
+    def update_active_recording_config(
+        self,
+        recording: SceneRecordingConfig,
+    ) -> SceneCollection:
+        if not isinstance(recording, SceneRecordingConfig):
+            raise TypeError("Invalid Scene recording configuration")
+        current = self._catalog.active
+        if current.recording == recording:
+            return current
+        updated_collection = replace(current, recording=recording)
+        updated_catalog = replace(
+            self._catalog,
+            revision=self._catalog.revision + 1,
+            collections=tuple(
+                updated_collection if item.id == current.id else item
+                for item in self._catalog.collections
+            ),
+        )
+        self._save_catalog(updated_catalog)
+        self._publish(SceneWorkspaceChangeKind.CATALOG)
+        return updated_collection
 
     def create_collection(self, name: str) -> SceneCollection:
         self._require_mutable_catalog("create")
@@ -867,6 +904,10 @@ class SceneWorkspaceService:
             raise SceneWorkspaceBusyError(
                 f"Turn off the Solin Virtual Camera to {operation} Scene profiles"
             )
+        for guard in tuple(self._catalog_mutation_guards):
+            reason = guard(operation)
+            if reason:
+                raise SceneWorkspaceBusyError(reason)
 
     def _save_catalog(self, catalog: SceneCollectionCatalog) -> None:
         self._catalog_repository.save(

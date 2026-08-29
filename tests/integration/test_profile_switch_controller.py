@@ -44,7 +44,7 @@ def test_request_switch_emits_main_window_signal():
     window = _WindowStub()
     controller = ProfileSwitchController(window.switch_profile_requested.emit)
 
-    controller.request_switch()
+    assert controller.request_switch() is True
 
     assert window.switch_profile_requested.emitted == 1
 
@@ -53,6 +53,20 @@ def test_profile_switch_controller_uses_explicit_dependencies():
     controller = ProfileSwitchController(lambda: None)
 
     assert not hasattr(controller, "_window")
+
+
+def test_profile_switch_is_blocked_before_opening_the_profile_overlay():
+    requested = []
+    blocked = []
+    controller = ProfileSwitchController(
+        lambda: requested.append(True),
+        can_switch=lambda: False,
+        notify_blocked=lambda: blocked.append(True),
+    )
+
+    assert controller.request_switch() is False
+    assert requested == []
+    assert blocked == [True]
 
 
 def test_wire_profile_switch_relaunches_selected_profile_from_overlay(monkeypatch):

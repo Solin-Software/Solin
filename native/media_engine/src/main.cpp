@@ -3,6 +3,7 @@
 #include "solin/media_engine/media_runtime.hpp"
 #include "solin/media_engine/frame_channel_output.hpp"
 #include "solin/media_engine/native_window_output.hpp"
+#include "solin/media_engine/program_recording.hpp"
 #include "solin/media_engine/scene_graph.hpp"
 #include "solin/media_engine/scene_snapshot.hpp"
 #include "solin/media_engine/virtual_camera_output.hpp"
@@ -10,6 +11,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstdlib>
+#include <filesystem>
 #include <iostream>
 #include <limits>
 #include <map>
@@ -60,6 +62,26 @@ nlohmann::json local_camera_payload(const solin::media_engine::MediaRuntime& med
         {"generation", snapshot.generation}, {"devices", std::move(devices)},
         {"error_code", snapshot.error_code},
     };
+}
+
+nlohmann::json audio_device_payload(const solin::media_engine::MediaRuntime& media_runtime) {
+    const auto snapshot = media_runtime.audio_devices();
+    auto devices = nlohmann::json::array();
+    for (const auto& device : snapshot.devices) {
+        devices.push_back({
+            {"device_id", device.device_id},
+            {"display_name", device.display_name},
+            {"direction", device.direction == solin::media_engine::AudioDeviceDirection::input
+                              ? "input"
+                              : "output"},
+            {"is_default", device.is_default},
+        });
+    }
+    return {{"supported", snapshot.supported},
+            {"ready", snapshot.ready},
+            {"generation", snapshot.generation},
+            {"devices", std::move(devices)},
+            {"error_code", snapshot.error_code}};
 }
 
 nlohmann::json applied_ack() {
@@ -118,7 +140,54 @@ nlohmann::json graph_capabilities(const solin::media_engine::MediaRuntimeProbe& 
         {"hardware_compositing", graph_available && probe.d3d11_compositor},
         {"virtual_camera", graph_available && probe.virtual_camera.operational},
         {"d3d11_shared_textures", d3d11_shared_textures},
+        {"program_recording", graph_available && probe.program_recording},
+        {"audio_input_capture", probe.audio_capture},
+        {"system_audio_capture", probe.audio_capture},
     };
+}
+
+[[nodiscard]] solin::media_engine::RecordingAudioSelection
+recording_audio_selection(const nlohmann::json& payload) {
+    const auto mode = payload.at("mode").get<std::string>();
+    return {
+        .mode = mode == "system_default"
+                    ? solin::media_engine::RecordingAudioSelectionMode::system_default
+                    : mode == "none"
+                          ? solin::media_engine::RecordingAudioSelectionMode::none
+                          : solin::media_engine::RecordingAudioSelectionMode::device,
+        .device_id = payload.at("device_id").get<std::string>(),
+    };
+}
+
+[[nodiscard]] nlohmann::json recording_result_payload(
+    const solin::media_engine::ProgramRecordingOperationResult& result) {
+    return {{"applied", result.applied},
+            {"error_code", result.error_code},
+            {"error_message", result.error_message}};
+}
+
+[[nodiscard]] std::string filesystem_path_utf8(const std::filesystem::path& path) {
+    const auto encoded = path.u8string();
+    return {reinterpret_cast<const char*>(encoded.data()), encoded.size()};
+}
+
+[[nodiscard]] solin::media_engine::ControlEnvelope program_recording_event(
+    const solin::media_engine::ControlEnvelope& request,
+    const solin::media_engine::ProgramRecordingState& state) {
+    auto event = request;
+    event.message_type = "program_recording_state";
+    event.payload = {
+        {"status", solin::media_engine::program_recording_status_text(state.status)},
+        {"path", filesystem_path_utf8(state.path)},
+        {"error_code", state.error_code},
+        {"message", state.error_message},
+        {"microphone_warning", state.microphone_warning},
+        {"system_audio_warning", state.system_audio_warning},
+        {"dropped_frames", state.frames_dropped},
+        {"duplicated_frames", state.frames_duplicated},
+        {"frame_feed_p95_ns", state.frame_feed_p95_ns},
+    };
+    return event;
 }
 
 struct PublishedSourceHealth final {
@@ -255,7 +324,7 @@ hydrate_scene_graph(solin::media_engine::SceneGraphRuntime* graph,
 }
 
 int run_self_test() {
-    constexpr std::string_view payload = R"({"protocol_version":3,"message_type":"probe"})";
+    constexpr std::string_view payload = R"({"protocol_version":4,"message_type":"probe"})";
     std::stringstream stream;
     if (!solin::media_engine::write_frame(stream, payload)) {
         return 1;
@@ -342,8 +411,10 @@ int run_protocol() {
     std::unique_ptr<solin::media_engine::FrameChannelOutputController> program_output;
     std::unique_ptr<solin::media_engine::NativeWindowOutputController> native_window_output;
     std::unique_ptr<solin::media_engine::VirtualCameraOutputController> virtual_camera_output;
+    std::shared_ptr<solin::media_engine::SceneRenderer> renderer;
+    std::unique_ptr<solin::media_engine::ProgramRecordingController> program_recording;
     if (media_probe.initialized) {
-        auto renderer = media_runtime.scene_renderer();
+        renderer = media_runtime.scene_renderer();
         scene_graph = std::make_unique<solin::media_engine::SceneGraphRuntime>(
             media_runtime.source_runtime_factory(), renderer);
         if (renderer != nullptr) {
@@ -359,6 +430,8 @@ int run_protocol() {
             virtual_camera_output =
                 std::make_unique<solin::media_engine::VirtualCameraOutputController>(
                     renderer, solin::media_engine::make_platform_virtual_camera_backend());
+            program_recording =
+                std::make_unique<solin::media_engine::ProgramRecordingController>(renderer);
         }
     }
     solin::media_engine::ControlSession session{
@@ -369,6 +442,46 @@ int run_protocol() {
                     return graph_capabilities(media_probe, scene_graph != nullptr);
                 },
             .list_local_cameras = [&media_runtime] { return local_camera_payload(media_runtime); },
+            .list_audio_devices = [&media_runtime] { return audio_device_payload(media_runtime); },
+            .start_program_recording =
+                [&program_recording, &media_runtime](const nlohmann::json& payload) {
+                    if (program_recording == nullptr) {
+                        return rejected_ack("media_graph_unavailable",
+                                            "The native media graph is not enabled");
+                    }
+                    const auto raw_path = payload.at("path").get<std::string>();
+                    const std::u8string utf8_path{
+                        reinterpret_cast<const char8_t*>(raw_path.data()), raw_path.size()};
+                    solin::media_engine::ProgramRecordingConfiguration configuration{
+                        .path = std::filesystem::path{utf8_path},
+                        .width = payload.at("width").get<std::uint32_t>(),
+                        .height = payload.at("height").get<std::uint32_t>(),
+                        .fps_numerator = payload.at("fps_numerator").get<std::uint32_t>(),
+                        .fps_denominator = payload.at("fps_denominator").get<std::uint32_t>(),
+                        .microphone = recording_audio_selection(payload.at("microphone")),
+                        .system_audio = recording_audio_selection(payload.at("system_audio")),
+                    };
+                    return recording_result_payload(
+                        program_recording->start(configuration, media_runtime.audio_devices()));
+                },
+            .set_program_recording_audio =
+                [&program_recording, &media_runtime](const nlohmann::json& payload) {
+                    if (program_recording == nullptr) {
+                        return rejected_ack("media_graph_unavailable",
+                                            "The native media graph is not enabled");
+                    }
+                    return recording_result_payload(program_recording->set_audio(
+                        recording_audio_selection(payload.at("microphone")),
+                        recording_audio_selection(payload.at("system_audio")),
+                        media_runtime.audio_devices()));
+                },
+            .stop_program_recording =
+                [&program_recording] {
+                    return program_recording == nullptr
+                               ? rejected_ack("media_graph_unavailable",
+                                              "The native media graph is not enabled")
+                               : recording_result_payload(program_recording->stop());
+                },
             .hydrate =
                 [&scene_graph, &preview_output, &program_output, &native_window_output,
                  &virtual_camera_output](
@@ -533,6 +646,7 @@ int run_protocol() {
         },
     };
     std::map<std::string, PublishedSourceHealth, std::less<>> published_source_health;
+    std::uint64_t published_recording_generation = 0U;
     while (true) {
         const auto frame = solin::media_engine::read_frame(std::cin);
         if (frame.status == solin::media_engine::FrameReadStatus::clean_eof) {
@@ -544,6 +658,9 @@ int run_protocol() {
         }
         try {
             const auto request = solin::media_engine::parse_control_envelope(frame.payload);
+            if (program_recording != nullptr) {
+                program_recording->refresh_audio_devices(media_runtime.audio_devices());
+            }
             const auto reply = session.handle(request);
             if (reply.response.has_value() &&
                 !solin::media_engine::write_frame(
@@ -576,7 +693,22 @@ int run_protocol() {
                     return 74;
                 }
             }
+            if (program_recording != nullptr) {
+                const auto recording_state = program_recording->state();
+                if (recording_state.generation != published_recording_generation) {
+                    const auto event = program_recording_event(request, recording_state);
+                    if (!solin::media_engine::write_frame(
+                            std::cout,
+                            solin::media_engine::serialize_control_envelope(event))) {
+                        return 74;
+                    }
+                    published_recording_generation = recording_state.generation;
+                }
+            }
             if (reply.should_stop) {
+                if (program_recording != nullptr) {
+                    program_recording->shutdown();
+                }
                 return 0;
             }
         } catch (const std::exception&) {

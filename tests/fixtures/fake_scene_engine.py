@@ -44,6 +44,7 @@ def main() -> int:
     mode = sys.argv[1] if len(sys.argv) >= 2 else "normal"
     marker = Path(sys.argv[2]) if len(sys.argv) >= 3 else None
     crash_this_generation = mode == "crash_first" and marker is not None and not marker.exists()
+    recording_path = ""
     if mode == "expect_locked_plugins":
         plugin_path = os.environ.get("GST_PLUGIN_SYSTEM_PATH_1_0", "")
         registry_path = os.environ.get("GST_REGISTRY_1_0", "")
@@ -66,6 +67,9 @@ def main() -> int:
                     "hardware_compositing": False,
                     "virtual_camera": False,
                     "d3d11_shared_textures": False,
+                    "program_recording": True,
+                    "audio_input_capture": True,
+                    "system_audio_capture": True,
                 },
             )
             if mode == "crash_after_hello":
@@ -99,6 +103,102 @@ def main() -> int:
                 )
             else:
                 _ack(request)
+        elif request.message_type == "list_audio_devices":
+            _respond(
+                request,
+                "audio_device_list",
+                {
+                    "supported": True,
+                    "ready": True,
+                    "generation": 1,
+                    "devices": [
+                        {
+                            "device_id": "microphone-1",
+                            "display_name": "Test microphone",
+                            "direction": "input",
+                            "is_default": True,
+                        },
+                        {
+                            "device_id": "speakers-1",
+                            "display_name": "Test speakers",
+                            "direction": "output",
+                            "is_default": True,
+                        },
+                    ],
+                    "error_code": "",
+                },
+            )
+        elif request.message_type == "start_program_recording":
+            if set(request.payload) != {
+                "path",
+                "width",
+                "height",
+                "fps_numerator",
+                "fps_denominator",
+                "microphone",
+                "system_audio",
+            } or any(
+                set(request.payload.get(field, {})) != {"mode", "device_id"}
+                for field in ("microphone", "system_audio")
+            ):
+                _respond(
+                    request,
+                    "error",
+                    {
+                        "error_code": "invalid_recording_payload",
+                        "error_message": "Recording payload did not match protocol v4",
+                    },
+                )
+                continue
+            recording_path = str(request.payload["path"])
+            _respond(
+                request,
+                "program_recording_state",
+                {
+                    "status": "recording",
+                    "path": recording_path,
+                    "error_code": "",
+                    "message": "",
+                    "microphone_warning": "",
+                    "system_audio_warning": "",
+                    "dropped_frames": 0,
+                    "duplicated_frames": 0,
+                    "frame_feed_p95_ns": 0,
+                },
+            )
+            _ack(request)
+        elif request.message_type == "set_program_recording_audio":
+            if set(request.payload) != {"microphone", "system_audio"} or any(
+                set(request.payload.get(field, {})) != {"mode", "device_id"}
+                for field in ("microphone", "system_audio")
+            ):
+                _respond(
+                    request,
+                    "error",
+                    {
+                        "error_code": "invalid_recording_audio_payload",
+                        "error_message": "Recording audio payload did not match protocol v4",
+                    },
+                )
+                continue
+            _ack(request)
+        elif request.message_type == "stop_program_recording":
+            _respond(
+                request,
+                "program_recording_state",
+                {
+                    "status": "idle",
+                    "path": recording_path,
+                    "error_code": "",
+                    "message": "",
+                    "microphone_warning": "",
+                    "system_audio_warning": "",
+                    "dropped_frames": 0,
+                    "duplicated_frames": 0,
+                    "frame_feed_p95_ns": 0,
+                },
+            )
+            _ack(request)
         elif request.message_type == "prepare_scene":
             if mode == "ignore_prepare":
                 continue
@@ -110,7 +210,7 @@ def main() -> int:
                     "error",
                     {
                         "error_code": "invalid_prepare_payload",
-                        "error_message": "Prepare payload did not match protocol v3",
+                        "error_message": "Prepare payload did not match protocol v4",
                     },
                 )
                 continue
@@ -151,7 +251,7 @@ def main() -> int:
                     "error",
                     {
                         "error_code": "invalid_take_payload",
-                        "error_message": "Take payload did not match protocol v3",
+                        "error_message": "Take payload did not match protocol v4",
                     },
                 )
                 continue

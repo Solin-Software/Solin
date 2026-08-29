@@ -39,6 +39,7 @@ from solin.ui.incremental_load import IncrementalLoadHandle
 from solin.widgets.background_song_popup import BackgroundSongPopup
 
 if TYPE_CHECKING:
+    from solin.controllers.program_recording_controller import ProgramRecordingController
     from solin.controllers.scene_runtime_controller import SceneRuntimeController
 
 
@@ -162,6 +163,7 @@ class QuickAccessToolbar(QQuickWidget):
         obs_settings: OBSSettingsStore,
         background_song_service=None,
         scene_runtime: SceneRuntimeController | None = None,
+        program_recording: ProgramRecordingController | None = None,
         camera_service=None,
         camera_settings: CameraSettingsStore | None = None,
     ):
@@ -171,6 +173,7 @@ class QuickAccessToolbar(QQuickWidget):
         self._obs_settings = obs_settings
         self._background_song = background_song_service
         self._scene_runtime = scene_runtime
+        self._program_recording = program_recording
         self._camera = camera_service
         self._camera_settings = camera_settings
         self._minimized = False
@@ -508,7 +511,11 @@ class QuickAccessToolbar(QQuickWidget):
             return None
         from solin.widgets.scenes.control_popup import SceneControlPopup
 
-        popup = SceneControlPopup(self._scene_runtime, self)
+        popup = SceneControlPopup(
+            self._scene_runtime,
+            self,
+            recording=self._program_recording,
+        )
         self._solin_scene_popup = popup
         return popup
 
