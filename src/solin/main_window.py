@@ -61,6 +61,7 @@ from .controllers.playback_protection_controller import (
     PlaybackProtectionController,
 )
 from .controllers.profile_switch_controller import ProfileSwitchController
+from .controllers.program_recording_controller import ProgramRecordingController
 from .controllers.scene_runtime_controller import SceneRuntimeController
 from .controllers.content_frame_ingress_controller import ContentFrameIngressController
 from .controllers.program_content_controller import ProgramContentController
@@ -116,6 +117,7 @@ from .core.projection.application import (
 )
 from .core.scenes.engine import MAXIMUM_OUTPUT_WINDOW_TARGETS, OutputWindowTarget
 from .core.scenes.model import BusId, CONTENT_SOURCE_ID, SceneDocument
+from .core.scenes.recording import ProgramRecordingState, ProgramRecordingStatus
 from .core.scenes.workspace import SceneWorkspaceService
 from .core.timer.application import TimerSession
 from .core.i18n.manager import LanguageManager
@@ -352,6 +354,13 @@ class MainWindow(QWidget):
             ptz=ptz_executor,
             parent=self,
         )
+        self._program_recording = ProgramRecordingController(
+            scene_workspace,
+            self.scene_runtime,
+            engine=scene_engine,
+            profile_paths=profile_paths,
+            parent=self,
+        )
         self._content_frame_ingress.descriptor_changed.connect(
             self.scene_runtime.set_content_ingress
         )
@@ -382,7 +391,11 @@ class MainWindow(QWidget):
             self._auto_key_settings,
             self,
         )
-        self._profile_switch = ProfileSwitchController(self.switch_profile_requested.emit)
+        self._profile_switch = ProfileSwitchController(
+            self.switch_profile_requested.emit,
+            can_switch=lambda: not self._program_recording.busy,
+            notify_blocked=self._notify_recording_blocks_profile_switch,
+        )
         self._projection_targets = ProjectionWindowController(
             ProjectionWindowContext(
                 session=self.projection_session,
@@ -453,6 +466,12 @@ class MainWindow(QWidget):
         )
 
         self.notifications = NotificationCenter(self)
+        self._last_program_recording_status = ProgramRecordingStatus.IDLE
+        self._program_recording.state_changed.connect(
+            self._on_program_recording_state_changed
+        )
+        if self._program_recording.state.status is ProgramRecordingStatus.FAILED:
+            self._on_program_recording_state_changed(self._program_recording.state)
         self.scene_runtime.transition_fallback.connect(
             self._on_scene_transition_fallback
         )
@@ -570,6 +589,7 @@ class MainWindow(QWidget):
                 profile_paths=self.profile_paths,
                 projection_session=self.projection_session,
                 scene_runtime=self.scene_runtime,
+                program_recording=self._program_recording,
                 ptz_credentials=ptz_credentials,
                 runtime_paths=self.runtime_paths,
                 media_cache_manager=self.media_cache_manager,
@@ -987,6 +1007,7 @@ class MainWindow(QWidget):
                     zoom=self._zoom_service,
                     ipc=lambda: self._ipc_controller,
                     scenes=self.scene_runtime,
+                    program_recording=self._program_recording,
                     program_content=self._program_content,
                     content_frame_ingress=self._content_frame_ingress,
                     scene_frame_egresses=(
@@ -1222,6 +1243,58 @@ class MainWindow(QWidget):
             message,
             title=self.tr("Scenes"),
             dedupe_key="scene-transition-fallback",
+        )
+
+    def _on_program_recording_state_changed(
+        self,
+        state: ProgramRecordingState,
+    ) -> None:
+        previous = self._last_program_recording_status
+        self._last_program_recording_status = state.status
+        if state.status is ProgramRecordingStatus.FAILED:
+            if previous is not ProgramRecordingStatus.FAILED:
+                preserved_path = None
+                if state.output_path is not None:
+                    staging_path = state.output_path.with_suffix(
+                        state.output_path.suffix + ".part"
+                    )
+                    if state.output_path.exists():
+                        preserved_path = state.output_path
+                    elif staging_path.exists():
+                        preserved_path = staging_path
+                if preserved_path is None:
+                    message = self.tr("Recording failed.")
+                else:
+                    message = self.tr(
+                        "Recording failed. The file was preserved at %1"
+                    ).replace("%1", str(preserved_path))
+                self.notifications.error(
+                    message,
+                    title=self.tr("Recording"),
+                    dedupe_key="program-recording-failed",
+                )
+            return
+        if (
+            state.status is ProgramRecordingStatus.IDLE
+            and previous
+            in {
+                ProgramRecordingStatus.STARTING,
+                ProgramRecordingStatus.RECORDING,
+                ProgramRecordingStatus.STOPPING,
+            }
+            and state.output_path is not None
+        ):
+            self.notifications.success(
+                self.tr("Recording saved to %1").replace("%1", str(state.output_path)),
+                title=self.tr("Recording complete"),
+                dedupe_key=f"program-recording-complete:{state.output_path}",
+            )
+
+    def _notify_recording_blocks_profile_switch(self) -> None:
+        self.notifications.warning(
+            self.tr("Stop recording before switching profiles."),
+            title=self.tr("Recording in progress"),
+            dedupe_key="program-recording-blocks-profile-switch",
         )
 
     def _on_scene_preview_frame(self, image) -> None:
@@ -1819,6 +1892,11 @@ class MainWindow(QWidget):
             "close",
         )
         self._partial_cleanup_method(
+            "Program recording",
+            getattr(self, "_program_recording", None),
+            "close",
+        )
+        self._partial_cleanup_method(
             "scene runtime",
             getattr(self, "scene_runtime", None),
             "close",
@@ -1907,6 +1985,12 @@ class MainWindow(QWidget):
         super().closeEvent(event)
 
     def confirm_close(self) -> bool:
+        if self._program_recording.busy:
+            self.notifications.warning(
+                self.tr("Stop recording before closing Solin."),
+                dedupe_key="program-recording-blocks-close",
+            )
+            return False
         widget = getattr(self, "talk_theme_widget", None)
         callback = getattr(widget, "confirm_close", None)
         return bool(callback()) if callable(callback) else True

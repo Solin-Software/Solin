@@ -31,6 +31,7 @@ class ShutdownServices:
     zoom: Any
     ipc: Callable[[], Any | None]
     scenes: Any | None = None
+    program_recording: Any | None = None
     program_content: Any | None = None
     content_frame_ingress: Any | None = None
     scene_frame_egresses: tuple[Any, ...] = ()
@@ -134,6 +135,8 @@ class ShutdownController:
         # Stop the scene data plane in reverse dependency order. Producers must
         # stop before their consumers so no frame worker can be left waiting on
         # a mapping/mutex that disappeared with the native engine.
+        if services.program_recording is not None:
+            services.program_recording.close()
         if services.program_content is not None:
             services.program_content.close()
         if services.content_frame_ingress is not None:

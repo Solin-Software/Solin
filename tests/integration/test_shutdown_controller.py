@@ -210,6 +210,7 @@ def test_scene_data_plane_stops_in_reverse_dependency_order():
             obs=services.obs,
             zoom=services.zoom,
             ipc=services.ipc,
+            program_recording=_Recorder(events, "program-recording"),
             program_content=_Recorder(events, "program-content"),
             content_frame_ingress=_Recorder(events, "content-ingress"),
             scene_frame_egresses=(_Recorder(events, "scene-egress"),),
@@ -225,12 +226,14 @@ def test_scene_data_plane_stops_in_reverse_dependency_order():
     ShutdownController(dependencies).shutdown()
 
     scene_events = [event for event in events if event.startswith((
+        "program-recording.",
         "program-content.",
         "content-ingress.",
         "scene-egress.",
         "scenes.",
     ))]
     assert scene_events == [
+        "program-recording.close",
         "program-content.close",
         "content-ingress.close",
         "scene-egress.close",

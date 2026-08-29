@@ -3,6 +3,7 @@ from typing import cast
 
 import solin.main_window as main_window
 from solin.core.scenes.model import BusId
+from solin.core.scenes.recording import ProgramRecordingState, ProgramRecordingStatus
 from solin.main_window import MainWindow, _use_native_media_presentation
 
 
@@ -252,3 +253,74 @@ def test_fallback_ingress_always_restores_python_delivery() -> None:
     MainWindow._reconcile_python_video_frame_delivery(cast(MainWindow, host))
 
     assert host.media_ctrl.delivery_requirements == [True]
+
+
+def test_active_program_recording_blocks_normal_window_close() -> None:
+    warnings: list[tuple[str, str]] = []
+    host = SimpleNamespace(
+        _program_recording=SimpleNamespace(busy=True),
+        notifications=SimpleNamespace(
+            warning=lambda message, *, dedupe_key: warnings.append(
+                (message, dedupe_key)
+            )
+        ),
+        tr=lambda text: text,
+    )
+
+    assert MainWindow.confirm_close(cast(MainWindow, host)) is False
+    assert warnings == [
+        (
+            "Stop recording before closing Solin.",
+            "program-recording-blocks-close",
+        )
+    ]
+
+
+def test_idle_program_recording_does_not_block_normal_window_close() -> None:
+    host = SimpleNamespace(
+        _program_recording=SimpleNamespace(busy=False),
+        talk_theme_widget=SimpleNamespace(confirm_close=lambda: True),
+    )
+
+    assert MainWindow.confirm_close(cast(MainWindow, host)) is True
+
+
+def test_recording_failure_only_claims_a_partial_file_when_one_exists(
+    tmp_path,
+) -> None:
+    errors: list[str] = []
+    host = SimpleNamespace(
+        _last_program_recording_status=ProgramRecordingStatus.IDLE,
+        notifications=SimpleNamespace(
+            error=lambda message, **_kwargs: errors.append(message)
+        ),
+        tr=lambda text: text,
+    )
+    output_path = tmp_path / "Solin recording.mp4"
+
+    MainWindow._on_program_recording_state_changed(
+        cast(MainWindow, host),
+        ProgramRecordingState(
+            status=ProgramRecordingStatus.FAILED,
+            output_path=output_path,
+            error_code="recording_failed",
+        ),
+    )
+    output_path.with_suffix(".mp4.part").write_bytes(b"partial")
+    host._last_program_recording_status = ProgramRecordingStatus.IDLE
+    MainWindow._on_program_recording_state_changed(
+        cast(MainWindow, host),
+        ProgramRecordingState(
+            status=ProgramRecordingStatus.FAILED,
+            output_path=output_path,
+            error_code="recording_failed",
+        ),
+    )
+
+    assert errors == [
+        "Recording failed.",
+        (
+            "Recording failed. The file was preserved at "
+            f"{output_path.with_suffix('.mp4.part')}"
+        ),
+    ]

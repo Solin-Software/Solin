@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from PySide6.QtCore import QEvent
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 from solin.ui.async_load import AsyncLoadHandle
 from solin.ui.loading_placeholder import DeferredLoadingPlaceholder
+
+if TYPE_CHECKING:
+    from solin.controllers.program_recording_controller import ProgramRecordingController
 
 
 def _load_scenes_widget_type():
@@ -22,12 +27,14 @@ class DeferredScenesWidget(QWidget):
         self,
         controller,
         *,
+        recording: ProgramRecordingController | None = None,
         credentials=None,
         notifications=None,
         parent=None,
     ) -> None:
         super().__init__(parent)
         self._controller = controller
+        self._recording = recording
         self._credentials = credentials
         self._notifications = notifications
         self._content = None
@@ -44,6 +51,7 @@ class DeferredScenesWidget(QWidget):
             return
         content = widget_type(
             self._controller,
+            recording=self._recording,
             credentials=self._credentials,
             notifications=self._notifications,
             parent=self,

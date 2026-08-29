@@ -57,6 +57,8 @@ ComboBox {
         leftPadding: 9
         rightPadding: 9
         highlighted: root.highlightedIndex === index
+        enabled: !option.modelData || option.modelData.available !== false
+        opacity: enabled ? 1 : 0.55
         contentItem: Text {
             text: root.textRole.length && option.modelData
                 ? String(option.modelData[root.textRole]) : String(option.modelData)

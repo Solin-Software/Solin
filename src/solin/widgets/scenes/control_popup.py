@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 
 from PySide6.QtCore import (
     QAbstractAnimation,
@@ -27,11 +28,22 @@ from PySide6.QtWidgets import (
 )
 
 from solin.controllers.scene_runtime_controller import SceneRuntimeController
+from solin.controllers.program_recording_controller import ProgramRecordingController
 from solin.core.scenes.composition import SceneComposition, analyze_scene_compositions
 from solin.core.scenes.model import BusId, OutputMode, TransitionKind, TransitionSpec
-from solin.styles.icons import ICON_CLAPPERBOARD, make_icon
+from solin.core.scenes.recording import ProgramRecordingStatus
+from solin.styles.icons import (
+    ICON_CLAPPERBOARD,
+    ICON_REC_CIRCLE,
+    ICON_REC_STOP,
+    make_icon,
+)
 from solin.styles.theme import PALETTE, qss_rgba
 from solin.ui.scene_engine_status import scene_engine_error_summary
+from solin.ui.scene_recording_status import (
+    scene_recording_audio_warning,
+    scene_recording_error_summary,
+)
 from solin.widgets.common.button_feedback import ButtonSuccessFlash
 from solin.widgets.common.flow_container import FlowContainer
 
@@ -192,12 +204,15 @@ class SceneControlPopup(QWidget):
         self,
         controller: SceneRuntimeController,
         parent: QWidget | None = None,
+        *,
+        recording: ProgramRecordingController | None = None,
     ) -> None:
         super().__init__(parent, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setFixedWidth(self._PREFERRED_WIDTH)
         self._controller = controller
+        self._recording = recording
         self._anchor_rect: QRect | None = None
         self._available_rect: QRect | None = None
         self._operation_error = ""
@@ -207,6 +222,9 @@ class SceneControlPopup(QWidget):
         self._operation_error_timer.setSingleShot(True)
         self._operation_error_timer.setInterval(self._OPERATION_ERROR_DURATION_MS)
         self._operation_error_timer.timeout.connect(self._clear_operation_error)
+        self._recording_clock = QTimer(self)
+        self._recording_clock.setInterval(1000)
+        self._recording_clock.timeout.connect(self._render_recording)
         self._success_flash = ButtonSuccessFlash(self)
         self._scene_rows: dict[str, _SceneChipButton] = {}
         self._scene_order: tuple[str, ...] = ()
@@ -234,6 +252,8 @@ class SceneControlPopup(QWidget):
         controller.operational_state_changed.connect(self._render)
         controller.runtime_changed.connect(self._render)
         controller.scene_profiles_changed.connect(self._render)
+        if recording is not None:
+            recording.state_changed.connect(self._render)
         self.apply_theme()
         self._render()
 
@@ -314,6 +334,18 @@ class SceneControlPopup(QWidget):
         separator.setFixedHeight(1)
         layout.addWidget(separator)
 
+        self._recording_row = QWidget()
+        self._recording_row.setObjectName("SceneControlRecordingRow")
+        recording_layout = QHBoxLayout(self._recording_row)
+        recording_layout.setContentsMargins(0, 0, 0, 0)
+        recording_layout.setSpacing(0)
+        self._recording_button = QPushButton()
+        self._recording_button.setObjectName("SceneControlRecording")
+        self._recording_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._recording_button.clicked.connect(self._toggle_recording)
+        recording_layout.addWidget(self._recording_button, 1)
+        layout.addWidget(self._recording_row)
+
         footer = QHBoxLayout()
         footer.setSpacing(8)
         self._automatic = QPushButton(self.tr("Auto-switch media"))
@@ -329,6 +361,103 @@ class SceneControlPopup(QWidget):
         footer.addWidget(self._media_mirror, 1)
         layout.addLayout(footer)
         root.addWidget(self._card)
+
+    def _toggle_recording(self) -> None:
+        if self._recording is None:
+            return
+        try:
+            self._recording.toggle()
+            self._set_operation_error("")
+        except Exception:  # noqa: BLE001 - recording controller boundary
+            log.exception("Could not toggle Program recording")
+            self._set_operation_error(self.tr("The recording state could not be changed."))
+        self._render()
+
+    def _render_recording(self) -> None:
+        if self._recording is None:
+            self._recording_clock.stop()
+            self._recording_row.hide()
+            return
+        state = self._recording.state
+        status = state.status
+        is_recording = status is ProgramRecordingStatus.RECORDING
+        is_active = status in {
+            ProgramRecordingStatus.STARTING,
+            ProgramRecordingStatus.RECORDING,
+            ProgramRecordingStatus.STOPPING,
+        }
+        if is_active and not self._recording_clock.isActive():
+            self._recording_clock.start()
+        elif not is_active:
+            self._recording_clock.stop()
+        if is_recording:
+            started = state.started_at_monotonic
+            elapsed = 0 if started is None else max(0, int(time.monotonic() - started))
+            hours, remainder = divmod(elapsed, 3600)
+            minutes, seconds = divmod(remainder, 60)
+            elapsed_text = (
+                f"{hours}:{minutes:02d}:{seconds:02d}"
+                if hours
+                else f"{minutes:02d}:{seconds:02d}"
+            )
+            text = self.tr("Stop recording · %1").replace("%1", elapsed_text)
+            icon = ICON_REC_STOP
+            audio_warnings = tuple(
+                value
+                for value in (
+                    scene_recording_audio_warning(
+                        state.microphone_warning,
+                        "microphone",
+                    ),
+                    scene_recording_audio_warning(
+                        state.system_audio_warning,
+                        "system_audio",
+                    ),
+                )
+                if value
+            )
+            tooltip = "\n".join((self.tr("Stop recording"), *audio_warnings))
+        elif status is ProgramRecordingStatus.STARTING:
+            text = self.tr("Starting recording…")
+            icon = ICON_REC_CIRCLE
+            tooltip = text
+        elif status is ProgramRecordingStatus.STOPPING:
+            text = self.tr("Finishing recording…")
+            icon = ICON_REC_STOP
+            tooltip = text
+        elif status is ProgramRecordingStatus.FAILED:
+            text = self.tr("Try recording again")
+            icon = ICON_REC_CIRCLE
+            tooltip = scene_recording_error_summary(state.error_code)
+        else:
+            text = self.tr("Start recording")
+            icon = ICON_REC_CIRCLE
+            tooltip = self.tr("Start recording the live output")
+        self._recording_button.setText(text)
+        self._recording_button.setIcon(make_icon(_svg(icon), 15, PALETTE.danger))
+        self._recording_button.setEnabled(
+            status is ProgramRecordingStatus.RECORDING
+            or (
+                self._controller.engine_ready
+                and self._recording.supported
+                and status
+                in {
+                    ProgramRecordingStatus.IDLE,
+                    ProgramRecordingStatus.FAILED,
+                }
+            )
+        )
+        self._recording_button.setProperty("recording", is_active)
+        if not self._recording_button.isEnabled():
+            if not self._controller.engine_ready:
+                tooltip = self.tr("The scene engine must be ready to record.")
+            elif not self._recording.supported:
+                tooltip = self.tr("Recording is unavailable in this scene engine.")
+        self._recording_button.setToolTip(tooltip)
+        self._recording_button.setAccessibleName(text)
+        self._recording_button.setAccessibleDescription(tooltip)
+        self._recording_row.show()
+        self._repolish(self._recording_button)
 
     def _take(self, scene_id: str) -> None:
         try:
@@ -394,6 +523,7 @@ class SceneControlPopup(QWidget):
         self._render()
 
     def _render(self, _value: object = None) -> None:
+        self._render_recording()
         runtime = self._controller.runtime.state.output(BusId.VIRTUAL_CAMERA)
         mirror = self._controller.runtime.state.output(BusId.MEDIA_WINDOWS)
         desired = self._controller.desired_scene(BusId.VIRTUAL_CAMERA)
@@ -431,7 +561,13 @@ class SceneControlPopup(QWidget):
             return_override_available=return_override_available,
         )
 
-        if engine_state != "ready":
+        if (
+            self._recording is not None
+            and self._recording.state.status is ProgramRecordingStatus.FAILED
+        ):
+            state = self._recording.state
+            info_text = scene_recording_error_summary(state.error_code)
+        elif engine_state != "ready":
             info_text = engine_text
         elif self._operation_error:
             info_text = self._operation_error
@@ -738,6 +874,9 @@ class SceneControlPopup(QWidget):
             QPushButton:pressed {{ background:{PALETTE.surface_alt}; }}
             QPushButton#SceneOutputToggle {{ min-width:84px; }}
             QPushButton#SceneOutputToggle:checked, QPushButton#SceneControlAutomatic:checked, QPushButton#SceneControlMediaWindows:checked {{ background:{qss_rgba(PALETTE.accent, 0.10)}; border-color:{qss_rgba(PALETTE.accent, 0.42)}; color:{PALETTE.accent_text}; }}
+            QPushButton#SceneControlRecording {{ min-width:180px; color:{PALETTE.danger}; border-color:{qss_rgba(PALETTE.danger, 0.38)}; }}
+            QPushButton#SceneControlRecording:hover {{ background:{qss_rgba(PALETTE.danger, 0.10)}; border-color:{qss_rgba(PALETTE.danger, 0.62)}; color:{PALETTE.danger}; }}
+            QPushButton#SceneControlRecording[recording="true"] {{ background:{qss_rgba(PALETTE.danger, 0.10)}; border-color:{qss_rgba(PALETTE.danger, 0.58)}; color:{PALETTE.danger}; }}
             QPushButton#SceneControlAutomatic[suspended="true"] {{ background:{PALETTE.warning_surface}; border-color:{PALETTE.warning_border}; color:{PALETTE.warning_text}; }}
             QPushButton#SceneControlScene {{ min-height:32px; padding:0 10px; background:{qss_rgba(PALETTE.surface, 0.60)}; border:1px solid {qss_rgba(PALETTE.border, 0.60)}; border-radius:8px; color:{PALETTE.text_muted}; font-size:12px; font-weight:400; text-align:center; }}
             QPushButton#SceneControlScene:hover {{ background:{PALETTE.surface_hover}; border-color:{qss_rgba(PALETTE.accent, 0.35)}; color:{PALETTE.text_secondary}; }}

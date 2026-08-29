@@ -18,6 +18,7 @@ from solin.core.scenes.engine import (
     FrameChannelDescriptor,
     LocalCameraDiscovery,
     OutputWindowTarget,
+    ProgramRecordingEvent,
     SceneEngine,
     SceneEngineAck,
     SceneEngineCapabilities,
@@ -236,6 +237,7 @@ class SceneRuntimeController(QObject):
         self._content_ingress: FrameChannelDescriptor | None = None
         self._preview_egress: FrameChannelDescriptor | None = None
         self._program_egress: FrameChannelDescriptor | None = None
+        self._program_recording_required = False
         self._preview_scene_id: str | None = None
         self._window_targets: tuple[OutputWindowTarget, ...] = ()
         self._local_cameras = _unavailable_local_cameras("engine_unavailable")
@@ -317,6 +319,10 @@ class SceneRuntimeController(QObject):
     @property
     def content_ingress_required(self) -> bool:
         return self._content_ingress_required()
+
+    @property
+    def program_recording_required(self) -> bool:
+        return self._program_recording_required
 
     @property
     def hydration_in_progress(self) -> bool:
@@ -559,6 +565,7 @@ class SceneRuntimeController(QObject):
             activation.runtime.state.output(BusId.VIRTUAL_CAMERA).enabled
             or activation.runtime.state.output(BusId.MEDIA_WINDOWS).enabled
             or self._program_egress is not None
+            or self._program_recording_required
             or any(target.bus_id is BusId.VIRTUAL_CAMERA for target in self._window_targets)
         )
         snapshot = SceneEngineSnapshot(
@@ -755,6 +762,14 @@ class SceneRuntimeController(QObject):
         self._last_render_enabled = self._render_enabled()
         self._reconcile_content_ingress_demand()
         self._hydrate_if_ready()
+
+    def set_program_recording_required(self, required: bool) -> None:
+        if type(required) is not bool:
+            raise TypeError("Program recording render demand must be a boolean")
+        if required == self._program_recording_required:
+            return
+        self._program_recording_required = required
+        self._reconcile_engine_outputs()
 
     def refresh_local_cameras(self) -> Future[LocalCameraDiscovery] | None:
         if self._engine is None or not self._engine_ready:
@@ -1037,10 +1052,15 @@ class SceneRuntimeController(QObject):
         self._async_engine_event.emit(event)
 
     def _consume_engine_event(self, event: object) -> None:
-        if not isinstance(event, (EngineHealthEvent, SourceHealthEvent)):
+        if not isinstance(
+            event,
+            (EngineHealthEvent, SourceHealthEvent, ProgramRecordingEvent),
+        ):
             self._report_exception("event", RuntimeError("Invalid scene engine event"))
             return
         self.engine_event.emit(event)
+        if isinstance(event, ProgramRecordingEvent):
+            return
         if isinstance(event, SourceHealthEvent):
             previous = self._source_health.get(event.source_id)
             if event.status is SourceHealthStatus.STOPPED:
@@ -2073,6 +2093,7 @@ class SceneRuntimeController(QObject):
             destination.output(BusId.VIRTUAL_CAMERA).enabled
             or destination.output(BusId.MEDIA_WINDOWS).enabled
             or self._program_egress is not None
+            or self._program_recording_required
             or any(
                 target.bus_id is BusId.VIRTUAL_CAMERA for target in self._window_targets
             )

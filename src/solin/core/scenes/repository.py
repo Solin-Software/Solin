@@ -11,7 +11,10 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
-from solin.core.scenes.collections import SceneCollectionCatalog
+from solin.core.scenes.collections import (
+    SCENE_COLLECTION_CATALOG_SCHEMA_VERSION,
+    SceneCollectionCatalog,
+)
 from solin.core.scenes.model import (
     DEFAULT_CAMERA_SOURCE_ID,
     SceneDocument,
@@ -540,9 +543,20 @@ class SceneCollectionCatalogRepository:
                 self._repository.path,
                 maximum_bytes=MAX_SCENE_COLLECTION_CATALOG_BYTES,
             )
-            return SceneCollectionCatalog.from_record(record)
         except (OSError, TypeError, ValueError) as exc:
             raise SceneRepositoryCorruptError(self._repository.path) from exc
+        try:
+            catalog = SceneCollectionCatalog.from_record(record)
+        except (TypeError, ValueError) as exc:
+            raise SceneRepositoryCorruptError(self._repository.path) from exc
+        if record.get("schema_version") != SCENE_COLLECTION_CATALOG_SCHEMA_VERSION:
+            self._repository.write(
+                catalog.to_record(),
+                indent=2,
+                sort_keys=False,
+                trailing_newline=True,
+            )
+        return catalog
 
     @contextmanager
     def _transaction_lock(self):

@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from concurrent.futures import Future
 from dataclasses import dataclass, replace
 import logging
 import math
+from pathlib import Path
+import time
 from typing import Any, Protocol
 
 from PySide6.QtCore import QObject, Property, Signal, Slot
 from PySide6.QtGui import QImage
 
+from solin.controllers.program_recording_controller import ProgramRecordingController
 from solin.controllers.scene_runtime_controller import SceneRuntimeController
 from solin.core.scenes.editor_geometry import (
     MINIMUM_LAYER_SIZE,
@@ -61,6 +65,12 @@ from solin.core.scenes.model import (
     ViscaTransport,
     new_identity,
 )
+from solin.core.scenes.recording import (
+    AudioDeviceDirection,
+    AudioDeviceSelection,
+    AudioSelectionMode,
+    ProgramRecordingStatus,
+)
 from solin.core.scenes.ptz import (
     PtzControlResult,
     PtzCredentialVault,
@@ -70,6 +80,10 @@ from solin.core.scenes.ptz import (
 from solin.core.scenes.workspace import SceneWorkspaceBusyError
 from solin.ui.qml.scenes_models import SceneLayerListModel, SceneListModel
 from solin.ui.scene_engine_status import scene_engine_error_summary
+from solin.ui.scene_recording_status import (
+    scene_recording_audio_warning,
+    scene_recording_error_summary,
+)
 
 
 log = logging.getLogger(__name__)
@@ -132,15 +146,21 @@ class ScenesBridge(QObject):
         controller: SceneRuntimeController,
         *,
         preview_store: ScenePreviewStore,
+        recording: ProgramRecordingController | None = None,
         credentials: PtzCredentialVault | None = None,
         notifications: Any | None = None,
+        recording_directory_picker: Callable[[str], str] | None = None,
+        recording_directory_opener: Callable[[str], bool] | None = None,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
         self._controller = controller
+        self._recording = recording
         self._preview_store = preview_store
         self._credentials = credentials
         self._notifications = notifications
+        self._recording_directory_picker = recording_directory_picker
+        self._recording_directory_opener = recording_directory_opener
         self._scenes = SceneListModel(self)
         self._layers = SceneLayerListModel(self)
         self._active = False
@@ -154,7 +174,9 @@ class ScenesBridge(QObject):
         self._framing_session: _LayerFramingSession | None = None
         self._ptz_recall_futures: set[Future[PtzRecallResult]] = set()
         self._controller_connections: tuple[tuple[Any, Any], ...] = ()
+        self._recording_connections: tuple[tuple[Any, Any], ...] = ()
         self._connect_controller()
+        self._connect_recording()
         self._refresh_models()
 
     def _connect_controller(self) -> None:
@@ -182,6 +204,26 @@ class ScenesBridge(QObject):
                 signal.disconnect(handler)
             except (RuntimeError, TypeError):
                 log.debug("Scene bridge signal was already disconnected", exc_info=True)
+
+    def _connect_recording(self) -> None:
+        if self._recording is None:
+            return
+        self._recording_connections = (
+            (self._recording.state_changed, self._on_recording_changed),
+            (self._recording.audio_devices_changed, self._on_recording_changed),
+            (self._recording.configuration_changed, self._on_recording_changed),
+            (self._recording.busy_changed, self._on_recording_changed),
+        )
+        for signal, handler in self._recording_connections:
+            signal.connect(handler)
+
+    def _disconnect_recording(self) -> None:
+        connections, self._recording_connections = self._recording_connections, ()
+        for signal, handler in connections:
+            try:
+                signal.disconnect(handler)
+            except (RuntimeError, TypeError):
+                log.debug("Recording bridge signal was already disconnected", exc_info=True)
 
     @Property(QObject, constant=True)
     def scenesModel(self) -> SceneListModel:
@@ -345,6 +387,162 @@ class ScenesBridge(QObject):
         return (
             self._controller.workspace.virtual_camera_enabled
             or self._controller.profile_activation_in_progress
+            or bool(self._recording and self._recording.busy)
+        )
+
+    @Property(bool, notify=changed)
+    def recordingAvailable(self) -> bool:
+        return self._recording is not None
+
+    @Property(str, notify=changed)
+    def recordingStatus(self) -> str:
+        if self._recording is None:
+            return ProgramRecordingStatus.IDLE.value
+        return self._recording.state.status.value
+
+    @Property(bool, notify=changed)
+    def recordingActive(self) -> bool:
+        return self.recordingStatus in {
+            ProgramRecordingStatus.STARTING.value,
+            ProgramRecordingStatus.RECORDING.value,
+            ProgramRecordingStatus.STOPPING.value,
+        }
+
+    @Property(bool, notify=changed)
+    def recordingBusy(self) -> bool:
+        return bool(self._recording and self._recording.busy)
+
+    @Property(bool, notify=changed)
+    def recordingCanToggle(self) -> bool:
+        if self._recording is None:
+            return False
+        status = self._recording.state.status
+        return status is ProgramRecordingStatus.RECORDING or (
+            self._controller.engine_ready
+            and self._recording.supported
+            and status in {
+                ProgramRecordingStatus.IDLE,
+                ProgramRecordingStatus.FAILED,
+            }
+        )
+
+    @Property(str, notify=changed)
+    def recordingToggleUnavailableReason(self) -> str:
+        if self._recording is None:
+            return self.tr("Recording is unavailable")
+        if (
+            self._recording.state.status
+            in {ProgramRecordingStatus.IDLE, ProgramRecordingStatus.FAILED}
+            and not self._controller.engine_ready
+        ):
+            return self.tr("The scene engine must be ready to record.")
+        if not self._recording.supported:
+            return self.tr("Recording is unavailable in this scene engine.")
+        return ""
+
+    @Property(int, notify=changed)
+    def recordingElapsedSeconds(self) -> int:
+        if self._recording is None:
+            return 0
+        started = self._recording.state.started_at_monotonic
+        if started is None:
+            return 0
+        return max(0, int(time.monotonic() - started))
+
+    @Property(str, notify=changed)
+    def recordingStatusLabel(self) -> str:
+        if self._recording is not None and not self._recording.supported:
+            return self.tr("Recording is unavailable")
+        labels = {
+            ProgramRecordingStatus.IDLE.value: self.tr("Ready to record"),
+            ProgramRecordingStatus.STARTING.value: self.tr("Starting recording…"),
+            ProgramRecordingStatus.RECORDING.value: self.tr("Recording"),
+            ProgramRecordingStatus.STOPPING.value: self.tr("Finishing recording…"),
+            ProgramRecordingStatus.FAILED.value: self.tr("Recording failed"),
+        }
+        status = (
+            ProgramRecordingStatus.IDLE.value
+            if self._recording is None
+            else self._recording.state.status.value
+        )
+        return labels[status]
+
+    @Property(str, notify=changed)
+    def recordingMessage(self) -> str:
+        if self._recording is None:
+            return self.tr("Recording is unavailable")
+        if not self._recording.supported:
+            return self.tr("Recording is unavailable in this scene engine.")
+        state = self._recording.state
+        if state.status is ProgramRecordingStatus.FAILED:
+            return scene_recording_error_summary(state.error_code)
+        return state.message or state.error_code
+
+    @Property(str, notify=changed)
+    def recordingAudioWarning(self) -> str:
+        if self._recording is None:
+            return ""
+        state = self._recording.state
+        warnings = tuple(
+            value
+            for value in (
+                scene_recording_audio_warning(
+                    state.microphone_warning,
+                    "microphone",
+                ),
+                scene_recording_audio_warning(
+                    state.system_audio_warning,
+                    "system_audio",
+                ),
+            )
+            if value
+        )
+        return "\n".join(warnings)
+
+    @Property("QVariantList", notify=changed)  # type: ignore[arg-type]
+    def recordingMicrophoneChoices(self) -> list[dict[str, object]]:
+        return self._recording_audio_choices(AudioDeviceDirection.INPUT)
+
+    @Property("QVariantList", notify=changed)  # type: ignore[arg-type]
+    def recordingSystemAudioChoices(self) -> list[dict[str, object]]:
+        return self._recording_audio_choices(AudioDeviceDirection.OUTPUT)
+
+    @Property(str, notify=changed)
+    def recordingAudioDeviceStatus(self) -> str:
+        if self._recording is None:
+            return ""
+        discovery = self._recording.audio_devices
+        if not discovery.ready:
+            return self.tr("Looking for audio devices…")
+        if not discovery.supported or discovery.error_code:
+            return self.tr("Audio devices could not be listed.")
+        if not discovery.devices:
+            return self.tr("No audio devices found.")
+        return ""
+
+    @Property(str, notify=changed)
+    def recordingMicrophoneSelection(self) -> str:
+        if self._recording is None:
+            return ""
+        return self._recording_selection_key(self._recording.configuration.microphone)
+
+    @Property(str, notify=changed)
+    def recordingSystemAudioSelection(self) -> str:
+        if self._recording is None:
+            return ""
+        return self._recording_selection_key(self._recording.configuration.system_audio)
+
+    @Property(str, notify=changed)
+    def recordingOutputDirectory(self) -> str:
+        if self._recording is None:
+            return ""
+        return str(self._recording.effective_output_directory())
+
+    @Property(bool, notify=changed)
+    def recordingOutputDirectoryIsDefault(self) -> bool:
+        return bool(
+            self._recording is not None
+            and not self._recording.configuration.output_directory
         )
 
     @Property("QVariantList", notify=changed)  # type: ignore[arg-type]
@@ -498,6 +696,77 @@ class ScenesBridge(QObject):
     @Slot(bool)
     def setAutomaticEnabled(self, enabled: bool) -> None:
         self._run_runtime(lambda: self._controller.set_program_automatic(bool(enabled)))
+
+    @Slot()
+    def toggleProgramRecording(self) -> None:
+        self._run_recording(self._recording.toggle if self._recording is not None else None)
+
+    @Slot()
+    def refreshRecordingAudioDevices(self) -> None:
+        self._run_recording(
+            self._recording.refresh_audio_devices
+            if self._recording is not None
+            else None,
+            notify=False,
+        )
+
+    @Slot(str)
+    def setRecordingMicrophone(self, selection_key: str) -> None:
+        recording = self._recording
+        if recording is None:
+            return
+        selection = self._recording_selection(
+            selection_key,
+            AudioDeviceDirection.INPUT,
+            recording.configuration.microphone,
+        )
+        self._run_recording(lambda: recording.set_microphone_selection(selection))
+
+    @Slot(str)
+    def setRecordingSystemAudio(self, selection_key: str) -> None:
+        recording = self._recording
+        if recording is None:
+            return
+        selection = self._recording_selection(
+            selection_key,
+            AudioDeviceDirection.OUTPUT,
+            recording.configuration.system_audio,
+        )
+        self._run_recording(lambda: recording.set_system_audio_selection(selection))
+
+    @Slot()
+    def chooseRecordingDirectory(self) -> None:
+        recording = self._recording
+        if (
+            recording is None
+            or recording.busy
+            or self._recording_directory_picker is None
+        ):
+            return
+        current = str(recording.effective_output_directory())
+        selected = self._recording_directory_picker(current)
+        if selected:
+            self._run_recording(
+                lambda: recording.set_output_directory(Path(selected))
+            )
+
+    @Slot()
+    def useDefaultRecordingDirectory(self) -> None:
+        recording = self._recording
+        if recording is None or recording.busy:
+            return
+        self._run_recording(lambda: recording.set_output_directory(None))
+
+    @Slot()
+    def openRecordingDirectory(self) -> None:
+        if self._recording is None or self._recording_directory_opener is None:
+            return
+        path = str(self._recording.effective_output_directory())
+        if not self._recording_directory_opener(path):
+            self._notify_failure(
+                self.tr("The recording folder could not be opened."),
+                dedupe_key="scenes-recording-folder-open-failed",
+            )
 
     @Slot()
     def undo(self) -> None:
@@ -1432,6 +1701,7 @@ class ScenesBridge(QObject):
         self._closed = True
         self._clear_framing_session()
         self._disconnect_controller()
+        self._disconnect_recording()
         self.stopAllPtz()
         for future in tuple(self._ptz_recall_futures):
             self._controller.cancel_ptz_recall(future)
@@ -1463,6 +1733,10 @@ class ScenesBridge(QObject):
     def _on_profiles_changed(self, change: object) -> None:
         del change
         self.changed.emit()
+
+    def _on_recording_changed(self, _value: object = None) -> None:
+        if not self._closed:
+            self.changed.emit()
 
     def _runtime_changed(self, _value: object = None) -> None:
         self._refresh_models()
@@ -2078,6 +2352,110 @@ class ScenesBridge(QObject):
             self.ptzResult.emit(camera_id, succeeded, error_code)
 
         future.add_done_callback(completed)
+
+    @staticmethod
+    def _recording_selection_key(selection: AudioDeviceSelection) -> str:
+        if selection.mode is AudioSelectionMode.DEVICE:
+            return f"device:{selection.device_id}"
+        return selection.mode.value
+
+    def _recording_audio_choices(
+        self,
+        direction: AudioDeviceDirection,
+    ) -> list[dict[str, object]]:
+        recording = self._recording
+        if recording is None:
+            return []
+        choices: list[dict[str, object]] = [
+            {
+                "key": AudioSelectionMode.SYSTEM_DEFAULT.value,
+                "name": self.tr("System default"),
+                "available": True,
+            },
+            {
+                "key": AudioSelectionMode.NONE.value,
+                "name": self.tr("None"),
+                "available": True,
+            },
+        ]
+        known_ids: set[str] = set()
+        for device in recording.audio_devices.devices:
+            if device.direction is not direction:
+                continue
+            known_ids.add(device.device_id)
+            choices.append(
+                {
+                    "key": f"device:{device.device_id}",
+                    "name": device.display_name,
+                    "available": True,
+                }
+            )
+        configuration = recording.configuration
+        selected = (
+            configuration.microphone
+            if direction is AudioDeviceDirection.INPUT
+            else configuration.system_audio
+        )
+        if (
+            selected.mode is AudioSelectionMode.DEVICE
+            and selected.device_id not in known_ids
+        ):
+            display_name = selected.display_name or self.tr("Unavailable device")
+            choices.append(
+                {
+                    "key": f"device:{selected.device_id}",
+                    "name": self.tr("%1 (unavailable)").replace("%1", display_name),
+                    "available": False,
+                }
+            )
+        return choices
+
+    def _recording_selection(
+        self,
+        selection_key: str,
+        direction: AudioDeviceDirection,
+        current: AudioDeviceSelection,
+    ) -> AudioDeviceSelection:
+        recording = self._recording
+        if recording is None:
+            raise RuntimeError("Program recording is unavailable")
+        if selection_key == AudioSelectionMode.SYSTEM_DEFAULT.value:
+            return AudioDeviceSelection(AudioSelectionMode.SYSTEM_DEFAULT)
+        if selection_key == AudioSelectionMode.NONE.value:
+            return AudioDeviceSelection(AudioSelectionMode.NONE)
+        prefix = "device:"
+        if not selection_key.startswith(prefix):
+            raise ValueError("Unknown recording audio selection")
+        device_id = selection_key[len(prefix) :]
+        display_name = ""
+        for device in recording.audio_devices.devices:
+            if device.direction is direction and device.device_id == device_id:
+                display_name = device.display_name
+                break
+        if not display_name and current.device_id == device_id:
+            display_name = current.display_name
+        return AudioDeviceSelection(
+            AudioSelectionMode.DEVICE,
+            device_id=device_id,
+            display_name=display_name,
+        )
+
+    def _run_recording(self, operation, *, notify: bool = True) -> bool:
+        if not callable(operation):
+            return False
+        try:
+            operation()
+        except Exception:  # noqa: BLE001 - recording controller boundary
+            log.exception("Could not update Program recording")
+            if notify:
+                self._notify_failure(
+                    self.tr("The recording setting could not be updated."),
+                    dedupe_key="scenes-recording-update-failed",
+                )
+            self.changed.emit()
+            return False
+        self.changed.emit()
+        return True
 
     def _run_edit(self, operation) -> bool:
         try:

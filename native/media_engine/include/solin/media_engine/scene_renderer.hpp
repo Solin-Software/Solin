@@ -72,6 +72,7 @@ struct SceneOutputFrameCursor {
 enum class SystemMemoryOutputConsumer : std::uint8_t {
     frame_channel = 0U,
     virtual_camera = 1U,
+    program_recording = 2U,
 };
 
 struct SceneRenderSourceBinding {

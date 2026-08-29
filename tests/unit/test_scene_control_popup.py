@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from pathlib import Path
+import time
 
-from PySide6.QtCore import QCoreApplication, QRect
+from PySide6.QtCore import QCoreApplication, QEvent, QObject, QRect, Signal
 from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
+from PySide6.QtWidgets import QApplication, QWidget
 
 from solin.controllers.scene_runtime_controller import SceneRuntimeController
 from solin.core.foundation.runtime_paths import ProfilePaths
@@ -21,6 +23,12 @@ from solin.core.scenes.model import (
     TransitionSpec,
 )
 from solin.core.scenes.presets import SceneSeedNames
+from solin.core.scenes.recording import (
+    AudioDeviceDiscovery,
+    ProgramRecordingState,
+    ProgramRecordingStatus,
+    SceneRecordingConfig,
+)
 from solin.core.scenes.workspace import SceneWorkspaceService
 from solin.widgets.scenes.control_popup import SceneControlPopup
 
@@ -40,6 +48,48 @@ class _Projection:
         self.session_id += 1
         for listener in tuple(self._listeners):
             listener()
+
+
+class _Recording(QObject):
+    state_changed = Signal(object)
+    audio_devices_changed = Signal(object)
+    configuration_changed = Signal(object)
+    busy_changed = Signal(bool)
+
+    def __init__(self, directory: Path) -> None:
+        super().__init__()
+        self.supported = True
+        self.state = ProgramRecordingState()
+        self.configuration = SceneRecordingConfig()
+        self.audio_devices = AudioDeviceDiscovery(
+            supported=True,
+            ready=True,
+            generation=1,
+            devices=(),
+        )
+        self.directory = directory
+        self.toggle_count = 0
+
+    @property
+    def busy(self) -> bool:
+        return self.state.busy
+
+    def toggle(self) -> None:
+        self.toggle_count += 1
+        self.state = (
+            ProgramRecordingState()
+            if self.busy
+            else ProgramRecordingState(
+                status=ProgramRecordingStatus.RECORDING,
+                started_at_monotonic=time.monotonic() - 65,
+                output_path=self.directory / "recording.mp4",
+                active_config=self.configuration,
+            )
+        )
+        self.state_changed.emit(self.state)
+
+    def effective_output_directory(self) -> Path:
+        return self.directory
 
 
 def _controller(
@@ -141,6 +191,102 @@ def test_scene_toolbar_popup_controls_one_program_and_two_destinations(
     assert popup._info_full_text == "Transient operation error"
     popup._clear_operation_error()
     assert popup._info_full_text == "Scene engine ready"
+
+    popup.deleteLater()
+    QCoreApplication.processEvents()
+    controller.close()
+
+
+def test_scene_toolbar_popup_uses_the_shared_program_recording_state(
+    tmp_path: Path,
+) -> None:
+    controller = _controller(tmp_path)
+    controller._set_engine_ready(True)
+    recording = _Recording(tmp_path / "Videos" / "Solin")
+    popup = SceneControlPopup(controller, recording=recording)
+
+    assert popup._recording_row.isVisibleTo(popup)
+    assert popup._recording_button.text() == "Start recording"
+    assert popup._recording_button.isEnabled()
+    assert popup._recording_button.accessibleName() == "Start recording"
+
+    QTest.mouseClick(popup._recording_button, Qt.MouseButton.LeftButton)
+
+    assert recording.toggle_count == 1
+    assert popup._recording_button.text() == "Stop recording · 01:05"
+    assert popup._recording_button.property("recording") is True
+    assert popup._recording_clock.isActive()
+    assert popup._recording_button.toolTip() == "Stop recording"
+
+    recording.state = ProgramRecordingState(
+        status=ProgramRecordingStatus.RECORDING,
+        started_at_monotonic=time.monotonic() - 65,
+        output_path=tmp_path / "recording.mp4",
+        active_config=recording.configuration,
+        microphone_warning="Microphone unavailable; recording silence.",
+    )
+    recording.state_changed.emit(recording.state)
+    assert "Microphone unavailable" in popup._recording_button.toolTip()
+
+    recording.state = ProgramRecordingState(
+        status=ProgramRecordingStatus.STOPPING,
+        output_path=tmp_path / "recording.mp4",
+        active_config=recording.configuration,
+    )
+    recording.state_changed.emit(recording.state)
+
+    assert popup._recording_button.text() == "Finishing recording…"
+    assert not popup._recording_button.isEnabled()
+
+    recording.state = ProgramRecordingState(
+        status=ProgramRecordingStatus.FAILED,
+        error_code="recording_disk_full",
+        message="The recording disk is full.",
+    )
+    recording.state_changed.emit(recording.state)
+
+    assert popup._recording_button.text() == "Try recording again"
+    assert popup._recording_button.isEnabled()
+    assert popup._info_full_text == (
+        "The recording folder is unavailable or does not have enough free space."
+    )
+
+    popup.deleteLater()
+    QCoreApplication.processEvents()
+    controller.close()
+
+
+def test_recording_controls_never_show_as_a_standalone_window_during_build(
+    tmp_path: Path,
+) -> None:
+    class _TopLevelShowRecorder(QObject):
+        def __init__(self) -> None:
+            super().__init__()
+            self.object_names: list[str] = []
+
+        def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802
+            if (
+                event.type() is QEvent.Type.Show
+                and isinstance(watched, QWidget)
+                and watched.isWindow()
+            ):
+                self.object_names.append(watched.objectName())
+            return False
+
+    controller = _controller(tmp_path)
+    recording = _Recording(tmp_path / "Videos" / "Solin")
+    application = QApplication.instance()
+    assert application is not None
+    recorder = _TopLevelShowRecorder()
+    application.installEventFilter(recorder)
+    try:
+        popup = SceneControlPopup(controller, recording=recording)
+    finally:
+        application.removeEventFilter(recorder)
+
+    assert "SceneControlRecordingRow" not in recorder.object_names
+    assert popup._recording_row.parentWidget() is popup._card
+    assert not popup._recording_row.isWindow()
 
     popup.deleteLater()
     QCoreApplication.processEvents()

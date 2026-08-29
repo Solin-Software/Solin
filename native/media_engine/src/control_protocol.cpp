@@ -1,4 +1,5 @@
 #include "solin/media_engine/control_protocol.hpp"
+#include "solin/media_engine/program_recording.hpp"
 
 #include <algorithm>
 #include <array>
@@ -106,7 +107,18 @@ constexpr std::array<std::string_view, 9U> kEnvelopeFields{
         {"hardware_compositing", false},
         {"virtual_camera", false},
         {"d3d11_shared_textures", false},
+        {"program_recording", false},
+        {"audio_input_capture", false},
+        {"system_audio_capture", false},
     };
+}
+
+[[nodiscard]] Json unavailable_audio_devices() {
+    return Json{{"supported", false},
+                {"ready", true},
+                {"generation", 0U},
+                {"devices", Json::array()},
+                {"error_code", "media_runtime_unavailable"}};
 }
 
 [[nodiscard]] Json unavailable_ack() {
@@ -162,13 +174,103 @@ void validate_unavailable_command(const ControlEnvelope& request) {
 void validate_capabilities_payload(const Json& payload) {
     if (!has_exact_fields(payload,
                           {"local_cameras", "rtsp_cameras", "hardware_compositing",
-                           "virtual_camera", "d3d11_shared_textures"}) ||
+                           "virtual_camera", "d3d11_shared_textures", "program_recording",
+                           "audio_input_capture", "system_audio_capture"}) ||
         !payload.at("local_cameras").is_boolean() ||
         !payload.at("rtsp_cameras").is_boolean() ||
         !payload.at("hardware_compositing").is_boolean() ||
         !payload.at("virtual_camera").is_boolean() ||
-        !payload.at("d3d11_shared_textures").is_boolean()) {
+        !payload.at("d3d11_shared_textures").is_boolean() ||
+        !payload.at("program_recording").is_boolean() ||
+        !payload.at("audio_input_capture").is_boolean() ||
+        !payload.at("system_audio_capture").is_boolean()) {
         throw std::runtime_error("invalid media graph capabilities");
+    }
+}
+
+void validate_audio_selection(const Json& selection) {
+    if (!has_exact_fields(selection, {"mode", "device_id"}) ||
+        !selection.at("mode").is_string() || !selection.at("device_id").is_string()) {
+        throw std::runtime_error("invalid recording audio selection");
+    }
+    const auto mode = selection.at("mode").get<std::string>();
+    const auto device_id = selection.at("device_id").get<std::string>();
+    if ((mode != "system_default" && mode != "none" && mode != "device") ||
+        device_id.size() > 1'024U ||
+        std::ranges::any_of(device_id, [](const unsigned char character) {
+            return character < 32U || character == 127U;
+        }) ||
+        ((mode == "device") != !device_id.empty())) {
+        throw std::runtime_error("invalid recording audio selection");
+    }
+}
+
+void validate_start_recording_payload(const Json& payload) {
+    if (!has_exact_fields(payload,
+                          {"path", "width", "height", "fps_numerator",
+                           "fps_denominator", "microphone", "system_audio"}) ||
+        !payload.at("path").is_string() || !payload.at("width").is_number_unsigned() ||
+        !payload.at("height").is_number_unsigned() ||
+        !payload.at("fps_numerator").is_number_unsigned() ||
+        !payload.at("fps_denominator").is_number_unsigned()) {
+        throw std::runtime_error("invalid start program recording payload");
+    }
+    const auto path = payload.at("path").get<std::string>();
+    if (path.empty() || path.size() > 4'096U ||
+        std::ranges::any_of(path, [](const unsigned char character) {
+            return character < 32U || character == 127U;
+        })) {
+        throw std::runtime_error("invalid recording path");
+    }
+    const auto width = strict_integer(payload.at("width"), "recording width");
+    const auto height = strict_integer(payload.at("height"), "recording height");
+    const auto fps_numerator =
+        strict_integer(payload.at("fps_numerator"), "recording fps numerator");
+    const auto fps_denominator =
+        strict_integer(payload.at("fps_denominator"), "recording fps denominator");
+    if (width == 0U || height == 0U || width > kMaximumProgramRecordingDimension ||
+        height > kMaximumProgramRecordingDimension ||
+        width * height > kMaximumProgramRecordingPixels || fps_numerator == 0U ||
+        fps_denominator == 0U ||
+        fps_numerator / fps_denominator > kMaximumProgramRecordingFramesPerSecond ||
+        (fps_numerator / fps_denominator == kMaximumProgramRecordingFramesPerSecond &&
+         fps_numerator % fps_denominator != 0U)) {
+        throw std::runtime_error("invalid recording video format");
+    }
+    validate_audio_selection(payload.at("microphone"));
+    validate_audio_selection(payload.at("system_audio"));
+}
+
+void validate_audio_device_response(const Json& payload) {
+    if (!has_exact_fields(payload,
+                          {"supported", "ready", "generation", "devices", "error_code"}) ||
+        !payload.at("supported").is_boolean() || !payload.at("ready").is_boolean() ||
+        !payload.at("generation").is_number_unsigned() || !payload.at("devices").is_array() ||
+        !payload.at("error_code").is_string() || payload.at("devices").size() > 64U) {
+        throw std::runtime_error("invalid audio device service response");
+    }
+    for (const auto& device : payload.at("devices")) {
+        if (!has_exact_fields(device,
+                              {"device_id", "display_name", "direction", "is_default"}) ||
+            !device.at("device_id").is_string() ||
+            !device.at("display_name").is_string() || !device.at("direction").is_string() ||
+            !device.at("is_default").is_boolean()) {
+            throw std::runtime_error("invalid audio device entry");
+        }
+        const auto device_id = device.at("device_id").get<std::string>();
+        const auto display_name = device.at("display_name").get<std::string>();
+        const auto direction = device.at("direction").get<std::string>();
+        if (device_id.empty() || device_id.size() > 1'024U || display_name.empty() ||
+            display_name.size() > 512U ||
+            (direction != "input" && direction != "output") ||
+            std::ranges::any_of(device_id, [](const unsigned char character) {
+                return character < 32U || character == 127U;
+            }) ||
+            std::ranges::any_of(display_name, [](const unsigned char character) {
+                return character < 32U || character == 127U;
+            })) {
+            throw std::runtime_error("invalid audio device entry");
+        }
     }
 }
 
@@ -402,6 +504,41 @@ ProtocolReply ControlSession::handle(const ControlEnvelope& request) {
         return {
             .response = response_for(request, "local_camera_list", std::move(payload)),
         };
+    }
+    if (request.message_type == "list_audio_devices") {
+        require_empty_payload(request.payload, "list audio devices");
+        auto payload = services_.list_audio_devices ? services_.list_audio_devices()
+                                                    : unavailable_audio_devices();
+        validate_audio_device_response(payload);
+        return {.response = response_for(request, "audio_device_list", std::move(payload))};
+    }
+    if (request.message_type == "start_program_recording") {
+        validate_start_recording_payload(request.payload);
+        auto payload = services_.start_program_recording
+                           ? services_.start_program_recording(request.payload)
+                           : unavailable_ack();
+        validate_ack_payload(payload);
+        return {.response = response_for(request, "ack", std::move(payload))};
+    }
+    if (request.message_type == "set_program_recording_audio") {
+        if (!has_exact_fields(request.payload, {"microphone", "system_audio"})) {
+            throw std::runtime_error("invalid set program recording audio payload");
+        }
+        validate_audio_selection(request.payload.at("microphone"));
+        validate_audio_selection(request.payload.at("system_audio"));
+        auto payload = services_.set_program_recording_audio
+                           ? services_.set_program_recording_audio(request.payload)
+                           : unavailable_ack();
+        validate_ack_payload(payload);
+        return {.response = response_for(request, "ack", std::move(payload))};
+    }
+    if (request.message_type == "stop_program_recording") {
+        require_empty_payload(request.payload, "stop program recording");
+        auto payload = services_.stop_program_recording
+                           ? services_.stop_program_recording()
+                           : unavailable_ack();
+        validate_ack_payload(payload);
+        return {.response = response_for(request, "ack", std::move(payload))};
     }
     if (request.message_type == "hydrate") {
         validate_hydrate_shape(request.payload);

@@ -21,6 +21,12 @@ from solin.core.scenes.model import (
     VideoColorSpace,
     VideoPixelFormat,
 )
+from solin.core.scenes.recording import (
+    AudioDeviceDiscovery,
+    AudioDeviceSelection,
+    ProgramRecordingNativeState,
+    ProgramRecordingRequest,
+)
 
 
 MAXIMUM_OUTPUT_WINDOW_TARGETS = 32
@@ -81,6 +87,9 @@ class SceneEngineCapabilities:
     hardware_compositing: bool
     virtual_camera: bool
     d3d11_shared_textures: bool
+    program_recording: bool
+    audio_input_capture: bool
+    system_audio_capture: bool
 
     def __post_init__(self) -> None:
         _positive_int(self.protocol_version, "protocol_version")
@@ -91,6 +100,9 @@ class SceneEngineCapabilities:
             self.hardware_compositing,
             self.virtual_camera,
             self.d3d11_shared_textures,
+            self.program_recording,
+            self.audio_input_capture,
+            self.system_audio_capture,
         )
 
 
@@ -482,7 +494,18 @@ class EngineHealthEvent:
             raise ValueError("Invalid scene engine health event")
 
 
-SceneEngineEvent: TypeAlias = SourceHealthEvent | EngineHealthEvent
+@dataclass(frozen=True, slots=True)
+class ProgramRecordingEvent:
+    state: ProgramRecordingNativeState
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.state, ProgramRecordingNativeState):
+            raise ValueError("Invalid Program recording event")
+
+
+SceneEngineEvent: TypeAlias = (
+    SourceHealthEvent | EngineHealthEvent | ProgramRecordingEvent
+)
 
 
 class SceneEngine(Protocol):
@@ -510,6 +533,13 @@ class SceneEngine(Protocol):
         request_id: str,
         deadline_ms: int,
     ) -> Future[LocalCameraDiscovery]: ...
+
+    def list_audio_devices(
+        self,
+        *,
+        request_id: str,
+        deadline_ms: int,
+    ) -> Future[AudioDeviceDiscovery]: ...
 
     def hydrate(
         self,
@@ -580,6 +610,30 @@ class SceneEngine(Protocol):
         *,
         request_id: str,
         sequence: int,
+        deadline_ms: int,
+    ) -> Future[SceneEngineAck]: ...
+
+    def start_program_recording(
+        self,
+        recording: ProgramRecordingRequest,
+        *,
+        request_id: str,
+        deadline_ms: int,
+    ) -> Future[SceneEngineAck]: ...
+
+    def set_program_recording_audio(
+        self,
+        microphone: AudioDeviceSelection,
+        system_audio: AudioDeviceSelection,
+        *,
+        request_id: str,
+        deadline_ms: int,
+    ) -> Future[SceneEngineAck]: ...
+
+    def stop_program_recording(
+        self,
+        *,
+        request_id: str,
         deadline_ms: int,
     ) -> Future[SceneEngineAck]: ...
 

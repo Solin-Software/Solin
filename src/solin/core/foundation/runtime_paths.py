@@ -115,6 +115,10 @@ class ProfilePaths:
         return self.profile_dir / "scenes_runtime.json"
 
     @property
+    def scene_recording_journal_file(self) -> Path:
+        return self.profile_dir / "scene_recording_journal.json"
+
+    @property
     def scenes_assets_dir(self) -> Path:
         return self.profile_dir / "scenes_assets"
 

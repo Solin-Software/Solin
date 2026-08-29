@@ -939,8 +939,8 @@
 <context>
     <name>DeferredScenesWidget</name>
     <message>
-        <location filename="../../widgets/deferred_scenes_widget.py" line="+34"/>
-        <location line="+38"/>
+        <location filename="../../widgets/deferred_scenes_widget.py" line="+41"/>
+        <location line="+39"/>
         <source>Loading…</source>
         <translation>Carregando…</translation>
     </message>
@@ -1589,19 +1589,54 @@
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../../main_window.py" line="+1223"/>
+        <location filename="../../main_window.py" line="+1244"/>
         <location filename="../../controllers/main_window_nav.py" line="+38"/>
         <source>Scenes</source>
         <translation>Cenas</translation>
     </message>
     <message>
-        <location line="-691"/>
+        <location line="-693"/>
         <location filename="../../controllers/main_window_nav.py" line="-27"/>
         <source>Solin</source>
         <translation>Solin</translation>
     </message>
     <message>
-        <location line="+1070"/>
+        <location line="+715"/>
+        <source>Recording failed.</source>
+        <translation>Falha na gravação.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Recording failed. The file was preserved at %1</source>
+        <translation>Falha na gravação. O arquivo foi preservado em %1</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Recording</source>
+        <translation>Gravação</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Recording saved to %1</source>
+        <translation>Gravação salva em %1</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Recording complete</source>
+        <translation>Gravação concluída</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Stop recording before switching profiles.</source>
+        <translation>Pare a gravação antes de trocar de perfil.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Recording in progress</source>
+        <translation>Gravação em andamento</translation>
+    </message>
+    <message>
+        <location line="+379"/>
         <source>Pause playback before changing the projected content.</source>
         <translation>Pause a reprodução antes de alterar o conteúdo projetado.</translation>
     </message>
@@ -1619,6 +1654,11 @@
         <location line="+1"/>
         <source>Auto Screen Share</source>
         <translation>Compartilhamento automático de tela</translation>
+    </message>
+    <message>
+        <location line="+307"/>
+        <source>Stop recording before closing Solin.</source>
+        <translation>Pare a gravação antes de fechar o Solin.</translation>
     </message>
     <message>
         <location filename="../../controllers/main_window_nav.py" line="+1"/>
@@ -5059,7 +5099,7 @@ Esta ação não pode ser desfeita.</translation>
 <context>
     <name>QuickAccessToolbar</name>
     <message>
-        <location filename="../../widgets/quick_access_toolbar.py" line="+671"/>
+        <location filename="../../widgets/quick_access_toolbar.py" line="+678"/>
         <location line="+8"/>
         <source>Background Song</source>
         <translation>Cântico de fundo</translation>
@@ -5518,49 +5558,49 @@ Esta ação não pode ser desfeita.</translation>
 <context>
     <name>SceneControlPopup</name>
     <message>
-        <location filename="../../widgets/scenes/control_popup.py" line="+254"/>
-        <location line="+570"/>
+        <location filename="../../widgets/scenes/control_popup.py" line="+274"/>
+        <location line="+690"/>
         <source>Solin scenes</source>
         <translation>Cenas do Solin</translation>
     </message>
     <message>
-        <location line="-361"/>
+        <location line="-364"/>
         <location line="+2"/>
         <source>Virtual camera</source>
         <translation>Câmera virtual</translation>
     </message>
     <message>
-        <location line="-146"/>
-        <location line="+509"/>
+        <location line="-250"/>
+        <location line="+616"/>
         <source>Auto-switch media</source>
         <translation>Troca automática</translation>
     </message>
     <message>
-        <location line="-504"/>
-        <location line="+505"/>
+        <location line="-611"/>
+        <location line="+612"/>
         <source>Media windows</source>
         <translation>Janelas de mídia</translation>
     </message>
     <message>
-        <location line="-554"/>
-        <location line="+550"/>
+        <location line="-674"/>
+        <location line="+670"/>
         <source>Configured</source>
         <translation>Configuradas</translation>
     </message>
     <message>
-        <location line="-532"/>
-        <location line="+534"/>
+        <location line="-652"/>
+        <location line="+654"/>
         <source>Other scenes</source>
         <translation>Outras cenas</translation>
     </message>
     <message>
-        <location line="-499"/>
-        <location line="+502"/>
+        <location line="-606"/>
+        <location line="+609"/>
         <source>Show in media windows</source>
         <translation>Exibir nas janelas de mídia</translation>
     </message>
     <message>
-        <location line="-491"/>
+        <location line="-501"/>
         <source>The scene could not be selected.</source>
         <translation>Não foi possível selecionar a cena.</translation>
     </message>
@@ -5585,7 +5625,7 @@ Esta ação não pode ser desfeita.</translation>
         <translation>Não foi possível alterar o espelhamento nas janelas de mídia.</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+24"/>
         <source>Preparing…</source>
         <translation>Preparando…</translation>
     </message>
@@ -5609,7 +5649,7 @@ Esta ação não pode ser desfeita.</translation>
         <translation>Indisponível</translation>
     </message>
     <message>
-        <location line="+24"/>
+        <location line="+30"/>
         <source>Return: %1 · Right-click to change</source>
         <translation>Retorno: %1 · Clique com o botão direito para alterar</translation>
     </message>
@@ -5624,13 +5664,63 @@ Esta ação não pode ser desfeita.</translation>
         <translation>Troca automática pausada nesta sessão de mídia</translation>
     </message>
     <message>
-        <location line="-155"/>
-        <location line="+542"/>
+        <location line="-272"/>
+        <location line="+662"/>
         <source>Camera PiP</source>
         <translation>Câmera PiP</translation>
     </message>
     <message>
-        <location line="-373"/>
+        <location line="-592"/>
+        <source>The recording state could not be changed.</source>
+        <translation>Não foi possível alterar o estado da gravação.</translation>
+    </message>
+    <message>
+        <location line="+30"/>
+        <source>Stop recording · %1</source>
+        <translation>Parar gravação · %1</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Stop recording</source>
+        <translation>Parar gravação</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Starting recording…</source>
+        <translation>Iniciando gravação…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Finishing recording…</source>
+        <translation>Finalizando gravação…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Try recording again</source>
+        <translation>Tentar gravar novamente</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Start recording</source>
+        <translation>Iniciar gravação</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Start recording the live output</source>
+        <translation>Iniciar gravação da saída ao vivo</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>The scene engine must be ready to record.</source>
+        <translation>O mecanismo de cenas precisa estar pronto para gravar.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Recording is unavailable in this scene engine.</source>
+        <translation>A gravação não está disponível neste mecanismo de cenas.</translation>
+    </message>
+    <message>
+        <location line="+134"/>
         <source>Paused for this media session after a manual scene change.</source>
         <translation>Pausada nesta sessão de mídia após uma troca manual de cena.</translation>
     </message>
@@ -5756,7 +5846,7 @@ Esta ação não pode ser desfeita.</translation>
 <context>
     <name>SceneRuntimeController</name>
     <message>
-        <location filename="../../controllers/scene_runtime_controller.py" line="+1626"/>
+        <location filename="../../controllers/scene_runtime_controller.py" line="+1646"/>
         <source>The selected transition is unavailable. The scene was cut instead.</source>
         <translation>A transição selecionada não está disponível. A cena foi trocada com Corte.</translation>
     </message>
@@ -5764,7 +5854,7 @@ Esta ação não pode ser desfeita.</translation>
 <context>
     <name>ScenesBridge</name>
     <message>
-        <location filename="../../ui/qml/scenes_bridge.py" line="+309"/>
+        <location filename="../../ui/qml/scenes_bridge.py" line="+351"/>
         <source>Switching</source>
         <translation>Trocando</translation>
     </message>
@@ -5799,18 +5889,76 @@ Esta ação não pode ser desfeita.</translation>
         <translation>Iniciando o motor de cenas…</translation>
     </message>
     <message>
-        <location line="+44"/>
+        <location line="+66"/>
+        <location line="+23"/>
+        <location line="+18"/>
+        <source>Recording is unavailable</source>
+        <translation>Gravação indisponível</translation>
+    </message>
+    <message>
+        <location line="-35"/>
+        <source>The scene engine must be ready to record.</source>
+        <translation>O mecanismo de cenas precisa estar pronto para gravar.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <location line="+35"/>
+        <source>Recording is unavailable in this scene engine.</source>
+        <translation>A gravação não está disponível neste mecanismo de cenas.</translation>
+    </message>
+    <message>
+        <location line="-18"/>
+        <source>Ready to record</source>
+        <translation>Pronto para gravar</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Starting recording…</source>
+        <translation>Iniciando gravação…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Recording</source>
+        <translation>Gravação</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Finishing recording…</source>
+        <translation>Finalizando gravação…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Recording failed</source>
+        <translation>Falha na gravação</translation>
+    </message>
+    <message>
+        <location line="+55"/>
+        <source>Looking for audio devices…</source>
+        <translation>Procurando dispositivos de áudio…</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Audio devices could not be listed.</source>
+        <translation>Não foi possível listar os dispositivos de áudio.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>No audio devices found.</source>
+        <translation>Nenhum dispositivo de áudio encontrado.</translation>
+    </message>
+    <message>
+        <location line="+46"/>
         <source>Default camera (automatic)</source>
         <translation>Câmera padrão (automática)</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+1442"/>
+        <location line="+1518"/>
         <source>Automatic</source>
         <translation>Automática</translation>
     </message>
     <message>
-        <location line="-1432"/>
+        <location line="-1508"/>
         <source>Looking for cameras…</source>
         <translation>Procurando câmeras…</translation>
     </message>
@@ -5830,7 +5978,12 @@ Esta ação não pode ser desfeita.</translation>
         <translation>Nenhuma câmera encontrada. A câmera automática continua disponível.</translation>
     </message>
     <message>
-        <location line="+148"/>
+        <location line="+183"/>
+        <source>The recording folder could not be opened.</source>
+        <translation>Não foi possível abrir a pasta de gravações.</translation>
+    </message>
+    <message>
+        <location line="+36"/>
         <source>%1 copy</source>
         <translation>%1 (cópia)</translation>
     </message>
@@ -5870,7 +6023,7 @@ Esta ação não pode ser desfeita.</translation>
         <translation>Falha ao acionar a predefinição PTZ.</translation>
     </message>
     <message>
-        <location line="+124"/>
+        <location line="+129"/>
         <source>Default</source>
         <translation>Padrão</translation>
     </message>
@@ -5945,7 +6098,32 @@ Esta ação não pode ser desfeita.</translation>
         <translation>Não foi possível remover credenciais PTZ obsoletas.</translation>
     </message>
     <message>
-        <location line="+61"/>
+        <location line="+71"/>
+        <source>System default</source>
+        <translation>Padrão do sistema</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>None</source>
+        <translation>Nenhum</translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <source>Unavailable device</source>
+        <translation>Dispositivo indisponível</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>%1 (unavailable)</source>
+        <translation>%1 (indisponível)</translation>
+    </message>
+    <message>
+        <location line="+45"/>
+        <source>The recording setting could not be updated.</source>
+        <translation>Não foi possível atualizar a configuração de gravação.</translation>
+    </message>
+    <message>
+        <location line="+14"/>
         <source>The scene configuration could not be saved.</source>
         <translation>Não foi possível salvar a configuração de cenas.</translation>
     </message>
@@ -5965,7 +6143,7 @@ Esta ação não pode ser desfeita.</translation>
         <translation>Cenas</translation>
     </message>
     <message>
-        <location line="-1541"/>
+        <location line="-1650"/>
         <location line="+26"/>
         <source>Choose a valid transition and duration.</source>
         <translation>Escolha uma transição e duração válidas.</translation>
@@ -5974,13 +6152,13 @@ Esta ação não pode ser desfeita.</translation>
 <context>
     <name>ScenesEditorView</name>
     <message>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+1469"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+1489"/>
         <location line="+6"/>
         <source>Program transition: %1</source>
         <translation>Transição de cena: %1</translation>
     </message>
     <message>
-        <location line="-821"/>
+        <location line="-829"/>
         <source>Program transition</source>
         <translation>Transição de cena</translation>
     </message>
@@ -5990,14 +6168,14 @@ Esta ação não pode ser desfeita.</translation>
         <translation>Usada quando as cenas entram ao vivo. A prévia do editor continua instantânea.</translation>
     </message>
     <message>
-        <location line="-462"/>
-        <location line="+473"/>
-        <location line="+141"/>
+        <location line="-474"/>
+        <location line="+485"/>
+        <location line="+149"/>
         <source>Cut</source>
         <translation>Corte</translation>
     </message>
     <message>
-        <location line="-670"/>
+        <location line="-690"/>
         <source>Open scenes</source>
         <translation>Abrir cenas</translation>
     </message>
@@ -6022,7 +6200,7 @@ Esta ação não pode ser desfeita.</translation>
         <translation>Refazer</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+25"/>
         <source>Off</source>
         <translation>Desligado</translation>
     </message>
@@ -6033,18 +6211,18 @@ Esta ação não pode ser desfeita.</translation>
     </message>
     <message>
         <location line="+15"/>
-        <location line="+465"/>
+        <location line="+473"/>
         <source>On air</source>
         <translation>Ao vivo</translation>
     </message>
     <message>
-        <location line="-465"/>
-        <location line="+465"/>
+        <location line="-473"/>
+        <location line="+473"/>
         <source>Take live</source>
         <translation>Transmitir ao vivo</translation>
     </message>
     <message>
-        <location line="-204"/>
+        <location line="-212"/>
         <source>Canvas</source>
         <translation>Canvas</translation>
     </message>
@@ -6055,23 +6233,23 @@ Esta ação não pode ser desfeita.</translation>
     </message>
     <message>
         <location line="+7"/>
-        <location line="+142"/>
+        <location line="+150"/>
         <source>Dissolve</source>
         <translation>Esmaecer</translation>
     </message>
     <message>
-        <location line="-141"/>
+        <location line="-149"/>
         <source>Blend the two scenes</source>
         <translation>Mesclar as duas cenas</translation>
     </message>
     <message>
         <location line="+7"/>
-        <location line="+143"/>
+        <location line="+151"/>
         <source>Fade through black</source>
         <translation>Fade</translation>
     </message>
     <message>
-        <location line="-142"/>
+        <location line="-150"/>
         <source>Fade out, then fade in</source>
         <translation>Desaparecer no preto e reaparecer</translation>
     </message>
@@ -6082,7 +6260,7 @@ Esta ação não pode ser desfeita.</translation>
     </message>
     <message>
         <location line="+15"/>
-        <location line="+444"/>
+        <location line="+452"/>
         <source>ms</source>
         <translation>ms</translation>
     </message>
@@ -6323,7 +6501,33 @@ Esta ação não pode ser desfeita.</translation>
         <translation>Exibir esta cena no lugar</translation>
     </message>
     <message>
-        <location line="+270"/>
+        <location line="+183"/>
+        <source>Try recording again</source>
+        <translation>Tentar gravar novamente</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Starting recording…</source>
+        <translation>Iniciando gravação…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Finishing recording…</source>
+        <translation>Finalizando gravação…</translation>
+    </message>
+    <message>
+        <location line="+57"/>
+        <source>Retry</source>
+        <translation>Tentar novamente</translation>
+    </message>
+    <message>
+        <location line="+54"/>
+        <location line="+6"/>
+        <source>Recording settings</source>
+        <translation>Configurações de gravação</translation>
+    </message>
+    <message>
+        <location line="+107"/>
         <source>Output · %1</source>
         <translation>Saída · %1</translation>
     </message>
@@ -6479,11 +6683,11 @@ Esta ação não pode ser desfeita.</translation>
         <location line="+65"/>
         <location line="+29"/>
         <location filename="../../qml/ScenesTransformDialog.qml" line="+94"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-900"/>
-        <location line="+441"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-1047"/>
+        <location line="+449"/>
         <location line="+89"/>
         <location line="+68"/>
-        <location line="+309"/>
+        <location line="+448"/>
         <source>Cancel</source>
         <translation>Cancelar</translation>
     </message>
@@ -6492,7 +6696,7 @@ Esta ação não pode ser desfeita.</translation>
         <location filename="../../qml/ScenesPtzInspector.qml" line="-93"/>
         <location line="+65"/>
         <location filename="../../qml/ScenesTransformDialog.qml" line="+1"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-435"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-574"/>
         <location line="+13"/>
         <source>Save</source>
         <translation>Salvar</translation>
@@ -6520,8 +6724,8 @@ Esta ação não pode ser desfeita.</translation>
     </message>
     <message>
         <location line="+11"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-291"/>
-        <location line="+441"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-299"/>
+        <location line="+449"/>
         <source>Apply</source>
         <translation>Aplicar</translation>
     </message>
@@ -6792,8 +6996,8 @@ Esta ação não pode ser desfeita.</translation>
     </message>
     <message>
         <location filename="../../qml/ScenesScenePanel.qml" line="+172"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-1173"/>
-        <location line="+301"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-1193"/>
+        <location line="+313"/>
         <location line="+102"/>
         <source>Scenes</source>
         <translation>Cenas</translation>
@@ -6896,6 +7100,91 @@ Adicione conteúdo, uma câmera ou outra cena.</translation>
         <location line="+2"/>
         <source>Rotation</source>
         <translation>Rotação</translation>
+    </message>
+    <message>
+        <location filename="../../qml/ScenesRecordingPopover.qml" line="+112"/>
+        <source>Recording</source>
+        <translation>Gravação</translation>
+    </message>
+    <message>
+        <location line="+58"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+1004"/>
+        <source>Record</source>
+        <translation>Gravar</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-61"/>
+        <source>Stop recording</source>
+        <translation>Parar gravação</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Try again</source>
+        <translation>Tentar novamente</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+58"/>
+        <source>Starting…</source>
+        <translation>Iniciando…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+1"/>
+        <source>Finishing…</source>
+        <translation>Finalizando…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-55"/>
+        <source>Start recording</source>
+        <translation>Iniciar gravação</translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <location line="+15"/>
+        <source>Microphone</source>
+        <translation>Microfone</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <location line="+15"/>
+        <source>System audio</source>
+        <translation>Áudio do sistema</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Includes sounds from every app using the selected output.</source>
+        <translation>Inclui sons de todos os aplicativos que usam a saída selecionada.</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Save recordings to</source>
+        <translation>Salvar gravações em</translation>
+    </message>
+    <message>
+        <location line="+38"/>
+        <source>Change…</source>
+        <translation>Alterar…</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Use default</source>
+        <translation>Usar padrão</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Open folder</source>
+        <translation>Abrir pasta</translation>
+    </message>
+</context>
+<context>
+    <name>ScenesEditorWidget</name>
+    <message>
+        <location filename="../../ui/qml/scenes.py" line="+139"/>
+        <source>Choose recording folder</source>
+        <translation>Escolher pasta de gravações</translation>
     </message>
 </context>
 <context>

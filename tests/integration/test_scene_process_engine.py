@@ -9,9 +9,11 @@ import pytest
 
 from solin.core.scenes.engine import (
     EngineHealthEvent,
+    ProgramRecordingEvent,
     SceneEngineSnapshot,
     SceneEngineStatus,
 )
+from solin.core.scenes.ipc_protocol import PROTOCOL_VERSION
 from solin.core.scenes.model import BusId, TransitionKind, TransitionSpec
 from solin.core.scenes.presets import SceneSeedNames, create_default_scene_document
 from solin.core.scenes.process_engine import (
@@ -19,6 +21,12 @@ from solin.core.scenes.process_engine import (
     SceneEngineProcessConfig,
     SceneEngineRequestTimeoutError,
     SubprocessSceneEngine,
+)
+from solin.core.scenes.recording import (
+    AudioDeviceSelection,
+    AudioSelectionMode,
+    ProgramRecordingRequest,
+    ProgramRecordingStatus,
 )
 
 
@@ -75,8 +83,14 @@ def _snapshot(sequence: int = 1) -> SceneEngineSnapshot:
 
 def test_subprocess_engine_executes_the_scene_command_lifecycle() -> None:
     engine = _engine()
+    recording_events: list[ProgramRecordingEvent] = []
+    engine.subscribe(
+        lambda event: recording_events.append(event)
+        if isinstance(event, ProgramRecordingEvent)
+        else None
+    )
     capabilities = engine.start(session_id="integration-session", deadline_ms=2000).result(3)
-    assert capabilities.protocol_version == 3
+    assert capabilities.protocol_version == PROTOCOL_VERSION
     assert not capabilities.hardware_compositing
 
     discovery = engine.list_local_cameras(
@@ -88,9 +102,39 @@ def test_subprocess_engine_executes_the_scene_command_lifecycle() -> None:
     assert discovery.devices[0].device_id == "camera://device-1"
     assert discovery.devices[0].formats[0].frames_per_second == pytest.approx(29.97, 0.01)
 
+    audio_devices = engine.list_audio_devices(
+        request_id="list-audio-1",
+        deadline_ms=1000,
+    ).result(2)
+    assert audio_devices.ready
+    assert {device.direction.value for device in audio_devices.devices} == {"input", "output"}
+
     snapshot = _snapshot()
     hydrated = engine.hydrate(snapshot, request_id="hydrate-1", deadline_ms=1000).result(2)
     assert hydrated.applied
+    recording_path = Path.cwd() / "Program recording.mp4"
+    recording = engine.start_program_recording(
+        ProgramRecordingRequest(
+            path=recording_path,
+            width=snapshot.document.output(BusId.VIRTUAL_CAMERA).video_format.width,
+            height=snapshot.document.output(BusId.VIRTUAL_CAMERA).video_format.height,
+            fps_numerator=60,
+            fps_denominator=1,
+            microphone=AudioDeviceSelection(),
+            system_audio=AudioDeviceSelection(AudioSelectionMode.NONE),
+        ),
+        request_id="recording-start-1",
+        deadline_ms=1000,
+    ).result(2)
+    assert recording.applied
+    assert recording_events[-1].state.status is ProgramRecordingStatus.RECORDING
+    changed_audio = engine.set_program_recording_audio(
+        AudioDeviceSelection(AudioSelectionMode.NONE),
+        AudioDeviceSelection(),
+        request_id="recording-audio-1",
+        deadline_ms=1000,
+    ).result(2)
+    assert changed_audio.applied
     preparation = engine.prepare_scene(
         BusId.MEDIA_WINDOWS,
         snapshot.active_scenes[0][1],
@@ -135,9 +179,15 @@ def test_subprocess_engine_executes_the_scene_command_lifecycle() -> None:
     assert output.document_revision == snapshot.document.revision
     assert window_targets.applied
     assert window_targets.document_revision == snapshot.document.revision
+    stopped_recording = engine.stop_program_recording(
+        request_id="recording-stop-1",
+        deadline_ms=1000,
+    ).result(2)
+    assert stopped_recording.applied
+    assert recording_events[-1].state.status is ProgramRecordingStatus.IDLE
     metrics = engine.metrics
-    assert metrics.request_count >= 8
-    assert metrics.latency_sample_count >= 8
+    assert metrics.request_count >= 12
+    assert metrics.latency_sample_count >= 12
     assert 0 <= metrics.latency_p50_ms <= metrics.latency_p95_ms <= metrics.latency_maximum_ms
     engine.stop()
     _wait_until(lambda: engine.health.status is SceneEngineStatus.STOPPED)
@@ -368,7 +418,7 @@ def test_subprocess_engine_locks_gstreamer_to_its_bundled_runtime(tmp_path: Path
 
     capabilities = engine.start(session_id="integration-session", deadline_ms=2000).result(3)
 
-    assert capabilities.protocol_version == 3
+    assert capabilities.protocol_version == PROTOCOL_VERSION
     engine.stop()
 
 

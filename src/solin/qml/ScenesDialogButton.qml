@@ -27,6 +27,18 @@ Rectangle {
         : buttonMouse.containsMouse && enabled ? hover : surfaceSoft
     border.width: primary ? 0 : 1
     border.color: danger ? dangerColor : borderColor
+    activeFocusOnTab: visible && enabled
+    Accessible.role: Accessible.Button
+    Accessible.name: root.text
+    Accessible.onPressAction: root.clicked()
+
+    Keys.onPressed: function(event) {
+        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter
+                || event.key === Qt.Key_Space) {
+            root.clicked()
+            event.accepted = true
+        }
+    }
 
     Text {
         id: label

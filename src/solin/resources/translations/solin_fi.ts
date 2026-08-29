@@ -939,8 +939,8 @@
 <context>
     <name>DeferredScenesWidget</name>
     <message>
-        <location filename="../../widgets/deferred_scenes_widget.py" line="+34"/>
-        <location line="+38"/>
+        <location filename="../../widgets/deferred_scenes_widget.py" line="+41"/>
+        <location line="+39"/>
         <source>Loading…</source>
         <translation>Ladataan…</translation>
     </message>
@@ -1589,16 +1589,51 @@
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../../main_window.py" line="+532"/>
+        <location filename="../../main_window.py" line="+551"/>
         <location filename="../../controllers/main_window_nav.py" line="+11"/>
         <source>Solin</source>
         <translation>Solin</translation>
     </message>
     <message>
-        <location line="+691"/>
+        <location line="+693"/>
         <location filename="../../controllers/main_window_nav.py" line="+27"/>
         <source>Scenes</source>
         <translation>Näkymät</translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <source>Recording failed.</source>
+        <translation>Tallennus epäonnistui.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Recording failed. The file was preserved at %1</source>
+        <translation>Tallennus epäonnistui. Tiedosto säilytettiin sijainnissa %1</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Recording</source>
+        <translation>Tallennus</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Recording saved to %1</source>
+        <translation>Tallenne tallennettiin kohteeseen %1</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Recording complete</source>
+        <translation>Tallennus valmis</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Stop recording before switching profiles.</source>
+        <translation>Lopeta tallennus ennen profiilin vaihtamista.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Recording in progress</source>
+        <translation>Tallennus käynnissä</translation>
     </message>
     <message>
         <location line="+379"/>
@@ -1619,6 +1654,11 @@
         <location line="+1"/>
         <source>Auto Screen Share</source>
         <translation>Automaattinen näytönjako</translation>
+    </message>
+    <message>
+        <location line="+307"/>
+        <source>Stop recording before closing Solin.</source>
+        <translation>Lopeta tallennus ennen Solinin sulkemista.</translation>
     </message>
     <message>
         <location filename="../../controllers/main_window_nav.py" line="-26"/>
@@ -5054,7 +5094,7 @@ Tätä toimintoa ei voi peruuttaa.</translation>
 <context>
     <name>QuickAccessToolbar</name>
     <message>
-        <location filename="../../widgets/quick_access_toolbar.py" line="+654"/>
+        <location filename="../../widgets/quick_access_toolbar.py" line="+661"/>
         <source>Remote control unavailable</source>
         <translation>Etäohjaus ei ole käytettävissä</translation>
     </message>
@@ -5501,49 +5541,99 @@ Tätä toimintoa ei voi peruuttaa.</translation>
 <context>
     <name>SceneControlPopup</name>
     <message>
-        <location filename="../../widgets/scenes/control_popup.py" line="+254"/>
-        <location line="+570"/>
+        <location filename="../../widgets/scenes/control_popup.py" line="+274"/>
+        <location line="+690"/>
         <source>Solin scenes</source>
         <translation>Solin-näkymät</translation>
     </message>
     <message>
-        <location line="-549"/>
-        <location line="+550"/>
+        <location line="-669"/>
+        <location line="+670"/>
         <source>Configured</source>
         <translation>Määritetyt</translation>
     </message>
     <message>
-        <location line="-541"/>
-        <location line="+542"/>
+        <location line="-661"/>
+        <location line="+662"/>
         <source>Camera PiP</source>
         <translation>Kamera-PiP</translation>
     </message>
     <message>
-        <location line="-533"/>
-        <location line="+534"/>
+        <location line="-653"/>
+        <location line="+654"/>
         <source>Other scenes</source>
         <translation>Muut näkymät</translation>
     </message>
     <message>
-        <location line="-508"/>
-        <location line="+509"/>
+        <location line="-615"/>
+        <location line="+616"/>
         <source>Auto-switch media</source>
         <translation>Automaattinen vaihto</translation>
     </message>
     <message>
-        <location line="-504"/>
-        <location line="+505"/>
+        <location line="-611"/>
+        <location line="+612"/>
         <source>Media windows</source>
         <translation>Mediaikkunat</translation>
     </message>
     <message>
-        <location line="-501"/>
-        <location line="+502"/>
+        <location line="-608"/>
+        <location line="+609"/>
         <source>Show in media windows</source>
         <translation>Näytä mediaikkunoissa</translation>
     </message>
     <message>
-        <location line="-491"/>
+        <location line="-596"/>
+        <source>The recording state could not be changed.</source>
+        <translation>Tallennuksen tilaa ei voitu muuttaa.</translation>
+    </message>
+    <message>
+        <location line="+30"/>
+        <source>Stop recording · %1</source>
+        <translation>Lopeta tallennus · %1</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Stop recording</source>
+        <translation>Lopeta tallennus</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Starting recording…</source>
+        <translation>Tallennusta käynnistetään…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Finishing recording…</source>
+        <translation>Tallennusta viimeistellään…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Try recording again</source>
+        <translation>Yritä tallennusta uudelleen</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Start recording</source>
+        <translation>Aloita tallennus</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Start recording the live output</source>
+        <translation>Aloita suoran lähdön tallennus</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>The scene engine must be ready to record.</source>
+        <translation>Kohtausmoottorin on oltava valmis tallennusta varten.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Recording is unavailable in this scene engine.</source>
+        <translation>Tallennus ei ole käytettävissä tässä kohtausmoottorissa.</translation>
+    </message>
+    <message>
+        <location line="+13"/>
         <source>The scene could not be selected.</source>
         <translation>Näkymän valitseminen epäonnistui.</translation>
     </message>
@@ -5568,7 +5658,7 @@ Tätä toimintoa ei voi peruuttaa.</translation>
         <translation>Mediaikkunoiden peilauksen vaihtaminen epäonnistui.</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+24"/>
         <source>Preparing…</source>
         <translation>Valmistellaan…</translation>
     </message>
@@ -5588,7 +5678,7 @@ Tätä toimintoa ei voi peruuttaa.</translation>
         <translation>Ei käytettävissä</translation>
     </message>
     <message>
-        <location line="+21"/>
+        <location line="+27"/>
         <source>Auto-switch paused for this media session</source>
         <translation>Automaattinen vaihto keskeytetty tämän mediaistunnon ajaksi</translation>
     </message>
@@ -5735,7 +5825,7 @@ Tätä toimintoa ei voi peruuttaa.</translation>
 <context>
     <name>SceneRuntimeController</name>
     <message>
-        <location filename="../../controllers/scene_runtime_controller.py" line="+1626"/>
+        <location filename="../../controllers/scene_runtime_controller.py" line="+1646"/>
         <source>The selected transition is unavailable. The scene was cut instead.</source>
         <translation>Valittu siirtymä ei ole käytettävissä. Näkymä vaihdettiin leikkauksella.</translation>
     </message>
@@ -5743,7 +5833,7 @@ Tätä toimintoa ei voi peruuttaa.</translation>
 <context>
     <name>ScenesBridge</name>
     <message>
-        <location filename="../../ui/qml/scenes_bridge.py" line="+309"/>
+        <location filename="../../ui/qml/scenes_bridge.py" line="+351"/>
         <source>Switching</source>
         <translation>Vaihdetaan</translation>
     </message>
@@ -5778,18 +5868,76 @@ Tätä toimintoa ei voi peruuttaa.</translation>
         <translation>Käynnistetään näkymämoottoria…</translation>
     </message>
     <message>
-        <location line="+44"/>
+        <location line="+66"/>
+        <location line="+23"/>
+        <location line="+18"/>
+        <source>Recording is unavailable</source>
+        <translation>Tallennus ei ole käytettävissä</translation>
+    </message>
+    <message>
+        <location line="-35"/>
+        <source>The scene engine must be ready to record.</source>
+        <translation>Kohtausmoottorin on oltava valmis tallennusta varten.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <location line="+35"/>
+        <source>Recording is unavailable in this scene engine.</source>
+        <translation>Tallennus ei ole käytettävissä tässä kohtausmoottorissa.</translation>
+    </message>
+    <message>
+        <location line="-18"/>
+        <source>Ready to record</source>
+        <translation>Valmis tallentamaan</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Starting recording…</source>
+        <translation>Tallennusta käynnistetään…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Recording</source>
+        <translation>Tallennus</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Finishing recording…</source>
+        <translation>Tallennusta viimeistellään…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Recording failed</source>
+        <translation>Tallennus epäonnistui</translation>
+    </message>
+    <message>
+        <location line="+55"/>
+        <source>Looking for audio devices…</source>
+        <translation>Etsitään äänilaitteita…</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Audio devices could not be listed.</source>
+        <translation>Äänilaitteita ei voitu luetteloida.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>No audio devices found.</source>
+        <translation>Äänilaitteita ei löytynyt.</translation>
+    </message>
+    <message>
+        <location line="+46"/>
         <source>Default camera (automatic)</source>
         <translation>Oletuskamera (automaattinen)</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+1442"/>
+        <location line="+1518"/>
         <source>Automatic</source>
         <translation>Automaattinen</translation>
     </message>
     <message>
-        <location line="-1432"/>
+        <location line="-1508"/>
         <source>Looking for cameras…</source>
         <translation>Etsitään kameroita…</translation>
     </message>
@@ -5809,7 +5957,12 @@ Tätä toimintoa ei voi peruuttaa.</translation>
         <translation>Kameroita ei löytynyt. Automaattinen kamera on edelleen käytettävissä.</translation>
     </message>
     <message>
-        <location line="+148"/>
+        <location line="+183"/>
+        <source>The recording folder could not be opened.</source>
+        <translation>Tallennuskansiota ei voitu avata.</translation>
+    </message>
+    <message>
+        <location line="+36"/>
         <source>%1 copy</source>
         <translation>%1 (kopio)</translation>
     </message>
@@ -5855,7 +6008,7 @@ Tätä toimintoa ei voi peruuttaa.</translation>
         <translation>PTZ-esiasetuksen palauttaminen epäonnistui.</translation>
     </message>
     <message>
-        <location line="+124"/>
+        <location line="+129"/>
         <source>Default</source>
         <translation>Oletus</translation>
     </message>
@@ -5930,7 +6083,32 @@ Tätä toimintoa ei voi peruuttaa.</translation>
         <translation>Vanhentuneita PTZ-tunnuksia ei voitu poistaa.</translation>
     </message>
     <message>
-        <location line="+61"/>
+        <location line="+71"/>
+        <source>System default</source>
+        <translation>Järjestelmän oletus</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>None</source>
+        <translation>Ei mitään</translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <source>Unavailable device</source>
+        <translation>Laite ei ole käytettävissä</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>%1 (unavailable)</source>
+        <translation>%1 (ei käytettävissä)</translation>
+    </message>
+    <message>
+        <location line="+45"/>
+        <source>The recording setting could not be updated.</source>
+        <translation>Tallennusasetusta ei voitu päivittää.</translation>
+    </message>
+    <message>
+        <location line="+14"/>
         <source>The scene configuration could not be saved.</source>
         <translation>Näkymien määritysten tallentaminen epäonnistui.</translation>
     </message>
@@ -5971,7 +6149,7 @@ Tätä toimintoa ei voi peruuttaa.</translation>
     <message>
         <location line="+6"/>
         <location filename="../../qml/ScenesPtzInspector.qml" line="+10"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+1624"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+1783"/>
         <source>Name</source>
         <translation>Nimi</translation>
     </message>
@@ -6104,11 +6282,11 @@ Tätä toimintoa ei voi peruuttaa.</translation>
         <location line="+65"/>
         <location line="+29"/>
         <location filename="../../qml/ScenesTransformDialog.qml" line="+94"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-900"/>
-        <location line="+441"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-1047"/>
+        <location line="+449"/>
         <location line="+89"/>
         <location line="+68"/>
-        <location line="+309"/>
+        <location line="+448"/>
         <source>Cancel</source>
         <translation>Peruuta</translation>
     </message>
@@ -6117,7 +6295,7 @@ Tätä toimintoa ei voi peruuttaa.</translation>
         <location filename="../../qml/ScenesPtzInspector.qml" line="-93"/>
         <location line="+65"/>
         <location filename="../../qml/ScenesTransformDialog.qml" line="+1"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-435"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-574"/>
         <location line="+13"/>
         <source>Save</source>
         <translation>Tallenna</translation>
@@ -6410,8 +6588,8 @@ Tätä toimintoa ei voi peruuttaa.</translation>
     </message>
     <message>
         <location filename="../../qml/ScenesScenePanel.qml" line="+172"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-1173"/>
-        <location line="+301"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-1193"/>
+        <location line="+313"/>
         <location line="+102"/>
         <source>Scenes</source>
         <translation>Näkymät</translation>
@@ -6516,7 +6694,7 @@ Lisää sisältöä, kamera tai toinen näkymä.</translation>
         <translation>Kierto</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-414"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-426"/>
         <source>Open scenes</source>
         <translation>Avaa näkymät</translation>
     </message>
@@ -6542,13 +6720,13 @@ Lisää sisältöä, kamera tai toinen näkymä.</translation>
     </message>
     <message>
         <location line="+7"/>
-        <location line="+473"/>
-        <location line="+141"/>
+        <location line="+485"/>
+        <location line="+149"/>
         <source>Cut</source>
         <translation>Leikkaus</translation>
     </message>
     <message>
-        <location line="-608"/>
+        <location line="-616"/>
         <source>Off</source>
         <translation>Pois käytöstä</translation>
     </message>
@@ -6559,18 +6737,18 @@ Lisää sisältöä, kamera tai toinen näkymä.</translation>
     </message>
     <message>
         <location line="+15"/>
-        <location line="+465"/>
+        <location line="+473"/>
         <source>On air</source>
         <translation>Suorassa</translation>
     </message>
     <message>
-        <location line="-465"/>
-        <location line="+465"/>
+        <location line="-473"/>
+        <location line="+473"/>
         <source>Take live</source>
         <translation>Siirrä suoraan</translation>
     </message>
     <message>
-        <location line="-204"/>
+        <location line="-212"/>
         <source>Canvas</source>
         <translation>Työtila</translation>
     </message>
@@ -6591,23 +6769,23 @@ Lisää sisältöä, kamera tai toinen näkymä.</translation>
     </message>
     <message>
         <location line="+7"/>
-        <location line="+142"/>
+        <location line="+150"/>
         <source>Dissolve</source>
         <translation>Ristihäivytys</translation>
     </message>
     <message>
-        <location line="-141"/>
+        <location line="-149"/>
         <source>Blend the two scenes</source>
         <translation>Sekoita kaksi näkymää</translation>
     </message>
     <message>
         <location line="+7"/>
-        <location line="+143"/>
+        <location line="+151"/>
         <source>Fade through black</source>
         <translation>Häivytys mustan kautta</translation>
     </message>
     <message>
-        <location line="-142"/>
+        <location line="-150"/>
         <source>Fade out, then fade in</source>
         <translation>Häivytä mustaan ja takaisin</translation>
     </message>
@@ -6618,14 +6796,14 @@ Lisää sisältöä, kamera tai toinen näkymä.</translation>
     </message>
     <message>
         <location line="+15"/>
-        <location line="+444"/>
+        <location line="+452"/>
         <source>ms</source>
         <translation>ms</translation>
     </message>
     <message>
         <location filename="../../qml/ScenesCanvas.qml" line="-3"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-428"/>
-        <location line="+441"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-436"/>
+        <location line="+449"/>
         <source>Apply</source>
         <translation>Käytä</translation>
     </message>
@@ -6872,9 +7050,120 @@ Lisää sisältöä, kamera tai toinen näkymä.</translation>
         <translation>Näkymäsiirtymä: %1</translation>
     </message>
     <message>
-        <location line="+105"/>
+        <location line="+18"/>
+        <source>Try recording again</source>
+        <translation>Yritä tallennusta uudelleen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Starting recording…</source>
+        <translation>Tallennusta käynnistetään…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Finishing recording…</source>
+        <translation>Tallennusta viimeistellään…</translation>
+    </message>
+    <message>
+        <location line="+57"/>
+        <source>Retry</source>
+        <translation>Yritä uudelleen</translation>
+    </message>
+    <message>
+        <location line="+54"/>
+        <location line="+6"/>
+        <source>Recording settings</source>
+        <translation>Tallennusasetukset</translation>
+    </message>
+    <message>
+        <location line="+107"/>
         <source>Output · %1</source>
         <translation>Lähtö · %1</translation>
+    </message>
+    <message>
+        <location filename="../../qml/ScenesRecordingPopover.qml" line="+112"/>
+        <source>Recording</source>
+        <translation>Tallennus</translation>
+    </message>
+    <message>
+        <location line="+58"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-166"/>
+        <source>Record</source>
+        <translation>Tallenna</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-61"/>
+        <source>Stop recording</source>
+        <translation>Lopeta tallennus</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Try again</source>
+        <translation>Yritä uudelleen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+58"/>
+        <source>Starting…</source>
+        <translation>Käynnistetään…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+1"/>
+        <source>Finishing…</source>
+        <translation>Viimeistellään…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-55"/>
+        <source>Start recording</source>
+        <translation>Aloita tallennus</translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <location line="+15"/>
+        <source>Microphone</source>
+        <translation>Mikrofoni</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <location line="+15"/>
+        <source>System audio</source>
+        <translation>Järjestelmän ääni</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Includes sounds from every app using the selected output.</source>
+        <translation>Sisältää kaikkien valittua äänilähtöä käyttävien sovellusten äänet.</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Save recordings to</source>
+        <translation>Tallenna tallenteet kansioon</translation>
+    </message>
+    <message>
+        <location line="+38"/>
+        <source>Change…</source>
+        <translation>Vaihda…</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Use default</source>
+        <translation>Käytä oletusta</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Open folder</source>
+        <translation>Avaa kansio</translation>
+    </message>
+</context>
+<context>
+    <name>ScenesEditorWidget</name>
+    <message>
+        <location filename="../../ui/qml/scenes.py" line="+139"/>
+        <source>Choose recording folder</source>
+        <translation>Valitse tallennuskansio</translation>
     </message>
 </context>
 <context>

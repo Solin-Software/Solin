@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from threading import RLock
 from typing import Any
 
 from PySide6.QtCore import QEvent, QSize, Qt, QUrl
-from PySide6.QtGui import QCursor, QImage, QShowEvent, QHideEvent
+from PySide6.QtGui import QCursor, QDesktopServices, QImage, QShowEvent, QHideEvent
 from PySide6.QtQuick import QQuickImageProvider
 from PySide6.QtQuickWidgets import QQuickWidget
-from PySide6.QtWidgets import QApplication, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QApplication, QFileDialog, QVBoxLayout, QWidget
 
+from solin.controllers.program_recording_controller import ProgramRecordingController
 from solin.core.foundation.exception_logging import log_ignored_exception
 from solin.styles import icons
 from solin.styles.theme import PALETTE
@@ -56,6 +58,7 @@ class ScenesEditorWidget(QWidget):
         self,
         controller: Any,
         *,
+        recording: ProgramRecordingController | None = None,
         credentials: Any | None = None,
         notifications: Any | None = None,
         parent: QWidget | None = None,
@@ -67,8 +70,11 @@ class ScenesEditorWidget(QWidget):
         self.bridge = ScenesBridge(
             controller,
             preview_store=self._preview_provider,
+            recording=recording,
             credentials=credentials,
             notifications=notifications,
+            recording_directory_picker=self._pick_recording_directory,
+            recording_directory_opener=self._open_recording_directory,
             parent=self,
         )
         layout = QVBoxLayout(self)
@@ -104,6 +110,9 @@ class ScenesEditorWidget(QWidget):
             "crosshair": icons.ICON_CROSSHAIR,
             "crop": icons.ICON_CROP,
             "warning": icons.ICON_INFO_CIRCLE,
+            "record": icons.ICON_REC_CIRCLE,
+            "record-stop": icons.ICON_REC_STOP,
+            "folder": icons.ICON_FOLDER,
         }
         self.qml_load_handle = configure_qml_host(
             self._qml,
@@ -123,6 +132,21 @@ class ScenesEditorWidget(QWidget):
         self.bridge.pointerOverrideStarted.connect(self._begin_pointer_override)
         self.bridge.pointerOverrideEnded.connect(self._end_pointer_override)
         layout.addWidget(self._qml)
+
+    def _pick_recording_directory(self, current: str) -> str:
+        return QFileDialog.getExistingDirectory(
+            self,
+            self.tr("Choose recording folder"),
+            current,
+        )
+
+    @staticmethod
+    def _open_recording_directory(path: str) -> bool:
+        try:
+            Path(path).mkdir(parents=True, exist_ok=True)
+        except OSError:
+            return False
+        return QDesktopServices.openUrl(QUrl.fromLocalFile(path))
 
     def _begin_pointer_override(self, cursor_source: str, cursor_shape: int) -> None:
         if self._pointer_override_owner and self._pointer_override_owner != cursor_source:

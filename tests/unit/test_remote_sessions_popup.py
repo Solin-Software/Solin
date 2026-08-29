@@ -132,13 +132,26 @@ def test_quick_toolbar_bridge_exposes_solin_scenes_independently_from_obs() -> N
 
     bridge.set_scenes_visible(True)
     bridge.set_scenes_icon_color("#388bfd")
+    bridge.set_scenes_recording(True)
     bridge.set_scenes_tooltip("Solin scenes · engine ready")
     bridge.onScenesClicked()
 
     assert bridge.scenesVisible is True
     assert bridge.scenesIconColor == "388bfd"
+    assert bridge.scenesRecording is True
     assert bridge.scenesTooltip == "Solin scenes · engine ready"
     assert clicks == [True]
+
+
+def test_quick_toolbar_reflects_shared_program_recording_activity() -> None:
+    bridge = QuickToolbarBridge()
+    toolbar = SimpleNamespace(_bridge=bridge)
+
+    QuickAccessToolbar._sync_program_recording_state(toolbar, True)
+    assert bridge.scenesRecording is True
+
+    QuickAccessToolbar._sync_program_recording_state(toolbar, False)
+    assert bridge.scenesRecording is False
 
 
 def test_remote_toolbar_control_keeps_the_maximum_pill_within_its_fixed_surface() -> None:
@@ -162,6 +175,7 @@ def test_remote_toolbar_control_keeps_the_maximum_pill_within_its_fixed_surface(
     assert "Accessible.role: Accessible.Button" in source
     assert "bridge.remoteControlBadge" in source
     assert "bridge.remoteControlWarning" in source
+    assert "bridge.scenesRecording" in source
 
 
 def test_remote_setup_dialog_scans_the_dedicated_setup_route_and_closes_qr_work() -> None:

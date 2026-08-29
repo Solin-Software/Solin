@@ -10,7 +10,7 @@
 
 namespace solin::media_engine {
 
-inline constexpr std::uint64_t kControlProtocolVersion = 3U;
+inline constexpr std::uint64_t kControlProtocolVersion = 4U;
 
 struct ControlEnvelope {
     std::uint64_t protocol_version{kControlProtocolVersion};
@@ -37,6 +37,10 @@ struct ControlServiceReply {
 struct ControlSessionServices {
     std::function<nlohmann::json()> capabilities{};
     std::function<nlohmann::json()> list_local_cameras{};
+    std::function<nlohmann::json()> list_audio_devices{};
+    std::function<nlohmann::json(const nlohmann::json&)> start_program_recording{};
+    std::function<nlohmann::json(const nlohmann::json&)> set_program_recording_audio{};
+    std::function<nlohmann::json()> stop_program_recording{};
     std::function<nlohmann::json(const nlohmann::json&, std::uint64_t, std::uint64_t)> hydrate{};
     std::function<ControlServiceReply(std::string_view, std::string_view, std::string_view,
                                       std::uint64_t, std::uint64_t, std::string_view,

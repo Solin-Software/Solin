@@ -32,9 +32,22 @@ from solin.core.scenes.engine import (
     SceneEngineSnapshot,
     SceneEngineStatus,
     ScenePreparation,
+    ProgramRecordingEvent,
     SourceHealthEvent,
     SourceHealthStatus,
     scene_engine_document_record,
+)
+from solin.core.scenes.recording import (
+    MAXIMUM_AUDIO_DEVICES,
+    MAXIMUM_AUDIO_DEVICE_ID_LENGTH,
+    MAXIMUM_AUDIO_DEVICE_NAME_LENGTH,
+    AudioDevice,
+    AudioDeviceDirection,
+    AudioDeviceDiscovery,
+    AudioDeviceSelection,
+    ProgramRecordingNativeState,
+    ProgramRecordingRequest,
+    ProgramRecordingStatus,
 )
 from solin.core.scenes.ipc_protocol import (
     PROTOCOL_VERSION,
@@ -65,6 +78,9 @@ _HELLO_FIELDS = frozenset(
         "hardware_compositing",
         "virtual_camera",
         "d3d11_shared_textures",
+        "program_recording",
+        "audio_input_capture",
+        "system_audio_capture",
     }
 )
 _ACK_FIELDS = frozenset({"applied", "error_code", "error_message"})
@@ -92,6 +108,25 @@ _LOCAL_VIDEO_FORMAT_FIELDS = frozenset(
         "height",
         "fps_numerator",
         "fps_denominator",
+    }
+)
+_AUDIO_DEVICE_LIST_FIELDS = frozenset(
+    {"supported", "ready", "generation", "devices", "error_code"}
+)
+_AUDIO_DEVICE_FIELDS = frozenset(
+    {"device_id", "display_name", "direction", "is_default"}
+)
+_PROGRAM_RECORDING_STATE_FIELDS = frozenset(
+    {
+        "status",
+        "path",
+        "error_code",
+        "message",
+        "microphone_warning",
+        "system_audio_warning",
+        "dropped_frames",
+        "duplicated_frames",
+        "frame_feed_p95_ns",
     }
 )
 _T = TypeVar("_T")
@@ -382,6 +417,23 @@ class SubprocessSceneEngine:
             converter=_local_camera_discovery_from_envelope,
         )
 
+    def list_audio_devices(
+        self,
+        *,
+        request_id: str,
+        deadline_ms: int,
+    ) -> Future[AudioDeviceDiscovery]:
+        return self._request(
+            message_type="list_audio_devices",
+            expected_message_type="audio_device_list",
+            request_id=request_id,
+            sequence=0,
+            document_revision=0,
+            deadline_ms=deadline_ms,
+            payload={},
+            converter=_audio_device_discovery_from_envelope,
+        )
+
     def _hydration_ack_from_envelope(
         self,
         envelope: SceneIpcEnvelope,
@@ -577,6 +629,84 @@ class SubprocessSceneEngine:
                     _window_target_record(target) for target in targets
                 ]
             },
+            converter=_ack_from_envelope,
+        )
+
+    def start_program_recording(
+        self,
+        recording: ProgramRecordingRequest,
+        *,
+        request_id: str,
+        deadline_ms: int,
+    ) -> Future[SceneEngineAck]:
+        if not isinstance(recording, ProgramRecordingRequest):
+            return _failed_future(TypeError("Invalid Program recording request"))
+        with self._lock:
+            document_revision = self._document_revision
+        return self._request(
+            message_type="start_program_recording",
+            expected_message_type="ack",
+            request_id=request_id,
+            sequence=0,
+            document_revision=document_revision,
+            deadline_ms=deadline_ms,
+            payload={
+                "path": str(recording.path),
+                "width": recording.width,
+                "height": recording.height,
+                "fps_numerator": recording.fps_numerator,
+                "fps_denominator": recording.fps_denominator,
+                "microphone": recording.microphone.to_engine_record(),
+                "system_audio": recording.system_audio.to_engine_record(),
+            },
+            converter=_ack_from_envelope,
+        )
+
+    def set_program_recording_audio(
+        self,
+        microphone: AudioDeviceSelection,
+        system_audio: AudioDeviceSelection,
+        *,
+        request_id: str,
+        deadline_ms: int,
+    ) -> Future[SceneEngineAck]:
+        if not isinstance(microphone, AudioDeviceSelection) or not isinstance(
+            system_audio,
+            AudioDeviceSelection,
+        ):
+            return _failed_future(TypeError("Invalid Program recording audio configuration"))
+        with self._lock:
+            document_revision = self._document_revision
+        return self._request(
+            message_type="set_program_recording_audio",
+            expected_message_type="ack",
+            request_id=request_id,
+            sequence=0,
+            document_revision=document_revision,
+            deadline_ms=deadline_ms,
+            payload={
+                "microphone": microphone.to_engine_record(),
+                "system_audio": system_audio.to_engine_record(),
+            },
+            converter=_ack_from_envelope,
+        )
+
+    def stop_program_recording(
+        self,
+        *,
+        request_id: str,
+        deadline_ms: int,
+    ) -> Future[SceneEngineAck]:
+        with self._lock:
+            document_revision = self._document_revision
+        return self._request(
+            message_type="stop_program_recording",
+            expected_message_type="ack",
+            request_id=request_id,
+            sequence=0,
+            document_revision=document_revision,
+            deadline_ms=deadline_ms,
+            payload={},
             converter=_ack_from_envelope,
         )
 
@@ -825,12 +955,15 @@ class SubprocessSceneEngine:
             ):
                 return
             self._last_received_monotonic = self._monotonic()
-            if envelope.message_type == "source_health":
+            if envelope.message_type in {"source_health", "program_recording_state"}:
                 pending = None
             else:
                 pending = self._pending.pop(envelope.request_id, None)
         if envelope.message_type == "source_health":
             self._emit_event(_source_health_from_envelope(envelope))
+            return
+        if envelope.message_type == "program_recording_state":
+            self._emit_event(_program_recording_event_from_envelope(envelope))
             return
         if pending is None:
             return
@@ -1173,6 +1306,18 @@ def _capabilities_from_envelope(envelope: SceneIpcEnvelope) -> SceneEngineCapabi
             payload["d3d11_shared_textures"],
             "D3D11 shared-texture capability",
         ),
+        program_recording=require_bool(
+            payload["program_recording"],
+            "Program recording capability",
+        ),
+        audio_input_capture=require_bool(
+            payload["audio_input_capture"],
+            "audio input capture capability",
+        ),
+        system_audio_capture=require_bool(
+            payload["system_audio_capture"],
+            "system audio capture capability",
+        ),
     )
 
 
@@ -1381,6 +1526,123 @@ def _local_camera_discovery_from_envelope(
             "local camera discovery error code",
             maximum=128,
         ),
+    )
+
+
+def _audio_device_discovery_from_envelope(
+    envelope: SceneIpcEnvelope,
+) -> AudioDeviceDiscovery:
+    payload = require_payload_fields(
+        envelope.payload,
+        _AUDIO_DEVICE_LIST_FIELDS,
+        message_type="audio device list",
+    )
+    raw_devices = payload["devices"]
+    if not isinstance(raw_devices, list) or len(raw_devices) > MAXIMUM_AUDIO_DEVICES:
+        raise SceneIpcMessageError("Invalid audio device list")
+    devices: list[AudioDevice] = []
+    for raw_device in raw_devices:
+        device = require_payload_fields(
+            raw_device,
+            _AUDIO_DEVICE_FIELDS,
+            message_type="audio device",
+        )
+        try:
+            direction = AudioDeviceDirection(
+                require_text(device["direction"], "audio device direction", maximum=64)
+            )
+        except ValueError as exc:
+            raise SceneIpcMessageError("Invalid audio device direction") from exc
+        devices.append(
+            AudioDevice(
+                device_id=require_text(
+                    device["device_id"],
+                    "audio device id",
+                    maximum=MAXIMUM_AUDIO_DEVICE_ID_LENGTH,
+                ),
+                display_name=require_text(
+                    device["display_name"],
+                    "audio device display name",
+                    maximum=MAXIMUM_AUDIO_DEVICE_NAME_LENGTH,
+                ),
+                direction=direction,
+                is_default=require_bool(
+                    device["is_default"],
+                    "audio device default state",
+                ),
+            )
+        )
+    return AudioDeviceDiscovery(
+        supported=require_bool(payload["supported"], "audio discovery support"),
+        ready=require_bool(payload["ready"], "audio discovery readiness"),
+        generation=require_non_negative_int(
+            payload["generation"],
+            "audio discovery generation",
+        ),
+        devices=tuple(devices),
+        error_code=require_text(
+            payload["error_code"],
+            "audio discovery error code",
+            maximum=128,
+        ),
+    )
+
+
+def _program_recording_event_from_envelope(
+    envelope: SceneIpcEnvelope,
+) -> ProgramRecordingEvent:
+    payload = require_payload_fields(
+        envelope.payload,
+        _PROGRAM_RECORDING_STATE_FIELDS,
+        message_type="Program recording state",
+    )
+    try:
+        status = ProgramRecordingStatus(
+            require_text(payload["status"], "Program recording status", maximum=64)
+        )
+    except ValueError as exc:
+        raise SceneIpcMessageError("Invalid Program recording status") from exc
+    return ProgramRecordingEvent(
+        ProgramRecordingNativeState(
+            status=status,
+            path=require_text(
+                payload["path"],
+                "Program recording path",
+                maximum=4096,
+            ),
+            error_code=require_text(
+                payload["error_code"],
+                "Program recording error code",
+                maximum=128,
+            ),
+            message=require_text(
+                payload["message"],
+                "Program recording message",
+                maximum=2048,
+            ),
+            microphone_warning=require_text(
+                payload["microphone_warning"],
+                "Program recording microphone warning",
+                maximum=128,
+            ),
+            system_audio_warning=require_text(
+                payload["system_audio_warning"],
+                "Program recording system-audio warning",
+                maximum=128,
+            ),
+            dropped_frames=require_non_negative_int(
+                payload["dropped_frames"],
+                "Program recording dropped-frame count",
+            ),
+            duplicated_frames=require_non_negative_int(
+                payload["duplicated_frames"],
+                "Program recording duplicated-frame count",
+            ),
+            frame_feed_p95_ns=require_non_negative_int(
+                payload["frame_feed_p95_ns"],
+                "Program recording frame-feed P95",
+            ),
+        )
     )
 
 

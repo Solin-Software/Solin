@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from solin.core.scenes.model import SceneValidationError
+from solin.core.scenes.recording import SceneRecordingConfig
 
 
-SCENE_COLLECTION_CATALOG_SCHEMA_VERSION = 1
+SCENE_COLLECTION_CATALOG_SCHEMA_VERSION = 2
+_LEGACY_SCENE_COLLECTION_CATALOG_SCHEMA_VERSION = 1
 DEFAULT_SCENE_COLLECTION_ID = "solin.scene-profile.default"
 MAX_SCENE_COLLECTIONS = 64
 
@@ -30,23 +32,48 @@ class SceneCollection:
 
     id: str
     name: str
+    recording: SceneRecordingConfig = field(default_factory=SceneRecordingConfig)
 
     def __post_init__(self) -> None:
         if not isinstance(self.id, str) or not _IDENTITY_PATTERN.fullmatch(self.id):
             raise SceneCollectionError("Invalid Scene profile id")
         _validate_collection_name(self.name)
+        if not isinstance(self.recording, SceneRecordingConfig):
+            raise SceneCollectionError("Invalid Scene profile recording configuration")
 
-    def to_record(self) -> dict[str, str]:
-        return {"id": self.id, "name": self.name}
+    def to_record(self) -> dict[str, object]:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "recording": self.recording.to_record(),
+        }
 
     @classmethod
-    def from_record(cls, raw: object) -> SceneCollection:
-        data = _strict_mapping(raw, field_name="Scene profile", allowed_keys={"id", "name"})
+    def from_record(
+        cls,
+        raw: object,
+        *,
+        schema_version: int = SCENE_COLLECTION_CATALOG_SCHEMA_VERSION,
+    ) -> SceneCollection:
+        legacy = schema_version == _LEGACY_SCENE_COLLECTION_CATALOG_SCHEMA_VERSION
+        data = _strict_mapping(
+            raw,
+            field_name="Scene profile",
+            allowed_keys={"id", "name"} if legacy else {"id", "name", "recording"},
+        )
         collection_id = data.get("id")
         name = data.get("name")
         if not isinstance(collection_id, str) or not isinstance(name, str):
             raise SceneCollectionError("Invalid Scene profile record")
-        return cls(id=collection_id, name=name)
+        return cls(
+            id=collection_id,
+            name=name,
+            recording=(
+                SceneRecordingConfig()
+                if legacy
+                else SceneRecordingConfig.from_record(data.get("recording"))
+            ),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,7 +146,10 @@ class SceneCollectionCatalog:
         schema_version = data.get("schema_version")
         if not isinstance(schema_version, int) or isinstance(schema_version, bool):
             raise SceneCollectionError("Invalid Scene profile catalog schema version")
-        if schema_version != SCENE_COLLECTION_CATALOG_SCHEMA_VERSION:
+        if schema_version not in {
+            _LEGACY_SCENE_COLLECTION_CATALOG_SCHEMA_VERSION,
+            SCENE_COLLECTION_CATALOG_SCHEMA_VERSION,
+        }:
             raise UnsupportedSceneCollectionSchemaError(schema_version)
         revision = data.get("revision")
         active_collection_id = data.get("active_collection_id")
@@ -134,11 +164,14 @@ class SceneCollectionCatalog:
         ):
             raise SceneCollectionError("Invalid Scene profile catalog record")
         return cls(
-            schema_version=schema_version,
+            schema_version=SCENE_COLLECTION_CATALOG_SCHEMA_VERSION,
             revision=revision,
             active_collection_id=active_collection_id,
             pending_collection_id=pending_collection_id,
-            collections=tuple(SceneCollection.from_record(item) for item in collections),
+            collections=tuple(
+                SceneCollection.from_record(item, schema_version=schema_version)
+                for item in collections
+            ),
         )
 
 

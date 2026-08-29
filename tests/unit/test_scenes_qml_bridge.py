@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from concurrent.futures import Future
 from dataclasses import replace
 from pathlib import Path
-from concurrent.futures import Future
+import time
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QObject, Qt, Signal
 from PySide6.QtGui import QImage
 from PySide6.QtTest import QSignalSpy
 
@@ -36,8 +37,19 @@ from solin.core.scenes.model import (
     new_identity,
 )
 from solin.core.scenes.presets import CAMERA_SCENE_ID, CONTENT_SCENE_ID, SceneSeedNames
+from solin.core.scenes.recording import (
+    AudioDevice,
+    AudioDeviceDirection,
+    AudioDeviceDiscovery,
+    AudioDeviceSelection,
+    AudioSelectionMode,
+    ProgramRecordingState,
+    ProgramRecordingStatus,
+    SceneRecordingConfig,
+)
 from solin.core.scenes.ptz import PtzControlKind, PtzControlResult, PtzRecallStatus
 from solin.core.scenes.workspace import SceneWorkspaceService
+from solin.styles.icons import ICON_FOLDER, ICON_FOLDER_LINK, make_icon
 from solin.ui.qml.scenes_bridge import ScenesBridge
 
 
@@ -74,6 +86,89 @@ class _Notifications:
 
     def warning(self, message: str, **options: str) -> None:
         self.warnings.append((message, options))
+
+
+def test_recording_directory_uses_a_plain_folder_icon() -> None:
+    assert ICON_FOLDER != ICON_FOLDER_LINK
+    assert "M22 19" in ICON_FOLDER
+    assert "M10 13" not in ICON_FOLDER
+    assert not make_icon(ICON_FOLDER, 16, "#ffffff").isNull()
+
+
+class _Recording(QObject):
+    state_changed = Signal(object)
+    audio_devices_changed = Signal(object)
+    configuration_changed = Signal(object)
+    busy_changed = Signal(bool)
+
+    def __init__(self, output_directory: Path) -> None:
+        super().__init__()
+        self.supported = True
+        self.state = ProgramRecordingState()
+        self.audio_devices = AudioDeviceDiscovery(
+            supported=True,
+            ready=True,
+            generation=1,
+            devices=(
+                AudioDevice(
+                    "microphone-one",
+                    "Lectern microphone",
+                    AudioDeviceDirection.INPUT,
+                    True,
+                ),
+                AudioDevice(
+                    "output-one",
+                    "Main speakers",
+                    AudioDeviceDirection.OUTPUT,
+                    True,
+                ),
+            ),
+        )
+        self.configuration = SceneRecordingConfig()
+        self._default_output_directory = output_directory
+        self.refresh_count = 0
+
+    @property
+    def busy(self) -> bool:
+        return self.state.busy
+
+    def toggle(self) -> None:
+        if self.state.status is ProgramRecordingStatus.RECORDING:
+            self.state = ProgramRecordingState()
+        else:
+            self.state = ProgramRecordingState(
+                status=ProgramRecordingStatus.RECORDING,
+                started_at_monotonic=time.monotonic() - 65,
+                output_path=self.effective_output_directory() / "recording.mp4",
+                active_config=self.configuration,
+            )
+        self.state_changed.emit(self.state)
+        self.busy_changed.emit(self.busy)
+
+    def refresh_audio_devices(self) -> None:
+        self.refresh_count += 1
+
+    def set_microphone_selection(self, selection: AudioDeviceSelection) -> None:
+        self.configuration = replace(self.configuration, microphone=selection)
+        self.configuration_changed.emit(self.configuration)
+
+    def set_system_audio_selection(self, selection: AudioDeviceSelection) -> None:
+        self.configuration = replace(self.configuration, system_audio=selection)
+        self.configuration_changed.emit(self.configuration)
+
+    def set_output_directory(self, path: Path | None) -> None:
+        self.configuration = replace(
+            self.configuration,
+            output_directory="" if path is None else str(path),
+        )
+        self.configuration_changed.emit(self.configuration)
+
+    def effective_output_directory(self) -> Path:
+        return (
+            Path(self.configuration.output_directory)
+            if self.configuration.output_directory
+            else self._default_output_directory
+        )
 
 
 class _Credentials:
@@ -142,6 +237,9 @@ def _bridge(
     notifications=None,
     credentials=None,
     ptz=None,
+    recording=None,
+    recording_directory_picker=None,
+    recording_directory_opener=None,
 ) -> tuple[SceneWorkspaceService, SceneRuntimeController, ScenesBridge, _PreviewStore]:
     paths = ProfilePaths.from_roots(
         data_dir=tmp_path / "data",
@@ -155,8 +253,11 @@ def _bridge(
     bridge = ScenesBridge(
         controller,
         preview_store=preview_store,
+        recording=recording,
         notifications=notifications,
         credentials=credentials,
+        recording_directory_picker=recording_directory_picker,
+        recording_directory_opener=recording_directory_opener,
     )
     return workspace, controller, bridge, preview_store
 
@@ -179,6 +280,112 @@ def _enable_default_camera_ptz(
     scene = controller.document.scenes[0]
     layer = scene.layers[0]
     return camera.id, layer.id
+
+
+def test_recording_bridge_projects_one_controller_and_applies_live_settings(
+    tmp_path: Path,
+) -> None:
+    default_directory = tmp_path / "Videos" / "Solin"
+    chosen_directory = tmp_path / "Recordings"
+    opened: list[str] = []
+    recording = _Recording(default_directory)
+    workspace, controller, bridge, _preview = _bridge(
+        tmp_path,
+        recording=recording,
+        recording_directory_picker=lambda current: (
+            str(chosen_directory) if current == str(default_directory) else ""
+        ),
+        recording_directory_opener=lambda path: opened.append(path) is None,
+    )
+
+    assert bridge.recordingAvailable
+    assert bridge.recordingStatus == "idle"
+    assert not bridge.recordingCanToggle
+    assert bridge.recordingToggleUnavailableReason == (
+        "The scene engine must be ready to record."
+    )
+    controller._set_engine_ready(True)
+    assert bridge.recordingCanToggle
+    recording.supported = False
+    assert not bridge.recordingCanToggle
+    assert bridge.recordingToggleUnavailableReason == (
+        "Recording is unavailable in this scene engine."
+    )
+    recording.supported = True
+    assert not bridge.recordingBusy
+    assert bridge.recordingOutputDirectory == str(default_directory)
+    assert bridge.recordingOutputDirectoryIsDefault
+    assert [choice["key"] for choice in bridge.recordingMicrophoneChoices] == [
+        "system_default",
+        "none",
+        "device:microphone-one",
+    ]
+    assert [choice["key"] for choice in bridge.recordingSystemAudioChoices] == [
+        "system_default",
+        "none",
+        "device:output-one",
+    ]
+
+    bridge.setRecordingMicrophone("device:microphone-one")
+    bridge.setRecordingSystemAudio("none")
+    bridge.chooseRecordingDirectory()
+
+    assert recording.configuration.microphone == AudioDeviceSelection(
+        AudioSelectionMode.DEVICE,
+        "microphone-one",
+        "Lectern microphone",
+    )
+    assert recording.configuration.system_audio.mode is AudioSelectionMode.NONE
+    assert recording.configuration.output_directory == str(chosen_directory)
+    assert not bridge.recordingOutputDirectoryIsDefault
+
+    missing_microphone = AudioDeviceSelection(
+        AudioSelectionMode.DEVICE,
+        "missing-microphone",
+        "Side microphone",
+    )
+    recording.set_microphone_selection(missing_microphone)
+    missing_choice = bridge.recordingMicrophoneChoices[-1]
+    assert missing_choice == {
+        "key": "device:missing-microphone",
+        "name": "Side microphone (unavailable)",
+        "available": False,
+    }
+    bridge.setRecordingMicrophone("device:missing-microphone")
+    assert recording.configuration.microphone == missing_microphone
+
+    bridge.toggleProgramRecording()
+
+    assert bridge.recordingStatus == "recording"
+    assert bridge.recordingBusy
+    assert bridge.profileChangesBlocked
+    assert bridge.recordingElapsedSeconds >= 65
+    recording.state = replace(
+        recording.state,
+        microphone_warning="Microphone unavailable; recording silence.",
+        system_audio_warning="System audio unavailable; recording silence.",
+    )
+    recording.state_changed.emit(recording.state)
+    assert bridge.recordingAudioWarning == (
+        "Microphone unavailable; recording silence.\n"
+        "System audio unavailable; recording silence."
+    )
+    bridge.chooseRecordingDirectory()
+    assert recording.configuration.output_directory == str(chosen_directory)
+
+    bridge.toggleProgramRecording()
+    bridge.useDefaultRecordingDirectory()
+    bridge.openRecordingDirectory()
+    bridge.refreshRecordingAudioDevices()
+
+    assert not bridge.recordingBusy
+    assert recording.configuration.output_directory == ""
+    assert opened == [str(default_directory)]
+    assert recording.refresh_count == 1
+
+    bridge.close()
+    controller.close()
+    del workspace
 
 
 def test_camera_source_health_surfaces_an_actionable_layer_warning(tmp_path: Path) -> None:

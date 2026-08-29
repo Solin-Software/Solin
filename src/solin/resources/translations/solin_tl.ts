@@ -939,8 +939,8 @@
 <context>
     <name>DeferredScenesWidget</name>
     <message>
-        <location filename="../../widgets/deferred_scenes_widget.py" line="+34"/>
-        <location line="+38"/>
+        <location filename="../../widgets/deferred_scenes_widget.py" line="+41"/>
+        <location line="+39"/>
         <source>Loading…</source>
         <translation>Nilu-load…</translation>
     </message>
@@ -1589,16 +1589,51 @@
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../../main_window.py" line="+532"/>
+        <location filename="../../main_window.py" line="+551"/>
         <location filename="../../controllers/main_window_nav.py" line="+11"/>
         <source>Solin</source>
         <translation>Solin</translation>
     </message>
     <message>
-        <location line="+691"/>
+        <location line="+693"/>
         <location filename="../../controllers/main_window_nav.py" line="+27"/>
         <source>Scenes</source>
         <translation>Mga Eksena</translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <source>Recording failed.</source>
+        <translation>Hindi nagtagumpay ang recording.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Recording failed. The file was preserved at %1</source>
+        <translation>Hindi nagtagumpay ang recording. Napanatili ang file sa %1</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Recording</source>
+        <translation>Pagre-record</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Recording saved to %1</source>
+        <translation>Na-save ang recording sa %1</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Recording complete</source>
+        <translation>Tapos na ang recording</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Stop recording before switching profiles.</source>
+        <translation>Ihinto ang recording bago magpalit ng profile.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Recording in progress</source>
+        <translation>Kasalukuyang nagre-record</translation>
     </message>
     <message>
         <location line="+379"/>
@@ -1619,6 +1654,11 @@
         <location line="+1"/>
         <source>Auto Screen Share</source>
         <translation>Awtomatikong Pagbabahagi ng Screen</translation>
+    </message>
+    <message>
+        <location line="+307"/>
+        <source>Stop recording before closing Solin.</source>
+        <translation>Ihinto ang recording bago isara ang Solin.</translation>
     </message>
     <message>
         <location filename="../../controllers/main_window_nav.py" line="-26"/>
@@ -5054,7 +5094,7 @@ Hindi na ito maibabalik.</translation>
 <context>
     <name>QuickAccessToolbar</name>
     <message>
-        <location filename="../../widgets/quick_access_toolbar.py" line="+654"/>
+        <location filename="../../widgets/quick_access_toolbar.py" line="+661"/>
         <source>Remote control unavailable</source>
         <translation>Hindi magagamit ang remote control</translation>
     </message>
@@ -5501,49 +5541,99 @@ Hindi na ito maibabalik.</translation>
 <context>
     <name>SceneControlPopup</name>
     <message>
-        <location filename="../../widgets/scenes/control_popup.py" line="+254"/>
-        <location line="+570"/>
+        <location filename="../../widgets/scenes/control_popup.py" line="+274"/>
+        <location line="+690"/>
         <source>Solin scenes</source>
         <translation>Mga eksena ng Solin</translation>
     </message>
     <message>
-        <location line="-549"/>
-        <location line="+550"/>
+        <location line="-669"/>
+        <location line="+670"/>
         <source>Configured</source>
         <translation>Nakatakda</translation>
     </message>
     <message>
-        <location line="-541"/>
-        <location line="+542"/>
+        <location line="-661"/>
+        <location line="+662"/>
         <source>Camera PiP</source>
         <translation>Camera PiP</translation>
     </message>
     <message>
-        <location line="-533"/>
-        <location line="+534"/>
+        <location line="-653"/>
+        <location line="+654"/>
         <source>Other scenes</source>
         <translation>Ibang mga eksena</translation>
     </message>
     <message>
-        <location line="-508"/>
-        <location line="+509"/>
+        <location line="-615"/>
+        <location line="+616"/>
         <source>Auto-switch media</source>
         <translation>Awtomatikong paglipat</translation>
     </message>
     <message>
-        <location line="-504"/>
-        <location line="+505"/>
+        <location line="-611"/>
+        <location line="+612"/>
         <source>Media windows</source>
         <translation>Mga window ng media</translation>
     </message>
     <message>
-        <location line="-501"/>
-        <location line="+502"/>
+        <location line="-608"/>
+        <location line="+609"/>
         <source>Show in media windows</source>
         <translation>Ipakita sa mga window ng media</translation>
     </message>
     <message>
-        <location line="-491"/>
+        <location line="-596"/>
+        <source>The recording state could not be changed.</source>
+        <translation>Hindi mabago ang status ng recording.</translation>
+    </message>
+    <message>
+        <location line="+30"/>
+        <source>Stop recording · %1</source>
+        <translation>Ihinto ang recording · %1</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Stop recording</source>
+        <translation>Ihinto ang recording</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Starting recording…</source>
+        <translation>Sinisimulan ang recording…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Finishing recording…</source>
+        <translation>Tinatapos ang recording…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Try recording again</source>
+        <translation>Subukang mag-record muli</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Start recording</source>
+        <translation>Simulan ang recording</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Start recording the live output</source>
+        <translation>Simulan ang recording ng live output</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>The scene engine must be ready to record.</source>
+        <translation>Dapat handa ang scene engine para mag-record.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Recording is unavailable in this scene engine.</source>
+        <translation>Hindi available ang recording sa scene engine na ito.</translation>
+    </message>
+    <message>
+        <location line="+13"/>
         <source>The scene could not be selected.</source>
         <translation>Hindi mapili ang eksena.</translation>
     </message>
@@ -5568,7 +5658,7 @@ Hindi na ito maibabalik.</translation>
         <translation>Hindi mapalitan ang pag-mirror sa mga window ng media.</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+24"/>
         <source>Preparing…</source>
         <translation>Naghahanda…</translation>
     </message>
@@ -5588,7 +5678,7 @@ Hindi na ito maibabalik.</translation>
         <translation>Hindi available</translation>
     </message>
     <message>
-        <location line="+21"/>
+        <location line="+27"/>
         <source>Auto-switch paused for this media session</source>
         <translation>Naka-pause ang awtomatikong paglipat sa session ng media na ito</translation>
     </message>
@@ -5735,7 +5825,7 @@ Hindi na ito maibabalik.</translation>
 <context>
     <name>SceneRuntimeController</name>
     <message>
-        <location filename="../../controllers/scene_runtime_controller.py" line="+1626"/>
+        <location filename="../../controllers/scene_runtime_controller.py" line="+1646"/>
         <source>The selected transition is unavailable. The scene was cut instead.</source>
         <translation>Hindi available ang napiling transition. Ginamit ang cut sa halip.</translation>
     </message>
@@ -5743,7 +5833,7 @@ Hindi na ito maibabalik.</translation>
 <context>
     <name>ScenesBridge</name>
     <message>
-        <location filename="../../ui/qml/scenes_bridge.py" line="+309"/>
+        <location filename="../../ui/qml/scenes_bridge.py" line="+351"/>
         <source>Switching</source>
         <translation>Lumilipat</translation>
     </message>
@@ -5778,18 +5868,76 @@ Hindi na ito maibabalik.</translation>
         <translation>Sinisimulan ang engine ng eksena…</translation>
     </message>
     <message>
-        <location line="+44"/>
+        <location line="+66"/>
+        <location line="+23"/>
+        <location line="+18"/>
+        <source>Recording is unavailable</source>
+        <translation>Hindi available ang recording</translation>
+    </message>
+    <message>
+        <location line="-35"/>
+        <source>The scene engine must be ready to record.</source>
+        <translation>Dapat handa ang scene engine para mag-record.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <location line="+35"/>
+        <source>Recording is unavailable in this scene engine.</source>
+        <translation>Hindi available ang recording sa scene engine na ito.</translation>
+    </message>
+    <message>
+        <location line="-18"/>
+        <source>Ready to record</source>
+        <translation>Handa nang mag-record</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Starting recording…</source>
+        <translation>Sinisimulan ang recording…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Recording</source>
+        <translation>Pagre-record</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Finishing recording…</source>
+        <translation>Tinatapos ang recording…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Recording failed</source>
+        <translation>Hindi nagtagumpay ang recording</translation>
+    </message>
+    <message>
+        <location line="+55"/>
+        <source>Looking for audio devices…</source>
+        <translation>Naghahanap ng mga audio device…</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Audio devices could not be listed.</source>
+        <translation>Hindi mailista ang mga audio device.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>No audio devices found.</source>
+        <translation>Walang nakitang audio device.</translation>
+    </message>
+    <message>
+        <location line="+46"/>
         <source>Default camera (automatic)</source>
         <translation>Default na camera (awtomatiko)</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+1442"/>
+        <location line="+1518"/>
         <source>Automatic</source>
         <translation>Awtomatiko</translation>
     </message>
     <message>
-        <location line="-1432"/>
+        <location line="-1508"/>
         <source>Looking for cameras…</source>
         <translation>Naghahanap ng camera…</translation>
     </message>
@@ -5809,7 +5957,12 @@ Hindi na ito maibabalik.</translation>
         <translation>Walang nakitang camera. Available pa rin ang awtomatikong camera.</translation>
     </message>
     <message>
-        <location line="+148"/>
+        <location line="+183"/>
+        <source>The recording folder could not be opened.</source>
+        <translation>Hindi mabuksan ang folder ng recording.</translation>
+    </message>
+    <message>
+        <location line="+36"/>
         <source>%1 copy</source>
         <translation>%1 (kopya)</translation>
     </message>
@@ -5855,7 +6008,7 @@ Hindi na ito maibabalik.</translation>
         <translation>Nabigong tawagin ang PTZ preset.</translation>
     </message>
     <message>
-        <location line="+124"/>
+        <location line="+129"/>
         <source>Default</source>
         <translation>Default</translation>
     </message>
@@ -5930,7 +6083,32 @@ Hindi na ito maibabalik.</translation>
         <translation>Hindi maalis ang lumang mga PTZ credential.</translation>
     </message>
     <message>
-        <location line="+61"/>
+        <location line="+71"/>
+        <source>System default</source>
+        <translation>Default ng system</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>None</source>
+        <translation>Wala</translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <source>Unavailable device</source>
+        <translation>Hindi available na device</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>%1 (unavailable)</source>
+        <translation>%1 (hindi available)</translation>
+    </message>
+    <message>
+        <location line="+45"/>
+        <source>The recording setting could not be updated.</source>
+        <translation>Hindi ma-update ang setting ng recording.</translation>
+    </message>
+    <message>
+        <location line="+14"/>
         <source>The scene configuration could not be saved.</source>
         <translation>Hindi ma-save ang configuration ng eksena.</translation>
     </message>
@@ -5971,7 +6149,7 @@ Hindi na ito maibabalik.</translation>
     <message>
         <location line="+6"/>
         <location filename="../../qml/ScenesPtzInspector.qml" line="+10"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+1624"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+1783"/>
         <source>Name</source>
         <translation>Pangalan</translation>
     </message>
@@ -6104,11 +6282,11 @@ Hindi na ito maibabalik.</translation>
         <location line="+65"/>
         <location line="+29"/>
         <location filename="../../qml/ScenesTransformDialog.qml" line="+94"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-900"/>
-        <location line="+441"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-1047"/>
+        <location line="+449"/>
         <location line="+89"/>
         <location line="+68"/>
-        <location line="+309"/>
+        <location line="+448"/>
         <source>Cancel</source>
         <translation>Kanselahin</translation>
     </message>
@@ -6117,7 +6295,7 @@ Hindi na ito maibabalik.</translation>
         <location filename="../../qml/ScenesPtzInspector.qml" line="-93"/>
         <location line="+65"/>
         <location filename="../../qml/ScenesTransformDialog.qml" line="+1"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-435"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-574"/>
         <location line="+13"/>
         <source>Save</source>
         <translation>I-save</translation>
@@ -6410,8 +6588,8 @@ Hindi na ito maibabalik.</translation>
     </message>
     <message>
         <location filename="../../qml/ScenesScenePanel.qml" line="+172"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-1173"/>
-        <location line="+301"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-1193"/>
+        <location line="+313"/>
         <location line="+102"/>
         <source>Scenes</source>
         <translation>Mga Eksena</translation>
@@ -6516,7 +6694,7 @@ Magdagdag ng nilalaman, camera, o ibang eksena.</translation>
         <translation>Pag-ikot</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-414"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-426"/>
         <source>Open scenes</source>
         <translation>Buksan ang mga eksena</translation>
     </message>
@@ -6542,13 +6720,13 @@ Magdagdag ng nilalaman, camera, o ibang eksena.</translation>
     </message>
     <message>
         <location line="+7"/>
-        <location line="+473"/>
-        <location line="+141"/>
+        <location line="+485"/>
+        <location line="+149"/>
         <source>Cut</source>
         <translation>Cut</translation>
     </message>
     <message>
-        <location line="-608"/>
+        <location line="-616"/>
         <source>Off</source>
         <translation>Naka-off</translation>
     </message>
@@ -6559,18 +6737,18 @@ Magdagdag ng nilalaman, camera, o ibang eksena.</translation>
     </message>
     <message>
         <location line="+15"/>
-        <location line="+465"/>
+        <location line="+473"/>
         <source>On air</source>
         <translation>Live</translation>
     </message>
     <message>
-        <location line="-465"/>
-        <location line="+465"/>
+        <location line="-473"/>
+        <location line="+473"/>
         <source>Take live</source>
         <translation>Gawing live</translation>
     </message>
     <message>
-        <location line="-204"/>
+        <location line="-212"/>
         <source>Canvas</source>
         <translation>Canvas</translation>
     </message>
@@ -6591,23 +6769,23 @@ Magdagdag ng nilalaman, camera, o ibang eksena.</translation>
     </message>
     <message>
         <location line="+7"/>
-        <location line="+142"/>
+        <location line="+150"/>
         <source>Dissolve</source>
         <translation>Dissolve</translation>
     </message>
     <message>
-        <location line="-141"/>
+        <location line="-149"/>
         <source>Blend the two scenes</source>
         <translation>Pagsamahin ang dalawang eksena</translation>
     </message>
     <message>
         <location line="+7"/>
-        <location line="+143"/>
+        <location line="+151"/>
         <source>Fade through black</source>
         <translation>Fade sa itim</translation>
     </message>
     <message>
-        <location line="-142"/>
+        <location line="-150"/>
         <source>Fade out, then fade in</source>
         <translation>Mag-fade sa itim, tapos babalik</translation>
     </message>
@@ -6618,14 +6796,14 @@ Magdagdag ng nilalaman, camera, o ibang eksena.</translation>
     </message>
     <message>
         <location line="+15"/>
-        <location line="+444"/>
+        <location line="+452"/>
         <source>ms</source>
         <translation>ms</translation>
     </message>
     <message>
         <location filename="../../qml/ScenesCanvas.qml" line="-3"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-428"/>
-        <location line="+441"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-436"/>
+        <location line="+449"/>
         <source>Apply</source>
         <translation>Ilapat</translation>
     </message>
@@ -6872,9 +7050,120 @@ Magdagdag ng nilalaman, camera, o ibang eksena.</translation>
         <translation>Transition ng eksena: %1</translation>
     </message>
     <message>
-        <location line="+105"/>
+        <location line="+18"/>
+        <source>Try recording again</source>
+        <translation>Subukang mag-record muli</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Starting recording…</source>
+        <translation>Sinisimulan ang recording…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Finishing recording…</source>
+        <translation>Tinatapos ang recording…</translation>
+    </message>
+    <message>
+        <location line="+57"/>
+        <source>Retry</source>
+        <translation>Subukang muli</translation>
+    </message>
+    <message>
+        <location line="+54"/>
+        <location line="+6"/>
+        <source>Recording settings</source>
+        <translation>Mga setting ng recording</translation>
+    </message>
+    <message>
+        <location line="+107"/>
         <source>Output · %1</source>
         <translation>Output · %1</translation>
+    </message>
+    <message>
+        <location filename="../../qml/ScenesRecordingPopover.qml" line="+112"/>
+        <source>Recording</source>
+        <translation>Pagre-record</translation>
+    </message>
+    <message>
+        <location line="+58"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-166"/>
+        <source>Record</source>
+        <translation>I-record</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-61"/>
+        <source>Stop recording</source>
+        <translation>Ihinto ang recording</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Try again</source>
+        <translation>Subukang muli</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+58"/>
+        <source>Starting…</source>
+        <translation>Nagsisimula…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+1"/>
+        <source>Finishing…</source>
+        <translation>Tinatapos…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-55"/>
+        <source>Start recording</source>
+        <translation>Simulan ang recording</translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <location line="+15"/>
+        <source>Microphone</source>
+        <translation>Mikropono</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <location line="+15"/>
+        <source>System audio</source>
+        <translation>System audio</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Includes sounds from every app using the selected output.</source>
+        <translation>Kasama ang mga tunog mula sa lahat ng app na gumagamit ng napiling output.</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Save recordings to</source>
+        <translation>I-save ang mga recording sa</translation>
+    </message>
+    <message>
+        <location line="+38"/>
+        <source>Change…</source>
+        <translation>Baguhin…</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Use default</source>
+        <translation>Gamitin ang default</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Open folder</source>
+        <translation>Buksan ang folder</translation>
+    </message>
+</context>
+<context>
+    <name>ScenesEditorWidget</name>
+    <message>
+        <location filename="../../ui/qml/scenes.py" line="+139"/>
+        <source>Choose recording folder</source>
+        <translation>Pumili ng folder ng recording</translation>
     </message>
 </context>
 <context>

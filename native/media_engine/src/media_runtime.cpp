@@ -232,6 +232,92 @@ void release_device_list(GList* entries) noexcept {
     }
     return unique_devices;
 }
+
+[[nodiscard]] std::vector<AudioDevice> enumerate_wasapi_devices(GstDeviceMonitor* monitor) {
+    std::vector<AudioDevice> devices;
+    std::optional<std::string> default_input_id;
+    std::optional<std::string> default_output_id;
+    const std::unique_ptr<GList, decltype(&release_device_list)> entries{
+        gst_device_monitor_get_devices(monitor),
+        &release_device_list,
+    };
+    for (auto* entry = entries.get(); entry != nullptr; entry = entry->next) {
+        auto* device = GST_DEVICE(entry->data);
+        const std::unique_ptr<GstStructure, decltype(&release_structure)> properties{
+            gst_device_get_properties(device), &release_structure};
+        if (properties == nullptr) {
+            continue;
+        }
+        const auto api = bounded_utf8(
+            gst_structure_get_string(properties.get(), "device.api"), 80U);
+        if (api != "wasapi2") {
+            continue;
+        }
+        gboolean is_default = FALSE;
+        static_cast<void>(gst_structure_get_boolean(properties.get(), "device.default",
+                                                     &is_default));
+        gboolean loopback = FALSE;
+        static_cast<void>(gst_structure_get_boolean(
+            properties.get(), "wasapi2.device.loopback", &loopback));
+        if (is_default != FALSE) {
+            const auto actual_id = bounded_utf8(
+                gst_structure_get_string(properties.get(), "device.actual-id"),
+                kMaximumDeviceIdBytes);
+            if (is_bounded_text(actual_id, kMaximumDeviceIdBytes)) {
+                if (loopback != FALSE || gst_device_has_classes(device, "Audio/Sink")) {
+                    default_output_id = actual_id;
+                } else {
+                    default_input_id = actual_id;
+                }
+            }
+            continue;
+        }
+        const auto device_id = bounded_utf8(
+            gst_structure_get_string(properties.get(), "device.id"), kMaximumDeviceIdBytes);
+        if (!is_bounded_text(device_id, kMaximumDeviceIdBytes)) {
+            continue;
+        }
+        std::optional<AudioDeviceDirection> direction;
+        if (gst_device_has_classes(device, "Audio/Sink")) {
+            direction = AudioDeviceDirection::output;
+        } else if (gst_device_has_classes(device, "Audio/Source") && loopback == FALSE) {
+            direction = AudioDeviceDirection::input;
+        }
+        if (!direction.has_value()) {
+            continue;
+        }
+        const std::unique_ptr<gchar, decltype(&g_free)> raw_display_name{
+            gst_device_get_display_name(device), &g_free};
+        auto display_name = bounded_display_name(raw_display_name.get());
+        if (display_name.empty()) {
+            display_name = device_id;
+        }
+        devices.push_back({
+            .device_id = device_id,
+            .display_name = std::move(display_name),
+            .direction = direction.value(),
+        });
+    }
+    for (auto& device : devices) {
+        device.is_default =
+            (device.direction == AudioDeviceDirection::input &&
+             default_input_id == device.device_id) ||
+            (device.direction == AudioDeviceDirection::output &&
+             default_output_id == device.device_id);
+    }
+    std::ranges::sort(devices, [](const AudioDevice& left, const AudioDevice& right) {
+        return std::tie(left.direction, left.display_name, left.device_id) <
+               std::tie(right.direction, right.display_name, right.device_id);
+    });
+    const auto duplicates = std::ranges::unique(devices, {}, [](const AudioDevice& device) {
+        return std::tie(device.direction, device.device_id);
+    });
+    devices.erase(duplicates.begin(), duplicates.end());
+    if (devices.size() > kMaximumDevices) {
+        devices.resize(kMaximumDevices);
+    }
+    return devices;
+}
 #endif
 
 } // namespace
@@ -464,10 +550,177 @@ class MediaRuntime::RuntimeSession final {
     RuntimeSession() = default;
 };
 
-MediaRuntime::MediaRuntime() : device_monitor_(std::make_shared<DeviceMonitor>()) {}
+class MediaRuntime::AudioDeviceMonitor final {
+  public:
+    AudioDeviceMonitor() = default;
+    ~AudioDeviceMonitor() { stop(); }
+
+    AudioDeviceMonitor(const AudioDeviceMonitor&) = delete;
+    AudioDeviceMonitor& operator=(const AudioDeviceMonitor&) = delete;
+
+    void start() {
+#ifdef SOLIN_MEDIA_ENGINE_HAS_GSTREAMER
+        {
+            std::scoped_lock lock{mutex_};
+            snapshot_ = {.supported = true,
+                         .ready = false,
+                         .generation = snapshot_.generation,
+                         .devices = {},
+                         .error_code = {}};
+        }
+        stop_requested_.store(false);
+        try {
+            worker_ = std::thread([this] { run(); });
+        } catch (const std::exception&) {
+            publish_failure(false, "audio_device_monitor_start_failed");
+        }
+#endif
+    }
+
+    void stop() {
+#ifdef SOLIN_MEDIA_ENGINE_HAS_GSTREAMER
+        stop_requested_.store(true);
+        retry_wakeup_.notify_all();
+        if (worker_.joinable()) {
+            worker_.join();
+        }
+#endif
+    }
+
+    void mark_unavailable(std::string error_code) {
+        std::scoped_lock lock{mutex_};
+        snapshot_.supported = false;
+        snapshot_.ready = true;
+        snapshot_.error_code = std::move(error_code);
+        ++snapshot_.generation;
+    }
+
+    [[nodiscard]] AudioDeviceSnapshot snapshot() const {
+        std::scoped_lock lock{mutex_};
+        return snapshot_;
+    }
+
+  private:
+#ifdef SOLIN_MEDIA_ENGINE_HAS_GSTREAMER
+    void run() {
+        auto retry_delay = kInitialDeviceMonitorRetry;
+        while (!stop_requested_.load()) {
+            auto* monitor = gst_device_monitor_new();
+            if (monitor == nullptr) {
+                publish_failure(false, "audio_device_monitor_unavailable");
+                wait_before_retry(retry_delay);
+                retry_delay = (std::min)(retry_delay * 2, kMaximumDeviceMonitorRetry);
+                continue;
+            }
+            const auto source_filter =
+                gst_device_monitor_add_filter(monitor, "Audio/Source", nullptr);
+            const auto sink_filter =
+                gst_device_monitor_add_filter(monitor, "Audio/Sink", nullptr);
+            auto* bus = gst_device_monitor_get_bus(monitor);
+            if ((source_filter == 0U && sink_filter == 0U) || bus == nullptr ||
+                gst_device_monitor_start(monitor) == FALSE) {
+                if (bus != nullptr) {
+                    gst_object_unref(bus);
+                }
+                gst_object_unref(monitor);
+                publish_failure(false, "audio_device_provider_unavailable");
+                wait_before_retry(retry_delay);
+                retry_delay = (std::min)(retry_delay * 2, kMaximumDeviceMonitorRetry);
+                continue;
+            }
+            constexpr auto mask = static_cast<GstMessageType>(
+                GST_MESSAGE_DEVICE_ADDED | GST_MESSAGE_DEVICE_REMOVED |
+                GST_MESSAGE_DEVICE_CHANGED | GST_MESSAGE_DEVICE_MONITOR_STARTED |
+                GST_MESSAGE_ERROR);
+            const auto startup_deadline =
+                std::chrono::steady_clock::now() + kDeviceMonitorStartupTimeout;
+            bool ready = false;
+            while (!stop_requested_.load()) {
+                auto* message = gst_bus_timed_pop_filtered(bus, 100U * GST_MSECOND, mask);
+                if (message == nullptr) {
+                    if (!ready && std::chrono::steady_clock::now() >= startup_deadline) {
+                        publish_failure(false, "audio_device_provider_start_timeout");
+                        break;
+                    }
+                    continue;
+                }
+                const auto type = GST_MESSAGE_TYPE(message);
+                gboolean started = FALSE;
+                if (type == GST_MESSAGE_DEVICE_MONITOR_STARTED) {
+                    gst_message_parse_device_monitor_started(message, &started);
+                }
+                gst_message_unref(message);
+                if (type == GST_MESSAGE_DEVICE_MONITOR_STARTED && started != FALSE) {
+                    ready = true;
+                    retry_delay = kInitialDeviceMonitorRetry;
+                    publish_devices(enumerate_wasapi_devices(monitor));
+                } else if (ready && (type == GST_MESSAGE_DEVICE_ADDED ||
+                                     type == GST_MESSAGE_DEVICE_REMOVED ||
+                                     type == GST_MESSAGE_DEVICE_CHANGED)) {
+                    publish_devices(enumerate_wasapi_devices(monitor));
+                } else if (type == GST_MESSAGE_ERROR ||
+                           (type == GST_MESSAGE_DEVICE_MONITOR_STARTED && started == FALSE)) {
+                    publish_failure(true, "audio_device_monitor_failed");
+                    break;
+                }
+            }
+            gst_device_monitor_stop(monitor);
+            gst_object_unref(bus);
+            gst_object_unref(monitor);
+            if (!stop_requested_.load()) {
+                wait_before_retry(retry_delay);
+                retry_delay = (std::min)(retry_delay * 2, kMaximumDeviceMonitorRetry);
+            }
+        }
+    }
+
+    void wait_before_retry(const std::chrono::milliseconds delay) {
+        std::unique_lock lock{retry_mutex_};
+        retry_wakeup_.wait_for(lock, delay, [this] { return stop_requested_.load(); });
+    }
+
+    void publish_devices(std::vector<AudioDevice> devices) {
+        std::scoped_lock lock{mutex_};
+        const bool changed = !snapshot_.ready || !snapshot_.supported ||
+                             !snapshot_.error_code.empty() || snapshot_.devices != devices;
+        snapshot_.supported = true;
+        snapshot_.ready = true;
+        snapshot_.devices = std::move(devices);
+        snapshot_.error_code.clear();
+        if (changed) {
+            ++snapshot_.generation;
+        }
+    }
+
+    void publish_failure(const bool supported, std::string error_code) {
+        std::scoped_lock lock{mutex_};
+        const bool changed = !snapshot_.ready || snapshot_.supported != supported ||
+                             snapshot_.error_code != error_code || !snapshot_.devices.empty();
+        snapshot_.supported = supported;
+        snapshot_.ready = true;
+        snapshot_.devices.clear();
+        snapshot_.error_code = std::move(error_code);
+        if (changed) {
+            ++snapshot_.generation;
+        }
+    }
+
+    std::atomic_bool stop_requested_{false};
+    std::thread worker_{};
+    std::mutex retry_mutex_{};
+    std::condition_variable retry_wakeup_{};
+#endif
+    mutable std::mutex mutex_{};
+    AudioDeviceSnapshot snapshot_{};
+};
+
+MediaRuntime::MediaRuntime()
+    : device_monitor_(std::make_shared<DeviceMonitor>()),
+      audio_device_monitor_(std::make_shared<AudioDeviceMonitor>()) {}
 
 MediaRuntime::~MediaRuntime() {
     device_monitor_->stop();
+    audio_device_monitor_->stop();
 }
 
 MediaRuntimeProbe MediaRuntime::initialize() {
@@ -548,6 +801,8 @@ MediaRuntimeProbe MediaRuntime::initialize() {
         .d3d11_compositor =
             has_element_factory("d3d11compositor") &&
             static_cast<bool>(gstreamer_d3d11_device(source_runtime_factory_)),
+        .audio_capture = has_element_factory("wasapi2src"),
+        .program_recording = program_recording_runtime_supported(),
         .virtual_camera = probe_platform_virtual_camera(),
         .version = runtime_version(),
     };
@@ -556,6 +811,11 @@ MediaRuntimeProbe MediaRuntime::initialize() {
     } else {
         device_monitor_->mark_unavailable("local_camera_source_unavailable");
     }
+    if (probe_.audio_capture) {
+        audio_device_monitor_->start();
+    } else {
+        audio_device_monitor_->mark_unavailable("audio_capture_unavailable");
+    }
     return probe_;
 #else
     return {};
@@ -563,6 +823,10 @@ MediaRuntimeProbe MediaRuntime::initialize() {
 }
 
 LocalCameraSnapshot MediaRuntime::local_cameras() const { return device_monitor_->snapshot(); }
+
+AudioDeviceSnapshot MediaRuntime::audio_devices() const {
+    return audio_device_monitor_->snapshot();
+}
 
 std::shared_ptr<SourceRuntimeFactory> MediaRuntime::source_runtime_factory() const {
     if (!initialized_ || source_runtime_factory_ == nullptr) {
