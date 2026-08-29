@@ -2238,8 +2238,9 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
     }
 
     void apply_weights(const SceneTransitionWeights weights) noexcept {
-        g_object_set(outgoing_pad_, "alpha", weights.outgoing, nullptr);
-        g_object_set(incoming_pad_, "alpha", weights.incoming, nullptr);
+        const auto alphas = scene_transition_source_over_alphas(weights);
+        g_object_set(outgoing_pad_, "alpha", alphas.outgoing, nullptr);
+        g_object_set(incoming_pad_, "alpha", alphas.incoming, nullptr);
     }
 
     static void on_samples_selected(GstAggregator* aggregator, GstSegment*, guint64,

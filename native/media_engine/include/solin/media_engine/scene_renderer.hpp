@@ -37,6 +37,17 @@ struct SceneTransitionWeights {
     bool operator==(const SceneTransitionWeights&) const = default;
 };
 
+// Opacities for two opaque frames stacked with the incoming frame above the
+// outgoing frame using the compositor's source-over operator. These are not
+// generally equal to the linear blend weights: source-over attenuates the
+// lower frame by the upper frame's alpha a second time.
+struct SceneTransitionPadAlphas {
+    double outgoing{0.0};
+    double incoming{1.0};
+
+    bool operator==(const SceneTransitionPadAlphas&) const = default;
+};
+
 using BgraPixel = std::array<std::uint8_t, 4U>;
 
 inline constexpr std::uint32_t kMinimumAnimatedTransitionDurationMs = 50U;
@@ -47,6 +58,8 @@ inline constexpr std::uint32_t kMaximumAnimatedTransitionDurationMs = 10'000U;
 void validate_scene_transition(const SceneTransitionSpec& transition);
 [[nodiscard]] SceneTransitionWeights
 scene_transition_weights(const SceneTransitionSpec& transition, double progress) noexcept;
+[[nodiscard]] SceneTransitionPadAlphas
+scene_transition_source_over_alphas(SceneTransitionWeights weights) noexcept;
 [[nodiscard]] BgraPixel
 scene_transition_blend_pixel(const SceneTransitionSpec& transition, double progress,
                              const BgraPixel& outgoing,

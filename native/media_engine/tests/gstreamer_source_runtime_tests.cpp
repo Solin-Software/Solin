@@ -609,16 +609,51 @@ void test_program_transitions_render_real_synthetic_frames(
     if (!red.has_value()) {
         return;
     }
+    auto last_sequence = red->sequence;
+
+    const auto red_with_pip = graph.prepare(
+        OutputBus::virtual_camera, "scene-red-pip", 1U, "dissolve-red-pip",
+        1'001U,
+        {.kind = SceneTransitionKind::dissolve,
+         .duration_ms = transition_duration});
+    graph.take(red_with_pip, 1U, 1'002U);
+    std::uint8_t minimum_shared_background_luma = 255U;
+    std::size_t shared_background_samples = 0U;
+    const auto shared_background_deadline =
+        std::chrono::steady_clock::now() + 900ms;
+    while (std::chrono::steady_clock::now() < shared_background_deadline) {
+        const auto frame = wait_for_program_center(renderer, last_sequence, 50ms);
+        if (!frame.has_value()) {
+            continue;
+        }
+        last_sequence = frame->sequence;
+        minimum_shared_background_luma =
+            (std::min)(minimum_shared_background_luma, frame->yuv[0]);
+        ++shared_background_samples;
+    }
+    expect(shared_background_samples >= 5U,
+           "Dissolve publishes enough shared-background frames for continuity checks");
+    expect(minimum_shared_background_luma >= 58U,
+           "Dissolve preserves an unchanged scene background while a PiP layer appears");
+    std::this_thread::sleep_for(400ms);
+    const auto stable_red_with_pip =
+        wait_for_program_center(renderer, last_sequence, 1s);
+    expect(stable_red_with_pip.has_value() &&
+               near_channel(stable_red_with_pip->yuv[0], 63U, 12U),
+           "the PiP destination retains the shared red background");
+    if (!stable_red_with_pip.has_value()) {
+        return;
+    }
+    last_sequence = stable_red_with_pip->sequence;
 
     const auto dissolve = graph.prepare(
-        OutputBus::virtual_camera, "scene-blue", 1U, "dissolve-blue", 1'001U,
+        OutputBus::virtual_camera, "scene-blue", 1U, "dissolve-blue", 1'003U,
         {.kind = SceneTransitionKind::dissolve,
          .duration_ms = transition_duration});
     expect(dissolve.effective_transition.kind == SceneTransitionKind::dissolve &&
                !dissolve.fallback_applied,
            "the D3D11 renderer prepares Dissolve without a CUT fallback");
-    graph.take(dissolve, 1U, 1'002U);
-    auto last_sequence = red->sequence;
+    graph.take(dissolve, 1U, 1'004U);
     std::optional<CenterNv12Frame> purple;
     std::uint32_t purple_distance = 1'000U;
     const auto dissolve_midpoint_deadline =
@@ -653,13 +688,13 @@ void test_program_transitions_render_real_synthetic_frames(
     }
 
     const auto fade = graph.prepare(
-        OutputBus::virtual_camera, "scene-red", 1U, "fade-red", 1'003U,
+        OutputBus::virtual_camera, "scene-red", 1U, "fade-red", 1'005U,
         {.kind = SceneTransitionKind::fade_to_black,
          .duration_ms = transition_duration});
     expect(fade.effective_transition.kind == SceneTransitionKind::fade_to_black &&
                !fade.fallback_applied,
            "the D3D11 renderer prepares Fade through black without fallback");
-    graph.take(fade, 1U, 1'004U);
+    graph.take(fade, 1U, 1'006U);
     last_sequence = blue->sequence;
     std::optional<CenterNv12Frame> black;
     std::uint32_t black_distance = 1'000U;
@@ -705,13 +740,13 @@ void test_program_transitions_render_real_synthetic_frames(
 
     last_sequence = final_red->sequence;
     const auto prewarmed = graph.prepare(
-        OutputBus::virtual_camera, "scene-blue", 1U, "prewarmed-blue", 1'005U,
+        OutputBus::virtual_camera, "scene-blue", 1U, "prewarmed-blue", 1'007U,
         {.kind = SceneTransitionKind::dissolve, .duration_ms = 50U});
     // Preparation is intentionally allowed to run before Take. This is the real
     // control contract and exposes output gates that discard their sticky caps
     // while the prepared transition is already producing frames.
     std::this_thread::sleep_for(250ms);
-    graph.take(prewarmed, 1U, 1'006U);
+    graph.take(prewarmed, 1U, 1'008U);
     std::optional<CenterNv12Frame> prewarmed_blue;
     const auto prewarmed_deadline = std::chrono::steady_clock::now() + 1s;
     while (std::chrono::steady_clock::now() < prewarmed_deadline) {
@@ -734,9 +769,9 @@ void test_program_transitions_render_real_synthetic_frames(
     }
 
     const auto returned = graph.prepare(
-        OutputBus::virtual_camera, "scene-red", 1U, "return-red", 1'007U,
+        OutputBus::virtual_camera, "scene-red", 1U, "return-red", 1'009U,
         {.kind = SceneTransitionKind::dissolve, .duration_ms = 50U});
-    graph.take(returned, 1U, 1'008U);
+    graph.take(returned, 1U, 1'010U);
     std::optional<CenterNv12Frame> returned_red;
     const auto returned_deadline = std::chrono::steady_clock::now() + 1s;
     while (std::chrono::steady_clock::now() < returned_deadline) {
@@ -1231,6 +1266,11 @@ void test_first_hardware_camera_publishes_its_exact_selected_format(
         .border_color = "#00000000",
         .visible = true,
     };
+    auto pip_geometry = geometry;
+    pip_geometry.x = 0.72;
+    pip_geometry.y = 0.72;
+    pip_geometry.width = 0.24;
+    pip_geometry.height = 0.24;
     value.scenes = {
         {.id = "scene-red",
          .layers = {{.id = "red-layer",
@@ -1240,6 +1280,15 @@ void test_first_hardware_camera_publishes_its_exact_selected_format(
          .layers = {{.id = "blue-layer",
                      .source_id = "color-blue",
                      .geometry = geometry}}},
+        {.id = "scene-red-pip",
+         .layers = {
+             {.id = "pip-background-layer",
+              .source_id = "color-red",
+              .geometry = geometry},
+             {.id = "pip-overlay-layer",
+              .source_id = "color-blue",
+              .geometry = pip_geometry},
+         }},
     };
     value.outputs[0].default_scene_id = "scene-red";
     value.outputs[1].default_scene_id = "scene-red";
