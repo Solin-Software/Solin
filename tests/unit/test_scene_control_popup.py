@@ -3,9 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 import time
 
-from PySide6.QtCore import QCoreApplication, QObject, QRect, Signal
+from PySide6.QtCore import QCoreApplication, QEvent, QObject, QRect, Signal
 from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
+from PySide6.QtWidgets import QApplication, QWidget
 
 from solin.controllers.scene_runtime_controller import SceneRuntimeController
 from solin.core.foundation.runtime_paths import ProfilePaths
@@ -249,6 +250,43 @@ def test_scene_toolbar_popup_uses_the_shared_program_recording_state(
     assert popup._info_full_text == (
         "The recording folder is unavailable or does not have enough free space."
     )
+
+    popup.deleteLater()
+    QCoreApplication.processEvents()
+    controller.close()
+
+
+def test_recording_controls_never_show_as_a_standalone_window_during_build(
+    tmp_path: Path,
+) -> None:
+    class _TopLevelShowRecorder(QObject):
+        def __init__(self) -> None:
+            super().__init__()
+            self.object_names: list[str] = []
+
+        def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802
+            if (
+                event.type() is QEvent.Type.Show
+                and isinstance(watched, QWidget)
+                and watched.isWindow()
+            ):
+                self.object_names.append(watched.objectName())
+            return False
+
+    controller = _controller(tmp_path)
+    recording = _Recording(tmp_path / "Videos" / "Solin")
+    application = QApplication.instance()
+    assert application is not None
+    recorder = _TopLevelShowRecorder()
+    application.installEventFilter(recorder)
+    try:
+        popup = SceneControlPopup(controller, recording=recording)
+    finally:
+        application.removeEventFilter(recorder)
+
+    assert "SceneControlRecordingRow" not in recorder.object_names
+    assert popup._recording_row.parentWidget() is popup._card
+    assert not popup._recording_row.isWindow()
 
     popup.deleteLater()
     QCoreApplication.processEvents()

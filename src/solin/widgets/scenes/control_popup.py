@@ -344,7 +344,6 @@ class SceneControlPopup(QWidget):
         self._recording_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self._recording_button.clicked.connect(self._toggle_recording)
         recording_layout.addWidget(self._recording_button, 1)
-        self._recording_row.setVisible(self._recording is not None)
         layout.addWidget(self._recording_row)
 
         footer = QHBoxLayout()
