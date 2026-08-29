@@ -939,8 +939,8 @@
 <context>
     <name>DeferredScenesWidget</name>
     <message>
-        <location filename="../../widgets/deferred_scenes_widget.py" line="+34"/>
-        <location line="+38"/>
+        <location filename="../../widgets/deferred_scenes_widget.py" line="+41"/>
+        <location line="+39"/>
         <source>Loading…</source>
         <translation>Chargement…</translation>
     </message>
@@ -1589,16 +1589,51 @@
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../../main_window.py" line="+532"/>
+        <location filename="../../main_window.py" line="+551"/>
         <location filename="../../controllers/main_window_nav.py" line="+11"/>
         <source>Solin</source>
         <translation>Solin</translation>
     </message>
     <message>
-        <location line="+691"/>
+        <location line="+693"/>
         <location filename="../../controllers/main_window_nav.py" line="+27"/>
         <source>Scenes</source>
         <translation>Scènes</translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <source>Recording failed.</source>
+        <translation>Échec de l’enregistrement.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Recording failed. The file was preserved at %1</source>
+        <translation>Échec de l’enregistrement. Le fichier a été conservé à l’emplacement %1</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Recording</source>
+        <translation>Enregistrement</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Recording saved to %1</source>
+        <translation>Enregistrement sauvegardé dans %1</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Recording complete</source>
+        <translation>Enregistrement terminé</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Stop recording before switching profiles.</source>
+        <translation>Arrêter l’enregistrement avant de changer de profil.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Recording in progress</source>
+        <translation>Enregistrement en cours</translation>
     </message>
     <message>
         <location line="+379"/>
@@ -1619,6 +1654,11 @@
         <location line="+1"/>
         <source>Auto Screen Share</source>
         <translation>Partage automatique de l&apos;écran</translation>
+    </message>
+    <message>
+        <location line="+307"/>
+        <source>Stop recording before closing Solin.</source>
+        <translation>Arrêter l’enregistrement avant de fermer Solin.</translation>
     </message>
     <message>
         <location filename="../../controllers/main_window_nav.py" line="-26"/>
@@ -5054,7 +5094,7 @@ Cette action est irréversible.</translation>
 <context>
     <name>QuickAccessToolbar</name>
     <message>
-        <location filename="../../widgets/quick_access_toolbar.py" line="+654"/>
+        <location filename="../../widgets/quick_access_toolbar.py" line="+661"/>
         <source>Remote control unavailable</source>
         <translation>Contrôle à distance indisponible</translation>
     </message>
@@ -5501,49 +5541,99 @@ Cette action est irréversible.</translation>
 <context>
     <name>SceneControlPopup</name>
     <message>
-        <location filename="../../widgets/scenes/control_popup.py" line="+254"/>
-        <location line="+570"/>
+        <location filename="../../widgets/scenes/control_popup.py" line="+274"/>
+        <location line="+690"/>
         <source>Solin scenes</source>
         <translation>Scènes Solin</translation>
     </message>
     <message>
-        <location line="-549"/>
-        <location line="+550"/>
+        <location line="-669"/>
+        <location line="+670"/>
         <source>Configured</source>
         <translation>Configurées</translation>
     </message>
     <message>
-        <location line="-541"/>
-        <location line="+542"/>
+        <location line="-661"/>
+        <location line="+662"/>
         <source>Camera PiP</source>
         <translation>Caméra PiP</translation>
     </message>
     <message>
-        <location line="-533"/>
-        <location line="+534"/>
+        <location line="-653"/>
+        <location line="+654"/>
         <source>Other scenes</source>
         <translation>Autres scènes</translation>
     </message>
     <message>
-        <location line="-508"/>
-        <location line="+509"/>
+        <location line="-615"/>
+        <location line="+616"/>
         <source>Auto-switch media</source>
         <translation>Changement automatique</translation>
     </message>
     <message>
-        <location line="-504"/>
-        <location line="+505"/>
+        <location line="-611"/>
+        <location line="+612"/>
         <source>Media windows</source>
         <translation>Fenêtres de médias</translation>
     </message>
     <message>
-        <location line="-501"/>
-        <location line="+502"/>
+        <location line="-608"/>
+        <location line="+609"/>
         <source>Show in media windows</source>
         <translation>Afficher dans les fenêtres de médias</translation>
     </message>
     <message>
-        <location line="-491"/>
+        <location line="-596"/>
+        <source>The recording state could not be changed.</source>
+        <translation>Impossible de modifier l’état de l’enregistrement.</translation>
+    </message>
+    <message>
+        <location line="+30"/>
+        <source>Stop recording · %1</source>
+        <translation>Arrêter l’enregistrement · %1</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Stop recording</source>
+        <translation>Arrêter l’enregistrement</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Starting recording…</source>
+        <translation>Démarrage de l’enregistrement…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Finishing recording…</source>
+        <translation>Finalisation de l’enregistrement…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Try recording again</source>
+        <translation>Réessayer l’enregistrement</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Start recording</source>
+        <translation>Démarrer l’enregistrement</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Start recording the live output</source>
+        <translation>Démarrer l’enregistrement de la sortie en direct</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>The scene engine must be ready to record.</source>
+        <translation>Le moteur de scènes doit être prêt pour enregistrer.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Recording is unavailable in this scene engine.</source>
+        <translation>L’enregistrement n’est pas disponible dans ce moteur de scènes.</translation>
+    </message>
+    <message>
+        <location line="+13"/>
         <source>The scene could not be selected.</source>
         <translation>La scène n’a pas pu être sélectionnée.</translation>
     </message>
@@ -5568,7 +5658,7 @@ Cette action est irréversible.</translation>
         <translation>La duplication dans les fenêtres de médias n’a pas pu être modifiée.</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+24"/>
         <source>Preparing…</source>
         <translation>Préparation…</translation>
     </message>
@@ -5588,7 +5678,7 @@ Cette action est irréversible.</translation>
         <translation>Indisponible</translation>
     </message>
     <message>
-        <location line="+21"/>
+        <location line="+27"/>
         <source>Auto-switch paused for this media session</source>
         <translation>Changement automatique en pause pour cette session de médias</translation>
     </message>
@@ -5735,7 +5825,7 @@ Cette action est irréversible.</translation>
 <context>
     <name>SceneRuntimeController</name>
     <message>
-        <location filename="../../controllers/scene_runtime_controller.py" line="+1626"/>
+        <location filename="../../controllers/scene_runtime_controller.py" line="+1646"/>
         <source>The selected transition is unavailable. The scene was cut instead.</source>
         <translation>La transition sélectionnée est indisponible. La scène a été basculée en coupe.</translation>
     </message>
@@ -5743,7 +5833,7 @@ Cette action est irréversible.</translation>
 <context>
     <name>ScenesBridge</name>
     <message>
-        <location filename="../../ui/qml/scenes_bridge.py" line="+309"/>
+        <location filename="../../ui/qml/scenes_bridge.py" line="+351"/>
         <source>Switching</source>
         <translation>Basculement</translation>
     </message>
@@ -5778,18 +5868,76 @@ Cette action est irréversible.</translation>
         <translation>Démarrage du moteur de scènes…</translation>
     </message>
     <message>
-        <location line="+44"/>
+        <location line="+66"/>
+        <location line="+23"/>
+        <location line="+18"/>
+        <source>Recording is unavailable</source>
+        <translation>Enregistrement indisponible</translation>
+    </message>
+    <message>
+        <location line="-35"/>
+        <source>The scene engine must be ready to record.</source>
+        <translation>Le moteur de scènes doit être prêt pour enregistrer.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <location line="+35"/>
+        <source>Recording is unavailable in this scene engine.</source>
+        <translation>L’enregistrement n’est pas disponible dans ce moteur de scènes.</translation>
+    </message>
+    <message>
+        <location line="-18"/>
+        <source>Ready to record</source>
+        <translation>Prêt à enregistrer</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Starting recording…</source>
+        <translation>Démarrage de l’enregistrement…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Recording</source>
+        <translation>Enregistrement</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Finishing recording…</source>
+        <translation>Finalisation de l’enregistrement…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Recording failed</source>
+        <translation>Échec de l’enregistrement</translation>
+    </message>
+    <message>
+        <location line="+55"/>
+        <source>Looking for audio devices…</source>
+        <translation>Recherche des périphériques audio…</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Audio devices could not be listed.</source>
+        <translation>Impossible de répertorier les périphériques audio.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>No audio devices found.</source>
+        <translation>Aucun périphérique audio trouvé.</translation>
+    </message>
+    <message>
+        <location line="+46"/>
         <source>Default camera (automatic)</source>
         <translation>Caméra par défaut (automatique)</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+1442"/>
+        <location line="+1518"/>
         <source>Automatic</source>
         <translation>Automatique</translation>
     </message>
     <message>
-        <location line="-1432"/>
+        <location line="-1508"/>
         <source>Looking for cameras…</source>
         <translation>Recherche de caméras…</translation>
     </message>
@@ -5809,7 +5957,12 @@ Cette action est irréversible.</translation>
         <translation>Aucune caméra trouvée. La caméra automatique reste disponible.</translation>
     </message>
     <message>
-        <location line="+148"/>
+        <location line="+183"/>
+        <source>The recording folder could not be opened.</source>
+        <translation>Impossible d’ouvrir le dossier d’enregistrement.</translation>
+    </message>
+    <message>
+        <location line="+36"/>
         <source>%1 copy</source>
         <translation>%1 (copie)</translation>
     </message>
@@ -5855,7 +6008,7 @@ Cette action est irréversible.</translation>
         <translation>Échec du rappel du préréglage PTZ.</translation>
     </message>
     <message>
-        <location line="+124"/>
+        <location line="+129"/>
         <source>Default</source>
         <translation>Par défaut</translation>
     </message>
@@ -5930,7 +6083,32 @@ Cette action est irréversible.</translation>
         <translation>Les identifiants PTZ obsolètes n’ont pas pu être supprimés.</translation>
     </message>
     <message>
-        <location line="+61"/>
+        <location line="+71"/>
+        <source>System default</source>
+        <translation>Valeur par défaut du système</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>None</source>
+        <translation>Aucun</translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <source>Unavailable device</source>
+        <translation>Périphérique indisponible</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>%1 (unavailable)</source>
+        <translation>%1 (indisponible)</translation>
+    </message>
+    <message>
+        <location line="+45"/>
+        <source>The recording setting could not be updated.</source>
+        <translation>Impossible de mettre à jour le paramètre d’enregistrement.</translation>
+    </message>
+    <message>
+        <location line="+14"/>
         <source>The scene configuration could not be saved.</source>
         <translation>La configuration des scènes n’a pas pu être enregistrée.</translation>
     </message>
@@ -5971,7 +6149,7 @@ Cette action est irréversible.</translation>
     <message>
         <location line="+6"/>
         <location filename="../../qml/ScenesPtzInspector.qml" line="+10"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+1624"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+1783"/>
         <source>Name</source>
         <translation>Nom</translation>
     </message>
@@ -6104,11 +6282,11 @@ Cette action est irréversible.</translation>
         <location line="+65"/>
         <location line="+29"/>
         <location filename="../../qml/ScenesTransformDialog.qml" line="+94"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-900"/>
-        <location line="+441"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-1047"/>
+        <location line="+449"/>
         <location line="+89"/>
         <location line="+68"/>
-        <location line="+309"/>
+        <location line="+448"/>
         <source>Cancel</source>
         <translation>Annuler</translation>
     </message>
@@ -6117,7 +6295,7 @@ Cette action est irréversible.</translation>
         <location filename="../../qml/ScenesPtzInspector.qml" line="-93"/>
         <location line="+65"/>
         <location filename="../../qml/ScenesTransformDialog.qml" line="+1"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-435"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-574"/>
         <location line="+13"/>
         <source>Save</source>
         <translation>Enregistrer</translation>
@@ -6410,8 +6588,8 @@ Cette action est irréversible.</translation>
     </message>
     <message>
         <location filename="../../qml/ScenesScenePanel.qml" line="+172"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-1173"/>
-        <location line="+301"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-1193"/>
+        <location line="+313"/>
         <location line="+102"/>
         <source>Scenes</source>
         <translation>Scènes</translation>
@@ -6516,7 +6694,7 @@ Ajouter du contenu, une caméra ou une autre scène.</translation>
         <translation>Rotation</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-414"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-426"/>
         <source>Open scenes</source>
         <translation>Ouvrir les scènes</translation>
     </message>
@@ -6542,13 +6720,13 @@ Ajouter du contenu, une caméra ou une autre scène.</translation>
     </message>
     <message>
         <location line="+7"/>
-        <location line="+473"/>
-        <location line="+141"/>
+        <location line="+485"/>
+        <location line="+149"/>
         <source>Cut</source>
         <translation>Coupe</translation>
     </message>
     <message>
-        <location line="-608"/>
+        <location line="-616"/>
         <source>Off</source>
         <translation>Désactivé</translation>
     </message>
@@ -6559,18 +6737,18 @@ Ajouter du contenu, une caméra ou une autre scène.</translation>
     </message>
     <message>
         <location line="+15"/>
-        <location line="+465"/>
+        <location line="+473"/>
         <source>On air</source>
         <translation>En direct</translation>
     </message>
     <message>
-        <location line="-465"/>
-        <location line="+465"/>
+        <location line="-473"/>
+        <location line="+473"/>
         <source>Take live</source>
         <translation>Passer en direct</translation>
     </message>
     <message>
-        <location line="-204"/>
+        <location line="-212"/>
         <source>Canvas</source>
         <translation>Canevas</translation>
     </message>
@@ -6591,23 +6769,23 @@ Ajouter du contenu, une caméra ou une autre scène.</translation>
     </message>
     <message>
         <location line="+7"/>
-        <location line="+142"/>
+        <location line="+150"/>
         <source>Dissolve</source>
         <translation>Fondu enchaîné</translation>
     </message>
     <message>
-        <location line="-141"/>
+        <location line="-149"/>
         <source>Blend the two scenes</source>
         <translation>Mélanger les deux scènes</translation>
     </message>
     <message>
         <location line="+7"/>
-        <location line="+143"/>
+        <location line="+151"/>
         <source>Fade through black</source>
         <translation>Fondu au noir</translation>
     </message>
     <message>
-        <location line="-142"/>
+        <location line="-150"/>
         <source>Fade out, then fade in</source>
         <translation>Fondu au noir puis réapparition</translation>
     </message>
@@ -6618,14 +6796,14 @@ Ajouter du contenu, une caméra ou une autre scène.</translation>
     </message>
     <message>
         <location line="+15"/>
-        <location line="+444"/>
+        <location line="+452"/>
         <source>ms</source>
         <translation>ms</translation>
     </message>
     <message>
         <location filename="../../qml/ScenesCanvas.qml" line="-3"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-428"/>
-        <location line="+441"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-436"/>
+        <location line="+449"/>
         <source>Apply</source>
         <translation>Appliquer</translation>
     </message>
@@ -6872,9 +7050,120 @@ Ajouter du contenu, une caméra ou une autre scène.</translation>
         <translation>Transition de scène : %1</translation>
     </message>
     <message>
-        <location line="+105"/>
+        <location line="+18"/>
+        <source>Try recording again</source>
+        <translation>Réessayer l’enregistrement</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Starting recording…</source>
+        <translation>Démarrage de l’enregistrement…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Finishing recording…</source>
+        <translation>Finalisation de l’enregistrement…</translation>
+    </message>
+    <message>
+        <location line="+57"/>
+        <source>Retry</source>
+        <translation>Réessayer</translation>
+    </message>
+    <message>
+        <location line="+54"/>
+        <location line="+6"/>
+        <source>Recording settings</source>
+        <translation>Paramètres d’enregistrement</translation>
+    </message>
+    <message>
+        <location line="+107"/>
         <source>Output · %1</source>
         <translation>Sortie · %1</translation>
+    </message>
+    <message>
+        <location filename="../../qml/ScenesRecordingPopover.qml" line="+112"/>
+        <source>Recording</source>
+        <translation>Enregistrement</translation>
+    </message>
+    <message>
+        <location line="+58"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-166"/>
+        <source>Record</source>
+        <translation>Enregistrer</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-61"/>
+        <source>Stop recording</source>
+        <translation>Arrêter l’enregistrement</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Try again</source>
+        <translation>Réessayer</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+58"/>
+        <source>Starting…</source>
+        <translation>Démarrage…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+1"/>
+        <source>Finishing…</source>
+        <translation>Finalisation…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-55"/>
+        <source>Start recording</source>
+        <translation>Démarrer l’enregistrement</translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <location line="+15"/>
+        <source>Microphone</source>
+        <translation>Microphone</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <location line="+15"/>
+        <source>System audio</source>
+        <translation>Audio système</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Includes sounds from every app using the selected output.</source>
+        <translation>Inclut les sons de toutes les applications utilisant la sortie sélectionnée.</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Save recordings to</source>
+        <translation>Emplacement des enregistrements</translation>
+    </message>
+    <message>
+        <location line="+38"/>
+        <source>Change…</source>
+        <translation>Modifier…</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Use default</source>
+        <translation>Utiliser la valeur par défaut</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Open folder</source>
+        <translation>Ouvrir le dossier</translation>
+    </message>
+</context>
+<context>
+    <name>ScenesEditorWidget</name>
+    <message>
+        <location filename="../../ui/qml/scenes.py" line="+139"/>
+        <source>Choose recording folder</source>
+        <translation>Choisir le dossier d’enregistrement</translation>
     </message>
 </context>
 <context>

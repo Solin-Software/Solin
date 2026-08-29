@@ -936,8 +936,8 @@
 <context>
     <name>DeferredScenesWidget</name>
     <message>
-        <location filename="../../widgets/deferred_scenes_widget.py" line="+34"/>
-        <location line="+38"/>
+        <location filename="../../widgets/deferred_scenes_widget.py" line="+41"/>
+        <location line="+39"/>
         <source>Loading…</source>
         <translation>로드 중…</translation>
     </message>
@@ -1576,16 +1576,51 @@
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../../main_window.py" line="+532"/>
+        <location filename="../../main_window.py" line="+551"/>
         <location filename="../../controllers/main_window_nav.py" line="+11"/>
         <source>Solin</source>
         <translation>Solin</translation>
     </message>
     <message>
-        <location line="+691"/>
+        <location line="+693"/>
         <location filename="../../controllers/main_window_nav.py" line="+27"/>
         <source>Scenes</source>
         <translation>장면</translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <source>Recording failed.</source>
+        <translation>녹화에 실패했습니다.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Recording failed. The file was preserved at %1</source>
+        <translation>녹화에 실패했습니다. 파일이 %1에 보존되었습니다</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Recording</source>
+        <translation>녹화</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Recording saved to %1</source>
+        <translation>녹화가 %1에 저장되었습니다</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Recording complete</source>
+        <translation>녹화 완료</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Stop recording before switching profiles.</source>
+        <translation>프로필을 전환하기 전에 녹화를 중지하십시오.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Recording in progress</source>
+        <translation>녹화 진행 중</translation>
     </message>
     <message>
         <location line="+379"/>
@@ -1606,6 +1641,11 @@
         <location line="+1"/>
         <source>Auto Screen Share</source>
         <translation>자동 화면 공유</translation>
+    </message>
+    <message>
+        <location line="+307"/>
+        <source>Stop recording before closing Solin.</source>
+        <translation>Solin을 닫기 전에 녹화를 중지하십시오.</translation>
     </message>
     <message>
         <location filename="../../controllers/main_window_nav.py" line="-26"/>
@@ -5024,7 +5064,7 @@ This action cannot be undone.</source>
 <context>
     <name>QuickAccessToolbar</name>
     <message>
-        <location filename="../../widgets/quick_access_toolbar.py" line="+654"/>
+        <location filename="../../widgets/quick_access_toolbar.py" line="+661"/>
         <source>Remote control unavailable</source>
         <translation>원격 제어를 사용할 수 없습니다</translation>
     </message>
@@ -5470,49 +5510,99 @@ This action cannot be undone.</source>
 <context>
     <name>SceneControlPopup</name>
     <message>
-        <location filename="../../widgets/scenes/control_popup.py" line="+254"/>
-        <location line="+570"/>
+        <location filename="../../widgets/scenes/control_popup.py" line="+274"/>
+        <location line="+690"/>
         <source>Solin scenes</source>
         <translation>Solin 장면</translation>
     </message>
     <message>
-        <location line="-549"/>
-        <location line="+550"/>
+        <location line="-669"/>
+        <location line="+670"/>
         <source>Configured</source>
         <translation>구성됨</translation>
     </message>
     <message>
-        <location line="-541"/>
-        <location line="+542"/>
+        <location line="-661"/>
+        <location line="+662"/>
         <source>Camera PiP</source>
         <translation>카메라 PiP</translation>
     </message>
     <message>
-        <location line="-533"/>
-        <location line="+534"/>
+        <location line="-653"/>
+        <location line="+654"/>
         <source>Other scenes</source>
         <translation>다른 장면</translation>
     </message>
     <message>
-        <location line="-508"/>
-        <location line="+509"/>
+        <location line="-615"/>
+        <location line="+616"/>
         <source>Auto-switch media</source>
         <translation>자동 전환</translation>
     </message>
     <message>
-        <location line="-504"/>
-        <location line="+505"/>
+        <location line="-611"/>
+        <location line="+612"/>
         <source>Media windows</source>
         <translation>미디어 창</translation>
     </message>
     <message>
-        <location line="-501"/>
-        <location line="+502"/>
+        <location line="-608"/>
+        <location line="+609"/>
         <source>Show in media windows</source>
         <translation>미디어 창에 표시</translation>
     </message>
     <message>
-        <location line="-491"/>
+        <location line="-596"/>
+        <source>The recording state could not be changed.</source>
+        <translation>녹화 상태를 변경할 수 없습니다.</translation>
+    </message>
+    <message>
+        <location line="+30"/>
+        <source>Stop recording · %1</source>
+        <translation>녹화 중지 · %1</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Stop recording</source>
+        <translation>녹화 중지</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Starting recording…</source>
+        <translation>녹화를 시작하는 중…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Finishing recording…</source>
+        <translation>녹화를 마무리하는 중…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Try recording again</source>
+        <translation>녹화 다시 시도</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Start recording</source>
+        <translation>녹화 시작</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Start recording the live output</source>
+        <translation>라이브 출력 녹화 시작</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>The scene engine must be ready to record.</source>
+        <translation>녹화하려면 장면 엔진이 준비되어 있어야 합니다.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Recording is unavailable in this scene engine.</source>
+        <translation>이 장면 엔진에서는 녹화를 사용할 수 없습니다.</translation>
+    </message>
+    <message>
+        <location line="+13"/>
         <source>The scene could not be selected.</source>
         <translation>장면을 선택할 수 없습니다.</translation>
     </message>
@@ -5537,7 +5627,7 @@ This action cannot be undone.</source>
         <translation>미디어 창의 미러링을 변경할 수 없습니다.</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+24"/>
         <source>Preparing…</source>
         <translation>준비하는 중…</translation>
     </message>
@@ -5557,7 +5647,7 @@ This action cannot be undone.</source>
         <translation>사용 불가</translation>
     </message>
     <message>
-        <location line="+21"/>
+        <location line="+27"/>
         <source>Auto-switch paused for this media session</source>
         <translation>이 미디어 세션에서 자동 전환이 일시중지되었습니다</translation>
     </message>
@@ -5704,7 +5794,7 @@ This action cannot be undone.</source>
 <context>
     <name>SceneRuntimeController</name>
     <message>
-        <location filename="../../controllers/scene_runtime_controller.py" line="+1626"/>
+        <location filename="../../controllers/scene_runtime_controller.py" line="+1646"/>
         <source>The selected transition is unavailable. The scene was cut instead.</source>
         <translation>선택한 전환을 사용할 수 없습니다. 대신 컷으로 전환했습니다.</translation>
     </message>
@@ -5712,7 +5802,7 @@ This action cannot be undone.</source>
 <context>
     <name>ScenesBridge</name>
     <message>
-        <location filename="../../ui/qml/scenes_bridge.py" line="+309"/>
+        <location filename="../../ui/qml/scenes_bridge.py" line="+351"/>
         <source>Switching</source>
         <translation>전환 중</translation>
     </message>
@@ -5747,18 +5837,76 @@ This action cannot be undone.</source>
         <translation>장면 엔진을 시작하는 중…</translation>
     </message>
     <message>
-        <location line="+44"/>
+        <location line="+66"/>
+        <location line="+23"/>
+        <location line="+18"/>
+        <source>Recording is unavailable</source>
+        <translation>녹화를 사용할 수 없음</translation>
+    </message>
+    <message>
+        <location line="-35"/>
+        <source>The scene engine must be ready to record.</source>
+        <translation>녹화하려면 장면 엔진이 준비되어 있어야 합니다.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <location line="+35"/>
+        <source>Recording is unavailable in this scene engine.</source>
+        <translation>이 장면 엔진에서는 녹화를 사용할 수 없습니다.</translation>
+    </message>
+    <message>
+        <location line="-18"/>
+        <source>Ready to record</source>
+        <translation>녹화 준비 완료</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Starting recording…</source>
+        <translation>녹화를 시작하는 중…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Recording</source>
+        <translation>녹화</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Finishing recording…</source>
+        <translation>녹화를 마무리하는 중…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Recording failed</source>
+        <translation>녹화 실패</translation>
+    </message>
+    <message>
+        <location line="+55"/>
+        <source>Looking for audio devices…</source>
+        <translation>오디오 장치를 찾는 중…</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Audio devices could not be listed.</source>
+        <translation>오디오 장치 목록을 가져올 수 없습니다.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>No audio devices found.</source>
+        <translation>오디오 장치를 찾을 수 없습니다.</translation>
+    </message>
+    <message>
+        <location line="+46"/>
         <source>Default camera (automatic)</source>
         <translation>기본 카메라(자동)</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+1442"/>
+        <location line="+1518"/>
         <source>Automatic</source>
         <translation>자동</translation>
     </message>
     <message>
-        <location line="-1432"/>
+        <location line="-1508"/>
         <source>Looking for cameras…</source>
         <translation>카메라를 찾는 중…</translation>
     </message>
@@ -5778,7 +5926,12 @@ This action cannot be undone.</source>
         <translation>카메라를 찾을 수 없습니다. 자동 카메라는 계속 사용할 수 있습니다.</translation>
     </message>
     <message>
-        <location line="+148"/>
+        <location line="+183"/>
+        <source>The recording folder could not be opened.</source>
+        <translation>녹화 폴더를 열 수 없습니다.</translation>
+    </message>
+    <message>
+        <location line="+36"/>
         <source>%1 copy</source>
         <translation>%1 (사본)</translation>
     </message>
@@ -5824,7 +5977,7 @@ This action cannot be undone.</source>
         <translation>PTZ 프리셋 호출에 실패했습니다.</translation>
     </message>
     <message>
-        <location line="+124"/>
+        <location line="+129"/>
         <source>Default</source>
         <translation>기본</translation>
     </message>
@@ -5899,7 +6052,32 @@ This action cannot be undone.</source>
         <translation>오래된 PTZ 인증 정보를 삭제할 수 없습니다.</translation>
     </message>
     <message>
-        <location line="+61"/>
+        <location line="+71"/>
+        <source>System default</source>
+        <translation>시스템 기본값</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>None</source>
+        <translation>없음</translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <source>Unavailable device</source>
+        <translation>사용할 수 없는 장치</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>%1 (unavailable)</source>
+        <translation>%1(사용할 수 없음)</translation>
+    </message>
+    <message>
+        <location line="+45"/>
+        <source>The recording setting could not be updated.</source>
+        <translation>녹화 설정을 업데이트할 수 없습니다.</translation>
+    </message>
+    <message>
+        <location line="+14"/>
         <source>The scene configuration could not be saved.</source>
         <translation>장면 구성을 저장할 수 없습니다.</translation>
     </message>
@@ -5940,7 +6118,7 @@ This action cannot be undone.</source>
     <message>
         <location line="+6"/>
         <location filename="../../qml/ScenesPtzInspector.qml" line="+10"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+1624"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+1783"/>
         <source>Name</source>
         <translation>이름</translation>
     </message>
@@ -6073,11 +6251,11 @@ This action cannot be undone.</source>
         <location line="+65"/>
         <location line="+29"/>
         <location filename="../../qml/ScenesTransformDialog.qml" line="+94"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-900"/>
-        <location line="+441"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-1047"/>
+        <location line="+449"/>
         <location line="+89"/>
         <location line="+68"/>
-        <location line="+309"/>
+        <location line="+448"/>
         <source>Cancel</source>
         <translation>취소</translation>
     </message>
@@ -6086,7 +6264,7 @@ This action cannot be undone.</source>
         <location filename="../../qml/ScenesPtzInspector.qml" line="-93"/>
         <location line="+65"/>
         <location filename="../../qml/ScenesTransformDialog.qml" line="+1"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-435"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-574"/>
         <location line="+13"/>
         <source>Save</source>
         <translation>저장</translation>
@@ -6379,8 +6557,8 @@ This action cannot be undone.</source>
     </message>
     <message>
         <location filename="../../qml/ScenesScenePanel.qml" line="+172"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-1173"/>
-        <location line="+301"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-1193"/>
+        <location line="+313"/>
         <location line="+102"/>
         <source>Scenes</source>
         <translation>장면</translation>
@@ -6485,7 +6663,7 @@ Add content, a camera, or another scene.</source>
         <translation>회전</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-414"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-426"/>
         <source>Open scenes</source>
         <translation>장면 열기</translation>
     </message>
@@ -6511,13 +6689,13 @@ Add content, a camera, or another scene.</source>
     </message>
     <message>
         <location line="+7"/>
-        <location line="+473"/>
-        <location line="+141"/>
+        <location line="+485"/>
+        <location line="+149"/>
         <source>Cut</source>
         <translation>컷</translation>
     </message>
     <message>
-        <location line="-608"/>
+        <location line="-616"/>
         <source>Off</source>
         <translation>꺼짐</translation>
     </message>
@@ -6528,18 +6706,18 @@ Add content, a camera, or another scene.</source>
     </message>
     <message>
         <location line="+15"/>
-        <location line="+465"/>
+        <location line="+473"/>
         <source>On air</source>
         <translation>온에어</translation>
     </message>
     <message>
-        <location line="-465"/>
-        <location line="+465"/>
+        <location line="-473"/>
+        <location line="+473"/>
         <source>Take live</source>
         <translation>온에어로 내보내기</translation>
     </message>
     <message>
-        <location line="-204"/>
+        <location line="-212"/>
         <source>Canvas</source>
         <translation>캔버스</translation>
     </message>
@@ -6560,23 +6738,23 @@ Add content, a camera, or another scene.</source>
     </message>
     <message>
         <location line="+7"/>
-        <location line="+142"/>
+        <location line="+150"/>
         <source>Dissolve</source>
         <translation>디졸브</translation>
     </message>
     <message>
-        <location line="-141"/>
+        <location line="-149"/>
         <source>Blend the two scenes</source>
         <translation>두 장면을 섞기</translation>
     </message>
     <message>
         <location line="+7"/>
-        <location line="+143"/>
+        <location line="+151"/>
         <source>Fade through black</source>
         <translation>검은 화면 페이드</translation>
     </message>
     <message>
-        <location line="-142"/>
+        <location line="-150"/>
         <source>Fade out, then fade in</source>
         <translation>검은 화면으로 사라졌다가 다시 나타남</translation>
     </message>
@@ -6587,14 +6765,14 @@ Add content, a camera, or another scene.</source>
     </message>
     <message>
         <location line="+15"/>
-        <location line="+444"/>
+        <location line="+452"/>
         <source>ms</source>
         <translation>밀리초</translation>
     </message>
     <message>
         <location filename="../../qml/ScenesCanvas.qml" line="-3"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-428"/>
-        <location line="+441"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-436"/>
+        <location line="+449"/>
         <source>Apply</source>
         <translation>적용</translation>
     </message>
@@ -6841,9 +7019,120 @@ Add content, a camera, or another scene.</source>
         <translation>장면 전환: %1</translation>
     </message>
     <message>
-        <location line="+105"/>
+        <location line="+18"/>
+        <source>Try recording again</source>
+        <translation>녹화 다시 시도</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Starting recording…</source>
+        <translation>녹화를 시작하는 중…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Finishing recording…</source>
+        <translation>녹화를 마무리하는 중…</translation>
+    </message>
+    <message>
+        <location line="+57"/>
+        <source>Retry</source>
+        <translation>다시 시도</translation>
+    </message>
+    <message>
+        <location line="+54"/>
+        <location line="+6"/>
+        <source>Recording settings</source>
+        <translation>녹화 설정</translation>
+    </message>
+    <message>
+        <location line="+107"/>
         <source>Output · %1</source>
         <translation>출력 · %1</translation>
+    </message>
+    <message>
+        <location filename="../../qml/ScenesRecordingPopover.qml" line="+112"/>
+        <source>Recording</source>
+        <translation>녹화</translation>
+    </message>
+    <message>
+        <location line="+58"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-166"/>
+        <source>Record</source>
+        <translation>녹화</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-61"/>
+        <source>Stop recording</source>
+        <translation>녹화 중지</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Try again</source>
+        <translation>다시 시도</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+58"/>
+        <source>Starting…</source>
+        <translation>시작하는 중…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+1"/>
+        <source>Finishing…</source>
+        <translation>마무리 중…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-55"/>
+        <source>Start recording</source>
+        <translation>녹화 시작</translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <location line="+15"/>
+        <source>Microphone</source>
+        <translation>마이크</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <location line="+15"/>
+        <source>System audio</source>
+        <translation>시스템 오디오</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Includes sounds from every app using the selected output.</source>
+        <translation>선택한 출력을 사용하는 모든 앱의 소리가 포함됩니다.</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Save recordings to</source>
+        <translation>녹화 저장 위치</translation>
+    </message>
+    <message>
+        <location line="+38"/>
+        <source>Change…</source>
+        <translation>변경…</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Use default</source>
+        <translation>기본값 사용</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Open folder</source>
+        <translation>폴더 열기</translation>
+    </message>
+</context>
+<context>
+    <name>ScenesEditorWidget</name>
+    <message>
+        <location filename="../../ui/qml/scenes.py" line="+139"/>
+        <source>Choose recording folder</source>
+        <translation>녹화 폴더 선택</translation>
     </message>
 </context>
 <context>

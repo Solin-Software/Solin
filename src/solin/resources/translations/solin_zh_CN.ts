@@ -936,8 +936,8 @@
 <context>
     <name>DeferredScenesWidget</name>
     <message>
-        <location filename="../../widgets/deferred_scenes_widget.py" line="+34"/>
-        <location line="+38"/>
+        <location filename="../../widgets/deferred_scenes_widget.py" line="+41"/>
+        <location line="+39"/>
         <source>Loading…</source>
         <translation>正在加载……</translation>
     </message>
@@ -1576,16 +1576,51 @@
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../../main_window.py" line="+532"/>
+        <location filename="../../main_window.py" line="+551"/>
         <location filename="../../controllers/main_window_nav.py" line="+11"/>
         <source>Solin</source>
         <translation>Solin</translation>
     </message>
     <message>
-        <location line="+691"/>
+        <location line="+693"/>
         <location filename="../../controllers/main_window_nav.py" line="+27"/>
         <source>Scenes</source>
         <translation>场景</translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <source>Recording failed.</source>
+        <translation>录制失败。</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Recording failed. The file was preserved at %1</source>
+        <translation>录制失败。文件已保存在 %1</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Recording</source>
+        <translation>录制</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Recording saved to %1</source>
+        <translation>录制已保存到 %1</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Recording complete</source>
+        <translation>录制完成</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Stop recording before switching profiles.</source>
+        <translation>切换配置文件前请停止录制。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Recording in progress</source>
+        <translation>正在录制</translation>
     </message>
     <message>
         <location line="+379"/>
@@ -1606,6 +1641,11 @@
         <location line="+1"/>
         <source>Auto Screen Share</source>
         <translation>自动屏幕共享</translation>
+    </message>
+    <message>
+        <location line="+307"/>
+        <source>Stop recording before closing Solin.</source>
+        <translation>关闭 Solin 前请停止录制。</translation>
     </message>
     <message>
         <location filename="../../controllers/main_window_nav.py" line="-26"/>
@@ -5024,7 +5064,7 @@ This action cannot be undone.</source>
 <context>
     <name>QuickAccessToolbar</name>
     <message>
-        <location filename="../../widgets/quick_access_toolbar.py" line="+654"/>
+        <location filename="../../widgets/quick_access_toolbar.py" line="+661"/>
         <source>Remote control unavailable</source>
         <translation>无法使用远程控制</translation>
     </message>
@@ -5470,49 +5510,99 @@ This action cannot be undone.</source>
 <context>
     <name>SceneControlPopup</name>
     <message>
-        <location filename="../../widgets/scenes/control_popup.py" line="+254"/>
-        <location line="+570"/>
+        <location filename="../../widgets/scenes/control_popup.py" line="+274"/>
+        <location line="+690"/>
         <source>Solin scenes</source>
         <translation>Solin 场景</translation>
     </message>
     <message>
-        <location line="-549"/>
-        <location line="+550"/>
+        <location line="-669"/>
+        <location line="+670"/>
         <source>Configured</source>
         <translation>已配置</translation>
     </message>
     <message>
-        <location line="-541"/>
-        <location line="+542"/>
+        <location line="-661"/>
+        <location line="+662"/>
         <source>Camera PiP</source>
         <translation>摄像头 PiP</translation>
     </message>
     <message>
-        <location line="-533"/>
-        <location line="+534"/>
+        <location line="-653"/>
+        <location line="+654"/>
         <source>Other scenes</source>
         <translation>其他场景</translation>
     </message>
     <message>
-        <location line="-508"/>
-        <location line="+509"/>
+        <location line="-615"/>
+        <location line="+616"/>
         <source>Auto-switch media</source>
         <translation>自动切换</translation>
     </message>
     <message>
-        <location line="-504"/>
-        <location line="+505"/>
+        <location line="-611"/>
+        <location line="+612"/>
         <source>Media windows</source>
         <translation>媒体窗口</translation>
     </message>
     <message>
-        <location line="-501"/>
-        <location line="+502"/>
+        <location line="-608"/>
+        <location line="+609"/>
         <source>Show in media windows</source>
         <translation>在媒体窗口中显示</translation>
     </message>
     <message>
-        <location line="-491"/>
+        <location line="-596"/>
+        <source>The recording state could not be changed.</source>
+        <translation>无法更改录制状态。</translation>
+    </message>
+    <message>
+        <location line="+30"/>
+        <source>Stop recording · %1</source>
+        <translation>停止录制 · %1</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Stop recording</source>
+        <translation>停止录制</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Starting recording…</source>
+        <translation>正在开始录制…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Finishing recording…</source>
+        <translation>正在完成录制…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Try recording again</source>
+        <translation>重试录制</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Start recording</source>
+        <translation>开始录制</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Start recording the live output</source>
+        <translation>开始录制实时输出</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>The scene engine must be ready to record.</source>
+        <translation>场景引擎必须准备就绪才能录制。</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Recording is unavailable in this scene engine.</source>
+        <translation>此场景引擎不支持录制。</translation>
+    </message>
+    <message>
+        <location line="+13"/>
         <source>The scene could not be selected.</source>
         <translation>无法选择该场景。</translation>
     </message>
@@ -5537,7 +5627,7 @@ This action cannot be undone.</source>
         <translation>无法更改媒体窗口的镜像。</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+24"/>
         <source>Preparing…</source>
         <translation>正在准备……</translation>
     </message>
@@ -5557,7 +5647,7 @@ This action cannot be undone.</source>
         <translation>不可用</translation>
     </message>
     <message>
-        <location line="+21"/>
+        <location line="+27"/>
         <source>Auto-switch paused for this media session</source>
         <translation>本次媒体会话已暂停自动切换</translation>
     </message>
@@ -5704,7 +5794,7 @@ This action cannot be undone.</source>
 <context>
     <name>SceneRuntimeController</name>
     <message>
-        <location filename="../../controllers/scene_runtime_controller.py" line="+1626"/>
+        <location filename="../../controllers/scene_runtime_controller.py" line="+1646"/>
         <source>The selected transition is unavailable. The scene was cut instead.</source>
         <translation>所选转场不可用，已改用硬切切换场景。</translation>
     </message>
@@ -5712,7 +5802,7 @@ This action cannot be undone.</source>
 <context>
     <name>ScenesBridge</name>
     <message>
-        <location filename="../../ui/qml/scenes_bridge.py" line="+309"/>
+        <location filename="../../ui/qml/scenes_bridge.py" line="+351"/>
         <source>Switching</source>
         <translation>正在切换</translation>
     </message>
@@ -5747,18 +5837,76 @@ This action cannot be undone.</source>
         <translation>正在启动场景引擎……</translation>
     </message>
     <message>
-        <location line="+44"/>
+        <location line="+66"/>
+        <location line="+23"/>
+        <location line="+18"/>
+        <source>Recording is unavailable</source>
+        <translation>录制不可用</translation>
+    </message>
+    <message>
+        <location line="-35"/>
+        <source>The scene engine must be ready to record.</source>
+        <translation>场景引擎必须准备就绪才能录制。</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <location line="+35"/>
+        <source>Recording is unavailable in this scene engine.</source>
+        <translation>此场景引擎不支持录制。</translation>
+    </message>
+    <message>
+        <location line="-18"/>
+        <source>Ready to record</source>
+        <translation>已准备好录制</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Starting recording…</source>
+        <translation>正在开始录制…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Recording</source>
+        <translation>录制</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Finishing recording…</source>
+        <translation>正在完成录制…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Recording failed</source>
+        <translation>录制失败</translation>
+    </message>
+    <message>
+        <location line="+55"/>
+        <source>Looking for audio devices…</source>
+        <translation>正在查找音频设备…</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Audio devices could not be listed.</source>
+        <translation>无法列出音频设备。</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>No audio devices found.</source>
+        <translation>未找到音频设备。</translation>
+    </message>
+    <message>
+        <location line="+46"/>
         <source>Default camera (automatic)</source>
         <translation>默认摄像机（自动）</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+1442"/>
+        <location line="+1518"/>
         <source>Automatic</source>
         <translation>自动</translation>
     </message>
     <message>
-        <location line="-1432"/>
+        <location line="-1508"/>
         <source>Looking for cameras…</source>
         <translation>正在查找摄像机……</translation>
     </message>
@@ -5778,7 +5926,12 @@ This action cannot be undone.</source>
         <translation>未找到摄像机。自动摄像机仍然可用。</translation>
     </message>
     <message>
-        <location line="+148"/>
+        <location line="+183"/>
+        <source>The recording folder could not be opened.</source>
+        <translation>无法打开录制文件夹。</translation>
+    </message>
+    <message>
+        <location line="+36"/>
         <source>%1 copy</source>
         <translation>%1（副本）</translation>
     </message>
@@ -5824,7 +5977,7 @@ This action cannot be undone.</source>
         <translation>调用 PTZ 预设失败。</translation>
     </message>
     <message>
-        <location line="+124"/>
+        <location line="+129"/>
         <source>Default</source>
         <translation>默认</translation>
     </message>
@@ -5899,7 +6052,32 @@ This action cannot be undone.</source>
         <translation>无法删除过期的 PTZ 凭据。</translation>
     </message>
     <message>
-        <location line="+61"/>
+        <location line="+71"/>
+        <source>System default</source>
+        <translation>系统默认</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>None</source>
+        <translation>无</translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <source>Unavailable device</source>
+        <translation>不可用的设备</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>%1 (unavailable)</source>
+        <translation>%1（不可用）</translation>
+    </message>
+    <message>
+        <location line="+45"/>
+        <source>The recording setting could not be updated.</source>
+        <translation>无法更新录制设置。</translation>
+    </message>
+    <message>
+        <location line="+14"/>
         <source>The scene configuration could not be saved.</source>
         <translation>无法保存场景配置。</translation>
     </message>
@@ -5940,7 +6118,7 @@ This action cannot be undone.</source>
     <message>
         <location line="+6"/>
         <location filename="../../qml/ScenesPtzInspector.qml" line="+10"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+1624"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+1783"/>
         <source>Name</source>
         <translation>名称</translation>
     </message>
@@ -6073,11 +6251,11 @@ This action cannot be undone.</source>
         <location line="+65"/>
         <location line="+29"/>
         <location filename="../../qml/ScenesTransformDialog.qml" line="+94"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-900"/>
-        <location line="+441"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-1047"/>
+        <location line="+449"/>
         <location line="+89"/>
         <location line="+68"/>
-        <location line="+309"/>
+        <location line="+448"/>
         <source>Cancel</source>
         <translation>取消</translation>
     </message>
@@ -6086,7 +6264,7 @@ This action cannot be undone.</source>
         <location filename="../../qml/ScenesPtzInspector.qml" line="-93"/>
         <location line="+65"/>
         <location filename="../../qml/ScenesTransformDialog.qml" line="+1"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-435"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-574"/>
         <location line="+13"/>
         <source>Save</source>
         <translation>保存</translation>
@@ -6379,8 +6557,8 @@ This action cannot be undone.</source>
     </message>
     <message>
         <location filename="../../qml/ScenesScenePanel.qml" line="+172"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-1173"/>
-        <location line="+301"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-1193"/>
+        <location line="+313"/>
         <location line="+102"/>
         <source>Scenes</source>
         <translation>场景</translation>
@@ -6485,7 +6663,7 @@ Add content, a camera, or another scene.</source>
         <translation>旋转</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-414"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-426"/>
         <source>Open scenes</source>
         <translation>打开场景</translation>
     </message>
@@ -6511,13 +6689,13 @@ Add content, a camera, or another scene.</source>
     </message>
     <message>
         <location line="+7"/>
-        <location line="+473"/>
-        <location line="+141"/>
+        <location line="+485"/>
+        <location line="+149"/>
         <source>Cut</source>
         <translation>硬切</translation>
     </message>
     <message>
-        <location line="-608"/>
+        <location line="-616"/>
         <source>Off</source>
         <translation>关闭</translation>
     </message>
@@ -6528,18 +6706,18 @@ Add content, a camera, or another scene.</source>
     </message>
     <message>
         <location line="+15"/>
-        <location line="+465"/>
+        <location line="+473"/>
         <source>On air</source>
         <translation>直播中</translation>
     </message>
     <message>
-        <location line="-465"/>
-        <location line="+465"/>
+        <location line="-473"/>
+        <location line="+473"/>
         <source>Take live</source>
         <translation>切入直播</translation>
     </message>
     <message>
-        <location line="-204"/>
+        <location line="-212"/>
         <source>Canvas</source>
         <translation>画布</translation>
     </message>
@@ -6560,23 +6738,23 @@ Add content, a camera, or another scene.</source>
     </message>
     <message>
         <location line="+7"/>
-        <location line="+142"/>
+        <location line="+150"/>
         <source>Dissolve</source>
         <translation>叠化</translation>
     </message>
     <message>
-        <location line="-141"/>
+        <location line="-149"/>
         <source>Blend the two scenes</source>
         <translation>混合两个场景</translation>
     </message>
     <message>
         <location line="+7"/>
-        <location line="+143"/>
+        <location line="+151"/>
         <source>Fade through black</source>
         <translation>黑场淡入淡出</translation>
     </message>
     <message>
-        <location line="-142"/>
+        <location line="-150"/>
         <source>Fade out, then fade in</source>
         <translation>淡出到黑场再淡入</translation>
     </message>
@@ -6587,14 +6765,14 @@ Add content, a camera, or another scene.</source>
     </message>
     <message>
         <location line="+15"/>
-        <location line="+444"/>
+        <location line="+452"/>
         <source>ms</source>
         <translation>毫秒</translation>
     </message>
     <message>
         <location filename="../../qml/ScenesCanvas.qml" line="-3"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-428"/>
-        <location line="+441"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-436"/>
+        <location line="+449"/>
         <source>Apply</source>
         <translation>应用</translation>
     </message>
@@ -6841,9 +7019,120 @@ Add content, a camera, or another scene.</source>
         <translation>场景转场：%1</translation>
     </message>
     <message>
-        <location line="+105"/>
+        <location line="+18"/>
+        <source>Try recording again</source>
+        <translation>重试录制</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Starting recording…</source>
+        <translation>正在开始录制…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Finishing recording…</source>
+        <translation>正在完成录制…</translation>
+    </message>
+    <message>
+        <location line="+57"/>
+        <source>Retry</source>
+        <translation>重试</translation>
+    </message>
+    <message>
+        <location line="+54"/>
+        <location line="+6"/>
+        <source>Recording settings</source>
+        <translation>录制设置</translation>
+    </message>
+    <message>
+        <location line="+107"/>
         <source>Output · %1</source>
         <translation>输出 · %1</translation>
+    </message>
+    <message>
+        <location filename="../../qml/ScenesRecordingPopover.qml" line="+112"/>
+        <source>Recording</source>
+        <translation>录制</translation>
+    </message>
+    <message>
+        <location line="+58"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-166"/>
+        <source>Record</source>
+        <translation>录制</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-61"/>
+        <source>Stop recording</source>
+        <translation>停止录制</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Try again</source>
+        <translation>重试</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+58"/>
+        <source>Starting…</source>
+        <translation>正在启动……</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="+1"/>
+        <source>Finishing…</source>
+        <translation>正在完成…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location filename="../../qml/ScenesWorkspace.qml" line="-55"/>
+        <source>Start recording</source>
+        <translation>开始录制</translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <location line="+15"/>
+        <source>Microphone</source>
+        <translation>麦克风</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <location line="+15"/>
+        <source>System audio</source>
+        <translation>系统音频</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Includes sounds from every app using the selected output.</source>
+        <translation>包括使用所选输出的所有应用的声音。</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Save recordings to</source>
+        <translation>录制文件保存位置</translation>
+    </message>
+    <message>
+        <location line="+38"/>
+        <source>Change…</source>
+        <translation>更改…</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Use default</source>
+        <translation>使用默认设置</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Open folder</source>
+        <translation>打开文件夹</translation>
+    </message>
+</context>
+<context>
+    <name>ScenesEditorWidget</name>
+    <message>
+        <location filename="../../ui/qml/scenes.py" line="+139"/>
+        <source>Choose recording folder</source>
+        <translation>选择录制文件夹</translation>
     </message>
 </context>
 <context>
