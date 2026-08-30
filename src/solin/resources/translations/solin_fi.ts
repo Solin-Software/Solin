@@ -5094,7 +5094,7 @@ Tätä toimintoa ei voi peruuttaa.</translation>
 <context>
     <name>QuickAccessToolbar</name>
     <message>
-        <location filename="../../widgets/quick_access_toolbar.py" line="+661"/>
+        <location filename="../../widgets/quick_access_toolbar.py" line="+666"/>
         <source>Remote control unavailable</source>
         <translation>Etäohjaus ei ole käytettävissä</translation>
     </message>
@@ -5144,7 +5144,7 @@ Tätä toimintoa ei voi peruuttaa.</translation>
 <context>
     <name>QuickToolbarBridge</name>
     <message>
-        <location filename="../../ui/qml/quick_toolbar.py" line="+426"/>
+        <location filename="../../ui/qml/quick_toolbar.py" line="+437"/>
         <source>Manage monitors</source>
         <translation>Hallitse näyttöjä</translation>
     </message>
@@ -5542,25 +5542,25 @@ Tätä toimintoa ei voi peruuttaa.</translation>
     <name>SceneControlPopup</name>
     <message>
         <location filename="../../widgets/scenes/control_popup.py" line="+274"/>
-        <location line="+690"/>
+        <location line="+689"/>
         <source>Solin scenes</source>
         <translation>Solin-näkymät</translation>
     </message>
     <message>
-        <location line="-669"/>
-        <location line="+670"/>
+        <location line="-668"/>
+        <location line="+669"/>
         <source>Configured</source>
         <translation>Määritetyt</translation>
     </message>
     <message>
-        <location line="-661"/>
-        <location line="+662"/>
+        <location line="-660"/>
+        <location line="+661"/>
         <source>Camera PiP</source>
         <translation>Kamera-PiP</translation>
     </message>
     <message>
-        <location line="-653"/>
-        <location line="+654"/>
+        <location line="-652"/>
+        <location line="+653"/>
         <source>Other scenes</source>
         <translation>Muut näkymät</translation>
     </message>
@@ -5833,7 +5833,7 @@ Tätä toimintoa ei voi peruuttaa.</translation>
 <context>
     <name>ScenesBridge</name>
     <message>
-        <location filename="../../ui/qml/scenes_bridge.py" line="+351"/>
+        <location filename="../../ui/qml/scenes_bridge.py" line="+352"/>
         <source>Switching</source>
         <translation>Vaihdetaan</translation>
     </message>
@@ -5931,13 +5931,13 @@ Tätä toimintoa ei voi peruuttaa.</translation>
         <translation>Oletuskamera (automaattinen)</translation>
     </message>
     <message>
-        <location line="+2"/>
-        <location line="+1518"/>
+        <location line="+4"/>
+        <location line="+1519"/>
         <source>Automatic</source>
         <translation>Automaattinen</translation>
     </message>
     <message>
-        <location line="-1508"/>
+        <location line="-1509"/>
         <source>Looking for cameras…</source>
         <translation>Etsitään kameroita…</translation>
     </message>
@@ -5957,7 +5957,12 @@ Tätä toimintoa ei voi peruuttaa.</translation>
         <translation>Kameroita ei löytynyt. Automaattinen kamera on edelleen käytettävissä.</translation>
     </message>
     <message>
-        <location line="+183"/>
+        <location line="+6"/>
+        <source>Some cameras were detected by Windows but could not be verified. You can still try them in automatic mode; check the application log if capture fails.</source>
+        <translation>Windows havaitsi joitakin kameroita, mutta niitä ei voitu vahvistaa. Niitä voi silti kokeilla automaattisessa tilassa; jos kuvaaminen epäonnistuu, tarkista sovelluksen loki.</translation>
+    </message>
+    <message>
+        <location line="+186"/>
         <source>The recording folder could not be opened.</source>
         <translation>Tallennuskansiota ei voitu avata.</translation>
     </message>
@@ -5978,7 +5983,7 @@ Tätä toimintoa ei voi peruuttaa.</translation>
         <translation>Valitse kelvollinen siirtymä ja kesto.</translation>
     </message>
     <message>
-        <location line="+522"/>
+        <location line="+508"/>
         <source>Check the camera name, connection and PTZ settings.</source>
         <translation>Tarkista kameran nimi, yhteys ja PTZ-asetukset.</translation>
     </message>
@@ -6068,12 +6073,17 @@ Tätä toimintoa ei voi peruuttaa.</translation>
         <translation>Kamera ei käytettävissä. Tarkista yhteys, tietosuoja-asetukset tai onko jokin toinen sovellus käyttämässä sitä.</translation>
     </message>
     <message>
-        <location line="+118"/>
+        <location line="+116"/>
         <source>%1 (virtual)</source>
         <translation>%1 (virtuaalinen)</translation>
     </message>
     <message>
-        <location line="+45"/>
+        <location line="+5"/>
+        <source>%1 (not verified)</source>
+        <translation>%1 (ei vahvistettu)</translation>
+    </message>
+    <message>
+        <location line="+88"/>
         <source>%1 × %2 · %3 fps · %4</source>
         <translation>%1 × %2 · %3 fps · %4</translation>
     </message>
@@ -6131,7 +6141,7 @@ Tätä toimintoa ei voi peruuttaa.</translation>
 <context>
     <name>ScenesEditorView</name>
     <message>
-        <location filename="../../qml/ScenesCameraDialog.qml" line="+162"/>
+        <location filename="../../qml/ScenesCameraDialog.qml" line="+165"/>
         <source>Edit camera</source>
         <translation>Muokkaa kameraa</translation>
     </message>
@@ -6164,7 +6174,7 @@ Tätä toimintoa ei voi peruuttaa.</translation>
         <translation>Laite</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+17"/>
         <source>Refresh cameras</source>
         <translation>Päivitä kamerat</translation>
     </message>
@@ -6174,7 +6184,7 @@ Tätä toimintoa ei voi peruuttaa.</translation>
         <translation>Muoto</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+14"/>
         <source>RTSP address</source>
         <translation>RTSP-osoite</translation>
     </message>

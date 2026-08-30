@@ -5094,7 +5094,7 @@ Hutaweza kurudisha hatua hii.</translation>
 <context>
     <name>QuickAccessToolbar</name>
     <message>
-        <location filename="../../widgets/quick_access_toolbar.py" line="+661"/>
+        <location filename="../../widgets/quick_access_toolbar.py" line="+666"/>
         <source>Remote control unavailable</source>
         <translation>Udhibiti wa mbali haupatikani</translation>
     </message>
@@ -5144,7 +5144,7 @@ Hutaweza kurudisha hatua hii.</translation>
 <context>
     <name>QuickToolbarBridge</name>
     <message>
-        <location filename="../../ui/qml/quick_toolbar.py" line="+426"/>
+        <location filename="../../ui/qml/quick_toolbar.py" line="+437"/>
         <source>Manage monitors</source>
         <translation>Simamia skrini</translation>
     </message>
@@ -5542,25 +5542,25 @@ Hutaweza kurudisha hatua hii.</translation>
     <name>SceneControlPopup</name>
     <message>
         <location filename="../../widgets/scenes/control_popup.py" line="+274"/>
-        <location line="+690"/>
+        <location line="+689"/>
         <source>Solin scenes</source>
         <translation>Mandhari ya Solin</translation>
     </message>
     <message>
-        <location line="-669"/>
-        <location line="+670"/>
+        <location line="-668"/>
+        <location line="+669"/>
         <source>Configured</source>
         <translation>Zilizowekwa</translation>
     </message>
     <message>
-        <location line="-661"/>
-        <location line="+662"/>
+        <location line="-660"/>
+        <location line="+661"/>
         <source>Camera PiP</source>
         <translation>Kamera ya PiP</translation>
     </message>
     <message>
-        <location line="-653"/>
-        <location line="+654"/>
+        <location line="-652"/>
+        <location line="+653"/>
         <source>Other scenes</source>
         <translation>Mandhari mengine</translation>
     </message>
@@ -5833,7 +5833,7 @@ Hutaweza kurudisha hatua hii.</translation>
 <context>
     <name>ScenesBridge</name>
     <message>
-        <location filename="../../ui/qml/scenes_bridge.py" line="+351"/>
+        <location filename="../../ui/qml/scenes_bridge.py" line="+352"/>
         <source>Switching</source>
         <translation>Inabadilisha</translation>
     </message>
@@ -5931,13 +5931,13 @@ Hutaweza kurudisha hatua hii.</translation>
         <translation>Kamera ya kawaida (otomatiki)</translation>
     </message>
     <message>
-        <location line="+2"/>
-        <location line="+1518"/>
+        <location line="+4"/>
+        <location line="+1519"/>
         <source>Automatic</source>
         <translation>Otomatiki</translation>
     </message>
     <message>
-        <location line="-1508"/>
+        <location line="-1509"/>
         <source>Looking for cameras…</source>
         <translation>Inatafuta kamera…</translation>
     </message>
@@ -5957,7 +5957,12 @@ Hutaweza kurudisha hatua hii.</translation>
         <translation>Hakuna kamera zilizopatikana. Kamera ya otomatiki bado inapatikana.</translation>
     </message>
     <message>
-        <location line="+183"/>
+        <location line="+6"/>
+        <source>Some cameras were detected by Windows but could not be verified. You can still try them in automatic mode; check the application log if capture fails.</source>
+        <translation>Baadhi ya kamera ziligunduliwa na Windows lakini hazikuweza kuthibitishwa. Bado zinaweza kujaribiwa katika hali otomatiki; angalia kumbukumbu ya programu ikiwa kunasa kutashindwa.</translation>
+    </message>
+    <message>
+        <location line="+186"/>
         <source>The recording folder could not be opened.</source>
         <translation>Folda ya rekodi haikuweza kufunguliwa.</translation>
     </message>
@@ -5978,7 +5983,7 @@ Hutaweza kurudisha hatua hii.</translation>
         <translation>Chagua mpito na muda sahihi.</translation>
     </message>
     <message>
-        <location line="+522"/>
+        <location line="+508"/>
         <source>Check the camera name, connection and PTZ settings.</source>
         <translation>Angalia jina la kamera, muunganisho, na mipangilio ya PTZ.</translation>
     </message>
@@ -6068,12 +6073,17 @@ Hutaweza kurudisha hatua hii.</translation>
         <translation>Kamera haipatikani. Angalia muunganisho, ruhusa za faragha, au kama programu nyingine inaitumia.</translation>
     </message>
     <message>
-        <location line="+118"/>
+        <location line="+116"/>
         <source>%1 (virtual)</source>
         <translation>%1 (pepe)</translation>
     </message>
     <message>
-        <location line="+45"/>
+        <location line="+5"/>
+        <source>%1 (not verified)</source>
+        <translation>%1 (haijathibitishwa)</translation>
+    </message>
+    <message>
+        <location line="+88"/>
         <source>%1 × %2 · %3 fps · %4</source>
         <translation>%1 × %2 · %3 fps · %4</translation>
     </message>
@@ -6131,7 +6141,7 @@ Hutaweza kurudisha hatua hii.</translation>
 <context>
     <name>ScenesEditorView</name>
     <message>
-        <location filename="../../qml/ScenesCameraDialog.qml" line="+162"/>
+        <location filename="../../qml/ScenesCameraDialog.qml" line="+165"/>
         <source>Edit camera</source>
         <translation>Hariri kamera</translation>
     </message>
@@ -6164,7 +6174,7 @@ Hutaweza kurudisha hatua hii.</translation>
         <translation>Kifaa</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+17"/>
         <source>Refresh cameras</source>
         <translation>Onyesha upya kamera</translation>
     </message>
@@ -6174,7 +6184,7 @@ Hutaweza kurudisha hatua hii.</translation>
         <translation>Muundo</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+14"/>
         <source>RTSP address</source>
         <translation>Anwani ya RTSP</translation>
     </message>

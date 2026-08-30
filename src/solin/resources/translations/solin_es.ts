@@ -5094,7 +5094,7 @@ Esta acción no se puede deshacer.</translation>
 <context>
     <name>QuickAccessToolbar</name>
     <message>
-        <location filename="../../widgets/quick_access_toolbar.py" line="+661"/>
+        <location filename="../../widgets/quick_access_toolbar.py" line="+666"/>
         <source>Remote control unavailable</source>
         <translation>Control remoto no disponible</translation>
     </message>
@@ -5144,7 +5144,7 @@ Esta acción no se puede deshacer.</translation>
 <context>
     <name>QuickToolbarBridge</name>
     <message>
-        <location filename="../../ui/qml/quick_toolbar.py" line="+426"/>
+        <location filename="../../ui/qml/quick_toolbar.py" line="+437"/>
         <source>Manage monitors</source>
         <translation>Administrar monitores</translation>
     </message>
@@ -5542,25 +5542,25 @@ Esta acción no se puede deshacer.</translation>
     <name>SceneControlPopup</name>
     <message>
         <location filename="../../widgets/scenes/control_popup.py" line="+274"/>
-        <location line="+690"/>
+        <location line="+689"/>
         <source>Solin scenes</source>
         <translation>Escenas de Solin</translation>
     </message>
     <message>
-        <location line="-669"/>
-        <location line="+670"/>
+        <location line="-668"/>
+        <location line="+669"/>
         <source>Configured</source>
         <translation>Configuradas</translation>
     </message>
     <message>
-        <location line="-661"/>
-        <location line="+662"/>
+        <location line="-660"/>
+        <location line="+661"/>
         <source>Camera PiP</source>
         <translation>Cámara PiP</translation>
     </message>
     <message>
-        <location line="-653"/>
-        <location line="+654"/>
+        <location line="-652"/>
+        <location line="+653"/>
         <source>Other scenes</source>
         <translation>Otras escenas</translation>
     </message>
@@ -5833,7 +5833,7 @@ Esta acción no se puede deshacer.</translation>
 <context>
     <name>ScenesBridge</name>
     <message>
-        <location filename="../../ui/qml/scenes_bridge.py" line="+351"/>
+        <location filename="../../ui/qml/scenes_bridge.py" line="+352"/>
         <source>Switching</source>
         <translation>Cambiando</translation>
     </message>
@@ -5931,13 +5931,13 @@ Esta acción no se puede deshacer.</translation>
         <translation>Cámara predeterminada (automática)</translation>
     </message>
     <message>
-        <location line="+2"/>
-        <location line="+1518"/>
+        <location line="+4"/>
+        <location line="+1519"/>
         <source>Automatic</source>
         <translation>Automática</translation>
     </message>
     <message>
-        <location line="-1508"/>
+        <location line="-1509"/>
         <source>Looking for cameras…</source>
         <translation>Buscando cámaras…</translation>
     </message>
@@ -5957,7 +5957,12 @@ Esta acción no se puede deshacer.</translation>
         <translation>No se encontraron cámaras. La cámara automática sigue disponible.</translation>
     </message>
     <message>
-        <location line="+183"/>
+        <location line="+6"/>
+        <source>Some cameras were detected by Windows but could not be verified. You can still try them in automatic mode; check the application log if capture fails.</source>
+        <translation>Windows detectó algunas cámaras, pero no se pudieron verificar. Aun así, puede probarlas en modo automático; consulte el registro de la aplicación si falla la captura.</translation>
+    </message>
+    <message>
+        <location line="+186"/>
         <source>The recording folder could not be opened.</source>
         <translation>No se pudo abrir la carpeta de grabaciones.</translation>
     </message>
@@ -5978,7 +5983,7 @@ Esta acción no se puede deshacer.</translation>
         <translation>Elija una transición y una duración válidas.</translation>
     </message>
     <message>
-        <location line="+522"/>
+        <location line="+508"/>
         <source>Check the camera name, connection and PTZ settings.</source>
         <translation>Compruebe el nombre de la cámara, la conexión y los ajustes PTZ.</translation>
     </message>
@@ -6068,12 +6073,17 @@ Esta acción no se puede deshacer.</translation>
         <translation>Cámara no disponible. Compruebe la conexión, los permisos de privacidad o si otra aplicación la está usando.</translation>
     </message>
     <message>
-        <location line="+118"/>
+        <location line="+116"/>
         <source>%1 (virtual)</source>
         <translation>%1 (virtual)</translation>
     </message>
     <message>
-        <location line="+45"/>
+        <location line="+5"/>
+        <source>%1 (not verified)</source>
+        <translation>%1 (sin verificar)</translation>
+    </message>
+    <message>
+        <location line="+88"/>
         <source>%1 × %2 · %3 fps · %4</source>
         <translation>%1 × %2 · %3 fps · %4</translation>
     </message>
@@ -6131,7 +6141,7 @@ Esta acción no se puede deshacer.</translation>
 <context>
     <name>ScenesEditorView</name>
     <message>
-        <location filename="../../qml/ScenesCameraDialog.qml" line="+162"/>
+        <location filename="../../qml/ScenesCameraDialog.qml" line="+165"/>
         <source>Edit camera</source>
         <translation>Editar cámara</translation>
     </message>
@@ -6164,7 +6174,7 @@ Esta acción no se puede deshacer.</translation>
         <translation>Dispositivo</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+17"/>
         <source>Refresh cameras</source>
         <translation>Actualizar cámaras</translation>
     </message>
@@ -6174,7 +6184,7 @@ Esta acción no se puede deshacer.</translation>
         <translation>Formato</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+14"/>
         <source>RTSP address</source>
         <translation>Dirección RTSP</translation>
     </message>

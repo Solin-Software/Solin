@@ -5099,7 +5099,7 @@ Esta ação não pode ser desfeita.</translation>
 <context>
     <name>QuickAccessToolbar</name>
     <message>
-        <location filename="../../widgets/quick_access_toolbar.py" line="+678"/>
+        <location filename="../../widgets/quick_access_toolbar.py" line="+683"/>
         <location line="+8"/>
         <source>Background Song</source>
         <translation>Cântico de fundo</translation>
@@ -5149,7 +5149,7 @@ Esta ação não pode ser desfeita.</translation>
 <context>
     <name>QuickToolbarBridge</name>
     <message>
-        <location filename="../../ui/qml/quick_toolbar.py" line="+426"/>
+        <location filename="../../ui/qml/quick_toolbar.py" line="+437"/>
         <source>Manage monitors</source>
         <translation>Gerenciar telas</translation>
     </message>
@@ -5559,7 +5559,7 @@ Esta ação não pode ser desfeita.</translation>
     <name>SceneControlPopup</name>
     <message>
         <location filename="../../widgets/scenes/control_popup.py" line="+274"/>
-        <location line="+690"/>
+        <location line="+689"/>
         <source>Solin scenes</source>
         <translation>Cenas do Solin</translation>
     </message>
@@ -5582,14 +5582,14 @@ Esta ação não pode ser desfeita.</translation>
         <translation>Janelas de mídia</translation>
     </message>
     <message>
-        <location line="-674"/>
-        <location line="+670"/>
+        <location line="-673"/>
+        <location line="+669"/>
         <source>Configured</source>
         <translation>Configuradas</translation>
     </message>
     <message>
-        <location line="-652"/>
-        <location line="+654"/>
+        <location line="-651"/>
+        <location line="+653"/>
         <source>Other scenes</source>
         <translation>Outras cenas</translation>
     </message>
@@ -5664,8 +5664,8 @@ Esta ação não pode ser desfeita.</translation>
         <translation>Troca automática pausada nesta sessão de mídia</translation>
     </message>
     <message>
-        <location line="-272"/>
-        <location line="+662"/>
+        <location line="-271"/>
+        <location line="+661"/>
         <source>Camera PiP</source>
         <translation>Câmera PiP</translation>
     </message>
@@ -5854,7 +5854,7 @@ Esta ação não pode ser desfeita.</translation>
 <context>
     <name>ScenesBridge</name>
     <message>
-        <location filename="../../ui/qml/scenes_bridge.py" line="+351"/>
+        <location filename="../../ui/qml/scenes_bridge.py" line="+352"/>
         <source>Switching</source>
         <translation>Trocando</translation>
     </message>
@@ -5952,13 +5952,13 @@ Esta ação não pode ser desfeita.</translation>
         <translation>Câmera padrão (automática)</translation>
     </message>
     <message>
-        <location line="+2"/>
-        <location line="+1518"/>
+        <location line="+4"/>
+        <location line="+1519"/>
         <source>Automatic</source>
         <translation>Automática</translation>
     </message>
     <message>
-        <location line="-1508"/>
+        <location line="-1509"/>
         <source>Looking for cameras…</source>
         <translation>Procurando câmeras…</translation>
     </message>
@@ -5978,7 +5978,12 @@ Esta ação não pode ser desfeita.</translation>
         <translation>Nenhuma câmera encontrada. A câmera automática continua disponível.</translation>
     </message>
     <message>
-        <location line="+183"/>
+        <location line="+6"/>
+        <source>Some cameras were detected by Windows but could not be verified. You can still try them in automatic mode; check the application log if capture fails.</source>
+        <translation>Algumas câmeras foram detectadas pelo Windows, mas não puderam ser verificadas. Ainda é possível testá-las no modo automático; confira o log do aplicativo se a captura falhar.</translation>
+    </message>
+    <message>
+        <location line="+186"/>
         <source>The recording folder could not be opened.</source>
         <translation>Não foi possível abrir a pasta de gravações.</translation>
     </message>
@@ -5993,7 +5998,7 @@ Esta ação não pode ser desfeita.</translation>
         <translation>Escolha qual cena deve substituir a cena ao vivo.</translation>
     </message>
     <message>
-        <location line="+590"/>
+        <location line="+576"/>
         <source>Check the camera name, connection and PTZ settings.</source>
         <translation>Verifique o nome da câmera, a conexão e as configurações de PTZ.</translation>
     </message>
@@ -6083,12 +6088,17 @@ Esta ação não pode ser desfeita.</translation>
         <translation>Câmera indisponível. Verifique a conexão, as permissões de privacidade ou se outro aplicativo está usando-a.</translation>
     </message>
     <message>
-        <location line="+118"/>
+        <location line="+116"/>
         <source>%1 (virtual)</source>
         <translation>%1 (virtual)</translation>
     </message>
     <message>
-        <location line="+45"/>
+        <location line="+5"/>
+        <source>%1 (not verified)</source>
+        <translation>%1 (não verificada)</translation>
+    </message>
+    <message>
+        <location line="+88"/>
         <source>%1 × %2 · %3 fps · %4</source>
         <translation>%1 × %2 · %3 fps · %4</translation>
     </message>
@@ -6143,7 +6153,7 @@ Esta ação não pode ser desfeita.</translation>
         <translation>Cenas</translation>
     </message>
     <message>
-        <location line="-1650"/>
+        <location line="-1682"/>
         <location line="+26"/>
         <source>Choose a valid transition and duration.</source>
         <translation>Escolha uma transição e duração válidas.</translation>
@@ -6532,7 +6542,7 @@ Esta ação não pode ser desfeita.</translation>
         <translation>Saída · %1</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesCameraDialog.qml" line="+162"/>
+        <location filename="../../qml/ScenesCameraDialog.qml" line="+165"/>
         <source>Edit camera</source>
         <translation>Editar câmera</translation>
     </message>
@@ -6565,7 +6575,7 @@ Esta ação não pode ser desfeita.</translation>
         <translation>Dispositivo</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+17"/>
         <source>Refresh cameras</source>
         <translation>Atualizar câmeras</translation>
     </message>
@@ -6575,7 +6585,7 @@ Esta ação não pode ser desfeita.</translation>
         <translation>Formato</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+14"/>
         <source>RTSP address</source>
         <translation>Endereço RTSP</translation>
     </message>
