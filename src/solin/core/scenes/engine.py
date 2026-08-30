@@ -151,12 +151,42 @@ class LocalVideoFormat:
         return self.fps_numerator / self.fps_denominator
 
 
+class LocalCameraProbeStatus(StrEnum):
+    READY = "ready"
+    UNVERIFIED = "unverified"
+
+
+@dataclass(frozen=True, slots=True)
+class LocalCameraProbe:
+    status: LocalCameraProbeStatus
+    backend: str
+    failure_stage: str = ""
+    error_code: str = ""
+    native_error_code: str = ""
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.status, LocalCameraProbeStatus):
+            raise ValueError("Invalid local camera probe status")
+        _identity(self.backend, "local camera probe backend")
+        _bounded_text(self.failure_stage, 128, "local camera probe failure stage")
+        _bounded_text(self.error_code, 128, "local camera probe error code")
+        _bounded_text(self.native_error_code, 128, "local camera probe native error code")
+        has_failure = bool(self.failure_stage or self.error_code or self.native_error_code)
+        if self.status is LocalCameraProbeStatus.READY and has_failure:
+            raise ValueError("Ready local camera probe cannot contain a failure")
+        if self.status is LocalCameraProbeStatus.UNVERIFIED and (
+            not self.failure_stage or not self.error_code
+        ):
+            raise ValueError("Unverified local camera probe requires a failure stage and code")
+
+
 @dataclass(frozen=True, slots=True)
 class LocalCameraDevice:
     device_id: str
     display_name: str
     software_device: bool
     formats: tuple[LocalVideoFormat, ...]
+    probe: LocalCameraProbe
 
     def __post_init__(self) -> None:
         if not self.device_id:
@@ -172,6 +202,12 @@ class LocalCameraDevice:
             or len(self.formats) != len(set(self.formats))
         ):
             raise ValueError("Invalid local camera format list")
+        if not isinstance(self.probe, LocalCameraProbe):
+            raise ValueError("Invalid local camera probe")
+        if self.probe.status is LocalCameraProbeStatus.UNVERIFIED and self.formats:
+            raise ValueError("Unverified local camera cannot contain verified formats")
+        if self.probe.status is LocalCameraProbeStatus.READY and not self.formats:
+            raise ValueError("Ready local camera requires at least one verified format")
 
 
 @dataclass(frozen=True, slots=True)

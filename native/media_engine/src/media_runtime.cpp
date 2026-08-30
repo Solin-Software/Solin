@@ -1,7 +1,9 @@
 #include "solin/media_engine/media_runtime.hpp"
 
 #include "gstreamer_source_runtime.hpp"
+#include "gstreamer_error_diagnostics.hpp"
 #include "gstreamer_scene_renderer.hpp"
+#include "local_camera_inventory.hpp"
 #include "solin/media_engine/virtual_camera_identity.hpp"
 
 #include <algorithm>
@@ -10,6 +12,7 @@
 #include <condition_variable>
 #include <cstdint>
 #include <exception>
+#include <iostream>
 #include <memory>
 #include <mutex>
 #include <numeric>
@@ -18,6 +21,8 @@
 #include <tuple>
 #include <utility>
 #include <vector>
+
+#include <nlohmann/json.hpp>
 
 #ifdef SOLIN_MEDIA_ENGINE_HAS_GSTREAMER
 #include <gst/gst.h>
@@ -36,6 +41,8 @@ constexpr auto kInitialDeviceMonitorRetry = std::chrono::milliseconds{250};
 constexpr auto kMaximumDeviceMonitorRetry = std::chrono::milliseconds{8'000};
 constexpr auto kDeviceMonitorStartupTimeout = std::chrono::seconds{5};
 constexpr auto kStableDeviceMonitorRun = std::chrono::seconds{10};
+constexpr auto kCameraInventoryRefreshInterval = std::chrono::seconds{2};
+constexpr auto kCameraInventoryEventDebounce = std::chrono::milliseconds{200};
 
 [[nodiscard]] bool has_element_factory(const char* name) {
     auto* factory = gst_element_factory_find(name);
@@ -233,6 +240,53 @@ void release_device_list(GList* entries) noexcept {
     return unique_devices;
 }
 
+void log_camera_discovery(const LocalCameraSnapshot& snapshot,
+                          const std::string& native_error_code) noexcept {
+    try {
+        const auto unverified_count = std::ranges::count_if(
+            snapshot.devices, [](const LocalCameraDevice& device) {
+                return device.probe.status == LocalCameraProbeStatus::unverified;
+            });
+        if (snapshot.error_code.empty() && native_error_code.empty() &&
+            unverified_count == 0) {
+            return;
+        }
+        std::cerr << "camera_discovery "
+                  << nlohmann::json{
+                         {"status", unverified_count == 0 && snapshot.error_code.empty()
+                                        ? "completed"
+                                        : "partial"},
+                         {"device_count", snapshot.devices.size()},
+                         {"unverified_device_count", unverified_count},
+                         {"error_code", snapshot.error_code},
+                         {"native_error_code", native_error_code},
+                     }
+                         .dump()
+                  << '\n';
+        for (std::size_t index = 0U; index < snapshot.devices.size(); ++index) {
+            const auto& device = snapshot.devices[index];
+            if (device.probe.status == LocalCameraProbeStatus::ready) {
+                continue;
+            }
+            std::cerr << "camera_discovery_device "
+                      << nlohmann::json{
+                             {"device_index", index},
+                             {"software_device", device.software_device},
+                             {"probe_status",
+                              local_camera_probe_status_text(device.probe.status)},
+                             {"backend", device.probe.backend},
+                             {"failure_stage", device.probe.failure_stage},
+                             {"error_code", device.probe.error_code},
+                             {"native_error_code", device.probe.native_error_code},
+                         }
+                             .dump()
+                      << '\n';
+        }
+    } catch (...) {
+        // Diagnostics must never interrupt device discovery.
+    }
+}
+
 [[nodiscard]] std::vector<AudioDevice> enumerate_wasapi_devices(GstDeviceMonitor* monitor) {
     std::vector<AudioDevice> devices;
     std::optional<std::string> default_input_id;
@@ -372,22 +426,25 @@ class MediaRuntime::DeviceMonitor final {
 
     void start() {
 #ifdef SOLIN_MEDIA_ENGINE_HAS_GSTREAMER
-        {
-            std::scoped_lock lock{mutex_};
-            snapshot_ = {
-                .supported = true,
-                .ready = false,
-                .generation = snapshot_.generation,
-                .devices = {},
-                .error_code = {},
-            };
-        }
-        stop_requested_.store(false);
-        try {
-            worker_ = std::thread([this] { run(); });
-        } catch (const std::exception&) {
-            publish_failure(false, "device_monitor_start_failed");
-        }
+        std::call_once(start_once_, [this] {
+            {
+                std::scoped_lock lock{mutex_};
+                snapshot_ = {
+                    .supported = true,
+                    .ready = false,
+                    .generation = snapshot_.generation,
+                    .devices = {},
+                    .error_code = {},
+                };
+                native_error_code_.clear();
+            }
+            stop_requested_.store(false);
+            try {
+                worker_ = std::thread([this] { run(); });
+            } catch (const std::exception&) {
+                publish_failure(false, "device_monitor_start_failed");
+            }
+        });
 #endif
     }
 
@@ -406,6 +463,7 @@ class MediaRuntime::DeviceMonitor final {
         snapshot_.supported = false;
         snapshot_.ready = true;
         snapshot_.error_code = std::move(error_code);
+        native_error_code_.clear();
         ++snapshot_.generation;
     }
 
@@ -424,6 +482,21 @@ class MediaRuntime::DeviceMonitor final {
                 (std::min)(retry_delay * 2, kMaximumDeviceMonitorRetry);
         };
         while (!stop_requested_.load()) {
+            const auto initial_inventory = platform_local_camera_inventory();
+            if (initial_inventory.supported &&
+                initial_inventory.error_code.empty()) {
+                last_inventory_ = initial_inventory;
+            }
+            if (initial_inventory.supported) {
+                const auto& effective_inventory =
+                    last_inventory_.supported && last_inventory_.error_code.empty()
+                        ? last_inventory_
+                        : initial_inventory;
+                publish_devices(
+                    reconcile_local_camera_devices(effective_inventory, {}),
+                    initial_inventory.error_code,
+                    initial_inventory.native_error_code, false);
+            }
             auto* monitor = gst_device_monitor_new();
             if (monitor == nullptr) {
                 publish_failure(false, "device_monitor_unavailable");
@@ -445,27 +518,64 @@ class MediaRuntime::DeviceMonitor final {
             }
             constexpr auto message_mask = static_cast<GstMessageType>(
                 GST_MESSAGE_DEVICE_ADDED | GST_MESSAGE_DEVICE_REMOVED |
+                GST_MESSAGE_DEVICE_CHANGED |
                 GST_MESSAGE_DEVICE_MONITOR_STARTED | GST_MESSAGE_ERROR);
             bool monitor_ready = false;
+            bool device_refresh_pending = false;
             auto monitor_ready_since = std::chrono::steady_clock::time_point{};
+            auto next_inventory_refresh = std::chrono::steady_clock::time_point{};
+            auto device_refresh_not_before =
+                std::chrono::steady_clock::time_point{};
             const auto startup_deadline =
                 std::chrono::steady_clock::now() + kDeviceMonitorStartupTimeout;
+            const auto refresh_devices = [this, monitor, &next_inventory_refresh] {
+                const auto inventory = platform_local_camera_inventory();
+                if (inventory.supported && inventory.error_code.empty()) {
+                    last_inventory_ = inventory;
+                }
+                const auto& effective_inventory =
+                    last_inventory_.supported && last_inventory_.error_code.empty()
+                        ? last_inventory_
+                        : inventory;
+                publish_devices(
+                    reconcile_local_camera_devices(
+                        effective_inventory,
+                        enumerate_media_foundation_devices(monitor)),
+                    inventory.error_code, inventory.native_error_code);
+                next_inventory_refresh =
+                    std::chrono::steady_clock::now() + kCameraInventoryRefreshInterval;
+            };
             try {
                 while (!stop_requested_.load()) {
                     auto* message =
                         gst_bus_timed_pop_filtered(bus, 100U * GST_MSECOND, message_mask);
                     if (message == nullptr) {
+                        const auto now = std::chrono::steady_clock::now();
                         if (!monitor_ready &&
-                            std::chrono::steady_clock::now() >= startup_deadline) {
+                            now >= startup_deadline) {
                             publish_failure(false, "device_provider_start_timeout");
                             break;
+                        }
+                        if (monitor_ready) {
+                            if (device_refresh_pending &&
+                                now >= device_refresh_not_before) {
+                                device_refresh_pending = false;
+                                refresh_devices();
+                            } else if (!device_refresh_pending &&
+                                       now >= next_inventory_refresh) {
+                                refresh_devices();
+                            }
                         }
                         continue;
                     }
                     const auto message_type = GST_MESSAGE_TYPE(message);
                     gboolean monitor_started = FALSE;
+                    std::string monitor_native_error;
                     if (message_type == GST_MESSAGE_DEVICE_MONITOR_STARTED) {
                         gst_message_parse_device_monitor_started(message, &monitor_started);
+                    } else if (message_type == GST_MESSAGE_ERROR) {
+                        monitor_native_error =
+                            gstreamer_native_error_code(message);
                     }
                     gst_message_unref(message);
                     if (message_type == GST_MESSAGE_DEVICE_MONITOR_STARTED) {
@@ -475,13 +585,19 @@ class MediaRuntime::DeviceMonitor final {
                         }
                         monitor_ready = true;
                         monitor_ready_since = std::chrono::steady_clock::now();
-                        publish_devices(enumerate_media_foundation_devices(monitor));
+                        device_refresh_pending = false;
+                        refresh_devices();
                     } else if (monitor_ready &&
                                (message_type == GST_MESSAGE_DEVICE_ADDED ||
-                                message_type == GST_MESSAGE_DEVICE_REMOVED)) {
-                        publish_devices(enumerate_media_foundation_devices(monitor));
+                                message_type == GST_MESSAGE_DEVICE_REMOVED ||
+                                message_type == GST_MESSAGE_DEVICE_CHANGED)) {
+                        device_refresh_pending = true;
+                        device_refresh_not_before =
+                            std::chrono::steady_clock::now() +
+                            kCameraInventoryEventDebounce;
                     } else if (message_type == GST_MESSAGE_ERROR) {
-                        publish_failure(true, "device_monitor_failed");
+                        publish_failure(true, "device_monitor_failed",
+                                        std::move(monitor_native_error));
                         break;
                     }
                 }
@@ -509,38 +625,72 @@ class MediaRuntime::DeviceMonitor final {
                                [this] { return stop_requested_.load(); });
     }
 
-    void publish_devices(std::vector<LocalCameraDevice> devices) {
-        std::scoped_lock lock{mutex_};
-        const bool changed = !snapshot_.ready || snapshot_.devices != devices ||
-                             !snapshot_.error_code.empty() || !snapshot_.supported;
-        snapshot_.supported = true;
-        snapshot_.ready = true;
-        snapshot_.devices = std::move(devices);
-        snapshot_.error_code.clear();
-        if (changed) {
-            ++snapshot_.generation;
+    void publish_devices(std::vector<LocalCameraDevice> devices,
+                         std::string error_code,
+                         std::string native_error_code,
+                         const bool emit_diagnostics = true) {
+        LocalCameraSnapshot published;
+        std::string published_native_error_code;
+        bool changed = false;
+        {
+            std::scoped_lock lock{mutex_};
+            changed = !snapshot_.ready || snapshot_.devices != devices ||
+                      snapshot_.error_code != error_code || !snapshot_.supported ||
+                      native_error_code_ != native_error_code;
+            snapshot_.supported = true;
+            snapshot_.ready = true;
+            snapshot_.devices = std::move(devices);
+            snapshot_.error_code = std::move(error_code);
+            native_error_code_ = std::move(native_error_code);
+            if (changed) {
+                ++snapshot_.generation;
+                published = snapshot_;
+                published_native_error_code = native_error_code_;
+            }
+        }
+        if (changed && emit_diagnostics) {
+            log_camera_discovery(published, published_native_error_code);
         }
     }
 
-    void publish_failure(const bool supported, std::string error_code) {
-        std::scoped_lock lock{mutex_};
-        const bool changed = !snapshot_.ready || snapshot_.supported != supported ||
-                             snapshot_.error_code != error_code ||
-                             !snapshot_.devices.empty();
-        snapshot_.supported = supported;
-        snapshot_.ready = true;
-        snapshot_.devices.clear();
-        snapshot_.error_code = std::move(error_code);
+    void publish_failure(const bool supported, std::string error_code,
+                         std::string native_error_code = {}) {
+        auto retained_devices = reconcile_local_camera_devices(last_inventory_, {});
+        const auto effective_supported = supported || last_inventory_.supported;
+        LocalCameraSnapshot published;
+        std::string published_native_error_code;
+        bool changed = false;
+        {
+            std::scoped_lock lock{mutex_};
+            changed = !snapshot_.ready ||
+                      snapshot_.supported != effective_supported ||
+                      snapshot_.error_code != error_code ||
+                      snapshot_.devices != retained_devices ||
+                      native_error_code_ != native_error_code;
+            snapshot_.supported = effective_supported;
+            snapshot_.ready = true;
+            snapshot_.devices = std::move(retained_devices);
+            snapshot_.error_code = std::move(error_code);
+            native_error_code_ = std::move(native_error_code);
+            if (changed) {
+                ++snapshot_.generation;
+                published = snapshot_;
+                published_native_error_code = native_error_code_;
+            }
+        }
         if (changed) {
-            ++snapshot_.generation;
+            log_camera_discovery(published, published_native_error_code);
         }
     }
 
     std::atomic_bool stop_requested_{false};
+    std::once_flag start_once_{};
     std::thread worker_{};
     std::mutex retry_mutex_{};
     std::condition_variable retry_wakeup_{};
+    LocalCameraInventorySnapshot last_inventory_{};
 #endif
+    std::string native_error_code_{};
     mutable std::mutex mutex_{};
     LocalCameraSnapshot snapshot_{};
 };
@@ -806,9 +956,7 @@ MediaRuntimeProbe MediaRuntime::initialize() {
         .virtual_camera = probe_platform_virtual_camera(),
         .version = runtime_version(),
     };
-    if (probe_.local_camera_source) {
-        device_monitor_->start();
-    } else {
+    if (!probe_.local_camera_source) {
         device_monitor_->mark_unavailable("local_camera_source_unavailable");
     }
     if (probe_.audio_capture) {
@@ -822,7 +970,12 @@ MediaRuntimeProbe MediaRuntime::initialize() {
 #endif
 }
 
-LocalCameraSnapshot MediaRuntime::local_cameras() const { return device_monitor_->snapshot(); }
+LocalCameraSnapshot MediaRuntime::local_cameras() const {
+    if (probe_.local_camera_source) {
+        device_monitor_->start();
+    }
+    return device_monitor_->snapshot();
+}
 
 AudioDeviceSnapshot MediaRuntime::audio_devices() const {
     return audio_device_monitor_->snapshot();

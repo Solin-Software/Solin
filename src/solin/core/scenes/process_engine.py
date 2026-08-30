@@ -22,6 +22,8 @@ from solin.core.scenes.engine import (
     FrameChannelDescriptor,
     LocalCameraDevice,
     LocalCameraDiscovery,
+    LocalCameraProbe,
+    LocalCameraProbeStatus,
     LocalVideoFormat,
     OutputWindowTarget,
     SceneEngineAck,
@@ -99,7 +101,12 @@ _TRANSITION_FIELDS = frozenset({"kind", "duration_ms"})
 _HEARTBEAT_FIELDS = frozenset({"monotonic_ms"})
 _SOURCE_HEALTH_FIELDS = frozenset({"source_id", "status", "error_code", "message"})
 _LOCAL_CAMERA_LIST_FIELDS = frozenset({"supported", "ready", "generation", "devices", "error_code"})
-_LOCAL_CAMERA_FIELDS = frozenset({"device_id", "display_name", "software_device", "formats"})
+_LOCAL_CAMERA_FIELDS = frozenset(
+    {"device_id", "display_name", "software_device", "formats", "probe"}
+)
+_LOCAL_CAMERA_PROBE_FIELDS = frozenset(
+    {"status", "backend", "failure_stage", "error_code", "native_error_code"}
+)
 _LOCAL_VIDEO_FORMAT_FIELDS = frozenset(
     {
         "media_type",
@@ -1511,6 +1518,7 @@ def _local_camera_discovery_from_envelope(
                     "local camera software-device flag",
                 ),
                 formats=tuple(formats),
+                probe=_local_camera_probe(device["probe"]),
             )
         )
     return LocalCameraDiscovery(
@@ -1524,6 +1532,39 @@ def _local_camera_discovery_from_envelope(
         error_code=require_text(
             payload["error_code"],
             "local camera discovery error code",
+            maximum=128,
+        ),
+    )
+
+
+def _local_camera_probe(raw_probe: object) -> LocalCameraProbe:
+    probe = require_payload_fields(
+        raw_probe,
+        _LOCAL_CAMERA_PROBE_FIELDS,
+        message_type="local camera probe",
+    )
+    try:
+        status = LocalCameraProbeStatus(
+            require_text(probe["status"], "local camera probe status", maximum=64)
+        )
+    except ValueError as exc:
+        raise SceneIpcMessageError("Invalid local camera probe status") from exc
+    return LocalCameraProbe(
+        status=status,
+        backend=require_text(probe["backend"], "local camera probe backend", maximum=256),
+        failure_stage=require_text(
+            probe["failure_stage"],
+            "local camera probe failure stage",
+            maximum=128,
+        ),
+        error_code=require_text(
+            probe["error_code"],
+            "local camera probe error code",
+            maximum=128,
+        ),
+        native_error_code=require_text(
+            probe["native_error_code"],
+            "local camera probe native error code",
             maximum=128,
         ),
     )

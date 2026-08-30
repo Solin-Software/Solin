@@ -23,6 +23,7 @@ set(SOLIN_MEDIA_ENGINE_SOURCES
     include/solin/media_engine/frame_codec.hpp
     include/solin/media_engine/frame_channel.hpp
     include/solin/media_engine/frame_channel_output.hpp
+    include/solin/media_engine/local_camera_discovery.hpp
     include/solin/media_engine/media_runtime.hpp
     include/solin/media_engine/native_window_output.hpp
     include/solin/media_engine/presentation_transition.hpp
@@ -44,6 +45,9 @@ set(SOLIN_MEDIA_ENGINE_SOURCES
     src/frame_channel.cpp
     src/gstreamer_source_runtime.cpp
     src/gstreamer_source_runtime.hpp
+    src/gstreamer_error_diagnostics.hpp
+    src/local_camera_discovery.cpp
+    src/local_camera_inventory.hpp
     src/gstreamer_frame_transition.hpp
     src/gstreamer_scene_renderer.cpp
     src/gstreamer_scene_renderer.hpp
@@ -51,6 +55,7 @@ set(SOLIN_MEDIA_ENGINE_SOURCES
     src/frame_channel_output.cpp
     src/media_runtime.cpp
     src/native_window_output.cpp
+    src/platform_camera_inventory.cpp
     src/native_window_output_routing.hpp
     src/native_window_output_wait.hpp
     src/windows_d3d11_frame_channel.cpp
@@ -74,6 +79,7 @@ set(SOLIN_MEDIA_ENGINE_SOURCES
     tests/content_image_framing_tests.cpp
     tests/frame_channel_tests.cpp
     tests/gstreamer_source_runtime_tests.cpp
+    tests/local_camera_discovery_tests.cpp
     tests/native_window_output_wait_tests.cpp
     tests/render_geometry_tests.cpp
     tests/scene_graph_tests.cpp
@@ -183,8 +189,10 @@ target_link_libraries(solin_media_engine_transport PUBLIC solin_media_engine_sce
 add_library(solin_media_engine_runtime STATIC
     src/gstreamer_scene_renderer.cpp
     src/gstreamer_source_runtime.cpp
+    src/local_camera_discovery.cpp
     src/media_runtime.cpp
     src/native_window_output.cpp
+    src/platform_camera_inventory.cpp
     src/program_recording.cpp
 )
 target_include_directories(solin_media_engine_runtime
@@ -232,7 +240,9 @@ if(WIN32)
         solin_media_engine_runtime PRIVATE
             "${CMAKE_CURRENT_SOURCE_DIR}/../media_transport/include"
     )
-    target_link_libraries(solin_media_engine_runtime PRIVATE d3d11 dxgi)
+    target_link_libraries(
+        solin_media_engine_runtime PRIVATE d3d11 dxgi mf mfplat mfuuid ole32
+    )
     include(cmake/SolinVirtualCameraFilter.cmake)
     solin_add_virtual_camera_filter()
 endif()
@@ -303,6 +313,41 @@ install(
 
 if(SOLIN_MEDIA_ENGINE_BUILD_TESTS)
     enable_testing()
+    add_executable(solin-media-engine-local-camera-discovery-tests
+        src/local_camera_discovery.cpp
+        src/platform_camera_inventory.cpp
+        tests/local_camera_discovery_tests.cpp
+    )
+    target_include_directories(
+        solin-media-engine-local-camera-discovery-tests
+        PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/include
+            ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+    target_compile_features(
+        solin-media-engine-local-camera-discovery-tests PRIVATE cxx_std_20
+    )
+    if(MSVC)
+        target_compile_options(
+            solin-media-engine-local-camera-discovery-tests
+            PRIVATE /W4 /WX /permissive- /EHsc
+        )
+    else()
+        target_compile_options(
+            solin-media-engine-local-camera-discovery-tests
+            PRIVATE -Wall -Wextra -Wpedantic -Werror
+        )
+    endif()
+    if(WIN32)
+        target_link_libraries(
+            solin-media-engine-local-camera-discovery-tests
+            PRIVATE mf mfplat mfuuid ole32
+        )
+    endif()
+    add_test(
+        NAME local-camera-discovery
+        COMMAND solin-media-engine-local-camera-discovery-tests
+    )
     add_executable(solin-media-engine-protocol-tests
         tests/frame_codec_tests.cpp
     )

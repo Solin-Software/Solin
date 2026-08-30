@@ -14,6 +14,8 @@ from solin.core.foundation.runtime_paths import ProfilePaths
 from solin.core.scenes.engine import (
     LocalCameraDevice,
     LocalCameraDiscovery,
+    LocalCameraProbe,
+    LocalCameraProbeStatus,
     LocalVideoFormat,
     SourceHealthEvent,
     SourceHealthStatus,
@@ -1081,6 +1083,10 @@ def test_bridge_uses_exact_local_camera_format(tmp_path: Path) -> None:
                     display_name="Camera",
                     software_device=False,
                     formats=(video_format,),
+                    probe=LocalCameraProbe(
+                        status=LocalCameraProbeStatus.READY,
+                        backend="media_foundation",
+                    ),
                 ),
             ),
         )
@@ -1104,6 +1110,157 @@ def test_bridge_uses_exact_local_camera_format(tmp_path: Path) -> None:
     assert configuration.fps_numerator == 30_000
     assert configuration.fps_denominator == 1_001
     assert configuration.keep_active
+    bridge.close()
+    controller.close()
+
+
+def test_bridge_exposes_unverified_windows_camera_for_automatic_capture(
+    tmp_path: Path,
+) -> None:
+    _workspace, controller, bridge, _preview_store = _bridge(tmp_path)
+    controller._set_local_cameras(
+        LocalCameraDiscovery(
+            supported=True,
+            ready=True,
+            generation=1,
+            devices=(
+                LocalCameraDevice(
+                    device_id="camera://c920",
+                    display_name="HD Pro Webcam C920",
+                    software_device=False,
+                    formats=(),
+                    probe=LocalCameraProbe(
+                        status=LocalCameraProbeStatus.UNVERIFIED,
+                        backend="media_foundation",
+                        failure_stage="capture_provider",
+                        error_code="capture_provider_not_reported",
+                    ),
+                ),
+            ),
+        )
+    )
+
+    camera = bridge.localCameraDevices[1]
+
+    assert camera["id"] == "camera://c920"
+    assert camera["available"] is True
+    assert camera["probeStatus"] == "unverified"
+    assert camera["formats"] == [{"id": "", "label": "Automatic"}]
+    assert "not verified" in str(camera["name"])
+    assert "application log" in bridge.localCameraStatus
+    assert bridge.saveCamera(
+        {
+            "kind": "local_camera",
+            "name": "C920",
+            "deviceId": "camera://c920",
+            "formatId": "",
+        },
+        False,
+    )
+    saved_camera = next(
+        item for item in controller.workspace.configured_cameras if item.name == "C920"
+    )
+    configuration = saved_camera.configuration
+    assert isinstance(configuration, LocalCameraConfig)
+    assert configuration.device_id == "camera://c920"
+    assert configuration.media_type is None
+    assert configuration.width == 0
+    bridge.close()
+    controller.close()
+
+
+def test_bridge_preserves_persisted_format_when_camera_recovers_before_save(
+    tmp_path: Path,
+) -> None:
+    workspace, controller, bridge, _preview_store = _bridge(tmp_path)
+    video_format = LocalVideoFormat(
+        media_type=CameraMediaType.JPEG,
+        pixel_format="JPEG",
+        width=1920,
+        height=1080,
+        fps_numerator=30,
+        fps_denominator=1,
+    )
+    ready_probe = LocalCameraProbe(
+        status=LocalCameraProbeStatus.READY,
+        backend="media_foundation",
+    )
+    controller._set_local_cameras(
+        LocalCameraDiscovery(
+            supported=True,
+            ready=True,
+            generation=1,
+            devices=(
+                LocalCameraDevice(
+                    device_id="camera://stable-id",
+                    display_name="Camera",
+                    software_device=False,
+                    formats=(video_format,),
+                    probe=ready_probe,
+                ),
+            ),
+        )
+    )
+    assert bridge.saveCamera(
+        {
+            "kind": "local_camera",
+            "name": "Front camera",
+            "deviceId": "camera://stable-id",
+            "formatId": "format-0",
+        },
+        False,
+    )
+    camera = next(camera for camera in workspace.configured_cameras if camera.name == "Front camera")
+    controller._set_local_cameras(
+        LocalCameraDiscovery(
+            supported=True,
+            ready=True,
+            generation=2,
+            devices=(
+                LocalCameraDevice(
+                    device_id="camera://stable-id",
+                    display_name="Camera",
+                    software_device=False,
+                    formats=(),
+                    probe=LocalCameraProbe(
+                        status=LocalCameraProbeStatus.UNVERIFIED,
+                        backend="media_foundation",
+                        failure_stage="capture_provider",
+                        error_code="capture_provider_not_reported",
+                    ),
+                ),
+            ),
+        )
+    )
+    draft = bridge.cameraDraft(camera.id)
+    draft["name"] = "Renamed camera"
+    draft["formatSelectionChanged"] = False
+    controller._set_local_cameras(
+        LocalCameraDiscovery(
+            supported=True,
+            ready=True,
+            generation=3,
+            devices=(
+                LocalCameraDevice(
+                    device_id="camera://stable-id",
+                    display_name="Camera",
+                    software_device=False,
+                    formats=(video_format,),
+                    probe=ready_probe,
+                ),
+            ),
+        )
+    )
+
+    assert bridge.saveCamera(draft, False)
+
+    updated = next(item for item in workspace.configured_cameras if item.id == camera.id)
+    configuration = updated.configuration
+    assert isinstance(configuration, LocalCameraConfig)
+    assert configuration.media_type is CameraMediaType.JPEG
+    assert configuration.width == 1920
+    assert configuration.height == 1080
+    assert configuration.fps_numerator == 30
     bridge.close()
     controller.close()
 

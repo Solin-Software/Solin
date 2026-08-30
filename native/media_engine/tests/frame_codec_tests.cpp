@@ -84,7 +84,7 @@ void test_control_envelope_round_trip() {
 
 void test_control_envelope_rejects_duplicate_keys() {
     constexpr std::string_view duplicate =
-        R"({"protocol_version":4,"protocol_version":4,"message_type":"hello","request_id":"r","session_id":"s","process_generation":"g","sequence":0,"document_revision":0,"deadline_monotonic_ms":1,"payload":{}})";
+        R"({"protocol_version":5,"protocol_version":5,"message_type":"hello","request_id":"r","session_id":"s","process_generation":"g","sequence":0,"document_revision":0,"deadline_monotonic_ms":1,"payload":{}})";
     try {
         static_cast<void>(solin::media_engine::parse_control_envelope(duplicate));
         expect(false, "duplicate JSON keys are rejected");
@@ -95,7 +95,7 @@ void test_control_envelope_rejects_duplicate_keys() {
 
 void test_control_envelope_rejects_the_previous_protocol_generation() {
     constexpr std::string_view previous_generation =
-        R"({"protocol_version":3,"message_type":"hello","request_id":"r","session_id":"s","process_generation":"g","sequence":0,"document_revision":0,"deadline_monotonic_ms":1,"payload":{}})";
+        R"({"protocol_version":4,"message_type":"hello","request_id":"r","session_id":"s","process_generation":"g","sequence":0,"document_revision":0,"deadline_monotonic_ms":1,"payload":{}})";
     try {
         static_cast<void>(solin::media_engine::parse_control_envelope(previous_generation));
         expect(false, "the previous control protocol generation is rejected");

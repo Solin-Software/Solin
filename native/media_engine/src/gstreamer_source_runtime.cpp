@@ -1,4 +1,5 @@
 #include "gstreamer_source_runtime.hpp"
+#include "gstreamer_error_diagnostics.hpp"
 #include "gstreamer_frame_transition.hpp"
 
 #include "solin/media_engine/content_image_framing.hpp"
@@ -23,6 +24,8 @@
 #include <string_view>
 #include <thread>
 #include <utility>
+
+#include <nlohmann/json.hpp>
 
 #ifdef SOLIN_MEDIA_ENGINE_HAS_GSTREAMER
 #include <gst/app/gstappsink.h>
@@ -2174,12 +2177,38 @@ class GStreamerSourceRuntime final : public SourceRuntime {
 #endif
     }
 
-    void publish_failure(const char* error_code) {
+    void publish_failure(const char* error_code,
+                         const std::string& native_error_code = {}) {
+        bool log_camera_error = false;
         {
             std::scoped_lock lock{state_mutex_};
             health_.status =
                 ever_ready_ ? SourceRuntimeStatus::degraded : SourceRuntimeStatus::failed;
             health_.error_code = error_code;
+            log_camera_error =
+                source_.kind == SceneSourceKind::local_camera &&
+                (last_logged_camera_error_code_ != error_code ||
+                 last_logged_camera_native_error_code_ != native_error_code);
+            if (log_camera_error) {
+                last_logged_camera_error_code_ = error_code;
+                last_logged_camera_native_error_code_ = native_error_code;
+            }
+        }
+        if (log_camera_error) {
+            try {
+                std::cerr << "camera_capture_error "
+                          << nlohmann::json{
+                                 {"source_id", source_.id},
+                                 {"backend", "media_foundation"},
+                                 {"stage", "pipeline"},
+                                 {"error_code", error_code},
+                                 {"native_error_code", native_error_code},
+                             }
+                                 .dump()
+                          << '\n';
+            } catch (...) {
+                // Diagnostics must never interrupt source recovery.
+            }
         }
         frame_signal_->notify();
     }
@@ -2221,6 +2250,7 @@ class GStreamerSourceRuntime final : public SourceRuntime {
             publish_attempt_started();
             bool pipeline_failed = false;
             bool use_system_memory_fallback = false;
+            std::string pipeline_native_error;
             try {
                 std::unique_ptr<GstElement, decltype(&release_pipeline)> pipeline{
                     build_pipeline(), &release_pipeline};
@@ -2237,6 +2267,7 @@ class GStreamerSourceRuntime final : public SourceRuntime {
                         use_d3d11_ && !requires_d3d11_ingress() &&
                         is_d3d11_failure_origin(state_error);
                     if (state_error != nullptr) {
+                        pipeline_native_error = gstreamer_native_error_code(state_error);
                         gst_message_unref(state_error);
                     }
                     throw std::runtime_error("source pipeline could not start");
@@ -2307,6 +2338,7 @@ class GStreamerSourceRuntime final : public SourceRuntime {
                     use_system_memory_fallback =
                         use_d3d11_ && !requires_d3d11_ingress() &&
                         is_d3d11_failure_origin(message);
+                    pipeline_native_error = gstreamer_native_error_code(message);
                     gst_message_unref(message);
                     break;
                 }
@@ -2343,7 +2375,7 @@ class GStreamerSourceRuntime final : public SourceRuntime {
             if (pipeline_failed) {
                 const auto current_health = health();
                 if (current_health.error_code != "source_frame_timeout") {
-                    publish_failure(stream_error_code());
+                    publish_failure(stream_error_code(), pipeline_native_error);
                 }
             }
             if (use_system_memory_fallback) {
@@ -2464,6 +2496,8 @@ class GStreamerSourceRuntime final : public SourceRuntime {
                 ever_ready_ = true;
                 health_.status = SourceRuntimeStatus::ready;
                 health_.error_code.clear();
+                last_logged_camera_error_code_.clear();
+                last_logged_camera_native_error_code_.clear();
                 health_.frame_sequence = sequence;
                 guint64 dropped_frames = 0U;
                 g_object_get(sink, "dropped", &dropped_frames, nullptr);
@@ -2505,6 +2539,8 @@ class GStreamerSourceRuntime final : public SourceRuntime {
     RuntimeLifecycle lifecycle_{RuntimeLifecycle::idle};
     mutable std::mutex state_mutex_{};
     SourceRuntimeHealth health_{.status = SourceRuntimeStatus::starting};
+    std::string last_logged_camera_error_code_{};
+    std::string last_logged_camera_native_error_code_{};
     std::shared_ptr<const SourceFrame> latest_frame_{};
     std::shared_ptr<SourceFrame> content_decoded_frame_{};
     bool ever_ready_{false};

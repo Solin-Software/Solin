@@ -3,6 +3,7 @@
 #include "solin/media_engine/source_registry.hpp"
 #include "solin/media_engine/shared_video_frame_channel.hpp"
 #include "solin/media_engine/virtual_camera.hpp"
+#include "gstreamer_error_diagnostics.hpp"
 #include "gstreamer_frame_transition.hpp"
 #include "gstreamer_source_runtime.hpp"
 
@@ -40,6 +41,23 @@ void expect(const bool condition, const char* const description) {
     }
     ++failures;
     std::cerr << "FAILED: " << description << '\n';
+}
+
+void test_gstreamer_diagnostics_extract_only_the_native_hresult() {
+    expect(solin::media_engine::extract_hresult_code(
+               "Activation failed for a private device path: 0x80070005") ==
+               "0x80070005",
+           "camera diagnostics retain a bounded HRESULT");
+    expect(solin::media_engine::extract_hresult_code(
+               "Activation failed with 0XaBcDeF12") == "0xABCDEF12",
+           "camera diagnostics normalize HRESULT casing");
+    expect(solin::media_engine::extract_hresult_code(
+               "No native code; private path remains redacted")
+               .empty(),
+           "camera diagnostics do not retain raw GStreamer messages");
+    expect(solin::media_engine::extract_hresult_code("Not an HRESULT: 0x80070005ABC")
+               .empty(),
+           "camera diagnostics reject oversized hexadecimal values");
 }
 
 class TestRtspServer final {
@@ -1789,6 +1807,7 @@ void test_forced_system_memory_and_global_d3d11_invalidation(
 
 int main(const int argc, const char* const argv[]) {
     try {
+    test_gstreamer_diagnostics_extract_only_the_native_hresult();
     test_automatic_camera_format_is_bounded_and_deterministic();
     {
         solin::media_engine::MediaRuntime media_runtime;
