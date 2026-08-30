@@ -247,10 +247,6 @@ void log_camera_discovery(const LocalCameraSnapshot& snapshot,
             snapshot.devices, [](const LocalCameraDevice& device) {
                 return device.probe.status == LocalCameraProbeStatus::unverified;
             });
-        if (snapshot.error_code.empty() && native_error_code.empty() &&
-            unverified_count == 0) {
-            return;
-        }
         std::cerr << "camera_discovery "
                   << nlohmann::json{
                          {"status", unverified_count == 0 && snapshot.error_code.empty()
@@ -632,6 +628,7 @@ class MediaRuntime::DeviceMonitor final {
         LocalCameraSnapshot published;
         std::string published_native_error_code;
         bool changed = false;
+        bool should_emit_diagnostics = false;
         {
             std::scoped_lock lock{mutex_};
             changed = !snapshot_.ready || snapshot_.devices != devices ||
@@ -644,11 +641,17 @@ class MediaRuntime::DeviceMonitor final {
             native_error_code_ = std::move(native_error_code);
             if (changed) {
                 ++snapshot_.generation;
+            }
+            should_emit_diagnostics =
+                emit_diagnostics &&
+                (changed || !camera_discovery_diagnostics_published_);
+            if (should_emit_diagnostics) {
                 published = snapshot_;
                 published_native_error_code = native_error_code_;
+                camera_discovery_diagnostics_published_ = true;
             }
         }
-        if (changed && emit_diagnostics) {
+        if (should_emit_diagnostics) {
             log_camera_discovery(published, published_native_error_code);
         }
     }
@@ -690,6 +693,7 @@ class MediaRuntime::DeviceMonitor final {
     std::condition_variable retry_wakeup_{};
     LocalCameraInventorySnapshot last_inventory_{};
 #endif
+    bool camera_discovery_diagnostics_published_{false};
     std::string native_error_code_{};
     mutable std::mutex mutex_{};
     LocalCameraSnapshot snapshot_{};
