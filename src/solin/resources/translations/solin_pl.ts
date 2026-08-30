@@ -5124,7 +5124,7 @@ Tej akcji nie można cofnąć.</translation>
 <context>
     <name>QuickAccessToolbar</name>
     <message>
-        <location filename="../../widgets/quick_access_toolbar.py" line="+661"/>
+        <location filename="../../widgets/quick_access_toolbar.py" line="+666"/>
         <source>Remote control unavailable</source>
         <translation>Zdalne sterowanie niedostępne</translation>
     </message>
@@ -5175,7 +5175,7 @@ Tej akcji nie można cofnąć.</translation>
 <context>
     <name>QuickToolbarBridge</name>
     <message>
-        <location filename="../../ui/qml/quick_toolbar.py" line="+426"/>
+        <location filename="../../ui/qml/quick_toolbar.py" line="+437"/>
         <source>Manage monitors</source>
         <translation>Zarządzaj monitorami</translation>
     </message>
@@ -5573,25 +5573,25 @@ Tej akcji nie można cofnąć.</translation>
     <name>SceneControlPopup</name>
     <message>
         <location filename="../../widgets/scenes/control_popup.py" line="+274"/>
-        <location line="+690"/>
+        <location line="+689"/>
         <source>Solin scenes</source>
         <translation>Sceny Solin</translation>
     </message>
     <message>
-        <location line="-669"/>
-        <location line="+670"/>
+        <location line="-668"/>
+        <location line="+669"/>
         <source>Configured</source>
         <translation>Skonfigurowane</translation>
     </message>
     <message>
-        <location line="-661"/>
-        <location line="+662"/>
+        <location line="-660"/>
+        <location line="+661"/>
         <source>Camera PiP</source>
         <translation>Kamera PiP</translation>
     </message>
     <message>
-        <location line="-653"/>
-        <location line="+654"/>
+        <location line="-652"/>
+        <location line="+653"/>
         <source>Other scenes</source>
         <translation>Inne sceny</translation>
     </message>
@@ -5864,7 +5864,7 @@ Tej akcji nie można cofnąć.</translation>
 <context>
     <name>ScenesBridge</name>
     <message>
-        <location filename="../../ui/qml/scenes_bridge.py" line="+351"/>
+        <location filename="../../ui/qml/scenes_bridge.py" line="+352"/>
         <source>Switching</source>
         <translation>Przełączanie</translation>
     </message>
@@ -5962,13 +5962,13 @@ Tej akcji nie można cofnąć.</translation>
         <translation>Kamera domyślna (automatyczna)</translation>
     </message>
     <message>
-        <location line="+2"/>
-        <location line="+1518"/>
+        <location line="+4"/>
+        <location line="+1519"/>
         <source>Automatic</source>
         <translation>Automatyczna</translation>
     </message>
     <message>
-        <location line="-1508"/>
+        <location line="-1509"/>
         <source>Looking for cameras…</source>
         <translation>Wyszukiwanie kamer…</translation>
     </message>
@@ -5988,7 +5988,12 @@ Tej akcji nie można cofnąć.</translation>
         <translation>Nie znaleziono kamer. Kamera automatyczna pozostaje dostępna.</translation>
     </message>
     <message>
-        <location line="+183"/>
+        <location line="+6"/>
+        <source>Some cameras were detected by Windows but could not be verified. You can still try them in automatic mode; check the application log if capture fails.</source>
+        <translation>System Windows wykrył niektóre kamery, ale nie można było ich zweryfikować. Nadal można je wypróbować w trybie automatycznym; jeśli przechwytywanie się nie powiedzie, należy sprawdzić dziennik aplikacji.</translation>
+    </message>
+    <message>
+        <location line="+186"/>
         <source>The recording folder could not be opened.</source>
         <translation>Nie można otworzyć folderu nagrań.</translation>
     </message>
@@ -6009,7 +6014,7 @@ Tej akcji nie można cofnąć.</translation>
         <translation>Wybierz prawidłowe przejście i czas trwania.</translation>
     </message>
     <message>
-        <location line="+522"/>
+        <location line="+508"/>
         <source>Check the camera name, connection and PTZ settings.</source>
         <translation>Sprawdź nazwę kamery, połączenie i ustawienia PTZ.</translation>
     </message>
@@ -6099,12 +6104,17 @@ Tej akcji nie można cofnąć.</translation>
         <translation>Kamera niedostępna. Sprawdź połączenie, uprawnienia prywatności lub czy nie używa jej inna aplikacja.</translation>
     </message>
     <message>
-        <location line="+118"/>
+        <location line="+116"/>
         <source>%1 (virtual)</source>
         <translation>%1 (wirtualna)</translation>
     </message>
     <message>
-        <location line="+45"/>
+        <location line="+5"/>
+        <source>%1 (not verified)</source>
+        <translation>%1 (niezweryfikowana)</translation>
+    </message>
+    <message>
+        <location line="+88"/>
         <source>%1 × %2 · %3 fps · %4</source>
         <translation>%1 × %2 · %3 fps · %4</translation>
     </message>
@@ -6162,7 +6172,7 @@ Tej akcji nie można cofnąć.</translation>
 <context>
     <name>ScenesEditorView</name>
     <message>
-        <location filename="../../qml/ScenesCameraDialog.qml" line="+162"/>
+        <location filename="../../qml/ScenesCameraDialog.qml" line="+165"/>
         <source>Edit camera</source>
         <translation>Edytuj kamerę</translation>
     </message>
@@ -6195,7 +6205,7 @@ Tej akcji nie można cofnąć.</translation>
         <translation>Urządzenie</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+17"/>
         <source>Refresh cameras</source>
         <translation>Odśwież kamery</translation>
     </message>
@@ -6205,7 +6215,7 @@ Tej akcji nie można cofnąć.</translation>
         <translation>Format</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+14"/>
         <source>RTSP address</source>
         <translation>Adres RTSP</translation>
     </message>

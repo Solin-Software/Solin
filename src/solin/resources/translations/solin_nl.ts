@@ -5094,7 +5094,7 @@ Deze actie kan niet ongedaan worden gemaakt.</translation>
 <context>
     <name>QuickAccessToolbar</name>
     <message>
-        <location filename="../../widgets/quick_access_toolbar.py" line="+661"/>
+        <location filename="../../widgets/quick_access_toolbar.py" line="+666"/>
         <source>Remote control unavailable</source>
         <translation>Afstandsbediening niet beschikbaar</translation>
     </message>
@@ -5144,7 +5144,7 @@ Deze actie kan niet ongedaan worden gemaakt.</translation>
 <context>
     <name>QuickToolbarBridge</name>
     <message>
-        <location filename="../../ui/qml/quick_toolbar.py" line="+426"/>
+        <location filename="../../ui/qml/quick_toolbar.py" line="+437"/>
         <source>Manage monitors</source>
         <translation>Schermen beheren</translation>
     </message>
@@ -5542,25 +5542,25 @@ Deze actie kan niet ongedaan worden gemaakt.</translation>
     <name>SceneControlPopup</name>
     <message>
         <location filename="../../widgets/scenes/control_popup.py" line="+274"/>
-        <location line="+690"/>
+        <location line="+689"/>
         <source>Solin scenes</source>
         <translation>Solin-scènes</translation>
     </message>
     <message>
-        <location line="-669"/>
-        <location line="+670"/>
+        <location line="-668"/>
+        <location line="+669"/>
         <source>Configured</source>
         <translation>Geconfigureerd</translation>
     </message>
     <message>
-        <location line="-661"/>
-        <location line="+662"/>
+        <location line="-660"/>
+        <location line="+661"/>
         <source>Camera PiP</source>
         <translation>Camera-PiP</translation>
     </message>
     <message>
-        <location line="-653"/>
-        <location line="+654"/>
+        <location line="-652"/>
+        <location line="+653"/>
         <source>Other scenes</source>
         <translation>Andere scènes</translation>
     </message>
@@ -5833,7 +5833,7 @@ Deze actie kan niet ongedaan worden gemaakt.</translation>
 <context>
     <name>ScenesBridge</name>
     <message>
-        <location filename="../../ui/qml/scenes_bridge.py" line="+351"/>
+        <location filename="../../ui/qml/scenes_bridge.py" line="+352"/>
         <source>Switching</source>
         <translation>Schakelen</translation>
     </message>
@@ -5931,13 +5931,13 @@ Deze actie kan niet ongedaan worden gemaakt.</translation>
         <translation>Standaardcamera (automatisch)</translation>
     </message>
     <message>
-        <location line="+2"/>
-        <location line="+1518"/>
+        <location line="+4"/>
+        <location line="+1519"/>
         <source>Automatic</source>
         <translation>Automatisch</translation>
     </message>
     <message>
-        <location line="-1508"/>
+        <location line="-1509"/>
         <source>Looking for cameras…</source>
         <translation>Camera&apos;s zoeken…</translation>
     </message>
@@ -5957,7 +5957,12 @@ Deze actie kan niet ongedaan worden gemaakt.</translation>
         <translation>Geen camera&apos;s gevonden. De automatische camera blijft beschikbaar.</translation>
     </message>
     <message>
-        <location line="+183"/>
+        <location line="+6"/>
+        <source>Some cameras were detected by Windows but could not be verified. You can still try them in automatic mode; check the application log if capture fails.</source>
+        <translation>Windows heeft enkele camera’s gedetecteerd, maar deze konden niet worden geverifieerd. U kunt ze toch proberen in de automatische modus; controleer het toepassingslogboek als de opname mislukt.</translation>
+    </message>
+    <message>
+        <location line="+186"/>
         <source>The recording folder could not be opened.</source>
         <translation>De opnamemap kon niet worden geopend.</translation>
     </message>
@@ -5978,7 +5983,7 @@ Deze actie kan niet ongedaan worden gemaakt.</translation>
         <translation>Kies een geldige overgang en duur.</translation>
     </message>
     <message>
-        <location line="+522"/>
+        <location line="+508"/>
         <source>Check the camera name, connection and PTZ settings.</source>
         <translation>Controleer de cameranaam, de verbinding en de PTZ-instellingen.</translation>
     </message>
@@ -6068,12 +6073,17 @@ Deze actie kan niet ongedaan worden gemaakt.</translation>
         <translation>Camera niet beschikbaar. Controleer de verbinding, de privacyrechten of of een andere toepassing de camera gebruikt.</translation>
     </message>
     <message>
-        <location line="+118"/>
+        <location line="+116"/>
         <source>%1 (virtual)</source>
         <translation>%1 (virtueel)</translation>
     </message>
     <message>
-        <location line="+45"/>
+        <location line="+5"/>
+        <source>%1 (not verified)</source>
+        <translation>%1 (niet geverifieerd)</translation>
+    </message>
+    <message>
+        <location line="+88"/>
         <source>%1 × %2 · %3 fps · %4</source>
         <translation>%1 × %2 · %3 fps · %4</translation>
     </message>
@@ -6131,7 +6141,7 @@ Deze actie kan niet ongedaan worden gemaakt.</translation>
 <context>
     <name>ScenesEditorView</name>
     <message>
-        <location filename="../../qml/ScenesCameraDialog.qml" line="+162"/>
+        <location filename="../../qml/ScenesCameraDialog.qml" line="+165"/>
         <source>Edit camera</source>
         <translation>Camera bewerken</translation>
     </message>
@@ -6164,7 +6174,7 @@ Deze actie kan niet ongedaan worden gemaakt.</translation>
         <translation>Apparaat</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+17"/>
         <source>Refresh cameras</source>
         <translation>Camera&apos;s vernieuwen</translation>
     </message>
@@ -6174,7 +6184,7 @@ Deze actie kan niet ongedaan worden gemaakt.</translation>
         <translation>Formaat</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+14"/>
         <source>RTSP address</source>
         <translation>RTSP-adres</translation>
     </message>

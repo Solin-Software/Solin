@@ -5064,7 +5064,7 @@ This action cannot be undone.</source>
 <context>
     <name>QuickAccessToolbar</name>
     <message>
-        <location filename="../../widgets/quick_access_toolbar.py" line="+661"/>
+        <location filename="../../widgets/quick_access_toolbar.py" line="+666"/>
         <source>Remote control unavailable</source>
         <translation>无法使用远程控制</translation>
     </message>
@@ -5113,7 +5113,7 @@ This action cannot be undone.</source>
 <context>
     <name>QuickToolbarBridge</name>
     <message>
-        <location filename="../../ui/qml/quick_toolbar.py" line="+426"/>
+        <location filename="../../ui/qml/quick_toolbar.py" line="+437"/>
         <source>Manage monitors</source>
         <translation>管理显示器</translation>
     </message>
@@ -5511,25 +5511,25 @@ This action cannot be undone.</source>
     <name>SceneControlPopup</name>
     <message>
         <location filename="../../widgets/scenes/control_popup.py" line="+274"/>
-        <location line="+690"/>
+        <location line="+689"/>
         <source>Solin scenes</source>
         <translation>Solin 场景</translation>
     </message>
     <message>
-        <location line="-669"/>
-        <location line="+670"/>
+        <location line="-668"/>
+        <location line="+669"/>
         <source>Configured</source>
         <translation>已配置</translation>
     </message>
     <message>
-        <location line="-661"/>
-        <location line="+662"/>
+        <location line="-660"/>
+        <location line="+661"/>
         <source>Camera PiP</source>
         <translation>摄像头 PiP</translation>
     </message>
     <message>
-        <location line="-653"/>
-        <location line="+654"/>
+        <location line="-652"/>
+        <location line="+653"/>
         <source>Other scenes</source>
         <translation>其他场景</translation>
     </message>
@@ -5802,7 +5802,7 @@ This action cannot be undone.</source>
 <context>
     <name>ScenesBridge</name>
     <message>
-        <location filename="../../ui/qml/scenes_bridge.py" line="+351"/>
+        <location filename="../../ui/qml/scenes_bridge.py" line="+352"/>
         <source>Switching</source>
         <translation>正在切换</translation>
     </message>
@@ -5900,13 +5900,13 @@ This action cannot be undone.</source>
         <translation>默认摄像机（自动）</translation>
     </message>
     <message>
-        <location line="+2"/>
-        <location line="+1518"/>
+        <location line="+4"/>
+        <location line="+1519"/>
         <source>Automatic</source>
         <translation>自动</translation>
     </message>
     <message>
-        <location line="-1508"/>
+        <location line="-1509"/>
         <source>Looking for cameras…</source>
         <translation>正在查找摄像机……</translation>
     </message>
@@ -5926,7 +5926,12 @@ This action cannot be undone.</source>
         <translation>未找到摄像机。自动摄像机仍然可用。</translation>
     </message>
     <message>
-        <location line="+183"/>
+        <location line="+6"/>
+        <source>Some cameras were detected by Windows but could not be verified. You can still try them in automatic mode; check the application log if capture fails.</source>
+        <translation>Windows 检测到了一些摄像头，但无法对其进行验证。您仍可在自动模式下尝试使用这些摄像头；如果采集失败，请查看应用程序日志。</translation>
+    </message>
+    <message>
+        <location line="+186"/>
         <source>The recording folder could not be opened.</source>
         <translation>无法打开录制文件夹。</translation>
     </message>
@@ -5947,7 +5952,7 @@ This action cannot be undone.</source>
         <translation>请选择有效的转场和时长。</translation>
     </message>
     <message>
-        <location line="+522"/>
+        <location line="+508"/>
         <source>Check the camera name, connection and PTZ settings.</source>
         <translation>请检查摄像机名称、连接和 PTZ 设置。</translation>
     </message>
@@ -6037,12 +6042,17 @@ This action cannot be undone.</source>
         <translation>摄像机不可用。请检查连接、隐私权限，或是否有其他程序正在使用它。</translation>
     </message>
     <message>
-        <location line="+118"/>
+        <location line="+116"/>
         <source>%1 (virtual)</source>
         <translation>%1（虚拟）</translation>
     </message>
     <message>
-        <location line="+45"/>
+        <location line="+5"/>
+        <source>%1 (not verified)</source>
+        <translation>%1（未验证）</translation>
+    </message>
+    <message>
+        <location line="+88"/>
         <source>%1 × %2 · %3 fps · %4</source>
         <translation>%1 × %2 · %3 fps · %4</translation>
     </message>
@@ -6100,7 +6110,7 @@ This action cannot be undone.</source>
 <context>
     <name>ScenesEditorView</name>
     <message>
-        <location filename="../../qml/ScenesCameraDialog.qml" line="+162"/>
+        <location filename="../../qml/ScenesCameraDialog.qml" line="+165"/>
         <source>Edit camera</source>
         <translation>编辑摄像机</translation>
     </message>
@@ -6133,7 +6143,7 @@ This action cannot be undone.</source>
         <translation>设备</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+17"/>
         <source>Refresh cameras</source>
         <translation>刷新摄像机</translation>
     </message>
@@ -6143,7 +6153,7 @@ This action cannot be undone.</source>
         <translation>格式</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+14"/>
         <source>RTSP address</source>
         <translation>RTSP 地址</translation>
     </message>

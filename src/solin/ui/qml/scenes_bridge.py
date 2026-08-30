@@ -33,6 +33,7 @@ from solin.core.scenes.editor_geometry import (
 )
 from solin.core.scenes.engine import (
     LocalCameraDevice,
+    LocalCameraProbeStatus,
     LocalVideoFormat,
     SourceHealthStatus,
 )
@@ -565,6 +566,8 @@ class ScenesBridge(QObject):
                 "id": "",
                 "name": self.tr("Default camera (automatic)"),
                 "software": False,
+                "available": True,
+                "probeStatus": LocalCameraProbeStatus.READY.value,
                 "formats": [{"id": "", "label": self.tr("Automatic")}],
             }
         ]
@@ -582,6 +585,15 @@ class ScenesBridge(QObject):
             return self.tr("Camera discovery could not be completed.")
         if not discovery.devices:
             return self.tr("No cameras found. The automatic camera remains available.")
+        if any(
+            device.probe.status is LocalCameraProbeStatus.UNVERIFIED
+            for device in discovery.devices
+        ):
+            return self.tr(
+                "Some cameras were detected by Windows but could not be verified. "
+                "You can still try them in automatic mode; check the application log "
+                "if capture fails."
+            )
         return ""
 
     @Property("QVariantList", notify=changed)  # type: ignore[arg-type]
@@ -1367,24 +1379,10 @@ class ScenesBridge(QObject):
             kind = SourceKind(str(values.get("kind", SourceKind.LOCAL_CAMERA.value)))
             ptz_binding, credentials = self._ptz_binding(values, existing)
             if kind is SourceKind.LOCAL_CAMERA:
-                selected_format = self._local_format(
-                    str(values.get("deviceId", "")),
-                    str(values.get("formatId", "")),
-                )
-                configuration = LocalCameraConfig(
-                    device_id=str(values.get("deviceId", "")),
-                    width=selected_format.width if selected_format is not None else 0,
-                    height=selected_format.height if selected_format is not None else 0,
-                    fps_numerator=(
-                        selected_format.fps_numerator if selected_format is not None else 0
-                    ),
-                    fps_denominator=(
-                        selected_format.fps_denominator if selected_format is not None else 1
-                    ),
-                    media_type=selected_format.media_type if selected_format is not None else None,
-                    pixel_format=selected_format.pixel_format if selected_format is not None else "",
-                    ptz_binding=ptz_binding,
-                    keep_active=bool(values.get("keepActive", True)),
+                configuration = self._local_camera_configuration(
+                    values,
+                    existing,
+                    ptz_binding,
                 )
             elif kind is SourceKind.RTSP_CAMERA:
                 configuration = RtspCameraConfig(
@@ -2074,14 +2072,20 @@ class ScenesBridge(QObject):
         }
 
     def _local_device_record(self, device: LocalCameraDevice) -> dict[str, object]:
+        name = (
+            self.tr("%1 (virtual)").replace("%1", device.display_name)
+            if device.software_device
+            else device.display_name
+        )
+        if device.probe.status is LocalCameraProbeStatus.UNVERIFIED:
+            name = self.tr("%1 (not verified)").replace("%1", name)
         return {
             "id": device.device_id,
-            "name": (
-                self.tr("%1 (virtual)").replace("%1", device.display_name)
-                if device.software_device
-                else device.display_name
-            ),
+            "name": name,
             "software": device.software_device,
+            "available": True,
+            "probeStatus": device.probe.status.value,
+            "probeErrorCode": device.probe.error_code,
             "formats": [
                 {"id": "", "label": self.tr("Automatic")},
                 *[
@@ -2093,6 +2097,46 @@ class ScenesBridge(QObject):
                 ],
             ],
         }
+
+    def _local_camera_configuration(
+        self,
+        values: dict[str, object],
+        existing: SourceDefinition | None,
+        ptz_binding: PtzBinding | None,
+    ) -> LocalCameraConfig:
+        device_id = str(values.get("deviceId", ""))
+        format_id = str(values.get("formatId", ""))
+        current = (
+            existing.configuration
+            if existing is not None and isinstance(existing.configuration, LocalCameraConfig)
+            else None
+        )
+        preserve_current_format = bool(
+            current is not None
+            and current.device_id == device_id
+            and current.media_type is not None
+            and not bool(values.get("formatSelectionChanged", False))
+            and not format_id
+        )
+        if preserve_current_format:
+            assert current is not None
+            return replace(
+                current,
+                ptz_binding=ptz_binding,
+                keep_active=bool(values.get("keepActive", True)),
+            )
+        selected_format = self._local_format(device_id, format_id)
+        return LocalCameraConfig(
+            device_id=device_id,
+            width=selected_format.width if selected_format is not None else 0,
+            height=selected_format.height if selected_format is not None else 0,
+            fps_numerator=selected_format.fps_numerator if selected_format is not None else 0,
+            fps_denominator=selected_format.fps_denominator if selected_format is not None else 1,
+            media_type=selected_format.media_type if selected_format is not None else None,
+            pixel_format=selected_format.pixel_format if selected_format is not None else "",
+            ptz_binding=ptz_binding,
+            keep_active=bool(values.get("keepActive", True)),
+        )
 
     @staticmethod
     def _format_id(index: int) -> str:

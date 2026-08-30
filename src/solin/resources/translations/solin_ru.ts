@@ -5123,7 +5123,7 @@ This action cannot be undone.</source>
 <context>
     <name>QuickAccessToolbar</name>
     <message>
-        <location filename="../../widgets/quick_access_toolbar.py" line="+661"/>
+        <location filename="../../widgets/quick_access_toolbar.py" line="+666"/>
         <source>Remote control unavailable</source>
         <translation>Удаленное управление недоступно</translation>
     </message>
@@ -5174,7 +5174,7 @@ This action cannot be undone.</source>
 <context>
     <name>QuickToolbarBridge</name>
     <message>
-        <location filename="../../ui/qml/quick_toolbar.py" line="+426"/>
+        <location filename="../../ui/qml/quick_toolbar.py" line="+437"/>
         <source>Manage monitors</source>
         <translation>Управление мониторами</translation>
     </message>
@@ -5572,25 +5572,25 @@ This action cannot be undone.</source>
     <name>SceneControlPopup</name>
     <message>
         <location filename="../../widgets/scenes/control_popup.py" line="+274"/>
-        <location line="+690"/>
+        <location line="+689"/>
         <source>Solin scenes</source>
         <translation>Сцены Solin</translation>
     </message>
     <message>
-        <location line="-669"/>
-        <location line="+670"/>
+        <location line="-668"/>
+        <location line="+669"/>
         <source>Configured</source>
         <translation>Настроенные</translation>
     </message>
     <message>
-        <location line="-661"/>
-        <location line="+662"/>
+        <location line="-660"/>
+        <location line="+661"/>
         <source>Camera PiP</source>
         <translation>Камера PiP</translation>
     </message>
     <message>
-        <location line="-653"/>
-        <location line="+654"/>
+        <location line="-652"/>
+        <location line="+653"/>
         <source>Other scenes</source>
         <translation>Другие сцены</translation>
     </message>
@@ -5863,7 +5863,7 @@ This action cannot be undone.</source>
 <context>
     <name>ScenesBridge</name>
     <message>
-        <location filename="../../ui/qml/scenes_bridge.py" line="+351"/>
+        <location filename="../../ui/qml/scenes_bridge.py" line="+352"/>
         <source>Switching</source>
         <translation>Переключение</translation>
     </message>
@@ -5961,13 +5961,13 @@ This action cannot be undone.</source>
         <translation>Камера по умолчанию (автоматически)</translation>
     </message>
     <message>
-        <location line="+2"/>
-        <location line="+1518"/>
+        <location line="+4"/>
+        <location line="+1519"/>
         <source>Automatic</source>
         <translation>Автоматически</translation>
     </message>
     <message>
-        <location line="-1508"/>
+        <location line="-1509"/>
         <source>Looking for cameras…</source>
         <translation>Поиск камер…</translation>
     </message>
@@ -5987,7 +5987,12 @@ This action cannot be undone.</source>
         <translation>Камеры не найдены. Автоматическая камера остаётся доступной.</translation>
     </message>
     <message>
-        <location line="+183"/>
+        <location line="+6"/>
+        <source>Some cameras were detected by Windows but could not be verified. You can still try them in automatic mode; check the application log if capture fails.</source>
+        <translation>Система Windows обнаружила некоторые камеры, но проверить их не удалось. Их всё равно можно попробовать использовать в автоматическом режиме; если захват не удастся, проверьте журнал приложения.</translation>
+    </message>
+    <message>
+        <location line="+186"/>
         <source>The recording folder could not be opened.</source>
         <translation>Не удалось открыть папку для записей.</translation>
     </message>
@@ -6008,7 +6013,7 @@ This action cannot be undone.</source>
         <translation>Выберите допустимый переход и длительность.</translation>
     </message>
     <message>
-        <location line="+522"/>
+        <location line="+508"/>
         <source>Check the camera name, connection and PTZ settings.</source>
         <translation>Проверьте название камеры, подключение и настройки PTZ.</translation>
     </message>
@@ -6098,12 +6103,17 @@ This action cannot be undone.</source>
         <translation>Камера недоступна. Проверьте подключение, разрешения конфиденциальности или используется ли она другим приложением.</translation>
     </message>
     <message>
-        <location line="+118"/>
+        <location line="+116"/>
         <source>%1 (virtual)</source>
         <translation>%1 (виртуальная)</translation>
     </message>
     <message>
-        <location line="+45"/>
+        <location line="+5"/>
+        <source>%1 (not verified)</source>
+        <translation>%1 (не проверена)</translation>
+    </message>
+    <message>
+        <location line="+88"/>
         <source>%1 × %2 · %3 fps · %4</source>
         <translation>%1 × %2 · %3 fps · %4</translation>
     </message>
@@ -6161,7 +6171,7 @@ This action cannot be undone.</source>
 <context>
     <name>ScenesEditorView</name>
     <message>
-        <location filename="../../qml/ScenesCameraDialog.qml" line="+162"/>
+        <location filename="../../qml/ScenesCameraDialog.qml" line="+165"/>
         <source>Edit camera</source>
         <translation>Изменить камеру</translation>
     </message>
@@ -6194,7 +6204,7 @@ This action cannot be undone.</source>
         <translation>Устройство</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+17"/>
         <source>Refresh cameras</source>
         <translation>Обновить камеры</translation>
     </message>
@@ -6204,7 +6214,7 @@ This action cannot be undone.</source>
         <translation>Формат</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+14"/>
         <source>RTSP address</source>
         <translation>Адрес RTSP</translation>
     </message>

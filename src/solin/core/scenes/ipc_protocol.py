@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import BinaryIO, Final, cast
 
 
-PROTOCOL_VERSION: Final = 4
+PROTOCOL_VERSION: Final = 5
 MAXIMUM_CONTROL_FRAME_BYTES: Final = 8 * 1024 * 1024
 _FRAME_HEADER = struct.Struct(">I")
 _MESSAGE_TYPE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")

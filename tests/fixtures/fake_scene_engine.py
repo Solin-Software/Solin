@@ -146,7 +146,7 @@ def main() -> int:
                     "error",
                     {
                         "error_code": "invalid_recording_payload",
-                        "error_message": "Recording payload did not match protocol v4",
+                        "error_message": "Recording payload did not match protocol v5",
                     },
                 )
                 continue
@@ -177,7 +177,7 @@ def main() -> int:
                     "error",
                     {
                         "error_code": "invalid_recording_audio_payload",
-                        "error_message": "Recording audio payload did not match protocol v4",
+                        "error_message": "Recording audio payload did not match protocol v5",
                     },
                 )
                 continue
@@ -210,7 +210,7 @@ def main() -> int:
                     "error",
                     {
                         "error_code": "invalid_prepare_payload",
-                        "error_message": "Prepare payload did not match protocol v4",
+                        "error_message": "Prepare payload did not match protocol v5",
                     },
                 )
                 continue
@@ -251,7 +251,7 @@ def main() -> int:
                     "error",
                     {
                         "error_code": "invalid_take_payload",
-                        "error_message": "Take payload did not match protocol v4",
+                        "error_message": "Take payload did not match protocol v5",
                     },
                 )
                 continue
@@ -276,6 +276,13 @@ def main() -> int:
                             "device_id": "camera://device-1",
                             "display_name": "Test camera",
                             "software_device": False,
+                            "probe": {
+                                "status": "ready",
+                                "backend": "media_foundation",
+                                "failure_stage": "",
+                                "error_code": "",
+                                "native_error_code": "",
+                            },
                             "formats": [
                                 {
                                     "media_type": "video/x-raw",
@@ -286,6 +293,19 @@ def main() -> int:
                                     "fps_denominator": 1_001,
                                 }
                             ],
+                        },
+                        {
+                            "device_id": "camera://inventory-only",
+                            "display_name": "Inventory-only camera",
+                            "software_device": False,
+                            "probe": {
+                                "status": "unverified",
+                                "backend": "media_foundation",
+                                "failure_stage": "capture_provider",
+                                "error_code": "capture_provider_not_reported",
+                                "native_error_code": "",
+                            },
+                            "formats": [],
                         }
                     ],
                     "error_code": "",

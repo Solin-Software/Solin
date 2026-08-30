@@ -55,6 +55,16 @@ nlohmann::json local_camera_payload(const solin::media_engine::MediaRuntime& med
             {"display_name", device.display_name},
             {"software_device", device.software_device},
             {"formats", std::move(formats)},
+            {"probe",
+             {
+                 {"status",
+                  solin::media_engine::local_camera_probe_status_text(
+                      device.probe.status)},
+                 {"backend", device.probe.backend},
+                 {"failure_stage", device.probe.failure_stage},
+                 {"error_code", device.probe.error_code},
+                 {"native_error_code", device.probe.native_error_code},
+             }},
         });
     }
     return {
@@ -324,7 +334,7 @@ hydrate_scene_graph(solin::media_engine::SceneGraphRuntime* graph,
 }
 
 int run_self_test() {
-    constexpr std::string_view payload = R"({"protocol_version":4,"message_type":"probe"})";
+    constexpr std::string_view payload = R"({"protocol_version":5,"message_type":"probe"})";
     std::stringstream stream;
     if (!solin::media_engine::write_frame(stream, payload)) {
         return 1;

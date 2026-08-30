@@ -101,6 +101,10 @@ def test_subprocess_engine_executes_the_scene_command_lifecycle() -> None:
     assert discovery.ready
     assert discovery.devices[0].device_id == "camera://device-1"
     assert discovery.devices[0].formats[0].frames_per_second == pytest.approx(29.97, 0.01)
+    assert discovery.devices[1].device_id == "camera://inventory-only"
+    assert discovery.devices[1].probe.status.value == "unverified"
+    assert discovery.devices[1].probe.error_code == "capture_provider_not_reported"
+    assert discovery.devices[1].formats == ()
 
     audio_devices = engine.list_audio_devices(
         request_id="list-audio-1",

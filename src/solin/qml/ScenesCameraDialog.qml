@@ -13,6 +13,7 @@ Dialog {
     property string cameraId: ""
     property string deviceId: ""
     property string formatId: ""
+    property bool formatSelectionChanged: false
     property string ptzProtocol: ""
     property bool hasCredentials: false
     property bool clearCredentials: false
@@ -81,6 +82,7 @@ Dialog {
         deviceCombo.currentIndex = findIndex(bridge ? bridge.localCameraDevices : [], "id", deviceId)
         var formats = deviceRecord().formats || []
         formatCombo.currentIndex = findIndex(formats, "id", formatId)
+        formatSelectionChanged = false
     }
 
     function openForCamera(kind) {
@@ -106,6 +108,7 @@ Dialog {
             name: nameField.text.trim(),
             deviceId: deviceId,
             formatId: formatId,
+            formatSelectionChanged: formatSelectionChanged,
             uri: uriField.text.trim(),
             transport: transportCombo.currentIndex === 1 ? "udp" : "tcp",
             latencyMs: latencyField.value,
@@ -203,6 +206,7 @@ Dialog {
                             onActivated: {
                                 root.deviceId = model[currentIndex].id
                                 root.formatId = ""
+                                root.formatSelectionChanged = true
                                 formatCombo.currentIndex = 0
                             }
                         }
@@ -217,7 +221,10 @@ Dialog {
                         Layout.fillWidth: true
                         model: root.deviceRecord().formats || []
                         textRole: "label"
-                        onActivated: root.formatId = model[currentIndex].id
+                        onActivated: {
+                            root.formatId = model[currentIndex].id
+                            root.formatSelectionChanged = true
+                        }
                     }
 
                     FieldLabel { visible: root.cameraKind === "rtsp_camera"; text: qsTr("RTSP address") }

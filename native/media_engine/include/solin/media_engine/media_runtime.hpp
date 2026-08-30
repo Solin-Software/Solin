@@ -1,48 +1,15 @@
 #pragma once
 
+#include "solin/media_engine/local_camera_discovery.hpp"
 #include "solin/media_engine/source_registry.hpp"
 #include "solin/media_engine/scene_renderer.hpp"
 #include "solin/media_engine/program_recording.hpp"
 #include "solin/media_engine/virtual_camera.hpp"
 
-#include <cstdint>
 #include <memory>
-#include <optional>
 #include <string>
-#include <vector>
 
 namespace solin::media_engine {
-
-struct LocalVideoFormat {
-    std::string media_type{};
-    std::string pixel_format{};
-    std::uint32_t width{0U};
-    std::uint32_t height{0U};
-    std::uint32_t fps_numerator{0U};
-    std::uint32_t fps_denominator{1U};
-
-    bool operator==(const LocalVideoFormat&) const = default;
-};
-
-struct LocalCameraDevice {
-    std::string device_id{};
-    std::string display_name{};
-    bool software_device{false};
-    std::vector<LocalVideoFormat> formats{};
-
-    bool operator==(const LocalCameraDevice&) const = default;
-};
-
-struct LocalCameraSnapshot {
-    bool supported{false};
-    bool ready{true};
-    std::uint64_t generation{0U};
-    std::vector<LocalCameraDevice> devices{};
-    std::string error_code{"media_runtime_unavailable"};
-};
-
-[[nodiscard]] std::optional<LocalVideoFormat>
-preferred_automatic_camera_format(const LocalCameraDevice& device);
 
 struct MediaRuntimeProbe {
     bool initialized{false};

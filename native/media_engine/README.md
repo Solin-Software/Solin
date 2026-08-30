@@ -145,8 +145,12 @@ deadlines. Local-camera discovery, immutable scene-graph hydration, transactiona
 preparation, cancellation, output state, hot native-window target updates, rendered Program
 transitions, media-window egress,
 Windows virtual-camera publication, audio-endpoint discovery, and Program recording are
-available. Protocol version 4 binds Cut,
-Dissolve, or Fade through black to `prepare_scene`; `take_prepared` consumes the resulting
+available. Protocol version 5 carries bounded per-camera probe diagnostics. On Windows,
+camera inventory comes from Media Foundation without activating devices and is reconciled
+with the GStreamer capture provider only after camera discovery is requested; inventory-only
+devices remain selectable in automatic mode with an `unverified` status. Cut, Dissolve, or
+Fade through black is bound by
+`prepare_scene`; `take_prepared` consumes the resulting
 token without accepting replacement effect parameters. If an animated effect cannot be
 prepared, the response reports a typed fallback and Take still converges to the prepared
 destination with Cut. Rapid requests retain only the latest destination and use the latest

@@ -5094,7 +5094,7 @@ Hindi na ito maibabalik.</translation>
 <context>
     <name>QuickAccessToolbar</name>
     <message>
-        <location filename="../../widgets/quick_access_toolbar.py" line="+661"/>
+        <location filename="../../widgets/quick_access_toolbar.py" line="+666"/>
         <source>Remote control unavailable</source>
         <translation>Hindi magagamit ang remote control</translation>
     </message>
@@ -5144,7 +5144,7 @@ Hindi na ito maibabalik.</translation>
 <context>
     <name>QuickToolbarBridge</name>
     <message>
-        <location filename="../../ui/qml/quick_toolbar.py" line="+426"/>
+        <location filename="../../ui/qml/quick_toolbar.py" line="+437"/>
         <source>Manage monitors</source>
         <translation>I-manage ang mga monitor</translation>
     </message>
@@ -5542,25 +5542,25 @@ Hindi na ito maibabalik.</translation>
     <name>SceneControlPopup</name>
     <message>
         <location filename="../../widgets/scenes/control_popup.py" line="+274"/>
-        <location line="+690"/>
+        <location line="+689"/>
         <source>Solin scenes</source>
         <translation>Mga eksena ng Solin</translation>
     </message>
     <message>
-        <location line="-669"/>
-        <location line="+670"/>
+        <location line="-668"/>
+        <location line="+669"/>
         <source>Configured</source>
         <translation>Nakatakda</translation>
     </message>
     <message>
-        <location line="-661"/>
-        <location line="+662"/>
+        <location line="-660"/>
+        <location line="+661"/>
         <source>Camera PiP</source>
         <translation>Camera PiP</translation>
     </message>
     <message>
-        <location line="-653"/>
-        <location line="+654"/>
+        <location line="-652"/>
+        <location line="+653"/>
         <source>Other scenes</source>
         <translation>Ibang mga eksena</translation>
     </message>
@@ -5833,7 +5833,7 @@ Hindi na ito maibabalik.</translation>
 <context>
     <name>ScenesBridge</name>
     <message>
-        <location filename="../../ui/qml/scenes_bridge.py" line="+351"/>
+        <location filename="../../ui/qml/scenes_bridge.py" line="+352"/>
         <source>Switching</source>
         <translation>Lumilipat</translation>
     </message>
@@ -5931,13 +5931,13 @@ Hindi na ito maibabalik.</translation>
         <translation>Default na camera (awtomatiko)</translation>
     </message>
     <message>
-        <location line="+2"/>
-        <location line="+1518"/>
+        <location line="+4"/>
+        <location line="+1519"/>
         <source>Automatic</source>
         <translation>Awtomatiko</translation>
     </message>
     <message>
-        <location line="-1508"/>
+        <location line="-1509"/>
         <source>Looking for cameras…</source>
         <translation>Naghahanap ng camera…</translation>
     </message>
@@ -5957,7 +5957,12 @@ Hindi na ito maibabalik.</translation>
         <translation>Walang nakitang camera. Available pa rin ang awtomatikong camera.</translation>
     </message>
     <message>
-        <location line="+183"/>
+        <location line="+6"/>
+        <source>Some cameras were detected by Windows but could not be verified. You can still try them in automatic mode; check the application log if capture fails.</source>
+        <translation>May ilang camera na natukoy ng Windows pero hindi ma-verify. Maaari pa ring subukan ang mga ito sa awtomatikong mode; tingnan ang log ng application kung mabigo ang pag-capture.</translation>
+    </message>
+    <message>
+        <location line="+186"/>
         <source>The recording folder could not be opened.</source>
         <translation>Hindi mabuksan ang folder ng recording.</translation>
     </message>
@@ -5978,7 +5983,7 @@ Hindi na ito maibabalik.</translation>
         <translation>Pumili ng wastong transition at tagal.</translation>
     </message>
     <message>
-        <location line="+522"/>
+        <location line="+508"/>
         <source>Check the camera name, connection and PTZ settings.</source>
         <translation>Tingnan ang pangalan ng camera, koneksyon, at mga setting ng PTZ.</translation>
     </message>
@@ -6068,12 +6073,17 @@ Hindi na ito maibabalik.</translation>
         <translation>Hindi available ang camera. Tingnan ang koneksyon, mga pahintulot sa privacy, o kung may ibang application na gumagamit nito.</translation>
     </message>
     <message>
-        <location line="+118"/>
+        <location line="+116"/>
         <source>%1 (virtual)</source>
         <translation>%1 (virtual)</translation>
     </message>
     <message>
-        <location line="+45"/>
+        <location line="+5"/>
+        <source>%1 (not verified)</source>
+        <translation>%1 (hindi na-verify)</translation>
+    </message>
+    <message>
+        <location line="+88"/>
         <source>%1 × %2 · %3 fps · %4</source>
         <translation>%1 × %2 · %3 fps · %4</translation>
     </message>
@@ -6131,7 +6141,7 @@ Hindi na ito maibabalik.</translation>
 <context>
     <name>ScenesEditorView</name>
     <message>
-        <location filename="../../qml/ScenesCameraDialog.qml" line="+162"/>
+        <location filename="../../qml/ScenesCameraDialog.qml" line="+165"/>
         <source>Edit camera</source>
         <translation>I-edit ang camera</translation>
     </message>
@@ -6164,7 +6174,7 @@ Hindi na ito maibabalik.</translation>
         <translation>Device</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+17"/>
         <source>Refresh cameras</source>
         <translation>I-refresh ang mga camera</translation>
     </message>
@@ -6174,7 +6184,7 @@ Hindi na ito maibabalik.</translation>
         <translation>Format</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+14"/>
         <source>RTSP address</source>
         <translation>RTSP address</translation>
     </message>

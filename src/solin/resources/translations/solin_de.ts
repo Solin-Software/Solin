@@ -5094,7 +5094,7 @@ Diese Aktion kann nicht rückgängig gemacht werden.</translation>
 <context>
     <name>QuickAccessToolbar</name>
     <message>
-        <location filename="../../widgets/quick_access_toolbar.py" line="+661"/>
+        <location filename="../../widgets/quick_access_toolbar.py" line="+666"/>
         <source>Remote control unavailable</source>
         <translation>Fernsteuerung nicht verfügbar</translation>
     </message>
@@ -5144,7 +5144,7 @@ Diese Aktion kann nicht rückgängig gemacht werden.</translation>
 <context>
     <name>QuickToolbarBridge</name>
     <message>
-        <location filename="../../ui/qml/quick_toolbar.py" line="+426"/>
+        <location filename="../../ui/qml/quick_toolbar.py" line="+437"/>
         <source>Manage monitors</source>
         <translation>Monitore verwalten</translation>
     </message>
@@ -5542,25 +5542,25 @@ Diese Aktion kann nicht rückgängig gemacht werden.</translation>
     <name>SceneControlPopup</name>
     <message>
         <location filename="../../widgets/scenes/control_popup.py" line="+274"/>
-        <location line="+690"/>
+        <location line="+689"/>
         <source>Solin scenes</source>
         <translation>Solin-Szenen</translation>
     </message>
     <message>
-        <location line="-669"/>
-        <location line="+670"/>
+        <location line="-668"/>
+        <location line="+669"/>
         <source>Configured</source>
         <translation>Konfiguriert</translation>
     </message>
     <message>
-        <location line="-661"/>
-        <location line="+662"/>
+        <location line="-660"/>
+        <location line="+661"/>
         <source>Camera PiP</source>
         <translation>Kamera-PiP</translation>
     </message>
     <message>
-        <location line="-653"/>
-        <location line="+654"/>
+        <location line="-652"/>
+        <location line="+653"/>
         <source>Other scenes</source>
         <translation>Andere Szenen</translation>
     </message>
@@ -5833,7 +5833,7 @@ Diese Aktion kann nicht rückgängig gemacht werden.</translation>
 <context>
     <name>ScenesBridge</name>
     <message>
-        <location filename="../../ui/qml/scenes_bridge.py" line="+351"/>
+        <location filename="../../ui/qml/scenes_bridge.py" line="+352"/>
         <source>Switching</source>
         <translation>Wird umgeschaltet</translation>
     </message>
@@ -5931,13 +5931,13 @@ Diese Aktion kann nicht rückgängig gemacht werden.</translation>
         <translation>Standardkamera (automatisch)</translation>
     </message>
     <message>
-        <location line="+2"/>
-        <location line="+1518"/>
+        <location line="+4"/>
+        <location line="+1519"/>
         <source>Automatic</source>
         <translation>Automatisch</translation>
     </message>
     <message>
-        <location line="-1508"/>
+        <location line="-1509"/>
         <source>Looking for cameras…</source>
         <translation>Kameras werden gesucht…</translation>
     </message>
@@ -5957,7 +5957,12 @@ Diese Aktion kann nicht rückgängig gemacht werden.</translation>
         <translation>Keine Kameras gefunden. Die automatische Kamera bleibt verfügbar.</translation>
     </message>
     <message>
-        <location line="+183"/>
+        <location line="+6"/>
+        <source>Some cameras were detected by Windows but could not be verified. You can still try them in automatic mode; check the application log if capture fails.</source>
+        <translation>Einige Kameras wurden von Windows erkannt, konnten aber nicht überprüft werden. Sie können trotzdem versuchen, sie im automatischen Modus zu verwenden; prüfen Sie das Anwendungsprotokoll, falls die Aufnahme fehlschlägt.</translation>
+    </message>
+    <message>
+        <location line="+186"/>
         <source>The recording folder could not be opened.</source>
         <translation>Der Aufnahmeordner konnte nicht geöffnet werden.</translation>
     </message>
@@ -5978,7 +5983,7 @@ Diese Aktion kann nicht rückgängig gemacht werden.</translation>
         <translation>Einen gültigen Übergang und eine gültige Dauer auswählen.</translation>
     </message>
     <message>
-        <location line="+522"/>
+        <location line="+508"/>
         <source>Check the camera name, connection and PTZ settings.</source>
         <translation>Kameraname, Verbindung und PTZ-Einstellungen prüfen.</translation>
     </message>
@@ -6068,12 +6073,17 @@ Diese Aktion kann nicht rückgängig gemacht werden.</translation>
         <translation>Kamera nicht verfügbar. Verbindung, Datenschutzberechtigungen oder eine andere Anwendung prüfen, die sie verwendet.</translation>
     </message>
     <message>
-        <location line="+118"/>
+        <location line="+116"/>
         <source>%1 (virtual)</source>
         <translation>%1 (virtuell)</translation>
     </message>
     <message>
-        <location line="+45"/>
+        <location line="+5"/>
+        <source>%1 (not verified)</source>
+        <translation>%1 (nicht überprüft)</translation>
+    </message>
+    <message>
+        <location line="+88"/>
         <source>%1 × %2 · %3 fps · %4</source>
         <translation>%1 × %2 · %3 fps · %4</translation>
     </message>
@@ -6131,7 +6141,7 @@ Diese Aktion kann nicht rückgängig gemacht werden.</translation>
 <context>
     <name>ScenesEditorView</name>
     <message>
-        <location filename="../../qml/ScenesCameraDialog.qml" line="+162"/>
+        <location filename="../../qml/ScenesCameraDialog.qml" line="+165"/>
         <source>Edit camera</source>
         <translation>Kamera bearbeiten</translation>
     </message>
@@ -6164,7 +6174,7 @@ Diese Aktion kann nicht rückgängig gemacht werden.</translation>
         <translation>Gerät</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+17"/>
         <source>Refresh cameras</source>
         <translation>Kameras aktualisieren</translation>
     </message>
@@ -6174,7 +6184,7 @@ Diese Aktion kann nicht rückgängig gemacht werden.</translation>
         <translation>Format</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+14"/>
         <source>RTSP address</source>
         <translation>RTSP-Adresse</translation>
     </message>

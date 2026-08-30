@@ -5094,7 +5094,7 @@ L&apos;azione è irreversibile.</translation>
 <context>
     <name>QuickAccessToolbar</name>
     <message>
-        <location filename="../../widgets/quick_access_toolbar.py" line="+661"/>
+        <location filename="../../widgets/quick_access_toolbar.py" line="+666"/>
         <source>Remote control unavailable</source>
         <translation>Controllo remoto non disponibile</translation>
     </message>
@@ -5144,7 +5144,7 @@ L&apos;azione è irreversibile.</translation>
 <context>
     <name>QuickToolbarBridge</name>
     <message>
-        <location filename="../../ui/qml/quick_toolbar.py" line="+426"/>
+        <location filename="../../ui/qml/quick_toolbar.py" line="+437"/>
         <source>Manage monitors</source>
         <translation>Gestisci monitor</translation>
     </message>
@@ -5542,25 +5542,25 @@ L&apos;azione è irreversibile.</translation>
     <name>SceneControlPopup</name>
     <message>
         <location filename="../../widgets/scenes/control_popup.py" line="+274"/>
-        <location line="+690"/>
+        <location line="+689"/>
         <source>Solin scenes</source>
         <translation>Scene di Solin</translation>
     </message>
     <message>
-        <location line="-669"/>
-        <location line="+670"/>
+        <location line="-668"/>
+        <location line="+669"/>
         <source>Configured</source>
         <translation>Configurate</translation>
     </message>
     <message>
-        <location line="-661"/>
-        <location line="+662"/>
+        <location line="-660"/>
+        <location line="+661"/>
         <source>Camera PiP</source>
         <translation>Camera PiP</translation>
     </message>
     <message>
-        <location line="-653"/>
-        <location line="+654"/>
+        <location line="-652"/>
+        <location line="+653"/>
         <source>Other scenes</source>
         <translation>Altre scene</translation>
     </message>
@@ -5833,7 +5833,7 @@ L&apos;azione è irreversibile.</translation>
 <context>
     <name>ScenesBridge</name>
     <message>
-        <location filename="../../ui/qml/scenes_bridge.py" line="+351"/>
+        <location filename="../../ui/qml/scenes_bridge.py" line="+352"/>
         <source>Switching</source>
         <translation>Passaggio in corso</translation>
     </message>
@@ -5931,13 +5931,13 @@ L&apos;azione è irreversibile.</translation>
         <translation>Videocamera predefinita (automatica)</translation>
     </message>
     <message>
-        <location line="+2"/>
-        <location line="+1518"/>
+        <location line="+4"/>
+        <location line="+1519"/>
         <source>Automatic</source>
         <translation>Automatica</translation>
     </message>
     <message>
-        <location line="-1508"/>
+        <location line="-1509"/>
         <source>Looking for cameras…</source>
         <translation>Ricerca delle videocamere…</translation>
     </message>
@@ -5957,7 +5957,12 @@ L&apos;azione è irreversibile.</translation>
         <translation>Nessuna videocamera trovata. La videocamera automatica resta disponibile.</translation>
     </message>
     <message>
-        <location line="+183"/>
+        <location line="+6"/>
+        <source>Some cameras were detected by Windows but could not be verified. You can still try them in automatic mode; check the application log if capture fails.</source>
+        <translation>Alcune videocamere sono state rilevate da Windows ma non è stato possibile verificarle. È comunque possibile provarle in modalità automatica; se l’acquisizione non riesce, consultare il registro dell’applicazione.</translation>
+    </message>
+    <message>
+        <location line="+186"/>
         <source>The recording folder could not be opened.</source>
         <translation>Impossibile aprire la cartella di registrazione.</translation>
     </message>
@@ -5978,7 +5983,7 @@ L&apos;azione è irreversibile.</translation>
         <translation>Scegliere una transizione e una durata valide.</translation>
     </message>
     <message>
-        <location line="+522"/>
+        <location line="+508"/>
         <source>Check the camera name, connection and PTZ settings.</source>
         <translation>Verificare il nome della videocamera, la connessione e le impostazioni PTZ.</translation>
     </message>
@@ -6068,12 +6073,17 @@ L&apos;azione è irreversibile.</translation>
         <translation>Videocamera non disponibile. Verificare la connessione, le autorizzazioni sulla privacy o se un’altra applicazione la sta usando.</translation>
     </message>
     <message>
-        <location line="+118"/>
+        <location line="+116"/>
         <source>%1 (virtual)</source>
         <translation>%1 (virtuale)</translation>
     </message>
     <message>
-        <location line="+45"/>
+        <location line="+5"/>
+        <source>%1 (not verified)</source>
+        <translation>%1 (non verificata)</translation>
+    </message>
+    <message>
+        <location line="+88"/>
         <source>%1 × %2 · %3 fps · %4</source>
         <translation>%1 × %2 · %3 fps · %4</translation>
     </message>
@@ -6131,7 +6141,7 @@ L&apos;azione è irreversibile.</translation>
 <context>
     <name>ScenesEditorView</name>
     <message>
-        <location filename="../../qml/ScenesCameraDialog.qml" line="+162"/>
+        <location filename="../../qml/ScenesCameraDialog.qml" line="+165"/>
         <source>Edit camera</source>
         <translation>Modifica videocamera</translation>
     </message>
@@ -6164,7 +6174,7 @@ L&apos;azione è irreversibile.</translation>
         <translation>Dispositivo</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+17"/>
         <source>Refresh cameras</source>
         <translation>Aggiorna videocamere</translation>
     </message>
@@ -6174,7 +6184,7 @@ L&apos;azione è irreversibile.</translation>
         <translation>Formato</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+14"/>
         <source>RTSP address</source>
         <translation>Indirizzo RTSP</translation>
     </message>

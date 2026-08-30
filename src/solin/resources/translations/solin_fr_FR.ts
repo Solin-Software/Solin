@@ -5094,7 +5094,7 @@ Cette action est irréversible.</translation>
 <context>
     <name>QuickAccessToolbar</name>
     <message>
-        <location filename="../../widgets/quick_access_toolbar.py" line="+661"/>
+        <location filename="../../widgets/quick_access_toolbar.py" line="+666"/>
         <source>Remote control unavailable</source>
         <translation>Contrôle à distance indisponible</translation>
     </message>
@@ -5144,7 +5144,7 @@ Cette action est irréversible.</translation>
 <context>
     <name>QuickToolbarBridge</name>
     <message>
-        <location filename="../../ui/qml/quick_toolbar.py" line="+426"/>
+        <location filename="../../ui/qml/quick_toolbar.py" line="+437"/>
         <source>Manage monitors</source>
         <translation>Gérer les écrans</translation>
     </message>
@@ -5542,25 +5542,25 @@ Cette action est irréversible.</translation>
     <name>SceneControlPopup</name>
     <message>
         <location filename="../../widgets/scenes/control_popup.py" line="+274"/>
-        <location line="+690"/>
+        <location line="+689"/>
         <source>Solin scenes</source>
         <translation>Scènes Solin</translation>
     </message>
     <message>
-        <location line="-669"/>
-        <location line="+670"/>
+        <location line="-668"/>
+        <location line="+669"/>
         <source>Configured</source>
         <translation>Configurées</translation>
     </message>
     <message>
-        <location line="-661"/>
-        <location line="+662"/>
+        <location line="-660"/>
+        <location line="+661"/>
         <source>Camera PiP</source>
         <translation>Caméra PiP</translation>
     </message>
     <message>
-        <location line="-653"/>
-        <location line="+654"/>
+        <location line="-652"/>
+        <location line="+653"/>
         <source>Other scenes</source>
         <translation>Autres scènes</translation>
     </message>
@@ -5833,7 +5833,7 @@ Cette action est irréversible.</translation>
 <context>
     <name>ScenesBridge</name>
     <message>
-        <location filename="../../ui/qml/scenes_bridge.py" line="+351"/>
+        <location filename="../../ui/qml/scenes_bridge.py" line="+352"/>
         <source>Switching</source>
         <translation>Basculement</translation>
     </message>
@@ -5931,13 +5931,13 @@ Cette action est irréversible.</translation>
         <translation>Caméra par défaut (automatique)</translation>
     </message>
     <message>
-        <location line="+2"/>
-        <location line="+1518"/>
+        <location line="+4"/>
+        <location line="+1519"/>
         <source>Automatic</source>
         <translation>Automatique</translation>
     </message>
     <message>
-        <location line="-1508"/>
+        <location line="-1509"/>
         <source>Looking for cameras…</source>
         <translation>Recherche de caméras…</translation>
     </message>
@@ -5957,7 +5957,12 @@ Cette action est irréversible.</translation>
         <translation>Aucune caméra trouvée. La caméra automatique reste disponible.</translation>
     </message>
     <message>
-        <location line="+183"/>
+        <location line="+6"/>
+        <source>Some cameras were detected by Windows but could not be verified. You can still try them in automatic mode; check the application log if capture fails.</source>
+        <translation>Certaines caméras ont été détectées par Windows, mais n’ont pas pu être vérifiées. Il est toujours possible de les essayer en mode automatique ; consultez le journal de l’application si la capture échoue.</translation>
+    </message>
+    <message>
+        <location line="+186"/>
         <source>The recording folder could not be opened.</source>
         <translation>Impossible d’ouvrir le dossier d’enregistrement.</translation>
     </message>
@@ -5978,7 +5983,7 @@ Cette action est irréversible.</translation>
         <translation>Choisir une transition et une durée valides.</translation>
     </message>
     <message>
-        <location line="+522"/>
+        <location line="+508"/>
         <source>Check the camera name, connection and PTZ settings.</source>
         <translation>Vérifier le nom de la caméra, la connexion et les paramètres PTZ.</translation>
     </message>
@@ -6068,12 +6073,17 @@ Cette action est irréversible.</translation>
         <translation>Caméra indisponible. Vérifier la connexion, les autorisations de confidentialité ou si une autre application l’utilise.</translation>
     </message>
     <message>
-        <location line="+118"/>
+        <location line="+116"/>
         <source>%1 (virtual)</source>
         <translation>%1 (virtuelle)</translation>
     </message>
     <message>
-        <location line="+45"/>
+        <location line="+5"/>
+        <source>%1 (not verified)</source>
+        <translation>%1 (non vérifiée)</translation>
+    </message>
+    <message>
+        <location line="+88"/>
         <source>%1 × %2 · %3 fps · %4</source>
         <translation>%1 × %2 · %3 fps · %4</translation>
     </message>
@@ -6131,7 +6141,7 @@ Cette action est irréversible.</translation>
 <context>
     <name>ScenesEditorView</name>
     <message>
-        <location filename="../../qml/ScenesCameraDialog.qml" line="+162"/>
+        <location filename="../../qml/ScenesCameraDialog.qml" line="+165"/>
         <source>Edit camera</source>
         <translation>Modifier la caméra</translation>
     </message>
@@ -6164,7 +6174,7 @@ Cette action est irréversible.</translation>
         <translation>Appareil</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+17"/>
         <source>Refresh cameras</source>
         <translation>Actualiser les caméras</translation>
     </message>
@@ -6174,7 +6184,7 @@ Cette action est irréversible.</translation>
         <translation>Format</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+14"/>
         <source>RTSP address</source>
         <translation>Adresse RTSP</translation>
     </message>
