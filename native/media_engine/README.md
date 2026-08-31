@@ -145,10 +145,12 @@ deadlines. Local-camera discovery, immutable scene-graph hydration, transactiona
 preparation, cancellation, output state, hot native-window target updates, rendered Program
 transitions, media-window egress,
 Windows virtual-camera publication, audio-endpoint discovery, and Program recording are
-available. Protocol version 6 preserves exact camera frame-rate fractions with positive,
-signed 32-bit components throughout discovery, selection, persistence, and capture. The
-60 fps media budget remains unchanged. Older sidecars fail the version handshake rather
-than accepting camera requests they cannot represent. On Windows,
+available. Protocol version 7 binds content-scene preparation to the expected media epoch;
+Take cannot expose a retained or newly prepared graph until that presentation has activation-safe
+pixels. It also preserves the exact camera frame-rate fractions introduced in version 6, with
+positive, signed 32-bit components throughout discovery, selection, persistence, and capture.
+The 60 fps media budget remains unchanged. Older sidecars fail the version handshake rather
+than accepting requests they cannot represent. On Windows,
 camera inventory comes from Media Foundation without activating devices and is reconciled
 with the GStreamer capture provider only after camera discovery is requested; inventory-only
 devices remain selectable in automatic mode with an `unverified` status. Invalid driver

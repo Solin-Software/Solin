@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -73,7 +74,9 @@ class SceneGraphRuntime final {
     [[nodiscard]] ScenePreparationReceipt
     prepare(OutputBus bus, std::string_view scene_id, std::uint64_t document_revision,
             std::string_view request_id, std::uint64_t sequence,
-            const SceneTransitionSpec& transition = {});
+            const SceneTransitionSpec& transition = {},
+            std::optional<std::uint64_t> expected_content_media_epoch =
+                std::nullopt);
     void take(const ScenePreparationReceipt& preparation,
               std::uint64_t document_revision, std::uint64_t sequence);
     void take(OutputBus bus, std::string_view scene_id, std::string_view preparation_token,

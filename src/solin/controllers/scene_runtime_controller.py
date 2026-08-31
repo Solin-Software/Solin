@@ -1338,6 +1338,11 @@ class SceneRuntimeController(QObject):
             request_id=request_id,
             sequence=sequence,
             deadline_ms=_PREPARE_DEADLINE_MS,
+            content_media_epoch=(
+                self._projection_session_id()
+                if scene_uses_content_source(self._documents.document, scene_id)
+                else None
+            ),
         )
         self._track_future(future, "prepare", (bus_id, pending))
 

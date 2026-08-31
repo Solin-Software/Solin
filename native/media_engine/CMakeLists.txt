@@ -392,6 +392,31 @@ if(SOLIN_MEDIA_ENGINE_BUILD_TESTS)
         NAME presentation-transition
         COMMAND solin-media-engine-presentation-transition-tests
     )
+    add_executable(solin-media-engine-render-frame-freshness-tests
+        tests/render_frame_freshness_tests.cpp
+    )
+    target_include_directories(
+        solin-media-engine-render-frame-freshness-tests
+        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+    target_compile_features(
+        solin-media-engine-render-frame-freshness-tests PRIVATE cxx_std_20
+    )
+    if(MSVC)
+        target_compile_options(
+            solin-media-engine-render-frame-freshness-tests
+            PRIVATE /W4 /WX /permissive- /EHsc
+        )
+    else()
+        target_compile_options(
+            solin-media-engine-render-frame-freshness-tests
+            PRIVATE -Wall -Wextra -Wpedantic -Werror
+        )
+    endif()
+    add_test(
+        NAME render-frame-freshness
+        COMMAND solin-media-engine-render-frame-freshness-tests
+    )
     add_executable(solin-media-engine-native-window-output-wait-tests
         tests/native_window_output_wait_tests.cpp
     )

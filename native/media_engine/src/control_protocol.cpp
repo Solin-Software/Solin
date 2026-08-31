@@ -615,7 +615,9 @@ ProtocolReply ControlSession::handle(const ControlEnvelope& request) {
         return {.response = response_for(request, "ack", std::move(payload))};
     }
     if (request.message_type == "prepare_scene") {
-        if (!has_exact_fields(request.payload, {"bus_id", "scene_id", "transition"}) ||
+        if (!has_exact_fields(request.payload,
+                              {"bus_id", "scene_id", "transition",
+                               "content_media_epoch"}) ||
             !request.payload.at("transition").is_object() ||
             !has_exact_fields(request.payload.at("transition"), {"kind", "duration_ms"})) {
             throw std::runtime_error("invalid prepare scene payload");
@@ -627,6 +629,12 @@ ProtocolReply ControlSession::handle(const ControlEnvelope& request) {
             request.payload.at("transition").at("kind"), "transition kind");
         const auto transition_duration_ms = strict_integer(
             request.payload.at("transition").at("duration_ms"), "transition duration");
+        const auto expected_content_media_epoch =
+            request.payload.at("content_media_epoch").is_null()
+                ? std::optional<std::uint64_t>{}
+                : std::optional{strict_integer(
+                      request.payload.at("content_media_epoch"),
+                      "content media epoch")};
         if ((transition_kind == "cut" && transition_duration_ms != 0U) ||
             ((transition_kind == "dissolve" || transition_kind == "fade_to_black") &&
              (transition_duration_ms < 50U || transition_duration_ms > 10'000U)) ||
@@ -637,6 +645,7 @@ ProtocolReply ControlSession::handle(const ControlEnvelope& request) {
         auto reply = services_.prepare_scene
                          ? services_.prepare_scene(
                                bus, scene_id, transition_kind, transition_duration_ms,
+                               expected_content_media_epoch,
                                request.document_revision, request.request_id,
                                request.sequence)
                          : ControlServiceReply{

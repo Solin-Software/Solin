@@ -1,6 +1,7 @@
 #include "gstreamer_scene_renderer.hpp"
 
 #include "gstreamer_source_runtime.hpp"
+#include "render_frame_freshness.hpp"
 #include "solin/media_engine/render_geometry.hpp"
 #include "solin/media_engine/scene_graph.hpp"
 
@@ -604,12 +605,19 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
                 const bool previously_enabled =
                     direct_output_enabled_.exchange(enabled);
                 demand_changed = previously_enabled != enabled;
+                if (enabled && !previously_enabled) {
+                    std::scoped_lock frame_lock{frame_mutex_};
+                    direct_frame_freshness_.invalidate();
+                    latest_frame_.reset();
+                    ++frame_wakeup_generation_;
+                }
                 g_object_set(direct_output_valve_, "drop",
                              enabled ? FALSE : TRUE,
                              nullptr);
                 replay_retained_frame = enabled && !previously_enabled;
             }
             if (replay_retained_frame) {
+                frame_wakeup_.notify_all();
                 source_replay_requested_.store(true);
             }
             if (demand_changed) {
@@ -657,10 +665,21 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
 
     void set_rendering_enabled(const bool enabled) noexcept override {
         try {
+            bool outputs_invalidated = false;
             {
                 std::scoped_lock lock{pipeline_mutex_};
                 if (stopped_.load() || rendering_enabled_.load() == enabled) {
                     return;
+                }
+                if (enabled) {
+                    std::scoped_lock frame_lock{frame_mutex_};
+                    gpu_frame_freshness_.invalidate();
+                    direct_frame_freshness_.invalidate();
+                    latest_gpu_frame_.reset();
+                    latest_frame_.reset();
+                    ++gpu_frame_wakeup_generation_;
+                    ++frame_wakeup_generation_;
+                    outputs_invalidated = true;
                 }
                 auto* pipeline = pipeline_;
                 rendering_enabled_.store(enabled);
@@ -678,6 +697,9 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
                     return;
                 }
             }
+            if (outputs_invalidated) {
+                frame_wakeup_.notify_all();
+            }
             // A disabled feeder deliberately ignores source notifications. Wake it
             // once on resume so the latest retained source frame is submitted even
             // when the producer itself is paused or static.
@@ -685,6 +707,67 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
             source_frame_signal_->notify();
         } catch (...) {
             record_failure("renderer_state_change_exception");
+        }
+    }
+
+    [[nodiscard]] bool refresh_for_activation(
+        const bool system_memory_output_required,
+        const std::chrono::steady_clock::time_point deadline) noexcept override {
+        try {
+            std::uint64_t gpu_generation = 0U;
+            std::uint64_t direct_generation = 0U;
+            bool state_change_failed = false;
+            {
+                std::scoped_lock lock{pipeline_mutex_};
+                if (stopped_.load() || failed_.load() || pipeline_ == nullptr ||
+                    direct_output_valve_ == nullptr) {
+                    return false;
+                }
+                {
+                    std::scoped_lock frame_lock{frame_mutex_};
+                    gpu_frame_freshness_.invalidate();
+                    direct_frame_freshness_.invalidate();
+                    gpu_generation = gpu_frame_freshness_.generation();
+                    direct_generation = direct_frame_freshness_.generation();
+                    latest_gpu_frame_.reset();
+                    latest_frame_.reset();
+                    ++gpu_frame_wakeup_generation_;
+                    ++frame_wakeup_generation_;
+                }
+                direct_output_enabled_.store(system_memory_output_required);
+                g_object_set(direct_output_valve_, "drop",
+                             system_memory_output_required ? FALSE : TRUE, nullptr);
+                if (!rendering_enabled_.exchange(true)) {
+                    static_cast<void>(rendering_generation_.fetch_add(1U));
+                    state_change_failed =
+                        gst_element_set_state(pipeline_, GST_STATE_PLAYING) ==
+                        GST_STATE_CHANGE_FAILURE;
+                }
+            }
+            frame_wakeup_.notify_all();
+            if (state_change_failed) {
+                record_failure("renderer_state_change_failed");
+                return false;
+            }
+
+            source_replay_requested_.store(true);
+            render_acknowledgement_.notify_all();
+            source_frame_signal_->notify();
+
+            std::unique_lock lock{frame_mutex_};
+            const auto ready = [&] {
+                return stopped_.load() || failed_.load() ||
+                       (gpu_frame_freshness_.ready(gpu_generation) &&
+                        (!system_memory_output_required ||
+                         direct_frame_freshness_.ready(direct_generation)));
+            };
+            static_cast<void>(frame_wakeup_.wait_until(lock, deadline, ready));
+            return !stopped_.load() && !failed_.load() &&
+                   gpu_frame_freshness_.ready(gpu_generation) &&
+                   (!system_memory_output_required ||
+                    direct_frame_freshness_.ready(direct_generation));
+        } catch (...) {
+            return false;
         }
     }
 
@@ -1169,7 +1252,6 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
                 gst_video_info_from_caps(&info, caps) == FALSE) {
                 return GST_FLOW_ERROR;
             }
-            const auto sequence = frame_sequence_->fetch_add(1U) + 1U;
             auto payload = std::make_shared<GStreamerRenderedFramePayload>(
                 sample_guard.release(), device_.owner);
             const auto* format_name =
@@ -1183,21 +1265,28 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
                         gst_caps_features_contains(features, "memory:D3D11Memory") != FALSE
                     ? SourceFrameMemory::d3d11
                     : SourceFrameMemory::system_memory;
-            auto frame = std::make_shared<SourceFrame>(SourceFrame{
-                .sequence = sequence,
-                .stream_epoch = 1U,
-                .discontinuity = sequence == 1U,
-                .presentation_timestamp_ns = valid_clock_time(GST_BUFFER_PTS(buffer)),
-                .duration_ns = valid_clock_time(GST_BUFFER_DURATION(buffer)),
-                .received_monotonic_ns = monotonic_nanoseconds(),
-                .width = static_cast<std::uint32_t>(GST_VIDEO_INFO_WIDTH(&info)),
-                .height = static_cast<std::uint32_t>(GST_VIDEO_INFO_HEIGHT(&info)),
-                .pixel_format = format_name,
-                .memory = memory_kind,
-                .payload = std::move(payload),
-            });
+            const auto timestamp = valid_clock_time(GST_BUFFER_PTS(buffer));
             {
                 std::scoped_lock lock{frame_mutex_};
+                auto& freshness = gpu_tap ? gpu_frame_freshness_
+                                          : direct_frame_freshness_;
+                if (!freshness.acknowledge(timestamp)) {
+                    return GST_FLOW_OK;
+                }
+                const auto sequence = frame_sequence_->fetch_add(1U) + 1U;
+                auto frame = std::make_shared<SourceFrame>(SourceFrame{
+                    .sequence = sequence,
+                    .stream_epoch = 1U,
+                    .discontinuity = sequence == 1U,
+                    .presentation_timestamp_ns = timestamp,
+                    .duration_ns = valid_clock_time(GST_BUFFER_DURATION(buffer)),
+                    .received_monotonic_ns = monotonic_nanoseconds(),
+                    .width = static_cast<std::uint32_t>(GST_VIDEO_INFO_WIDTH(&info)),
+                    .height = static_cast<std::uint32_t>(GST_VIDEO_INFO_HEIGHT(&info)),
+                    .pixel_format = format_name,
+                    .memory = memory_kind,
+                    .payload = std::move(payload),
+                });
                 if (gpu_tap) {
                     latest_gpu_frame_ = std::move(frame);
                     ++gpu_frame_wakeup_generation_;
@@ -1208,15 +1297,15 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
             }
             frame_wakeup_.notify_all();
             if (GST_CLOCK_TIME_IS_VALID(GST_BUFFER_PTS(buffer))) {
-                const auto timestamp = GST_BUFFER_PTS(buffer);
+                const auto gst_timestamp = GST_BUFFER_PTS(buffer);
                 {
                     std::scoped_lock lock{render_acknowledgement_mutex_};
                     auto& received = gpu_tap ? gpu_output_received_
                                              : direct_output_received_;
                     auto& latest = gpu_tap ? last_gpu_output_timestamp_
                                            : last_direct_output_timestamp_;
-                    if (!received || timestamp > latest) {
-                        latest = timestamp;
+                    if (!received || gst_timestamp > latest) {
+                        latest = gst_timestamp;
                     }
                     received = true;
                 }
@@ -1309,6 +1398,13 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
             const auto rendering_generation = rendering_generation_.load();
             const auto acknowledgement_target = pending_render_timestamp;
             const auto presentation_timestamp = next_render_timestamp_;
+            {
+                // appsrc can synchronously reach either appsink while the first
+                // retained input is pushed, so arm this causal timestamp first.
+                std::scoped_lock lock{frame_mutex_};
+                gpu_frame_freshness_.submitted(presentation_timestamp);
+                direct_frame_freshness_.submitted(presentation_timestamp);
+            }
             bool submitted = false;
             bool caps_changed = false;
             for (auto& [_, source] : sources_) {
@@ -1722,6 +1818,8 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
     mutable std::condition_variable_any frame_wakeup_{};
     std::uint64_t frame_wakeup_generation_{0U};
     std::uint64_t gpu_frame_wakeup_generation_{0U};
+    RenderFrameFreshness direct_frame_freshness_{};
+    RenderFrameFreshness gpu_frame_freshness_{};
     std::shared_ptr<const SourceFrame> latest_frame_{};
     std::shared_ptr<const SourceFrame> latest_gpu_frame_{};
 };
@@ -2729,6 +2827,28 @@ class GStreamerSceneRenderer final : public SceneRenderer {
                 graph->set_direct_output_enabled(output_required);
             }
         } catch (...) {
+        }
+    }
+
+    [[nodiscard]] bool refresh_prepared(
+        const OutputBus bus,
+        const std::shared_ptr<PreparedSceneRenderGraph>& graph,
+        const std::chrono::steady_clock::time_point deadline) noexcept override {
+        try {
+            bool direct_output_required = false;
+            {
+                std::scoped_lock lock{mutex_};
+                if (closed_.load()) {
+                    return false;
+                }
+                direct_output_required =
+                    system_memory_output_required(bus_index(bus));
+            }
+            return graph != nullptr &&
+                   graph->refresh_for_activation(
+                       direct_output_required, deadline);
+        } catch (...) {
+            return false;
         }
     }
 

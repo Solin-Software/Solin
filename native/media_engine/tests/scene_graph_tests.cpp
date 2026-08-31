@@ -7,6 +7,7 @@
 #include <exception>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -65,11 +66,50 @@ class FakeRuntime final : public solin::media_engine::SourceRuntime {
         return {.status = status_.load()};
     }
 
+    void publish_activation_frame(const std::uint64_t media_epoch) noexcept {
+        media_epoch_.store(media_epoch);
+        frame_available_.store(true);
+        static_cast<void>(sequence_.fetch_add(1U));
+    }
+
+    [[nodiscard]] std::shared_ptr<const solin::media_engine::SourceFrame>
+    latest_frame() const override {
+        if (!frame_available_.load()) {
+            return {};
+        }
+        return std::make_shared<solin::media_engine::SourceFrame>(
+            solin::media_engine::SourceFrame{
+                .sequence = sequence_.load(),
+                .media_epoch = media_epoch_.load(),
+                .activation_ready = true,
+            });
+    }
+
+    [[nodiscard]] std::shared_ptr<const solin::media_engine::SourceFrame>
+    activation_frame(
+        const std::optional<std::uint64_t> expected_media_epoch) const override {
+        const auto frame = latest_frame();
+        return frame != nullptr &&
+                       (!expected_media_epoch.has_value() ||
+                        frame->media_epoch == expected_media_epoch.value())
+                   ? frame
+                   : std::shared_ptr<const solin::media_engine::SourceFrame>{};
+    }
+
+    [[nodiscard]] bool wait_for_frame(
+        const std::uint64_t after_sequence, std::stop_token,
+        std::chrono::steady_clock::time_point) const noexcept override {
+        return sequence_.load() > after_sequence;
+    }
+
   private:
     std::shared_ptr<RuntimeCounters> counters_{};
     std::atomic<solin::media_engine::SourceRuntimeStatus> status_{
         solin::media_engine::SourceRuntimeStatus::starting};
     std::atomic_bool stopped_{false};
+    std::atomic_bool frame_available_{false};
+    std::atomic_uint64_t sequence_{0U};
+    std::atomic_uint64_t media_epoch_{0U};
 };
 
 class FakeRuntimeFactory final : public solin::media_engine::SourceRuntimeFactory {
@@ -89,14 +129,22 @@ class FakeRuntimeFactory final : public solin::media_engine::SourceRuntimeFactor
             source.kind != solin::media_engine::SceneSourceKind::rtsp_camera) {
             throw std::runtime_error("source_runtime_not_implemented");
         }
-        return std::make_shared<FakeRuntime>(counters_);
+        auto runtime = std::make_shared<FakeRuntime>(counters_);
+        if (source.kind == solin::media_engine::SceneSourceKind::solin_content) {
+            content_runtime_ = runtime;
+        }
+        return runtime;
     }
 
     void fail_source(std::string source_id) { failing_source_id_ = std::move(source_id); }
+    [[nodiscard]] std::shared_ptr<FakeRuntime> content_runtime() const noexcept {
+        return content_runtime_;
+    }
 
   private:
     std::shared_ptr<RuntimeCounters> counters_{};
     std::string failing_source_id_{};
+    std::shared_ptr<FakeRuntime> content_runtime_{};
 };
 
 class FakePreparedRenderGraph final
@@ -343,6 +391,16 @@ class FakeRenderer final : public solin::media_engine::SceneRenderer {
         solin::media_engine::SystemMemoryOutputConsumer,
         bool) noexcept override {}
 
+    [[nodiscard]] bool refresh_prepared(
+        const solin::media_engine::OutputBus bus,
+        const std::shared_ptr<solin::media_engine::PreparedSceneRenderGraph>& graph,
+        const std::chrono::steady_clock::time_point deadline) noexcept override {
+        ++refresh_count;
+        return refresh_succeeds &&
+               solin::media_engine::SceneRenderer::refresh_prepared(
+                   bus, graph, deadline);
+    }
+
     [[nodiscard]] std::shared_ptr<const solin::media_engine::SourceFrame>
     latest_frame(solin::media_engine::OutputBus) const noexcept override {
         return {};
@@ -377,6 +435,8 @@ class FakeRenderer final : public solin::media_engine::SceneRenderer {
     std::uint64_t take_sequence{0U};
     std::uint64_t output_sequence{0U};
     std::uint64_t transition_prepare_count{0U};
+    std::uint64_t refresh_count{0U};
+    bool refresh_succeeds{true};
     bool transitions_available{false};
     solin::media_engine::SceneTransitionSpec requested_transition{};
     std::shared_ptr<TransitionCounters> transition_counters{
@@ -658,6 +718,54 @@ void test_retired_scene_graph_is_not_reused_after_content_transport_changes() {
     runtime.take(returned, 1U, 6U);
 }
 
+void test_content_prepare_requires_the_requested_presentation_before_reuse_or_preroll() {
+    using solin::media_engine::OutputBus;
+    auto counters = std::make_shared<RuntimeCounters>();
+    auto factory = std::make_shared<FakeRuntimeFactory>(counters);
+    auto renderer = std::make_shared<FakeRenderer>();
+    solin::media_engine::SceneGraphRuntime runtime{factory, renderer};
+    runtime.hydrate(content_return_snapshot("d3d11-token", "content-scene"),
+                    1U);
+
+    const auto away = runtime.prepare(OutputBus::virtual_camera,
+                                      "default-scene", 1U,
+                                      "activation-away", 2U);
+    runtime.take(away, 1U, 3U);
+    const auto preparations_before_return = renderer->prepare_count;
+
+    expect_error(
+        [&runtime] {
+            static_cast<void>(runtime.prepare(
+                OutputBus::virtual_camera, "content-scene", 1U,
+                "activation-stale", 4U, {}, 42U));
+        },
+        "source_unavailable",
+        "a retained content graph cannot activate before the requested presentation");
+    expect(renderer->refresh_count == 0U &&
+               renderer->prepare_count == preparations_before_return &&
+               renderer->active_scene(OutputBus::virtual_camera) ==
+                   "default-scene",
+           "a rejected presentation leaves Program and the renderer untouched");
+
+    const auto content_runtime = factory->content_runtime();
+    expect(content_runtime != nullptr,
+           "the content presentation test owns the canonical content runtime");
+    if (content_runtime == nullptr) {
+        return;
+    }
+    content_runtime->publish_activation_frame(42U);
+    const auto ready = runtime.prepare(OutputBus::virtual_camera,
+                                       "content-scene", 1U,
+                                       "activation-ready", 5U, {}, 42U);
+    expect(renderer->prepare_count == preparations_before_return + 1U,
+           "a discarded stale graph is cold-prerolled only after the requested "
+           "presentation arrives");
+    runtime.take(ready, 1U, 6U);
+    expect(renderer->active_scene(OutputBus::virtual_camera) ==
+               "content-scene",
+           "the activation-safe cold graph remains committable");
+}
+
 void test_failed_or_stale_prepare_preserves_the_previous_preparation() {
     auto counters = std::make_shared<RuntimeCounters>();
     auto factory = std::make_shared<FakeRuntimeFactory>(counters);
@@ -893,14 +1001,40 @@ void test_recent_scene_graph_is_reused_for_a_return_cut() {
     const auto back = runtime.prepare(
         solin::media_engine::OutputBus::media_windows, "scene-a", 1U,
         "prepare-back", 4U);
-    expect(renderer->prepare_count == 3U,
-           "a prompt return reuses the retained graph without another preroll");
+    expect(renderer->prepare_count == 3U && renderer->refresh_count == 1U,
+           "a prompt return refreshes and reuses the retained graph without another preroll");
     expect(back.preparation_token != away.preparation_token,
            "a reused graph receives a fresh transaction identity");
     runtime.take(back, 1U, 5U);
     expect(renderer->active_scene(
                solin::media_engine::OutputBus::media_windows) == "scene-a",
            "the retained graph remains committable as the active scene");
+}
+
+void test_unrefreshable_retained_graph_falls_back_to_a_clean_preroll() {
+    using solin::media_engine::OutputBus;
+    auto counters = std::make_shared<RuntimeCounters>();
+    auto renderer = std::make_shared<FakeRenderer>();
+    solin::media_engine::SceneGraphRuntime runtime{
+        std::make_shared<FakeRuntimeFactory>(counters), renderer};
+    runtime.hydrate(snapshot(), 1U);
+
+    const auto away = runtime.prepare(OutputBus::virtual_camera, "scene-c", 1U,
+                                      "refresh-fallback-away", 2U);
+    runtime.take(away, 1U, 3U);
+    const auto preparations_before_return = renderer->prepare_count;
+    renderer->refresh_succeeds = false;
+
+    const auto back = runtime.prepare(OutputBus::virtual_camera, "scene-a", 1U,
+                                      "refresh-fallback-back", 4U);
+
+    expect(renderer->refresh_count == 1U &&
+               renderer->prepare_count == preparations_before_return + 1U &&
+               renderer->active_scene(OutputBus::virtual_camera) == "scene-c",
+           "an unrefreshable cache entry is rebuilt without changing the on-air scene");
+    runtime.take(back, 1U, 5U);
+    expect(renderer->active_scene(OutputBus::virtual_camera) == "scene-a",
+           "the clean fallback preroll remains committable");
 }
 
 void test_inactive_scene_graph_remains_warm_beyond_transition_safety_window() {
@@ -1177,6 +1311,7 @@ int main() {
     test_hydrate_prepare_cancel_and_take_are_transactional();
     test_hydration_replaces_runtime_content_transport_at_the_same_document_revision();
     test_retired_scene_graph_is_not_reused_after_content_transport_changes();
+    test_content_prepare_requires_the_requested_presentation_before_reuse_or_preroll();
     test_preview_geometry_updates_the_active_renderer_without_rebuilding_it();
     test_failed_or_stale_prepare_preserves_the_previous_preparation();
     test_failed_hydration_preserves_the_previous_applied_graph();
@@ -1185,6 +1320,7 @@ int main() {
     test_renderer_prepare_and_commits_follow_scene_transactions();
     test_hidden_program_takes_skip_animated_transition_work();
     test_recent_scene_graph_is_reused_for_a_return_cut();
+    test_unrefreshable_retained_graph_falls_back_to_a_clean_preroll();
     test_inactive_scene_graph_remains_warm_beyond_transition_safety_window();
     test_only_the_immediately_previous_on_air_graph_remains_warm();
     test_cancelled_preparations_never_enter_the_warm_graph_slot();

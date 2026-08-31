@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <stop_token>
 #include <string>
 #include <string_view>
@@ -46,6 +47,11 @@ struct SourceFrame {
     // It is intentionally distinct from stream_epoch, which tracks source
     // reconnect/device generations.
     std::uint64_t media_epoch{0U};
+    // A content transition may publish frames for the requested media epoch
+    // while those pixels still contain its outgoing presentation. Such frames
+    // remain valid for an already-visible Raw route, but a scene being
+    // activated must wait until the outgoing presentation is fully hidden.
+    bool activation_ready{true};
     bool discontinuity{false};
     std::uint64_t presentation_timestamp_ns{0U};
     std::uint64_t duration_ns{0U};
@@ -81,6 +87,16 @@ class SourceRuntime {
     [[nodiscard]] virtual SourceRuntimeHealth health() const = 0;
     [[nodiscard]] virtual std::shared_ptr<const SourceFrame> latest_frame() const {
         return {};
+    }
+    // Returns the newest frame that may safely become visible at a scene Take.
+    // Most sources have no presentation boundary and use latest_frame(). The
+    // canonical content source also fences against the producer's requested
+    // media epoch and its in-progress Raw presentation transition.
+    [[nodiscard]] virtual std::shared_ptr<const SourceFrame>
+    activation_frame(
+        std::optional<std::uint64_t> expected_media_epoch = std::nullopt) const {
+        static_cast<void>(expected_media_epoch);
+        return latest_frame();
     }
     [[nodiscard]] virtual bool wait_for_frame(
         std::uint64_t after_sequence, std::stop_token stop_token,

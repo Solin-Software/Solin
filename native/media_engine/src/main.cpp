@@ -509,6 +509,8 @@ int run_protocol() {
                 [&scene_graph](const std::string_view bus, const std::string_view scene_id,
                                const std::string_view transition_kind,
                                const std::uint64_t transition_duration_ms,
+                               const std::optional<std::uint64_t>
+                                   expected_content_media_epoch,
                                const std::uint64_t document_revision,
                                const std::string_view request_id, const std::uint64_t sequence) {
                     if (scene_graph == nullptr) {
@@ -523,7 +525,8 @@ int run_protocol() {
                                                               scene_transition_kind_from_text(
                                                                   transition_kind),
                                                   .duration_ms = static_cast<std::uint32_t>(
-                                                      transition_duration_ms)});
+                                                      transition_duration_ms)},
+                                                 expected_content_media_epoch);
                         return solin::media_engine::ControlServiceReply{
                             .message_type = "scene_prepared",
                             .payload =

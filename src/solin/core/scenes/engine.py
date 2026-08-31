@@ -600,6 +600,7 @@ class SceneEngine(Protocol):
         request_id: str,
         sequence: int,
         deadline_ms: int,
+        content_media_epoch: int | None = None,
     ) -> Future[ScenePreparation]: ...
 
     def take_prepared(

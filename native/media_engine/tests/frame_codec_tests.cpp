@@ -84,7 +84,7 @@ void test_control_envelope_round_trip() {
 
 void test_control_envelope_rejects_duplicate_keys() {
     constexpr std::string_view duplicate =
-        R"({"protocol_version":6,"protocol_version":6,"message_type":"hello","request_id":"r","session_id":"s","process_generation":"g","sequence":0,"document_revision":0,"deadline_monotonic_ms":1,"payload":{}})";
+        R"({"protocol_version":7,"protocol_version":7,"message_type":"hello","request_id":"r","session_id":"s","process_generation":"g","sequence":0,"document_revision":0,"deadline_monotonic_ms":1,"payload":{}})";
     try {
         static_cast<void>(solin::media_engine::parse_control_envelope(duplicate));
         expect(false, "duplicate JSON keys are rejected");
@@ -162,6 +162,7 @@ void test_control_session_handshake_and_heartbeat() {
         {"bus_id", "media_windows"},
         {"scene_id", "scene-1"},
         {"transition", {{"kind", "cut"}, {"duration_ms", 0U}}},
+        {"content_media_epoch", nullptr},
     };
     const auto rejected = session.handle(prepare);
     expect(rejected.response.has_value() && rejected.response->message_type == "error",
@@ -206,11 +207,15 @@ void test_control_session_dispatches_validated_graph_commands() {
                                  const std::string_view scene_id,
                                  const std::string_view transition,
                                  const std::uint64_t duration,
+                                 const std::optional<std::uint64_t>
+                                     content_media_epoch,
                                  const std::uint64_t revision,
                                  const std::string_view request_id,
                                  const std::uint64_t sequence) {
                 prepared = bus == "virtual_camera" && scene_id == "scene-2" &&
                            transition == "dissolve" && duration == 350U &&
+                           content_media_epoch ==
+                               std::optional<std::uint64_t>{42U} &&
                            revision == 7U && request_id == "prepare-request" &&
                            sequence == 2U;
                 return solin::media_engine::ControlServiceReply{
@@ -328,6 +333,7 @@ void test_control_session_dispatches_validated_graph_commands() {
         {"bus_id", "virtual_camera"},
         {"scene_id", "scene-2"},
         {"transition", {{"kind", "dissolve"}, {"duration_ms", 350U}}},
+        {"content_media_epoch", 42U},
     };
     const auto preparation_reply = session.handle(prepare);
     expect(prepared && preparation_reply.response.has_value() &&
@@ -420,6 +426,7 @@ void test_transition_contract_rejects_invalid_and_legacy_payloads() {
         {"bus_id", "virtual_camera"},
         {"scene_id", "scene-1"},
         {"transition", {{"kind", "dissolve"}, {"duration_ms", 49U}}},
+        {"content_media_epoch", nullptr},
     };
     try {
         static_cast<void>(session.handle(invalid));

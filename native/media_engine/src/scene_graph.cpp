@@ -18,6 +18,42 @@ namespace {
 
 constexpr std::size_t kOutputBusCount = 2U;
 constexpr auto kContentIngressHandoffTimeout = std::chrono::seconds{3};
+constexpr auto kGraphActivationTimeout = std::chrono::seconds{1};
+
+[[nodiscard]] bool wait_for_content_activation(
+    const std::vector<SourceLease>& leases,
+    const std::uint64_t expected_media_epoch,
+    const std::chrono::steady_clock::time_point deadline) noexcept {
+    try {
+        for (const auto& lease : leases) {
+            if (lease.source().kind != SceneSourceKind::solin_content) {
+                continue;
+            }
+            auto& runtime = lease.runtime();
+            const auto ready = [&] {
+                return runtime.activation_frame(expected_media_epoch) != nullptr;
+            };
+            while (!ready() && std::chrono::steady_clock::now() < deadline) {
+                const auto latest = runtime.latest_frame();
+                const auto after_sequence =
+                    latest == nullptr ? 0U : latest->sequence;
+                if (ready()) {
+                    break;
+                }
+                if (!runtime.wait_for_frame(
+                        after_sequence, std::stop_token{}, deadline)) {
+                    break;
+                }
+            }
+            if (!ready()) {
+                return false;
+            }
+        }
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
 
 [[nodiscard]] std::size_t bus_index(const OutputBus bus) noexcept {
     return static_cast<std::size_t>(bus);
@@ -385,6 +421,8 @@ class SceneGraphRuntime::Impl final {
         const std::shared_ptr<const CompiledSceneDocument>& compiled_document,
         const SceneOutputDefinition& output,
         const SceneTransitionSpec& requested_transition = {},
+        const std::optional<std::uint64_t> expected_content_media_epoch =
+            std::nullopt,
         SourceRegistryUpdate* source_update = nullptr) {
         if (compiled_document == nullptr ||
             expected_document_revision != compiled_document->document_revision) {
@@ -415,8 +453,30 @@ class SceneGraphRuntime::Impl final {
                     continue;
                 }
                 if (retained->render_graph != nullptr) {
-                    retained->render_graph->set_direct_output_enabled(false);
-                    retained->render_graph->set_rendering_enabled(true);
+                    const auto activation_deadline =
+                        std::chrono::steady_clock::now() +
+                        kGraphActivationTimeout;
+                    if (expected_content_media_epoch.has_value() &&
+                        !wait_for_content_activation(
+                            retained->render_resources->source_leases,
+                            expected_content_media_epoch.value(),
+                            activation_deadline)) {
+                        deferred_releases.discard(std::move(retained.value()));
+                        throw SceneGraphError{
+                            "source_unavailable",
+                            "The requested content presentation is not ready"};
+                    }
+                    const auto refreshed =
+                        renderer != nullptr && renderer->refresh_prepared(
+                                                   bus, retained->render_graph,
+                                                   activation_deadline);
+                    if (!refreshed) {
+                        deferred_releases.discard(std::move(retained.value()));
+                        // A retained graph is only an optimization. If its
+                        // pipeline cannot publish the current composition, fall
+                        // through to a clean preroll instead of failing Take.
+                        continue;
+                    }
                 }
                 retained->receipt.preparation_token = token;
                 retained->request_id = std::string{request_id};
@@ -477,6 +537,16 @@ class SceneGraphRuntime::Impl final {
             throw;
         } catch (const std::exception& error) {
             map_source_failure(error);
+        }
+        if (expected_content_media_epoch.has_value() &&
+            !wait_for_content_activation(
+                prepared.render_resources->source_leases,
+                expected_content_media_epoch.value(),
+                std::chrono::steady_clock::now() +
+                    kGraphActivationTimeout)) {
+            throw SceneGraphError{
+                "source_unavailable",
+                "The requested content presentation is not ready"};
         }
         if (renderer != nullptr) {
             SceneRenderPreparation render_preparation{
@@ -610,7 +680,8 @@ void SceneGraphRuntime::hydrate(const SceneHydrationSnapshot& snapshot,
         next_active[index].emplace(impl_->prepare_graph(
             bus, snapshot.active_scene_ids[index], snapshot.document_revision,
             index == 0U ? "hydrate-media-windows" : "hydrate-virtual-camera", next_document,
-            snapshot.outputs[index], {}, &source_update.value()));
+            snapshot.outputs[index], {}, std::nullopt,
+            &source_update.value()));
     }
     if (require_content_handoff_output && impl_->renderer != nullptr) {
         const auto deadline = std::chrono::steady_clock::now() +
@@ -657,7 +728,8 @@ void SceneGraphRuntime::hydrate(const SceneHydrationSnapshot& snapshot,
 ScenePreparationReceipt SceneGraphRuntime::prepare(
     const OutputBus bus, const std::string_view scene_id,
     const std::uint64_t document_revision, const std::string_view request_id,
-    const std::uint64_t sequence, const SceneTransitionSpec& transition) {
+    const std::uint64_t sequence, const SceneTransitionSpec& transition,
+    const std::optional<std::uint64_t> expected_content_media_epoch) {
     try {
         validate_scene_transition(transition);
     } catch (const std::invalid_argument& error) {
@@ -682,7 +754,8 @@ ScenePreparationReceipt SceneGraphRuntime::prepare(
             : transition;
     auto prepared = impl_->prepare_graph(
         bus, scene_id, document_revision, request_id, impl_->document,
-        impl_->applied_snapshot->outputs[index], effective_request);
+        impl_->applied_snapshot->outputs[index], effective_request,
+        expected_content_media_epoch);
     const auto receipt = prepared.receipt;
     impl_->erase_pending_for_bus(bus);
     impl_->token_by_request.emplace(prepared.request_id,

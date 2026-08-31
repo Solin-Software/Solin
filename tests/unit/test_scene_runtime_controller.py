@@ -222,6 +222,7 @@ class _Engine:
         )
         self.snapshots: list[tuple[str, SceneEngineSnapshot]] = []
         self.preparations: list[tuple[str, BusId, str, int, TransitionSpec]] = []
+        self.preparation_content_media_epochs: list[int | None] = []
         self.takes: list[tuple[str, ScenePreparation]] = []
         self.outputs: list[tuple[str, BusId, bool]] = []
         self.renders: list[tuple[str, BusId, bool]] = []
@@ -338,9 +339,11 @@ class _Engine:
         request_id: str,
         sequence: int,
         deadline_ms: int,
+        content_media_epoch: int | None = None,
     ) -> Future[ScenePreparation]:
         assert deadline_ms > 0
         self.preparations.append((request_id, bus_id, scene_id, sequence, transition))
+        self.preparation_content_media_epochs.append(content_media_epoch)
         return _completed(
             ScenePreparation(
                 request_id=request_id,
@@ -1514,6 +1517,7 @@ def test_transition_fallback_is_reported_without_marking_engine_failed() -> None
             request_id: str,
             sequence: int,
             deadline_ms: int,
+            content_media_epoch: int | None = None,
         ) -> Future[ScenePreparation]:
             prepared = super().prepare_scene(
                 bus_id,
@@ -1523,6 +1527,7 @@ def test_transition_fallback_is_reported_without_marking_engine_failed() -> None
                 request_id=request_id,
                 sequence=sequence,
                 deadline_ms=deadline_ms,
+                content_media_epoch=content_media_epoch,
             ).result()
             if bus_id is BusId.VIRTUAL_CAMERA:
                 prepared = replace(
@@ -1619,6 +1624,7 @@ def test_auto_switch_resolves_transition_for_each_destination_scene() -> None:
         TransitionSpec(TransitionKind.CUT, 0),
         TransitionSpec(TransitionKind.CUT, 0),
     ]
+    assert engine.preparation_content_media_epochs == [1, 1, None, None]
     assert len(engine.snapshots) == 1
     assert [targets for _request_id, targets in engine.window_target_updates] == [(target,)]
     controller.close()
@@ -1640,9 +1646,11 @@ def test_runtime_coalesces_rapid_scene_selection_while_prepare_is_in_flight() ->
             request_id: str,
             sequence: int,
             deadline_ms: int,
+            content_media_epoch: int | None = None,
         ) -> Future[ScenePreparation]:
             assert deadline_ms > 0
             self.preparations.append((request_id, bus_id, scene_id, sequence, transition))
+            self.preparation_content_media_epochs.append(content_media_epoch)
             future: Future[ScenePreparation] = Future()
             self.pending_preparations.append(future)
             return future
@@ -2235,6 +2243,7 @@ def test_failed_preparation_cancels_its_native_resource() -> None:
             request_id: str,
             sequence: int,
             deadline_ms: int,
+            content_media_epoch: int | None = None,
         ) -> Future[ScenePreparation]:
             assert deadline_ms > 0
             assert document_revision >= 0
@@ -2276,6 +2285,7 @@ def test_rejected_preparation_preserves_the_native_error_code() -> None:
             request_id: str,
             sequence: int,
             deadline_ms: int,
+            content_media_epoch: int | None = None,
         ) -> Future[ScenePreparation]:
             self.preparations.append((request_id, bus_id, scene_id, sequence, transition))
             return _failed(SceneEngineCommandRejectedError("source_unavailable"))
@@ -2314,6 +2324,7 @@ def test_cancelled_preparation_does_not_publish_a_sticky_engine_error() -> None:
             request_id: str,
             sequence: int,
             deadline_ms: int,
+            content_media_epoch: int | None = None,
         ) -> Future[ScenePreparation]:
             return _failed(CancelledError())
 
