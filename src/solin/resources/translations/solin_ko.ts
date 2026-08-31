@@ -4526,6 +4526,24 @@ This action cannot be undone.</source>
     </message>
 </context>
 <context>
+    <name>PopupHoverButton</name>
+    <message>
+        <location filename="../../widgets/common/popup_hover_button.py" line="28"/>
+        <source>Open on hover</source>
+        <translation>마우스를 올리면 열기</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/common/popup_hover_button.py" line="30"/>
+        <source>Opens when you hover over its toolbar icon. Click to disable.</source>
+        <translation>도구 모음의 아이콘 위에 마우스를 올리면 열립니다. 클릭하여 사용을 중지하세요.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/common/popup_hover_button.py" line="32"/>
+        <source>Open this panel by hovering over its toolbar icon. Click to enable.</source>
+        <translation>도구 모음의 아이콘 위에 마우스를 올리면 이 패널이 열립니다. 클릭하여 사용하세요.</translation>
+    </message>
+</context>
+<context>
     <name>ProfileNameDialog</name>
     <message>
         <location filename="../../ui/profile_widgets.py" line="+336"/>

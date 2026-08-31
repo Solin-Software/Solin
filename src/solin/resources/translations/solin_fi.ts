@@ -4555,6 +4555,24 @@ Tätä toimintoa ei voi peruuttaa.</translation>
     </message>
 </context>
 <context>
+    <name>PopupHoverButton</name>
+    <message>
+        <location filename="../../widgets/common/popup_hover_button.py" line="28"/>
+        <source>Open on hover</source>
+        <translation>Avaa viemällä hiiri päälle</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/common/popup_hover_button.py" line="30"/>
+        <source>Opens when you hover over its toolbar icon. Click to disable.</source>
+        <translation>Avautuu, kun hiiren osoitin viedään sen kuvakkeen päälle työkalurivillä. Poista käytöstä napsauttamalla.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/common/popup_hover_button.py" line="32"/>
+        <source>Open this panel by hovering over its toolbar icon. Click to enable.</source>
+        <translation>Avaa tämä paneeli viemällä hiiren osoitin sen kuvakkeen päälle työkalurivillä. Ota käyttöön napsauttamalla.</translation>
+    </message>
+</context>
+<context>
     <name>ProfileNameDialog</name>
     <message>
         <location filename="../../ui/profile_widgets.py" line="+336"/>

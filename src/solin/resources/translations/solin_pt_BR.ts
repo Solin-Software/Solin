@@ -4560,6 +4560,24 @@ Esta ação não pode ser desfeita.</translation>
     </message>
 </context>
 <context>
+    <name>PopupHoverButton</name>
+    <message>
+        <location filename="../../widgets/common/popup_hover_button.py" line="28"/>
+        <source>Open on hover</source>
+        <translation>Abrir ao passar o mouse</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/common/popup_hover_button.py" line="30"/>
+        <source>Opens when you hover over its toolbar icon. Click to disable.</source>
+        <translation>Abre ao passar o mouse sobre o ícone dele na barra de ferramentas. Clique para desativar.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/common/popup_hover_button.py" line="32"/>
+        <source>Open this panel by hovering over its toolbar icon. Click to enable.</source>
+        <translation>Abra este painel ao passar o mouse sobre o ícone dele na barra de ferramentas. Clique para ativar.</translation>
+    </message>
+</context>
+<context>
     <name>ProfileNameDialog</name>
     <message>
         <location filename="../../ui/profile_widgets.py" line="+336"/>

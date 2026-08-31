@@ -4526,6 +4526,24 @@ This action cannot be undone.</source>
     </message>
 </context>
 <context>
+    <name>PopupHoverButton</name>
+    <message>
+        <location filename="../../widgets/common/popup_hover_button.py" line="28"/>
+        <source>Open on hover</source>
+        <translation>悬停时打开</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/common/popup_hover_button.py" line="30"/>
+        <source>Opens when you hover over its toolbar icon. Click to disable.</source>
+        <translation>鼠标悬停在工具栏图标上时自动打开。点击禁用。</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/common/popup_hover_button.py" line="32"/>
+        <source>Open this panel by hovering over its toolbar icon. Click to enable.</source>
+        <translation>将鼠标悬停在工具栏图标上即可打开此面板。点击启用。</translation>
+    </message>
+</context>
+<context>
     <name>ProfileNameDialog</name>
     <message>
         <location filename="../../ui/profile_widgets.py" line="+336"/>

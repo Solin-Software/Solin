@@ -4554,6 +4554,24 @@ Den här åtgärden kan inte ångras.</translation>
     </message>
 </context>
 <context>
+    <name>PopupHoverButton</name>
+    <message>
+        <location filename="../../widgets/common/popup_hover_button.py" line="28"/>
+        <source>Open on hover</source>
+        <translation>Öppna vid hovring</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/common/popup_hover_button.py" line="30"/>
+        <source>Opens when you hover over its toolbar icon. Click to disable.</source>
+        <translation>Öppnas när muspekaren hålls över dess ikon i verktygsfältet. Klicka för att inaktivera.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/common/popup_hover_button.py" line="32"/>
+        <source>Open this panel by hovering over its toolbar icon. Click to enable.</source>
+        <translation>Öppna den här panelen genom att hålla muspekaren över dess ikon i verktygsfältet. Klicka för att aktivera.</translation>
+    </message>
+</context>
+<context>
     <name>ProfileNameDialog</name>
     <message>
         <location filename="../../ui/profile_widgets.py" line="+336"/>

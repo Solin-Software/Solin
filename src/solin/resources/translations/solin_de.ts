@@ -4555,6 +4555,24 @@ Diese Aktion kann nicht rückgängig gemacht werden.</translation>
     </message>
 </context>
 <context>
+    <name>PopupHoverButton</name>
+    <message>
+        <location filename="../../widgets/common/popup_hover_button.py" line="28"/>
+        <source>Open on hover</source>
+        <translation>Beim Darüberfahren öffnen</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/common/popup_hover_button.py" line="30"/>
+        <source>Opens when you hover over its toolbar icon. Click to disable.</source>
+        <translation>Öffnet sich, wenn der Mauszeiger über sein Symbol in der Symbolleiste bewegt wird. Zum Deaktivieren klicken.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/common/popup_hover_button.py" line="32"/>
+        <source>Open this panel by hovering over its toolbar icon. Click to enable.</source>
+        <translation>Dieses Panel öffnen, indem der Mauszeiger über sein Symbol in der Symbolleiste bewegt wird. Zum Aktivieren klicken.</translation>
+    </message>
+</context>
+<context>
     <name>ProfileNameDialog</name>
     <message>
         <location filename="../../ui/profile_widgets.py" line="+336"/>
