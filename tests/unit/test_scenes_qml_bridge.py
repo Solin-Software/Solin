@@ -5,6 +5,8 @@ from dataclasses import replace
 from pathlib import Path
 import time
 
+import pytest
+
 from PySide6.QtCore import QObject, Qt, Signal
 from PySide6.QtGui import QImage
 from PySide6.QtTest import QSignalSpy
@@ -1062,15 +1064,16 @@ def test_bridge_does_not_duplicate_application_transition_notifications(
     controller.close()
 
 
-def test_bridge_uses_exact_local_camera_format(tmp_path: Path) -> None:
+@pytest.mark.parametrize("rate", [(30_000, 1_001), (10_000_000, 333_333)])
+def test_bridge_uses_exact_local_camera_format(tmp_path: Path, rate: tuple[int, int]) -> None:
     workspace, controller, bridge, _preview_store = _bridge(tmp_path)
     video_format = LocalVideoFormat(
         media_type=CameraMediaType.JPEG,
         pixel_format="JPEG",
         width=1920,
         height=1080,
-        fps_numerator=30_000,
-        fps_denominator=1_001,
+        fps_numerator=rate[0],
+        fps_denominator=rate[1],
     )
     controller._set_local_cameras(
         LocalCameraDiscovery(
@@ -1107,8 +1110,8 @@ def test_bridge_uses_exact_local_camera_format(tmp_path: Path) -> None:
     assert isinstance(configuration, LocalCameraConfig)
     assert configuration.device_id == "camera://stable-id"
     assert configuration.media_type is CameraMediaType.JPEG
-    assert configuration.fps_numerator == 30_000
-    assert configuration.fps_denominator == 1_001
+    assert configuration.fps_numerator == rate[0]
+    assert configuration.fps_denominator == rate[1]
     assert configuration.keep_active
     bridge.close()
     controller.close()
@@ -1165,6 +1168,37 @@ def test_bridge_exposes_unverified_windows_camera_for_automatic_capture(
     assert configuration.device_id == "camera://c920"
     assert configuration.media_type is None
     assert configuration.width == 0
+    bridge.close()
+    controller.close()
+
+
+def test_camera_list_refreshes_from_pending_to_two_then_three_devices(tmp_path: Path) -> None:
+    _workspace, controller, bridge, _preview_store = _bridge(tmp_path)
+    pending = LocalCameraDiscovery(supported=True, ready=False, generation=0, devices=())
+    camera = LocalCameraDevice(
+        device_id="camera://integrated",
+        display_name="Integrated camera",
+        software_device=False,
+        formats=(LocalVideoFormat(CameraMediaType.RAW, "NV12", 1920, 1080, 30, 1),),
+        probe=LocalCameraProbe(LocalCameraProbeStatus.READY, "media_foundation"),
+    )
+    virtual = replace(camera, device_id="camera://virtual", software_device=True)
+    controller._set_local_cameras(pending)
+    assert len(bridge.localCameraDevices) == 1  # Automatic is not a discovered device.
+    controller._set_local_cameras(replace(pending, ready=True, generation=1, devices=(camera, virtual)))
+    assert len(bridge.localCameraDevices) == 3
+
+    usb = replace(
+        camera,
+        device_id="camera://usb",
+        formats=(replace(camera.formats[0], fps_numerator=10_000_000, fps_denominator=333_333),),
+    )
+    controller._set_local_cameras(
+        replace(pending, ready=True, generation=2, devices=(camera, virtual, usb))
+    )
+    assert [device["id"] for device in bridge.localCameraDevices] == [
+        "", camera.device_id, virtual.device_id, usb.device_id,
+    ]
     bridge.close()
     controller.close()
 

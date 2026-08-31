@@ -295,6 +295,62 @@ def test_local_camera_frame_rate_is_rational_and_canonical() -> None:
         LocalCameraConfig(device_id="camera://device", width=1920, height=1080)
 
 
+@pytest.mark.parametrize(
+    ("numerator", "denominator"),
+    [
+        (10_000_000, 333_333),
+        (10_000_000, 166_667),
+        (2_147_483_647, 143_165_577),
+        (2_147_483_647, 35_791_395),
+        (1, 2_147_483_647),
+    ],
+)
+def test_local_camera_preserves_exact_native_fps_components_through_persistence(
+    numerator: int, denominator: int
+) -> None:
+    configuration = LocalCameraConfig(
+        width=1920,
+        height=1080,
+        fps_numerator=numerator,
+        fps_denominator=denominator,
+        media_type=CameraMediaType.JPEG,
+        pixel_format="JPEG",
+    )
+
+    assert LocalCameraConfig.from_record(configuration.to_record()) == configuration
+    assert configuration.fps_numerator == numerator
+    assert configuration.fps_denominator == denominator
+
+
+@pytest.mark.parametrize(
+    ("numerator", "denominator"),
+    [
+        (2_147_483_648, 2_147_483_647),
+        (1, 2_147_483_648),
+        (20_000_000, 666_666),
+        (10_000_000, 166_666),
+        (10_000_000, 0),
+        (True, 1),
+        (1, True),
+    ],
+)
+def test_local_camera_rejects_unrepresentable_noncanonical_or_over_budget_fps(
+    numerator: int, denominator: int
+) -> None:
+    record = LocalCameraConfig(
+        width=1920,
+        height=1080,
+        fps_numerator=30,
+        fps_denominator=1,
+        media_type=CameraMediaType.JPEG,
+        pixel_format="JPEG",
+    ).to_record()
+    record.update(fps_numerator=numerator, fps_denominator=denominator)
+
+    with pytest.raises(SceneValidationError):
+        LocalCameraConfig.from_record(record)
+
+
 def test_camera_sources_keep_active_by_default_and_preserve_an_explicit_opt_out() -> None:
     local_record = LocalCameraConfig(keep_active=False).to_record()
     local_without_preference = dict(local_record)

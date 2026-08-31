@@ -17,6 +17,8 @@ MAXIMUM_CAMERA_SOURCE_DIMENSION = 3_840
 MAXIMUM_CAMERA_SOURCE_SHORT_EDGE = 2_160
 MAXIMUM_CAMERA_SOURCE_PIXELS = 3_840 * 2_160
 MAXIMUM_CAMERA_SOURCE_FPS = 60
+# GStreamer stores each exact rational component as a signed 32-bit integer.
+MAXIMUM_CAMERA_FPS_COMPONENT = 2_147_483_647
 MAX_SOURCES = 256
 MAX_SCENES = 256
 MAX_LAYERS_PER_SCENE = 128
@@ -814,8 +816,8 @@ class LocalCameraConfig:
         for name, value, maximum in (
             ("width", self.width, MAXIMUM_CAMERA_SOURCE_DIMENSION),
             ("height", self.height, MAXIMUM_CAMERA_SOURCE_DIMENSION),
-            ("fps numerator", self.fps_numerator, 480_000),
-            ("fps denominator", self.fps_denominator, 100_000),
+            ("fps numerator", self.fps_numerator, MAXIMUM_CAMERA_FPS_COMPONENT),
+            ("fps denominator", self.fps_denominator, MAXIMUM_CAMERA_FPS_COMPONENT),
         ):
             minimum = 1 if name == "fps denominator" else 0
             if (
@@ -907,13 +909,13 @@ class LocalCameraConfig:
                 data.get("fps_numerator", 0),
                 field_name="source.configuration.fps_numerator",
                 minimum=0,
-                maximum=480_000,
+                maximum=MAXIMUM_CAMERA_FPS_COMPONENT,
             ),
             fps_denominator=_integer(
                 data.get("fps_denominator", 1),
                 field_name="source.configuration.fps_denominator",
                 minimum=1,
-                maximum=100_000,
+                maximum=MAXIMUM_CAMERA_FPS_COMPONENT,
             ),
             media_type=(
                 None

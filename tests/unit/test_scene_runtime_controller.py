@@ -118,6 +118,59 @@ def test_local_video_formats_enforce_the_native_media_budget() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    ("numerator", "denominator"),
+    [
+        (10_000_000, 333_333),
+        (10_000_000, 166_667),
+        (2_147_483_647, 143_165_577),
+        (2_147_483_647, 35_791_395),
+        (1, 2_147_483_647),
+    ],
+)
+def test_local_video_formats_preserve_exact_native_frame_rates(
+    numerator: int, denominator: int
+) -> None:
+    video_format = LocalVideoFormat(
+        media_type=CameraMediaType.JPEG,
+        pixel_format="JPEG",
+        width=1920,
+        height=1080,
+        fps_numerator=numerator,
+        fps_denominator=denominator,
+    )
+
+    assert video_format.fps_numerator == numerator
+    assert video_format.fps_denominator == denominator
+
+
+@pytest.mark.parametrize(
+    ("numerator", "denominator"),
+    [
+        (2_147_483_648, 2_147_483_647),
+        (1, 2_147_483_648),
+        (20_000_000, 666_666),
+        (10_000_000, 166_666),
+        (10_000_000, 0),
+        (0, 1),
+        (True, 1),
+        (1, True),
+    ],
+)
+def test_local_video_formats_reject_invalid_native_frame_rates(
+    numerator: int, denominator: int
+) -> None:
+    with pytest.raises(ValueError):
+        LocalVideoFormat(
+            media_type=CameraMediaType.JPEG,
+            pixel_format="JPEG",
+            width=1920,
+            height=1080,
+            fps_numerator=numerator,
+            fps_denominator=denominator,
+        )
+
+
 class _Projection:
     def __init__(self) -> None:
         self.state = {"type": "idle"}

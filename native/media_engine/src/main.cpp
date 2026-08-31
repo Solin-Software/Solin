@@ -334,7 +334,10 @@ hydrate_scene_graph(solin::media_engine::SceneGraphRuntime* graph,
 }
 
 int run_self_test() {
-    constexpr std::string_view payload = R"({"protocol_version":5,"message_type":"probe"})";
+    const auto payload = nlohmann::json{
+        {"protocol_version", solin::media_engine::kControlProtocolVersion},
+        {"message_type", "probe"},
+    }.dump();
     std::stringstream stream;
     if (!solin::media_engine::write_frame(stream, payload)) {
         return 1;

@@ -325,6 +325,45 @@ void test_local_camera_formats_are_either_automatic_or_within_the_exact_media_bu
     }
 }
 
+void test_local_camera_preserves_exact_native_frame_rates() {
+    for (const auto& [numerator, denominator] :
+         {std::pair{10'000'000U, 333'333U}, std::pair{10'000'000U, 166'667U},
+          std::pair{2'147'483'647U, 143'165'577U},
+          std::pair{2'147'483'647U, 35'791'395U}, std::pair{1U, 2'147'483'647U}}) {
+        auto payload = valid_payload();
+        auto& configuration = payload["document"]["sources"][1]["configuration"];
+        configuration["fps_numerator"] = numerator;
+        configuration["fps_denominator"] = denominator;
+        try {
+            const auto snapshot =
+                solin::media_engine::parse_scene_hydration_snapshot(payload, 7U);
+            const auto& camera = std::get<solin::media_engine::LocalCameraSourceConfiguration>(
+                snapshot.sources[1].configuration);
+            expect(camera.fps_numerator == numerator && camera.fps_denominator == denominator,
+                   "exact native camera frame rates are preserved without approximation");
+        } catch (const std::exception&) {
+            expect(false, "signed 32-bit native camera fractions are accepted");
+        }
+    }
+}
+
+void test_local_camera_rejects_invalid_native_frame_rates() {
+    for (const auto& [numerator, denominator] :
+         {std::pair{2'147'483'648U, 2'147'483'647U}, std::pair{1U, 2'147'483'648U},
+          std::pair{20'000'000U, 666'666U}, std::pair{10'000'000U, 166'666U},
+          std::pair{10'000'000U, 0U}}) {
+        auto payload = valid_payload();
+        auto& configuration = payload["document"]["sources"][1]["configuration"];
+        configuration["fps_numerator"] = numerator;
+        configuration["fps_denominator"] = denominator;
+        expect_rejected(
+            [&payload] {
+                static_cast<void>(solin::media_engine::parse_scene_hydration_snapshot(payload, 7U));
+            },
+            "camera rates must be representable, canonical, positive and within budget");
+    }
+}
+
 } // namespace
 
 int main() {
@@ -338,6 +377,8 @@ int main() {
     test_scene_reference_cycles_are_rejected();
     test_content_ingress_transport_requires_a_compatible_pixel_layout();
     test_local_camera_formats_are_either_automatic_or_within_the_exact_media_budget();
+    test_local_camera_preserves_exact_native_frame_rates();
+    test_local_camera_rejects_invalid_native_frame_rates();
     if (failures != 0) {
         std::cerr << failures << " scene snapshot test(s) failed\n";
         return 1;

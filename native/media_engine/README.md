@@ -145,10 +145,20 @@ deadlines. Local-camera discovery, immutable scene-graph hydration, transactiona
 preparation, cancellation, output state, hot native-window target updates, rendered Program
 transitions, media-window egress,
 Windows virtual-camera publication, audio-endpoint discovery, and Program recording are
-available. Protocol version 5 carries bounded per-camera probe diagnostics. On Windows,
+available. Protocol version 6 preserves exact camera frame-rate fractions with positive,
+signed 32-bit components throughout discovery, selection, persistence, and capture. The
+60 fps media budget remains unchanged. Older sidecars fail the version handshake rather
+than accepting camera requests they cannot represent. On Windows,
 camera inventory comes from Media Foundation without activating devices and is reconciled
 with the GStreamer capture provider only after camera discovery is requested; inventory-only
-devices remain selectable in automatic mode with an `unverified` status. Cut, Dissolve, or
+devices remain selectable in automatic mode with an `unverified` status. Invalid driver
+formats are rejected before publication without removing the camera or its valid formats.
+Discovery diagnostics include the generation, device index, bounded display name, probe
+state, accepted-format count, and rejection count with at most eight format samples per
+device. USB symbolic links and device IDs are not logged. IPC validation failures retain
+their original cause and log the camera generation, device/format indices, violated rule,
+and code location without raw payloads. `ready` means usable formats were discovered,
+not that streaming from the camera has been tested successfully. Cut, Dissolve, or
 Fade through black is bound by
 `prepare_scene`; `take_prepared` consumes the resulting
 token without accepting replacement effect parameters. If an animated effect cannot be

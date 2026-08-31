@@ -15,7 +15,6 @@
 #include <iostream>
 #include <memory>
 #include <mutex>
-#include <numeric>
 #include <string>
 #include <thread>
 #include <tuple>
@@ -36,7 +35,6 @@ constexpr std::size_t kMaximumDevices = 64U;
 constexpr std::size_t kMaximumFormatsPerDevice = 256U;
 constexpr std::size_t kMaximumDeviceIdBytes = 1024U;
 constexpr std::size_t kMaximumDisplayNameBytes = 512U;
-constexpr std::int64_t kMaximumSourcePixels = 3'840LL * 2'160LL;
 constexpr auto kInitialDeviceMonitorRetry = std::chrono::milliseconds{250};
 constexpr auto kMaximumDeviceMonitorRetry = std::chrono::milliseconds{8'000};
 constexpr auto kDeviceMonitorStartupTimeout = std::chrono::seconds{5};
@@ -116,14 +114,14 @@ void release_caps(GstCaps* caps) noexcept { gst_caps_unref(caps); }
 
 void release_structure(GstStructure* structure) noexcept { gst_structure_free(structure); }
 
-[[nodiscard]] std::vector<LocalVideoFormat> formats_for(GstDevice* device) {
-    std::vector<LocalVideoFormat> formats;
+void read_camera_formats(GstDevice* device, LocalCameraDevice& camera) {
+    auto& formats = camera.formats;
     const std::unique_ptr<GstCaps, decltype(&release_caps)> caps{
         gst_device_get_caps(device),
         &release_caps,
     };
     if (caps == nullptr) {
-        return formats;
+        return;
     }
     const auto structure_count = gst_caps_get_size(caps.get());
     for (guint index = 0U;
@@ -137,28 +135,27 @@ void release_structure(GstStructure* structure) noexcept { gst_structure_free(st
         const auto pixel_format = pixel_format_for(structure);
         const auto* raw_media_type = gst_structure_get_name(structure);
         const std::string media_type = bounded_utf8(raw_media_type, 80U);
-        if (pixel_format.empty() || media_type.empty() ||
-            gst_structure_get_int(structure, "width", &width) == FALSE ||
+        if (gst_structure_get_int(structure, "width", &width) == FALSE ||
             gst_structure_get_int(structure, "height", &height) == FALSE ||
             gst_structure_get_fraction(structure, "framerate", &fps_numerator,
-                                       &fps_denominator) == FALSE ||
-            width <= 0 || width > 3'840 || height <= 0 || height > 3'840 ||
-            static_cast<std::int64_t>(width) * height > kMaximumSourcePixels ||
-            (std::min)(width, height) > 2'160 ||
-            fps_numerator <= 0 || fps_denominator <= 0 ||
-            static_cast<std::int64_t>(fps_numerator) >
-                60LL * static_cast<std::int64_t>(fps_denominator)) {
+                                       &fps_denominator) == FALSE) {
+            record_local_camera_format_rejection(camera, index, "non_fixed_caps", {});
             continue;
         }
-        const auto divisor = std::gcd(fps_numerator, fps_denominator);
-        formats.push_back({
+        LocalVideoFormat format{
             .media_type = media_type,
             .pixel_format = pixel_format,
             .width = static_cast<std::uint32_t>(width),
             .height = static_cast<std::uint32_t>(height),
-            .fps_numerator = static_cast<std::uint32_t>(fps_numerator / divisor),
-            .fps_denominator = static_cast<std::uint32_t>(fps_denominator / divisor),
-        });
+            .fps_numerator = static_cast<std::uint32_t>(fps_numerator),
+            .fps_denominator = static_cast<std::uint32_t>(fps_denominator),
+        };
+        const auto error = normalize_local_camera_format(format);
+        if (!error.empty()) {
+            record_local_camera_format_rejection(camera, index, error, format);
+        } else if (std::ranges::find(formats, format) == formats.end()) {
+            formats.push_back(std::move(format));
+        }
     }
     std::ranges::sort(formats, [](const LocalVideoFormat& left, const LocalVideoFormat& right) {
         return std::tie(left.width, left.height, left.fps_numerator, left.fps_denominator,
@@ -166,8 +163,6 @@ void release_structure(GstStructure* structure) noexcept { gst_structure_free(st
                std::tie(right.width, right.height, right.fps_numerator, right.fps_denominator,
                         right.media_type, right.pixel_format);
     });
-    formats.erase(std::ranges::unique(formats).begin(), formats.end());
-    return formats;
 }
 
 void release_device_list(GList* entries) noexcept {
@@ -214,12 +209,13 @@ void release_device_list(GList* entries) noexcept {
                 // It is an output device, never a scene input.
                 continue;
             }
-            devices.push_back({
+            LocalCameraDevice camera{
                 .device_id = device_id,
                 .display_name = std::move(display_name),
                 .software_device = software_device,
-                .formats = formats_for(device),
-            });
+            };
+            read_camera_formats(device, camera);
+            devices.push_back(std::move(camera));
         }
     }
     std::ranges::sort(devices, [](const LocalCameraDevice& left, const LocalCameraDevice& right) {
@@ -253,6 +249,7 @@ void log_camera_discovery(const LocalCameraSnapshot& snapshot,
                                         ? "completed"
                                         : "partial"},
                          {"device_count", snapshot.devices.size()},
+                         {"generation", snapshot.generation},
                          {"unverified_device_count", unverified_count},
                          {"error_code", snapshot.error_code},
                          {"native_error_code", native_error_code},
@@ -261,13 +258,14 @@ void log_camera_discovery(const LocalCameraSnapshot& snapshot,
                   << '\n';
         for (std::size_t index = 0U; index < snapshot.devices.size(); ++index) {
             const auto& device = snapshot.devices[index];
-            if (device.probe.status == LocalCameraProbeStatus::ready) {
-                continue;
-            }
             std::cerr << "camera_discovery_device "
                       << nlohmann::json{
                              {"device_index", index},
+                             {"generation", snapshot.generation},
+                             {"display_name", device.display_name},
                              {"software_device", device.software_device},
+                             {"format_count", device.formats.size()},
+                             {"rejected_format_count", device.rejected_format_count},
                              {"probe_status",
                               local_camera_probe_status_text(device.probe.status)},
                              {"backend", device.probe.backend},
@@ -277,6 +275,20 @@ void log_camera_discovery(const LocalCameraSnapshot& snapshot,
                          }
                              .dump()
                       << '\n';
+            for (const auto& rejection : device.format_rejections) {
+                std::cerr << "camera_discovery_format_rejected "
+                          << nlohmann::json{
+                                 {"generation", snapshot.generation},
+                                 {"device_index", index},
+                                 {"format_index", rejection.format_index},
+                                 {"error_code", rejection.error_code},
+                                 {"width", rejection.format.width},
+                                 {"height", rejection.format.height},
+                                 {"fps_numerator", rejection.format.fps_numerator},
+                                 {"fps_denominator", rejection.format.fps_denominator},
+                             }.dump()
+                          << '\n';
+            }
         }
     } catch (...) {
         // Diagnostics must never interrupt device discovery.
@@ -382,7 +394,8 @@ preferred_automatic_camera_format(const LocalCameraDevice& device) {
         const auto within_default_raster =
             format.width <= 1'920U && format.height <= 1'080U;
         const auto within_default_rate =
-            format.fps_numerator <= 30U * format.fps_denominator;
+            static_cast<std::uint64_t>(format.fps_numerator) <=
+                30ULL * format.fps_denominator;
         const auto media_rank = format.media_type == "video/x-raw"
                                     ? 2
                                     : format.media_type == "image/jpeg" ? 1 : 0;

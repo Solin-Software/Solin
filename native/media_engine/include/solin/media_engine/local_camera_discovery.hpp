@@ -1,12 +1,17 @@
 #pragma once
 
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
 
 namespace solin::media_engine {
+
+// GStreamer exact fractions use signed 32-bit numerator and denominator values.
+inline constexpr std::uint32_t kMaximumCameraFpsComponent =
+    static_cast<std::uint32_t>((std::numeric_limits<std::int32_t>::max)());
 
 struct LocalVideoFormat {
     std::string media_type{};
@@ -45,12 +50,23 @@ struct LocalCameraProbe {
     bool operator==(const LocalCameraProbe&) const = default;
 };
 
+// Internal diagnostics are logged locally, never added to the control payload.
+struct LocalCameraFormatRejection {
+    std::uint32_t format_index{0U};
+    std::string error_code{};
+    LocalVideoFormat format{};
+
+    bool operator==(const LocalCameraFormatRejection&) const = default;
+};
+
 struct LocalCameraDevice {
     std::string device_id{};
     std::string display_name{};
     bool software_device{false};
     std::vector<LocalVideoFormat> formats{};
     LocalCameraProbe probe{};
+    std::uint32_t rejected_format_count{0U};
+    std::vector<LocalCameraFormatRejection> format_rejections{};
 
     bool operator==(const LocalCameraDevice&) const = default;
 };

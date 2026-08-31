@@ -1,4 +1,5 @@
 #include "solin/media_engine/scene_snapshot.hpp"
+#include "solin/media_engine/local_camera_discovery.hpp"
 
 #include <algorithm>
 #include <array>
@@ -357,9 +358,11 @@ void validate_ptz_binding(const Json& value) {
         .height = static_cast<std::uint32_t>(
             unsigned_integer(value.at("height"), 3'840U, "local camera height")),
         .fps_numerator = static_cast<std::uint32_t>(
-            unsigned_integer(value.at("fps_numerator"), 480'000U, "local camera FPS numerator")),
+            unsigned_integer(value.at("fps_numerator"), kMaximumCameraFpsComponent,
+                             "local camera FPS numerator")),
         .fps_denominator = static_cast<std::uint32_t>(unsigned_integer(
-            value.at("fps_denominator"), 100'000U, "local camera FPS denominator")),
+            value.at("fps_denominator"), kMaximumCameraFpsComponent,
+            "local camera FPS denominator")),
         .media_type = bounded_text(value.at("media_type"), 80U, "local camera media type", true),
         .pixel_format =
             bounded_text(value.at("pixel_format"), 80U, "local camera pixel format", true),
@@ -377,7 +380,8 @@ void validate_ptz_binding(const Json& value) {
          (static_cast<std::uint64_t>(result.width) * result.height > 3'840ULL * 2'160ULL ||
           (std::min)(result.width, result.height) > 2'160U)) ||
         (result.fps_numerator > 0U &&
-         (result.fps_numerator > 60U * result.fps_denominator ||
+         (static_cast<std::uint64_t>(result.fps_numerator) >
+              60ULL * result.fps_denominator ||
           std::gcd(result.fps_numerator, result.fps_denominator) != 1U)) ||
         result.media_type.empty() != result.pixel_format.empty() ||
         (!automatic_format && !exact_format)) {

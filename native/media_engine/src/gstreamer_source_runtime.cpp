@@ -4,6 +4,7 @@
 
 #include "solin/media_engine/content_image_framing.hpp"
 #include "solin/media_engine/frame_channel.hpp"
+#include "solin/media_engine/local_camera_discovery.hpp"
 #include "solin/media_engine/presentation_transition.hpp"
 #ifdef _WIN32
 #include "windows_d3d11_frame_channel.hpp"
@@ -19,6 +20,7 @@
 #include <limits>
 #include <memory>
 #include <mutex>
+#include <numeric>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -963,35 +965,6 @@ class GStreamerSourceRuntime final : public SourceRuntime {
         }
     }
 
-    [[nodiscard]] GstCaps*
-    local_camera_caps(const LocalCameraSourceConfiguration& configuration) const {
-        const auto pixels = static_cast<std::uint64_t>(configuration.width) *
-                            static_cast<std::uint64_t>(configuration.height);
-        if (configuration.width == 0U || configuration.height == 0U ||
-            configuration.width > kMaximumSourceDimension ||
-            configuration.height > kMaximumSourceDimension || pixels > kMaximumSourcePixels ||
-            configuration.fps_numerator == 0U || configuration.fps_denominator == 0U ||
-            configuration.fps_numerator >
-                kMaximumSourceFramesPerSecond * configuration.fps_denominator ||
-            configuration.media_type.empty() || configuration.pixel_format.empty()) {
-            throw std::runtime_error("local_camera_format_unsupported");
-        }
-        auto* caps =
-            gst_caps_new_simple(configuration.media_type.c_str(), "width", G_TYPE_INT,
-                                static_cast<gint>(configuration.width), "height", G_TYPE_INT,
-                                static_cast<gint>(configuration.height), "framerate",
-                                GST_TYPE_FRACTION, static_cast<gint>(configuration.fps_numerator),
-                                static_cast<gint>(configuration.fps_denominator), nullptr);
-        if (caps == nullptr) {
-            throw std::runtime_error("local camera caps could not be created");
-        }
-        if (configuration.media_type == "video/x-raw") {
-            gst_caps_set_simple(caps, "format", G_TYPE_STRING, configuration.pixel_format.c_str(),
-                                nullptr);
-        }
-        return caps;
-    }
-
     void add_local_camera(GstElement* pipeline, GstElement* tail_input,
                           const LocalCameraSourceConfiguration& configuration) {
         auto resolved_configuration = configuration;
@@ -1031,7 +1004,7 @@ class GStreamerSourceRuntime final : public SourceRuntime {
         }
         auto* caps_filter = add_element(pipeline, "capsfilter", "camera-format");
         const std::unique_ptr<GstCaps, decltype(&release_caps)> caps{
-            local_camera_caps(resolved_configuration), &release_caps};
+            gstreamer_local_camera_caps(resolved_configuration), &release_caps};
         g_object_set(caps_filter, "caps", caps.get(), nullptr);
         require_link(source, caps_filter);
         if (resolved_configuration.media_type == "video/x-raw") {
@@ -2659,6 +2632,41 @@ class GStreamerSourceRuntimeFactory final : public SourceRuntimeFactory {
 
 } // namespace
 
+GstCaps* gstreamer_local_camera_caps(const LocalCameraSourceConfiguration& configuration) {
+    const auto pixels = static_cast<std::uint64_t>(configuration.width) *
+                        static_cast<std::uint64_t>(configuration.height);
+    if (configuration.width == 0U || configuration.height == 0U ||
+        configuration.width > kMaximumSourceDimension ||
+        configuration.height > kMaximumSourceDimension || pixels > kMaximumSourcePixels ||
+        (std::min)(configuration.width, configuration.height) > kMaximumSourceShortEdge ||
+        configuration.fps_numerator == 0U || configuration.fps_denominator == 0U ||
+        configuration.fps_numerator > kMaximumCameraFpsComponent ||
+        configuration.fps_denominator > kMaximumCameraFpsComponent ||
+        static_cast<std::uint64_t>(configuration.fps_numerator) >
+            static_cast<std::uint64_t>(kMaximumSourceFramesPerSecond) *
+                configuration.fps_denominator ||
+        std::gcd(configuration.fps_numerator, configuration.fps_denominator) != 1U ||
+        (configuration.media_type != "video/x-raw" && configuration.media_type != "image/jpeg" &&
+         configuration.media_type != "video/x-h264") ||
+        configuration.pixel_format.empty()) {
+        throw std::runtime_error("local_camera_format_unsupported");
+    }
+    auto* caps =
+        gst_caps_new_simple(configuration.media_type.c_str(), "width", G_TYPE_INT,
+                            static_cast<gint>(configuration.width), "height", G_TYPE_INT,
+                            static_cast<gint>(configuration.height), "framerate",
+                            GST_TYPE_FRACTION, static_cast<gint>(configuration.fps_numerator),
+                            static_cast<gint>(configuration.fps_denominator), nullptr);
+    if (caps == nullptr) {
+        throw std::runtime_error("local camera caps could not be created");
+    }
+    if (configuration.media_type == "video/x-raw") {
+        gst_caps_set_simple(caps, "format", G_TYPE_STRING, configuration.pixel_format.c_str(),
+                            nullptr);
+    }
+    return caps;
+}
+
 class GStreamerFrameTransitionPipeline::Impl final {
   public:
     Impl(const bool use_d3d11, std::shared_ptr<GstD3D11Device> device,
@@ -2779,6 +2787,10 @@ bool invalidate_gstreamer_d3d11_device(std::shared_ptr<SourceRuntimeFactory> fac
 }
 
 #else
+
+GstCaps* gstreamer_local_camera_caps(const LocalCameraSourceConfiguration&) {
+    throw std::runtime_error("media_runtime_unavailable");
+}
 
 std::shared_ptr<SourceRuntimeFactory> make_gstreamer_source_runtime_factory(std::shared_ptr<void>) {
     throw std::runtime_error("media_runtime_unavailable");
