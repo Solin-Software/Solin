@@ -46,6 +46,7 @@ from solin.ui.scene_recording_status import (
 )
 from solin.widgets.common.button_feedback import ButtonSuccessFlash
 from solin.widgets.common.flow_container import FlowContainer
+from solin.widgets.common.popup_hover_button import PopupHoverButton
 
 
 log = logging.getLogger(__name__)
@@ -280,6 +281,8 @@ class SceneControlPopup(QWidget):
         self._output.setCheckable(True)
         self._output.clicked.connect(self._set_output_enabled)
         header.addWidget(self._output)
+        self.hover_button = PopupHoverButton(self._card)
+        header.addWidget(self.hover_button)
         layout.addLayout(header)
 
         self._scroll = _SmoothScrollArea()
@@ -860,6 +863,7 @@ class SceneControlPopup(QWidget):
         self.move(x, y)
 
     def apply_theme(self) -> None:
+        self.hover_button.apply_theme()
         self._set_engine_visual(self._engine_visual_state, self._icon.toolTip())
         self.setStyleSheet(
             f"""

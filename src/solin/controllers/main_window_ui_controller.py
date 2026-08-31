@@ -710,6 +710,7 @@ class MainWindowUiController:
             context.zoom_service,
             right_col,
             obs_settings=context.obs_settings,
+            app_settings=context.app_settings,
             background_song_service=context.background_song_service,
             scene_runtime=(context.scene_runtime if NATIVE_SCENES_SUPPORTED else None),
             program_recording=(

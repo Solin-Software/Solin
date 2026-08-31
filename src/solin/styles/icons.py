@@ -14,6 +14,9 @@ import sys
 
 from solin.styles.theme import PALETTE
 
+# Declared without eagerly constructing the SVG returned by __getattr__.
+ICON_CURSOR_HOVER: str
+
 # ── Configuracao de bandeiras ─────────────────────────────────────────────────
 #
 # USE_EMOJI_FLAGS = True   → renderiza bandeiras como emoji Unicode (🇧🇷 🇺🇸 etc.)
@@ -239,6 +242,7 @@ _ICON_NAMES = frozenset(
         "ICON_SHARE_SCREEN",
         "ICON_ASPECT_MATCH",
         "ICON_BOUNDS",
+        "ICON_CURSOR_HOVER",
         "ICON_SECTION",
         "ICON_MARKER",
         "ICON_PALETTE",
@@ -259,7 +263,16 @@ _FLAG_ICON_NAMES: dict[str, str] = {
 
 def _build_icon_svg(name: str) -> str:
     """Build one SVG string on first access."""
-    if name == "ICON_PLAY":
+    if name == "ICON_CURSOR_HOVER":
+        return (
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" '
+            'fill="none" stroke="currentColor" stroke-width="1.7" '
+            'stroke-linecap="round" stroke-linejoin="round">'
+            '<path d="m5 5 5.5 14 2.5-6 6-2.5L5 5Z"/>'
+            '<path d="M14 3v2M19 5l-1.5 1.5M21 10h-2"/>'
+            '</svg>'
+        )
+    elif name == "ICON_PLAY":
         return (
             '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">'
             '<polygon points="5,3 19,12 5,21" fill="currentColor"/>'

@@ -33,6 +33,7 @@ from solin.styles.theme import PALETTE, qss_rgba
 from solin.ui.themed_tooltip import install_themed_tooltip
 from solin.widgets.common.button_feedback import ButtonSuccessFlash
 from solin.widgets.common.flow_container import FlowContainer
+from solin.widgets.common.popup_hover_button import PopupHoverButton
 
 
 class _SceneChipButton(QPushButton):
@@ -117,6 +118,8 @@ class OBSScenePopup(QWidget):
         h_lay.addWidget(self._title_lbl)
         h_lay.addStretch()
         h_lay.addWidget(self._active_lbl)
+        self.hover_button = PopupHoverButton(self._hdr)
+        h_lay.addWidget(self.hover_button)
         card_lay.addWidget(self._hdr)
 
         self._scroll = QScrollArea()
@@ -229,6 +232,7 @@ class OBSScenePopup(QWidget):
         )
 
     def apply_theme(self) -> None:
+        self.hover_button.apply_theme()
         self._card.setStyleSheet(self._card_style())
         self._obs_icon.setPixmap(make_icon(ICON_OBS, 14, PALETTE.text_faint).pixmap(14, 14))
         self._title_lbl.setStyleSheet(self._title_style())
