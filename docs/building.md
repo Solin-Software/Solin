@@ -43,11 +43,19 @@ manual copy. Use the same Python environment that runs Solin, for example:
 .venv\Scripts\python main.py
 ```
 
-Both filter DLLs are packaged with every Windows build. The installer registers
-them only for the installing account, in the corresponding 64-bit and 32-bit
-per-user COM views. Registration does not require elevation, including when the
-application itself is installed for all users. Windows x86 itself is not a
-supported host; the x86 DLL exists for 32-bit camera consumers on Windows x64.
+Both filter DLLs are packaged with every Windows build. A current-user install
+keeps the immutable filters under the user's local application data and
+registers the 64-bit and 32-bit COM views in HKCU without elevation. An
+all-users install keeps them under the protected 64-bit Program Files root and
+registers both views in HKLM while Setup is elevated. Windows x86 itself is not
+a supported host; the x86 DLL exists for 32-bit camera consumers on Windows x64.
+
+Setup stages and verifies the immutable filter pair before installing application
+files. A registration failure restores the preceding pair in the same scope.
+Uninstall removes the registration immediately; files still loaded by a camera
+consumer are retained until a later install can clean them up. Setup does not
+schedule their deletion on reboot, so a reinstall cannot lose its filters to an
+older uninstall's pending deletion.
 
 For local virtual-camera testing, install the compiled filters from an ordinary
 terminal. Registration and removal are explicit so ordinary builds never

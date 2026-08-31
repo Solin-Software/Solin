@@ -157,9 +157,9 @@ def test_qsettings_identity_and_namespaces_are_stable() -> None:
 
 
 def test_windows_installer_qsettings_cleanup_tracks_current_namespaces() -> None:
-    setup_iss = (PROJECT_ROOT / "packaging" / "windows" / "installer" / "setup.iss").read_text(
-        encoding="utf-8"
-    )
+    uninstall_iss = (
+        PROJECT_ROOT / "packaging" / "windows" / "installer" / "uninstall.iss"
+    ).read_text(encoding="utf-8")
     current_apps = {
         QSETTINGS_PREFS_APP,
         QSETTINGS_APP_APP,
@@ -171,9 +171,9 @@ def test_windows_installer_qsettings_cleanup_tracks_current_namespaces() -> None
     }
 
     for app_name in current_apps:
-        assert f"Software\\Solin\\{app_name}" in setup_iss
-    assert "RegGetSubkeyNames(HKCU, 'Software', Names)" in setup_iss
-    assert "Copy(KeyName, 1, 6) = 'Solin_'" in setup_iss
+        assert f"Software\\Solin\\{app_name}" in uninstall_iss
+    assert "RegGetSubkeyNames(HKCU, 'Software', Names)" in uninstall_iss
+    assert "Copy(KeyName, 1, 6) = 'Solin_'" in uninstall_iss
 
 
 def test_settings_key_names_and_values_are_stable() -> None:

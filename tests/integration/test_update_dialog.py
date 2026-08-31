@@ -90,3 +90,26 @@ def test_update_dialog_blocks_embedded_markdown_images() -> None:
         )
         is None
     )
+
+
+def test_update_dialog_handles_unresolved_patch_install_scope() -> None:
+    def fail_to_launch(_path: str) -> None:
+        raise RuntimeError("installation scope is ambiguous")
+
+    dialog = UpdateDialog(
+        UpdateInfo(
+            UpdateKind.PATCH,
+            _version("26.25.0.0"),
+            "https://releases.example/patch.exe",
+        ),
+        patch_downloader_factory=lambda *_args: None,
+        save_cleanup_path=lambda _path: None,
+        launch_patch=fail_to_launch,
+    )
+    dialog._patch_path = "patch.exe"
+    dialog._btn_cancel.setEnabled(False)
+
+    dialog._launch_patch_and_quit()
+
+    assert dialog._status_label.text() == "Failed to launch installer."
+    assert dialog._btn_cancel.isEnabled()

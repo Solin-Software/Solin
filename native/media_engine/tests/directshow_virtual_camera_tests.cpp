@@ -34,6 +34,7 @@ namespace {
 
 using DllGetClassObjectFunction = HRESULT(STDAPICALLTYPE*)(REFCLSID, REFIID,
                                                            void**);
+using DllInstallFunction = HRESULT(STDAPICALLTYPE*)(BOOL, LPCWSTR);
 
 class ComApartment final {
   public:
@@ -320,6 +321,15 @@ int wmain(const int argument_count, wchar_t** arguments) {
     const auto get_class_object = reinterpret_cast<DllGetClassObjectFunction>(
         GetProcAddress(module.get(), "DllGetClassObject"));
     if (!expect(get_class_object != nullptr, "DllGetClassObject is missing")) {
+        return 1;
+    }
+    const auto install = reinterpret_cast<DllInstallFunction>(
+        GetProcAddress(module.get(), "DllInstall"));
+    if (!expect(install != nullptr, "DllInstall is missing") ||
+        !expect(install(FALSE, nullptr) == E_INVALIDARG,
+                "DllInstall accepted a missing scope") ||
+        !expect(install(FALSE, L"invalid") == E_INVALIDARG,
+                "DllInstall accepted an invalid scope")) {
         return 1;
     }
     ComPtr<IClassFactory> factory;

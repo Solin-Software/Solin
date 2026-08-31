@@ -74,6 +74,7 @@ class _ReleaseNotesBrowser(QTextBrowser):
             return None
         return super().loadResource(resource_type, name)
 
+
 # The QDialog itself must be transparent (WA_TranslucentBackground is set).
 # Only QFrame#card carries the actual background color — this prevents the
 # background mismatch caused by the OS compositing the dialog's own bg
@@ -391,10 +392,11 @@ class UpdateDialog(QDialog):
         """
         try:
             self._launch_patch(self._patch_path)
-        except OSError as exc:
+        except (OSError, RuntimeError) as exc:
             log.error("[Update] failed to launch patch: %s", exc)
             self._status_label.setStyleSheet(f"color:{_C['red']}; background:transparent;")
             self._status_label.setText(self.tr("Failed to launch installer."))
+            self._btn_cancel.setEnabled(True)
             return
 
         from PySide6.QtWidgets import QApplication

@@ -28,7 +28,8 @@
 ;    - AppId MUST match setup.iss so Windows recognises this as the same
 ;      product in Add/Remove Programs and the uninstall log is appended to
 ;      (UninstallLogMode=append, the Inno default).
-;    - CreateUninstallRegKey=no → the original uninstaller is preserved.
+;    - CreateUninstallRegKey=no preserves the existing Add/Remove Programs entry.
+;      The appended uninstall log uses the shared uninstall.iss lifecycle.
 ; =============================================================================
 
 #define MyAppName       "Solin"
@@ -81,7 +82,7 @@ DisableProgramGroupPage=yes
 DisableReadyPage=no
 DisableFinishedPage=no
 
-; ── Keep original uninstaller — patch entries are appended to unins*.dat ──────
+; ── Reuse the uninstall log and existing Add/Remove Programs entry ─────────────
 CreateUninstallRegKey=no
 
 ; ── Define o nome limpo no Painel de Controle ────────────────────────────────
@@ -119,9 +120,8 @@ LZMAUseSeparateProcess=yes
 ChangesAssociations=yes
 
 ; ── Privilege handling ────────────────────────────────────────────────────────
-; Mirrors setup.iss: per-user by default, elevation optional via dialog.
-; The code reads from HKCU first (per-user install), then HKLM (machine install).
-; If the original install was machine-wide the user will be prompted to elevate.
+; Mirrors setup.iss: per-user by default, elevation optional via dialog. The app
+; passes /CURRENTUSER or /ALLUSERS from the registry record for its executable.
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 ArchitecturesAllowed=x64os
@@ -144,13 +144,13 @@ Name: "italian";    MessagesFile: "compiler:Languages\Italian.isl"
 
 ; =============================================================================
 [Files]
+; Stage the immutable filter pair before application files are installed.
+; These files and their COM registration have one shared lifecycle owner.
+Source: "{#MyDistDir}\native\media-engine\virtual-camera\x64\solin-virtual-camera.dll"; DestName: "solin-virtual-camera-x64.dll"; Flags: dontcopy
+Source: "{#MyDistDir}\native\media-engine\virtual-camera\x86\solin-virtual-camera.dll"; DestName: "solin-virtual-camera-x86.dll"; Flags: dontcopy
 ; ── Option A — Copy the full dist (simpler, ensures consistency) ──────────────
 Source: "{#MyDistDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\..\..\src\solin\resources\assets\playlist.ico"; DestDir: "{app}\resources\assets"; Flags: ignoreversion
-; Register the patch's immutable per-user DirectShow filters in both registry
-; views. Existing consumers may continue using the preceding version until exit.
-Source: "{#MyDistDir}\native\media-engine\virtual-camera\x64\solin-virtual-camera.dll"; DestDir: "{localappdata}\Solin\VirtualCamera\versions\{#MyPatchVersion}\x64"; Flags: ignoreversion regserver 64bit uninsrestartdelete
-Source: "{#MyDistDir}\native\media-engine\virtual-camera\x86\solin-virtual-camera.dll"; DestDir: "{localappdata}\Solin\VirtualCamera\versions\{#MyPatchVersion}\x86"; Flags: ignoreversion regserver 32bit uninsrestartdelete; BeforeInstall: MaybeInjectVirtualCameraX86RegistrationFailure
 
 ; =============================================================================
 [Registry]
@@ -389,8 +389,6 @@ begin
   CloseHandle(ExecInfo.hProcess);
 end;
 
-#include "virtual_camera_registration.iss"
-
 // ── Cached install info populated in InitializeSetup ─────────────────────────
 var
   GInstallPath:  String;  // full path to the existing install directory
@@ -406,7 +404,22 @@ begin
   Result := GInstallHive = HKLM;
 end;
 
-// ── Locate the existing install: HKCU first (per-user), then HKLM (machine) ──
+function IsCameraMachineInstall(): Boolean;
+begin
+  // Inno also restores this scope from the uninstall log when uninstalling.
+  Result := IsAdminInstallMode();
+end;
+
+procedure MaybeInjectVirtualCameraX86RegistrationFailure();
+begin
+#ifdef MyVirtualCameraForceX86RegistrationFailure
+  RaiseException('Injected x86 DirectShow registration failure.');
+#endif
+end;
+
+#include "virtual_camera_registration.iss"
+
+// ── Locate the existing install in the selected privilege scope ───────────────
 
 function FindInstallPath(out OutPath: String; out OutHive: Integer): Boolean;
 var
@@ -414,21 +427,27 @@ var
 begin
   Result := False;
   OutPath := '';
-  OutHive := HKCU;
-
-  if RegQueryStringValue(HKCU, '{#MyRegSubkey}', 'InstallPath', Path) and (Path <> '') then
+  if IsAdminInstallMode() then
   begin
-    OutPath := Path;
-    OutHive := HKCU;
-    Result := True;
-    Exit;
-  end;
-
-  if RegQueryStringValue(HKLM, '{#MyRegSubkey}', 'InstallPath', Path) and (Path <> '') then
-  begin
-    OutPath := Path;
     OutHive := HKLM;
-    Result := True;
+    if RegQueryStringValue(
+      HKLM, '{#MyRegSubkey}', 'InstallPath', Path
+    ) and (Path <> '') then
+    begin
+      OutPath := Path;
+      Result := True;
+    end;
+  end
+  else
+  begin
+    OutHive := HKCU;
+    if RegQueryStringValue(
+      HKCU, '{#MyRegSubkey}', 'InstallPath', Path
+    ) and (Path <> '') then
+    begin
+      OutPath := Path;
+      Result := True;
+    end;
   end;
 end;
 
@@ -548,7 +567,6 @@ function InitializeSetup(): Boolean;
 var
   InstalledVer: String;
 begin
-  CaptureCameraRegistrationState();
   Result := True;
 
   // 1. Locate the existing installation (populates GInstallPath / GInstallHive)
@@ -745,12 +763,12 @@ begin
   if CurStep = ssInstall then
   begin
     EnsureWebView2Runtime();
-    BeginCameraRegistrationTransaction();
+    InstallCameraRegistrationTransaction();
   end;
 
   if CurStep = ssPostInstall then
   begin
-    VerifyCameraRegistrationTransaction();
+    CommitCameraRegistrationTransaction();
     // Update our own Version key in whichever hive the original install used
     RegWriteStringValue(GInstallHive, '{#MyRegSubkey}', 'Version', '{#MyPatchVersion}');
 
@@ -765,6 +783,7 @@ begin
   if CurStep = ssDone then
   begin
     CleanupObsoleteCameraVersions();
-    CommitCameraRegistrationTransaction();
   end;
 end;
+
+#include "uninstall.iss"

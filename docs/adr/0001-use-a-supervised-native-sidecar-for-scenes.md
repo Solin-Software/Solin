@@ -35,8 +35,8 @@ PR #11 keeps the established playback, cache, reconnection, audio, metadata, and
 lifecycle contracts behind the existing Qt adapter. Native failures are limited to the
 supervised composition/output process and can be recovered by restarting it and replaying
 the latest validated state. Its current Windows implementation provides D3D11 composition,
-native presentation, and a per-user DirectShow virtual camera for x86 and x64 consumers on
-Windows 10 and Windows 11.
+native presentation, and a scope-aware DirectShow virtual camera for x86 and x64 consumers
+on Windows 10 and Windows 11.
 
 The decision compares the intended architectures, not only feature counts in their
 prototypes. Neither alternative has completed the full low-end performance and reliability
@@ -66,7 +66,9 @@ output.
   transitions, native presentation, and Program output publication.
 - Python/PySide6 remains the source of truth for persisted scene documents, automation,
   PTZ orchestration, supervision, and user-facing state.
-- Windows uses the Solin-owned per-user DirectShow filter built for x86 and x64 consumers.
+- Windows uses the Solin-owned DirectShow filter built for x86 and x64 consumers. Its COM
+  registration follows the application install scope: HKCU for current-user installs and
+  HKLM for all-users installs.
 - Native Scenes initially ships as a Windows beta. Unsupported platforms retain their
   established behavior until their native backends are implemented and qualified.
 - The existing OBS WebSocket integration remains independent from the native Scenes engine.

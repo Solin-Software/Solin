@@ -36,13 +36,14 @@ installer over it, verifies that user state survived, starts the upgraded app,
 then runs the generated uninstaller and removes its test registry keys. It is
 also wired into the Windows release workflow after the Inno Setup build by
 downloading the previous production installer configured in the workflow input.
-The smoke temporarily registers the per-user DirectShow camera in both WOW64
-registry views, loads each installed DLL through its architecture-matched
+The smoke validates current-user and all-users DirectShow registration in both
+WOW64 registry views, loads each installed DLL through its architecture-matched
 harness, connects a real graph, and validates standby samples. It then runs an
 installer whose x86 registration deliberately fails and verifies that the prior
-x64/x86 pair was restored before uninstall. Both registrations must be absent
-after uninstall. The test refuses to run when the Solin camera CLSID already
-exists, so use a disposable Windows account or runner. The Windows release
+x64/x86 pair was restored before uninstall. The machine-scope scenario runs
+only from an elevated process. Registrations created by the smoke must be absent
+after uninstall, while a pre-existing registration in the other scope must stay
+unchanged. Use a disposable Windows account or runner. The Windows release
 workflow builds the failure-injection artifact automatically; it is never
 published.
 
