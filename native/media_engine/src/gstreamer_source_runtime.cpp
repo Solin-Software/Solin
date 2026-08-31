@@ -890,6 +890,37 @@ class GStreamerSourceRuntime final : public SourceRuntime {
         return latest_frame_;
     }
 
+    [[nodiscard]] std::shared_ptr<const SourceFrame>
+    activation_frame(
+        const std::optional<std::uint64_t> expected_media_epoch) const override {
+        const auto frame = latest_frame();
+        if (source_.kind != SceneSourceKind::solin_content) {
+            return frame;
+        }
+        try {
+            auto requested_epoch = expected_media_epoch;
+            if (!requested_epoch.has_value()) {
+#ifdef _WIN32
+                if (d3d11_frame_channel_reader_ != nullptr) {
+                    requested_epoch = d3d11_frame_channel_reader_->media_epoch();
+                } else
+#endif
+                if (frame_channel_reader_ != nullptr) {
+                    requested_epoch = frame_channel_reader_->media_epoch();
+                }
+            }
+            if (!requested_epoch.has_value()) {
+                return {};
+            }
+            return frame != nullptr && frame->media_epoch == *requested_epoch &&
+                           frame->activation_ready
+                       ? frame
+                       : std::shared_ptr<const SourceFrame>{};
+        } catch (...) {
+            return {};
+        }
+    }
+
     [[nodiscard]] bool wait_for_frame(
         const std::uint64_t after_sequence, const std::stop_token stop_token,
         const std::chrono::steady_clock::time_point deadline) const noexcept override {
@@ -1510,7 +1541,8 @@ class GStreamerSourceRuntime final : public SourceRuntime {
 
     [[nodiscard]] std::shared_ptr<SourceFrame> content_gpu_output_frame(
         ContentGpuTransitionPipeline::Output output,
-        const std::uint64_t media_epoch) noexcept {
+        const std::uint64_t media_epoch,
+        const bool activation_ready = true) noexcept {
         if (output.sample == nullptr) {
             return {};
         }
@@ -1542,6 +1574,7 @@ class GStreamerSourceRuntime final : public SourceRuntime {
                 .sequence = sequence,
                 .stream_epoch = stream_epoch_.load(),
                 .media_epoch = media_epoch,
+                .activation_ready = activation_ready,
                 .discontinuity = false,
                 .presentation_timestamp_ns = valid_clock_time(GST_BUFFER_PTS(buffer)),
                 .duration_ns = valid_clock_time(GST_BUFFER_DURATION(buffer)),
@@ -1560,8 +1593,10 @@ class GStreamerSourceRuntime final : public SourceRuntime {
 
     void publish_content_transition_output(
         ContentGpuTransitionPipeline::Output output,
-        const std::uint64_t media_epoch) noexcept {
-        publish_content_frame(content_gpu_output_frame(std::move(output), media_epoch));
+        const std::uint64_t media_epoch,
+        const bool activation_ready) noexcept {
+        publish_content_frame(content_gpu_output_frame(
+            std::move(output), media_epoch, activation_ready));
     }
 
     void consume_content_transition_output(const std::uint64_t media_epoch) noexcept {
@@ -1584,7 +1619,9 @@ class GStreamerSourceRuntime final : public SourceRuntime {
             content_transition_awaiting_output_ = false;
             content_transition_output_watchdog_.acknowledge();
         }
-        publish_content_transition_output(std::move(output), media_epoch);
+        publish_content_transition_output(
+            std::move(output), media_epoch,
+            content_transition_awaited_activation_ready_);
     }
 
     void consume_content_framing_output(const std::uint64_t media_epoch) noexcept {
@@ -2046,6 +2083,8 @@ class GStreamerSourceRuntime final : public SourceRuntime {
             content_transition_awaited_revision_ = checkpoint;
             content_transition_awaited_submission_ =
                 content_transition_pipeline_->submission();
+            content_transition_awaited_activation_ready_ =
+                transition_sample.weights.outgoing <= 0.0;
             content_transition_awaiting_output_ = true;
             content_transition_output_watchdog_.arm(now);
             consume_content_transition_output(desired.media_epoch);
@@ -2576,6 +2615,7 @@ class GStreamerSourceRuntime final : public SourceRuntime {
     bool content_transition_awaiting_output_{false};
     std::uint64_t content_transition_awaited_revision_{0U};
     std::uint64_t content_transition_awaited_submission_{0U};
+    bool content_transition_awaited_activation_ready_{false};
     PresentationReadinessWatchdog content_transition_output_watchdog_{};
     std::optional<std::uint64_t> content_transition_bypass_epoch_{};
     bool content_transition_black_output_observed_{false};

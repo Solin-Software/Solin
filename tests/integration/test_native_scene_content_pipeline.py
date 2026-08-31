@@ -6,9 +6,11 @@ import struct
 import sys
 import time
 from collections.abc import Callable, Iterator
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager, nullcontext
 from dataclasses import replace
 from pathlib import Path
+from threading import Event
 
 import pytest
 from PySide6.QtCore import QCoreApplication, QSize, Qt, QUrl
@@ -187,6 +189,47 @@ def _nv12_pixel_is_red(frame: VideoFrame, x: int, y: int) -> bool:
     blue_chroma = frame.pixels[chroma_offset]
     red_chroma = frame.pixels[chroma_offset + 1]
     return 45 <= luma <= 115 and 90 <= blue_chroma <= 140 and 170 <= red_chroma <= 245
+
+
+@contextmanager
+def _record_program_centers(
+    subscriber: SharedMemoryVideoFrameSubscriber,
+) -> Iterator[list[tuple[int, tuple[int, int, int]]]]:
+    """Observe egress while the control thread waits for prepare/Take replies."""
+    samples: list[tuple[int, tuple[int, int, int]]] = []
+    started = Event()
+    stopped = Event()
+
+    def record() -> None:
+        started.set()
+        while not stopped.is_set():
+            if not subscriber.wait_for_frame(20):
+                continue
+            frame = subscriber.read_latest()
+            if frame is None:
+                continue
+            assert frame.pixel_format is VideoPixelFormat.NV12
+            x, y = frame.width // 2, frame.height // 2
+            chroma = frame.width * frame.height + (y // 2) * frame.width + (x // 2) * 2
+            samples.append(
+                (
+                    frame.sequence,
+                    (
+                        frame.pixels[y * frame.width + x],
+                        frame.pixels[chroma],
+                        frame.pixels[chroma + 1],
+                    ),
+                )
+            )
+
+    with ThreadPoolExecutor(max_workers=1, thread_name_prefix="program-frame-recorder") as executor:
+        recording = executor.submit(record)
+        assert started.wait(2), "Program recorder did not start"
+        try:
+            yield samples
+        finally:
+            stopped.set()
+            recording.result(2)
 
 
 def _wait_for_raw_and_program_color(
@@ -936,6 +979,201 @@ def test_hardware_decoded_qt_frame_stays_on_gpu_until_composition(
         ingress.close()
         egress.close()
         program_egress.close()
+        unsubscribe()
+        engine.stop()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows native media pipeline")
+@pytest.mark.parametrize(
+    ("retained_kind", "accelerated"),
+    [
+        pytest.param("image", False, id="image-shm"),
+        pytest.param("image", True, id="image-d3d11"),
+        pytest.param("idle", False, id="idle-shm"),
+        pytest.param("idle", True, id="idle-d3d11"),
+        pytest.param("video", False, id="video-shm"),
+    ],
+)
+def test_return_to_cached_content_never_publishes_the_previous_presentation(
+    tmp_path,
+    accelerated: bool,
+    retained_kind: str,
+) -> None:
+    engine = create_native_scene_engine(tmp_path, repository_root=REPOSITORY_ROOT)
+    if engine is None:
+        pytest.skip("Built native media engine is unavailable")
+    ingress = ContentFrameIngressController(
+        enable_accelerated=accelerated,
+        maximum_fps=30,
+        canvas_width=1920,
+        canvas_height=1080,
+    )
+    descriptor = ingress.descriptor
+    if accelerated and (
+        descriptor is None or descriptor.transport is not FrameChannelTransport.D3D11_SHARED_TEXTURE
+    ):
+        ingress.close()
+        engine.stop()
+        pytest.skip("Built Qt D3D11 bridge is unavailable")
+    preview = SharedMemoryBgraFrameSubscriber(1920, 1080)
+    program = SharedMemoryVideoFrameSubscriber(1920, 1080)
+    document, content_scene = _content_document()
+    away_scene = next(
+        scene
+        for scene in document.scenes
+        if len(scene.layers) == 1 and scene.layers[0].source_id == NO_SIGNAL_SOURCE_ID
+    )
+    retained = QImage(1280, 720, QImage.Format.Format_ARGB32)
+    retained.fill(QColor("#20d020" if retained_kind == "idle" else "#e02020"))
+    retained_frame = _padded_red_nv12_frame() if retained_kind == "video" else retained
+    next_image = QImage(1280, 720, QImage.Format.Format_ARGB32)
+    next_image.fill(QColor("#0000ff"))
+    retained_match = _nv12_pixel_is_green if retained_kind == "idle" else _nv12_pixel_is_red
+    events: list[object] = []
+    unsubscribe = engine.subscribe(events.append)
+    prepare_latencies: list[float] = []
+    sequence = 1
+
+    def prepare(
+        scene_id: str,
+        *,
+        record_latency: bool = False,
+        content_media_epoch: int | None = None,
+    ):
+        nonlocal sequence
+        sequence += 1
+        started_at = time.monotonic()
+        prepared = engine.prepare_scene(
+            BusId.VIRTUAL_CAMERA,
+            scene_id,
+            transition=TransitionSpec(TransitionKind.CUT, 0),
+            document_revision=document.revision,
+            request_id=f"cached-content-prepare-{sequence}",
+            sequence=sequence,
+            deadline_ms=10_000,
+            content_media_epoch=content_media_epoch,
+        ).result(15)
+        if record_latency:
+            prepare_latencies.append((time.monotonic() - started_at) * 1_000)
+        return prepared
+
+    def take(prepared) -> None:
+        nonlocal sequence
+        sequence += 1
+        assert (
+            engine.take_prepared(
+                prepared,
+                request_id=f"cached-content-take-{sequence}",
+                sequence=sequence,
+                deadline_ms=10_000,
+            )
+            .result(15)
+            .applied
+        )
+
+    def program_matches(match: Callable[[VideoFrame, int, int], bool]) -> bool:
+        frame = program.read_latest()
+        return frame is not None and match(frame, frame.width // 2, frame.height // 2)
+
+    def is_blue(yuv: tuple[int, int, int]) -> bool:
+        luma, blue_chroma, red_chroma = yuv
+        return 20 <= luma <= 80 and blue_chroma >= 180 and 80 <= red_chroma <= 160
+
+    def is_black_to_blue(yuv: tuple[int, int, int]) -> bool:
+        luma, blue_chroma, red_chroma = yuv
+        return luma <= 80 and blue_chroma >= 120 and red_chroma <= 145
+
+    try:
+        capabilities = engine.start(
+            session_id="native-cached-content-return", deadline_ms=10_000
+        ).result(15)
+        if not capabilities.local_cameras and not capabilities.rtsp_cameras:
+            pytest.skip("Native GStreamer graph is unavailable")
+        ingress.set_decoder_frame_gate(1, retained_kind == "video")
+        ingress.begin_presentation(1)
+        ingress.submit_frame(retained_frame)
+        publisher = ingress._accelerated_publisher if accelerated else ingress._publisher
+        assert publisher is not None
+        assert _wait_for(
+            lambda: (
+                int(publisher.status().get("published_sequence", 0)) > 0
+                if accelerated
+                else int(getattr(publisher, "_sequence", 0)) > 0
+            )
+        ), "Initial retained presentation was not published"
+        assert (
+            engine.hydrate(
+                SceneEngineSnapshot(
+                    session_id="native-cached-content-return",
+                    sequence=sequence,
+                    document=document,
+                    active_scenes=tuple(
+                        (route.bus_id, content_scene.id) for route in document.outputs
+                    ),
+                    render_enabled=((BusId.MEDIA_WINDOWS, True), (BusId.VIRTUAL_CAMERA, True)),
+                    output_enabled=((BusId.MEDIA_WINDOWS, True), (BusId.VIRTUAL_CAMERA, False)),
+                    content_ingress=descriptor,
+                    preview_egress=preview.descriptor,
+                    program_egress=program.descriptor,
+                ),
+                request_id="cached-content-hydrate",
+                deadline_ms=10_000,
+            )
+            .result(15)
+            .applied
+        )
+
+        for cycle in range(3):
+            if cycle:
+                ingress.set_decoder_frame_gate(cycle * 2 + 1, retained_kind == "video")
+                ingress.begin_presentation(cycle * 2 + 1)
+                ingress.submit_frame(retained_frame)
+            assert _wait_for(lambda: program_matches(retained_match)), events
+
+            take(prepare(away_scene.id))
+            assert _wait_for(
+                lambda: program_matches(lambda frame, x, y: frame.pixels[y * frame.width + x] <= 24)
+            ), events
+
+            # Production auto switch starts preparing Program as soon as the
+            # presentation identity changes. The first pixels are published by
+            # the content controller in the same turn, but Raw still has to
+            # retire the previous presentation before those pixels are safe to
+            # expose. Waiting for Preview to finish that transition here hides
+            # the warm-graph race seen by the application.
+            ingress.set_decoder_frame_gate(cycle * 2 + 2, False)
+            ingress.begin_presentation(cycle * 2 + 2)
+            ingress.submit_frame(next_image)
+            assert ingress.descriptor == descriptor
+
+            with _record_program_centers(program) as samples:
+                # Delaying or draining the Qt loop here masks the race. Take
+                # immediately after preparation, as production auto switch does.
+                prepared = prepare(
+                    content_scene.id,
+                    record_latency=True,
+                    content_media_epoch=cycle * 2 + 2,
+                )
+                take(prepared)
+                assert _wait_for(lambda: any(is_blue(yuv) for _, yuv in tuple(samples))), (
+                    cycle,
+                    samples,
+                    events,
+                )
+                time.sleep(0.1)
+            assert samples, "Program emitted no frames during the cached return"
+            assert all(is_black_to_blue(yuv) for _, yuv in samples), (
+                f"cached {retained_kind} reappeared on return {cycle}: {samples!r}"
+            )
+            sequences = [frame_sequence for frame_sequence, _ in samples]
+            assert sequences == sorted(set(sequences)), (
+                f"Program egress sequence regressed or repeated: {sequences!r}"
+            )
+        assert prepare_latencies and max(prepare_latencies) < 1_500, prepare_latencies
+    finally:
+        ingress.close()
+        preview.close()
+        program.close()
         unsubscribe()
         engine.stop()
 

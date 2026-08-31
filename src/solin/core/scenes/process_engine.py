@@ -541,11 +541,20 @@ class SubprocessSceneEngine:
         request_id: str,
         sequence: int,
         deadline_ms: int,
+        content_media_epoch: int | None = None,
     ) -> Future[ScenePreparation]:
         if not isinstance(bus_id, BusId):
             return _failed_future(TypeError("Invalid output bus"))
         if not isinstance(transition, TransitionSpec):
             return _failed_future(TypeError("Invalid scene transition"))
+        if content_media_epoch is not None and (
+            isinstance(content_media_epoch, bool)
+            or not isinstance(content_media_epoch, int)
+            or not 0 <= content_media_epoch <= 2**64 - 1
+        ):
+            return _failed_future(
+                ValueError("Content media epoch must be a non-negative 64-bit integer")
+            )
         _validate_identity(scene_id, "scene id")
         return self._request(
             message_type="prepare_scene",
@@ -558,6 +567,7 @@ class SubprocessSceneEngine:
                 "bus_id": bus_id.value,
                 "scene_id": scene_id,
                 "transition": transition.to_record(),
+                "content_media_epoch": content_media_epoch,
             },
             converter=_preparation_from_envelope,
         )

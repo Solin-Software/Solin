@@ -397,6 +397,8 @@ error code. Messages must never contain credentials or complete sensitive URIs.
   stall media windows.
 - Scene Take is prepare/commit: allocate and preroll first, then change the active graph on a
   frame boundary. A failed preparation leaves the applied scene untouched.
+- Content-scene preparation carries the expected projection media epoch. Both retained and new
+  graphs wait for activation-safe pixels from that epoch before Take can make them visible.
 
 ## IPC and supervision
 

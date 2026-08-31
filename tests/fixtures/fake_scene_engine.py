@@ -202,7 +202,12 @@ def main() -> int:
         elif request.message_type == "prepare_scene":
             if mode == "ignore_prepare":
                 continue
-            if set(request.payload) != {"bus_id", "scene_id", "transition"} or set(
+            if set(request.payload) != {
+                "bus_id",
+                "scene_id",
+                "transition",
+                "content_media_epoch",
+            } or set(
                 request.payload.get("transition", {})
             ) != {"kind", "duration_ms"}:
                 _respond(

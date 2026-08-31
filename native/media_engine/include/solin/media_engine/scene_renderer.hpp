@@ -173,6 +173,16 @@ class PreparedSceneRenderGraph {
     virtual void set_rendering_enabled(bool enabled) noexcept {
         static_cast<void>(enabled);
     }
+    // Re-activate a retained graph and withhold its cached outputs until a
+    // composition causally produced by this activation has been published.
+    [[nodiscard]] virtual bool refresh_for_activation(
+        bool system_memory_output_required,
+        std::chrono::steady_clock::time_point deadline) noexcept {
+        static_cast<void>(deadline);
+        set_rendering_enabled(true);
+        set_direct_output_enabled(system_memory_output_required);
+        return true;
+    }
     [[nodiscard]] virtual bool is_transition_output() const noexcept { return false; }
     [[nodiscard]] virtual std::shared_ptr<PreparedSceneRenderGraph>
     transition_target() const noexcept {
@@ -233,6 +243,15 @@ class SceneRenderer {
     virtual void set_system_memory_output_enabled(
         OutputBus bus, SystemMemoryOutputConsumer consumer,
         bool enabled) noexcept = 0;
+    // Warm-graph reuse is a prepare-time optimization. Implementations may
+    // preroll both GPU and demanded CPU outputs before the subsequent Take.
+    [[nodiscard]] virtual bool refresh_prepared(
+        OutputBus bus, const std::shared_ptr<PreparedSceneRenderGraph>& graph,
+        std::chrono::steady_clock::time_point deadline) noexcept {
+        static_cast<void>(bus);
+        return graph != nullptr && graph->refresh_for_activation(
+                                       false, deadline);
+    }
     [[nodiscard]] virtual std::shared_ptr<const SourceFrame>
     latest_frame(OutputBus bus) const noexcept = 0;
     [[nodiscard]] virtual std::shared_ptr<const SourceFrame>
