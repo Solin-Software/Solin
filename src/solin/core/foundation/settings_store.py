@@ -137,3 +137,17 @@ class ProfileAppSettingsStore:
 
     def set_app_theme_id(self, theme_id: str) -> None:
         self.settings.set_value(SettingsKey.APP_THEME, str(theme_id or "").strip())
+
+    def hover_popup_ids(self) -> frozenset[str]:
+        value = self.settings.value(SettingsKey.TOOLBAR_HOVER_POPUPS, [])
+        if not isinstance(value, (list, tuple)):
+            return frozenset()
+        return frozenset(item for item in value if isinstance(item, str) and item)
+
+    def set_popup_hover_enabled(self, popup_id: str, enabled: bool) -> None:
+        popup_ids = set(self.hover_popup_ids())
+        if enabled:
+            popup_ids.add(popup_id)
+        else:
+            popup_ids.discard(popup_id)
+        self.settings.set_value(SettingsKey.TOOLBAR_HOVER_POPUPS, sorted(popup_ids))

@@ -12,6 +12,7 @@ class SettingsKey:
     BOOTSTRAP_LANGUAGE: Final = "bootstrap_language"
     APP_LANGUAGE: Final = "language"
     APP_THEME: Final = "theme"
+    TOOLBAR_HOVER_POPUPS: Final = "toolbar/hover_popups"
     REMOTE_CONTROL_ENABLED: Final = "remote_control/enabled"
     REMOTE_CONTROL_NETWORK_SELECTION: Final = "remote_control/network_selection"
     REMOTE_CONTROL_CREDENTIALS: Final = "remote_control/credentials"

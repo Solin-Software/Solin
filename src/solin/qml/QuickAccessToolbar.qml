@@ -53,22 +53,36 @@ Item {
         }
     }
 
-    function beginButtonHover(item, text) {
+    Connections {
+        target: bridge
+        function onPopupOpening() {
+            tooltipTimer.stop()
+            bridge.hideTooltip()
+        }
+    }
+
+    function beginButtonHover(item, text, popupId = "") {
         bridge.onPointerEntered()
         tooltipTimer.stop()
         bridge.hideTooltip()
         root.tooltipItem = item
         root.tooltipText = text
+        var pos = item.mapToItem(root, 0, 0)
+        bridge.hoverPopup(popupId, pos.x, pos.y, item.width, item.height)
         if (text !== "")
             tooltipTimer.start()
     }
 
-    function endButtonHover() {
+    function endButtonHover(item) {
+        bridge.onPointerExited()
+        // Qt can deliver the new item's Enter before the previous item's Exit.
+        if (root.tooltipItem !== item)
+            return
+        bridge.cancelPopupHover()
         tooltipTimer.stop()
         root.tooltipItem = null
         root.tooltipText = ""
         bridge.hideTooltip()
-        bridge.onPointerExited()
     }
 
     // ── Expanded Pill ────────────────────────────────────────────────────
@@ -121,7 +135,7 @@ Item {
                     id: monitorMA; anchors.fill: parent
                     hoverEnabled: true
                     onEntered: root.beginButtonHover(monitorMA, bridge.monitorTooltip)
-                    onExited: root.endButtonHover()
+                    onExited: root.endButtonHover(monitorMA)
                     onClicked: bridge.onMonitorClicked()
                 }
             }
@@ -148,7 +162,7 @@ Item {
                     id: backgroundSongMA; anchors.fill: parent
                     hoverEnabled: true
                     onEntered: root.beginButtonHover(backgroundSongMA, bridge.backgroundSongTooltip)
-                    onExited: root.endButtonHover()
+                    onExited: root.endButtonHover(backgroundSongMA)
                     onClicked: bridge.onBackgroundSongClicked()
                 }
             }
@@ -163,11 +177,22 @@ Item {
 
             // ── OBS ──────────────────────────────────────────────────
             Item {
+                id: obsButton
+                objectName: "toolbarObsButton"
                 visible: bridge.obsVisible
                 width: 30; height: 30
+                activeFocusOnTab: visible
+                Accessible.role: Accessible.Button
+                Accessible.name: bridge.obsTooltip
+                Accessible.onPressAction: bridge.onObsClicked()
+                Keys.onSpacePressed: bridge.onObsClicked()
+                Keys.onReturnPressed: bridge.onObsClicked()
+                Keys.onEnterPressed: bridge.onObsClicked()
 
                 Rectangle {
                     anchors.fill: parent; radius: 15
+                    border.width: obsButton.activeFocus ? 1 : 0
+                    border.color: root.accent
                     color: obsMA.pressed
                            ? root.toolbarPressed
                            : obsMA.containsMouse
@@ -190,19 +215,30 @@ Item {
                 MouseArea {
                     id: obsMA; anchors.fill: parent
                     hoverEnabled: true
-                    onEntered: root.beginButtonHover(obsMA, bridge.obsTooltip)
-                    onExited: root.endButtonHover()
+                    onEntered: root.beginButtonHover(obsMA, bridge.obsTooltip, "obs")
+                    onExited: root.endButtonHover(obsMA)
                     onClicked: bridge.onObsClicked()
                 }
             }
 
             // ── Solin Scenes ─────────────────────────────────────────
             Item {
+                id: scenesButton
+                objectName: "toolbarScenesButton"
                 visible: bridge.scenesVisible
                 width: 30; height: 30
+                activeFocusOnTab: visible
+                Accessible.role: Accessible.Button
+                Accessible.name: bridge.scenesTooltip
+                Accessible.onPressAction: bridge.onScenesClicked()
+                Keys.onSpacePressed: bridge.onScenesClicked()
+                Keys.onReturnPressed: bridge.onScenesClicked()
+                Keys.onEnterPressed: bridge.onScenesClicked()
 
                 Rectangle {
                     anchors.fill: parent; radius: 15
+                    border.width: scenesButton.activeFocus ? 1 : 0
+                    border.color: root.accent
                     color: scenesMA.pressed
                            ? root.toolbarPressed
                            : scenesMA.containsMouse
@@ -228,8 +264,8 @@ Item {
                 MouseArea {
                     id: scenesMA; anchors.fill: parent
                     hoverEnabled: true
-                    onEntered: root.beginButtonHover(scenesMA, bridge.scenesTooltip)
-                    onExited: root.endButtonHover()
+                    onEntered: root.beginButtonHover(scenesMA, bridge.scenesTooltip, "scenes")
+                    onExited: root.endButtonHover(scenesMA)
                     onClicked: bridge.onScenesClicked()
                 }
             }
@@ -256,7 +292,7 @@ Item {
                     id: cameraMA; anchors.fill: parent
                     hoverEnabled: true
                     onEntered: root.beginButtonHover(cameraMA, bridge.cameraTooltip)
-                    onExited: root.endButtonHover()
+                    onExited: root.endButtonHover(cameraMA)
                     onClicked: bridge.onCameraClicked()
                 }
             }
@@ -283,7 +319,7 @@ Item {
                     id: zoomMA; anchors.fill: parent
                     hoverEnabled: true
                     onEntered: root.beginButtonHover(zoomMA, bridge.zoomTooltip)
-                    onExited: root.endButtonHover()
+                    onExited: root.endButtonHover(zoomMA)
                     onClicked: bridge.onZoomClicked()
                 }
             }
@@ -341,7 +377,7 @@ Item {
                     id: remoteControlMA; anchors.fill: parent
                     hoverEnabled: true
                     onEntered: root.beginButtonHover(remoteControlMA, bridge.remoteControlTooltip)
-                    onExited: root.endButtonHover()
+                    onExited: root.endButtonHover(remoteControlMA)
                     onClicked: {
                         remoteControlButton.forceActiveFocus()
                         bridge.onRemoteControlClicked()
@@ -369,7 +405,7 @@ Item {
                     id: minMA; anchors.fill: parent
                     hoverEnabled: true
                     onEntered: root.beginButtonHover(minMA, bridge.minimizeTooltip)
-                    onExited: root.endButtonHover()
+                    onExited: root.endButtonHover(minMA)
                     onClicked: bridge.onMinimizeClicked()
                 }
             }
@@ -418,7 +454,7 @@ Item {
             width: 26  // Constrain hover/clicks to the visible part
             hoverEnabled: true
             onEntered: root.beginButtonHover(miniMA, bridge.expandTooltip)
-            onExited: root.endButtonHover()
+            onExited: root.endButtonHover(miniMA)
             onClicked: bridge.onExpandClicked()
         }
     }

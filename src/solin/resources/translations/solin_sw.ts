@@ -4555,6 +4555,24 @@ Hutaweza kurudisha hatua hii.</translation>
     </message>
 </context>
 <context>
+    <name>PopupHoverButton</name>
+    <message>
+        <location filename="../../widgets/common/popup_hover_button.py" line="28"/>
+        <source>Open on hover</source>
+        <translation>Fungua kwa kuelekeza kishale</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/common/popup_hover_button.py" line="30"/>
+        <source>Opens when you hover over its toolbar icon. Click to disable.</source>
+        <translation>Hufunguka kishale kinapoelekezwa kwenye ikoni yake kwenye upau wa zana. Bofya ili kuzima.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/common/popup_hover_button.py" line="32"/>
+        <source>Open this panel by hovering over its toolbar icon. Click to enable.</source>
+        <translation>Fungua paneli hii kwa kuelekeza kishale kwenye ikoni yake kwenye upau wa zana. Bofya ili kuwezesha.</translation>
+    </message>
+</context>
+<context>
     <name>ProfileNameDialog</name>
     <message>
         <location filename="../../ui/profile_widgets.py" line="+336"/>

@@ -57,6 +57,9 @@ class QuickToolbarBridge(QObject):
     pointerExited = Signal()
     tooltipRequested = Signal(str, float, float, float, float)
     tooltipHidden = Signal()
+    popupHoverRequested = Signal(str, float, float, float, float)
+    popupHoverCancelled = Signal()
+    popupOpening = Signal()
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -230,6 +233,16 @@ class QuickToolbarBridge(QObject):
         return self._expand_tooltip
 
     # ── QML Slots (user actions) ──────────────────────────────────────────
+
+    @Slot(str, float, float, float, float)
+    def hoverPopup(  # noqa: N802
+        self, popup_id: str, x: float, y: float, width: float, height: float
+    ) -> None:
+        self.popupHoverRequested.emit(popup_id, x, y, width, height)
+
+    @Slot()
+    def cancelPopupHover(self) -> None:  # noqa: N802
+        self.popupHoverCancelled.emit()
 
     @Slot()
     def onMonitorClicked(self) -> None:  # noqa: N802

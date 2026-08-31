@@ -29,6 +29,7 @@ EXPECTED_SETTINGS_KEYS = {
     "BOOTSTRAP_LANGUAGE": "bootstrap_language",
     "APP_LANGUAGE": "language",
     "APP_THEME": "theme",
+    "TOOLBAR_HOVER_POPUPS": "toolbar/hover_popups",
     "MEDIA_LANGUAGE_CODE": "media_language_code",
     "LEGACY_JW_LANGUAGE": "jw_language",
     "WINDOW_GEOMETRY": "geometry",

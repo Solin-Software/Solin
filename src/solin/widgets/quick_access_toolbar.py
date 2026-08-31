@@ -17,11 +17,12 @@ from PySide6.QtCore import (
     QUrl,
     Signal,
 )
-from PySide6.QtGui import QColor, QCursor, QFontMetrics, QGuiApplication, QRegion
+from PySide6.QtGui import QColor, QRegion
 from PySide6.QtQuickWidgets import QQuickWidget
-from PySide6.QtWidgets import QWidget
+from PySide6.QtWidgets import QApplication, QWidget
 
 from solin.core.integrations.automation.settings import CameraSettingsStore, OBSSettingsStore
+from solin.core.foundation.settings_store import ProfileAppSettingsStore
 from solin.core.integrations.camera_options import CameraOption
 from solin.core.remote_control.security import RemoteSessionInfo
 from solin.ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
@@ -36,6 +37,7 @@ from solin.ui.qml.quick_toolbar import (
 )
 from solin.ui.qml.svg_icons import SvgIconProvider
 from solin.ui.incremental_load import IncrementalLoadHandle
+from solin.ui.popup_hover import PopupHoverController
 from solin.widgets.background_song_popup import BackgroundSongPopup
 
 if TYPE_CHECKING:
@@ -161,6 +163,7 @@ class QuickAccessToolbar(QQuickWidget):
         parent=None,
         *,
         obs_settings: OBSSettingsStore,
+        app_settings: ProfileAppSettingsStore,
         background_song_service=None,
         scene_runtime: SceneRuntimeController | None = None,
         program_recording: ProgramRecordingController | None = None,
@@ -233,6 +236,26 @@ class QuickAccessToolbar(QQuickWidget):
         self._bridge.pointerExited.connect(self._end_qml_pointer_cursor)
         self._bridge.tooltipRequested.connect(self._show_native_tooltip)
         self._bridge.tooltipHidden.connect(hide_themed_tooltip)
+
+        self._popup_hover = PopupHoverController(self, app_settings, self._active_surface)
+        self._popup_hover.register(
+            "obs",
+            self._on_obs_clicked,
+            lambda: (
+                self._bridge.pillVisible
+                and self._obs_connected
+                and self._obs is not None
+                and self._obs.is_connected
+            ),
+        )
+        self._popup_hover.register(
+            "scenes",
+            self._on_solin_scenes_clicked,
+            lambda: self._bridge.pillVisible and self._scene_runtime is not None,
+        )
+        self._bridge.popupHoverRequested.connect(self._popup_hover.enter)
+        self._bridge.popupHoverCancelled.connect(self._popup_hover.cancel)
+        self._popup_hover.opening.connect(self._bridge.popupOpening)
 
         if _MAC:
             self._bridge.set_solid_mode(True)
@@ -346,6 +369,7 @@ class QuickAccessToolbar(QQuickWidget):
             end_qml_pointer_cursor(self)
 
     def _reset_qml_pointer_cursor(self):
+        self._popup_hover.cancel()
         self._qml_pointer_depth = 0
         end_qml_pointer_cursor(self)
         hide_themed_tooltip()
@@ -388,74 +412,14 @@ class QuickAccessToolbar(QQuickWidget):
         width: float,
         height: float,
     ) -> None:
-        if not text:
+        if not text or QApplication.activePopupWidget() is not None:
             hide_themed_tooltip()
             return
 
         rect = QRect(round(x), round(y), round(width), round(height))
         surface = self._active_surface()
-        anchor = surface.mapToGlobal(QPoint(rect.center().x(), rect.top()))
-        top_left = surface.mapToGlobal(QPoint(rect.left(), rect.top()))
-
-        screen = QGuiApplication.screenAt(anchor)
-        if screen is None and surface.windowHandle() is not None:
-            screen = surface.windowHandle().screen()
-        if screen is None:
-            screen = QGuiApplication.primaryScreen()
-
-        margin = 8
-        tooltip_gap = 25
-        cursor_clearance = 16
-        available = screen.availableGeometry() if screen else QRect()
-        metrics = QFontMetrics(self.font())
-        tooltip_w = metrics.horizontalAdvance(text) + 18
-        if available.isValid():
-            tooltip_w = min(tooltip_w, max(24, available.width() - margin * 2))
-        tooltip_h = metrics.lineSpacing() + 12
-
-        pos_x = anchor.x() - tooltip_w // 2
-        preferred_above_y = top_left.y() - tooltip_h - tooltip_gap
-        preferred_below_y = top_left.y() + rect.height() + tooltip_gap
-        pos_y = preferred_above_y
-
-        if available.isValid():
-            pos_x = max(
-                available.left() + margin,
-                min(pos_x, available.right() - tooltip_w - margin),
-            )
-            if pos_y < available.top() + margin:
-                pos_y = preferred_below_y
-
-            cursor_pos = QCursor.pos()
-
-            def clamp_y(candidate: int) -> int:
-                return max(
-                    available.top() + margin,
-                    min(candidate, available.bottom() - tooltip_h - margin),
-                )
-
-            def clears_cursor(candidate: int) -> bool:
-                tooltip_rect = QRect(pos_x, candidate, tooltip_w, tooltip_h)
-                return not tooltip_rect.adjusted(
-                    -cursor_clearance,
-                    -cursor_clearance,
-                    cursor_clearance,
-                    cursor_clearance,
-                ).contains(cursor_pos)
-
-            candidates = [
-                clamp_y(pos_y),
-                clamp_y(preferred_above_y),
-                clamp_y(preferred_below_y),
-                clamp_y(cursor_pos.y() - tooltip_h - cursor_clearance),
-                clamp_y(cursor_pos.y() + cursor_clearance),
-            ]
-            for candidate in candidates:
-                if clears_cursor(candidate):
-                    pos_y = candidate
-                    break
-
-        show_themed_tooltip(QPoint(pos_x, pos_y), text)
+        anchor = QRect(surface.mapToGlobal(rect.topLeft()), rect.size())
+        show_themed_tooltip(anchor, text, screen=surface.screen())
 
     def _ensure_zoom_panel(self):
         if self._zoom_panel is not None:
@@ -480,6 +444,7 @@ class QuickAccessToolbar(QQuickWidget):
         from solin.widgets.obs_scene_popup import OBSScenePopup
 
         popup = OBSScenePopup(self)
+        self._popup_hover.bind_button("obs", popup.hover_button)
         popup.scene_change_requested.connect(self.obs_scene_change)
         popup.return_scene_requested.connect(self.obs_return_scene_change)
         popup.stream_requested.connect(self.obs_stream_requested)
@@ -521,6 +486,7 @@ class QuickAccessToolbar(QQuickWidget):
             self,
             recording=self._program_recording,
         )
+        self._popup_hover.bind_button("scenes", popup.hover_button)
         self._solin_scene_popup = popup
         return popup
 
@@ -1051,6 +1017,7 @@ class QuickAccessToolbar(QQuickWidget):
         self._apply_mac_corners()
 
     def _toggle_minimize(self):
+        self._popup_hover.cancel()
         hide_themed_tooltip()
         p = self._anchor_parent
         if not p:
@@ -1147,6 +1114,8 @@ class QuickAccessToolbar(QQuickWidget):
         idle_scene = self._obs_settings.default_scene()
         media_scene = self._obs_settings.media_window_scene()
         popup = self._ensure_scene_popup()
+        if popup.isVisible():
+            return
         popup.populate(scenes, current, idle_scene, media_scene)
         popup.show_above(self._active_surface())
         if not scenes:
@@ -1155,7 +1124,7 @@ class QuickAccessToolbar(QQuickWidget):
     def _on_solin_scenes_clicked(self) -> None:
         hide_themed_tooltip()
         popup = self._ensure_solin_scene_popup()
-        if popup is not None:
+        if popup is not None and not popup.isVisible():
             popup.show_above(self._active_surface())
 
     def _on_camera_clicked(self) -> None:

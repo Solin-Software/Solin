@@ -9,6 +9,7 @@ from PySide6.QtWidgets import QApplication
 from unittest.mock import patch
 
 from solin.widgets.common.buffered_slider import BufferedSlider
+from solin.ui.themed_tooltip import ThemedTooltipFilter
 
 
 _APP = QApplication.instance() or QApplication([])
@@ -17,7 +18,7 @@ _APP = QApplication.instance() or QApplication([])
 def test_disabled_buffered_slider_hides_handle_and_uses_arrow_cursor() -> None:
     slider = BufferedSlider()
 
-    assert slider._solin_themed_tooltip_filter is not None
+    assert slider.findChild(ThemedTooltipFilter) is not None
     assert slider._should_draw_handle() is True
     assert slider.cursor().shape() == Qt.CursorShape.PointingHandCursor
 
