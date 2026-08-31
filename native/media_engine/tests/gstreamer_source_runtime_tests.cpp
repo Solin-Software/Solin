@@ -18,6 +18,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <condition_variable>
+#include <exception>
 #include <iostream>
 #include <memory>
 #include <mutex>
@@ -27,6 +28,7 @@
 #include <string>
 #include <string_view>
 #include <thread>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -58,6 +60,62 @@ void test_gstreamer_diagnostics_extract_only_the_native_hresult() {
     expect(solin::media_engine::extract_hresult_code("Not an HRESULT: 0x80070005ABC")
                .empty(),
            "camera diagnostics reject oversized hexadecimal values");
+}
+
+void test_local_camera_caps_preserve_exact_native_frame_rates() {
+    for (const auto& [numerator, denominator] :
+         {std::pair{10'000'000U, 333'333U}, std::pair{10'000'000U, 166'667U},
+          std::pair{2'147'483'647U, 143'165'577U},
+          std::pair{2'147'483'647U, 35'791'395U}, std::pair{1U, 2'147'483'647U}}) {
+        try {
+            const std::unique_ptr<GstCaps, decltype(&gst_caps_unref)> caps{
+                solin::media_engine::gstreamer_local_camera_caps({
+                    .width = 1'920U,
+                    .height = 1'080U,
+                    .fps_numerator = numerator,
+                    .fps_denominator = denominator,
+                    .media_type = "image/jpeg",
+                    .pixel_format = "JPEG",
+                }),
+                &gst_caps_unref,
+            };
+            gint actual_numerator = 0;
+            gint actual_denominator = 0;
+            const auto* structure = gst_caps_get_structure(caps.get(), 0U);
+            expect(gst_structure_get_fraction(structure, "framerate", &actual_numerator,
+                                              &actual_denominator) != FALSE &&
+                       actual_numerator == static_cast<gint>(numerator) &&
+                       actual_denominator == static_cast<gint>(denominator),
+                   "camera capture caps retain the exact selected fraction without approximation");
+        } catch (const std::exception&) {
+            expect(false, "capture accepts bounded exact native frame rate components");
+        }
+    }
+}
+
+void test_local_camera_caps_reject_invalid_native_frame_rates() {
+    for (const auto& [numerator, denominator] :
+         {std::pair{2'147'483'648U, 2'147'483'647U}, std::pair{1U, 2'147'483'648U},
+          std::pair{20'000'000U, 666'666U}, std::pair{10'000'000U, 166'666U},
+          std::pair{10'000'000U, 0U}, std::pair{0U, 1U}}) {
+        try {
+            const std::unique_ptr<GstCaps, decltype(&gst_caps_unref)> caps{
+                solin::media_engine::gstreamer_local_camera_caps({
+                    .width = 1'920U,
+                    .height = 1'080U,
+                    .fps_numerator = numerator,
+                    .fps_denominator = denominator,
+                    .media_type = "image/jpeg",
+                    .pixel_format = "JPEG",
+                }),
+                &gst_caps_unref,
+            };
+            expect(false, "invalid camera rates are rejected before creating GStreamer caps");
+        } catch (const std::exception& error) {
+            expect(std::string_view{error.what()} == "local_camera_format_unsupported",
+                   "invalid capture fractions produce a stable diagnostic");
+        }
+    }
 }
 
 class TestRtspServer final {
@@ -302,6 +360,16 @@ void test_automatic_camera_format_is_bounded_and_deterministic() {
                 solin::media_engine::LocalCameraDevice{})
                 .has_value(),
            "automatic camera selection rejects an empty device capability set");
+    auto precise = device.formats[2];
+    precise.fps_numerator = 2'147'483'647U;
+    precise.fps_denominator = 143'165'577U;
+    auto faster = precise;
+    faster.fps_numerator = 60U;
+    faster.fps_denominator = 1U;
+    const auto precise_choice = solin::media_engine::preferred_automatic_camera_format(
+        {.formats = {faster, precise}});
+    expect(precise_choice == precise,
+           "automatic FPS budget comparison does not overflow large exact denominators");
 }
 
 [[nodiscard]] solin::media_engine::SceneHydrationSnapshot color_snapshot() {
@@ -1814,6 +1882,8 @@ int main(const int argc, const char* const argv[]) {
         const auto probe = media_runtime.initialize();
         expect(probe.initialized, "the pinned GStreamer runtime initializes");
         if (probe.initialized) {
+            test_local_camera_caps_preserve_exact_native_frame_rates();
+            test_local_camera_caps_reject_invalid_native_frame_rates();
             test_ephemeral_transition_graph_requires_causal_output(media_runtime);
             test_color_source_publishes_bounded_latest_d3d11_frames(media_runtime);
             test_rtsp_source_decodes_to_the_same_bounded_frame_contract(media_runtime);

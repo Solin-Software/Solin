@@ -19,6 +19,7 @@ from solin.core.scenes.presets import SceneSeedNames, create_default_scene_docum
 from solin.core.scenes.process_engine import (
     SceneEngineCommandRejectedError,
     SceneEngineProcessConfig,
+    SceneEngineProtocolError,
     SceneEngineRequestTimeoutError,
     SubprocessSceneEngine,
 )
@@ -79,6 +80,35 @@ def _snapshot(sequence: int = 1) -> SceneEngineSnapshot:
         render_enabled=tuple((bus_id, True) for bus_id in BusId),
         output_enabled=tuple((bus_id, True) for bus_id in BusId),
     )
+
+
+def test_subprocess_camera_discovery_preserves_high_precision_fps() -> None:
+    engine = _engine("camera_exact_fps")
+    try:
+        engine.start(session_id="integration-session", deadline_ms=2000).result(3)
+        discovery = engine.list_local_cameras(request_id="cameras", deadline_ms=1000).result(2)
+        assert len(discovery.devices) == 2
+        assert discovery.devices[0].formats[0].fps_numerator == 10_000_000
+        assert discovery.devices[0].formats[0].fps_denominator == 333_333
+        assert engine.metrics.protocol_error_count == 0
+        assert engine.health.restart_count == 0
+    finally:
+        engine.stop()
+
+
+def test_subprocess_camera_failure_reports_the_actual_validation_rule(caplog) -> None:
+    engine = _engine("camera_invalid_fps")
+    try:
+        engine.start(session_id="integration-session", deadline_ms=2000).result(3)
+        with pytest.raises(SceneEngineProtocolError) as failure:
+            engine.list_local_cameras(request_id="cameras", deadline_ms=1000).result(2)
+        assert failure.value.__cause__ is not None
+        assert "FPS denominator" in caplog.text
+        assert '"device_index":0' in caplog.text
+        assert '"format_index":0' in caplog.text
+        assert "camera://device-1" not in caplog.text
+    finally:
+        engine.stop()
 
 
 def test_subprocess_engine_executes_the_scene_command_lifecycle() -> None:

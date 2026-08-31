@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <numeric>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -14,6 +15,20 @@ namespace {
 constexpr std::size_t kMaximumLocalCameraDevices = 64U;
 
 void mark_provider_result(LocalCameraDevice& device) {
+    std::vector<LocalVideoFormat> formats;
+    formats.reserve((std::min)(device.formats.size(), std::size_t{256U}));
+    for (std::size_t index = 0U; index < device.formats.size(); ++index) {
+        auto format = std::move(device.formats[index]);
+        const auto error = normalize_local_camera_format(format);
+        if (!error.empty()) {
+            record_local_camera_format_rejection(
+                device, static_cast<std::uint32_t>(index), error, format);
+        } else if (formats.size() < 256U &&
+                   std::ranges::find(formats, format) == formats.end()) {
+            formats.push_back(std::move(format));
+        }
+    }
+    device.formats = std::move(formats);
     if (device.formats.empty()) {
         device.probe = {
             .status = LocalCameraProbeStatus::unverified,
@@ -46,6 +61,47 @@ void mark_provider_result(LocalCameraDevice& device) {
 }
 
 } // namespace
+
+std::string_view normalize_local_camera_format(LocalVideoFormat& format) {
+    if (format.media_type != "video/x-raw" && format.media_type != "image/jpeg" &&
+        format.media_type != "video/x-h264") {
+        return "unsupported_media_type";
+    }
+    if (format.pixel_format.empty() || format.pixel_format.size() > 80U ||
+        std::ranges::any_of(format.pixel_format, [](const unsigned char value) {
+            return value < 32U || value == 127U;
+        })) {
+        return "invalid_pixel_format";
+    }
+    if (format.width == 0U || format.height == 0U ||
+        format.width > 3'840U || format.height > 3'840U ||
+        static_cast<std::uint64_t>(format.width) * format.height > 3'840ULL * 2'160ULL ||
+        (std::min)(format.width, format.height) > 2'160U) {
+        return "invalid_dimensions";
+    }
+    if (format.fps_numerator == 0U || format.fps_denominator == 0U ||
+        format.fps_numerator > kMaximumCameraFpsComponent ||
+        format.fps_denominator > kMaximumCameraFpsComponent ||
+        static_cast<std::uint64_t>(format.fps_numerator) >
+            60ULL * format.fps_denominator) {
+        return "invalid_frame_rate";
+    }
+    const auto divisor = std::gcd(format.fps_numerator, format.fps_denominator);
+    format.fps_numerator /= divisor;
+    format.fps_denominator /= divisor;
+    return {};
+}
+
+void record_local_camera_format_rejection(LocalCameraDevice& device,
+                                          const std::uint32_t index,
+                                          const std::string_view error_code,
+                                          const LocalVideoFormat& format) {
+    ++device.rejected_format_count;
+    constexpr std::size_t maximum_samples = 8U;
+    if (device.format_rejections.size() < maximum_samples) {
+        device.format_rejections.push_back({index, std::string{error_code}, format});
+    }
+}
 
 bool same_local_camera_device_id(const std::string_view left,
                                  const std::string_view right) noexcept {

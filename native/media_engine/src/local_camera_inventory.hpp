@@ -28,6 +28,15 @@ struct LocalCameraInventorySnapshot {
 [[nodiscard]] bool same_local_camera_device_id(std::string_view left,
                                                std::string_view right) noexcept;
 
+// Validate driver data at the native boundary, preserving exact reduced FPS.
+// An empty error code means the format is usable by the complete capture path.
+[[nodiscard]] std::string_view normalize_local_camera_format(LocalVideoFormat& format);
+
+void record_local_camera_format_rejection(LocalCameraDevice& device,
+                                          std::uint32_t index,
+                                          std::string_view error_code,
+                                          const LocalVideoFormat& format);
+
 [[nodiscard]] std::vector<LocalCameraDevice> reconcile_local_camera_devices(
     const LocalCameraInventorySnapshot& inventory,
     std::vector<LocalCameraDevice> provider_devices);

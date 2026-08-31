@@ -289,8 +289,13 @@ def main() -> int:
                                     "pixel_format": "NV12",
                                     "width": 1920,
                                     "height": 1080,
-                                    "fps_numerator": 30_000,
-                                    "fps_denominator": 1_001,
+                                    "fps_numerator": (
+                                        10_000_000 if mode == "camera_exact_fps" else 30_000
+                                    ),
+                                    "fps_denominator": (
+                                        333_333 if mode == "camera_exact_fps"
+                                        else 0 if mode == "camera_invalid_fps" else 1_001
+                                    ),
                                 }
                             ],
                         },

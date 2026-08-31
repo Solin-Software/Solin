@@ -10,7 +10,7 @@
 
 namespace solin::media_engine {
 
-inline constexpr std::uint64_t kControlProtocolVersion = 5U;
+inline constexpr std::uint64_t kControlProtocolVersion = 6U;
 
 struct ControlEnvelope {
     std::uint64_t protocol_version{kControlProtocolVersion};

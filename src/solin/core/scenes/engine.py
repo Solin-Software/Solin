@@ -8,6 +8,7 @@ from math import gcd, isfinite
 from typing import Protocol, TypeAlias
 
 from solin.core.scenes.model import (
+    MAXIMUM_CAMERA_FPS_COMPONENT,
     MAXIMUM_CAMERA_SOURCE_DIMENSION,
     MAXIMUM_CAMERA_SOURCE_FPS,
     MAXIMUM_CAMERA_SOURCE_PIXELS,
@@ -138,8 +139,12 @@ class LocalVideoFormat:
             or min(self.width, self.height) > MAXIMUM_CAMERA_SOURCE_SHORT_EDGE
         ):
             raise ValueError("Local video dimensions exceed the media budget")
-        _bounded_int(self.fps_numerator, 1, 480_000, "local video FPS numerator")
-        _bounded_int(self.fps_denominator, 1, 100_000, "local video FPS denominator")
+        _bounded_int(
+            self.fps_numerator, 1, MAXIMUM_CAMERA_FPS_COMPONENT, "local video FPS numerator"
+        )
+        _bounded_int(
+            self.fps_denominator, 1, MAXIMUM_CAMERA_FPS_COMPONENT, "local video FPS denominator"
+        )
         if (
             self.fps_numerator > MAXIMUM_CAMERA_SOURCE_FPS * self.fps_denominator
             or gcd(self.fps_numerator, self.fps_denominator) != 1

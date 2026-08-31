@@ -12,12 +12,17 @@
 #include <string_view>
 
 typedef struct _GstSample GstSample;
+typedef struct _GstCaps GstCaps;
 typedef struct _GstD3D11Device GstD3D11Device;
 
 namespace solin::media_engine {
 
 using LocalCameraFormatResolver = std::function<
     std::optional<LocalCameraSourceConfiguration>(std::string_view)>;
+
+// The caller owns the returned caps and must release them with gst_caps_unref.
+[[nodiscard]] GstCaps*
+gstreamer_local_camera_caps(const LocalCameraSourceConfiguration& configuration);
 
 class GStreamerSamplePayload : public SourceFramePayload {
   public:

@@ -141,6 +141,77 @@ void test_reconciliation_deduplicates_and_bounds_devices() {
            "authoritative inventory devices take priority at the protocol limit");
 }
 
+void test_invalid_format_does_not_poison_other_formats_or_cameras() {
+    auto mixed = provider_device("camera://mixed", "Mixed formats");
+    auto invalid = mixed.formats.front();
+    invalid.fps_denominator = 0U;
+    mixed.formats.push_back(invalid);
+    auto unsupported = provider_device("camera://unsupported", "Unsupported formats");
+    unsupported.formats.front().fps_numerator = 61U;
+    const auto devices = solin::media_engine::reconcile_local_camera_devices(
+        {.supported = true},
+        {std::move(mixed), std::move(unsupported),
+         provider_device("camera://healthy", "Healthy camera")});
+
+    expect(devices.size() == 3U, "invalid formats never hide camera identities");
+    expect(devices[1].formats.size() == 1U,
+           "one bad format does not discard a camera's valid formats");
+    expect(devices[1].rejected_format_count == 1U &&
+               devices[1].format_rejections.front().error_code == "invalid_frame_rate" &&
+               devices[1].format_rejections.front().format_index == 1U,
+           "format rejection diagnostics identify the reason and input position");
+    expect(devices[2].formats.empty() &&
+               devices[2].probe.status ==
+                   solin::media_engine::LocalCameraProbeStatus::unverified,
+           "camera with no usable format stays selectable as unverified");
+    expect(devices[0].formats.size() == 1U,
+           "unrelated camera remains ready");
+}
+
+void test_provider_formats_are_canonical_exact_and_deduplicated() {
+    auto provider = provider_device("camera://exact", "Exact frame rate");
+    auto exact = provider.formats.front();
+    exact.fps_numerator = 10'000'000U;
+    exact.fps_denominator = 333'333U;
+    auto equivalent = exact;
+    equivalent.fps_numerator *= 2U;
+    equivalent.fps_denominator *= 2U;
+    provider.formats = {exact, equivalent};
+    const auto devices = solin::media_engine::reconcile_local_camera_devices(
+        {.supported = true}, {std::move(provider)});
+    expect(devices[0].formats.size() == 1U,
+           "equivalent fractions produce a single canonical format");
+    expect(devices[0].formats.front() == exact,
+           "high-precision driver FPS is preserved without rounding");
+}
+
+void test_format_validation_bounds_diagnostics_and_rejects_invalid_inputs() {
+    const auto valid = provider_device("camera://valid", "Valid").formats.front();
+    std::vector<solin::media_engine::LocalVideoFormat> invalid(12U, valid);
+    invalid[0].fps_numerator = 2'147'483'648U;
+    invalid[1].fps_denominator = 2'147'483'648U;
+    invalid[2].media_type = "video/unknown";
+    invalid[3].pixel_format = "";
+    invalid[4].pixel_format = "NV12\n";
+    invalid[5].pixel_format = std::string(81U, 'x');
+    invalid[6].width = 0U;
+    invalid[7].height = 3'841U;
+    invalid[8].width = 3'840U;
+    invalid[8].height = 3'840U;
+    invalid[9].fps_numerator = 10'000'000U;
+    invalid[9].fps_denominator = 166'666U;
+    invalid[10].fps_numerator = 0U;
+    invalid[11].fps_denominator = 0U;
+    auto provider = provider_device("camera://invalid", "Invalid");
+    provider.formats = invalid;
+    const auto devices = solin::media_engine::reconcile_local_camera_devices(
+        {.supported = true}, {std::move(provider)});
+    expect(devices[0].formats.empty(), "invalid native formats never reach the wire");
+    expect(devices[0].rejected_format_count == invalid.size() &&
+               devices[0].format_rejections.size() == 8U,
+           "format diagnostics count all rejections but retain bounded samples");
+}
+
 void test_platform_inventory_is_bounded_and_non_activating() {
     const auto inventory =
         solin::media_engine::platform_local_camera_inventory();
@@ -189,6 +260,9 @@ int main(const int argument_count, const char* const* arguments) {
     test_inventory_failure_does_not_hide_provider_devices();
     test_provider_device_without_bounded_formats_remains_unverified();
     test_reconciliation_deduplicates_and_bounds_devices();
+    test_invalid_format_does_not_poison_other_formats_or_cameras();
+    test_provider_formats_are_canonical_exact_and_deduplicated();
+    test_format_validation_bounds_diagnostics_and_rejects_invalid_inputs();
     test_platform_inventory_is_bounded_and_non_activating();
     return failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 }

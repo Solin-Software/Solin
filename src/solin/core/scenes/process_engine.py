@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import os
 import random
@@ -55,6 +56,7 @@ from solin.core.scenes.ipc_protocol import (
     PROTOCOL_VERSION,
     SceneIpcEnvelope,
     SceneIpcError,
+    SceneIpcFrameError,
     SceneIpcMessageError,
     read_envelope,
     require_bool,
@@ -154,6 +156,83 @@ class SceneEngineRequestTimeoutError(SceneEngineProcessError):
 
 class SceneEngineProtocolError(SceneEngineProcessError):
     """Raised when the child violates the versioned control protocol."""
+
+
+class _CameraDiscoveryValidationError(SceneIpcMessageError):
+    """A camera contract failure with safe, positional diagnostic context."""
+
+    def __init__(
+        self,
+        error: ValueError,
+        *,
+        generation: int | None,
+        device_index: int | None,
+        format_index: int | None,
+        raw_format: object,
+    ) -> None:
+        # Camera validators use fixed field/invariant names, never payload values.
+        super().__init__(str(error))
+        self.diagnostics = {
+            "reason": str(error),
+            "validation_error_type": type(error).__name__,
+            "camera_generation": generation,
+            "device_index": device_index,
+            "format_index": format_index,
+            "format_values": _camera_format_diagnostics(raw_format),
+        }
+
+
+def _camera_format_diagnostics(raw_format: object) -> dict[str, object]:
+    if not isinstance(raw_format, dict):
+        return {}
+    values: dict[str, object] = {}
+    for field in ("width", "height", "fps_numerator", "fps_denominator"):
+        value = raw_format.get(field)
+        values[field] = (
+            value
+            if type(value) is int and -(2**63) <= value < 2**63
+            else {"type": type(value).__name__}
+        )
+    return values
+
+
+def _log_protocol_error(
+    error: ValueError,
+    *,
+    stage: str,
+    message_type: str = "",
+    expected_message_type: str = "",
+) -> None:
+    details: dict[str, object] = {
+        "stage": stage,
+        "message_type": message_type,
+        "expected_message_type": expected_message_type,
+        "error_type": type(error).__name__,
+    }
+    if isinstance(error, _CameraDiscoveryValidationError):
+        details.update(error.diagnostics)
+    elif type(error) in (SceneIpcMessageError, SceneIpcFrameError):
+        # The wire validators describe fixed schema rules, not raw payloads.
+        details["reason"] = str(error)
+    # Keep the failure location even for non-camera errors, without logging raw
+    # exception values, payloads, trace source lines, or local filesystem paths.
+    frames: list[dict[str, object]] = []
+    traceback = (
+        error.__cause__.__traceback__
+        if isinstance(error, _CameraDiscoveryValidationError) and error.__cause__ is not None
+        else error.__traceback__
+    )
+    while traceback is not None:
+        frames.append(
+            {
+                "file": Path(traceback.tb_frame.f_code.co_filename).name,
+                "function": traceback.tb_frame.f_code.co_name,
+                "line": traceback.tb_lineno,
+            }
+        )
+        traceback = traceback.tb_next
+    details["trace"] = frames[-4:]
+    log.warning("scene_engine_protocol_error %s", json.dumps(details, separators=(",", ":")))
 
 
 class SceneEngineCommandRejectedError(SceneEngineProcessError):
@@ -935,9 +1014,10 @@ class SubprocessSceneEngine:
                 self._receive(envelope, generation)
         except OSError:
             pass
-        except (SceneIpcError, ValueError):
+        except (SceneIpcError, ValueError) as exc:
             with self._lock:
                 self._protocol_error_count += 1
+            _log_protocol_error(exc, stage="read_or_event")
         finally:
             if not self._stop_event.is_set() and generation == self._process_generation:
                 self._generation_failed.set()
@@ -985,10 +1065,18 @@ class SubprocessSceneEngine:
                 pending.future.set_exception(_command_error_from_envelope(envelope))
                 return
             result = pending.converter(envelope)
-        except (SceneIpcError, ValueError):
+        except (SceneIpcError, ValueError) as exc:
             with self._lock:
                 self._protocol_error_count += 1
-            pending.future.set_exception(SceneEngineProtocolError("Invalid engine response"))
+            _log_protocol_error(
+                exc,
+                stage="response",
+                message_type=envelope.message_type,
+                expected_message_type=pending.expected_message_type,
+            )
+            error = SceneEngineProtocolError("Invalid engine response")
+            error.__cause__ = exc
+            pending.future.set_exception(error)
             self._generation_failed.set()
             return
         pending.future.set_result(result)
@@ -1450,91 +1538,115 @@ def _source_health_from_envelope(envelope: SceneIpcEnvelope) -> SourceHealthEven
 def _local_camera_discovery_from_envelope(
     envelope: SceneIpcEnvelope,
 ) -> LocalCameraDiscovery:
-    payload = require_payload_fields(
-        envelope.payload,
-        _LOCAL_CAMERA_LIST_FIELDS,
-        message_type="local camera list",
-    )
-    raw_devices = payload["devices"]
-    if not isinstance(raw_devices, list) or len(raw_devices) > 64:
-        raise SceneIpcMessageError("Invalid local camera device list")
-    devices: list[LocalCameraDevice] = []
-    for raw_device in raw_devices:
-        device = require_payload_fields(
-            raw_device,
-            _LOCAL_CAMERA_FIELDS,
-            message_type="local camera",
+    generation: int | None = None
+    device_index: int | None = None
+    format_index: int | None = None
+    raw_format: object = None
+    try:
+        payload = require_payload_fields(
+            envelope.payload,
+            _LOCAL_CAMERA_LIST_FIELDS,
+            message_type="local camera list",
         )
-        raw_formats = device["formats"]
-        if not isinstance(raw_formats, list) or len(raw_formats) > 256:
-            raise SceneIpcMessageError("Invalid local camera format list")
-        formats: list[LocalVideoFormat] = []
-        for raw_format in raw_formats:
-            video_format = require_payload_fields(
-                raw_format,
-                _LOCAL_VIDEO_FORMAT_FIELDS,
-                message_type="local video format",
-            )
-            try:
-                media_type = CameraMediaType(
-                    require_text(video_format["media_type"], "local video media type", maximum=80)
-                )
-            except ValueError as exc:
-                raise SceneIpcMessageError("Invalid local video media type") from exc
-            formats.append(
-                LocalVideoFormat(
-                    media_type=media_type,
-                    pixel_format=require_text(
-                        video_format["pixel_format"],
-                        "local video pixel format",
-                        maximum=80,
-                    ),
-                    width=require_non_negative_int(video_format["width"], "local video width"),
-                    height=require_non_negative_int(video_format["height"], "local video height"),
-                    fps_numerator=require_non_negative_int(
-                        video_format["fps_numerator"],
-                        "local video FPS numerator",
-                    ),
-                    fps_denominator=require_non_negative_int(
-                        video_format["fps_denominator"],
-                        "local video FPS denominator",
-                    ),
-                )
-            )
-        devices.append(
-            LocalCameraDevice(
-                device_id=require_text(
-                    device["device_id"],
-                    "local camera device id",
-                    maximum=1024,
-                ),
-                display_name=require_text(
-                    device["display_name"],
-                    "local camera display name",
-                    maximum=512,
-                ),
-                software_device=require_bool(
-                    device["software_device"],
-                    "local camera software-device flag",
-                ),
-                formats=tuple(formats),
-                probe=_local_camera_probe(device["probe"]),
-            )
+        generation = require_non_negative_int(
+            payload["generation"], "local camera discovery generation"
         )
-    return LocalCameraDiscovery(
-        supported=require_bool(payload["supported"], "local camera discovery support"),
-        ready=require_bool(payload["ready"], "local camera discovery readiness"),
-        generation=require_non_negative_int(
-            payload["generation"],
-            "local camera discovery generation",
-        ),
-        devices=tuple(devices),
-        error_code=require_text(
-            payload["error_code"],
-            "local camera discovery error code",
-            maximum=128,
-        ),
-    )
+        raw_devices = payload["devices"]
+        if not isinstance(raw_devices, list) or len(raw_devices) > 64:
+            raise SceneIpcMessageError("Invalid local camera device list")
+        devices: list[LocalCameraDevice] = []
+        for current_device_index, raw_device in enumerate(raw_devices):
+            device_index = current_device_index
+            format_index = None
+            raw_format = None
+            device = require_payload_fields(
+                raw_device,
+                _LOCAL_CAMERA_FIELDS,
+                message_type="local camera",
+            )
+            raw_formats = device["formats"]
+            if not isinstance(raw_formats, list) or len(raw_formats) > 256:
+                raise SceneIpcMessageError("Invalid local camera format list")
+            formats: list[LocalVideoFormat] = []
+            for current_format_index, raw_format in enumerate(raw_formats):
+                format_index = current_format_index
+                video_format = require_payload_fields(
+                    raw_format,
+                    _LOCAL_VIDEO_FORMAT_FIELDS,
+                    message_type="local video format",
+                )
+                try:
+                    media_type = CameraMediaType(
+                        require_text(
+                            video_format["media_type"], "local video media type", maximum=80
+                        )
+                    )
+                except ValueError as exc:
+                    raise SceneIpcMessageError("Invalid local video media type") from exc
+                formats.append(
+                    LocalVideoFormat(
+                        media_type=media_type,
+                        pixel_format=require_text(
+                            video_format["pixel_format"],
+                            "local video pixel format",
+                            maximum=80,
+                        ),
+                        width=require_non_negative_int(video_format["width"], "local video width"),
+                        height=require_non_negative_int(
+                            video_format["height"], "local video height"
+                        ),
+                        fps_numerator=require_non_negative_int(
+                            video_format["fps_numerator"],
+                            "local video FPS numerator",
+                        ),
+                        fps_denominator=require_non_negative_int(
+                            video_format["fps_denominator"],
+                            "local video FPS denominator",
+                        ),
+                    )
+                )
+            format_index = None
+            raw_format = None
+            devices.append(
+                LocalCameraDevice(
+                    device_id=require_text(
+                        device["device_id"],
+                        "local camera device id",
+                        maximum=1024,
+                    ),
+                    display_name=require_text(
+                        device["display_name"],
+                        "local camera display name",
+                        maximum=512,
+                    ),
+                    software_device=require_bool(
+                        device["software_device"],
+                        "local camera software-device flag",
+                    ),
+                    formats=tuple(formats),
+                    probe=_local_camera_probe(device["probe"]),
+                )
+            )
+        device_index = None
+        return LocalCameraDiscovery(
+            supported=require_bool(payload["supported"], "local camera discovery support"),
+            ready=require_bool(payload["ready"], "local camera discovery readiness"),
+            generation=generation,
+            devices=tuple(devices),
+            error_code=require_text(
+                payload["error_code"],
+                "local camera discovery error code",
+                maximum=128,
+            ),
+        )
+    except (SceneIpcError, ValueError) as exc:
+        raise _CameraDiscoveryValidationError(
+            exc,
+            generation=generation,
+            device_index=device_index,
+            format_index=format_index,
+            raw_format=raw_format,
+        ) from exc
 
 
 def _local_camera_probe(raw_probe: object) -> LocalCameraProbe:

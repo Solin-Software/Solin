@@ -84,7 +84,7 @@ void test_control_envelope_round_trip() {
 
 void test_control_envelope_rejects_duplicate_keys() {
     constexpr std::string_view duplicate =
-        R"({"protocol_version":5,"protocol_version":5,"message_type":"hello","request_id":"r","session_id":"s","process_generation":"g","sequence":0,"document_revision":0,"deadline_monotonic_ms":1,"payload":{}})";
+        R"({"protocol_version":6,"protocol_version":6,"message_type":"hello","request_id":"r","session_id":"s","process_generation":"g","sequence":0,"document_revision":0,"deadline_monotonic_ms":1,"payload":{}})";
     try {
         static_cast<void>(solin::media_engine::parse_control_envelope(duplicate));
         expect(false, "duplicate JSON keys are rejected");
