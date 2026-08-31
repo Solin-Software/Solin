@@ -1,5 +1,6 @@
-// Shared transactional coordinator for the per-user DirectShow registration.
-// Included from inside [Code], after ExecAndWaitResponsive is declared.
+// Shared transactional coordinator for DirectShow registration in the install
+// scope selected by the parent installer. The parent must define
+// IsCameraMachineInstall before including this file.
 
 const
   CameraFilterClassId = '{08AFA2E5-0293-4E56-9FE1-2A79DAE8E28F}';
@@ -10,6 +11,9 @@ var
   GCameraStateCaptured: Boolean;
   GCameraTransactionStarted: Boolean;
   GCameraTransactionCommitted: Boolean;
+  GCameraRegistrationAttempted: Boolean;
+  GCameraCreatedX64File: Boolean;
+  GCameraCreatedX86File: Boolean;
   GCameraPriorX64Exists: Boolean;
   GCameraPriorX86Exists: Boolean;
   GCameraPriorX64Path: String;
@@ -27,12 +31,54 @@ begin
             '\Instance\' + CameraFilterClassId;
 end;
 
+function CameraStorageRoot(): String;
+begin
+  if IsCameraMachineInstall() then
+    Result := ExpandConstant('{commonpf64}\Solin\VirtualCamera')
+  else
+    Result := ExpandConstant('{localappdata}\Solin\VirtualCamera');
+end;
+
+function CameraVersionsRoot(): String;
+begin
+  Result := CameraStorageRoot() + '\versions';
+end;
+
+function CameraVersionedFilterDirectory(Architecture: String): String;
+begin
+  Result := CameraVersionsRoot() + '\{#MyVirtualCameraVersion}\' + Architecture;
+end;
+
 function CameraVersionedFilterPath(const Architecture: String): String;
 begin
-  Result := ExpandConstant(
-    '{localappdata}\Solin\VirtualCamera\versions\{#MyVirtualCameraVersion}\' +
-    Architecture + '\solin-virtual-camera.dll'
-  );
+  Result := CameraVersionedFilterDirectory(Architecture) +
+            '\solin-virtual-camera.dll';
+end;
+
+function CameraRegistrationRootKey(IsX64: Boolean): Integer;
+begin
+  if IsCameraMachineInstall() then
+  begin
+    if IsX64 then
+      Result := HKLM64
+    else
+      Result := HKLM32;
+  end
+  else
+  begin
+    if IsX64 then
+      Result := HKCU64
+    else
+      Result := HKCU32;
+  end;
+end;
+
+function CameraInstallScopeArgument(): String;
+begin
+  if IsCameraMachineInstall() then
+    Result := 'machine'
+  else
+    Result := 'user';
 end;
 
 function CameraBooleanText(Value: Boolean): String;
@@ -50,14 +96,15 @@ begin
   GCameraPriorX64Path := '';
   GCameraPriorX86Path := '';
   GCameraPriorX64Exists := RegQueryStringValue(
-    HKCU64, CameraClassKey(), '', GCameraPriorX64Path
+    CameraRegistrationRootKey(True), CameraClassKey(), '', GCameraPriorX64Path
   ) and FileExists(GCameraPriorX64Path);
   GCameraPriorX86Exists := RegQueryStringValue(
-    HKCU32, CameraClassKey(), '', GCameraPriorX86Path
+    CameraRegistrationRootKey(False), CameraClassKey(), '', GCameraPriorX86Path
   ) and FileExists(GCameraPriorX86Path);
   GCameraStateCaptured := True;
   Log(
-    'Captured DirectShow registration pair: x64=' +
+    'Captured ' + CameraInstallScopeArgument() +
+    ' DirectShow registration pair: x64=' +
     CameraBooleanText(GCameraPriorX64Exists) + '; x86=' +
     CameraBooleanText(GCameraPriorX86Exists)
   );
@@ -105,18 +152,22 @@ end;
 procedure VerifyCameraRegistrationTransaction();
 begin
   if not CameraRegistrationViewIsValid(
-    HKCU64, CameraVersionedFilterPath('x64')
+    CameraRegistrationRootKey(True), CameraVersionedFilterPath('x64')
   ) then
     RaiseException('The x64 Solin DirectShow registration could not be verified.');
   if not CameraRegistrationViewIsValid(
-    HKCU32, CameraVersionedFilterPath('x86')
+    CameraRegistrationRootKey(False), CameraVersionedFilterPath('x86')
   ) then
     RaiseException('The x86 Solin DirectShow registration could not be verified.');
-  Log('Verified the transactional x64/x86 DirectShow registration pair.');
+  Log(
+    'Verified the transactional ' + CameraInstallScopeArgument() +
+    ' x64/x86 DirectShow registration pair.'
+  );
 end;
 
-function RunCameraRegsvr(
-  const FilterPath: String; IsX64: Boolean; Unregister: Boolean
+function RunCameraRegsvrCommand(
+  const FilterPath: String; IsX64: Boolean; Unregister: Boolean;
+  ScopedInstall: Boolean
 ): Boolean;
 var
   RegsvrPath: String;
@@ -124,6 +175,7 @@ var
   ExitCode: Integer;
 begin
   Result := False;
+  ExitCode := -1;
   if not FileExists(FilterPath) then
     Exit;
   if IsX64 then
@@ -133,10 +185,52 @@ begin
   Params := '/s ';
   if Unregister then
     Params := Params + '/u ';
+  if ScopedInstall then
+    Params := Params + '/n /i:' + CameraInstallScopeArgument() + ' ';
   Params := Params + '"' + FilterPath + '"';
-  Result := ExecAndWaitResponsive(
-    RegsvrPath, Params, ExtractFileDir(FilterPath), SW_HIDE, ExitCode
+  Result := Exec(
+    RegsvrPath, Params, ExtractFileDir(FilterPath), SW_HIDE,
+    ewWaitUntilTerminated, ExitCode
   ) and (ExitCode = 0);
+  if not Result then
+    Log(
+      'DirectShow registration command failed with exit code ' +
+      IntToStr(ExitCode) + ': ' + RegsvrPath + ' ' + Params
+    );
+end;
+
+function RunCameraRegsvr(
+  const FilterPath: String; IsX64: Boolean; Unregister: Boolean;
+  AllowLegacy: Boolean
+): Boolean;
+begin
+  Result := RunCameraRegsvrCommand(
+    FilterPath, IsX64, Unregister, True
+  );
+  if not Result and AllowLegacy and not IsCameraMachineInstall() then
+  begin
+    Log(
+      'Retrying legacy per-user DirectShow registration without DllInstall: ' +
+      FilterPath
+    );
+    Result := RunCameraRegsvrCommand(
+      FilterPath, IsX64, Unregister, False
+    );
+  end;
+end;
+
+procedure RegisterCameraPair();
+begin
+  GCameraRegistrationAttempted := True;
+  if not RunCameraRegsvr(
+    CameraVersionedFilterPath('x64'), True, False, False
+  ) then
+    RaiseException('The x64 Solin DirectShow registration failed.');
+  MaybeInjectVirtualCameraX86RegistrationFailure();
+  if not RunCameraRegsvr(
+    CameraVersionedFilterPath('x86'), False, False, False
+  ) then
+    RaiseException('The x86 Solin DirectShow registration failed.');
 end;
 
 procedure RemoveCameraRegistrationView(RootKey: Integer);
@@ -155,7 +249,7 @@ begin
   RemoveCameraRegistrationView(RootKey);
   if PriorExists then
   begin
-    if RunCameraRegsvr(PriorPath, IsX64, False) then
+    if RunCameraRegsvr(PriorPath, IsX64, False, True) then
       Log('Restored previous DirectShow registration: ' + PriorPath)
     else
       Log('Failed to restore previous DirectShow registration: ' + PriorPath);
@@ -164,21 +258,65 @@ end;
 
 procedure RollbackCameraRegistrationTransaction();
 begin
-  Log('Rolling back the DirectShow x64/x86 registration pair.');
-  if not RunCameraRegsvr(
-    CameraVersionedFilterPath('x86'), False, True
-  ) then
-    RemoveCameraRegistrationView(HKCU32);
-  if not RunCameraRegsvr(
-    CameraVersionedFilterPath('x64'), True, True
-  ) then
-    RemoveCameraRegistrationView(HKCU64);
-  RestoreCameraRegistrationView(
-    HKCU64, True, GCameraPriorX64Exists, GCameraPriorX64Path
+  Log(
+    'Rolling back the ' + CameraInstallScopeArgument() +
+    ' DirectShow x64/x86 registration pair.'
   );
-  RestoreCameraRegistrationView(
-    HKCU32, False, GCameraPriorX86Exists, GCameraPriorX86Path
-  );
+  if GCameraRegistrationAttempted then
+  begin
+    RemoveCameraRegistrationView(CameraRegistrationRootKey(False));
+    RemoveCameraRegistrationView(CameraRegistrationRootKey(True));
+    RestoreCameraRegistrationView(
+      CameraRegistrationRootKey(True), True,
+      GCameraPriorX64Exists, GCameraPriorX64Path
+    );
+    RestoreCameraRegistrationView(
+      CameraRegistrationRootKey(False), False,
+      GCameraPriorX86Exists, GCameraPriorX86Path
+    );
+  end;
+  if GCameraCreatedX64File then
+    DeleteFile(CameraVersionedFilterPath('x64'));
+  if GCameraCreatedX86File then
+    DeleteFile(CameraVersionedFilterPath('x86'));
+  RemoveDir(CameraVersionedFilterDirectory('x64'));
+  RemoveDir(CameraVersionedFilterDirectory('x86'));
+  RemoveDir(ExtractFileDir(CameraVersionedFilterDirectory('x64')));
+end;
+
+procedure StageCameraFilter(const Architecture: String; var Created: Boolean);
+var
+  SourceName: String;
+  SourcePath: String;
+  TargetPath: String;
+begin
+  SourceName := 'solin-virtual-camera-' + Architecture + '.dll';
+  ExtractTemporaryFile(SourceName);
+  SourcePath := ExpandConstant('{tmp}\') + SourceName;
+  TargetPath := CameraVersionedFilterPath(Architecture);
+  if FileExists(TargetPath) then
+  begin
+    // Published versions are immutable, including when a consumer holds the DLL.
+    if GetSHA256OfFile(SourcePath) <> GetSHA256OfFile(TargetPath) then
+      RaiseException('A different virtual-camera binary already exists for this version: ' + TargetPath);
+    Exit;
+  end;
+  if not ForceDirectories(ExtractFileDir(TargetPath)) then
+    RaiseException('Could not create the virtual-camera directory: ' + ExtractFileDir(TargetPath));
+  Created := True;
+  if not FileCopy(SourcePath, TargetPath, True) then
+    RaiseException('Could not install the virtual-camera binary: ' + TargetPath);
+end;
+
+procedure InstallCameraRegistrationTransaction();
+begin
+  // ssInstall is the last event in which an exception aborts Setup. Own the
+  // immutable filter files and registration together, before application writes.
+  BeginCameraRegistrationTransaction();
+  StageCameraFilter('x64', GCameraCreatedX64File);
+  StageCameraFilter('x86', GCameraCreatedX86File);
+  RegisterCameraPair();
+  VerifyCameraRegistrationTransaction();
 end;
 
 procedure CommitCameraRegistrationTransaction();
@@ -192,7 +330,7 @@ var
   Candidate: String;
   FindRec: TFindRec;
 begin
-  RootDir := ExpandConstant('{localappdata}\Solin\VirtualCamera\versions');
+  RootDir := CameraVersionsRoot();
   if not DirExists(RootDir) then
     Exit;
   if FindFirst(RootDir + '\*', FindRec) then
@@ -212,13 +350,6 @@ begin
   finally
     FindClose(FindRec);
   end;
-end;
-
-procedure MaybeInjectVirtualCameraX86RegistrationFailure();
-begin
-#ifdef MyVirtualCameraForceX86RegistrationFailure
-  RaiseException('Injected x86 DirectShow registration failure.');
-#endif
 end;
 
 procedure DeinitializeSetup();

@@ -31,6 +31,11 @@ int g_cTemplates = static_cast<int>(std::size(g_Templates));
 
 namespace {
 
+enum class RegistrationScope {
+    current_user,
+    machine,
+};
+
 template <typename Interface> class ComPtr final {
   public:
     ~ComPtr() {
@@ -99,11 +104,15 @@ class ComApartment final {
     HRESULT result_{E_FAIL};
 };
 
-[[nodiscard]] HRESULT open_classes_root(RegistryKey& classes_root) noexcept {
+[[nodiscard]] HRESULT open_classes_root(const RegistrationScope scope,
+                                        RegistryKey& classes_root) noexcept {
+    const auto hive = scope == RegistrationScope::machine ? HKEY_LOCAL_MACHINE
+                                                          : HKEY_CURRENT_USER;
+    // Machine Classes permits creating owned subkeys without granting writes
+    // to the protected root's values. Registration never changes root values.
     const auto result = RegCreateKeyExW(
-        HKEY_CURRENT_USER, L"Software\\Classes", 0U, nullptr,
-        REG_OPTION_NON_VOLATILE, KEY_READ | KEY_WRITE, nullptr,
-        classes_root.put(), nullptr);
+        hive, L"Software\\Classes", 0U, nullptr, REG_OPTION_NON_VOLATILE,
+        KEY_READ | KEY_CREATE_SUB_KEY, nullptr, classes_root.put(), nullptr);
     return HRESULT_FROM_WIN32(result);
 }
 
@@ -152,7 +161,8 @@ class ComApartment final {
                                   nullptr, &registration);
 }
 
-[[nodiscard]] HRESULT register_current_user(IFilterMapper2* mapper) {
+[[nodiscard]] HRESULT register_scope(IFilterMapper2* mapper,
+                                     const RegistrationScope scope) {
     using namespace solin::media_engine::windows_virtual_camera;
     std::wstring path;
     auto result = module_path(path);
@@ -160,7 +170,7 @@ class ComApartment final {
         return result;
     }
     RegistryKey classes_root;
-    result = open_classes_root(classes_root);
+    result = open_classes_root(scope, classes_root);
     if (FAILED(result)) {
         return result;
     }
@@ -182,10 +192,11 @@ class ComApartment final {
     return result;
 }
 
-[[nodiscard]] HRESULT unregister_current_user(IFilterMapper2* mapper) {
+[[nodiscard]] HRESULT unregister_scope(IFilterMapper2* mapper,
+                                       const RegistrationScope scope) {
     using namespace solin::media_engine::windows_virtual_camera;
     RegistryKey classes_root;
-    auto result = open_classes_root(classes_root);
+    auto result = open_classes_root(scope, classes_root);
     if (FAILED(result)) {
         return result;
     }
@@ -263,14 +274,7 @@ class ComApartment final {
     return SUCCEEDED(result) && filter_is_enumerated() ? S_OK : E_FAIL;
 }
 
-} // namespace
-
-extern "C" BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason,
-                               LPVOID reserved) {
-    return DllEntryPoint(instance, reason, reserved);
-}
-
-STDAPI DllRegisterServer() {
+[[nodiscard]] HRESULT register_server(const RegistrationScope scope) {
     ComApartment apartment;
     if (FAILED(apartment.result())) {
         return apartment.result();
@@ -280,22 +284,63 @@ STDAPI DllRegisterServer() {
     if (FAILED(result)) {
         return result;
     }
-    result = register_current_user(mapper.get());
+    result = register_scope(mapper.get(), scope);
     if (SUCCEEDED(result)) {
         result = verify_registration();
     }
     if (FAILED(result)) {
-        static_cast<void>(unregister_current_user(mapper.get()));
+        static_cast<void>(unregister_scope(mapper.get(), scope));
     }
     return result;
 }
 
-STDAPI DllUnregisterServer() {
+[[nodiscard]] HRESULT unregister_server(const RegistrationScope scope) {
     ComApartment apartment;
     if (FAILED(apartment.result())) {
         return apartment.result();
     }
     ComPtr<IFilterMapper2> mapper;
     const auto result = create_filter_mapper(mapper);
-    return FAILED(result) ? result : unregister_current_user(mapper.get());
+    return FAILED(result) ? result : unregister_scope(mapper.get(), scope);
+}
+
+[[nodiscard]] bool install_scope(const LPCWSTR command_line,
+                                 RegistrationScope& scope) noexcept {
+    if (command_line == nullptr) {
+        return false;
+    }
+    if (CompareStringOrdinal(command_line, -1, L"user", -1, TRUE) ==
+        CSTR_EQUAL) {
+        scope = RegistrationScope::current_user;
+        return true;
+    }
+    if (CompareStringOrdinal(command_line, -1, L"machine", -1, TRUE) ==
+        CSTR_EQUAL) {
+        scope = RegistrationScope::machine;
+        return true;
+    }
+    return false;
+}
+
+} // namespace
+
+extern "C" BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason,
+                               LPVOID reserved) {
+    return DllEntryPoint(instance, reason, reserved);
+}
+
+STDAPI DllRegisterServer() {
+    return register_server(RegistrationScope::current_user);
+}
+
+STDAPI DllUnregisterServer() {
+    return unregister_server(RegistrationScope::current_user);
+}
+
+STDAPI DllInstall(const BOOL install, const LPCWSTR command_line) {
+    RegistrationScope scope{};
+    if (!install_scope(command_line, scope)) {
+        return E_INVALIDARG;
+    }
+    return install != FALSE ? register_server(scope) : unregister_server(scope);
 }

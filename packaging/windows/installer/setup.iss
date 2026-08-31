@@ -153,13 +153,12 @@ Name: "startupicon"; Description: "Start with Windows";     GroupDescription: "O
 
 ; =============================================================================
 [Files]
+; Stage the immutable filter pair before application files are installed.
+; These files and their COM registration have one shared lifecycle owner.
+Source: "{#MyDistDir}\native\media-engine\virtual-camera\x64\solin-virtual-camera.dll"; DestName: "solin-virtual-camera-x64.dll"; Flags: dontcopy
+Source: "{#MyDistDir}\native\media-engine\virtual-camera\x86\solin-virtual-camera.dll"; DestName: "solin-virtual-camera-x86.dll"; Flags: dontcopy
 ; ── 1. Copy build output (DRY: one line copies the entire app) ────────────────
 Source: "{#MyDistDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-; DirectShow consumers load architecture-matched in-process filters. Keep each
-; release immutable so an application holding the previous DLL never blocks an
-; update. DllRegisterServer scopes all COM/category writes to the current user.
-Source: "{#MyDistDir}\native\media-engine\virtual-camera\x64\solin-virtual-camera.dll"; DestDir: "{localappdata}\Solin\VirtualCamera\versions\{#MyAppVersion}\x64"; Flags: ignoreversion regserver 64bit uninsrestartdelete
-Source: "{#MyDistDir}\native\media-engine\virtual-camera\x86\solin-virtual-camera.dll"; DestDir: "{localappdata}\Solin\VirtualCamera\versions\{#MyAppVersion}\x86"; Flags: ignoreversion regserver 32bit uninsrestartdelete; BeforeInstall: MaybeInjectVirtualCameraX86RegistrationFailure
 
 ; ── 2. App icon (only if not already inside main.dist) ───────────────────────
 Source: "..\..\..\src\solin\resources\assets\icon.ico"; DestDir: "{app}\resources\assets"; Flags: ignoreversion
@@ -401,6 +400,18 @@ begin
   CloseHandle(ExecInfo.hProcess);
 end;
 
+function IsCameraMachineInstall(): Boolean;
+begin
+  Result := IsAdminInstallMode();
+end;
+
+procedure MaybeInjectVirtualCameraX86RegistrationFailure();
+begin
+#ifdef MyVirtualCameraForceX86RegistrationFailure
+  RaiseException('Injected x86 DirectShow registration failure.');
+#endif
+end;
+
 #include "virtual_camera_registration.iss"
 
 // ── Install scope ─────────────────────────────────────────────────────────────
@@ -475,7 +486,6 @@ end;
 
 function InitializeSetup(): Boolean;
 begin
-  CaptureCameraRegistrationState();
   Result := True;
   if IsAppRunning() then
   begin
@@ -623,172 +633,15 @@ begin
   if CurStep = ssInstall then
   begin
     EnsureWebView2Runtime();
-    BeginCameraRegistrationTransaction();
+    InstallCameraRegistrationTransaction();
   end;
   if CurStep = ssPostInstall then
-    VerifyCameraRegistrationTransaction();
+  begin
+    CommitCameraRegistrationTransaction();
+  end;
   if CurStep = ssDone then
   begin
     CleanupObsoleteCameraVersions();
-    CommitCameraRegistrationTransaction();
-  end;
-end;
-
-// ── Uninstaller ───────────────────────────────────────────────────────────────
-// Deletes all runtime-generated files that Inno's own uninstall log does not
-// track: app data dir and installer temp files (is-*.tmp).
-
-procedure DeleteTempFiles(const Dir: String);
-var
-  FindRec: TFindRec;
-begin
-  if FindFirst(Dir + '\is-*.tmp', FindRec) then
-  try
-    repeat
-      DeleteFile(Dir + '\' + FindRec.Name);
-    until not FindNext(FindRec);
-  finally
-    FindClose(FindRec);
-  end;
-end;
-
-procedure DeleteProfileQSettingsKeys();
-var
-  Names: TArrayOfString;
-  I: Integer;
-  KeyName: String;
-begin
-  if RegGetSubkeyNames(HKCU, 'Software', Names) then
-  begin
-    for I := 0 to GetArrayLength(Names) - 1 do
-    begin
-      KeyName := Names[I];
-      if Copy(KeyName, 1, 6) = 'Solin_' then
-        RegDeleteKeyIncludingSubkeys(HKCU, 'Software\' + KeyName);
-    end;
-  end;
-end;
-
-procedure DeleteQSettingsKeys();
-begin
-  RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Solin\ProjectionPrefs');
-  RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Solin\App');
-  RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Solin\GlobalApp');
-  RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Solin\MainWindowGeometry');
-  RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Solin\Timer');
-  RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Solin\Monitors');
-  RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Solin\Notifications');
-  DeleteProfileQSettingsKeys();
-  RegDeleteKeyIfEmpty(HKCU, 'Software\Solin');
-end;
-
-procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
-var
-  AppDir: String;
-  CameraFilterX64Path: String;
-  CameraFilterX86Path: String;
-begin
-  AppDir := ExpandConstant('{app}');
-
-  case CurUninstallStep of
-
-    usAppMutexCheck:
-    begin
-      if IsAppRunning() then
-      begin
-        if MsgBox(
-          'Solin is currently running.' + #13#10 +
-          'It must be closed before uninstalling.' + #13#10#13#10 +
-          'Close it and continue?',
-          mbConfirmation, MB_YESNO or MB_DEFBUTTON1
-        ) = IDYES then
-        begin
-          ForceCloseApp();
-          if IsAppRunning() then
-          begin
-            MsgBox(
-              'Could not close Solin. Please close it manually and try again.',
-              mbError, MB_OK
-            );
-            Abort();
-          end;
-        end
-        else
-          Abort();
-      end;
-    end;
-
-    usUninstall:
-    begin
-      // Unregister both DirectShow registry views before deleting the immutable
-      // version. The calls are idempotent with Inno's regserver bookkeeping.
-      CameraFilterX64Path := '';
-      if not RegQueryStringValue(
-        HKCU64, CameraClassKey(), '', CameraFilterX64Path
-      ) then
-        CameraFilterX64Path := CameraVersionedFilterPath('x64');
-      if FileExists(CameraFilterX64Path) and
-         not RunCameraRegsvr(CameraFilterX64Path, True, True) then
-        Log('x64 virtual-camera cleanup failed during uninstall.');
-      RemoveCameraRegistrationView(HKCU64);
-
-      CameraFilterX86Path := '';
-      if not RegQueryStringValue(
-        HKCU32, CameraClassKey(), '', CameraFilterX86Path
-      ) then
-        CameraFilterX86Path := CameraVersionedFilterPath('x86');
-      if FileExists(CameraFilterX86Path) and
-         not RunCameraRegsvr(CameraFilterX86Path, False, True) then
-        Log('x86 virtual-camera cleanup failed during uninstall.');
-      RemoveCameraRegistrationView(HKCU32);
-
-      // Remove QSettings keys (always HKCU — written by the Qt app)
-      DeleteQSettingsKeys();
-
-      // Remove installer keys (check both hives — written by HKA at install time)
-      RegDeleteKeyIncludingSubkeys(HKLM, 'Software\Solin\Solin');
-      RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Solin\Solin');
-      RegDeleteKeyIfEmpty(HKLM, 'Software\Solin');
-      RegDeleteKeyIfEmpty(HKCU, 'Software\Solin');
-
-      // Remove o Solin do "Abrir com..." de Imagens
-      RegDeleteValue(HKCU, 'Software\Classes\.png\OpenWithProgids', 'Solin.Image');
-      RegDeleteValue(HKCU, 'Software\Classes\.jpg\OpenWithProgids', 'Solin.Image');
-      RegDeleteValue(HKCU, 'Software\Classes\.jpeg\OpenWithProgids', 'Solin.Image');
-      RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Classes\Solin.Image');
-
-      RegDeleteValue(HKLM, 'Software\Classes\.png\OpenWithProgids', 'Solin.Image');
-      RegDeleteValue(HKLM, 'Software\Classes\.jpg\OpenWithProgids', 'Solin.Image');
-      RegDeleteValue(HKLM, 'Software\Classes\.jpeg\OpenWithProgids', 'Solin.Image');
-      RegDeleteKeyIncludingSubkeys(HKLM, 'Software\Classes\Solin.Image');
-
-      // Remove o Solin do "Abrir com..." de Vídeos
-      RegDeleteValue(HKCU, 'Software\Classes\.mp4\OpenWithProgids', 'Solin.Video');
-      RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Classes\Solin.Video');
-
-      RegDeleteValue(HKLM, 'Software\Classes\.mp4\OpenWithProgids', 'Solin.Video');
-      RegDeleteKeyIncludingSubkeys(HKLM, 'Software\Classes\Solin.Video');
-
-      // Remove o Solin do "Abrir com..." de Áudios
-      RegDeleteValue(HKCU, 'Software\Classes\.mp3\OpenWithProgids', 'Solin.Audio');
-      RegDeleteValue(HKCU, 'Software\Classes\.wav\OpenWithProgids', 'Solin.Audio');
-      RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Classes\Solin.Audio');
-
-      RegDeleteValue(HKLM, 'Software\Classes\.mp3\OpenWithProgids', 'Solin.Audio');
-      RegDeleteValue(HKLM, 'Software\Classes\.wav\OpenWithProgids', 'Solin.Audio');
-      RegDeleteKeyIncludingSubkeys(HKLM, 'Software\Classes\Solin.Audio');
-    end;
-
-    usPostUninstall:
-    begin
-      DelTree(ExpandConstant('{localappdata}\Solin\VirtualCamera'), True, True, True);
-      // Inno Setup installer temp files left behind from interrupted installs
-      DeleteTempFiles(AppDir);
-
-      // Remove the install directory itself ONLY if it is now empty
-      RemoveDir(AppDir);
-    end;
-
   end;
 end;
 
@@ -812,3 +665,5 @@ begin
     end;
   end;
 end;
+
+#include "uninstall.iss"

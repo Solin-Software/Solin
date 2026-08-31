@@ -50,8 +50,8 @@ the source, compositor, and output workers without 1–4 ms polling. The system-
 still copies before releasing its slot. The virtual-camera render branch converts on the
 shared D3D11 device, downloads a
 tightly packed NV12 edge frame, and publishes it through a separate lock-free, three-slot
-shared-memory channel. A per-user DirectShow source filter consumes that channel through a
-private protocol-v3 broker. The broker derives its pipe from the current SID and session,
+shared-memory channel. A DirectShow source filter consumes that channel through a private
+protocol-v3 broker. The broker derives its pipe from the current SID and session,
 rejects remote clients, validates the client's token and session, and reveals only a
 read-only file-backed transport locator. A current DirectShow pin retains its authenticated
 broker session until its stream thread stops. The resulting active-session count gates the

@@ -48,9 +48,7 @@ def test_python_and_native_scene_schema_versions_match() -> None:
 
 def test_native_dependency_downloads_are_versioned_and_digest_pinned() -> None:
     cmake = _read("native/media_engine/CMakeLists.txt")
-    virtual_camera_cmake = _read(
-        "native/media_engine/cmake/SolinVirtualCameraFilter.cmake"
-    )
+    virtual_camera_cmake = _read("native/media_engine/cmake/SolinVirtualCameraFilter.cmake")
     bootstrap = _read("scripts/install_gstreamer_windows.ps1")
 
     assert "nlohmann/json/releases/download/v3.12.0/json.tar.xz" in cmake
@@ -108,9 +106,7 @@ def test_windows_virtual_camera_registration_contract_is_consistent() -> None:
     )
     installer = _read("packaging/windows/installer/setup.iss")
     patch_installer = _read("packaging/windows/installer/patch.iss")
-    registration_coordinator = _read(
-        "packaging/windows/installer/virtual_camera_registration.iss"
-    )
+    registration_coordinator = _read("packaging/windows/installer/virtual_camera_registration.iss")
     development_registration = _read("scripts/manage_virtual_camera_directshow.py")
     source_exports = _read(
         "native/media_engine/windows/directshow_virtual_camera/solin_virtual_camera.def"
@@ -121,11 +117,16 @@ def test_windows_virtual_camera_registration_contract_is_consistent() -> None:
     assert "0x08AFA2E5" in contract
     assert clsid in development_registration
     assert "ArchitecturesAllowed=x64os" in installer
-    assert "{localappdata}\\Solin\\VirtualCamera\\versions" in installer
-    assert "regserver 64bit" in installer
-    assert "regserver 32bit" in installer
-    assert "regserver 64bit" in patch_installer
-    assert "regserver 32bit" in patch_installer
+    for setup_script in (installer, patch_installer):
+        assert "InstallCameraRegistrationTransaction();" in setup_script
+        assert 'DestName: "solin-virtual-camera-x64.dll"; Flags: dontcopy' in setup_script
+        assert 'DestName: "solin-virtual-camera-x86.dll"; Flags: dontcopy' in setup_script
+        assert 'include "uninstall.iss"' in setup_script
+        install_step = setup_script.split("if CurStep = ssInstall then", 1)[1]
+        install_step = install_step.split("if CurStep = ssPostInstall then", 1)[0]
+        assert "InstallCameraRegistrationTransaction();" in install_step
+    assert "regserver" not in installer
+    assert "regserver" not in patch_installer
     assert "MinVersion=10.0.17763" in installer
     assert "MinVersion=10.0.17763" in patch_installer
     assert "CleanupObsoleteCameraVersions" in installer
@@ -139,7 +140,15 @@ def test_windows_virtual_camera_registration_contract_is_consistent() -> None:
     assert "System32" in development_registration
     assert "SysWOW64" in development_registration
     assert "DllUnregisterServer" in source_exports
+    assert "DllInstall" in source_exports
     assert "regsvr32.exe" in registration_coordinator
+    assert "{commonpf64}\\Solin\\VirtualCamera" in registration_coordinator
+    assert "{localappdata}\\Solin\\VirtualCamera" in registration_coordinator
+    assert "HKLM64" in registration_coordinator
+    assert "HKCU64" in registration_coordinator
+    assert "'/n /i:'" in registration_coordinator
+    assert "RegisterCameraPair" in registration_coordinator
+    assert "ExecAndWaitResponsive" not in registration_coordinator
     assert "RollbackCameraRegistrationTransaction" in registration_coordinator
     assert 'include "virtual_camera_registration.iss"' in installer
     assert 'include "virtual_camera_registration.iss"' in patch_installer

@@ -337,8 +337,9 @@ engine:
   640x480, all progressive at 30 fps, with NV12 1920x1080 as the default;
 - per-consumer frame adaptation in the filter, preserving aspect ratio with centered limited-
   range black bars and using box downscale or bilinear upscale;
-- per-user DirectShow registration in both WOW64 registry views, with versioned immutable
-  DLL locations so an open consumer can retain the previous version during an update.
+- install-scope DirectShow registration in both WOW64 registry views, with versioned
+  immutable DLL locations so an open consumer can retain the previous version during an
+  update.
 
 The private broker protocol is pointer-size-independent and derived from the current SID and
 session. The pipe rejects remote clients, permits only SYSTEM and the current user, and
@@ -602,11 +603,12 @@ These are regression guards, not optional refinements:
   filter, builds the filter-only Win32 target, and runs both native test suites. A source
   checkout legitimately has no generated engine until this command succeeds; the local
   launcher discovers its output under `build/native/`.
-- Testing the Windows virtual camera requires one non-elevated per-user install command,
-  documented in `docs/building.md`. Ordinary application runs never mutate COM state.
+- Local testing of the Windows virtual camera uses one non-elevated per-user install
+  command documented in `docs/building.md`. Packaged installation follows the selected
+  application scope. Ordinary application runs never mutate COM state.
 - Nuitka/Inno builds invoke the same native build, stage the private runtime, fail when the
-  sidecar or either filter DLL is absent, and register the camera for the installing account
-  regardless of the application's installation scope.
+  sidecar or either filter DLL is absent, and register the camera in the application's
+  selected per-user or machine-wide installation scope.
 - Distributed Windows releases require Authenticode. The workflow signs and verifies the app,
   native sidecar, both filter DLLs, Inno embedded uninstaller, and final installer. Explicitly
   unsigned workflow runs are diagnostic artifacts and carry an `unsigned-diagnostic` suffix.
