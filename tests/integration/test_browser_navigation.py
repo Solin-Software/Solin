@@ -25,6 +25,38 @@ def test_browser_overlay_js_has_live_projection_hover_gate():
     assert "if (!mediaHoverOverlaysEnabled()) return;" in overlay_js
 
 
+def test_browser_overlay_js_keeps_the_hover_bar_outside_the_page():
+    overlay_js = browser_widget.OVERLAY_JS
+
+    assert "document.body.appendChild(_bar);" in overlay_js
+    assert "'position:fixed'" in overlay_js
+    assert "function mediaFromPoint(x, y)" in overlay_js
+    assert "document.addEventListener('mouseover', onPointerOver, true);" in overlay_js
+
+
+def test_browser_overlay_js_context_menu_uses_the_hover_media_pair():
+    overlay_js = browser_widget.OVERLAY_JS
+
+    # O par {image, video} resolvido por elementsFromPoint alimenta o menu inteiro.
+    assert "function ctxItemsFor(media)" in overlay_js
+    assert (
+        "if (media.image) _addCtxGroup(items, seen, imageUrlOf(media.image), 'image');"
+        in overlay_js
+    )
+    assert (
+        "if (media.video) _addCtxGroup(items, seen, videoUrlOf(media.video), 'video');"
+        in overlay_js
+    )
+
+    # Clique sobre o botão da barra reaproveita o par; clique na mídia resolve pelo ponto.
+    assert "var media = (_bar && _bar.contains(e.target) && _barMedia)" in overlay_js
+    assert ": mediaFromPoint(e.clientX, e.clientY);" in overlay_js
+
+    # A mídia não é redescoberta caminhando o DOM.
+    assert "_gatherCtxItems" not in overlay_js
+    assert "_gatherFromElement" not in overlay_js
+
+
 def test_browser_zoom_change_persists_once_and_updates_other_tabs(monkeypatch):
     class ViewDouble:
         def __init__(self):
