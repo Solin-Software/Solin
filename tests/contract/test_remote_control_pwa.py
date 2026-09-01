@@ -12,6 +12,7 @@ import xml.etree.ElementTree as ET
 from PIL import Image
 import pytest
 
+from solin.core.remote_control.web_assets import RemoteControlWebAssets
 from solin.styles.icons import (
     ICON_IMAGE,
     ICON_MUSIC,
@@ -215,7 +216,12 @@ def test_remote_control_navigation_prioritizes_meetings_and_uses_canonical_icons
 
 
 def test_remote_control_service_worker_caches_only_the_static_shell() -> None:
-    service_worker = (PWA_ROOT / "service-worker.js").read_text(encoding="utf-8")
+    web_assets = RemoteControlWebAssets(
+        PWA_ROOT,
+        installation_id="contract-installation",
+        url_prefix="/remote",
+    )
+    service_worker = web_assets.service_worker.decode("utf-8")
     pwa = (PWA_ROOT / "scripts" / "pwa.js").read_text(encoding="utf-8")
     match = re.search(
         r"const SHELL_RESOURCES = \[(?P<resources>.*?)\];",
@@ -224,10 +230,14 @@ def test_remote_control_service_worker_caches_only_the_static_shell() -> None:
     )
     assert match is not None
     cached = set(re.findall(r'"\./([^"\n]*)"', match.group("resources")))
-    expected = {
+    versioned = {
         path.relative_to(PWA_ROOT).as_posix()
         for path in PWA_ROOT.rglob("*")
-        if path.is_file() and path.name not in {"README.md", "service-worker.js"}
+        if path.is_file() and path.name not in {"README.md", "index.html", "service-worker.js"}
+    }
+    expected = {
+        "index.html",
+        *(f"_assets/{web_assets.revision}/{path}" for path in versioned),
     }
 
     assert cached - {""} == expected
@@ -235,11 +245,34 @@ def test_remote_control_service_worker_caches_only_the_static_shell() -> None:
     assert "/remote/api/" in service_worker
     assert 'request.mode === "navigate"' in service_worker
     assert 'cache: "reload"' in service_worker
-    assert "networkFirstShellResource" in service_worker
-    assert 'fetch(request, { cache: "no-cache" })' in service_worker
+    assert "cacheFirstShellResource" in service_worker
+    assert 'fetch(request, { cache: "reload" })' in service_worker
+    assert "name.startsWith(CACHE_PREFIX)" in service_worker
     assert 'updateViaCache: "none"' in pwa
+    assert "await registration.update()" in pwa
     assert 'navigator.serviceWorker.addEventListener("controllerchange"' in pwa
     assert "window.location.reload()" in pwa
+
+
+def test_rendered_remote_control_service_worker_is_valid_javascript() -> None:
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node.js is required to validate the rendered Service Worker")
+    service_worker = RemoteControlWebAssets(
+        PWA_ROOT,
+        installation_id="contract-installation",
+        url_prefix="/remote",
+    ).service_worker.decode("utf-8")
+
+    result = subprocess.run(
+        [node, "--check", "-"],
+        input=service_worker,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
 
 
 def test_remote_control_media_cards_only_play_from_the_explicit_action() -> None:
@@ -287,7 +320,11 @@ def test_remote_control_connection_uses_an_atomic_session_snapshot() -> None:
 
 def test_stale_play_recovery_is_bounded_and_revalidates_the_catalog_origin() -> None:
     app = (PWA_ROOT / "scripts" / "app.js").read_text(encoding="utf-8")
-    service_worker = (PWA_ROOT / "service-worker.js").read_text(encoding="utf-8")
+    service_worker = RemoteControlWebAssets(
+        PWA_ROOT,
+        installation_id="contract-installation",
+        url_prefix="/remote",
+    ).service_worker.decode("utf-8")
 
     recovery = re.search(
         r"async function executeCommandWithStateRecovery\(.*?\n\}",
@@ -304,7 +341,7 @@ def test_stale_play_recovery_is_bounded_and_revalidates_the_catalog_origin() -> 
     assert "function refreshedPlayCommand(fields)" in app
     assert "candidate.id === collectionId && candidate.kind === source" in app
     assert 'node.kind !== "media" || !node.available' in app
-    assert "solin-remote-shell-v17" in service_worker
+    assert re.search(r'const SHELL_REVISION = "[a-f0-9]{32}";', service_worker)
 
 
 def test_stale_play_recovery_behavior() -> None:

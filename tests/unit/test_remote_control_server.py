@@ -4,6 +4,7 @@ import asyncio
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
+import re
 import threading
 from typing import Any, cast
 import uuid
@@ -142,12 +143,20 @@ async def _harness(
     thumbnail_handler: Any | None = None,
     collection_thumbnail_handler: Any | None = None,
     setup_provider: Any | None = None,
+    installation_id: str = "installation-1",
 ) -> _Harness:
     assets = tmp_path / "assets"
     assets.mkdir()
-    (assets / "index.html").write_text("<!doctype html><title>Remote</title>", "utf-8")
+    (assets / "index.html").write_text(
+        '<!doctype html><title>Remote</title><script src="./app.js"></script>',
+        "utf-8",
+    )
     (assets / "app.js").write_text("", "utf-8")
-    (assets / "service-worker.js").write_text("", "utf-8")
+    (assets / "service-worker.js").write_text(
+        'const SHELL_REVISION = "__SOLIN_REMOTE_SHELL_REVISION__";\n'
+        "const SHELL_RESOURCES = __SOLIN_REMOTE_SHELL_RESOURCES__;\n",
+        "utf-8",
+    )
 
     hasher = ScryptPasswordHasher(
         ScryptParameters(n=1_024, r=8, p=1, max_memory_bytes=8 * 1024 * 1024)
@@ -201,6 +210,7 @@ async def _harness(
             meeting_week_start=lambda: date(2026, 7, 13),
         ),
         allowed_origin=_ORIGIN,
+        installation_id=installation_id,
         trust_certificate_der=b"scoped authority certificate",
     )
     client = TestClient(TestServer(application.app))
@@ -259,8 +269,29 @@ def test_static_shell_has_strict_security_headers(tmp_path: Path) -> None:
                 headers={"Host": _HOST},
             )
             assert service_worker.status == 200
-            assert service_worker.headers["Cache-Control"] == "no-cache"
+            assert service_worker.headers["Cache-Control"] == (
+                "no-cache, no-store, must-revalidate"
+            )
+            assert service_worker.headers["Pragma"] == "no-cache"
+            assert service_worker.headers["Expires"] == "0"
             assert service_worker.headers["Service-Worker-Allowed"] == "/remote/"
+            worker_source = await service_worker.text()
+            assert "__SOLIN_REMOTE_" not in worker_source
+
+            index = await response.text()
+            versioned_script = re.search(
+                r'src="(?P<url>/remote/_assets/[a-f0-9]{32}/app\.js)"',
+                index,
+            )
+            assert versioned_script is not None
+            immutable_script = await harness.client.get(
+                versioned_script.group("url"),
+                headers={"Host": _HOST},
+            )
+            assert immutable_script.status == 200
+            assert immutable_script.headers["Cache-Control"] == (
+                "public, max-age=31536000, immutable"
+            )
 
             certificate = await harness.client.get(
                 "/remote/trust-certificate.cer",

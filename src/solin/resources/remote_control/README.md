@@ -8,10 +8,21 @@ projection state remains authoritative in the desktop process.
 
 Serve this directory below `/remote/`, with `index.html` for both `/remote/` and
 `/remote/index.html`. `service-worker.js` must be served with
-`Service-Worker-Allowed: /remote/` and revalidation enabled.
-Static shell assets use HTTP revalidation rather than freshness windows; the
-versioned Service Worker cache is the offline source of truth and always reloads
-the shell from the server while installing a replacement worker.
+`Service-Worker-Allowed: /remote/` and `no-cache, no-store, must-revalidate`.
+The server derives one shell revision from the installation ID, the worker
+template, and every packaged shell asset. It renders the worker and index at
+startup, exposes shell files under revisioned `/_assets/` URLs, and serves those
+content-addressed responses as immutable. A release asset change or a different
+Solin installation at the same IP therefore produces both a different worker
+script and different subresource URLs without a manual cache-version bump.
+
+The stable HTML routes remain `no-store` and navigation is network-first. This
+also migrates clients controlled by the original cache-first worker: the fresh
+index references revisioned URLs the old allowlist cannot intercept. The client
+then requests an uncached worker update, the fully populated replacement cache
+activates with `skipWaiting()`, and `clients.claim()` plus `controllerchange`
+reloads existing clients. Activation removes only obsolete
+`solin-remote-shell-*` caches, never unrelated origin storage.
 
 The HTTP server is responsible for the security policy that cannot be enforced
 reliably by markup alone, especially:

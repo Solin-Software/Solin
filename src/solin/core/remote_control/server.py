@@ -41,6 +41,11 @@ from .state import (
     RemoteControlRuntimeSnapshot,
     RemoteControlStateStore,
 )
+from .web_assets import (
+    REMOTE_SHELL_ASSET_ROUTE,
+    WEB_ASSET_CONTENT_TYPES,
+    RemoteControlWebAssets,
+)
 
 
 log = logging.getLogger(__name__)
@@ -72,17 +77,6 @@ _CSP: Final = (
     "object-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
     "font-src 'self'; connect-src 'self'; manifest-src 'self'; worker-src 'self'"
 )
-_STATIC_CONTENT_TYPES: Final = {
-    ".css": "text/css",
-    ".html": "text/html",
-    ".ico": "image/x-icon",
-    ".js": "text/javascript",
-    ".json": "application/json",
-    ".png": "image/png",
-    ".svg": "image/svg+xml",
-    ".webmanifest": "application/manifest+json",
-}
-
 CommandHandler = Callable[[RemoteCommand], Awaitable[CommandError | None]]
 ThumbnailHandler = Callable[[str, str, str], Awaitable[bytes | None]]
 CollectionThumbnailHandler = Callable[[str, str], Awaitable[bytes | None]]
@@ -137,12 +131,18 @@ class RemoteControlHttpApplication:
         dependencies: RemoteControlServerDependencies,
         *,
         allowed_origin: str,
+        installation_id: str,
         trust_certificate_der: bytes | None = None,
     ) -> None:
         self._dependencies = dependencies
         self._allowed_origin = allowed_origin.rstrip("/")
         self._allowed_host = self._allowed_origin.removeprefix("https://").casefold()
         self._trust_certificate_der = trust_certificate_der
+        self._web_assets = RemoteControlWebAssets(
+            dependencies.assets_directory,
+            installation_id=installation_id,
+            url_prefix=REMOTE_CONTROL_PREFIX,
+        )
         self._websockets: dict[web.WebSocketResponse, asyncio.Lock] = {}
         self._websocket_sessions: dict[web.WebSocketResponse, str] = {}
         self._websocket_reservations: dict[str, int] = {}
@@ -296,12 +296,33 @@ class RemoteControlHttpApplication:
             f"{prefix}/trust-certificate.cer",
             self._trust_certificate,
         )
+        self._app.router.add_get(f"{prefix}/service-worker.js", self._service_worker)
         self._app.router.add_get(f"{prefix}/", self._index)
         self._app.router.add_get(f"{prefix}/index.html", self._index)
         self._app.router.add_get(f"{prefix}/{{asset:.*}}", self._asset)
 
     async def _index(self, request: web.Request) -> web.StreamResponse:
-        return await self._serve_asset("index.html")
+        del request
+        return web.Response(
+            body=self._web_assets.index_html,
+            content_type="text/html",
+            charset="utf-8",
+            headers={"Cache-Control": "no-store"},
+        )
+
+    async def _service_worker(self, request: web.Request) -> web.Response:
+        del request
+        return web.Response(
+            body=self._web_assets.service_worker,
+            content_type="text/javascript",
+            charset="utf-8",
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Expires": "0",
+                "Pragma": "no-cache",
+                "Service-Worker-Allowed": f"{REMOTE_CONTROL_PREFIX}/",
+            },
+        )
 
     async def _trust_certificate(self, request: web.Request) -> web.Response:
         del request
@@ -324,6 +345,18 @@ class RemoteControlHttpApplication:
         requested = request.match_info.get("asset", "")
         if requested.startswith("api/") or requested == "ws":
             raise web.HTTPNotFound()
+        if requested == "index.html":
+            return await self._index(request)
+        if requested == "service-worker.js":
+            return await self._service_worker(request)
+        if requested.startswith(f"{REMOTE_SHELL_ASSET_ROUTE}/"):
+            candidate = self._web_assets.resolve_versioned(requested)
+            if candidate is None:
+                raise web.HTTPNotFound()
+            return self._static_file_response(
+                candidate,
+                cache_control="public, max-age=31536000, immutable",
+            )
         return await self._serve_asset(requested)
 
     async def _serve_asset(self, requested: str) -> web.StreamResponse:
@@ -334,18 +367,24 @@ class RemoteControlHttpApplication:
         candidate = (root / relative).resolve()
         if root not in candidate.parents or not candidate.is_file():
             raise web.HTTPNotFound()
-        content_type = _STATIC_CONTENT_TYPES.get(candidate.suffix.lower())
+        content_type = WEB_ASSET_CONTENT_TYPES.get(candidate.suffix.lower())
         if content_type is None:
             raise web.HTTPNotFound()
-        response = web.FileResponse(candidate, headers={"Content-Type": content_type})
-        if candidate.name == "service-worker.js":
-            response.headers["Service-Worker-Allowed"] = f"{REMOTE_CONTROL_PREFIX}/"
-            response.headers["Cache-Control"] = "no-cache"
-        elif candidate.suffix.lower() == ".html":
-            response.headers["Cache-Control"] = "no-store"
-        else:
-            response.headers["Cache-Control"] = "no-cache"
-        return response
+        cache_control = "no-store" if candidate.suffix.lower() == ".html" else "no-cache"
+        return self._static_file_response(candidate, cache_control=cache_control)
+
+    @staticmethod
+    def _static_file_response(candidate: Path, *, cache_control: str) -> web.FileResponse:
+        content_type = WEB_ASSET_CONTENT_TYPES.get(candidate.suffix.lower())
+        if content_type is None:
+            raise web.HTTPNotFound()
+        return web.FileResponse(
+            candidate,
+            headers={
+                "Cache-Control": cache_control,
+                "Content-Type": content_type,
+            },
+        )
 
     async def _login(self, request: web.Request) -> web.Response:
         self._require_same_origin(request)
@@ -1107,6 +1146,7 @@ class RemoteControlServer:
         application = RemoteControlHttpApplication(
             self._dependencies,
             allowed_origin=binding.origin,
+            installation_id=binding.tls_identity.installation_id,
             trust_certificate_der=binding.tls_identity.trust_certificate_der(),
         )
         runner = web.AppRunner(

@@ -40,10 +40,17 @@ export function setupPwa({ onInstallAvailable, onInstalled, onError }) {
     });
     serviceWorkerReady = navigator.serviceWorker
       .register("./service-worker.js", {
-          scope: "/remote/",
-          updateViaCache: "none",
-        })
-      .then(() => navigator.serviceWorker.ready)
+        scope: "/remote/",
+        updateViaCache: "none",
+      })
+      .then(async (registration) => {
+        try {
+          await registration.update();
+        } catch (error) {
+          onError(error);
+        }
+        return navigator.serviceWorker.ready;
+      })
       .catch((error) => {
         onError(error);
         return null;
