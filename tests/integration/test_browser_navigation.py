@@ -25,6 +25,15 @@ def test_browser_overlay_js_has_live_projection_hover_gate():
     assert "if (!mediaHoverOverlaysEnabled()) return;" in overlay_js
 
 
+def test_browser_overlay_js_keeps_the_hover_bar_outside_the_page():
+    overlay_js = browser_widget.OVERLAY_JS
+
+    assert "document.body.appendChild(_bar);" in overlay_js
+    assert "'position:fixed'" in overlay_js
+    assert "function mediaFromPoint(x, y)" in overlay_js
+    assert "document.addEventListener('mouseover', onPointerOver, true);" in overlay_js
+
+
 def test_browser_zoom_change_persists_once_and_updates_other_tabs(monkeypatch):
     class ViewDouble:
         def __init__(self):

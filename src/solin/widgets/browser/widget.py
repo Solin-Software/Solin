@@ -103,10 +103,11 @@ _OVERLAY_JS_RAW = r"""
     if (location.hostname === 'stream.jw.org') return;
 
     var _bridge        = null;
-    var _injected      = new WeakSet();
     var _videoSrcMap   = new WeakMap();
     var _imgSaveUrlMap = new WeakMap();  // img/el → original HTTP URL for cache save
-    var _barMap        = new WeakMap(); // anchor → btnBar (container flex dos botões)
+    var _bar           = null;  // barra única de botões, filha do <body>
+    var _barMedia      = null;  // mídia sob a barra no momento
+    var _hideTimer     = null;
     var OVERLAY_BAR_CLASS = '__solin_media_hover_overlay_bar';
     window.__solinMediaHoverOverlaysEnabled =
         window.__solinMediaHoverOverlaysEnabled !== false;
@@ -319,8 +320,11 @@ _OVERLAY_JS_RAW = r"""
             }
         };
         window.__solinBridge = _bridge;
-        setupOverlays();
+        captureMediaUrls();
         observeDOM();
+        document.addEventListener('mouseover', onPointerOver, true);
+        window.addEventListener('scroll', repositionBar, {capture: true, passive: true});
+        window.addEventListener('resize', repositionBar, {passive: true});
     }
 
     function mediaHoverOverlaysEnabled() {
@@ -365,94 +369,133 @@ _OVERLAY_JS_RAW = r"""
         return btn;
     }
 
-    // ── Container de botões por âncora ────────────────────────────────────
-    function getOrCreateBtnBar(anchor) {
-        if (_barMap.has(anchor)) return _barMap.get(anchor);
-        var bar = document.createElement('div');
-        bar.className = OVERLAY_BAR_CLASS;
-        bar.style.cssText = [
-            'position:absolute', 'top:8px', 'right:8px', 'z-index:2147483647',
+    // ── Barra de botões flutuante ─────────────────────────────────────────
+    //
+    // A barra vive no <body> com position:fixed, nunca dentro da página.
+    // Carrosséis e galerias (slick) enumeram os filhos dos seus containers
+    // ao inicializar: um nó nosso entre eles virava um slide vazio.
+    function ensureBar() {
+        if (_bar && _bar.isConnected) return _bar;
+        _bar = document.createElement('div');
+        _bar.className = OVERLAY_BAR_CLASS;
+        _bar.style.cssText = [
+            'position:fixed', 'left:0', 'top:0', 'z-index:2147483647',
             'display:flex', 'flex-direction:row', 'gap:6px',
             'opacity:0', 'pointer-events:none',
             'transition:opacity 0.18s ease',
         ].join(';');
-        anchor.appendChild(bar);
-        _barMap.set(anchor, bar);
-        wireHover(anchor, bar);
-        return bar;
+        _bar.addEventListener('mouseenter', function () { clearTimeout(_hideTimer); });
+        _bar.addEventListener('mouseleave', scheduleHide);
+        document.body.appendChild(_bar);
+        return _bar;
     }
 
-    function wireHover(anchor, bar) {
-        anchor.addEventListener('mouseenter', function () {
-            setOverlayBarVisible(bar, true);
-        });
-        anchor.addEventListener('mouseleave', function () {
-            setOverlayBarVisible(bar, false);
-        });
+    // ponytail: só descarta mídia fora da viewport; um container com
+    // overflow:hidden ainda pode deixar a barra visível sobre o recorte.
+    function placeBar(media) {
+        var r = media.getBoundingClientRect();
+        if (r.width < 40 || r.height < 40) return false;
+        if (r.bottom <= 0 || r.top >= window.innerHeight) return false;
+        if (r.right <= 0 || r.left >= window.innerWidth) return false;
+        _bar.style.left = Math.round(r.right - 8 - _bar.offsetWidth) + 'px';
+        _bar.style.top  = Math.round(r.top + 8) + 'px';
+        return true;
     }
 
-    // ── Imagens com background-image CSS ──────────────────────────────────
-    function wrapCssBg(el) {
-        if (_injected.has(el)) return;
-        var inlineStyle = el.getAttribute('style') || '';
-        var m = inlineStyle.match(/background-image\s*:\s*url\(\s*['"]?([^'")\s]+)['"]?\s*\)/i);
-        if (!m || !m[1] || !m[1].startsWith('http')) return;
-
-        var capturedUrl = m[1];
-        _injected.add(el);
-        _imgSaveUrlMap.set(el, capturedUrl);
-
-        var posAnchor   = el.parentElement || el;
-        var hoverAnchor = posAnchor.parentElement || posAnchor;
-
-        if (getComputedStyle(posAnchor).position === 'static') posAnchor.style.position = 'relative';
-
-        var btn = makeBtn(SVG_IMAGE, function () {
-            if (_bridge) _bridge.projectImage(capturedUrl);
-        });
-        btn.title = window._jwProjectLabel || 'Project image';
-        btn.setAttribute('aria-label', btn.title);
-
-        var bar = getOrCreateBtnBar(posAnchor);
-        hoverAnchor.addEventListener('mouseenter', function () {
-            setOverlayBarVisible(bar, true);
-        });
-        hoverAnchor.addEventListener('mouseleave', function () {
-            setOverlayBarVisible(bar, false);
-        });
-        bar.insertBefore(btn, bar.firstChild);
+    function scheduleHide() {
+        clearTimeout(_hideTimer);
+        _hideTimer = setTimeout(function () {
+            setOverlayBarVisible(ensureBar(), false);
+            _barMedia = null;
+        }, 120);
     }
 
-    // ── Imagens <img> ─────────────────────────────────────────────────────
-    function wrapImg(img) {
-        if (_injected.has(img)) return;
-        _injected.add(img);
-        var parent = img.parentElement;
-        if (!parent) return;
-        if (getComputedStyle(parent).position === 'static') parent.style.position = 'relative';
-
-        // Captura a URL original ANTES de qualquer lazy-load mudar o src
-        var saveUrl = (img.getAttribute('src') || img.currentSrc || '').split('?')[0];
-        if (saveUrl && saveUrl.startsWith('http')) {
-            _imgSaveUrlMap.set(img, saveUrl);
+    function showBarFor(media, buttons) {
+        clearTimeout(_hideTimer);
+        var bar = ensureBar();
+        if (_barMedia !== media) {
+            bar.innerHTML = '';
+            buttons.forEach(function (btn) { bar.appendChild(btn); });
+            _barMedia = media;
         }
+        setOverlayBarVisible(bar, placeBar(media));
+    }
 
-        var btn = makeBtn(SVG_IMAGE, function () {
-            try {
-                var c = document.createElement('canvas');
-                c.width  = img.naturalWidth  || img.width;
-                c.height = img.naturalHeight || img.height;
-                c.getContext('2d').drawImage(img, 0, 0);
-                if (_bridge) _bridge.projectImage(c.toDataURL('image/png'));
-            } catch (e) {
-                if (_bridge) _bridge.projectImage(img.src || img.currentSrc || '');
-            }
-        });
-        btn.title = window._jwProjectLabel || 'Project image';
-        btn.setAttribute('aria-label', btn.title);
+    function repositionBar() {
+        if (!_barMedia || !_bar) return;
+        setOverlayBarVisible(_bar, placeBar(_barMedia));
+    }
 
-        var bar = getOrCreateBtnBar(parent);
-        bar.insertBefore(btn, bar.firstChild);
+    // ── Mídia sob o cursor ────────────────────────────────────────────────
+    function cssBgUrl(el) {
+        if (!el || !el.getAttribute) return '';
+        var stored = _imgSaveUrlMap.get(el);
+        if (stored) return stored;
+        var m = (el.getAttribute('style') || '').match(
+            /background-image\s*:\s*url\(\s*['"]?([^'")\s]+)['"]?\s*\)/i
+        );
+        return (m && m[1] && m[1].startsWith('http')) ? m[1] : '';
+    }
+
+    function isProjectableImg(el) {
+        return el.tagName === 'IMG'
+            && (el.naturalWidth  || el.width)  > 80
+            && (el.naturalHeight || el.height) > 80;
+    }
+
+    // elementsFromPoint alcança o <video> mesmo coberto pelos controles do
+    // player e a <img> sob camadas decorativas da página.
+    function mediaFromPoint(x, y) {
+        var stack = document.elementsFromPoint(x, y);
+        for (var i = 0; i < stack.length; i++) {
+            var el = stack[i];
+            if (_bar && _bar.contains(el)) continue;
+            if (isProjectableImg(el) || el.tagName === 'VIDEO' || cssBgUrl(el)) return el;
+        }
+        return null;
+    }
+
+    function projectImgElement(img) {
+        try {
+            var c = document.createElement('canvas');
+            c.width  = img.naturalWidth  || img.width;
+            c.height = img.naturalHeight || img.height;
+            c.getContext('2d').drawImage(img, 0, 0);
+            if (_bridge) _bridge.projectImage(c.toDataURL('image/png'));
+        } catch (e) {
+            if (_bridge) _bridge.projectImage(img.src || img.currentSrc || '');
+        }
+    }
+
+    function labelledBtn(svg, label, handler) {
+        var btn = makeBtn(svg, handler);
+        btn.title = label;
+        btn.setAttribute('aria-label', label);
+        return btn;
+    }
+
+    function buttonsFor(media) {
+        if (media.tagName === 'IMG') {
+            return [labelledBtn(SVG_IMAGE, window._jwProjectLabel || 'Project image',
+                function () { projectImgElement(media); })];
+        }
+        if (media.tagName === 'VIDEO') {
+            return [labelledBtn(SVG_VIDEO, window._jwProjectVideoLabel || 'Project video',
+                function () { projectVideoElement(media); })];
+        }
+        var url = cssBgUrl(media);
+        if (!url) return null;
+        return [labelledBtn(SVG_IMAGE, window._jwProjectLabel || 'Project image',
+            function () { if (_bridge) _bridge.projectImage(url); })];
+    }
+
+    function onPointerOver(e) {
+        if (!mediaHoverOverlaysEnabled()) return;
+        if (_bar && _bar.contains(e.target)) { clearTimeout(_hideTimer); return; }
+        var media = mediaFromPoint(e.clientX, e.clientY);
+        var buttons = media ? buttonsFor(media) : null;
+        if (!buttons) { scheduleHide(); return; }
+        showBarFor(media, buttons);
     }
 
     // ── Extração de URL de vídeo ──────────────────────────────────────────
@@ -509,67 +552,38 @@ _OVERLAY_JS_RAW = r"""
         return src;
     }
 
-    // ── Overlay de vídeo ──────────────────────────────────────────────────
-    function findAnchor(vid) {
-        var playerSelectors = [
-            '.videoPlayer', '.lVideoPlayer', '.mediaholder',
-            '.video-js', '.jwplayer', '[class*="videoPlayer"]',
-            '[class*="player"]', '[class*="media"]',
-            'figure', 'article'
-        ];
-        var el = vid.parentElement;
-        while (el && el !== document.body) {
-            for (var s = 0; s < playerSelectors.length; s++) {
-                if (el.matches && el.matches(playerSelectors[s]) &&
-                    el.offsetWidth > 0 && el.offsetHeight > 0) return el;
-            }
-            el = el.parentElement;
+    // ── Projeção de vídeo ─────────────────────────────────────────────────
+    function projectVideoElement(vid) {
+        var src = _videoSrcMap.get(vid) || captureVideoSrc(vid);
+        if (!src) {
+            var cs = vid.currentSrc || '';
+            if (cs && !cs.startsWith('blob:') && cs.startsWith('http')) src = cs;
         }
-        el = vid.parentElement;
-        while (el && el !== document.body) {
-            if (el.offsetWidth > 0 && el.offsetHeight > 0) return el;
-            el = el.parentElement;
+        if (src && _bridge) {
+            console.log('[Solin] Projecting video direct URL:', src);
+            _bridge.projectVideo(src);
+        } else {
+            console.warn('[Solin] No direct video URL found. currentSrc=', vid.currentSrc);
         }
-        return vid.parentElement;
-    }
-
-    function wrapVideo(vid) {
-        captureVideoSrc(vid);
-        if (_injected.has(vid)) return;
-        _injected.add(vid);
-
-        var anchor = findAnchor(vid);
-        if (!anchor) return;
-        if (getComputedStyle(anchor).position === 'static') anchor.style.position = 'relative';
-
-        var btn = makeBtn(SVG_VIDEO, function () {
-            var src = _videoSrcMap.get(vid) || captureVideoSrc(vid);
-            if (!src) {
-                var cs = vid.currentSrc || '';
-                if (cs && !cs.startsWith('blob:') && cs.startsWith('http')) src = cs;
-            }
-            if (src && _bridge) {
-                console.log('[Solin] Projecting video direct URL:', src);
-                _bridge.projectVideo(src);
-            } else {
-                console.warn('[Solin] No direct video URL found. currentSrc=', vid.currentSrc);
-            }
-        });
-        btn.title = window._jwProjectVideoLabel || 'Project video';
-        btn.setAttribute('aria-label', btn.title);
-
-        var bar = getOrCreateBtnBar(anchor);
-        bar.appendChild(btn);
     }
 
     // ── Setup geral ───────────────────────────────────────────────────────
-    function setupOverlays() {
+    //
+    // Guarda a URL original de cada mídia antes que lazy-load ou o player
+    // troquem o src. Nada é inserido na página: a barra é criada sob demanda
+    // no hover, fora dela.
+    function captureMediaUrls() {
         document.querySelectorAll('img').forEach(function (img) {
-            if ((img.naturalWidth || img.width) > 80 && (img.naturalHeight || img.height) > 80)
-                wrapImg(img);
+            if (_imgSaveUrlMap.has(img)) return;
+            var url = (img.getAttribute('src') || img.currentSrc || '').split('?')[0];
+            if (url && url.startsWith('http')) _imgSaveUrlMap.set(img, url);
         });
-        document.querySelectorAll('video').forEach(wrapVideo);
-        document.querySelectorAll('[style*="background-image"]').forEach(wrapCssBg);
+        document.querySelectorAll('video').forEach(captureVideoSrc);
+        document.querySelectorAll('[style*="background-image"]').forEach(function (el) {
+            if (_imgSaveUrlMap.has(el)) return;
+            var url = cssBgUrl(el);
+            if (url) _imgSaveUrlMap.set(el, url);
+        });
     }
 
     function earlyCapture(nodes) {
@@ -585,7 +599,7 @@ _OVERLAY_JS_RAW = r"""
             var added = [];
             mutations.forEach(function (m) { m.addedNodes.forEach(function (n) { added.push(n); }); });
             if (added.length) earlyCapture(added);
-            setupOverlays();
+            captureMediaUrls();
         });
         obs.observe(document.documentElement, { childList: true, subtree: true });
     }
@@ -612,7 +626,8 @@ _OVERLAY_JS_RAW = r"""
     function _gatherCtxItems(startEl) {
         var allItems = [];
         var seen = {};
-        var el = startEl;
+        // Com o cursor sobre a barra, e.target é o botão: usa a mídia que ela cobre.
+        var el = (_bar && _bar.contains(startEl) && _barMedia) ? _barMedia : startEl;
 
         while (el && el !== document.documentElement) {
 
@@ -626,32 +641,6 @@ _OVERLAY_JS_RAW = r"""
                         _gatherFromElement(el.children[ci], allItems, seen);
                         break;
                     }
-                }
-            }
-
-            // ── Âncora de overlay (quando cursor estava sobre nosso btn bar) ──
-            //
-            // Se o cursor está sobre o botão de overlay (bar ou btn dentro dele),
-            // e.target resolve para o bar/btn, NÃO para a mídia subjacente.
-            // Quando chegamos ao anchor que contém o bar (_barMap.has(el)), varremos
-            // TODOS os seus descendentes conhecidos (img, video, bg-image) para
-            // garantir que o menu apareça independentemente de onde o clique caiu.
-            if (_barMap.has(el)) {
-                var bar = _barMap.get(el);
-                // imgs descendentes
-                var allImgs = el.querySelectorAll('img');
-                for (var ii = 0; ii < allImgs.length; ii++) {
-                    _gatherFromElement(allImgs[ii], allItems, seen);
-                }
-                // videos descendentes
-                var allVids = el.querySelectorAll('video');
-                for (var vi = 0; vi < allVids.length; vi++) {
-                    _gatherFromElement(allVids[vi], allItems, seen);
-                }
-                // elementos com background-image descendentes
-                var bgEls = el.querySelectorAll('[style*="background-image"]');
-                for (var bi = 0; bi < bgEls.length; bi++) {
-                    _gatherFromElement(bgEls[bi], allItems, seen);
                 }
             }
 
