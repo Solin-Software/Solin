@@ -106,7 +106,7 @@ _OVERLAY_JS_RAW = r"""
     var _videoSrcMap   = new WeakMap();
     var _imgSaveUrlMap = new WeakMap();  // img/el → original HTTP URL for cache save
     var _bar           = null;  // barra única de botões, filha do <body>
-    var _barMedia      = null;  // mídia sob a barra no momento
+    var _barMedia      = null;  // par {image, video} sob a barra no momento
     var _hideTimer     = null;
     var OVERLAY_BAR_CLASS = '__solin_media_hover_overlay_bar';
     window.__solinMediaHoverOverlaysEnabled =
@@ -410,21 +410,28 @@ _OVERLAY_JS_RAW = r"""
         }, 120);
     }
 
+    function samePair(a, b) {
+        return !!a && !!b && a.image === b.image && a.video === b.video;
+    }
+
+    function barAnchor(media) {
+        return media.video || media.image;
+    }
+
     function showBarFor(media, buttons) {
         clearTimeout(_hideTimer);
         var bar = ensureBar();
-        var anchor = media.video || media.image;
-        if (_barMedia !== anchor) {
+        if (!samePair(_barMedia, media)) {
             bar.innerHTML = '';
             buttons.forEach(function (btn) { bar.appendChild(btn); });
-            _barMedia = anchor;
+            _barMedia = media;
         }
-        setOverlayBarVisible(bar, placeBar(anchor));
+        setOverlayBarVisible(bar, placeBar(barAnchor(media)));
     }
 
     function repositionBar() {
         if (!_barMedia || !_bar) return;
-        setOverlayBarVisible(_bar, placeBar(_barMedia));
+        setOverlayBarVisible(_bar, placeBar(barAnchor(_barMedia)));
     }
 
     // ── Mídia sob o cursor ────────────────────────────────────────────────
@@ -618,10 +625,10 @@ _OVERLAY_JS_RAW = r"""
 
     // ── Listener delegado de contextmenu (nível de documento) ──────────────
     //
-    // Um único listener com capture=true intercepta TODOS os contextmenu,
-    // independente de qual elemento foi alvo. Caminha o DOM do target até
-    // o topo coletando TODAS as mídias (img, background-image, video) e
-    // exibe um menu combinado. Se nenhuma mídia HTTP válida for encontrada,
+    // Um único listener com capture=true intercepta TODOS os contextmenu.
+    // O par {image, video} resolvido por elementsFromPoint é a única fonte
+    // da mídia, igual para a barra de hover e para o menu: clicar no player
+    // ou no botão do overlay produz o mesmo menu. Sem mídia HTTP válida,
     // retorna sem preventDefault → menu padrão do browser aparece.
 
     function _addCtxGroup(dest, seen, url, mediaType) {
@@ -635,77 +642,42 @@ _OVERLAY_JS_RAW = r"""
         for (var i = 0; i < grp.length; i++) dest.push(grp[i]);
     }
 
-    function _gatherCtxItems(startEl) {
-        var allItems = [];
-        var seen = {};
-        // Com o cursor sobre a barra, e.target é o botão: usa a mídia que ela cobre.
-        var el = (_bar && _bar.contains(startEl) && _barMedia) ? _barMedia : startEl;
-
-        while (el && el !== document.documentElement) {
-
-            // ── Elemento direto (img, bg, video) ──────────────────────────
-            _gatherFromElement(el, allItems, seen);
-
-            // ── <video> filho imediato (para containers não-VIDEO) ─────────
-            if (el.tagName !== 'VIDEO' && el.children) {
-                for (var ci = 0; ci < el.children.length; ci++) {
-                    if (el.children[ci].tagName === 'VIDEO') {
-                        _gatherFromElement(el.children[ci], allItems, seen);
-                        break;
-                    }
-                }
-            }
-
-            el = el.parentElement;
+    function imageUrlOf(el) {
+        if (el.tagName === 'IMG') {
+            return _imgSaveUrlMap.get(el)
+                || (el.getAttribute('src') || '').split('?')[0]
+                || (el.currentSrc || '').split('?')[0];
         }
+        return cssBgUrl(el);
+    }
 
-        // Limpa separadores nas pontas
-        while (allItems.length && allItems[0] === null)                    allItems.shift();
-        while (allItems.length && allItems[allItems.length - 1] === null)  allItems.pop();
-        return allItems.length > 0 ? allItems : null;
+    function videoUrlOf(vid) {
+        var src = _videoSrcMap.get(vid) || captureVideoSrc(vid);
+        if (src) return src;
+        var current = vid.currentSrc || '';
+        return (current && !current.startsWith('blob:')) ? current : '';
+    }
+
+    function ctxItemsFor(media) {
+        var items = [];
+        var seen = {};
+        if (media.image) _addCtxGroup(items, seen, imageUrlOf(media.image), 'image');
+        if (media.video) _addCtxGroup(items, seen, videoUrlOf(media.video), 'video');
+        return items.length > 0 ? items : null;
     }
 
     // Registrado na fase de capture para agir antes dos demais listeners de contextmenu
-    document.addEventListener('contextmenu', function(e) {
-        var items = _gatherCtxItems(e.target);
+    document.addEventListener('contextmenu', function (e) {
+        // Sobre o botão do overlay, e.target é o botão: usa o par que a barra cobre.
+        var media = (_bar && _bar.contains(e.target) && _barMedia)
+            ? _barMedia
+            : mediaFromPoint(e.clientX, e.clientY);
+        var items = media ? ctxItemsFor(media) : null;
         if (!items) return;               // sem mídia HTTP → menu padrão do browser
         e.preventDefault();
         e.stopPropagation();
         _showCtxMenu(e.clientX, e.clientY, items);
     }, true);
-
-    // ── Helpers reutilizados pelo gather e pelo anchor-scan ────────────────
-    function _gatherFromElement(el, allItems, seen) {
-        // <img>
-        if (el.tagName === 'IMG') {
-            var iurl = _imgSaveUrlMap.get(el)
-                || (el.getAttribute('src') || '').split('?')[0]
-                || (el.currentSrc      || '').split('?')[0];
-            _addCtxGroup(allItems, seen, iurl, 'image');
-        }
-
-        // background-image inline ou armazenado
-        var bgStored = _imgSaveUrlMap.get(el);
-        var bgUrl = bgStored || '';
-        if (!bgUrl) {
-            var inlineStyle = el.getAttribute('style') || '';
-            var m = inlineStyle.match(
-                /background-image\s*:\s*url\(\s*['"]?([^'"\)\s]+)['"]?\s*\)/i
-            );
-            bgUrl = (m && m[1] && m[1].startsWith('http')) ? m[1] : '';
-        }
-        if (bgUrl) _addCtxGroup(allItems, seen, bgUrl, 'image');
-
-        // <video> direto
-        if (el.tagName === 'VIDEO') {
-            var vsrc = _videoSrcMap.get(el) || captureVideoSrc(el);
-            if (!vsrc) {
-                var cs = el.currentSrc || '';
-                if (cs && !cs.startsWith('blob:') && cs.startsWith('http')) vsrc = cs;
-            }
-            _addCtxGroup(allItems, seen, vsrc, 'video');
-        }
-    }
 
     function earlyVideoScan() {
         document.querySelectorAll('video').forEach(captureVideoSrc);
