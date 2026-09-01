@@ -413,12 +413,13 @@ _OVERLAY_JS_RAW = r"""
     function showBarFor(media, buttons) {
         clearTimeout(_hideTimer);
         var bar = ensureBar();
-        if (_barMedia !== media) {
+        var anchor = media.video || media.image;
+        if (_barMedia !== anchor) {
             bar.innerHTML = '';
             buttons.forEach(function (btn) { bar.appendChild(btn); });
-            _barMedia = media;
+            _barMedia = anchor;
         }
-        setOverlayBarVisible(bar, placeBar(media));
+        setOverlayBarVisible(bar, placeBar(anchor));
     }
 
     function repositionBar() {
@@ -443,16 +444,21 @@ _OVERLAY_JS_RAW = r"""
             && (el.naturalHeight || el.height) > 80;
     }
 
-    // elementsFromPoint alcança o <video> mesmo coberto pelos controles do
-    // player e a <img> sob camadas decorativas da página.
+    // elementsFromPoint alcança o <video> mesmo coberto pelo poster e pelos
+    // controles do player, e a <img> sob camadas decorativas da página.
+    // Antes do play o poster do VideoJS cobre o vídeo: os dois entram na
+    // mesma pilha e cada um recebe o seu botão, como o overlay por âncora fazia.
     function mediaFromPoint(x, y) {
         var stack = document.elementsFromPoint(x, y);
+        var image = null, video = null;
         for (var i = 0; i < stack.length; i++) {
             var el = stack[i];
             if (_bar && _bar.contains(el)) continue;
-            if (isProjectableImg(el) || el.tagName === 'VIDEO' || cssBgUrl(el)) return el;
+            if (!video && el.tagName === 'VIDEO') video = el;
+            else if (!image && (isProjectableImg(el) || cssBgUrl(el))) image = el;
+            if (image && video) break;
         }
-        return null;
+        return (image || video) ? {image: image, video: video} : null;
     }
 
     function projectImgElement(img) {
@@ -475,18 +481,24 @@ _OVERLAY_JS_RAW = r"""
     }
 
     function buttonsFor(media) {
-        if (media.tagName === 'IMG') {
-            return [labelledBtn(SVG_IMAGE, window._jwProjectLabel || 'Project image',
-                function () { projectImgElement(media); })];
+        var buttons = [];
+        var image = media.image;
+        if (image && image.tagName === 'IMG') {
+            buttons.push(labelledBtn(SVG_IMAGE, window._jwProjectLabel || 'Project image',
+                function () { projectImgElement(image); }));
+        } else if (image) {
+            var url = cssBgUrl(image);
+            if (url) {
+                buttons.push(labelledBtn(SVG_IMAGE, window._jwProjectLabel || 'Project image',
+                    function () { if (_bridge) _bridge.projectImage(url); }));
+            }
         }
-        if (media.tagName === 'VIDEO') {
-            return [labelledBtn(SVG_VIDEO, window._jwProjectVideoLabel || 'Project video',
-                function () { projectVideoElement(media); })];
+        if (media.video) {
+            var video = media.video;
+            buttons.push(labelledBtn(SVG_VIDEO, window._jwProjectVideoLabel || 'Project video',
+                function () { projectVideoElement(video); }));
         }
-        var url = cssBgUrl(media);
-        if (!url) return null;
-        return [labelledBtn(SVG_IMAGE, window._jwProjectLabel || 'Project image',
-            function () { if (_bridge) _bridge.projectImage(url); })];
+        return buttons.length ? buttons : null;
     }
 
     function onPointerOver(e) {
