@@ -113,6 +113,106 @@ void release_caps(GstCaps* caps) noexcept {
     }
 }
 
+#ifdef _WIN32
+constexpr gint64 kContentIngressD3d11MemoryToken =
+    static_cast<gint64>(0x534f4c494e434f4eULL);
+std::uint8_t content_ingress_d3d11_memory_marker{};
+
+[[nodiscard]] GstMemory*
+content_ingress_d3d11_memory(GstBuffer* buffer) noexcept {
+    if (buffer == nullptr) {
+        return nullptr;
+    }
+    try {
+        const auto memory_count = gst_buffer_n_memory(buffer);
+        for (guint index = 0U; index < memory_count; ++index) {
+            auto* memory = gst_buffer_peek_memory(buffer, index);
+            if (memory != nullptr && gst_is_d3d11_memory(memory) != FALSE &&
+                gst_d3d11_memory_get_token_data(
+                    GST_D3D11_MEMORY_CAST(memory),
+                    kContentIngressD3d11MemoryToken) ==
+                    &content_ingress_d3d11_memory_marker) {
+                return memory;
+            }
+        }
+    } catch (...) {
+    }
+    return nullptr;
+}
+
+void mark_content_ingress_d3d11_memory(GstMemory* memory) noexcept {
+    try {
+        if (memory != nullptr && gst_is_d3d11_memory(memory) != FALSE) {
+            gst_d3d11_memory_set_token_data(
+                GST_D3D11_MEMORY_CAST(memory),
+                kContentIngressD3d11MemoryToken,
+                &content_ingress_d3d11_memory_marker, nullptr);
+        }
+    } catch (...) {
+    }
+}
+
+[[nodiscard]] bool same_texture_layout(
+    const D3D11_TEXTURE2D_DESC& left,
+    const D3D11_TEXTURE2D_DESC& right) noexcept {
+    return left.Width == right.Width && left.Height == right.Height &&
+           left.MipLevels == right.MipLevels &&
+           left.ArraySize == right.ArraySize && left.Format == right.Format &&
+           left.SampleDesc.Count == right.SampleDesc.Count &&
+           left.SampleDesc.Quality == right.SampleDesc.Quality &&
+           left.Usage == right.Usage && left.BindFlags == right.BindFlags &&
+           left.CPUAccessFlags == right.CPUAccessFlags &&
+           left.MiscFlags == right.MiscFlags;
+}
+
+[[nodiscard]] bool copy_d3d11_memory(
+    GstMemory* source, GstMemory* destination,
+    GstD3D11Device* device) noexcept {
+    if (source == nullptr || destination == nullptr || device == nullptr ||
+        gst_is_d3d11_memory(source) == FALSE ||
+        gst_is_d3d11_memory(destination) == FALSE) {
+        return false;
+    }
+    GstMapInfo source_map{};
+    GstMapInfo destination_map{};
+    if (gst_memory_map(
+            source, &source_map,
+            static_cast<GstMapFlags>(GST_MAP_READ | GST_MAP_D3D11)) == FALSE) {
+        return false;
+    }
+    if (gst_memory_map(
+            destination, &destination_map,
+            static_cast<GstMapFlags>(GST_MAP_WRITE | GST_MAP_D3D11)) == FALSE) {
+        gst_memory_unmap(source, &source_map);
+        return false;
+    }
+    auto* source_texture = reinterpret_cast<ID3D11Texture2D*>(source_map.data);
+    auto* destination_texture =
+        reinterpret_cast<ID3D11Texture2D*>(destination_map.data);
+    bool copied = false;
+    if (source_texture != nullptr && destination_texture != nullptr &&
+        source_texture != destination_texture) {
+        gst_d3d11_device_lock(device);
+        auto* context = gst_d3d11_device_get_device_context_handle(device);
+        if (context != nullptr) {
+            context->CopySubresourceRegion(
+                destination_texture,
+                gst_d3d11_memory_get_subresource_index(
+                    GST_D3D11_MEMORY_CAST(destination)),
+                0U, 0U, 0U, source_texture,
+                gst_d3d11_memory_get_subresource_index(
+                    GST_D3D11_MEMORY_CAST(source)),
+                nullptr);
+            copied = true;
+        }
+        gst_d3d11_device_unlock(device);
+    }
+    gst_memory_unmap(destination, &destination_map);
+    gst_memory_unmap(source, &source_map);
+    return copied;
+}
+#endif
+
 [[nodiscard]] std::unique_ptr<GstCaps, decltype(&release_caps)> bounded_raw_caps(const bool d3d11) {
     const std::string prefix =
         d3d11 ? "video/x-raw(memory:D3D11Memory),format=BGRA,pixel-aspect-ratio=1/1"
@@ -1314,6 +1414,7 @@ class GStreamerSourceRuntime final : public SourceRuntime {
             throw std::runtime_error(
                 "content D3D11 memory wrapping failed");
         }
+        mark_content_ingress_d3d11_memory(memory);
         static_cast<void>(lifetime.release());
         if (resource_changed) {
             gsize memory_offset = 0U;
@@ -1417,8 +1518,13 @@ class GStreamerSourceRuntime final : public SourceRuntime {
         content_transition_bypass_epoch_.reset();
         content_transition_black_output_observed_ = false;
         content_transition_first_frame_watchdog_.acknowledge();
-        std::scoped_lock lock{state_mutex_};
-        content_decoded_frame_.reset();
+        {
+            std::scoped_lock lock{state_mutex_};
+            content_decoded_frame_.reset();
+        }
+#ifdef _WIN32
+        reset_content_detach_allocator();
+#endif
     }
 
     enum class ContentTransitionStage : std::uint8_t {
@@ -2425,6 +2531,100 @@ class GStreamerSourceRuntime final : public SourceRuntime {
         return static_cast<GStreamerSourceRuntime*>(data)->receive_sample(sink);
     }
 
+#ifdef _WIN32
+    void reset_content_detach_allocator() noexcept {
+        if (content_detach_allocator_ != nullptr) {
+            static_cast<void>(gst_d3d11_allocator_set_active(
+                GST_D3D11_ALLOCATOR_CAST(content_detach_allocator_), FALSE));
+            gst_object_unref(content_detach_allocator_);
+            content_detach_allocator_ = nullptr;
+        }
+        content_detach_layout_ = {};
+        content_detach_layout_valid_ = false;
+    }
+
+    [[nodiscard]] GstSample*
+    detach_content_ingress_sample(GstSample* sample,
+                                  GstMemory* ingress_memory) noexcept {
+        try {
+            auto* buffer =
+                sample == nullptr ? nullptr : gst_sample_get_buffer(sample);
+            auto* caps = sample == nullptr ? nullptr : gst_sample_get_caps(sample);
+            if (buffer == nullptr || caps == nullptr || ingress_memory == nullptr ||
+                d3d11_device_ == nullptr || gst_buffer_n_memory(buffer) != 1U) {
+                return nullptr;
+            }
+            D3D11_TEXTURE2D_DESC source_layout{};
+            if (gst_d3d11_memory_get_texture_desc(
+                    GST_D3D11_MEMORY_CAST(ingress_memory), &source_layout) == FALSE) {
+                return nullptr;
+            }
+            D3D11_TEXTURE2D_DESC detached_layout{
+                .Width = source_layout.Width,
+                .Height = source_layout.Height,
+                .MipLevels = 1U,
+                .ArraySize = 1U,
+                .Format = source_layout.Format,
+                .SampleDesc = source_layout.SampleDesc,
+                .Usage = D3D11_USAGE_DEFAULT,
+                .BindFlags = source_layout.BindFlags,
+                .CPUAccessFlags = 0U,
+                .MiscFlags = 0U,
+            };
+            if (detached_layout.Width == 0U || detached_layout.Height == 0U ||
+                detached_layout.SampleDesc.Count != 1U) {
+                return nullptr;
+            }
+            if (!content_detach_layout_valid_ ||
+                !same_texture_layout(content_detach_layout_, detached_layout)) {
+                reset_content_detach_allocator();
+                content_detach_allocator_ = gst_d3d11_pool_allocator_new(
+                    d3d11_device_.get(), &detached_layout);
+                if (content_detach_allocator_ == nullptr ||
+                    gst_d3d11_allocator_set_active(
+                        GST_D3D11_ALLOCATOR_CAST(content_detach_allocator_),
+                        TRUE) == FALSE) {
+                    reset_content_detach_allocator();
+                    return nullptr;
+                }
+                content_detach_layout_ = detached_layout;
+                content_detach_layout_valid_ = true;
+            }
+            GstMemory* detached_memory = nullptr;
+            if (gst_d3d11_pool_allocator_acquire_memory(
+                    content_detach_allocator_, &detached_memory) != GST_FLOW_OK ||
+                detached_memory == nullptr) {
+                return nullptr;
+            }
+            if (!copy_d3d11_memory(
+                    ingress_memory, detached_memory, d3d11_device_.get())) {
+                gst_memory_unref(detached_memory);
+                return nullptr;
+            }
+            auto* detached_buffer = gst_buffer_new();
+            if (detached_buffer == nullptr) {
+                gst_memory_unref(detached_memory);
+                return nullptr;
+            }
+            gst_buffer_append_memory(detached_buffer, detached_memory);
+            if (gst_buffer_copy_into(
+                    detached_buffer, buffer, GST_BUFFER_COPY_METADATA, 0U,
+                    static_cast<gsize>(-1)) == FALSE) {
+                gst_buffer_unref(detached_buffer);
+                return nullptr;
+            }
+            const auto* info = gst_sample_get_info(sample);
+            auto* detached_sample = gst_sample_new(
+                detached_buffer, caps, gst_sample_get_segment(sample),
+                info == nullptr ? nullptr : gst_structure_copy(info));
+            gst_buffer_unref(detached_buffer);
+            return detached_sample;
+        } catch (...) {
+            return nullptr;
+        }
+    }
+#endif
+
     GstFlowReturn receive_sample(GstAppSink* sink) noexcept {
         auto* sample = gst_app_sink_pull_sample(sink);
         if (sample == nullptr) {
@@ -2433,8 +2633,8 @@ class GStreamerSourceRuntime final : public SourceRuntime {
         std::unique_ptr<GstSample, decltype(&gst_sample_unref)> sample_guard{sample,
                                                                              &gst_sample_unref};
         try {
-            const auto* caps = gst_sample_get_caps(sample);
-            const auto* buffer = gst_sample_get_buffer(sample);
+            auto* caps = gst_sample_get_caps(sample);
+            auto* buffer = gst_sample_get_buffer(sample);
             GstVideoInfo info{};
             if (caps == nullptr || buffer == nullptr ||
                 gst_video_info_from_caps(&info, caps) == FALSE) {
@@ -2447,6 +2647,31 @@ class GStreamerSourceRuntime final : public SourceRuntime {
             if (d3d11 && !d3d11_manager_->is_current(d3d11_device_)) {
                 return GST_FLOW_ERROR;
             }
+#ifdef _WIN32
+            auto* ingress_memory =
+                source_.kind == SceneSourceKind::solin_content && d3d11
+                    ? content_ingress_d3d11_memory(buffer)
+                    : nullptr;
+            if (ingress_memory != nullptr) {
+                // BGRA can pass through conversion while still owning one of
+                // the bridge's three transport slots. Raw, Program and their
+                // transitions cache canonical frames, so detach only that
+                // aliased memory into the engine-owned reusable GPU pool.
+                auto* detached =
+                    detach_content_ingress_sample(sample, ingress_memory);
+                if (detached == nullptr) {
+                    return GST_FLOW_ERROR;
+                }
+                sample_guard.reset(detached);
+                sample = detached;
+                caps = gst_sample_get_caps(sample);
+                buffer = gst_sample_get_buffer(sample);
+                if (caps == nullptr || buffer == nullptr ||
+                    gst_video_info_from_caps(&info, caps) == FALSE) {
+                    return GST_FLOW_ERROR;
+                }
+            }
+#endif
             const auto stream_epoch = stream_epoch_.load();
             const auto media_epoch =
                 source_.kind == SceneSourceKind::solin_content &&
@@ -2579,6 +2804,9 @@ class GStreamerSourceRuntime final : public SourceRuntime {
     std::uint64_t content_d3d11_layout_generation_{0U};
     gsize content_d3d11_mapped_size_{0U};
     guint content_d3d11_stride_{0U};
+    GstD3D11PoolAllocator* content_detach_allocator_{nullptr};
+    D3D11_TEXTURE2D_DESC content_detach_layout_{};
+    bool content_detach_layout_valid_{false};
 #endif
     std::atomic_uint64_t content_requested_media_epoch_{0U};
     FrameChannelImageTransform content_requested_image_transform_{};
