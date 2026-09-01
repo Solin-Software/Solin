@@ -150,6 +150,50 @@ def _stale_d3d11_reader_leases(handle_token: str) -> Iterator[None]:
         mapping.close()
 
 
+def _d3d11_reader_slot_count(handle_token: str) -> int:
+    import ctypes.wintypes as wintypes
+
+    mapping = mmap.mmap(
+        -1,
+        640,
+        tagname=f"Local\\SolinD3D11Frame.{handle_token}",
+        access=mmap.ACCESS_READ,
+    )
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.OpenMutexW.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.LPCWSTR)
+    kernel32.OpenMutexW.restype = wintypes.HANDLE
+    kernel32.WaitForSingleObject.argtypes = (wintypes.HANDLE, wintypes.DWORD)
+    kernel32.WaitForSingleObject.restype = wintypes.DWORD
+    kernel32.ReleaseMutex.argtypes = (wintypes.HANDLE,)
+    kernel32.ReleaseMutex.restype = wintypes.BOOL
+    kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+    kernel32.CloseHandle.restype = wintypes.BOOL
+    mutex = kernel32.OpenMutexW(
+        0x00100001,
+        False,
+        f"Local\\SolinD3D11FrameMutex.{handle_token}",
+    )
+    if not mutex:
+        mapping.close()
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        if kernel32.WaitForSingleObject(mutex, 1_000) != 0:
+            raise RuntimeError("D3D11 channel mutex is unavailable")
+        try:
+            generation = struct.unpack_from("<Q", mapping, 64)[0]
+            reader_state = (generation << 2) | 1
+            return sum(
+                struct.unpack_from("<Q", mapping, 256 + slot * 128 + 48)[0]
+                == reader_state
+                for slot in range(3)
+            )
+        finally:
+            kernel32.ReleaseMutex(mutex)
+    finally:
+        kernel32.CloseHandle(mutex)
+        mapping.close()
+
+
 def _wait_for(
     predicate: Callable[[], bool],
     *,
@@ -1170,6 +1214,178 @@ def test_return_to_cached_content_never_publishes_the_previous_presentation(
                 f"Program egress sequence regressed or repeated: {sequences!r}"
             )
         assert prepare_latencies and max(prepare_latencies) < 1_500, prepare_latencies
+    finally:
+        ingress.close()
+        preview.close()
+        program.close()
+        unsubscribe()
+        engine.stop()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows native media pipeline")
+def test_rapid_program_and_raw_content_retargets_do_not_stall_d3d11_ingress(
+    tmp_path,
+) -> None:
+    engine = create_native_scene_engine(tmp_path, repository_root=REPOSITORY_ROOT)
+    if engine is None:
+        pytest.skip("Built native media engine is unavailable")
+    ingress = ContentFrameIngressController(
+        enable_accelerated=True,
+        maximum_fps=60,
+        canvas_width=1920,
+        canvas_height=1080,
+    )
+    descriptor = ingress.descriptor
+    if descriptor is None or descriptor.transport is not FrameChannelTransport.D3D11_SHARED_TEXTURE:
+        ingress.close()
+        engine.stop()
+        pytest.skip("Built Qt D3D11 bridge is unavailable")
+    preview = SharedMemoryBgraFrameSubscriber(1920, 1080)
+    program = SharedMemoryVideoFrameSubscriber(1920, 1080)
+    document, content_scene = _content_document()
+    away_scene = next(
+        scene
+        for scene in document.scenes
+        if len(scene.layers) == 1 and scene.layers[0].source_id == NO_SIGNAL_SOURCE_ID
+    )
+    green = QImage(1280, 720, QImage.Format.Format_ARGB32)
+    green.fill(QColor("#20d020"))
+    blue = QImage(1280, 720, QImage.Format.Format_ARGB32)
+    blue.fill(QColor("#2040e0"))
+    stop_producer = Event()
+    diagnostics: list[tuple[int, int, int, int]] = []
+    events: list[object] = []
+    unsubscribe = engine.subscribe(events.append)
+    sequence = 1
+
+    def publish_live_frames() -> None:
+        frame_index = 0
+        while not stop_producer.is_set():
+            ingress.submit_frame(green if frame_index % 2 == 0 else blue)
+            frame_index += 1
+            time.sleep(1 / 60)
+
+    try:
+        capabilities = engine.start(
+            session_id="native-dual-bus-content-retarget", deadline_ms=10_000
+        ).result(15)
+        if not capabilities.local_cameras and not capabilities.rtsp_cameras:
+            pytest.skip("Native GStreamer graph is unavailable")
+        ingress.begin_presentation(1)
+        ingress.set_image_transform(
+            None,
+            media_epoch=1,
+            canvas_width=1920,
+            canvas_height=1080,
+            animate=False,
+        )
+        ingress.submit_frame(green)
+        bridge = ingress._accelerated_publisher
+        assert bridge is not None
+        assert _wait_for(lambda: int(bridge.status()["published_sequence"]) > 0)
+        assert engine.hydrate(
+            SceneEngineSnapshot(
+                session_id="native-dual-bus-content-retarget",
+                sequence=sequence,
+                document=document,
+                active_scenes=tuple(
+                    (route.bus_id, content_scene.id) for route in document.outputs
+                ),
+                render_enabled=((BusId.MEDIA_WINDOWS, True), (BusId.VIRTUAL_CAMERA, True)),
+                output_enabled=((BusId.MEDIA_WINDOWS, True), (BusId.VIRTUAL_CAMERA, False)),
+                content_ingress=descriptor,
+                preview_egress=preview.descriptor,
+                program_egress=program.descriptor,
+            ),
+            request_id="dual-bus-content-hydrate",
+            deadline_ms=10_000,
+        ).result(15).applied
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            producer = executor.submit(publish_live_frames)
+            try:
+                initial_status = bridge.status()
+                initial_published = int(initial_status["published_sequence"])
+                for cycle in range(30):
+                    destination = away_scene if cycle % 2 == 0 else content_scene
+                    for bus_id in (BusId.VIRTUAL_CAMERA, BusId.MEDIA_WINDOWS):
+                        sequence += 1
+                        prepared = engine.prepare_scene(
+                            bus_id,
+                            destination.id,
+                            transition=(
+                                TransitionSpec(TransitionKind.DISSOLVE, 500)
+                                if bus_id is BusId.VIRTUAL_CAMERA
+                                else TransitionSpec(TransitionKind.CUT, 0)
+                            ),
+                            document_revision=document.revision,
+                            request_id=f"dual-bus-prepare-{sequence}",
+                            sequence=sequence,
+                            deadline_ms=10_000,
+                            content_media_epoch=(
+                                1 if destination.id == content_scene.id else None
+                            ),
+                        ).result(15)
+                        sequence += 1
+                        assert engine.take_prepared(
+                            prepared,
+                            request_id=f"dual-bus-take-{sequence}",
+                            sequence=sequence,
+                            deadline_ms=10_000,
+                        ).result(15).applied
+                    status = bridge.status()
+                    diagnostics.append(
+                        (
+                            cycle,
+                            int(status["published_sequence"]),
+                            int(status["dropped_frames"]),
+                            _d3d11_reader_slot_count(descriptor.handle_token),
+                        )
+                    )
+                    time.sleep(0.04)
+                settled_status = bridge.status()
+                settled_published = int(settled_status["published_sequence"])
+                try:
+                    raw_before = preview.read_latest()
+                except TimeoutError:
+                    raw_before = None
+                try:
+                    program_before = program.read_latest()
+                except TimeoutError:
+                    program_before = None
+                raw_sequence = 0 if raw_before is None else raw_before.sequence
+                program_sequence = 0 if program_before is None else program_before.sequence
+                advanced_outputs: dict[str, object] = {}
+
+                def outputs_advanced() -> bool:
+                    try:
+                        raw_frame = preview.read_latest()
+                    except TimeoutError:
+                        raw_frame = None
+                    try:
+                        program_frame = program.read_latest()
+                    except TimeoutError:
+                        program_frame = None
+                    if raw_frame is not None and raw_frame.sequence > raw_sequence:
+                        advanced_outputs["raw"] = raw_frame
+                    if program_frame is not None and program_frame.sequence > program_sequence:
+                        advanced_outputs["program"] = program_frame
+                    return "raw" in advanced_outputs and "program" in advanced_outputs
+
+                assert _wait_for(
+                    lambda: int(bridge.status()["published_sequence"])
+                    >= settled_published + 5,
+                    timeout=3.0,
+                ), (bridge.status(), diagnostics, events)
+                assert _wait_for(outputs_advanced, timeout=3.0), (
+                    bridge.status(),
+                    diagnostics,
+                    advanced_outputs,
+                    events,
+                )
+                assert int(bridge.status()["published_sequence"]) >= initial_published + 30
+            finally:
+                stop_producer.set()
+                producer.result(2)
     finally:
         ingress.close()
         preview.close()
