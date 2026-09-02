@@ -279,6 +279,31 @@ class _FakeColorSource:
         self.released += 1
 
 
+class _FakeOutput:
+    def __init__(self, kind: str, name: str, settings: dict) -> None:
+        self.kind = kind
+        self.name = name
+        self.settings = dict(settings)
+        self.media: tuple | None = None
+        self.started = 0
+        self.stopped = 0
+        self.released = 0
+        self.start_ok = True
+
+    def set_media(self, video, audio) -> None:
+        self.media = (video, audio)
+
+    def start(self) -> bool:
+        self.started += 1
+        return self.start_ok
+
+    def stop(self, *args, **kwargs) -> None:
+        self.stopped += 1
+
+    def release(self) -> None:
+        self.released += 1
+
+
 class _FakeTransition:
     def __init__(self, kind: str, name: str, settings: dict) -> None:
         self.kind = kind
@@ -318,9 +343,11 @@ class _CompositingRuntime:
         self.scenes: list[_FakeScene] = []
         self.sources: list[_FakeColorSource] = []
         self.transitions: list[_FakeTransition] = []
+        self.outputs: list[_FakeOutput] = []
         self.camera_sources: list[tuple[str, str]] = []
         self.channels: dict[int, object] = {}
         self.released_channels: list[int] = []
+        self.output_types = ["virtualcam_output"]
         self.starts = 0
         self.shutdowns = 0
         self._next_channel = 0
@@ -347,12 +374,28 @@ class _CompositingRuntime:
                 runtime.transitions.append(transition)
                 return transition
 
+        class _OutputNS:
+            @staticmethod
+            def create(kind: str, name: str, settings: dict) -> _FakeOutput:
+                output = _FakeOutput(kind, name, settings)
+                runtime.outputs.append(output)
+                return output
+
         self.ob = types.SimpleNamespace(
             Scene=_SceneNS,
             Source=_SourceNS,
             Transition=_TransitionNS,
+            Output=_OutputNS,
+            enum_output_types=lambda: list(runtime.output_types),
             BoundsType=types.SimpleNamespace(SCALE_INNER=2),
             Alignment=types.SimpleNamespace(LEFT=1, TOP=4),
+        )
+
+    @property
+    def context(self):
+        return types.SimpleNamespace(
+            get_video=lambda: "main-video",
+            get_audio=lambda: "main-audio",
         )
 
     # obs_runtime boot contract
@@ -815,6 +858,77 @@ def test_engine_cancel_preparation_is_a_silent_notification():
     engine.handle(_request("hydrate", {"document": _TWO_SCENE_DOC,
                                        "active_scenes": {"virtual_camera": "a"}}))
     assert engine.handle(_request("cancel_preparation", {"cancelled_request_id": "x"})) is None
+
+
+# ── virtual camera (virtual_camera bus output) ───────────────────────────────
+
+
+def test_virtual_camera_starts_and_stops_the_output():
+    from solin.core.scenes.libobs_virtual_camera import LibobsVirtualCamera
+
+    runtime = _CompositingRuntime()
+    vcam = LibobsVirtualCamera(runtime)
+
+    assert vcam.start() is True
+    assert vcam.active is True
+    output = runtime.outputs[-1]
+    assert output.kind == "virtualcam_output"
+    assert output.name == "Solin Virtual Camera"
+    assert output.media == ("main-video", "main-audio")  # mirrors the main mix
+    assert output.started == 1
+
+    assert vcam.start() is True  # idempotent
+    assert output.started == 1
+
+    vcam.stop()
+    assert output.stopped == 1 and output.released == 1
+    assert vcam.active is False
+
+
+def test_virtual_camera_unavailable_when_output_kind_missing():
+    from solin.core.scenes.libobs_virtual_camera import LibobsVirtualCamera
+
+    runtime = _CompositingRuntime()
+    runtime.output_types = []  # e.g. Windows with the bundled plugins only
+
+    vcam = LibobsVirtualCamera(runtime)
+    assert vcam.start() is False
+    assert vcam.active is False
+    assert runtime.outputs == []
+
+
+def test_engine_set_output_enabled_toggles_the_virtual_camera():
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+
+    on = engine.handle(_request("set_output_enabled", {"bus_id": "virtual_camera", "enabled": True}))
+    assert on is not None and on.message_type == "ack" and on.payload["applied"] is True
+    assert runtime.outputs[-1].started == 1
+
+    off = engine.handle(_request("set_output_enabled", {"bus_id": "virtual_camera", "enabled": False}))
+    assert off is not None and off.payload["applied"] is True
+    assert runtime.outputs[-1].stopped == 1
+
+
+def test_engine_set_output_enabled_other_bus_is_a_noop_ack():
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+
+    response = engine.handle(_request("set_output_enabled", {"bus_id": "media_windows", "enabled": True}))
+    assert response is not None and response.payload["applied"] is True
+    assert runtime.outputs == []  # media_windows doesn't create a vcam output
+
+
+def test_hello_advertises_virtual_camera_when_booted():
+    runtime = _CompositingRuntime()
+    booted = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    caps = _capabilities_from_envelope(booted.handle(_request("hello")))
+    assert caps.virtual_camera is True
+
+    caps = _capabilities_from_envelope(LibobsSidecarEngine().handle(_request("hello")))
+    assert caps.virtual_camera is False
 
 
 # ── content ingress: shared-memory frames → a libobs content source ──────────

@@ -156,6 +156,7 @@ class LibobsSidecarEngine:
         self._scene_graph: object | None = None
         self._window_output: object | None = None
         self._content_consumer: Any | None = None
+        self._virtual_camera: Any | None = None
 
     @property
     def runtime_started(self) -> bool:
@@ -165,6 +166,7 @@ class LibobsSidecarEngine:
         # Advertise honestly: compositing is only real once the runtime is up.
         capabilities = dict(CAPABILITIES)
         capabilities["hardware_compositing"] = self._runtime_started
+        capabilities["virtual_camera"] = self._runtime_started
         return capabilities
 
     def _boot_runtime(self) -> None:
@@ -187,6 +189,9 @@ class LibobsSidecarEngine:
 
         self._scene_graph = LibobsSceneGraph(runtime)
         self._window_output = LibobsWindowOutput(runtime)
+        from solin.core.scenes.libobs_virtual_camera import LibobsVirtualCamera
+
+        self._virtual_camera = LibobsVirtualCamera(runtime)
 
     def handle(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope | None:
         message_type = request.message_type
@@ -204,9 +209,30 @@ class LibobsSidecarEngine:
             if graph is not None:
                 graph.cancel_all()  # type: ignore[attr-defined]
             return None  # a notification — no response
+        if message_type == "set_output_enabled":
+            return self._handle_set_output_enabled(request)
         if message_type == "set_window_targets":
             return self._handle_set_window_targets(request)
         return build_response(request)
+
+    def _handle_set_output_enabled(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope:
+        payload = request.payload
+        bus_id = payload.get("bus_id")
+        enabled = bool(payload.get("enabled"))
+        if bus_id != "virtual_camera":
+            # media_windows output is driven by set_window_targets; just ack.
+            return _ack(request, applied=True)
+        camera = self._virtual_camera
+        if not self._runtime_started or camera is None:
+            return _ack(request, applied=False, error_code="runtime_unavailable",
+                        error_message="the libobs runtime is not running")
+        if enabled:
+            if camera.start():
+                return _ack(request, applied=True)
+            return _ack(request, applied=False, error_code="virtual_camera_unavailable",
+                        error_message="the virtual camera device is not available")
+        camera.stop()
+        return _ack(request, applied=True)
 
     def _handle_hydrate(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope:
         graph = self._scene_graph
@@ -309,8 +335,15 @@ class LibobsSidecarEngine:
         return _ack(request, applied=True)
 
     def shutdown(self) -> None:
-        # Release in reverse dependency order: window displays (they hold GL
-        # surfaces on the context) → scene graph → the runtime/context itself.
+        # Release in reverse dependency order: virtual-camera output → window
+        # displays (they hold GL surfaces on the context) → scene graph → the
+        # content consumer → the runtime/context itself.
+        camera, self._virtual_camera = self._virtual_camera, None
+        if camera is not None:
+            try:
+                camera.stop()
+            except Exception:  # noqa: BLE001 - shutdown must not raise out of the sidecar
+                log.warning("virtual camera stop errored", exc_info=True)
         output, self._window_output = self._window_output, None
         if output is not None:
             try:
