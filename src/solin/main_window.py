@@ -464,12 +464,25 @@ class MainWindow(QWidget):
         document = self.scene_documents.document
         preview_output = document.output(BusId.MEDIA_WINDOWS)
         program_output = document.output(BusId.VIRTUAL_CAMERA)
-        self._scene_preview_egress = SceneFrameEgressController(
-            preview_output.video_format.width,
-            preview_output.video_format.height,
-            self,
-            worker_name="solin-scene-preview-egress",
-        )
+        if libobs_scene_engine_selected():
+            # The libobs sidecar composites the edited scene into a
+            # cross-platform BGRA block the app owns (see libobs_preview_egress).
+            from .controllers.shared_memory_preview_egress import (
+                SharedMemoryPreviewEgressController,
+            )
+
+            self._scene_preview_egress = SharedMemoryPreviewEgressController(
+                preview_output.video_format.width,
+                preview_output.video_format.height,
+                self,
+            )
+        else:
+            self._scene_preview_egress = SceneFrameEgressController(
+                preview_output.video_format.width,
+                preview_output.video_format.height,
+                self,
+                worker_name="solin-scene-preview-egress",
+            )
         self._scene_preview_egress.descriptor_changed.connect(
             self._on_scene_frame_egress_descriptor_changed
         )

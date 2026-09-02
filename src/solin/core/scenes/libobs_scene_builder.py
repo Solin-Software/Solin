@@ -77,6 +77,11 @@ class LibobsSceneGraph:
     def scene_ids(self) -> tuple[str, ...]:
         return tuple(self._scenes)
 
+    def scene_source(self, scene_id: str) -> Any | None:
+        """Borrowed source of a built scene (for off-screen preview readback)."""
+        scene = self._scenes.get(scene_id)
+        return scene.as_source() if scene is not None else None
+
     def hydrate(
         self,
         document: dict,

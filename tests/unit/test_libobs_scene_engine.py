@@ -1964,6 +1964,87 @@ def test_engine_control_media_unknown_action_is_rejected():
     engine.shutdown()
 
 
+class _FakePreviewEgress:
+    def __init__(self) -> None:
+        self.configured: list = []
+        self.sources: list = []
+        self.enabled: list = []
+        self.shutdowns = 0
+
+    def configure(self, descriptor) -> None:
+        self.configured.append(descriptor)
+
+    def set_scene_source(self, source) -> None:
+        self.sources.append(source)
+
+    def set_enabled(self, enabled) -> None:
+        self.enabled.append(enabled)
+
+    def shutdown(self) -> None:
+        self.shutdowns += 1
+
+
+def test_engine_hydrate_configures_preview_egress_and_sets_scene():
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+    fake = _FakePreviewEgress()
+    engine._preview_egress = fake  # replace the real egress with a recorder
+
+    descriptor = {"transport": "shared_memory_bgra", "handle_token": "tok",
+                  "width": 1920, "height": 1080}
+    engine.handle(_request("hydrate", {
+        "document": _MEDIA_DOC,
+        "active_scenes": {"media_windows": "s1", "virtual_camera": "s1"},
+        "preview_egress": descriptor,
+    }))
+    assert fake.configured[-1] == descriptor
+    # the render is paused (None) before rebuild, then pointed at the edit scene
+    assert fake.sources[0] is None
+    assert fake.sources[-1] == "scene-source:solin-scene-s1"
+
+
+def test_engine_set_render_enabled_toggles_preview_and_acks():
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+    fake = _FakePreviewEgress()
+    engine._preview_egress = fake
+
+    on = engine.handle(_request("set_render_enabled", {"bus_id": "media_windows", "enabled": True}))
+    assert _ack_from_envelope(on).applied is True
+    assert fake.enabled[-1] is True
+
+    off = engine.handle(_request("set_render_enabled", {"bus_id": "media_windows", "enabled": False}))
+    assert _ack_from_envelope(off).applied is True
+    assert fake.enabled[-1] is False
+
+    # the program bus render is a no-op ack (it always composites)
+    prog = engine.handle(_request("set_render_enabled", {"bus_id": "virtual_camera", "enabled": True}))
+    assert _ack_from_envelope(prog).applied is True
+    assert fake.enabled[-1] is False  # unchanged by the program-bus toggle
+
+
+def test_engine_shutdown_stops_preview_egress_before_scene_graph():
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+    fake = _FakePreviewEgress()
+    engine._preview_egress = fake
+    engine.shutdown()
+    assert fake.shutdowns == 1
+
+
+def test_scene_graph_scene_source_returns_built_scene():
+    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+
+    runtime = _CompositingRuntime()
+    graph = LibobsSceneGraph(runtime)
+    graph.hydrate(_MEDIA_DOC, {"virtual_camera": "s1"}, object())
+    assert graph.scene_source("s1") == "scene-source:solin-scene-s1"
+    assert graph.scene_source("missing") is None
+
+
 def test_engine_shutdown_closes_media_source():
     runtime = _CompositingRuntime()
     engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)

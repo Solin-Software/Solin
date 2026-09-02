@@ -183,6 +183,7 @@ class LibobsSidecarEngine:
         self._scene_graph: object | None = None
         self._window_output: object | None = None
         self._content_consumer: Any | None = None
+        self._preview_egress: Any | None = None
         self._virtual_camera: Any | None = None
         self._recorder: Any | None = None
         self._audio_mixer: Any | None = None
@@ -237,6 +238,9 @@ class LibobsSidecarEngine:
 
         self._scene_graph = LibobsSceneGraph(runtime)
         self._window_output = LibobsWindowOutput(runtime)
+        from solin.core.scenes.libobs_preview_egress import LibobsPreviewEgress
+
+        self._preview_egress = LibobsPreviewEgress(runtime)
         from solin.core.scenes.libobs_audio_sources import LibobsAudioMixer
         from solin.core.scenes.libobs_media_source import LibobsMediaSource
         from solin.core.scenes.libobs_recorder import LibobsRecorder
@@ -290,6 +294,8 @@ class LibobsSidecarEngine:
             return None  # a notification — no response
         if message_type == "set_output_enabled":
             return self._handle_set_output_enabled(request)
+        if message_type == "set_render_enabled":
+            return self._handle_set_render_enabled(request)
         if message_type == "set_window_targets":
             return self._handle_set_window_targets(request)
         return build_response(request)
@@ -645,17 +651,42 @@ class LibobsSidecarEngine:
         try:
             payload = request.payload
             self._reconcile_content_ingress(payload.get("content_ingress"))
+            # Stop the preview render on the old (about-to-be-released) scenes
+            # before rebuilding — the egress renders a borrowed scene source.
+            if self._preview_egress is not None:
+                self._preview_egress.set_scene_source(None)
+            active_scenes = payload.get("active_scenes") or {}
             # An open media source owns the content slot; otherwise the BGRA
             # frame-ingress source does (both may be absent → placeholder).
             graph.hydrate(  # type: ignore[attr-defined]
                 payload.get("document") or {},
-                payload.get("active_scenes") or {},
+                active_scenes,
                 self._effective_content_source(),
             )
+            self._reconcile_preview_egress(payload.get("preview_egress"), active_scenes)
         except Exception:  # noqa: BLE001 - a bad document must not crash the engine
             log.warning("libobs hydrate failed", exc_info=True)
             return _ack(request, applied=False, error_code="hydrate_failed",
                         error_message="could not build the libobs scene graph")
+        return _ack(request, applied=True)
+
+    def _reconcile_preview_egress(self, descriptor: object, active_scenes: dict) -> None:
+        egress = self._preview_egress
+        graph = self._scene_graph
+        if egress is None or graph is None:
+            return
+        egress.configure(descriptor)  # attach/detach the writer to the app's block
+        # The editor previews the MEDIA_WINDOWS (edit) bus scene.
+        preview_scene_id = active_scenes.get("media_windows") or active_scenes.get("virtual_camera")
+        source = graph.scene_source(preview_scene_id) if preview_scene_id else None  # type: ignore[attr-defined]
+        egress.set_scene_source(source)
+
+    def _handle_set_render_enabled(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope:
+        # The MEDIA_WINDOWS bus render demand gates the editor preview egress;
+        # the program bus always composites, so just ack it.
+        payload = request.payload
+        if payload.get("bus_id") == "media_windows" and self._preview_egress is not None:
+            self._preview_egress.set_enabled(bool(payload.get("enabled")))
         return _ack(request, applied=True)
 
     def _reconcile_content_ingress(self, descriptor: object) -> None:
@@ -774,6 +805,13 @@ class LibobsSidecarEngine:
                 output.shutdown()  # type: ignore[attr-defined]
             except Exception:  # noqa: BLE001 - shutdown must not raise out of the sidecar
                 log.warning("libobs window output shutdown errored", exc_info=True)
+        # Stop the preview render before releasing the scenes it borrows.
+        egress, self._preview_egress = self._preview_egress, None
+        if egress is not None:
+            try:
+                egress.shutdown()
+            except Exception:  # noqa: BLE001 - shutdown must not raise out of the sidecar
+                log.warning("preview egress shutdown errored", exc_info=True)
         graph, self._scene_graph = self._scene_graph, None
         if graph is not None:
             try:
