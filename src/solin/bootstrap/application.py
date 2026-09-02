@@ -370,6 +370,10 @@ def _build_main_window_runtime(
         PlaylistStoragePaths,
     )
     from solin.core.foundation.resource_lanes import ResourceLaneRegistry
+    from solin.core.scenes.libobs_engine import (
+        create_libobs_scene_engine,
+        libobs_scene_engine_selected,
+    )
     from solin.core.scenes.native_engine import create_native_scene_engine
     from solin.core.scenes.ptz_runtime import create_ptz_runtime_services
 
@@ -434,11 +438,14 @@ def _build_main_window_runtime(
     watched_folder_playlist_store = WatchedFolderPlaylistStore()
     main_window_profile_settings = _build_main_window_profile_settings(profile_settings)
     scene_workspace = _build_scene_workspace(profile_paths)
-    scene_engine = (
-        create_native_scene_engine(runtime_paths.cache_dir)
-        if NATIVE_SCENES_SUPPORTED
-        else None
-    )
+    # SOLIN_SCENE_ENGINE=libobs opts into the libobs sidecar engine on any
+    # platform; otherwise the native engine is used where supported.
+    if libobs_scene_engine_selected():
+        scene_engine = create_libobs_scene_engine()
+    elif NATIVE_SCENES_SUPPORTED:
+        scene_engine = create_native_scene_engine(runtime_paths.cache_dir)
+    else:
+        scene_engine = None
     ptz_services = create_ptz_runtime_services(active_profile.id)
     scene_workspace.set_credential_cleaner(ptz_services.credentials.delete)
     meeting_linked_folder_sync = MeetingLinkedFolderSync(
