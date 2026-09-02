@@ -154,6 +154,7 @@ class LibobsSidecarEngine:
         self._runtime: object | None = None
         self._runtime_started = False
         self._scene_graph: object | None = None
+        self._window_output: object | None = None
 
     @property
     def runtime_started(self) -> bool:
@@ -181,8 +182,10 @@ class LibobsSidecarEngine:
         self._runtime = runtime
         self._runtime_started = True
         from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+        from solin.core.scenes.libobs_window_output import LibobsWindowOutput
 
         self._scene_graph = LibobsSceneGraph(runtime)
+        self._window_output = LibobsWindowOutput(runtime)
 
     def handle(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope | None:
         message_type = request.message_type
@@ -213,17 +216,28 @@ class LibobsSidecarEngine:
         return _ack(request, applied=True)
 
     def _handle_set_window_targets(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope:
-        # Binding a libobs Display to each native window handle is a later stage;
-        # acknowledge so the runtime controller proceeds. The scene still
-        # composites onto its output channel in the meantime.
-        targets = request.payload.get("window_targets") or []
-        log.info(
-            "libobs engine received %d window target(s); display binding pending",
-            len(targets) if isinstance(targets, list) else 0,
-        )
+        output = self._window_output
+        if not self._runtime_started or output is None:
+            return _ack(request, applied=False, error_code="runtime_unavailable",
+                        error_message="the libobs runtime is not running")
+        try:
+            targets = request.payload.get("window_targets") or []
+            output.set_targets(targets if isinstance(targets, list) else [])  # type: ignore[attr-defined]
+        except Exception:  # noqa: BLE001 - a bad target must not crash the engine
+            log.warning("libobs set_window_targets failed", exc_info=True)
+            return _ack(request, applied=False, error_code="window_targets_failed",
+                        error_message="could not bind the window displays")
         return _ack(request, applied=True)
 
     def shutdown(self) -> None:
+        # Release in reverse dependency order: window displays (they hold GL
+        # surfaces on the context) → scene graph → the runtime/context itself.
+        output, self._window_output = self._window_output, None
+        if output is not None:
+            try:
+                output.shutdown()  # type: ignore[attr-defined]
+            except Exception:  # noqa: BLE001 - shutdown must not raise out of the sidecar
+                log.warning("libobs window output shutdown errored", exc_info=True)
         graph, self._scene_graph = self._scene_graph, None
         if graph is not None:
             try:

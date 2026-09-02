@@ -430,13 +430,6 @@ def test_engine_hydrate_without_runtime_acks_not_applied():
     assert response.payload["error_code"] == "runtime_unavailable"
 
 
-def test_engine_set_window_targets_acks():
-    engine = LibobsSidecarEngine()
-    response = engine.handle(_request("set_window_targets", {"window_targets": []}))
-    assert response is not None and response.message_type == "ack"
-    assert response.payload["applied"] is True
-
-
 def test_hello_advertises_hardware_compositing_only_when_booted():
     runtime = _CompositingRuntime()
     booted = LibobsSidecarEngine(runtime_factory=lambda: runtime)
@@ -446,6 +439,142 @@ def test_hello_advertises_hardware_compositing_only_when_booted():
     unbooted = LibobsSidecarEngine()  # no factory
     caps = _capabilities_from_envelope(unbooted.handle(_request("hello")))
     assert caps.hardware_compositing is False
+
+
+# ── set_window_targets → obs_display binding (fake display factory) ───────────
+
+
+class _FakeDisplay:
+    def __init__(self, handle: int, width: int, height: int, background: int) -> None:
+        self.handle = handle
+        self.size = (width, height)
+        self.background = background
+        self.draw_callbacks: list = []
+        self.resizes: list[tuple[int, int]] = []
+        self.released = 0
+
+    def add_draw_callback(self, fn) -> None:
+        self.draw_callbacks.append(fn)
+
+    def resize(self, width: int, height: int) -> None:
+        self.resizes.append((width, height))
+        self.size = (width, height)
+
+    def release(self) -> None:
+        self.released += 1
+
+
+def _window_target(handle: int, *, width=1280, height=720, dpr=1.0, visible=True) -> dict:
+    return {
+        "bus_id": "media_windows",
+        "target_id": f"t{handle}",
+        "screen_id": f"s{handle}",
+        "native_handle": handle,
+        "x": 0,
+        "y": 0,
+        "width": width,
+        "height": height,
+        "device_pixel_ratio": dpr,
+        "visible": visible,
+    }
+
+
+def _window_output_with_recorder():
+    from solin.core.scenes.libobs_window_output import LibobsWindowOutput
+
+    created: list[_FakeDisplay] = []
+
+    def factory(handle, width, height, background):
+        display = _FakeDisplay(handle, width, height, background)
+        created.append(display)
+        return display
+
+    return LibobsWindowOutput(_CompositingRuntime(), display_factory=factory), created
+
+
+def test_window_output_creates_a_display_per_visible_target_with_physical_size():
+    output, created = _window_output_with_recorder()
+
+    output.set_targets([_window_target(101, width=1280, height=720, dpr=1.5)])
+
+    assert len(created) == 1
+    display = created[0]
+    assert display.handle == 101
+    assert display.size == (1920, 1080)  # logical size * dpr
+    assert len(display.draw_callbacks) == 1  # renders the main texture
+    assert output.handles == (101,)
+
+
+def test_window_output_skips_invisible_targets():
+    output, created = _window_output_with_recorder()
+    output.set_targets([_window_target(101, visible=False)])
+    assert created == []
+    assert output.handles == ()
+
+
+def test_window_output_releases_targets_that_disappear():
+    output, created = _window_output_with_recorder()
+    output.set_targets([_window_target(101), _window_target(202)])
+    output.set_targets([_window_target(202)])  # 101 gone
+
+    display_101 = next(d for d in created if d.handle == 101)
+    assert display_101.released == 1
+    assert output.handles == (202,)
+
+
+def test_window_output_resizes_an_existing_display():
+    output, created = _window_output_with_recorder()
+    output.set_targets([_window_target(101, width=1280, height=720)])
+    output.set_targets([_window_target(101, width=1920, height=1080)])
+
+    assert len(created) == 1  # reused, not recreated
+    assert created[0].resizes == [(1920, 1080)]
+
+
+def test_window_output_shutdown_releases_all():
+    output, created = _window_output_with_recorder()
+    output.set_targets([_window_target(101), _window_target(202)])
+    output.shutdown()
+    assert all(d.released == 1 for d in created)
+    assert output.handles == ()
+
+
+class _RecordingWindowOutput:
+    def __init__(self) -> None:
+        self.calls: list[list] = []
+        self.shutdowns = 0
+
+    def set_targets(self, targets) -> None:
+        self.calls.append(list(targets))
+
+    def shutdown(self) -> None:
+        self.shutdowns += 1
+
+
+def test_engine_set_window_targets_routes_to_the_window_output_and_acks():
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))  # boot → creates the runtime-backed output
+    # Swap in a recorder so the routing is tested without touching real libobs
+    # displays (LibobsWindowOutput itself is unit-tested above).
+    recorder = _RecordingWindowOutput()
+    engine._window_output = recorder
+
+    response = engine.handle(
+        _request("set_window_targets", {"window_targets": [_window_target(101)]})
+    )
+
+    assert response is not None and response.message_type == "ack"
+    assert response.payload["applied"] is True
+    assert recorder.calls == [[_window_target(101)]]
+
+
+def test_engine_set_window_targets_without_runtime_acks_not_applied():
+    engine = LibobsSidecarEngine()
+    response = engine.handle(_request("set_window_targets", {"window_targets": []}))
+    assert response is not None and response.message_type == "ack"
+    assert response.payload["applied"] is False
+    assert response.payload["error_code"] == "runtime_unavailable"
 
 
 # ── factory + selection ──────────────────────────────────────────────────────
