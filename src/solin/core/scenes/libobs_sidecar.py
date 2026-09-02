@@ -23,6 +23,8 @@ from __future__ import annotations
 import logging
 import os
 import sys
+import threading
+import time
 from typing import Any, BinaryIO, Callable
 
 from solin.core.scenes.ipc_protocol import (
@@ -157,16 +159,25 @@ class LibobsSidecarEngine:
         self._window_output: object | None = None
         self._content_consumer: Any | None = None
         self._virtual_camera: Any | None = None
+        self._recorder: Any | None = None
+        self._event_sink: Callable[[SceneIpcEnvelope], None] | None = None
+        self._session_id = "not-started"
+        self._process_generation = "not-started"
 
     @property
     def runtime_started(self) -> bool:
         return self._runtime_started
 
+    def set_event_sink(self, sink: Callable[[SceneIpcEnvelope], None] | None) -> None:
+        """Register the (thread-safe) writer serve() uses for unsolicited events."""
+        self._event_sink = sink
+
     def _capabilities(self) -> dict[str, bool]:
-        # Advertise honestly: compositing is only real once the runtime is up.
+        # Advertise honestly: features are only real once the runtime is up.
         capabilities = dict(CAPABILITIES)
         capabilities["hardware_compositing"] = self._runtime_started
         capabilities["virtual_camera"] = self._runtime_started
+        capabilities["program_recording"] = self._runtime_started
         return capabilities
 
     def _boot_runtime(self) -> None:
@@ -189,15 +200,37 @@ class LibobsSidecarEngine:
 
         self._scene_graph = LibobsSceneGraph(runtime)
         self._window_output = LibobsWindowOutput(runtime)
+        from solin.core.scenes.libobs_recorder import LibobsRecorder
         from solin.core.scenes.libobs_virtual_camera import LibobsVirtualCamera
 
         self._virtual_camera = LibobsVirtualCamera(runtime)
+        self._recorder = LibobsRecorder(runtime)
 
     def handle(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope | None:
+        # Remember correlation ids so unsolicited events (recording state) are
+        # accepted by the client (it validates session + generation on events).
+        self._session_id = request.session_id
+        self._process_generation = request.process_generation
         message_type = request.message_type
         if message_type == "hello":
             self._boot_runtime()
             return _reply(request, "hello_ack", self._capabilities())
+        if message_type == "start_program_recording":
+            return self._handle_start_recording(request)
+        if message_type == "stop_program_recording":
+            return self._handle_stop_recording(request)
+        if message_type == "set_program_recording_audio":
+            return _ack(request, applied=True)  # device selection is a later slice
+        if message_type == "list_local_cameras":
+            return _reply(request, "local_camera_list", {
+                "supported": self._runtime_started, "ready": self._runtime_started,
+                "generation": 0, "devices": [], "error_code": "",
+            })
+        if message_type == "list_audio_devices":
+            return _reply(request, "audio_device_list", {
+                "supported": self._runtime_started, "ready": self._runtime_started,
+                "generation": 0, "devices": [], "error_code": "",
+            })
         if message_type == "hydrate":
             return self._handle_hydrate(request)
         if message_type == "prepare_scene":
@@ -214,6 +247,66 @@ class LibobsSidecarEngine:
         if message_type == "set_window_targets":
             return self._handle_set_window_targets(request)
         return build_response(request)
+
+    def _handle_start_recording(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope:
+        recorder = self._recorder
+        if not self._runtime_started or recorder is None:
+            return _ack(request, applied=False, error_code="runtime_unavailable",
+                        error_message="the libobs runtime is not running")
+        path = str(request.payload.get("path") or "")
+        if not path:
+            return _ack(request, applied=False, error_code="invalid_path",
+                        error_message="a recording path is required")
+        if recorder.start(path):
+            self._emit_recording_state("recording", path=path)
+            return _ack(request, applied=True)
+        self._emit_recording_state("failed", path=path, error_code="recording_start_failed",
+                                   message="could not start the recording output")
+        return _ack(request, applied=False, error_code="recording_start_failed",
+                    error_message="could not start the recording output")
+
+    def _handle_stop_recording(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope:
+        recorder = self._recorder
+        if recorder is not None:
+            recorder.stop()
+        self._emit_recording_state("idle")
+        return _ack(request, applied=True)
+
+    def _emit_recording_state(
+        self,
+        status: str,
+        *,
+        path: str = "",
+        error_code: str = "",
+        message: str = "",
+    ) -> None:
+        sink = self._event_sink
+        if sink is None:
+            return
+        envelope = SceneIpcEnvelope(
+            message_type="program_recording_state",
+            request_id="event-recording",
+            session_id=self._session_id,
+            process_generation=self._process_generation,
+            sequence=0,
+            document_revision=0,
+            deadline_monotonic_ms=int(time.monotonic() * 1000) + 2000,
+            payload={
+                "status": status,
+                "path": path,
+                "error_code": error_code,
+                "message": message,
+                "microphone_warning": "",
+                "system_audio_warning": "",
+                "dropped_frames": 0,
+                "duplicated_frames": 0,
+                "frame_feed_p95_ns": 0,
+            },
+        )
+        try:
+            sink(envelope)
+        except Exception:  # noqa: BLE001 - an event write must not break handling
+            log.debug("could not emit program recording state", exc_info=True)
 
     def _handle_set_output_enabled(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope:
         payload = request.payload
@@ -338,6 +431,12 @@ class LibobsSidecarEngine:
         # Release in reverse dependency order: virtual-camera output → window
         # displays (they hold GL surfaces on the context) → scene graph → the
         # content consumer → the runtime/context itself.
+        recorder, self._recorder = self._recorder, None
+        if recorder is not None:
+            try:
+                recorder.stop()
+            except Exception:  # noqa: BLE001 - shutdown must not raise out of the sidecar
+                log.warning("recorder stop errored", exc_info=True)
         camera, self._virtual_camera = self._virtual_camera, None
         if camera is not None:
             try:
@@ -385,6 +484,13 @@ def serve(
     the libobs runtime is released even on an unclean channel.
     """
     active = engine if engine is not None else LibobsSidecarEngine()
+    write_lock = threading.Lock()
+
+    def emit(envelope: SceneIpcEnvelope) -> None:
+        with write_lock:
+            write_envelope(sink, envelope)
+
+    active.set_event_sink(emit)
     try:
         while True:
             try:
@@ -395,8 +501,10 @@ def serve(
                 return  # clean EOF: the parent closed the pipe or exited
             response = active.handle(request)
             if response is not None:
-                write_envelope(sink, response)
+                with write_lock:
+                    write_envelope(sink, response)
     finally:
+        active.set_event_sink(None)
         active.shutdown()
 
 
