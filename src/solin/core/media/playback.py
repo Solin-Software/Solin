@@ -29,6 +29,7 @@ from .cache import MediaCacheManager
 from .qt_contracts import PlaybackDownloaderFactory
 from .playback_session import MediaPlaybackSession
 from .playback_request import (
+    TICKS_PER_MILLISECOND,
     MediaPlaybackRequest,
     PlaybackCachePolicy,
     ResolvedPlaybackRange,
@@ -36,6 +37,18 @@ from .playback_request import (
 from .settings import MediaPlaybackSettings
 
 log = logging.getLogger(__name__)
+
+# obs media-state integers (mirror scenes.media_control.MediaPlaybackState) mapped
+# to Qt playback states, so an engine-routed source drives the same UI bindings.
+_ENGINE_STATE_PLAYING = 1
+_ENGINE_STATE_PAUSED = 4
+_ENGINE_STATE_ENDED = 6
+_ENGINE_STATE_TO_QT = {
+    _ENGINE_STATE_PLAYING: QMediaPlayer.PlaybackState.PlayingState,
+    2: QMediaPlayer.PlaybackState.PausedState,  # OPENING
+    3: QMediaPlayer.PlaybackState.PausedState,  # BUFFERING
+    _ENGINE_STATE_PAUSED: QMediaPlayer.PlaybackState.PausedState,
+}
 
 
 class MediaController(QObject):
@@ -60,6 +73,12 @@ class MediaController(QObject):
     # True  -> reproduzindo de arquivo local (offline/cache)
     # False -> reproduzindo via stream HTTP ou inativo
     playback_source_changed = Signal(bool)
+
+    # Internal: a sidecar media_playback_state arrived on the engine's reader
+    # thread; re-emitted here so the connected slot runs on the GUI thread
+    # (AutoConnection → QueuedConnection), serialising engine state with the
+    # GUI-thread transport methods that touch the same fields.
+    _engine_media_state_received = Signal(object)
 
     def __init__(
         self,
@@ -103,6 +122,16 @@ class MediaController(QObject):
         self._published_frame_acceptance: tuple[int, bool] | None = None
         self._python_frame_delivery_required = True
         self._python_frame_connection: QMetaObject.Connection | None = None
+        self._playback_rate = 1.0
+        # Fork A: when set, local files are decoded by the libobs sidecar and this
+        # controller mirrors the sidecar's playback state instead of driving Qt.
+        self._engine_route = None
+        self._engine_route_active = False
+        self._engine_state = 0
+        self._engine_position_ms = 0
+        self._engine_duration_ms = 0
+        self._engine_media_ended_emitted = False
+        self._engine_media_state_received.connect(self._apply_engine_media_state)
 
         self._connect_python_frame_delivery()
         self.player.playbackStateChanged.connect(self._on_state)
@@ -167,6 +196,97 @@ class MediaController(QObject):
             self._on_frame
         )
 
+    # ── Engine routing (Fork A: libobs sidecar decodes local media) ────────
+
+    def set_engine_media_route(self, route) -> None:
+        """Install (or clear with ``None``) the sidecar route for local files.
+
+        With a route installed, :meth:`start_playback` of a *local* source hands
+        decode + compositing to the engine and this controller reflects the
+        engine's ``media_playback_state`` events through its usual signals; remote
+        streams and everything else keep using ``QMediaPlayer`` unchanged.
+        """
+        self._engine_route = route
+
+    def _route_should_handle(self, url: str) -> bool:
+        route = self._engine_route
+        if route is None or MediaCacheManager.is_remote(url):
+            return False
+        # Fall back to Qt if the sidecar is not ready, so a local file still plays
+        # instead of failing silently (the engine may be restarting).
+        is_ready = getattr(route, "is_ready", None)
+        return is_ready() if callable(is_ready) else True
+
+    def _volume_percent(self) -> int:
+        return max(0, round(self.audio_output.volume() * 100))
+
+    def _speed_percent(self) -> int:
+        return max(1, round(self._playback_rate * 100))
+
+    @staticmethod
+    def _trim_offsets(request: MediaPlaybackRequest) -> tuple[int, int]:
+        """(start_ms, end-trim ms) for the engine; the sidecar resolves the end."""
+        trim = request.trim
+        if trim is None or not trim.custom:
+            return (0, 0)
+        return (
+            trim.start_trim_ticks // TICKS_PER_MILLISECOND,
+            trim.end_trim_ticks // TICKS_PER_MILLISECOND,
+        )
+
+    def _begin_engine_playback(self, request: MediaPlaybackRequest, url: str) -> None:
+        start_ms, end_trim_ms = self._trim_offsets(request)
+        self._engine_route_active = True
+        self._engine_state = 0
+        self._engine_position_ms = 0
+        self._engine_duration_ms = 0
+        self._engine_media_ended_emitted = False
+        self._playback_range = None  # the sidecar reports trim-relative values
+        self._session.set_cached_local(url)
+        self._session.set_stream_persist(False)
+        self._engine_route.open(
+            url,
+            is_local_file=True,
+            autoplay=request.autoplay,
+            volume_percent=self._volume_percent(),
+            speed_percent=self._speed_percent(),
+            trim_start_ms=start_ms,
+            trim_end_ms=end_trim_ms,
+        )
+        self.playback_source_changed.emit(True)
+
+    def on_engine_media_state(self, state) -> None:
+        """Entry from the engine's event thread; hop to the GUI thread to apply.
+
+        Emitting the signal (thread-safe) hands ``_apply_engine_media_state`` to
+        this controller's thread via a queued connection, so all shared-state
+        mutation is serialised with the GUI-thread transport methods.
+        """
+        self._engine_media_state_received.emit(state)
+
+    def _apply_engine_media_state(self, state) -> None:
+        if not self._engine_route_active:
+            return
+        duration = max(0, int(state.duration_ms))
+        if duration != self._engine_duration_ms:
+            self._engine_duration_ms = duration
+            self.duration_changed.emit(duration)
+        self._engine_position_ms = max(0, int(state.position_ms))
+        self.position_changed.emit(self._engine_position_ms)
+        raw_state = int(state.state)
+        if raw_state != self._engine_state:
+            self._engine_state = raw_state
+            self.state_changed.emit(
+                _ENGINE_STATE_TO_QT.get(raw_state, QMediaPlayer.PlaybackState.StoppedState)
+            )
+        if raw_state == _ENGINE_STATE_ENDED and not self._engine_media_ended_emitted:
+            self._engine_media_ended_emitted = True
+            self._session.mark_media_ended()
+            self.media_ended.emit()
+        error_code = getattr(state, "error_code", "")
+        if error_code:
+            self.error_occurred.emit(str(error_code))
+
     # ── Playback público ──────────────────────────────────────────────────
 
     def start_playback(self, request: MediaPlaybackRequest) -> None:
@@ -205,6 +325,13 @@ class MediaController(QObject):
         self._clear_player_source()
         self._restore_gated_audio()
         self.buffer_progress.emit(0, 0)
+        self._engine_route_active = False
+
+        # Fork A: a local source with an engine route decodes in the sidecar.
+        if self._route_should_handle(url):
+            self._downloader.cancel()
+            self._begin_engine_playback(request, url)
+            return
 
         if not is_remote:
             self._downloader.cancel()
@@ -236,13 +363,32 @@ class MediaController(QObject):
 
     def play(self):
         self._session.set_requested_playing(True)
+        if self._engine_route_active:
+            self._engine_route.play()
+            return
         self.player.play()
 
     def pause(self):
         self._session.set_requested_playing(False)
+        if self._engine_route_active:
+            self._engine_route.pause()
+            return
         self.player.pause()
 
     def stop(self):
+        if self._engine_route_active:
+            self._engine_route.close()
+            self._engine_route_active = False
+            self._session.begin_stop()
+            self._session.finish_stop()
+            self._request = None
+            self._engine_state = 0
+            self._engine_position_ms = 0
+            self._engine_duration_ms = 0
+            self._engine_media_ended_emitted = False
+            self.state_changed.emit(QMediaPlayer.PlaybackState.StoppedState)
+            self.playback_source_changed.emit(False)
+            return
         was_gated = not self._trim_gate_open
         self._reconnect_timer.stop()
         self._reset_reconnect_state()
@@ -267,6 +413,12 @@ class MediaController(QObject):
             self.state_changed.emit(self.player.playbackState())
 
     def toggle_play_pause(self):
+        if self._engine_route_active:
+            if self._engine_state == _ENGINE_STATE_PLAYING:
+                self.pause()
+            else:
+                self.play()
+            return
         if (
             self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState
             or (self._stream_recovering and self._session.requested_playing)
@@ -277,6 +429,11 @@ class MediaController(QObject):
 
     def replay(self):
         """Restart from the effective beginning without replacing the source."""
+        if self._engine_route_active:
+            self._engine_media_ended_emitted = False
+            self._session.set_requested_playing(True)
+            self._engine_route.restart()
+            return
         start_ms = self._playback_range.start_ms if self._playback_range else 0
         self._trim_end_emitted = False
         self._session.set_requested_playing(True)
@@ -306,6 +463,9 @@ class MediaController(QObject):
 
     def seek(self, ms: int):
         relative_ms = max(0, int(ms))
+        if self._engine_route_active:
+            self._engine_route.seek(relative_ms)
+            return
         if self._playback_range is None:
             self.player.setPosition(relative_ms)
             return
@@ -335,26 +495,46 @@ class MediaController(QObject):
 
     def set_volume(self, value: float):
         self.audio_output.setVolume(value)
+        if self._engine_route_active:
+            self._engine_route.set_properties(
+                volume_percent=self._volume_percent(),
+                speed_percent=self._speed_percent(),
+            )
 
     def set_playback_rate(self, rate: float):
-        self.player.setPlaybackRate(max(0.1, rate))
+        self._playback_rate = max(0.1, rate)
+        if self._engine_route_active:
+            self._engine_route.set_properties(
+                volume_percent=self._volume_percent(),
+                speed_percent=self._speed_percent(),
+            )
+            return
+        self.player.setPlaybackRate(self._playback_rate)
 
     @property
     def is_playing(self) -> bool:
+        if self._engine_route_active:
+            return self._engine_state == _ENGINE_STATE_PLAYING
         return self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState
 
     @property
     def is_paused(self) -> bool:
+        if self._engine_route_active:
+            return self._engine_state == _ENGINE_STATE_PAUSED
         return self.player.playbackState() == QMediaPlayer.PlaybackState.PausedState
 
     @property
     def duration(self) -> int:
+        if self._engine_route_active:
+            return self._engine_duration_ms
         if self._playback_range is not None:
             return self._playback_range.duration_ms
         return self.player.duration()
 
     @property
     def position(self) -> int:
+        if self._engine_route_active:
+            return self._engine_position_ms
         if self._playback_range is not None:
             return max(
                 0,

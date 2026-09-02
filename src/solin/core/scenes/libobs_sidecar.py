@@ -148,7 +148,10 @@ def build_response(request: SceneIpcEnvelope) -> SceneIpcEnvelope | None:
     if message_type == "hello":
         return _reply(request, "hello_ack", dict(CAPABILITIES))
     if message_type == "ping":
-        return _reply(request, "heartbeat", {})
+        # The client validates the heartbeat payload strictly (it must carry a
+        # non-negative monotonic timestamp); an empty payload fails _validate and
+        # the supervisor treats it as a generation failure and restarts us.
+        return _reply(request, "heartbeat", {"monotonic_ms": int(time.monotonic() * 1000)})
     if message_type in _NOTIFY_MESSAGE_TYPES:
         return None
     return _reply(
@@ -188,7 +191,8 @@ class LibobsSidecarEngine:
         self._media_poller: threading.Thread | None = None
         self._media_poll_stop = threading.Event()
         self._media_trim_start_ms = 0
-        self._media_trim_end_ms = 0
+        self._media_trim_end_from_ms = 0  # ms trimmed from the END (0 = play to natural end)
+        self._media_trim_ended = False  # latched once the trim window's end is reached
         self._event_sink: Callable[[SceneIpcEnvelope], None] | None = None
         self._session_id = "not-started"
         self._process_generation = "not-started"
@@ -431,11 +435,16 @@ class LibobsSidecarEngine:
                                 volume_percent=volume, speed_percent=speed)
             if opened:
                 self._media_trim_start_ms = trim_start
-                self._media_trim_end_ms = trim_end
+                self._media_trim_end_from_ms = trim_end  # from the end
+                self._media_trim_ended = False
                 if trim_start:
                     media.seek(trim_start)
                 if self._scene_graph is not None:
-                    self._scene_graph.set_content_source(media.source)  # type: ignore[attr-defined]
+                    try:
+                        self._scene_graph.set_content_source(media.source)  # type: ignore[attr-defined]
+                    except Exception:  # noqa: BLE001 - a scene error must not kill the sidecar
+                        log.warning("could not route media into the content slot",
+                                    exc_info=True)
         if not opened:
             self._emit_media_state(7, 0, 0, path, error_code="media_open_failed")  # ERROR
             return _ack(request, applied=False, error_code="media_open_failed",
@@ -461,18 +470,24 @@ class LibobsSidecarEngine:
                 media.stop()
             elif action == "restart":
                 media.restart()
+                self._media_trim_ended = False
                 if self._media_trim_start_ms:
                     media.seek(self._media_trim_start_ms)
             elif action == "seek":
                 media.seek(position_ms + self._media_trim_start_ms)  # trim-relative → absolute
+                self._media_trim_ended = False  # re-evaluated on the next poll
             elif action == "close":
                 media.close()
                 self._media_trim_start_ms = 0
-                self._media_trim_end_ms = 0
+                self._media_trim_end_from_ms = 0
+                self._media_trim_ended = False
                 if self._scene_graph is not None:
-                    self._scene_graph.set_content_source(  # type: ignore[attr-defined]
-                        self._frame_content_source()
-                    )
+                    try:
+                        self._scene_graph.set_content_source(  # type: ignore[attr-defined]
+                            self._frame_content_source()
+                        )
+                    except Exception:  # noqa: BLE001 - a scene error must not kill the sidecar
+                        log.warning("could not revert the content slot", exc_info=True)
                 reverted = True
             else:
                 return _ack(request, applied=False, error_code="invalid_media_action",
@@ -519,15 +534,26 @@ class LibobsSidecarEngine:
             if media is None or media.source is None:
                 return None
             start = self._media_trim_start_ms
-            end = self._media_trim_end_ms
+            trim_from_end = self._media_trim_end_from_ms
             position = media.position_ms
             state = media.state
-            if end and position >= end and state == STATE_PLAYING:
-                media.pause()
-                state = STATE_ENDED
             duration = media.duration_ms
+            # Resolve the trim end against the real duration (the app can't know it
+            # before decode); trim_end is "ms removed from the end". Only enforce a
+            # window that is actually inside the media and wider than the start —
+            # a bogus/oversized trim (end past the real duration) is ignored.
+            effective_end = 0
+            if trim_from_end and duration:
+                candidate = duration - trim_from_end
+                if candidate > start:
+                    effective_end = candidate
+            if effective_end and position >= effective_end and state == STATE_PLAYING:
+                media.pause()
+                self._media_trim_ended = True
+            if self._media_trim_ended:
+                state = STATE_ENDED  # latched: keep reporting ENDED past the trim end
             path = media.path
-        window_end = end if end else duration
+        window_end = effective_end if effective_end else duration
         rel_position = max(0, position - start)
         rel_duration = max(0, window_end - start) if window_end else 0
         return (state, rel_position, rel_duration, path)
@@ -798,7 +824,14 @@ def serve(
                 return
             if request is None:
                 return  # clean EOF: the parent closed the pipe or exited
-            response = active.handle(request)
+            try:
+                response = active.handle(request)
+            except Exception:  # noqa: BLE001 - a handler bug must not kill the sidecar
+                log.exception("scene engine handler crashed for %s", request.message_type)
+                response = _reply(request, "error", {
+                    "error_code": "handler_error",
+                    "error_message": f"the engine failed to handle '{request.message_type}'",
+                })
             if response is not None:
                 with write_lock:
                     write_envelope(sink, response)

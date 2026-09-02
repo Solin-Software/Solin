@@ -47,6 +47,7 @@ from solin.core.scenes.process_engine import (
     _audio_device_discovery_from_envelope,
     _capabilities_from_envelope,
     _command_error_from_envelope,
+    _heartbeat_from_envelope,
     _local_camera_discovery_from_envelope,
     _media_playback_event_from_envelope,
     _program_recording_event_from_envelope,
@@ -121,7 +122,9 @@ def test_ping_returns_heartbeat():
 
     assert response is not None
     assert response.message_type == "heartbeat"
-    assert response.payload == {}
+    # the payload must satisfy the client's strict heartbeat validation (a
+    # non-negative monotonic timestamp) or the supervisor restarts the sidecar
+    assert _heartbeat_from_envelope(response) >= 0
     _assert_correlation_echoed(response, request)
 
 
@@ -171,6 +174,30 @@ def test_serve_stops_on_a_corrupt_frame():
     serve(source, sink)
 
     assert sink.getvalue() == b""
+
+
+def test_serve_turns_a_handler_crash_into_an_error_not_a_process_exit():
+    class _CrashingEngine(LibobsSidecarEngine):
+        def handle(self, request):
+            if request.message_type == "hydrate":
+                raise RuntimeError("boom")
+            return super().handle(request)
+
+    source = io.BytesIO(
+        encode_envelope(_request("hydrate", {"document": {}}, request_id="req-1"))
+        + encode_envelope(_request("ping", request_id="req-2"))
+    )
+    sink = io.BytesIO()
+
+    serve(source, sink, engine=_CrashingEngine())
+
+    replies = io.BytesIO(sink.getvalue())
+    first = read_envelope(replies)
+    second = read_envelope(replies)
+    # the crash became an error reply, and the loop kept serving the next request
+    assert first is not None and first.message_type == "error"
+    assert first.payload["error_code"] == "handler_error"
+    assert second is not None and second.message_type == "heartbeat"
 
 
 # ── libobs runtime lifecycle (Stage 1b) ──────────────────────────────────────
@@ -1855,9 +1882,10 @@ def test_engine_open_media_reports_trim_relative_position_and_duration():
     events: list[SceneIpcEnvelope] = []
     engine.set_event_sink(events.append)
     engine.handle(_request("hello"))
+    # trim_end_ms is "ms removed from the end"; fake duration 60s, start 10s,
+    # 20s off the end → window 10s..40s → 30s duration, position 0 at start
     engine.handle(_request("open_media", {"path": "/c.mp4", "is_local_file": True,
-                                          "trim_start_ms": 10000, "trim_end_ms": 40000}))
-    # fake media duration is 60s; the 10s..40s window → 30s duration, position 0 at start
+                                          "trim_start_ms": 10000, "trim_end_ms": 20000}))
     event = _media_playback_event_from_envelope(events[-1])
     assert event.state.duration_ms == 30000
     assert event.state.position_ms == 0
@@ -1871,6 +1899,48 @@ def test_engine_open_media_without_runtime_fails():
         "path": "/c.mp4", "is_local_file": True,
     })))
     assert ack.applied is False and ack.error_code == "runtime_unavailable"
+
+
+def test_engine_media_trim_end_latches_ended_state():
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.set_event_sink(lambda _e: None)
+    engine.handle(_request("hello"))
+    engine.handle(_request("open_media", {"path": "/c.mp4", "is_local_file": True,
+                                          "trim_end_ms": 20000}))
+    media = _media_sources(runtime)[-1]
+    media.media_time = 40000  # at the trim end (duration 60000 - 20000)
+    media._state = 1  # PLAYING
+
+    state, _pos, _dur, _path = engine._sample_media()
+    assert state == int(MediaPlaybackState.ENDED)
+    assert media.play_pause_calls[-1] is True  # paused at the trim end
+    # the source now reads PAUSED, but ENDED stays latched across ticks
+    assert engine._sample_media()[0] == int(MediaPlaybackState.ENDED)
+
+    engine.handle(_request("control_media", {"action": "restart"}))
+    media._state = 1
+    media.media_time = 0
+    assert engine._sample_media()[0] != int(MediaPlaybackState.ENDED)  # latch cleared
+    engine.shutdown()
+
+
+def test_engine_media_oversized_trim_end_does_not_end_early():
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.set_event_sink(lambda _e: None)
+    engine.handle(_request("hello"))
+    # trim_end larger than the (unknown-to-the-app) real duration → ignore it
+    engine.handle(_request("open_media", {"path": "/c.mp4", "is_local_file": True,
+                                          "trim_end_ms": 70000}))
+    media = _media_sources(runtime)[-1]
+    media.media_time = 1000
+    media._state = 1  # PLAYING
+
+    state, _pos, duration, _path = engine._sample_media()
+    assert state == int(MediaPlaybackState.PLAYING)  # no spurious instant end
+    assert duration == 60000  # natural duration, not a collapsed 0
+    engine.shutdown()
 
 
 def test_engine_open_media_missing_path_fails():

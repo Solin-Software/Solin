@@ -346,6 +346,17 @@ class MainWindow(QWidget):
             self.media_ctrl.session_id,
             self.media_ctrl.decoded_frames_accepted,
         )
+        # Fork A: with the libobs engine, local media files decode in the sidecar.
+        # Route the foreground controller through the engine and mirror its
+        # media_playback_state events back onto the controller's usual signals.
+        self._unsubscribe_media_engine = None
+        if libobs_scene_engine_selected() and scene_engine is not None:
+            from .controllers.media_engine_route import SceneEngineMediaRoute
+
+            self.media_ctrl.set_engine_media_route(SceneEngineMediaRoute(scene_engine))
+            self._unsubscribe_media_engine = scene_engine.subscribe(
+                self._on_engine_media_event
+            )
         self._program_content = ProgramContentController(
             self.projection_session,
             self.font_manager,
@@ -446,6 +457,10 @@ class MainWindow(QWidget):
         self.destroyed.connect(
             lambda _object=None: self._unsubscribe_native_projection_state()
         )
+        if self._unsubscribe_media_engine is not None:
+            self.destroyed.connect(
+                lambda _object=None: self._unsubscribe_media_engine()
+            )
         document = self.scene_documents.document
         preview_output = document.output(BusId.MEDIA_WINDOWS)
         program_output = document.output(BusId.VIRTUAL_CAMERA)
@@ -1099,6 +1114,14 @@ class MainWindow(QWidget):
 
     def _on_projection_state_changed_for_native(self) -> None:
         self._reconcile_native_scene_surfaces()
+
+    def _on_engine_media_event(self, event: object) -> None:
+        # Runs on the engine's event thread; on_engine_media_state only emits
+        # (queued) Qt signals and sets plain attributes, so this is thread-safe.
+        from .core.scenes.engine import MediaPlaybackEvent
+
+        if isinstance(event, MediaPlaybackEvent):
+            self.media_ctrl.on_engine_media_state(event.state)
 
     def _on_native_content_source_health_changed(self, source_id: str) -> None:
         if source_id != CONTENT_SOURCE_ID:
