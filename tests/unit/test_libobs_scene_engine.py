@@ -292,6 +292,7 @@ class _CompositingRuntime:
         self.video = _FakeCanvas()
         self.scenes: list[_FakeScene] = []
         self.sources: list[_FakeColorSource] = []
+        self.camera_sources: list[tuple[str, str]] = []
         self.channels: dict[int, object] = {}
         self.released_channels: list[int] = []
         self.starts = 0
@@ -326,6 +327,11 @@ class _CompositingRuntime:
 
     def shutdown(self) -> None:
         self.shutdowns += 1
+
+    # shared camera source (runtime-owned)
+    def camera_source(self, device_id: str, name: str = ""):
+        self.camera_sources.append((device_id, name))
+        return types.SimpleNamespace(kind="camera", device_id=device_id, name=name)
 
     # channel routing
     def acquire_channel(self) -> int:
@@ -584,6 +590,86 @@ def test_engine_set_window_targets_without_runtime_acks_not_applied():
     assert response is not None and response.message_type == "ack"
     assert response.payload["applied"] is False
     assert response.payload["error_code"] == "runtime_unavailable"
+
+
+# ── camera / color / rtsp sources from the document ──────────────────────────
+
+
+def test_camera_layer_uses_the_shared_runtime_source_and_is_not_released():
+    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+
+    runtime = _CompositingRuntime()
+    graph = LibobsSceneGraph(runtime)
+    document = {
+        "sources": [
+            {"id": "cam1", "type": "local_camera", "name": "Logitech",
+             "configuration": {"device_id": "/dev/video0"}}
+        ],
+        "scenes": [
+            {"id": "s", "layers": [
+                {"id": "L", "source_id": "cam1", "visible": True,
+                 "rect": {"x": 0.25, "y": 0.25, "width": 0.5, "height": 0.5}}]}
+        ],
+    }
+
+    graph.hydrate(document, {"virtual_camera": "s"})
+
+    # Resolved through the runtime's shared camera cache (not a placeholder).
+    assert runtime.camera_sources == [("/dev/video0", "Logitech")]
+    assert runtime.sources == []  # no color placeholder created for it
+
+    graph.clear()  # must not try to release the runtime-owned camera source
+
+
+def test_color_source_uses_the_configured_color():
+    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+
+    runtime = _CompositingRuntime()
+    graph = LibobsSceneGraph(runtime)
+    document = {
+        "sources": [
+            {"id": "c1", "type": "color", "name": "Red", "configuration": {"color": "#FF0000"}}
+        ],
+        "scenes": [
+            {"id": "s", "layers": [
+                {"id": "L", "source_id": "c1", "visible": True,
+                 "rect": {"x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0}}]}
+        ],
+    }
+
+    graph.hydrate(document, {"virtual_camera": "s"})
+
+    source = runtime.sources[-1]
+    assert source.kind == "color_source_v3"
+    assert source.settings["color"] == 0xFF0000FF  # 0xAABBGGRR: red in the low byte
+
+    graph.clear()
+    assert source.released == 1  # owned → released
+
+
+def test_rtsp_layer_creates_an_ffmpeg_source():
+    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+
+    runtime = _CompositingRuntime()
+    graph = LibobsSceneGraph(runtime)
+    document = {
+        "sources": [
+            {"id": "r1", "type": "rtsp_camera", "name": "Cam",
+             "configuration": {"uri": "rtsp://host/stream"}}
+        ],
+        "scenes": [
+            {"id": "s", "layers": [
+                {"id": "L", "source_id": "r1", "visible": True,
+                 "rect": {"x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0}}]}
+        ],
+    }
+
+    graph.hydrate(document, {"virtual_camera": "s"})
+
+    source = runtime.sources[-1]
+    assert source.kind == "ffmpeg_source"
+    assert source.settings["is_local_file"] is False
+    assert source.settings["input"] == "rtsp://host/stream"
 
 
 # ── content ingress: shared-memory frames → a libobs content source ──────────

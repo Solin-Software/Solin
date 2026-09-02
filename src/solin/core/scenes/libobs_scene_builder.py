@@ -30,6 +30,20 @@ _MIRROR_BUS = "media_windows"
 _CONTENT_SOURCE_ID = "solin.content.current"
 
 
+def _parse_color(hex_color: str) -> int:
+    """Parse ``#RRGGBB`` into libobs' color_source uint32 (0xAABBGGRR)."""
+    text = hex_color.lstrip("#")
+    if len(text) >= 6:
+        try:
+            red = int(text[0:2], 16)
+            green = int(text[2:4], 16)
+            blue = int(text[4:6], 16)
+        except ValueError:
+            return _PLACEHOLDER_COLOR
+        return 0xFF000000 | (blue << 16) | (green << 8) | red
+    return _PLACEHOLDER_COLOR
+
+
 class LibobsSceneGraph:
     """Owns the libobs scenes/sources built for one hydrate snapshot."""
 
@@ -58,6 +72,11 @@ class LibobsSceneGraph:
         self.clear()
         ob = self._runtime.ob
         canvas = self._runtime.video
+        sources_by_id = {
+            src["id"]: src
+            for src in (document.get("sources") or ())
+            if isinstance(src, dict) and src.get("id")
+        }
         for scene_record in document.get("scenes") or ():
             scene_id = scene_record.get("id")
             if not scene_id:
@@ -67,17 +86,24 @@ class LibobsSceneGraph:
             for layer in scene_record.get("layers") or ():
                 if not layer.get("visible", True):
                     continue
-                self._add_layer(ob, scene, layer, canvas, content_source)
+                self._add_layer(ob, scene, layer, canvas, sources_by_id, content_source)
         self._route_program(active_scenes)
 
     def _add_layer(
-        self, ob: Any, scene: Any, layer: dict, canvas: Any, content_source: Any | None
+        self,
+        ob: Any,
+        scene: Any,
+        layer: dict,
+        canvas: Any,
+        sources_by_id: dict,
+        content_source: Any | None,
     ) -> None:
-        if content_source is not None and layer.get("source_id") == _CONTENT_SOURCE_ID:
-            source = content_source  # referenced (the consumer owns its lifetime)
-        else:
-            source = self._create_placeholder(ob, layer, canvas)
-            self._sources.append(source)  # owned → released on clear
+        source, owned = self._resolve_source(ob, layer, canvas, sources_by_id, content_source)
+        if source is None:
+            source = self._create_color(ob, layer, canvas, _PLACEHOLDER_COLOR)
+            owned = True
+        if owned:
+            self._sources.append(source)  # released on clear (runtime owns shared cams)
         item = scene.add(source)
         rect = layer.get("rect") or {}
         # Scale the source into its normalized rect (SCALE_INNER preserves aspect),
@@ -94,14 +120,51 @@ class LibobsSceneGraph:
         item.bounds_type = int(ob.BoundsType.SCALE_INNER)
         item.bounds_alignment = int(ob.Alignment.LEFT | ob.Alignment.TOP)
 
-    def _create_placeholder(self, ob: Any, layer: dict, canvas: Any) -> Any:
+    def _resolve_source(
+        self,
+        ob: Any,
+        layer: dict,
+        canvas: Any,
+        sources_by_id: dict,
+        content_source: Any | None,
+    ) -> tuple[Any | None, bool]:
+        """Return ``(source, owned)`` for a layer, or ``(None, False)`` to fall
+        back to a placeholder. ``owned`` sources are released on clear; shared
+        camera sources and the content source are referenced, not owned."""
+        definition = sources_by_id.get(layer.get("source_id"))
+        kind = definition.get("type") if definition else None
+        config = (definition.get("configuration") if definition else None) or {}
+
+        if kind == "solin_content" or layer.get("source_id") == _CONTENT_SOURCE_ID:
+            return (content_source, False)  # referenced (the consumer owns it)
+        if kind == "color":
+            return (self._create_color(ob, layer, canvas, _parse_color(str(config.get("color", "")))), True)
+        if kind == "local_camera":
+            device = str(config.get("device_id", ""))
+            name = str(definition.get("name", "")) if definition else ""
+            return (self._runtime.camera_source(device, name), False)  # runtime-owned
+        if kind == "rtsp_camera":
+            uri = str(config.get("uri", ""))
+            if not uri:
+                return (None, False)
+            source = ob.Source.create(
+                "ffmpeg_source",
+                f"solin-rtsp-{layer.get('id', 'layer')}",
+                {"is_local_file": False, "input": uri, "reconnect_delay_sec": 2},
+            )
+            return (source, True)
+        # image (needs app-side asset resolution) and scene_reference are not yet
+        # wired → placeholder.
+        return (None, False)
+
+    def _create_color(self, ob: Any, layer: dict, canvas: Any, color: int) -> Any:
         rect = layer.get("rect") or {}
         width = max(1, round(float(rect.get("width", 1.0)) * canvas.width))
         height = max(1, round(float(rect.get("height", 1.0)) * canvas.height))
         return ob.Source.create(
             "color_source_v3",
-            f"solin-placeholder-{layer.get('id', 'layer')}",
-            {"color": _PLACEHOLDER_COLOR, "width": width, "height": height},
+            f"solin-color-{layer.get('id', 'layer')}",
+            {"color": color, "width": width, "height": height},
         )
 
     def _route_program(self, active_scenes: dict) -> None:
