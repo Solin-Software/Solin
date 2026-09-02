@@ -7,6 +7,7 @@ from typing import Any, TYPE_CHECKING
 
 from PySide6.QtWidgets import QApplication, QVBoxLayout, QWidget
 from PySide6.QtCore import QObject, QPoint, QTimer, Signal, Slot, QEvent, Qt
+from PySide6.QtGui import QImage
 
 from .controllers.auto_key_projection_controller import AutoKeyProjectionController
 from .controllers.language_controller import LanguageContext, LanguageController
@@ -489,12 +490,26 @@ class MainWindow(QWidget):
         self._scene_preview_egress.frame_ready.connect(
             self._on_scene_preview_frame
         )
-        self._scene_program_egress = SceneVideoFrameEgressController(
-            program_output.video_format.width,
-            program_output.video_format.height,
-            self,
-            worker_name="solin-scene-program-egress",
-        )
+        if libobs_scene_engine_selected():
+            # The libobs sidecar mirrors the program main mix into a
+            # cross-platform BGRA block for the operator Program tab.
+            from .controllers.shared_memory_preview_egress import (
+                SharedMemoryPreviewEgressController,
+            )
+
+            self._scene_program_egress = SharedMemoryPreviewEgressController(
+                program_output.video_format.width,
+                program_output.video_format.height,
+                self,
+                channel_id="solin-program",
+            )
+        else:
+            self._scene_program_egress = SceneVideoFrameEgressController(
+                program_output.video_format.width,
+                program_output.video_format.height,
+                self,
+                worker_name="solin-scene-program-egress",
+            )
         self._scene_program_egress.descriptor_changed.connect(
             self._on_scene_frame_egress_descriptor_changed
         )
@@ -1099,10 +1114,16 @@ class MainWindow(QWidget):
 
     def _reconcile_scene_media_egress(self) -> None:
         self.scene_runtime.set_preview_egress(self._scene_preview_egress.descriptor)
+        # Under libobs the sidecar paints projection windows directly, so the
+        # program egress only feeds the operator Program tab — demand it whenever
+        # the program is mirrored. The native engine demands it as a window
+        # fallback instead.
+        if libobs_scene_engine_selected():
+            program_required = self._program_mirror_enabled()
+        else:
+            program_required = self._native_fallback_mirror_required
         self.scene_runtime.set_program_egress(
-            self._scene_program_egress.descriptor
-            if self._native_fallback_mirror_required
-            else None
+            self._scene_program_egress.descriptor if program_required else None
         )
 
     @staticmethod
@@ -1353,15 +1374,20 @@ class MainWindow(QWidget):
     def _on_scene_program_frame(self, frame) -> None:
         if not self._program_mirror_enabled():
             return
-        image = video_frame_to_image(frame)
-        if image.isNull():
+        # The libobs egress emits a QImage directly; the native one a VideoFrame.
+        image = frame if isinstance(frame, QImage) else video_frame_to_image(frame)
+        if image is None or image.isNull():
             return
-        for window in self.projection_session.all_windows():
-            if getattr(window, "native_output_active", False):
-                continue
-            show_image = getattr(window, "show_image_from_qimage", None)
-            if callable(show_image):
-                show_image(image, cache_pixmap=False)
+        # Under libobs the sidecar paints the projection windows itself, so only
+        # the operator Program tab is fed here; the native engine also uses these
+        # frames as a fallback to paint windows it did not render natively.
+        if not libobs_scene_engine_selected():
+            for window in self.projection_session.all_windows():
+                if getattr(window, "native_output_active", False):
+                    continue
+                show_image = getattr(window, "show_image_from_qimage", None)
+                if callable(show_image):
+                    show_image(image, cache_pixmap=False)
         if hasattr(self, "proj_bar"):
             self.proj_bar.update_tab_live_preview(image)
 

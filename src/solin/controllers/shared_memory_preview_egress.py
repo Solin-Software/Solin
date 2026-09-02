@@ -40,8 +40,16 @@ class SharedMemoryPreviewEgressController(QObject):
     frame_ready = Signal(object)
     descriptor_changed = Signal(object)
 
-    def __init__(self, width: int, height: int, parent: QObject | None = None) -> None:
+    def __init__(
+        self,
+        width: int,
+        height: int,
+        parent: QObject | None = None,
+        *,
+        channel_id: str = _CHANNEL_ID,
+    ) -> None:
         super().__init__(parent)
+        self._channel_id = channel_id
         self._lock = threading.Lock()
         self._reader: SharedFrameChannelReader | None = None
         self._descriptor: FrameChannelDescriptor | None = None
@@ -93,7 +101,7 @@ class SharedMemoryPreviewEgressController(QObject):
             log.warning("could not create the preview egress channel", exc_info=True)
             return
         descriptor = FrameChannelDescriptor(
-            channel_id=_CHANNEL_ID,
+            channel_id=self._channel_id,
             generation=self._generation,
             producer_kind=FrameProducerKind.SOLIN_OFFSCREEN,
             transport=FrameChannelTransport.SHARED_MEMORY_BGRA,

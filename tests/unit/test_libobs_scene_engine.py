@@ -2035,6 +2035,43 @@ def test_engine_shutdown_stops_preview_egress_before_scene_graph():
     assert fake.shutdowns == 1
 
 
+def test_engine_hydrate_configures_program_egress():
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+    fake = _FakePreviewEgress()  # configure/shutdown surface suffices for the program egress
+    engine._program_egress = fake
+
+    descriptor = {"transport": "shared_memory_bgra", "handle_token": "ptok",
+                  "width": 1280, "height": 720}
+    engine.handle(_request("hydrate", {
+        "document": _MEDIA_DOC,
+        "active_scenes": {"virtual_camera": "s1"},
+        "program_egress": descriptor,
+    }))
+    assert fake.configured[-1] == descriptor
+
+
+def test_engine_shutdown_stops_program_egress():
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+    fake = _FakePreviewEgress()
+    engine._program_egress = fake
+    engine.shutdown()
+    assert fake.shutdowns == 1
+
+
+def test_program_egress_tight_repacks_padded_stride():
+    from solin.core.scenes.libobs_program_egress import LibobsProgramEgress
+
+    # a 2x2 BGRA frame delivered with a padded stride (12 > 2*4) → tight 8-byte rows
+    padded = bytes(range(24))  # 12 bytes/row * 2 rows
+    tight = LibobsProgramEgress._tight(padded, 12, 2, 2)
+    assert len(tight) == 2 * 2 * 4
+    assert tight[0:8] == padded[0:8] and tight[8:16] == padded[12:20]
+
+
 def test_scene_graph_scene_source_returns_built_scene():
     from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
 

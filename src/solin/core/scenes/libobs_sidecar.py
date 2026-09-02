@@ -184,6 +184,7 @@ class LibobsSidecarEngine:
         self._window_output: object | None = None
         self._content_consumer: Any | None = None
         self._preview_egress: Any | None = None
+        self._program_egress: Any | None = None
         self._virtual_camera: Any | None = None
         self._recorder: Any | None = None
         self._audio_mixer: Any | None = None
@@ -239,8 +240,10 @@ class LibobsSidecarEngine:
         self._scene_graph = LibobsSceneGraph(runtime)
         self._window_output = LibobsWindowOutput(runtime)
         from solin.core.scenes.libobs_preview_egress import LibobsPreviewEgress
+        from solin.core.scenes.libobs_program_egress import LibobsProgramEgress
 
         self._preview_egress = LibobsPreviewEgress(runtime)
+        self._program_egress = LibobsProgramEgress(runtime)
         from solin.core.scenes.libobs_audio_sources import LibobsAudioMixer
         from solin.core.scenes.libobs_media_source import LibobsMediaSource
         from solin.core.scenes.libobs_recorder import LibobsRecorder
@@ -664,6 +667,8 @@ class LibobsSidecarEngine:
                 self._effective_content_source(),
             )
             self._reconcile_preview_egress(payload.get("preview_egress"), active_scenes)
+            if self._program_egress is not None:
+                self._program_egress.configure(payload.get("program_egress"))
         except Exception:  # noqa: BLE001 - a bad document must not crash the engine
             log.warning("libobs hydrate failed", exc_info=True)
             return _ack(request, applied=False, error_code="hydrate_failed",
@@ -812,6 +817,12 @@ class LibobsSidecarEngine:
                 egress.shutdown()
             except Exception:  # noqa: BLE001 - shutdown must not raise out of the sidecar
                 log.warning("preview egress shutdown errored", exc_info=True)
+        program_egress, self._program_egress = self._program_egress, None
+        if program_egress is not None:
+            try:
+                program_egress.shutdown()
+            except Exception:  # noqa: BLE001 - shutdown must not raise out of the sidecar
+                log.warning("program egress shutdown errored", exc_info=True)
         graph, self._scene_graph = self._scene_graph, None
         if graph is not None:
             try:

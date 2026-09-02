@@ -104,6 +104,15 @@ def test_preview_egress_controller_emits_written_frames():
         controller.close()
 
 
+def test_egress_controller_honours_channel_id():
+    _app()
+    controller = SharedMemoryPreviewEgressController(4, 2, channel_id="solin-program")
+    try:
+        assert controller.descriptor.channel_id == "solin-program"
+    finally:
+        controller.close()
+
+
 def test_preview_egress_controller_reconfigure_changes_descriptor():
     _app()
     controller = SharedMemoryPreviewEgressController(4, 2)
