@@ -25,7 +25,12 @@ from solin.core.scenes.libobs_engine import (
     create_libobs_scene_engine,
     libobs_scene_engine_selected,
 )
-from solin.core.scenes.libobs_sidecar import CAPABILITIES, build_response, serve
+from solin.core.scenes.libobs_sidecar import (
+    CAPABILITIES,
+    LibobsSidecarEngine,
+    build_response,
+    serve,
+)
 from solin.core.scenes.process_engine import (
     SceneEngineCommandRejectedError,
     _capabilities_from_envelope,
@@ -153,6 +158,85 @@ def test_serve_stops_on_a_corrupt_frame():
     assert sink.getvalue() == b""
 
 
+# ── libobs runtime lifecycle (Stage 1b) ──────────────────────────────────────
+
+
+class _FakeRuntime:
+    """Stand-in for ObsRuntime: records boot/shutdown, can simulate failure."""
+
+    def __init__(self, *, fail_start: bool = False) -> None:
+        self.starts = 0
+        self.shutdowns = 0
+        self._fail_start = fail_start
+
+    def ensure_started(self, **_kwargs) -> None:
+        if self._fail_start:
+            raise RuntimeError("pylibobs is not installed")
+        self.starts += 1
+
+    def shutdown(self) -> None:
+        self.shutdowns += 1
+
+
+def test_hello_boots_the_runtime_and_shutdown_releases_it():
+    runtime = _FakeRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+
+    response = engine.handle(_request("hello", {"parent_process_id": 1}))
+
+    assert response is not None and response.message_type == "hello_ack"
+    assert runtime.starts == 1
+    assert engine.runtime_started is True
+
+    engine.shutdown()
+    assert runtime.shutdowns == 1
+    assert engine.runtime_started is False
+
+
+def test_runtime_boots_only_once():
+    runtime = _FakeRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+
+    engine.handle(_request("hello"))
+    engine.handle(_request("hello", request_id="req-2"))
+
+    assert runtime.starts == 1
+
+
+def test_boot_failure_is_non_fatal_to_the_handshake():
+    runtime = _FakeRuntime(fail_start=True)
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+
+    response = engine.handle(_request("hello"))
+
+    # The handshake still completes so the app degrades gracefully.
+    assert response is not None and response.message_type == "hello_ack"
+    assert engine.runtime_started is False
+    # No runtime was retained, so shutdown is a no-op (never touches a dead ctx).
+    engine.shutdown()
+    assert runtime.shutdowns == 0
+
+
+def test_engine_without_a_factory_never_touches_libobs():
+    # Protocol-only mode (the serve() default) must not boot a runtime.
+    engine = LibobsSidecarEngine()
+    response = engine.handle(_request("hello"))
+    assert response is not None and response.message_type == "hello_ack"
+    assert engine.runtime_started is False
+
+
+def test_serve_boots_then_shuts_down_the_injected_engine():
+    runtime = _FakeRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    source = io.BytesIO(encode_envelope(_request("hello", {"parent_process_id": 1})))
+    sink = io.BytesIO()
+
+    serve(source, sink, engine=engine)
+
+    assert runtime.starts == 1
+    assert runtime.shutdowns == 1  # released on EOF via the finally block
+
+
 # ── factory + selection ──────────────────────────────────────────────────────
 
 
@@ -180,7 +264,11 @@ def test_selection_reads_the_environment(monkeypatch):
 # ── end-to-end: real subprocess under the real supervisor ────────────────────
 
 
-def test_handshake_end_to_end_over_subprocess():
+def test_handshake_end_to_end_over_subprocess(monkeypatch):
+    # Exercise the real subprocess + supervisor + IPC, but without booting libobs
+    # (GPU/display dependent) — that keeps the wire/supervision contract
+    # deterministic on any machine. The boot lifecycle is covered above.
+    monkeypatch.setenv("SOLIN_LIBOBS_SIDECAR_NO_RUNTIME", "1")
     engine = create_libobs_scene_engine()
     try:
         future = engine.start(session_id="stage1ahandshake", deadline_ms=15_000)
