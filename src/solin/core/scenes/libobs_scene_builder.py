@@ -103,12 +103,19 @@ class LibobsSceneGraph:
             for src in (document.get("sources") or ())
             if isinstance(src, dict) and src.get("id")
         }
-        for scene_record in document.get("scenes") or ():
-            scene_id = scene_record.get("id")
-            if not scene_id:
-                continue
-            scene = ob.Scene.create(f"solin-scene-{scene_id}")
-            self._scenes[scene_id] = scene
+        scene_records = [
+            record
+            for record in (document.get("scenes") or ())
+            if isinstance(record, dict) and record.get("id")
+        ]
+        # Pass 1: create every scene (empty) so a scene_reference layer can resolve
+        # any target — including a forward reference — in pass 2.
+        for scene_record in scene_records:
+            scene_id = scene_record["id"]
+            self._scenes[scene_id] = ob.Scene.create(f"solin-scene-{scene_id}")
+        # Pass 2: populate each scene's layers.
+        for scene_record in scene_records:
+            scene = self._scenes[scene_record["id"]]
             for layer in scene_record.get("layers") or ():
                 if not layer.get("visible", True):
                     continue
@@ -196,9 +203,49 @@ class LibobsSceneGraph:
                 {"is_local_file": False, "input": uri, "reconnect_delay_sec": 2},
             )
             return (source, True)
-        # image (needs app-side asset resolution) and scene_reference are not yet
-        # wired → placeholder.
+        if kind == "scene_reference":
+            target = str(config.get("target_scene_id", ""))
+            scene = self._scenes.get(target)
+            # A nested scene: reference the target scene's source (owned by the
+            # graph, so borrowed here — not released by the referencing item).
+            return (scene.as_source(), False) if scene is not None else (None, False)
+        if kind == "image":
+            path = self._resolve_image_asset(str(config.get("asset_id", "")))
+            if not path:
+                return (None, False)  # unresolved → placeholder
+            source = ob.Source.create(
+                "image_source",
+                f"solin-image-{layer.get('id', 'layer')}",
+                {"file": path},
+            )
+            return (source, True)
         return (None, False)
+
+    @staticmethod
+    def _resolve_image_asset(asset_id: str) -> str | None:
+        """Resolve a scene image asset id to an absolute file under the profile's
+        images directory (passed to the sidecar via ``SOLIN_SCENE_IMAGES_DIR``).
+
+        The id maps to a file named exactly ``asset_id`` or ``asset_id.*``; obs'
+        image_source auto-detects the format from the file contents.
+        """
+        if not asset_id:
+            return None
+        import os
+        from pathlib import Path
+
+        root = os.environ.get("SOLIN_SCENE_IMAGES_DIR")
+        if not root:
+            return None
+        base = Path(root)
+        exact = base / asset_id
+        if exact.is_file():
+            return str(exact)
+        try:
+            matches = sorted(base.glob(f"{asset_id}.*"))
+        except OSError:
+            return None
+        return str(matches[0]) if matches else None
 
     def set_content_source(self, new_source: Any | None) -> None:
         """Retarget the content-slot items to ``new_source`` without re-hydrating.

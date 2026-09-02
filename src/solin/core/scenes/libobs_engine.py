@@ -29,14 +29,21 @@ def libobs_scene_engine_selected() -> bool:
     return selection == _LIBOBS_SELECTION_VALUE
 
 
-def create_libobs_scene_engine() -> SubprocessSceneEngine:
+def create_libobs_scene_engine(images_dir: Path | None = None) -> SubprocessSceneEngine:
     """Build a supervised libobs scene engine.
 
     Launches ``<python> -m solin.core.scenes.libobs_sidecar`` under the same
     ``SubprocessSceneEngine`` client that drives the native engine, so all of the
     supervision / heartbeat / restart / protocol machinery is shared. No
     GStreamer runtime is configured (libobs is self-contained via pylibobs).
+
+    ``images_dir`` (the profile's scene images directory) is exported so the
+    sidecar can resolve image scene sources' asset ids to files; it is passed
+    through the inherited process environment (the supervisor copies os.environ
+    when it launches the sidecar).
     """
+    if images_dir is not None:
+        os.environ["SOLIN_SCENE_IMAGES_DIR"] = str(images_dir)
     return SubprocessSceneEngine(
         SceneEngineProcessConfig(
             executable=Path(sys.executable),

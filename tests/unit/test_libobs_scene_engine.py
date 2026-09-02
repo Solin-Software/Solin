@@ -9,6 +9,7 @@ the full handshake end-to-end.
 from __future__ import annotations
 
 import io
+import os
 import sys
 import time
 import types
@@ -2080,6 +2081,96 @@ def test_scene_graph_scene_source_returns_built_scene():
     graph.hydrate(_MEDIA_DOC, {"virtual_camera": "s1"}, object())
     assert graph.scene_source("s1") == "scene-source:solin-scene-s1"
     assert graph.scene_source("missing") is None
+
+
+# ── image + scene_reference sources ──────────────────────────────────────────
+
+_SCENE_REF_DOC = {
+    "sources": [
+        # scene "a" references scene "b", which is defined AFTER it (forward ref)
+        {"id": "ref", "type": "scene_reference", "name": "Ref",
+         "configuration": {"target_scene_id": "b"}},
+        {"id": "green", "type": "color", "name": "G", "configuration": {"color": "#00FF00"}},
+    ],
+    "scenes": [
+        {"id": "a", "layers": [{"id": "la", "source_id": "ref", "visible": True,
+                                "rect": {"x": 0, "y": 0, "width": 1.0, "height": 1.0}}]},
+        {"id": "b", "layers": [{"id": "lb", "source_id": "green", "visible": True,
+                                "rect": {"x": 0, "y": 0, "width": 1.0, "height": 1.0}}]},
+    ],
+}
+
+
+def _scene_by_name(runtime, name):
+    return next(s for s in runtime.scenes if s.name == name)
+
+
+def test_scene_reference_resolves_to_the_target_scene_forward_ref():
+    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+
+    runtime = _CompositingRuntime()
+    LibobsSceneGraph(runtime).hydrate(_SCENE_REF_DOC, {"virtual_camera": "a"})
+    scene_a = _scene_by_name(runtime, "solin-scene-a")
+    # the reference layer nests scene b's source (resolved despite b coming later)
+    assert scene_a.items[0].source == "scene-source:solin-scene-b"
+
+
+def test_scene_reference_unknown_target_uses_placeholder():
+    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+
+    doc = {
+        "sources": [{"id": "ref", "type": "scene_reference", "name": "R",
+                     "configuration": {"target_scene_id": "nope"}}],
+        "scenes": [{"id": "a", "layers": [{"id": "la", "source_id": "ref", "visible": True,
+                                           "rect": {"x": 0, "y": 0, "width": 1.0, "height": 1.0}}]}],
+    }
+    runtime = _CompositingRuntime()
+    LibobsSceneGraph(runtime).hydrate(doc, {"virtual_camera": "a"})
+    scene_a = _scene_by_name(runtime, "solin-scene-a")
+    assert getattr(scene_a.items[0].source, "kind", None) == "color_source_v3"  # placeholder
+
+
+def _image_doc(asset_id):
+    return {
+        "sources": [{"id": "im", "type": "image", "name": "I",
+                     "configuration": {"asset_id": asset_id}}],
+        "scenes": [{"id": "s", "layers": [{"id": "l", "source_id": "im", "visible": True,
+                                           "rect": {"x": 0, "y": 0, "width": 1.0, "height": 1.0}}]}],
+    }
+
+
+def test_image_source_resolves_asset_to_image_source(tmp_path, monkeypatch):
+    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+
+    image = tmp_path / "logo.png"
+    image.write_bytes(b"\x89PNG")
+    monkeypatch.setenv("SOLIN_SCENE_IMAGES_DIR", str(tmp_path))
+
+    runtime = _CompositingRuntime()
+    LibobsSceneGraph(runtime).hydrate(_image_doc("logo"), {"virtual_camera": "s"})
+    images = [s for s in runtime.sources if s.kind == "image_source"]
+    assert len(images) == 1 and images[0].settings["file"] == str(image)
+
+
+def test_image_source_unresolved_uses_placeholder(monkeypatch):
+    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+
+    monkeypatch.delenv("SOLIN_SCENE_IMAGES_DIR", raising=False)
+    runtime = _CompositingRuntime()
+    LibobsSceneGraph(runtime).hydrate(_image_doc("ghost"), {"virtual_camera": "s"})
+    assert not any(s.kind == "image_source" for s in runtime.sources)
+    assert any(s.kind == "color_source_v3" for s in runtime.sources)  # placeholder
+
+
+def test_create_libobs_engine_exports_images_dir(tmp_path, monkeypatch):
+    from solin.core.scenes.libobs_engine import create_libobs_scene_engine
+
+    monkeypatch.delenv("SOLIN_SCENE_IMAGES_DIR", raising=False)
+    engine = create_libobs_scene_engine(tmp_path)
+    try:
+        assert os.environ["SOLIN_SCENE_IMAGES_DIR"] == str(tmp_path)
+    finally:
+        engine.stop()
 
 
 def test_engine_shutdown_closes_media_source():

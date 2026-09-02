@@ -441,7 +441,7 @@ def _build_main_window_runtime(
     # SOLIN_SCENE_ENGINE=libobs opts into the libobs sidecar engine on any
     # platform; otherwise the native engine is used where supported.
     if libobs_scene_engine_selected():
-        scene_engine = create_libobs_scene_engine()
+        scene_engine = create_libobs_scene_engine(profile_paths.images_dir)
     elif NATIVE_SCENES_SUPPORTED:
         scene_engine = create_native_scene_engine(runtime_paths.cache_dir)
     else:
