@@ -11,6 +11,7 @@ from __future__ import annotations
 import io
 import sys
 import time
+import types
 from pathlib import Path
 
 from solin.core.scenes.engine import SceneEngineStatus
@@ -235,6 +236,216 @@ def test_serve_boots_then_shuts_down_the_injected_engine():
 
     assert runtime.starts == 1
     assert runtime.shutdowns == 1  # released on EOF via the finally block
+
+
+# ── hydrate → obs_scene compositing (fake libobs runtime) ────────────────────
+
+
+class _FakeItem:
+    def __init__(self, source) -> None:
+        self.source = source
+        self.pos = (0.0, 0.0)
+
+
+class _FakeScene:
+    def __init__(self, name: str) -> None:
+        self.name = name
+        self.items: list[_FakeItem] = []
+        self.released = 0
+
+    def add(self, source) -> _FakeItem:
+        item = _FakeItem(source)
+        self.items.append(item)
+        return item
+
+    def as_source(self) -> str:
+        return f"scene-source:{self.name}"
+
+    def release(self) -> None:
+        self.released += 1
+
+
+class _FakeColorSource:
+    def __init__(self, kind: str, name: str, settings: dict) -> None:
+        self.kind = kind
+        self.name = name
+        self.settings = dict(settings)
+        self.released = 0
+
+    def release(self) -> None:
+        self.released += 1
+
+
+class _FakeCanvas:
+    width = 1920
+    height = 1080
+    fps = 30
+
+
+class _CompositingRuntime:
+    """Fake ObsRuntime with just enough libobs surface for the scene builder."""
+
+    def __init__(self) -> None:
+        self.video = _FakeCanvas()
+        self.scenes: list[_FakeScene] = []
+        self.sources: list[_FakeColorSource] = []
+        self.channels: dict[int, object] = {}
+        self.released_channels: list[int] = []
+        self.starts = 0
+        self.shutdowns = 0
+        self._next_channel = 0
+        runtime = self
+
+        class _SceneNS:
+            @staticmethod
+            def create(name: str) -> _FakeScene:
+                scene = _FakeScene(name)
+                runtime.scenes.append(scene)
+                return scene
+
+        class _SourceNS:
+            @staticmethod
+            def create(kind: str, name: str, settings: dict) -> _FakeColorSource:
+                source = _FakeColorSource(kind, name, settings)
+                runtime.sources.append(source)
+                return source
+
+        self.ob = types.SimpleNamespace(Scene=_SceneNS, Source=_SourceNS)
+
+    # obs_runtime boot contract
+    def ensure_started(self, **_kwargs) -> None:
+        self.starts += 1
+
+    def shutdown(self) -> None:
+        self.shutdowns += 1
+
+    # channel routing
+    def acquire_channel(self) -> int:
+        channel = self._next_channel
+        self._next_channel += 1
+        return channel
+
+    def set_channel_source(self, channel: int, source) -> None:
+        if source is None:
+            self.channels.pop(channel, None)
+        else:
+            self.channels[channel] = source
+
+    def release_channel(self, channel: int) -> None:
+        self.released_channels.append(channel)
+        self.channels.pop(channel, None)
+
+
+_DOCUMENT = {
+    "scenes": [
+        {
+            "id": "scene-a",
+            "layers": [
+                {"id": "L1", "source_id": "content", "visible": True,
+                 "rect": {"x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0}},
+                {"id": "L2", "source_id": "cam", "visible": True,
+                 "rect": {"x": 0.5, "y": 0.5, "width": 0.5, "height": 0.5}},
+                {"id": "L3", "source_id": "hidden", "visible": False,
+                 "rect": {"x": 0.0, "y": 0.0, "width": 0.2, "height": 0.2}},
+            ],
+        },
+        {"id": "scene-b", "layers": []},
+    ],
+}
+
+
+def test_scene_graph_builds_scenes_and_positions_visible_layers():
+    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+
+    runtime = _CompositingRuntime()
+    graph = LibobsSceneGraph(runtime)
+
+    graph.hydrate(_DOCUMENT, {"virtual_camera": "scene-a"})
+
+    assert len(runtime.scenes) == 2
+    scene_a = next(s for s in runtime.scenes if s.name == "solin-scene-scene-a")
+    # The hidden layer (L3) is skipped; only the two visible layers are added.
+    assert len(scene_a.items) == 2
+    # Full-canvas layer sized to the canvas at the origin.
+    assert scene_a.items[0].source.settings["width"] == 1920
+    assert scene_a.items[0].source.settings["height"] == 1080
+    assert scene_a.items[0].pos == (0.0, 0.0)
+    # Bottom-right quadrant PiP.
+    assert scene_a.items[1].source.settings["width"] == 960
+    assert scene_a.items[1].source.settings["height"] == 540
+    assert scene_a.items[1].pos == (960.0, 540.0)
+    # The program scene is routed onto an acquired channel.
+    assert runtime.channels[0] == "scene-source:solin-scene-scene-a"
+
+
+def test_scene_graph_without_active_program_routes_nothing():
+    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+
+    runtime = _CompositingRuntime()
+    LibobsSceneGraph(runtime).hydrate(_DOCUMENT, {})
+
+    assert runtime.channels == {}
+
+
+def test_scene_graph_rehydrate_releases_the_previous_graph():
+    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+
+    runtime = _CompositingRuntime()
+    graph = LibobsSceneGraph(runtime)
+    graph.hydrate(_DOCUMENT, {"virtual_camera": "scene-a"})
+    first_scene = runtime.scenes[0]
+    first_sources = list(runtime.sources)
+
+    graph.hydrate(_DOCUMENT, {"virtual_camera": "scene-a"})
+
+    assert first_scene.released == 1
+    assert all(source.released == 1 for source in first_sources)
+
+    graph.shutdown()
+    assert runtime.released_channels == [0]
+
+
+def test_engine_hydrate_builds_and_acks():
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))  # boots the runtime + creates the graph
+
+    response = engine.handle(
+        _request("hydrate", {"document": _DOCUMENT, "active_scenes": {"virtual_camera": "scene-a"}})
+    )
+
+    assert response is not None and response.message_type == "ack"
+    assert response.payload["applied"] is True
+    assert len(runtime.scenes) == 2
+    assert runtime.channels[0] == "scene-source:solin-scene-scene-a"
+
+
+def test_engine_hydrate_without_runtime_acks_not_applied():
+    engine = LibobsSidecarEngine()  # no runtime factory → no libobs
+    response = engine.handle(
+        _request("hydrate", {"document": _DOCUMENT, "active_scenes": {}})
+    )
+    assert response is not None and response.message_type == "ack"
+    assert response.payload["applied"] is False
+    assert response.payload["error_code"] == "runtime_unavailable"
+
+
+def test_engine_set_window_targets_acks():
+    engine = LibobsSidecarEngine()
+    response = engine.handle(_request("set_window_targets", {"window_targets": []}))
+    assert response is not None and response.message_type == "ack"
+    assert response.payload["applied"] is True
+
+
+def test_hello_advertises_hardware_compositing_only_when_booted():
+    runtime = _CompositingRuntime()
+    booted = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    caps = _capabilities_from_envelope(booted.handle(_request("hello")))
+    assert caps.hardware_compositing is True
+
+    unbooted = LibobsSidecarEngine()  # no factory
+    caps = _capabilities_from_envelope(unbooted.handle(_request("hello")))
+    assert caps.hardware_compositing is False
 
 
 # ── factory + selection ──────────────────────────────────────────────────────

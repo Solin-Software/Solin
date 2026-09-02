@@ -98,6 +98,21 @@ def _reply(
     )
 
 
+def _ack(
+    request: SceneIpcEnvelope,
+    *,
+    applied: bool,
+    error_code: str = "",
+    error_message: str = "",
+) -> SceneIpcEnvelope:
+    """Build the ``ack`` response the client expects for hydrate/window commands."""
+    return _reply(
+        request,
+        "ack",
+        {"applied": applied, "error_code": error_code, "error_message": error_message},
+    )
+
+
 def build_response(request: SceneIpcEnvelope) -> SceneIpcEnvelope | None:
     """Map one control request to its response, or ``None`` for a notification.
 
@@ -138,10 +153,17 @@ class LibobsSidecarEngine:
         self._runtime_factory = runtime_factory
         self._runtime: object | None = None
         self._runtime_started = False
+        self._scene_graph: object | None = None
 
     @property
     def runtime_started(self) -> bool:
         return self._runtime_started
+
+    def _capabilities(self) -> dict[str, bool]:
+        # Advertise honestly: compositing is only real once the runtime is up.
+        capabilities = dict(CAPABILITIES)
+        capabilities["hardware_compositing"] = self._runtime_started
+        return capabilities
 
     def _boot_runtime(self) -> None:
         if self._runtime_factory is None or self._runtime_started:
@@ -158,13 +180,56 @@ class LibobsSidecarEngine:
             return
         self._runtime = runtime
         self._runtime_started = True
+        from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+
+        self._scene_graph = LibobsSceneGraph(runtime)
 
     def handle(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope | None:
-        if request.message_type == "hello":
+        message_type = request.message_type
+        if message_type == "hello":
             self._boot_runtime()
+            return _reply(request, "hello_ack", self._capabilities())
+        if message_type == "hydrate":
+            return self._handle_hydrate(request)
+        if message_type == "set_window_targets":
+            return self._handle_set_window_targets(request)
         return build_response(request)
 
+    def _handle_hydrate(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope:
+        graph = self._scene_graph
+        if not self._runtime_started or graph is None:
+            return _ack(request, applied=False, error_code="runtime_unavailable",
+                        error_message="the libobs runtime is not running")
+        try:
+            payload = request.payload
+            graph.hydrate(  # type: ignore[attr-defined]
+                payload.get("document") or {},
+                payload.get("active_scenes") or {},
+            )
+        except Exception:  # noqa: BLE001 - a bad document must not crash the engine
+            log.warning("libobs hydrate failed", exc_info=True)
+            return _ack(request, applied=False, error_code="hydrate_failed",
+                        error_message="could not build the libobs scene graph")
+        return _ack(request, applied=True)
+
+    def _handle_set_window_targets(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope:
+        # Binding a libobs Display to each native window handle is a later stage;
+        # acknowledge so the runtime controller proceeds. The scene still
+        # composites onto its output channel in the meantime.
+        targets = request.payload.get("window_targets") or []
+        log.info(
+            "libobs engine received %d window target(s); display binding pending",
+            len(targets) if isinstance(targets, list) else 0,
+        )
+        return _ack(request, applied=True)
+
     def shutdown(self) -> None:
+        graph, self._scene_graph = self._scene_graph, None
+        if graph is not None:
+            try:
+                graph.shutdown()  # type: ignore[attr-defined]
+            except Exception:  # noqa: BLE001 - shutdown must not raise out of the sidecar
+                log.warning("libobs scene graph shutdown errored", exc_info=True)
         runtime, self._runtime = self._runtime, None
         self._runtime_started = False
         if runtime is None:
