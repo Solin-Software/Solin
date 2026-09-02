@@ -115,6 +115,24 @@ def _ack(
     )
 
 
+def _unavailable_discovery(error_code: str = "runtime_unavailable") -> dict[str, object]:
+    """A device-discovery payload meaning "unavailable" that satisfies the client.
+
+    ``AudioDeviceDiscovery`` / ``LocalCameraDiscovery`` both require an *unsupported*
+    result to carry a non-empty ``error_code``, and a *not-ready* result to carry
+    neither devices nor an error. The only valid "we can't enumerate" shape is
+    therefore ``supported=False, ready=True`` with an ``error_code`` — reporting
+    "unavailable" cleanly instead of a protocol error the client would reject.
+    """
+    return {
+        "supported": False,
+        "ready": True,
+        "generation": 0,
+        "devices": [],
+        "error_code": error_code,
+    }
+
+
 def build_response(request: SceneIpcEnvelope) -> SceneIpcEnvelope | None:
     """Map one control request to its response, or ``None`` for a notification.
 
@@ -160,6 +178,7 @@ class LibobsSidecarEngine:
         self._content_consumer: Any | None = None
         self._virtual_camera: Any | None = None
         self._recorder: Any | None = None
+        self._audio_mixer: Any | None = None
         self._event_sink: Callable[[SceneIpcEnvelope], None] | None = None
         self._session_id = "not-started"
         self._process_generation = "not-started"
@@ -178,6 +197,10 @@ class LibobsSidecarEngine:
         capabilities["hardware_compositing"] = self._runtime_started
         capabilities["virtual_camera"] = self._runtime_started
         capabilities["program_recording"] = self._runtime_started
+        if self._runtime_started and self._audio_mixer is not None:
+            microphone, system_audio = self._audio_mixer.available()
+            capabilities["audio_input_capture"] = microphone
+            capabilities["system_audio_capture"] = system_audio
         return capabilities
 
     def _boot_runtime(self) -> None:
@@ -200,11 +223,13 @@ class LibobsSidecarEngine:
 
         self._scene_graph = LibobsSceneGraph(runtime)
         self._window_output = LibobsWindowOutput(runtime)
+        from solin.core.scenes.libobs_audio_sources import LibobsAudioMixer
         from solin.core.scenes.libobs_recorder import LibobsRecorder
         from solin.core.scenes.libobs_virtual_camera import LibobsVirtualCamera
 
         self._virtual_camera = LibobsVirtualCamera(runtime)
         self._recorder = LibobsRecorder(runtime)
+        self._audio_mixer = LibobsAudioMixer(runtime)
 
     def handle(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope | None:
         # Remember correlation ids so unsolicited events (recording state) are
@@ -220,17 +245,16 @@ class LibobsSidecarEngine:
         if message_type == "stop_program_recording":
             return self._handle_stop_recording(request)
         if message_type == "set_program_recording_audio":
-            return _ack(request, applied=True)  # device selection is a later slice
+            return self._handle_set_recording_audio(request)
         if message_type == "list_local_cameras":
+            if not self._runtime_started:
+                return _reply(request, "local_camera_list", _unavailable_discovery())
             return _reply(request, "local_camera_list", {
-                "supported": self._runtime_started, "ready": self._runtime_started,
+                "supported": True, "ready": True,
                 "generation": 0, "devices": [], "error_code": "",
             })
         if message_type == "list_audio_devices":
-            return _reply(request, "audio_device_list", {
-                "supported": self._runtime_started, "ready": self._runtime_started,
-                "generation": 0, "devices": [], "error_code": "",
-            })
+            return _reply(request, "audio_device_list", self._audio_device_list())
         if message_type == "hydrate":
             return self._handle_hydrate(request)
         if message_type == "prepare_scene":
@@ -257,9 +281,18 @@ class LibobsSidecarEngine:
         if not path:
             return _ack(request, applied=False, error_code="invalid_path",
                         error_message="a recording path is required")
+        # Bind the selected microphone + system audio into the mix BEFORE the
+        # recorder starts, so the file carries them from the first frame. An
+        # audio-selection failure must not block the recording itself — it is
+        # surfaced as a warning on the recording-state event instead.
+        warnings = self._apply_recording_audio(request.payload)
         if recorder.start(path):
-            self._emit_recording_state("recording", path=path)
+            self._emit_recording_state("recording", path=path, warnings=warnings)
             return _ack(request, applied=True)
+        # The recording never began, so drop the capture sources we just bound —
+        # a failed start must not leave the microphone live.
+        if self._audio_mixer is not None:
+            self._audio_mixer.clear()
         self._emit_recording_state("failed", path=path, error_code="recording_start_failed",
                                    message="could not start the recording output")
         return _ack(request, applied=False, error_code="recording_start_failed",
@@ -269,8 +302,55 @@ class LibobsSidecarEngine:
         recorder = self._recorder
         if recorder is not None:
             recorder.stop()
+        # Drop the capture sources so an unselected microphone is never left live
+        # once recording ends.
+        if self._audio_mixer is not None:
+            self._audio_mixer.clear()
         self._emit_recording_state("idle")
         return _ack(request, applied=True)
+
+    def _handle_set_recording_audio(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope:
+        mixer = self._audio_mixer
+        if not self._runtime_started or mixer is None:
+            return _ack(request, applied=False, error_code="runtime_unavailable",
+                        error_message="the libobs runtime is not running")
+        payload = request.payload
+        try:
+            warnings = mixer.apply(
+                payload.get("microphone") or {}, payload.get("system_audio") or {}
+            )
+        except Exception:  # noqa: BLE001 - audio source / libobs boundary
+            log.warning("libobs set_program_recording_audio failed", exc_info=True)
+            return _ack(request, applied=False, error_code="audio_config_failed",
+                        error_message="could not apply the audio device selection")
+        # A live change during a recording: republish the state so the app sees any
+        # device-unavailable warning (mirrors the native engine's mid-recording event).
+        recorder = self._recorder
+        if recorder is not None and recorder.active:
+            self._emit_recording_state("recording", path=recorder.path, warnings=warnings)
+        return _ack(request, applied=True)
+
+    def _apply_recording_audio(self, payload: dict[str, object]) -> dict[str, str]:
+        mixer = self._audio_mixer
+        if mixer is None:
+            return {}
+        try:
+            return mixer.apply(
+                payload.get("microphone") or {}, payload.get("system_audio") or {}
+            )
+        except Exception:  # noqa: BLE001 - audio must not block the recording
+            log.warning("could not apply recording audio selection", exc_info=True)
+            return {}
+
+    def _audio_device_list(self) -> dict[str, object]:
+        mixer = self._audio_mixer
+        if mixer is None:
+            return _unavailable_discovery()  # runtime not booted → audio unavailable
+        try:
+            return mixer.list_devices()
+        except Exception:  # noqa: BLE001 - enumeration boundary
+            log.warning("libobs audio device enumeration failed", exc_info=True)
+            return _unavailable_discovery("audio_enumeration_failed")
 
     def _emit_recording_state(
         self,
@@ -279,10 +359,12 @@ class LibobsSidecarEngine:
         path: str = "",
         error_code: str = "",
         message: str = "",
+        warnings: dict[str, str] | None = None,
     ) -> None:
         sink = self._event_sink
         if sink is None:
             return
+        warnings = warnings or {}
         envelope = SceneIpcEnvelope(
             message_type="program_recording_state",
             request_id="event-recording",
@@ -296,8 +378,8 @@ class LibobsSidecarEngine:
                 "path": path,
                 "error_code": error_code,
                 "message": message,
-                "microphone_warning": "",
-                "system_audio_warning": "",
+                "microphone_warning": str(warnings.get("microphone", "")),
+                "system_audio_warning": str(warnings.get("system_audio", "")),
                 "dropped_frames": 0,
                 "duplicated_frames": 0,
                 "frame_feed_p95_ns": 0,
@@ -437,6 +519,12 @@ class LibobsSidecarEngine:
                 recorder.stop()
             except Exception:  # noqa: BLE001 - shutdown must not raise out of the sidecar
                 log.warning("recorder stop errored", exc_info=True)
+        mixer, self._audio_mixer = self._audio_mixer, None
+        if mixer is not None:
+            try:
+                mixer.shutdown()
+            except Exception:  # noqa: BLE001 - shutdown must not raise out of the sidecar
+                log.warning("audio mixer shutdown errored", exc_info=True)
         camera, self._virtual_camera = self._virtual_camera, None
         if camera is not None:
             try:

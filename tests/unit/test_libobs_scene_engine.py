@@ -15,7 +15,11 @@ import types
 from pathlib import Path
 
 from solin.core.scenes.engine import SceneEngineStatus
-from solin.core.scenes.recording import ProgramRecordingStatus
+from solin.core.scenes.recording import (
+    AudioDeviceSelection,
+    AudioSelectionMode,
+    ProgramRecordingStatus,
+)
 from solin.core.scenes.ipc_protocol import (
     PROTOCOL_VERSION,
     SceneIpcEnvelope,
@@ -284,6 +288,34 @@ class _FakeColorSource:
         self.released += 1
 
 
+class _FakeListItem:
+    def __init__(self, name: str, value: str) -> None:
+        self.name = name
+        self.value = value
+
+
+class _FakeProperty:
+    def __init__(self, items: list) -> None:
+        self.items = list(items)
+
+
+class _FakeProperties:
+    """Mimics pylibobs Properties: .get(name) -> Property(.items), .release()."""
+
+    def __init__(self, items: list) -> None:
+        self._items = list(items)
+        self.released = 0
+
+    def get(self, name: str):
+        return _FakeProperty(self._items) if name == "device_id" else None
+
+    def names(self) -> list[str]:
+        return ["device_id"]
+
+    def release(self) -> None:
+        self.released += 1
+
+
 class _FakeEncoder:
     def __init__(self, kind: str, name: str, settings: dict) -> None:
         self.kind = kind
@@ -373,6 +405,27 @@ class _CompositingRuntime:
         self.released_channels: list[int] = []
         self.output_types = ["virtualcam_output", "mp4_output", "ffmpeg_muxer"]
         self.output_start_ok = True
+        self.source_types = [
+            "color_source_v3", "ffmpeg_source", "solin_frame_source",
+            "pulse_input_capture", "pulse_output_capture",
+        ]
+        # Failure-injection hooks for the audio-mixer tests.
+        self.fail_source_kinds: set[str] = set()  # Source.create -> None for these
+        self.enum_source_types_raises = False     # enum_source_types() raises
+        self.fail_set_channel_once = False         # next set_channel_source raises
+        # device_id property items per capture kind: (display_name, device_id).
+        # The synthetic "default" entry is present, as libobs really returns it.
+        self.audio_devices_by_kind = {
+            "pulse_input_capture": [
+                ("Default", "default"),
+                ("USB Microphone", "usb-mic-1"),
+                ("Built-in Mic", "builtin-mic"),
+            ],
+            "pulse_output_capture": [
+                ("Default", "default"),
+                ("Speakers", "speakers-1"),
+            ],
+        }
         self.starts = 0
         self.shutdowns = 0
         self._next_channel = 0
@@ -387,7 +440,9 @@ class _CompositingRuntime:
 
         class _SourceNS:
             @staticmethod
-            def create(kind: str, name: str, settings: dict) -> _FakeColorSource:
+            def create(kind: str, name: str, settings: dict):
+                if kind in runtime.fail_source_kinds:
+                    return None  # simulate a plugin refusing the device
                 source = _FakeColorSource(kind, name, settings)
                 runtime.sources.append(source)
                 return source
@@ -422,7 +477,24 @@ class _CompositingRuntime:
                 runtime.encoders.append(encoder)
                 return encoder
 
+        def _enum_source_types():
+            if runtime.enum_source_types_raises:
+                raise RuntimeError("enum_source_types failed")
+            return list(runtime.source_types)
+
+        class _PropertiesNS:
+            @staticmethod
+            def from_source_id(kind: str):
+                items = [
+                    _FakeListItem(name, value)
+                    for name, value in runtime.audio_devices_by_kind.get(kind, [])
+                ]
+                properties = _FakeProperties(items)
+                runtime.properties.append(properties)
+                return properties
+
         self.encoders: list[_FakeEncoder] = []
+        self.properties: list[_FakeProperties] = []
         self.ob = types.SimpleNamespace(
             Scene=_SceneNS,
             Source=_SourceNS,
@@ -430,7 +502,9 @@ class _CompositingRuntime:
             Output=_OutputNS,
             VideoEncoder=_VideoEncoderNS,
             AudioEncoder=_AudioEncoderNS,
+            Properties=_PropertiesNS,
             enum_output_types=lambda: list(runtime.output_types),
+            enum_source_types=_enum_source_types,
             BoundsType=types.SimpleNamespace(SCALE_INNER=2),
             Alignment=types.SimpleNamespace(LEFT=1, TOP=4),
         )
@@ -461,6 +535,9 @@ class _CompositingRuntime:
         return channel
 
     def set_channel_source(self, channel: int, source) -> None:
+        if source is not None and self.fail_set_channel_once:
+            self.fail_set_channel_once = False
+            raise RuntimeError("set_channel_source failed")
         if source is None:
             self.channels.pop(channel, None)
         else:
@@ -1106,14 +1183,20 @@ def test_engine_set_program_recording_audio_acks():
     assert _ack_from_envelope(response).applied is True
 
 
-def test_engine_list_audio_devices_returns_an_empty_discovery():
+def test_engine_list_audio_devices_reports_real_devices():
     runtime = _CompositingRuntime()
     engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
     engine.handle(_request("hello"))
     discovery = _audio_device_discovery_from_envelope(
         engine.handle(_request("list_audio_devices"))
     )
-    assert discovery.supported is True and discovery.devices == ()
+    assert discovery.supported is True and discovery.ready is True
+    ids = {(d.direction.value, d.device_id) for d in discovery.devices}
+    # real devices are listed; the synthetic "default" pseudo-entry is dropped
+    assert ("input", "usb-mic-1") in ids
+    assert ("input", "builtin-mic") in ids
+    assert ("output", "speakers-1") in ids
+    assert all(d.device_id != "default" for d in discovery.devices)
 
 
 def test_engine_list_local_cameras_returns_an_empty_discovery():
@@ -1145,6 +1228,395 @@ def test_shutdown_stops_an_active_recording():
 
     engine.shutdown()
     assert output.stopped == 1 and output.released == 1
+
+
+# ── audio device selection: mic + system-audio capture into the main mix ─────
+
+
+def _audio_sources(runtime, kind: str) -> list:
+    return [s for s in runtime.sources if s.kind == kind]
+
+
+def test_audio_mixer_lists_input_and_output_devices():
+    from solin.core.scenes.libobs_audio_sources import LibobsAudioMixer
+
+    runtime = _CompositingRuntime()
+    payload = LibobsAudioMixer(runtime).list_devices()
+
+    assert payload["supported"] is True and payload["ready"] is True
+    assert payload["generation"] >= 1 and payload["error_code"] == ""
+    by_id = {d["device_id"]: d for d in payload["devices"]}
+    assert "default" not in by_id  # synthetic entry dropped
+    assert by_id["usb-mic-1"]["direction"] == "input"
+    assert by_id["usb-mic-1"]["display_name"] == "USB Microphone"
+    assert by_id["speakers-1"]["direction"] == "output"
+    assert all(d["is_default"] is False for d in payload["devices"])
+    # the enumerated Properties objects are released
+    assert all(p.released == 1 for p in runtime.properties)
+
+
+def test_audio_mixer_generation_increments_per_enumeration():
+    from solin.core.scenes.libobs_audio_sources import LibobsAudioMixer
+
+    mixer = LibobsAudioMixer(_CompositingRuntime())
+    first = mixer.list_devices()["generation"]
+    second = mixer.list_devices()["generation"]
+    assert second > first
+
+
+def test_audio_mixer_apply_device_creates_capture_source_on_a_channel():
+    from solin.core.scenes.libobs_audio_sources import LibobsAudioMixer
+
+    runtime = _CompositingRuntime()
+    mixer = LibobsAudioMixer(runtime)
+    mixer.apply({"mode": "device", "device_id": "usb-mic-1"}, {"mode": "none"})
+
+    mics = _audio_sources(runtime, "pulse_input_capture")
+    assert len(mics) == 1
+    assert mics[0].settings == {"device_id": "usb-mic-1"}
+    assert mics[0] in runtime.channels.values()  # routed onto an output channel
+    assert _audio_sources(runtime, "pulse_output_capture") == []  # system = none
+
+
+def test_audio_mixer_apply_system_default_uses_default_device_id():
+    from solin.core.scenes.libobs_audio_sources import LibobsAudioMixer
+
+    runtime = _CompositingRuntime()
+    mixer = LibobsAudioMixer(runtime)
+    mixer.apply({"mode": "system_default", "device_id": ""},
+                {"mode": "system_default", "device_id": ""})
+
+    mic = _audio_sources(runtime, "pulse_input_capture")[0]
+    system = _audio_sources(runtime, "pulse_output_capture")[0]
+    assert mic.settings["device_id"] == "default"
+    assert system.settings["device_id"] == "default"
+    assert mic in runtime.channels.values() and system in runtime.channels.values()
+
+
+def test_audio_mixer_apply_none_creates_no_source():
+    from solin.core.scenes.libobs_audio_sources import LibobsAudioMixer
+
+    runtime = _CompositingRuntime()
+    LibobsAudioMixer(runtime).apply({"mode": "none"}, {"mode": "none"})
+    assert _audio_sources(runtime, "pulse_input_capture") == []
+    assert _audio_sources(runtime, "pulse_output_capture") == []
+
+
+def test_audio_mixer_reapply_same_selection_is_stable():
+    from solin.core.scenes.libobs_audio_sources import LibobsAudioMixer
+
+    runtime = _CompositingRuntime()
+    mixer = LibobsAudioMixer(runtime)
+    selection = {"mode": "device", "device_id": "usb-mic-1"}
+    mixer.apply(selection, {"mode": "none"})
+    mixer.apply(dict(selection), {"mode": "none"})  # identical re-apply
+
+    mics = _audio_sources(runtime, "pulse_input_capture")
+    assert len(mics) == 1 and mics[0].released == 0  # no churn
+
+
+def test_audio_mixer_switching_device_replaces_the_source():
+    from solin.core.scenes.libobs_audio_sources import LibobsAudioMixer
+
+    runtime = _CompositingRuntime()
+    mixer = LibobsAudioMixer(runtime)
+    mixer.apply({"mode": "device", "device_id": "usb-mic-1"}, {"mode": "none"})
+    first = _audio_sources(runtime, "pulse_input_capture")[0]
+    mixer.apply({"mode": "device", "device_id": "builtin-mic"}, {"mode": "none"})
+
+    mics = _audio_sources(runtime, "pulse_input_capture")
+    assert len(mics) == 2
+    assert first.released == 1  # old source torn down
+    assert mics[1].settings["device_id"] == "builtin-mic"
+    assert first not in runtime.channels.values()
+    assert mics[1] in runtime.channels.values()
+
+
+def test_audio_mixer_clear_releases_sources_and_channels():
+    from solin.core.scenes.libobs_audio_sources import LibobsAudioMixer
+
+    runtime = _CompositingRuntime()
+    mixer = LibobsAudioMixer(runtime)
+    mixer.apply({"mode": "system_default"}, {"mode": "system_default"})
+    channels_used = [c for c, s in runtime.channels.items()
+                     if s in {src for src in runtime.sources if src.kind.startswith("pulse")}]
+    mixer.clear()
+
+    assert all(s.released == 1 for s in runtime.sources if s.kind.startswith("pulse"))
+    assert all(c in runtime.released_channels for c in channels_used)
+    assert not any(s.kind.startswith("pulse") for s in runtime.channels.values())
+
+
+def test_audio_mixer_unavailable_kind_creates_nothing():
+    from solin.core.scenes.libobs_audio_sources import LibobsAudioMixer
+
+    runtime = _CompositingRuntime()
+    runtime.source_types = ["color_source_v3", "ffmpeg_source"]  # no capture kinds
+    mixer = LibobsAudioMixer(runtime)
+    mixer.apply({"mode": "system_default"}, {"mode": "system_default"})
+
+    assert runtime.sources == []
+    assert mixer.available() == (False, False)
+
+
+def test_engine_set_program_recording_audio_applies_selection():
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+
+    response = engine.handle(_request("set_program_recording_audio", {
+        "microphone": AudioDeviceSelection(
+            AudioSelectionMode.DEVICE, "usb-mic-1", "USB Microphone"
+        ).to_engine_record(),
+        "system_audio": AudioDeviceSelection().to_engine_record(),  # system default
+    }))
+    assert _ack_from_envelope(response).applied is True
+    mic = _audio_sources(runtime, "pulse_input_capture")[0]
+    assert mic.settings["device_id"] == "usb-mic-1"
+    system = _audio_sources(runtime, "pulse_output_capture")[0]
+    assert system.settings["device_id"] == "default"
+
+
+def test_engine_set_program_recording_audio_without_runtime_fails():
+    engine = LibobsSidecarEngine()  # protocol-only, no runtime
+    engine.handle(_request("hello"))
+    response = engine.handle(_request("set_program_recording_audio", {
+        "microphone": {"mode": "system_default", "device_id": ""},
+        "system_audio": {"mode": "system_default", "device_id": ""},
+    }))
+    ack = _ack_from_envelope(response)
+    assert ack.applied is False and ack.error_code == "runtime_unavailable"
+
+
+def test_engine_start_recording_applies_audio_before_start():
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+
+    start = engine.handle(_request("start_program_recording", {
+        "path": "/tmp/rec.mp4",
+        "microphone": {"mode": "device", "device_id": "usb-mic-1"},
+        "system_audio": {"mode": "none"},
+    }))
+    assert _ack_from_envelope(start).applied is True
+    mic = _audio_sources(runtime, "pulse_input_capture")[0]
+    assert mic.settings["device_id"] == "usb-mic-1"
+    assert mic in runtime.channels.values()
+    assert runtime.outputs[-1].started == 1  # recording actually started
+
+
+def test_engine_stop_recording_clears_audio_sources():
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+    engine.handle(_request("start_program_recording", {
+        "path": "/tmp/rec.mp4",
+        "microphone": {"mode": "device", "device_id": "usb-mic-1"},
+        "system_audio": {"mode": "system_default"},
+    }))
+    engine.handle(_request("stop_program_recording", {}))
+
+    # every capture source is released and off its channel once recording stops
+    assert all(s.released == 1 for s in runtime.sources if s.kind.startswith("pulse"))
+    assert not any(s.kind.startswith("pulse") for s in runtime.channels.values())
+
+
+def test_engine_failed_recording_start_clears_audio_sources():
+    runtime = _CompositingRuntime()
+    runtime.output_start_ok = False  # recorder.start() will fail
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+
+    response = engine.handle(_request("start_program_recording", {
+        "path": "/tmp/rec.mp4",
+        "microphone": {"mode": "device", "device_id": "usb-mic-1"},
+        "system_audio": {"mode": "none"},
+    }))
+    assert _ack_from_envelope(response).applied is False
+    # a failed start must not leave the microphone live
+    assert all(s.released == 1 for s in runtime.sources if s.kind.startswith("pulse"))
+    assert not any(s.kind.startswith("pulse") for s in runtime.channels.values())
+
+
+def test_hello_advertises_audio_capture_when_kinds_available():
+    runtime = _CompositingRuntime()
+    caps = _capabilities_from_envelope(
+        LibobsSidecarEngine(runtime_factory=lambda: runtime).handle(_request("hello"))
+    )
+    assert caps.audio_input_capture is True
+    assert caps.system_audio_capture is True
+
+    bare = _CompositingRuntime()
+    bare.source_types = ["color_source_v3"]  # no capture kinds registered
+    caps = _capabilities_from_envelope(
+        LibobsSidecarEngine(runtime_factory=lambda: bare).handle(_request("hello"))
+    )
+    assert caps.audio_input_capture is False
+    assert caps.system_audio_capture is False
+
+    caps = _capabilities_from_envelope(LibobsSidecarEngine().handle(_request("hello")))
+    assert caps.audio_input_capture is False  # no runtime at all
+
+
+def test_engine_shutdown_releases_audio_sources():
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+    engine.handle(_request("set_program_recording_audio", {
+        "microphone": {"mode": "system_default"},
+        "system_audio": {"mode": "system_default"},
+    }))
+    engine.shutdown()
+    assert all(s.released == 1 for s in runtime.sources if s.kind.startswith("pulse"))
+
+
+def test_audio_mixer_missing_device_warns_but_still_binds():
+    from solin.core.scenes.libobs_audio_sources import LibobsAudioMixer
+
+    runtime = _CompositingRuntime()
+    mixer = LibobsAudioMixer(runtime)
+    warnings = mixer.apply({"mode": "device", "device_id": "ghost-mic"}, {"mode": "none"})
+
+    assert warnings["microphone"] == "device_unavailable"  # id not in the enumerated set
+    assert warnings["system_audio"] == ""
+    # it still binds a source (the device may return; recording is not blocked)
+    mics = _audio_sources(runtime, "pulse_input_capture")
+    assert len(mics) == 1 and mics[0].settings["device_id"] == "ghost-mic"
+
+
+def test_audio_mixer_source_create_failure_warns_and_leaks_nothing():
+    from solin.core.scenes.libobs_audio_sources import LibobsAudioMixer
+
+    runtime = _CompositingRuntime()
+    runtime.fail_source_kinds = {"pulse_input_capture"}  # plugin refuses the device
+    mixer = LibobsAudioMixer(runtime)
+    warnings = mixer.apply({"mode": "device", "device_id": "usb-mic-1"},
+                           {"mode": "system_default"})
+
+    assert warnings["microphone"] == "device_unavailable"
+    assert _audio_sources(runtime, "pulse_input_capture") == []  # nothing created
+    # the system-audio slot is unaffected and bound
+    assert warnings["system_audio"] == ""
+    assert len(_audio_sources(runtime, "pulse_output_capture")) == 1
+
+
+def test_audio_mixer_releases_channel_when_routing_fails():
+    from solin.core.scenes.libobs_audio_sources import LibobsAudioMixer
+
+    runtime = _CompositingRuntime()
+    runtime.fail_set_channel_once = True  # obs_set_output_source raises once
+    mixer = LibobsAudioMixer(runtime)
+    warnings = mixer.apply({"mode": "device", "device_id": "usb-mic-1"}, {"mode": "none"})
+
+    assert warnings["microphone"] == "device_unavailable"
+    # the just-created source is released and the reserved channel is freed (no leak)
+    mic = _audio_sources(runtime, "pulse_input_capture")[0]
+    assert mic.released == 1
+    assert mic not in runtime.channels.values()
+    assert runtime.released_channels  # the acquired channel was handed back
+
+
+def test_audio_mixer_keeps_live_source_when_enumeration_transiently_fails():
+    from solin.core.scenes.libobs_audio_sources import LibobsAudioMixer
+
+    runtime = _CompositingRuntime()
+    mixer = LibobsAudioMixer(runtime)
+    mixer.apply({"mode": "device", "device_id": "usb-mic-1"}, {"mode": "none"})
+    live = _audio_sources(runtime, "pulse_input_capture")[0]
+
+    runtime.enum_source_types_raises = True  # a momentary libobs hiccup
+    warnings = mixer.apply({"mode": "device", "device_id": "usb-mic-1"}, {"mode": "none"})
+
+    assert warnings["microphone"] == ""  # not reported as unavailable
+    assert live.released == 0  # the live capture is NOT torn down over a transient failure
+    assert live in runtime.channels.values()
+
+
+def test_engine_start_recording_with_missing_device_warns_but_records():
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    events: list[SceneIpcEnvelope] = []
+    engine.set_event_sink(events.append)
+    engine.handle(_request("hello"))
+
+    start = engine.handle(_request("start_program_recording", {
+        "path": "/tmp/rec.mp4",
+        "microphone": {"mode": "device", "device_id": "ghost-mic"},
+        "system_audio": {"mode": "none"},
+    }))
+    assert _ack_from_envelope(start).applied is True  # recording still starts
+    event = _program_recording_event_from_envelope(events[-1])
+    assert event.state.status is ProgramRecordingStatus.RECORDING
+    assert event.state.microphone_warning == "device_unavailable"
+    assert runtime.outputs[-1].started == 1
+
+
+def test_engine_live_device_switch_replaces_source_and_emits_state():
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    events: list[SceneIpcEnvelope] = []
+    engine.set_event_sink(events.append)
+    engine.handle(_request("hello"))
+    engine.handle(_request("start_program_recording", {
+        "path": "/tmp/rec.mp4",
+        "microphone": {"mode": "device", "device_id": "usb-mic-1"},
+        "system_audio": {"mode": "none"},
+    }))
+    first = _audio_sources(runtime, "pulse_input_capture")[0]
+
+    # The app changes the mic mid-recording via a second message on the same engine.
+    switch = engine.handle(_request("set_program_recording_audio", {
+        "microphone": {"mode": "device", "device_id": "builtin-mic"},
+        "system_audio": {"mode": "none"},
+    }))
+    assert _ack_from_envelope(switch).applied is True
+    mics = _audio_sources(runtime, "pulse_input_capture")
+    assert len(mics) == 2 and first.released == 1  # old torn down, new bound
+    assert mics[1].settings["device_id"] == "builtin-mic"
+    # a fresh recording-state event is published so the UI reflects the change
+    latest = _program_recording_event_from_envelope(events[-1])
+    assert latest.state.status is ProgramRecordingStatus.RECORDING
+
+
+def test_engine_set_recording_audio_missing_device_emits_warning():
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    events: list[SceneIpcEnvelope] = []
+    engine.set_event_sink(events.append)
+    engine.handle(_request("hello"))
+    engine.handle(_request("start_program_recording", {
+        "path": "/tmp/rec.mp4",
+        "microphone": {"mode": "system_default"},
+        "system_audio": {"mode": "none"},
+    }))
+
+    engine.handle(_request("set_program_recording_audio", {
+        "microphone": {"mode": "device", "device_id": "ghost-mic"},
+        "system_audio": {"mode": "none"},
+    }))
+    event = _program_recording_event_from_envelope(events[-1])
+    assert event.state.status is ProgramRecordingStatus.RECORDING
+    assert event.state.microphone_warning == "device_unavailable"
+
+
+def test_engine_list_audio_devices_without_runtime_reports_unavailable():
+    engine = LibobsSidecarEngine()  # protocol-only: runtime never booted
+    engine.handle(_request("hello"))
+    # a valid "unavailable" discovery (supported False + error_code), not a crash
+    discovery = _audio_device_discovery_from_envelope(
+        engine.handle(_request("list_audio_devices"))
+    )
+    assert discovery.supported is False and discovery.error_code != ""
+    assert discovery.devices == ()
+
+
+def test_engine_list_local_cameras_without_runtime_reports_unavailable():
+    engine = LibobsSidecarEngine()  # protocol-only: runtime never booted
+    engine.handle(_request("hello"))
+    discovery = _local_camera_discovery_from_envelope(
+        engine.handle(_request("list_local_cameras"))
+    )
+    assert discovery.supported is False and discovery.error_code != ""
 
 
 # ── content ingress: shared-memory frames → a libobs content source ──────────
