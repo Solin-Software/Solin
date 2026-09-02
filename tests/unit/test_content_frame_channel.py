@@ -81,3 +81,49 @@ def test_reader_rejects_a_foreign_block():
     finally:
         block.close()
         block.unlink()
+
+
+# ── app-side content publisher (produces frames + the descriptor) ─────────────
+
+
+def test_content_publisher_roundtrips_a_frame_to_a_reader():
+    from solin.core.scenes.content_frame_publisher import SharedMemoryContentPublisher
+    from solin.core.scenes.engine import FrameChannelTransport
+    from solin.core.scenes.model import VideoPixelFormat
+
+    publisher = SharedMemoryContentPublisher(2, 2)
+    try:
+        descriptor = publisher.descriptor
+        assert descriptor.transport is FrameChannelTransport.SHARED_MEMORY_BGRA
+        assert descriptor.pixel_format is VideoPixelFormat.BGRA
+        assert (descriptor.width, descriptor.height) == (2, 2)
+
+        reader = SharedFrameChannelReader(descriptor.handle_token, 2, 2)
+        try:
+            red = b"\x00\x00\xff\xff" * 4  # BGRA red, 2x2
+            seq = publisher.publish(red, frame_width=2, frame_height=2)
+            assert seq == 1
+            frame = reader.read_latest()
+            assert frame is not None and frame.data == red
+        finally:
+            reader.close()
+    finally:
+        publisher.close()
+
+
+def test_content_publisher_rejects_non_bgra_planes():
+    from solin.core.scenes.content_frame_publisher import SharedMemoryContentPublisher
+    from solin.core.scenes.model import VideoPixelFormat
+
+    publisher = SharedMemoryContentPublisher(2, 2)
+    try:
+        with pytest.raises(ValueError):
+            publisher.publish_planes(
+                (b"\x00" * 4, b"\x00" * 4),
+                plane_strides=(2, 2),
+                frame_width=2,
+                frame_height=2,
+                pixel_format=VideoPixelFormat.NV12,
+            )
+    finally:
+        publisher.close()

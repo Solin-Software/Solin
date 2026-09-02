@@ -64,6 +64,7 @@ from .controllers.profile_switch_controller import ProfileSwitchController
 from .controllers.program_recording_controller import ProgramRecordingController
 from .controllers.scene_runtime_controller import SceneRuntimeController
 from .controllers.content_frame_ingress_controller import ContentFrameIngressController
+from .core.scenes.libobs_engine import libobs_scene_engine_selected
 from .controllers.program_content_controller import ProgramContentController
 from .controllers.scene_frame_egress_controller import (
     SceneFrameEgressController,
@@ -315,11 +316,24 @@ class MainWindow(QWidget):
         )
         self.scene_workspace = scene_workspace
         program_output = self.scene_documents.document.output(BusId.VIRTUAL_CAMERA)
-        self._content_frame_ingress = ContentFrameIngressController(
-            self,
-            canvas_width=program_output.video_format.width,
-            canvas_height=program_output.video_format.height,
-        )
+        if libobs_scene_engine_selected():
+            # The libobs engine consumes a cross-platform SHARED_MEMORY_BGRA
+            # channel; publish content through it and skip the D3D11 transport.
+            from .core.scenes.content_frame_publisher import SharedMemoryContentPublisher
+
+            self._content_frame_ingress = ContentFrameIngressController(
+                self,
+                canvas_width=program_output.video_format.width,
+                canvas_height=program_output.video_format.height,
+                publisher_factory=lambda width, height: SharedMemoryContentPublisher(width, height),
+                accelerated_publisher_factory=lambda width, height: None,
+            )
+        else:
+            self._content_frame_ingress = ContentFrameIngressController(
+                self,
+                canvas_width=program_output.video_format.width,
+                canvas_height=program_output.video_format.height,
+            )
         self._content_frame_ingress.bind_video_sink(self.media_ctrl.video_sink)
         self._content_frame_ingress.direct_submission_changed.connect(
             self._reconcile_python_video_frame_delivery,
