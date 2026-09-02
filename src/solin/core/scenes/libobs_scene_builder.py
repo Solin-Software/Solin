@@ -80,10 +80,19 @@ class LibobsSceneGraph:
             self._sources.append(source)  # owned → released on clear
         item = scene.add(source)
         rect = layer.get("rect") or {}
+        # Scale the source into its normalized rect (SCALE_INNER preserves aspect),
+        # so real sources of any native size (media, camera, image) fill the rect
+        # rather than rendering at their own dimensions.
         item.pos = (
             float(rect.get("x", 0.0)) * canvas.width,
             float(rect.get("y", 0.0)) * canvas.height,
         )
+        item.bounds = (
+            max(1.0, float(rect.get("width", 1.0)) * canvas.width),
+            max(1.0, float(rect.get("height", 1.0)) * canvas.height),
+        )
+        item.bounds_type = int(ob.BoundsType.SCALE_INNER)
+        item.bounds_alignment = int(ob.Alignment.LEFT | ob.Alignment.TOP)
 
     def _create_placeholder(self, ob: Any, layer: dict, canvas: Any) -> Any:
         rect = layer.get("rect") or {}

@@ -245,6 +245,9 @@ class _FakeItem:
     def __init__(self, source) -> None:
         self.source = source
         self.pos = (0.0, 0.0)
+        self.bounds = (0.0, 0.0)
+        self.bounds_type = 0
+        self.bounds_alignment = 0
 
 
 class _FakeScene:
@@ -310,7 +313,12 @@ class _CompositingRuntime:
                 runtime.sources.append(source)
                 return source
 
-        self.ob = types.SimpleNamespace(Scene=_SceneNS, Source=_SourceNS)
+        self.ob = types.SimpleNamespace(
+            Scene=_SceneNS,
+            Source=_SourceNS,
+            BoundsType=types.SimpleNamespace(SCALE_INNER=2),
+            Alignment=types.SimpleNamespace(LEFT=1, TOP=4),
+        )
 
     # obs_runtime boot contract
     def ensure_started(self, **_kwargs) -> None:
@@ -366,14 +374,15 @@ def test_scene_graph_builds_scenes_and_positions_visible_layers():
     scene_a = next(s for s in runtime.scenes if s.name == "solin-scene-scene-a")
     # The hidden layer (L3) is skipped; only the two visible layers are added.
     assert len(scene_a.items) == 2
-    # Full-canvas layer sized to the canvas at the origin.
-    assert scene_a.items[0].source.settings["width"] == 1920
-    assert scene_a.items[0].source.settings["height"] == 1080
+    # Full-canvas layer: placed at the origin, scaled to fill the canvas.
     assert scene_a.items[0].pos == (0.0, 0.0)
-    # Bottom-right quadrant PiP.
-    assert scene_a.items[1].source.settings["width"] == 960
-    assert scene_a.items[1].source.settings["height"] == 540
+    assert scene_a.items[0].bounds == (1920.0, 1080.0)
+    assert scene_a.items[0].bounds_type == 2  # SCALE_INNER
+    assert scene_a.items[0].bounds_alignment == 5  # LEFT | TOP
+    assert scene_a.items[0].source.settings["width"] == 1920
+    # Bottom-right quadrant PiP: positioned + bounded to that quadrant.
     assert scene_a.items[1].pos == (960.0, 540.0)
+    assert scene_a.items[1].bounds == (960.0, 540.0)
     # The program scene is routed onto an acquired channel.
     assert runtime.channels[0] == "scene-source:solin-scene-scene-a"
 
