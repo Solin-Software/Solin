@@ -577,6 +577,88 @@ def test_engine_set_window_targets_without_runtime_acks_not_applied():
     assert response.payload["error_code"] == "runtime_unavailable"
 
 
+# ── content ingress: shared-memory frames → a libobs content source ──────────
+
+
+def test_content_layer_uses_the_content_source_and_is_not_released():
+    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+
+    runtime = _CompositingRuntime()
+    graph = LibobsSceneGraph(runtime)
+    document = {
+        "scenes": [
+            {
+                "id": "s",
+                "layers": [
+                    {"id": "c", "source_id": "solin.content.current", "visible": True,
+                     "rect": {"x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0}},
+                    {"id": "p", "source_id": "other", "visible": True,
+                     "rect": {"x": 0.0, "y": 0.0, "width": 0.5, "height": 0.5}},
+                ],
+            }
+        ]
+    }
+    content_source = object()  # referenced, never created by the builder
+
+    graph.hydrate(document, {"virtual_camera": "s"}, content_source)
+
+    scene = runtime.scenes[0]
+    assert scene.items[0].source is content_source  # content layer wired to it
+    assert len(runtime.sources) == 1  # only the non-content layer got a placeholder
+
+    graph.clear()
+    # The placeholder is released; the injected content source is NOT (not owned).
+    assert runtime.sources[0].released == 1
+
+
+def test_content_consumer_delivers_frames_to_the_frame_source():
+    from solin.core.scenes.content_frame_channel import SharedFrameChannelWriter
+    from solin.core.scenes.content_frame_consumer import ContentFrameConsumer
+
+    pushed: list[tuple] = []
+
+    class _FakeFrameSource:
+        source = "content-source"
+
+        def push_bgra(self, data, width, height, stride) -> None:
+            pushed.append((bytes(data), width, height, stride))
+
+        def release(self) -> None:
+            pass
+
+    writer = SharedFrameChannelWriter(2, 2)
+    consumer = ContentFrameConsumer(
+        _CompositingRuntime(),
+        {"handle_token": writer.name, "width": 2, "height": 2, "transport": "shared_memory_bgra"},
+        frame_source_factory=lambda runtime, name: _FakeFrameSource(),
+    )
+    try:
+        assert consumer.start() is True
+        assert consumer.source == "content-source"
+        writer.write(bytes(range(16)))
+        deadline = time.monotonic() + 2.0
+        while not pushed and time.monotonic() < deadline:
+            time.sleep(0.02)
+        assert pushed, "the pump thread never delivered a frame"
+        assert pushed[0] == (bytes(range(16)), 2, 2, 8)
+    finally:
+        consumer.stop()
+        writer.close()
+        writer.unlink()
+
+
+def test_content_consumer_start_fails_without_a_channel():
+    from solin.core.scenes.content_frame_consumer import ContentFrameConsumer
+
+    consumer = ContentFrameConsumer(
+        _CompositingRuntime(),
+        {"handle_token": "solin-no-such-channel", "width": 2, "height": 2,
+         "transport": "shared_memory_bgra"},
+        frame_source_factory=lambda runtime, name: None,
+    )
+    assert consumer.start() is False
+
+
 # ── factory + selection ──────────────────────────────────────────────────────
 
 

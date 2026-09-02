@@ -25,6 +25,9 @@ _PLACEHOLDER_COLOR = 0xFF404040
 # "Program" bus; MEDIA_WINDOWS mirrors it. The program scene is what composites.
 _PROGRAM_BUS = "virtual_camera"
 _MIRROR_BUS = "media_windows"
+# The single canonical content source id (see model.CONTENT_SOURCE_ID). Layers
+# referencing it are fed by the content ingress source, not a placeholder.
+_CONTENT_SOURCE_ID = "solin.content.current"
 
 
 class LibobsSceneGraph:
@@ -40,8 +43,18 @@ class LibobsSceneGraph:
     def scene_ids(self) -> tuple[str, ...]:
         return tuple(self._scenes)
 
-    def hydrate(self, document: dict, active_scenes: dict) -> None:
-        """Rebuild the scene graph from a document record and route the program."""
+    def hydrate(
+        self,
+        document: dict,
+        active_scenes: dict,
+        content_source: Any | None = None,
+    ) -> None:
+        """Rebuild the scene graph from a document record and route the program.
+
+        ``content_source`` (a libobs source fed by the content ingress) is placed
+        for layers referencing the canonical content id; it is *referenced*, not
+        owned, so the scene graph never releases it.
+        """
         self.clear()
         ob = self._runtime.ob
         canvas = self._runtime.video
@@ -54,23 +67,32 @@ class LibobsSceneGraph:
             for layer in scene_record.get("layers") or ():
                 if not layer.get("visible", True):
                     continue
-                self._add_layer(ob, scene, layer, canvas)
+                self._add_layer(ob, scene, layer, canvas, content_source)
         self._route_program(active_scenes)
 
-    def _add_layer(self, ob: Any, scene: Any, layer: dict, canvas: Any) -> None:
-        rect = layer.get("rect") or {}
-        width = max(1, round(float(rect.get("width", 1.0)) * canvas.width))
-        height = max(1, round(float(rect.get("height", 1.0)) * canvas.height))
-        source = ob.Source.create(
-            "color_source_v3",
-            f"solin-placeholder-{layer.get('id', 'layer')}",
-            {"color": _PLACEHOLDER_COLOR, "width": width, "height": height},
-        )
-        self._sources.append(source)
+    def _add_layer(
+        self, ob: Any, scene: Any, layer: dict, canvas: Any, content_source: Any | None
+    ) -> None:
+        if content_source is not None and layer.get("source_id") == _CONTENT_SOURCE_ID:
+            source = content_source  # referenced (the consumer owns its lifetime)
+        else:
+            source = self._create_placeholder(ob, layer, canvas)
+            self._sources.append(source)  # owned → released on clear
         item = scene.add(source)
+        rect = layer.get("rect") or {}
         item.pos = (
             float(rect.get("x", 0.0)) * canvas.width,
             float(rect.get("y", 0.0)) * canvas.height,
+        )
+
+    def _create_placeholder(self, ob: Any, layer: dict, canvas: Any) -> Any:
+        rect = layer.get("rect") or {}
+        width = max(1, round(float(rect.get("width", 1.0)) * canvas.width))
+        height = max(1, round(float(rect.get("height", 1.0)) * canvas.height))
+        return ob.Source.create(
+            "color_source_v3",
+            f"solin-placeholder-{layer.get('id', 'layer')}",
+            {"color": _PLACEHOLDER_COLOR, "width": width, "height": height},
         )
 
     def _route_program(self, active_scenes: dict) -> None:

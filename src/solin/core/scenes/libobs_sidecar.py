@@ -23,7 +23,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
-from typing import BinaryIO, Callable
+from typing import Any, BinaryIO, Callable
 
 from solin.core.scenes.ipc_protocol import (
     SceneIpcEnvelope,
@@ -155,6 +155,7 @@ class LibobsSidecarEngine:
         self._runtime_started = False
         self._scene_graph: object | None = None
         self._window_output: object | None = None
+        self._content_consumer: Any | None = None
 
     @property
     def runtime_started(self) -> bool:
@@ -205,15 +206,45 @@ class LibobsSidecarEngine:
                         error_message="the libobs runtime is not running")
         try:
             payload = request.payload
+            self._reconcile_content_ingress(payload.get("content_ingress"))
+            consumer = self._content_consumer
+            content_source = consumer.source if consumer is not None else None
             graph.hydrate(  # type: ignore[attr-defined]
                 payload.get("document") or {},
                 payload.get("active_scenes") or {},
+                content_source,
             )
         except Exception:  # noqa: BLE001 - a bad document must not crash the engine
             log.warning("libobs hydrate failed", exc_info=True)
             return _ack(request, applied=False, error_code="hydrate_failed",
                         error_message="could not build the libobs scene graph")
         return _ack(request, applied=True)
+
+    def _reconcile_content_ingress(self, descriptor: object) -> None:
+        from solin.core.scenes.content_frame_consumer import (
+            SHARED_MEMORY_BGRA,
+            ContentFrameConsumer,
+        )
+
+        if not isinstance(descriptor, dict) or descriptor.get("transport") != SHARED_MEMORY_BGRA:
+            self._stop_content_consumer()  # no supported content channel
+            return
+        token = descriptor.get("handle_token")
+        current = self._content_consumer
+        if current is not None and current.handle_token == token:
+            return  # already consuming this exact channel
+        self._stop_content_consumer()
+        consumer = ContentFrameConsumer(self._runtime, descriptor)
+        if consumer.start():
+            self._content_consumer = consumer
+
+    def _stop_content_consumer(self) -> None:
+        consumer, self._content_consumer = self._content_consumer, None
+        if consumer is not None:
+            try:
+                consumer.stop()
+            except Exception:  # noqa: BLE001 - shutdown must not raise
+                log.warning("content frame consumer stop errored", exc_info=True)
 
     def _handle_set_window_targets(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope:
         output = self._window_output
@@ -244,6 +275,9 @@ class LibobsSidecarEngine:
                 graph.shutdown()  # type: ignore[attr-defined]
             except Exception:  # noqa: BLE001 - shutdown must not raise out of the sidecar
                 log.warning("libobs scene graph shutdown errored", exc_info=True)
+        # Stop the content pump + release its source only after the scenes that
+        # referenced it are gone.
+        self._stop_content_consumer()
         runtime, self._runtime = self._runtime, None
         self._runtime_started = False
         if runtime is None:
