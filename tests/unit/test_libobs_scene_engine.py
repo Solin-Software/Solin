@@ -279,6 +279,31 @@ class _FakeColorSource:
         self.released += 1
 
 
+class _FakeTransition:
+    def __init__(self, kind: str, name: str, settings: dict) -> None:
+        self.kind = kind
+        self.name = name
+        self.settings = dict(settings)
+        self.current_source = None
+        self.starts: list[tuple] = []
+        self.size = None
+        self.released = 0
+
+    def set_source(self, source) -> None:
+        self.current_source = source
+
+    def start(self, destination, duration_ms=500, mode=0) -> bool:
+        self.starts.append((destination, duration_ms))
+        self.current_source = destination
+        return True
+
+    def set_size(self, cx: int, cy: int) -> None:
+        self.size = (cx, cy)
+
+    def release(self) -> None:
+        self.released += 1
+
+
 class _FakeCanvas:
     width = 1920
     height = 1080
@@ -292,6 +317,7 @@ class _CompositingRuntime:
         self.video = _FakeCanvas()
         self.scenes: list[_FakeScene] = []
         self.sources: list[_FakeColorSource] = []
+        self.transitions: list[_FakeTransition] = []
         self.camera_sources: list[tuple[str, str]] = []
         self.channels: dict[int, object] = {}
         self.released_channels: list[int] = []
@@ -314,9 +340,17 @@ class _CompositingRuntime:
                 runtime.sources.append(source)
                 return source
 
+        class _TransitionNS:
+            @staticmethod
+            def create(kind: str, name: str, settings: dict | None = None) -> _FakeTransition:
+                transition = _FakeTransition(kind, name, settings or {})
+                runtime.transitions.append(transition)
+                return transition
+
         self.ob = types.SimpleNamespace(
             Scene=_SceneNS,
             Source=_SourceNS,
+            Transition=_TransitionNS,
             BoundsType=types.SimpleNamespace(SCALE_INNER=2),
             Alignment=types.SimpleNamespace(LEFT=1, TOP=4),
         )
@@ -389,8 +423,10 @@ def test_scene_graph_builds_scenes_and_positions_visible_layers():
     # Bottom-right quadrant PiP: positioned + bounded to that quadrant.
     assert scene_a.items[1].pos == (960.0, 540.0)
     assert scene_a.items[1].bounds == (960.0, 540.0)
-    # The program scene is routed onto an acquired channel.
-    assert runtime.channels[0] == "scene-source:solin-scene-scene-a"
+    # A transition sits on the acquired channel, holding the program scene.
+    transition = runtime.channels[0]
+    assert transition in runtime.transitions
+    assert transition.current_source == "scene-source:solin-scene-scene-a"
 
 
 def test_scene_graph_without_active_program_routes_nothing():
@@ -432,7 +468,7 @@ def test_engine_hydrate_builds_and_acks():
     assert response is not None and response.message_type == "ack"
     assert response.payload["applied"] is True
     assert len(runtime.scenes) == 2
-    assert runtime.channels[0] == "scene-source:solin-scene-scene-a"
+    assert runtime.channels[0].current_source == "scene-source:solin-scene-scene-a"
 
 
 def test_engine_hydrate_without_runtime_acks_not_applied():
@@ -670,6 +706,115 @@ def test_rtsp_layer_creates_an_ffmpeg_source():
     assert source.kind == "ffmpeg_source"
     assert source.settings["is_local_file"] is False
     assert source.settings["input"] == "rtsp://host/stream"
+
+
+# ── transitions (prepare_scene / take_prepared) ──────────────────────────────
+
+
+_TWO_SCENE_DOC = {"scenes": [{"id": "a", "layers": []}, {"id": "b", "layers": []}]}
+
+
+def _graph_on_scene_a():
+    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+
+    runtime = _CompositingRuntime()
+    graph = LibobsSceneGraph(runtime)
+    graph.hydrate(_TWO_SCENE_DOC, {"virtual_camera": "a"})
+    return runtime, graph
+
+
+def test_prepare_and_take_dissolve_swaps_transition_and_animates():
+    runtime, graph = _graph_on_scene_a()
+    assert runtime.channels[0].current_source == "scene-source:solin-scene-a"
+
+    result = graph.prepare("b", "dissolve", 500)
+    assert result is not None and result["fallback_applied"] is False
+    assert graph.take(result["token"]) is True
+
+    transition = runtime.channels[0]  # dissolve != cut → swapped
+    assert transition.kind == "fade_transition"
+    assert transition.starts[-1] == ("scene-source:solin-scene-b", 500)
+
+
+def test_cut_take_reuses_the_cut_transition():
+    runtime, graph = _graph_on_scene_a()
+    result = graph.prepare("b", "cut", 0)
+    assert graph.take(result["token"]) is True
+    transition = runtime.channels[0]
+    assert transition.kind == "cut_transition"  # same kind → not swapped
+    assert transition.starts[-1] == ("scene-source:solin-scene-b", 0)
+
+
+def test_prepare_unknown_scene_returns_none():
+    _runtime, graph = _graph_on_scene_a()
+    assert graph.prepare("missing", "cut", 0) is None
+
+
+def test_prepare_unknown_kind_falls_back_to_cut():
+    _runtime, graph = _graph_on_scene_a()
+    result = graph.prepare("b", "sparkle", 0)
+    assert result is not None
+    assert result["fallback_applied"] is True
+    assert result["kind"] == "cut"
+
+
+def test_take_unknown_token_returns_false():
+    _runtime, graph = _graph_on_scene_a()
+    assert graph.take("prep-999") is False
+
+
+def test_cancel_all_drops_pending_preparations():
+    _runtime, graph = _graph_on_scene_a()
+    result = graph.prepare("b", "cut", 0)
+    graph.cancel_all()
+    assert graph.take(result["token"]) is False
+
+
+def test_engine_prepare_then_take_scene():
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+    engine.handle(_request("hydrate", {"document": _TWO_SCENE_DOC,
+                                       "active_scenes": {"virtual_camera": "a"}}))
+
+    prepared = engine.handle(_request("prepare_scene", {
+        "bus_id": "virtual_camera", "scene_id": "b",
+        "transition": {"kind": "dissolve", "duration_ms": 300},
+        "content_media_epoch": None,
+    }))
+    assert prepared is not None and prepared.message_type == "scene_prepared"
+    assert prepared.payload["fallback_applied"] is False
+    token = prepared.payload["preparation_token"]
+
+    taken = engine.handle(_request("take_prepared", {
+        "bus_id": "virtual_camera", "scene_id": "b", "preparation_token": token,
+    }))
+    assert taken is not None and taken.message_type == "ack"
+    assert taken.payload["applied"] is True
+    assert runtime.channels[0].starts[-1] == ("scene-source:solin-scene-b", 300)
+
+
+def test_engine_prepare_unknown_scene_errors():
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+    engine.handle(_request("hydrate", {"document": _TWO_SCENE_DOC,
+                                       "active_scenes": {"virtual_camera": "a"}}))
+    response = engine.handle(_request("prepare_scene", {
+        "bus_id": "virtual_camera", "scene_id": "nope",
+        "transition": {"kind": "cut", "duration_ms": 0},
+    }))
+    assert response is not None and response.message_type == "error"
+    assert response.payload["error_code"] == "unknown_scene"
+
+
+def test_engine_cancel_preparation_is_a_silent_notification():
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+    engine.handle(_request("hydrate", {"document": _TWO_SCENE_DOC,
+                                       "active_scenes": {"virtual_camera": "a"}}))
+    assert engine.handle(_request("cancel_preparation", {"cancelled_request_id": "x"})) is None
 
 
 # ── content ingress: shared-memory frames → a libobs content source ──────────

@@ -195,6 +195,15 @@ class LibobsSidecarEngine:
             return _reply(request, "hello_ack", self._capabilities())
         if message_type == "hydrate":
             return self._handle_hydrate(request)
+        if message_type == "prepare_scene":
+            return self._handle_prepare_scene(request)
+        if message_type == "take_prepared":
+            return self._handle_take_prepared(request)
+        if message_type == "cancel_preparation":
+            graph = self._scene_graph
+            if graph is not None:
+                graph.cancel_all()  # type: ignore[attr-defined]
+            return None  # a notification — no response
         if message_type == "set_window_targets":
             return self._handle_set_window_targets(request)
         return build_response(request)
@@ -245,6 +254,45 @@ class LibobsSidecarEngine:
                 consumer.stop()
             except Exception:  # noqa: BLE001 - shutdown must not raise
                 log.warning("content frame consumer stop errored", exc_info=True)
+
+    def _handle_prepare_scene(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope:
+        graph = self._scene_graph
+        if not self._runtime_started or graph is None:
+            return _reply(request, "error", {
+                "error_code": "runtime_unavailable",
+                "error_message": "the libobs runtime is not running",
+            })
+        payload = request.payload
+        bus_id = payload.get("bus_id")
+        scene_id = str(payload.get("scene_id") or "")
+        transition = payload.get("transition") or {}
+        kind = str(transition.get("kind", "cut"))
+        duration_ms = int(transition.get("duration_ms", 0) or 0)
+        result = graph.prepare(scene_id, kind, duration_ms)  # type: ignore[attr-defined]
+        if result is None:
+            return _reply(request, "error", {
+                "error_code": "unknown_scene",
+                "error_message": f"no scene {scene_id!r}",
+            })
+        return _reply(request, "scene_prepared", {
+            "bus_id": bus_id,
+            "scene_id": scene_id,
+            "preparation_token": result["token"],
+            "transition": {"kind": result["kind"], "duration_ms": duration_ms},
+            "fallback_applied": result["fallback_applied"],
+            "fallback_reason": result["fallback_reason"],
+        })
+
+    def _handle_take_prepared(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope:
+        graph = self._scene_graph
+        if not self._runtime_started or graph is None:
+            return _ack(request, applied=False, error_code="runtime_unavailable",
+                        error_message="the libobs runtime is not running")
+        token = str(request.payload.get("preparation_token") or "")
+        if graph.take(token):  # type: ignore[attr-defined]
+            return _ack(request, applied=True)
+        return _ack(request, applied=False, error_code="unknown_preparation",
+                    error_message="no such prepared scene")
 
     def _handle_set_window_targets(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope:
         output = self._window_output

@@ -29,6 +29,14 @@ _MIRROR_BUS = "media_windows"
 # referencing it are fed by the content ingress source, not a placeholder.
 _CONTENT_SOURCE_ID = "solin.content.current"
 
+# Model TransitionKind (see model.TransitionKind) → obs transition source id.
+_TRANSITION_IDS = {
+    "cut": "cut_transition",
+    "dissolve": "fade_transition",
+    "fade_to_black": "fade_to_color_transition",
+}
+_FALLBACK_KIND = "cut"
+
 
 def _parse_color(hex_color: str) -> int:
     """Parse ``#RRGGBB`` into libobs' color_source uint32 (0xAABBGGRR)."""
@@ -52,6 +60,13 @@ class LibobsSceneGraph:
         self._scenes: dict[str, Any] = {}
         self._sources: list[Any] = []
         self._program_channel: int | None = None
+        # Program transition: a transition source sits on the program channel and
+        # holds the active scene; scene switches animate through take().
+        self._transition: Any | None = None
+        self._transition_kind: str | None = None
+        self._active_scene_id: str | None = None
+        self._pending: dict[str, tuple[str, str, int]] = {}
+        self._token_seq = 0
 
     @property
     def scene_ids(self) -> tuple[str, ...]:
@@ -87,7 +102,7 @@ class LibobsSceneGraph:
                 if not layer.get("visible", True):
                     continue
                 self._add_layer(ob, scene, layer, canvas, sources_by_id, content_source)
-        self._route_program(active_scenes)
+        self._setup_program(active_scenes)
 
     def _add_layer(
         self,
@@ -167,22 +182,99 @@ class LibobsSceneGraph:
             {"color": color, "width": width, "height": height},
         )
 
-    def _route_program(self, active_scenes: dict) -> None:
+    def _setup_program(self, active_scenes: dict) -> None:
         program_scene_id = active_scenes.get(_PROGRAM_BUS) or active_scenes.get(_MIRROR_BUS)
         scene = self._scenes.get(program_scene_id) if program_scene_id else None
         if scene is None:
             return
         if self._program_channel is None:
             self._program_channel = self._runtime.acquire_channel()
-        self._runtime.set_channel_source(self._program_channel, scene.as_source())
+        self._transition = self._create_transition(_FALLBACK_KIND)
+        self._transition_kind = _FALLBACK_KIND
+        self._transition.set_source(scene.as_source())
+        self._active_scene_id = program_scene_id
+        self._runtime.set_channel_source(self._program_channel, self._transition)
+
+    def _create_transition(self, model_kind: str) -> Any:
+        ob = self._runtime.ob
+        canvas = self._runtime.video
+        obs_id = _TRANSITION_IDS.get(model_kind, _TRANSITION_IDS[_FALLBACK_KIND])
+        settings = {"color": 0xFF000000} if obs_id == "fade_to_color_transition" else {}
+        transition = ob.Transition.create(obs_id, f"solin-transition-{model_kind}", settings)
+        try:
+            transition.set_size(canvas.width, canvas.height)
+        except Exception:  # noqa: BLE001 - libobs boundary
+            log.debug("transition set_size errored", exc_info=True)
+        return transition
+
+    def prepare(self, scene_id: str, model_kind: str, duration_ms: int) -> dict | None:
+        """Stage a switch to ``scene_id``. Returns a token + resolved transition,
+        or None if the scene is unknown."""
+        if scene_id not in self._scenes:
+            return None
+        fallback_applied = model_kind not in _TRANSITION_IDS
+        effective_kind = _FALLBACK_KIND if fallback_applied else model_kind
+        self._token_seq += 1
+        token = f"prep-{self._token_seq}"
+        self._pending[token] = (scene_id, effective_kind, int(duration_ms))
+        return {
+            "token": token,
+            "kind": effective_kind,
+            "fallback_applied": fallback_applied,
+            "fallback_reason": "unsupported transition kind" if fallback_applied else "",
+        }
+
+    def take(self, token: str) -> bool:
+        """Execute a prepared switch, animating the program transition."""
+        pending = self._pending.pop(token, None)
+        if pending is None:
+            return False
+        scene_id, model_kind, duration_ms = pending
+        scene = self._scenes.get(scene_id)
+        if scene is None or self._transition is None:
+            return False
+        if model_kind != self._transition_kind:
+            self._swap_transition(model_kind)
+        self._transition.start(scene.as_source(), duration_ms)
+        self._active_scene_id = scene_id
+        return True
+
+    def _swap_transition(self, model_kind: str) -> None:
+        # Changing kind means a new transition source; carry the live scene into
+        # it so the program does not blink.
+        new_transition = self._create_transition(model_kind)
+        active = self._scenes.get(self._active_scene_id) if self._active_scene_id else None
+        if active is not None:
+            new_transition.set_source(active.as_source())
+        old, self._transition = self._transition, new_transition
+        self._transition_kind = model_kind
+        if self._program_channel is not None:
+            self._runtime.set_channel_source(self._program_channel, new_transition)
+        if old is not None:
+            try:
+                old.release()
+            except Exception:  # noqa: BLE001 - libobs boundary
+                log.debug("old transition release errored", exc_info=True)
+
+    def cancel_all(self) -> None:
+        self._pending.clear()
 
     def clear(self) -> None:
         """Release the current scenes/sources (keeps the reserved channel)."""
+        self._pending.clear()
         if self._program_channel is not None:
             try:
                 self._runtime.set_channel_source(self._program_channel, None)
             except Exception:  # noqa: BLE001 - libobs boundary
                 log.debug("Could not clear the program channel", exc_info=True)
+        if self._transition is not None:
+            try:
+                self._transition.release()
+            except Exception:  # noqa: BLE001 - libobs boundary
+                log.debug("transition release errored", exc_info=True)
+            self._transition = None
+        self._transition_kind = None
+        self._active_scene_id = None
         for source in self._sources:
             try:
                 source.release()
