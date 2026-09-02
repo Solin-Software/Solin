@@ -64,6 +64,10 @@ _NOTIFY_MESSAGE_TYPES = frozenset({"cancel_preparation"})
 # needs a real graphics context); the handshake and supervision still work.
 _NO_RUNTIME_ENV = "SOLIN_LIBOBS_SIDECAR_NO_RUNTIME"
 
+# How often the media poller samples + reports playback state (position/state) so
+# the app's transport UI (scrubber, play/pause, ended) stays live.
+_MEDIA_POLL_INTERVAL_S = 0.25
+
 # A runtime factory yields an object exposing ``ensure_started()`` / ``shutdown()``
 # (the :class:`~solin.core.media.obs_runtime.ObsRuntime` contract). It is injected
 # so the boot lifecycle can be exercised without a real libobs runtime.
@@ -179,6 +183,12 @@ class LibobsSidecarEngine:
         self._virtual_camera: Any | None = None
         self._recorder: Any | None = None
         self._audio_mixer: Any | None = None
+        self._media_source: Any | None = None
+        self._media_lock = threading.Lock()
+        self._media_poller: threading.Thread | None = None
+        self._media_poll_stop = threading.Event()
+        self._media_trim_start_ms = 0
+        self._media_trim_end_ms = 0
         self._event_sink: Callable[[SceneIpcEnvelope], None] | None = None
         self._session_id = "not-started"
         self._process_generation = "not-started"
@@ -224,12 +234,14 @@ class LibobsSidecarEngine:
         self._scene_graph = LibobsSceneGraph(runtime)
         self._window_output = LibobsWindowOutput(runtime)
         from solin.core.scenes.libobs_audio_sources import LibobsAudioMixer
+        from solin.core.scenes.libobs_media_source import LibobsMediaSource
         from solin.core.scenes.libobs_recorder import LibobsRecorder
         from solin.core.scenes.libobs_virtual_camera import LibobsVirtualCamera
 
         self._virtual_camera = LibobsVirtualCamera(runtime)
         self._recorder = LibobsRecorder(runtime)
         self._audio_mixer = LibobsAudioMixer(runtime)
+        self._media_source = LibobsMediaSource(runtime)
 
     def handle(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope | None:
         # Remember correlation ids so unsolicited events (recording state) are
@@ -246,6 +258,12 @@ class LibobsSidecarEngine:
             return self._handle_stop_recording(request)
         if message_type == "set_program_recording_audio":
             return self._handle_set_recording_audio(request)
+        if message_type == "open_media":
+            return self._handle_open_media(request)
+        if message_type == "control_media":
+            return self._handle_control_media(request)
+        if message_type == "set_media_properties":
+            return self._handle_set_media_properties(request)
         if message_type == "list_local_cameras":
             if not self._runtime_started:
                 return _reply(request, "local_camera_list", _unavailable_discovery())
@@ -390,6 +408,190 @@ class LibobsSidecarEngine:
         except Exception:  # noqa: BLE001 - an event write must not break handling
             log.debug("could not emit program recording state", exc_info=True)
 
+    # ── media control (Fork A: libobs decodes; app drives over IPC) ─────────
+
+    def _handle_open_media(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope:
+        media = self._media_source
+        if not self._runtime_started or media is None:
+            return _ack(request, applied=False, error_code="runtime_unavailable",
+                        error_message="the libobs runtime is not running")
+        payload = request.payload
+        path = str(payload.get("path") or "")
+        if not path:
+            return _ack(request, applied=False, error_code="invalid_path",
+                        error_message="a media path is required")
+        is_local = bool(payload.get("is_local_file", True))
+        autoplay = bool(payload.get("autoplay", True))
+        volume = int(payload.get("volume_percent", 100) or 0)
+        speed = int(payload.get("speed_percent", 100) or 0) or 100
+        trim_start = max(0, int(payload.get("trim_start_ms", 0) or 0))
+        trim_end = max(0, int(payload.get("trim_end_ms", 0) or 0))
+        with self._media_lock:
+            opened = media.open(path, autoplay=autoplay, is_local_file=is_local,
+                                volume_percent=volume, speed_percent=speed)
+            if opened:
+                self._media_trim_start_ms = trim_start
+                self._media_trim_end_ms = trim_end
+                if trim_start:
+                    media.seek(trim_start)
+                if self._scene_graph is not None:
+                    self._scene_graph.set_content_source(media.source)  # type: ignore[attr-defined]
+        if not opened:
+            self._emit_media_state(7, 0, 0, path, error_code="media_open_failed")  # ERROR
+            return _ack(request, applied=False, error_code="media_open_failed",
+                        error_message="could not open the media source")
+        self._ensure_media_poller()
+        self._emit_media_state_now()
+        return _ack(request, applied=True)
+
+    def _handle_control_media(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope:
+        media = self._media_source
+        if not self._runtime_started or media is None:
+            return _ack(request, applied=False, error_code="runtime_unavailable",
+                        error_message="the libobs runtime is not running")
+        action = str(request.payload.get("action") or "")
+        position_ms = max(0, int(request.payload.get("position_ms", 0) or 0))
+        reverted = False
+        with self._media_lock:
+            if action == "play":
+                media.play()
+            elif action == "pause":
+                media.pause()
+            elif action == "stop":
+                media.stop()
+            elif action == "restart":
+                media.restart()
+                if self._media_trim_start_ms:
+                    media.seek(self._media_trim_start_ms)
+            elif action == "seek":
+                media.seek(position_ms + self._media_trim_start_ms)  # trim-relative → absolute
+            elif action == "close":
+                media.close()
+                self._media_trim_start_ms = 0
+                self._media_trim_end_ms = 0
+                if self._scene_graph is not None:
+                    self._scene_graph.set_content_source(  # type: ignore[attr-defined]
+                        self._frame_content_source()
+                    )
+                reverted = True
+            else:
+                return _ack(request, applied=False, error_code="invalid_media_action",
+                            error_message=f"unknown media action {action!r}")
+        if reverted:
+            self._stop_media_poller()
+        else:
+            self._emit_media_state_now()
+        return _ack(request, applied=True)
+
+    def _handle_set_media_properties(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope:
+        media = self._media_source
+        if not self._runtime_started or media is None:
+            return _ack(request, applied=False, error_code="runtime_unavailable",
+                        error_message="the libobs runtime is not running")
+        volume = int(request.payload.get("volume_percent", 100) or 0)
+        speed = int(request.payload.get("speed_percent", 100) or 0) or 100
+        with self._media_lock:
+            media.set_volume(volume)
+            media.set_speed(speed)
+        return _ack(request, applied=True)
+
+    def _frame_content_source(self) -> Any | None:
+        consumer = self._content_consumer
+        return consumer.source if consumer is not None else None
+
+    def _effective_content_source(self) -> Any | None:
+        """The content-slot source: an open media source wins over BGRA ingress."""
+        media = self._media_source
+        if media is not None and media.source is not None:
+            return media.source
+        return self._frame_content_source()
+
+    def _sample_media(self) -> tuple[int, int, int, str] | None:
+        """Read (state, position_ms, duration_ms, path), trim-adjusted, or None.
+
+        Positions/durations are reported relative to the trim window so the app's
+        scrubber matches; the trim end is enforced by pausing and reporting ENDED.
+        """
+        from solin.core.scenes.libobs_media_source import STATE_ENDED, STATE_PLAYING
+
+        with self._media_lock:
+            media = self._media_source
+            if media is None or media.source is None:
+                return None
+            start = self._media_trim_start_ms
+            end = self._media_trim_end_ms
+            position = media.position_ms
+            state = media.state
+            if end and position >= end and state == STATE_PLAYING:
+                media.pause()
+                state = STATE_ENDED
+            duration = media.duration_ms
+            path = media.path
+        window_end = end if end else duration
+        rel_position = max(0, position - start)
+        rel_duration = max(0, window_end - start) if window_end else 0
+        return (state, rel_position, rel_duration, path)
+
+    def _emit_media_state_now(self) -> None:
+        snapshot = self._sample_media()
+        if snapshot is not None:
+            self._emit_media_state(*snapshot)
+
+    def _emit_media_state(
+        self,
+        state: int,
+        position_ms: int,
+        duration_ms: int,
+        path: str,
+        *,
+        error_code: str = "",
+    ) -> None:
+        sink = self._event_sink
+        if sink is None:
+            return
+        envelope = SceneIpcEnvelope(
+            message_type="media_playback_state",
+            request_id="event-media",
+            session_id=self._session_id,
+            process_generation=self._process_generation,
+            sequence=0,
+            document_revision=0,
+            deadline_monotonic_ms=int(time.monotonic() * 1000) + 2000,
+            payload={
+                "state": max(0, int(state)),
+                "position_ms": max(0, int(position_ms)),
+                "duration_ms": max(0, int(duration_ms)),
+                "path": str(path or ""),
+                "error_code": str(error_code or ""),
+            },
+        )
+        try:
+            sink(envelope)
+        except Exception:  # noqa: BLE001 - an event write must not break handling
+            log.debug("could not emit media playback state", exc_info=True)
+
+    def _ensure_media_poller(self) -> None:
+        if self._media_poller is not None and self._media_poller.is_alive():
+            return
+        self._media_poll_stop.clear()
+        self._media_poller = threading.Thread(
+            target=self._media_poll_loop, name="solin-media-poll", daemon=True
+        )
+        self._media_poller.start()
+
+    def _stop_media_poller(self) -> None:
+        self._media_poll_stop.set()
+        poller, self._media_poller = self._media_poller, None
+        if poller is not None and poller is not threading.current_thread():
+            poller.join(timeout=1.0)
+
+    def _media_poll_loop(self) -> None:
+        while not self._media_poll_stop.wait(_MEDIA_POLL_INTERVAL_S):
+            snapshot = self._sample_media()
+            if snapshot is None:
+                continue
+            self._emit_media_state(*snapshot)
+
     def _handle_set_output_enabled(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope:
         payload = request.payload
         bus_id = payload.get("bus_id")
@@ -417,12 +619,12 @@ class LibobsSidecarEngine:
         try:
             payload = request.payload
             self._reconcile_content_ingress(payload.get("content_ingress"))
-            consumer = self._content_consumer
-            content_source = consumer.source if consumer is not None else None
+            # An open media source owns the content slot; otherwise the BGRA
+            # frame-ingress source does (both may be absent → placeholder).
             graph.hydrate(  # type: ignore[attr-defined]
                 payload.get("document") or {},
                 payload.get("active_scenes") or {},
-                content_source,
+                self._effective_content_source(),
             )
         except Exception:  # noqa: BLE001 - a bad document must not crash the engine
             log.warning("libobs hydrate failed", exc_info=True)
@@ -525,6 +727,15 @@ class LibobsSidecarEngine:
                 mixer.shutdown()
             except Exception:  # noqa: BLE001 - shutdown must not raise out of the sidecar
                 log.warning("audio mixer shutdown errored", exc_info=True)
+        # Stop the media poller before releasing the source it samples, and release
+        # our media ref before the scene graph tears down (scenes hold their own ref).
+        self._stop_media_poller()
+        media, self._media_source = self._media_source, None
+        if media is not None:
+            try:
+                media.close()
+            except Exception:  # noqa: BLE001 - shutdown must not raise out of the sidecar
+                log.warning("media source close errored", exc_info=True)
         camera, self._virtual_camera = self._virtual_camera, None
         if camera is not None:
             try:

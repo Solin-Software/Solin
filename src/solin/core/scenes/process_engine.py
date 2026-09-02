@@ -26,6 +26,7 @@ from solin.core.scenes.engine import (
     LocalCameraProbe,
     LocalCameraProbeStatus,
     LocalVideoFormat,
+    MediaPlaybackEvent,
     OutputWindowTarget,
     SceneEngineAck,
     SceneEngineCapabilities,
@@ -39,6 +40,12 @@ from solin.core.scenes.engine import (
     SourceHealthEvent,
     SourceHealthStatus,
     scene_engine_document_record,
+)
+from solin.core.scenes.media_control import (
+    MAXIMUM_MEDIA_PATH_LENGTH,
+    MediaControlAction,
+    MediaPlaybackNativeState,
+    MediaPlaybackState,
 )
 from solin.core.scenes.recording import (
     MAXIMUM_AUDIO_DEVICES,
@@ -137,6 +144,9 @@ _PROGRAM_RECORDING_STATE_FIELDS = frozenset(
         "duplicated_frames",
         "frame_feed_p95_ns",
     }
+)
+_MEDIA_PLAYBACK_STATE_FIELDS = frozenset(
+    {"state", "position_ms", "duration_ms", "path", "error_code"}
 )
 _T = TypeVar("_T")
 log = logging.getLogger(__name__)
@@ -806,6 +816,89 @@ class SubprocessSceneEngine:
             converter=_ack_from_envelope,
         )
 
+    def open_media(
+        self,
+        path: str,
+        *,
+        is_local_file: bool,
+        autoplay: bool = True,
+        volume_percent: int = 100,
+        speed_percent: int = 100,
+        trim_start_ms: int = 0,
+        trim_end_ms: int = 0,
+        request_id: str,
+        deadline_ms: int,
+    ) -> Future[SceneEngineAck]:
+        if not isinstance(path, str) or not path:
+            return _failed_future(ValueError("Media path is required"))
+        with self._lock:
+            document_revision = self._document_revision
+        return self._request(
+            message_type="open_media",
+            expected_message_type="ack",
+            request_id=request_id,
+            sequence=0,
+            document_revision=document_revision,
+            deadline_ms=deadline_ms,
+            payload={
+                "path": path,
+                "is_local_file": bool(is_local_file),
+                "autoplay": bool(autoplay),
+                "volume_percent": int(volume_percent),
+                "speed_percent": int(speed_percent),
+                "trim_start_ms": int(trim_start_ms),
+                "trim_end_ms": int(trim_end_ms),
+            },
+            converter=_ack_from_envelope,
+        )
+
+    def control_media(
+        self,
+        action: MediaControlAction,
+        *,
+        position_ms: int = 0,
+        request_id: str,
+        deadline_ms: int,
+    ) -> Future[SceneEngineAck]:
+        if not isinstance(action, MediaControlAction):
+            return _failed_future(TypeError("Invalid media control action"))
+        with self._lock:
+            document_revision = self._document_revision
+        return self._request(
+            message_type="control_media",
+            expected_message_type="ack",
+            request_id=request_id,
+            sequence=0,
+            document_revision=document_revision,
+            deadline_ms=deadline_ms,
+            payload={"action": action.value, "position_ms": int(position_ms)},
+            converter=_ack_from_envelope,
+        )
+
+    def set_media_properties(
+        self,
+        *,
+        volume_percent: int,
+        speed_percent: int,
+        request_id: str,
+        deadline_ms: int,
+    ) -> Future[SceneEngineAck]:
+        with self._lock:
+            document_revision = self._document_revision
+        return self._request(
+            message_type="set_media_properties",
+            expected_message_type="ack",
+            request_id=request_id,
+            sequence=0,
+            document_revision=document_revision,
+            deadline_ms=deadline_ms,
+            payload={
+                "volume_percent": int(volume_percent),
+                "speed_percent": int(speed_percent),
+            },
+            converter=_ack_from_envelope,
+        )
+
     def stop(self) -> None:
         with self._lock:
             supervisor = self._supervisor
@@ -1052,7 +1145,11 @@ class SubprocessSceneEngine:
             ):
                 return
             self._last_received_monotonic = self._monotonic()
-            if envelope.message_type in {"source_health", "program_recording_state"}:
+            if envelope.message_type in {
+                "source_health",
+                "program_recording_state",
+                "media_playback_state",
+            }:
                 pending = None
             else:
                 pending = self._pending.pop(envelope.request_id, None)
@@ -1061,6 +1158,9 @@ class SubprocessSceneEngine:
             return
         if envelope.message_type == "program_recording_state":
             self._emit_event(_program_recording_event_from_envelope(envelope))
+            return
+        if envelope.message_type == "media_playback_state":
+            self._emit_event(_media_playback_event_from_envelope(envelope))
             return
         if pending is None:
             return
@@ -1805,6 +1905,30 @@ def _program_recording_event_from_envelope(
                 payload["frame_feed_p95_ns"],
                 "Program recording frame-feed P95",
             ),
+        )
+    )
+
+
+def _media_playback_event_from_envelope(
+    envelope: SceneIpcEnvelope,
+) -> MediaPlaybackEvent:
+    payload = require_payload_fields(
+        envelope.payload,
+        _MEDIA_PLAYBACK_STATE_FIELDS,
+        message_type="Media playback state",
+    )
+    raw_state = require_non_negative_int(payload["state"], "Media playback state")
+    try:
+        state = MediaPlaybackState(raw_state)
+    except ValueError as exc:
+        raise SceneIpcMessageError("Invalid media playback state") from exc
+    return MediaPlaybackEvent(
+        MediaPlaybackNativeState(
+            state=state,
+            position_ms=require_non_negative_int(payload["position_ms"], "Media position"),
+            duration_ms=require_non_negative_int(payload["duration_ms"], "Media duration"),
+            path=require_text(payload["path"], "Media path", maximum=MAXIMUM_MEDIA_PATH_LENGTH),
+            error_code=require_text(payload["error_code"], "Media error code", maximum=128),
         )
     )
 

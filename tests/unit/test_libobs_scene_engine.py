@@ -37,6 +37,10 @@ from solin.core.scenes.libobs_sidecar import (
     build_response,
     serve,
 )
+from solin.core.scenes.media_control import (
+    MediaControlAction,
+    MediaPlaybackState,
+)
 from solin.core.scenes.process_engine import (
     SceneEngineCommandRejectedError,
     _ack_from_envelope,
@@ -44,6 +48,7 @@ from solin.core.scenes.process_engine import (
     _capabilities_from_envelope,
     _command_error_from_envelope,
     _local_camera_discovery_from_envelope,
+    _media_playback_event_from_envelope,
     _program_recording_event_from_envelope,
 )
 
@@ -251,12 +256,20 @@ def test_serve_boots_then_shuts_down_the_injected_engine():
 
 
 class _FakeItem:
-    def __init__(self, source) -> None:
+    def __init__(self, source, scene=None) -> None:
         self.source = source
+        self.scene = scene
         self.pos = (0.0, 0.0)
         self.bounds = (0.0, 0.0)
         self.bounds_type = 0
         self.bounds_alignment = 0
+        self.order_position = 0
+        self.removed = False
+
+    def remove(self) -> None:
+        self.removed = True
+        if self.scene is not None and self in self.scene.items:
+            self.scene.items.remove(self)
 
 
 class _FakeScene:
@@ -266,7 +279,8 @@ class _FakeScene:
         self.released = 0
 
     def add(self, source) -> _FakeItem:
-        item = _FakeItem(source)
+        item = _FakeItem(source, scene=self)
+        item.order_position = len(self.items)  # appended on top, like obs_scene_add
         self.items.append(item)
         return item
 
@@ -283,6 +297,50 @@ class _FakeColorSource:
         self.name = name
         self.settings = dict(settings)
         self.released = 0
+
+    def release(self) -> None:
+        self.released += 1
+
+
+class _FakeMediaSource:
+    """A fake ffmpeg_source exposing the obs media API LibobsMediaSource drives."""
+
+    def __init__(self, kind: str, name: str, settings: dict) -> None:
+        self.kind = kind
+        self.name = name
+        self.settings = dict(settings)
+        self.released = 0
+        self.volume = 1.0
+        self.media_time = 0
+        self._duration = 60_000
+        self._state = 5  # STATE_STOPPED
+        self.play_pause_calls: list[bool] = []
+        self.stops = 0
+        self.restarts = 0
+
+    def media_play_pause(self, pause: bool) -> None:
+        self.play_pause_calls.append(pause)
+        self._state = 4 if pause else 1  # PAUSED / PLAYING
+
+    def media_stop(self) -> None:
+        self.stops += 1
+        self._state = 5
+
+    def media_restart(self) -> None:
+        self.restarts += 1
+        self.media_time = 0
+        self._state = 1
+
+    @property
+    def media_duration(self) -> int:
+        return self._duration
+
+    @property
+    def media_state(self) -> int:
+        return self._state
+
+    def update(self, settings: dict) -> None:
+        self.settings.update(settings)
 
     def release(self) -> None:
         self.released += 1
@@ -443,7 +501,10 @@ class _CompositingRuntime:
             def create(kind: str, name: str, settings: dict):
                 if kind in runtime.fail_source_kinds:
                     return None  # simulate a plugin refusing the device
-                source = _FakeColorSource(kind, name, settings)
+                if kind == "ffmpeg_source":
+                    source = _FakeMediaSource(kind, name, settings)
+                else:
+                    source = _FakeColorSource(kind, name, settings)
                 runtime.sources.append(source)
                 return source
 
@@ -522,6 +583,11 @@ class _CompositingRuntime:
 
     def shutdown(self) -> None:
         self.shutdowns += 1
+
+    # media source monitoring (best-effort; LibobsMediaSource.open calls this)
+    def set_source_monitoring(self, source, monitoring_type: int) -> None:
+        self.monitored = getattr(self, "monitored", [])
+        self.monitored.append((source, monitoring_type))
 
     # shared camera source (runtime-owned)
     def camera_source(self, device_id: str, name: str = ""):
@@ -1617,6 +1683,226 @@ def test_engine_list_local_cameras_without_runtime_reports_unavailable():
         engine.handle(_request("list_local_cameras"))
     )
     assert discovery.supported is False and discovery.error_code != ""
+
+
+# ── media control: sidecar libobs decode driven over IPC (Fork A) ────────────
+
+_MEDIA_DOC = {
+    "sources": [
+        {"id": "solin.content.current", "type": "solin_content", "name": "Content"},
+        {"id": "ov", "type": "color", "name": "Overlay", "configuration": {"color": "#0000FF"}},
+    ],
+    "scenes": [
+        {"id": "s1", "layers": [
+            {"id": "content", "source_id": "solin.content.current", "visible": True,
+             "rect": {"x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0}},
+            {"id": "overlay", "source_id": "ov", "visible": True,
+             "rect": {"x": 0.5, "y": 0.5, "width": 0.5, "height": 0.5}},
+        ]},
+    ],
+}
+
+
+def _media_sources(runtime):
+    return [s for s in runtime.sources if s.kind == "ffmpeg_source"]
+
+
+def test_scene_graph_set_content_source_retargets_and_preserves_z_order():
+    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+
+    runtime = _CompositingRuntime()
+    graph = LibobsSceneGraph(runtime)
+    frame = object()
+    graph.hydrate(_MEDIA_DOC, {"virtual_camera": "s1"}, frame)
+    scene = runtime.scenes[0]
+    content_item = next(i for i in scene.items if i.source is frame)
+    assert content_item.order_position == 0  # content at the bottom, overlay on top
+
+    media = object()
+    graph.set_content_source(media)
+
+    new_content = next(i for i in scene.items if i.source is media)
+    assert new_content.order_position == 0  # z-order preserved
+    assert all(i.source is not frame for i in scene.items)  # old content item gone
+    overlay = [i for i in scene.items if getattr(i.source, "kind", None) == "color_source_v3"]
+    assert overlay and overlay[0].order_position == 1  # overlay still on top
+
+
+def test_scene_graph_set_content_source_none_uses_placeholder():
+    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+
+    runtime = _CompositingRuntime()
+    graph = LibobsSceneGraph(runtime)
+    frame = object()
+    graph.hydrate(_MEDIA_DOC, {"virtual_camera": "s1"}, frame)
+    graph.set_content_source(None)
+
+    scene = runtime.scenes[0]
+    content_item = min(scene.items, key=lambda i: i.order_position)
+    assert getattr(content_item.source, "kind", None) == "color_source_v3"  # placeholder
+
+
+def test_scene_graph_set_content_source_releases_replaced_placeholder():
+    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+
+    runtime = _CompositingRuntime()
+    graph = LibobsSceneGraph(runtime)
+    graph.hydrate(_MEDIA_DOC, {"virtual_camera": "s1"}, None)  # no content → placeholder
+    scene = runtime.scenes[0]
+    placeholder = min(scene.items, key=lambda i: i.order_position).source
+    assert placeholder.kind == "color_source_v3"
+
+    graph.set_content_source(object())
+    assert placeholder.released == 1  # the stand-in placeholder is freed
+
+
+def test_libobs_media_source_open_applies_volume_speed_and_local_flag():
+    from solin.core.scenes.libobs_media_source import LibobsMediaSource
+
+    runtime = _CompositingRuntime()
+    media = LibobsMediaSource(runtime)
+    assert media.open("/v.mp4", is_local_file=True, volume_percent=50, speed_percent=200) is True
+    src = _media_sources(runtime)[-1]
+    assert src.settings["is_local_file"] is True and src.settings["local_file"] == "/v.mp4"
+    assert src.settings.get("speed_percent") == 200
+    assert src.volume == 0.5
+    assert media.state == MediaPlaybackState.PLAYING  # autoplay
+
+
+def test_engine_open_media_puts_ffmpeg_source_in_content_slot_and_autoplays():
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    events: list[SceneIpcEnvelope] = []
+    engine.set_event_sink(events.append)
+    engine.handle(_request("hello"))
+    engine.handle(_request("hydrate", {"document": _MEDIA_DOC,
+                                        "active_scenes": {"virtual_camera": "s1"}}))
+
+    ack = _ack_from_envelope(engine.handle(_request("open_media", {
+        "path": "/clip.mp4", "is_local_file": True, "autoplay": True,
+        "volume_percent": 80, "speed_percent": 100, "trim_start_ms": 0, "trim_end_ms": 0,
+    })))
+    assert ack.applied is True
+    media = _media_sources(runtime)[-1]
+    assert media.settings["local_file"] == "/clip.mp4"
+    assert media.play_pause_calls == [False]  # autoplay → play
+    assert media.volume == 0.8
+    assert any(i.source is media for i in runtime.scenes[0].items)  # in the content slot
+    event = _media_playback_event_from_envelope(events[-1])
+    assert event.state.path == "/clip.mp4"
+    assert event.state.state is MediaPlaybackState.PLAYING
+    engine.shutdown()
+
+
+def test_engine_control_media_drives_transport_with_trim_offset():
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.set_event_sink(lambda _e: None)
+    engine.handle(_request("hello"))
+    engine.handle(_request("open_media", {"path": "/c.mp4", "is_local_file": True,
+                                          "trim_start_ms": 2000}))
+    media = _media_sources(runtime)[-1]
+    assert media.media_time == 2000  # opened → seeked to trim start
+
+    engine.handle(_request("control_media", {"action": "pause"}))
+    assert media.play_pause_calls[-1] is True
+    engine.handle(_request("control_media", {"action": "play"}))
+    assert media.play_pause_calls[-1] is False
+    engine.handle(_request("control_media", {"action": "seek", "position_ms": 5000}))
+    assert media.media_time == 7000  # trim-relative 5000 → absolute 5000+2000
+    engine.handle(_request("control_media", {"action": "restart"}))
+    assert media.restarts == 1 and media.media_time == 2000  # restart re-seeks trim start
+    engine.shutdown()
+
+
+def test_engine_control_media_close_reverts_content_slot_and_stops_poller():
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.set_event_sink(lambda _e: None)
+    engine.handle(_request("hello"))
+    engine.handle(_request("hydrate", {"document": _MEDIA_DOC,
+                                        "active_scenes": {"virtual_camera": "s1"}}))
+    engine.handle(_request("open_media", {"path": "/c.mp4", "is_local_file": True}))
+    media = _media_sources(runtime)[-1]
+    assert engine._media_poller is not None  # poller running while media is open
+
+    ack = _ack_from_envelope(engine.handle(_request("control_media", {"action": "close"})))
+    assert ack.applied is True
+    assert media.stops >= 1 and media.released == 1  # stopped + released
+    assert engine._media_poller is None  # poller stopped
+    assert all(i.source is not media for i in runtime.scenes[0].items)  # slot reverted
+
+
+def test_engine_set_media_properties_updates_volume_and_speed():
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.set_event_sink(lambda _e: None)
+    engine.handle(_request("hello"))
+    engine.handle(_request("open_media", {"path": "/c.mp4", "is_local_file": True}))
+    media = _media_sources(runtime)[-1]
+
+    ack = _ack_from_envelope(engine.handle(_request("set_media_properties", {
+        "volume_percent": 50, "speed_percent": 150,
+    })))
+    assert ack.applied is True
+    assert media.volume == 0.5 and media.settings["speed_percent"] == 150
+    engine.shutdown()
+
+
+def test_engine_open_media_reports_trim_relative_position_and_duration():
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    events: list[SceneIpcEnvelope] = []
+    engine.set_event_sink(events.append)
+    engine.handle(_request("hello"))
+    engine.handle(_request("open_media", {"path": "/c.mp4", "is_local_file": True,
+                                          "trim_start_ms": 10000, "trim_end_ms": 40000}))
+    # fake media duration is 60s; the 10s..40s window → 30s duration, position 0 at start
+    event = _media_playback_event_from_envelope(events[-1])
+    assert event.state.duration_ms == 30000
+    assert event.state.position_ms == 0
+    engine.shutdown()
+
+
+def test_engine_open_media_without_runtime_fails():
+    engine = LibobsSidecarEngine()  # protocol-only, no runtime
+    engine.handle(_request("hello"))
+    ack = _ack_from_envelope(engine.handle(_request("open_media", {
+        "path": "/c.mp4", "is_local_file": True,
+    })))
+    assert ack.applied is False and ack.error_code == "runtime_unavailable"
+
+
+def test_engine_open_media_missing_path_fails():
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+    ack = _ack_from_envelope(engine.handle(_request("open_media", {
+        "path": "", "is_local_file": True,
+    })))
+    assert ack.applied is False and ack.error_code == "invalid_path"
+
+
+def test_engine_control_media_unknown_action_is_rejected():
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.set_event_sink(lambda _e: None)
+    engine.handle(_request("hello"))
+    engine.handle(_request("open_media", {"path": "/c.mp4", "is_local_file": True}))
+    ack = _ack_from_envelope(engine.handle(_request("control_media", {"action": "frobnicate"})))
+    assert ack.applied is False and ack.error_code == "invalid_media_action"
+    engine.shutdown()
+
+
+def test_engine_shutdown_closes_media_source():
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.set_event_sink(lambda _e: None)
+    engine.handle(_request("hello"))
+    engine.handle(_request("open_media", {"path": "/c.mp4", "is_local_file": True}))
+    media = _media_sources(runtime)[-1]
+    engine.shutdown()
+    assert media.released == 1 and engine._media_poller is None
 
 
 # ── content ingress: shared-memory frames → a libobs content source ──────────

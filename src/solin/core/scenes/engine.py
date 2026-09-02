@@ -22,6 +22,7 @@ from solin.core.scenes.model import (
     VideoColorSpace,
     VideoPixelFormat,
 )
+from solin.core.scenes.media_control import MediaControlAction, MediaPlaybackNativeState
 from solin.core.scenes.recording import (
     AudioDeviceDiscovery,
     AudioDeviceSelection,
@@ -544,8 +545,17 @@ class ProgramRecordingEvent:
             raise ValueError("Invalid Program recording event")
 
 
+@dataclass(frozen=True, slots=True)
+class MediaPlaybackEvent:
+    state: MediaPlaybackNativeState
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.state, MediaPlaybackNativeState):
+            raise ValueError("Invalid media playback event")
+
+
 SceneEngineEvent: TypeAlias = (
-    SourceHealthEvent | EngineHealthEvent | ProgramRecordingEvent
+    SourceHealthEvent | EngineHealthEvent | ProgramRecordingEvent | MediaPlaybackEvent
 )
 
 
@@ -675,6 +685,38 @@ class SceneEngine(Protocol):
     def stop_program_recording(
         self,
         *,
+        request_id: str,
+        deadline_ms: int,
+    ) -> Future[SceneEngineAck]: ...
+
+    def open_media(
+        self,
+        path: str,
+        *,
+        is_local_file: bool,
+        autoplay: bool = True,
+        volume_percent: int = 100,
+        speed_percent: int = 100,
+        trim_start_ms: int = 0,
+        trim_end_ms: int = 0,
+        request_id: str,
+        deadline_ms: int,
+    ) -> Future[SceneEngineAck]: ...
+
+    def control_media(
+        self,
+        action: MediaControlAction,
+        *,
+        position_ms: int = 0,
+        request_id: str,
+        deadline_ms: int,
+    ) -> Future[SceneEngineAck]: ...
+
+    def set_media_properties(
+        self,
+        *,
+        volume_percent: int,
+        speed_percent: int,
         request_id: str,
         deadline_ms: int,
     ) -> Future[SceneEngineAck]: ...

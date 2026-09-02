@@ -52,16 +52,32 @@ class LibobsMediaSource:
     def path(self) -> str:
         return self._path
 
-    def open(self, path: str, *, autoplay: bool = True) -> bool:
-        """Create an ffmpeg_source for ``path`` (local file or remote URL)."""
+    def open(
+        self,
+        path: str,
+        *,
+        autoplay: bool = True,
+        is_local_file: bool | None = None,
+        volume_percent: int = 100,
+        speed_percent: int = 100,
+    ) -> bool:
+        """Create an ffmpeg_source for ``path`` (local file or remote URL).
+
+        ``is_local_file`` overrides the scheme-based guess (the app knows which);
+        ``volume_percent`` / ``speed_percent`` set the initial volume and playback
+        rate (100 = unity / normal speed).
+        """
         self.close()
         if not path:
             return False
-        settings = (
-            {"is_local_file": False, "input": path}
-            if _is_remote(path)
-            else {"is_local_file": True, "local_file": path}
+        local = (not _is_remote(path)) if is_local_file is None else bool(is_local_file)
+        settings: dict[str, object] = (
+            {"is_local_file": True, "local_file": path}
+            if local
+            else {"is_local_file": False, "input": path}
         )
+        if speed_percent and speed_percent != 100:
+            settings["speed_percent"] = int(speed_percent)
         try:
             source = self._runtime.ob.Source.create("ffmpeg_source", "solin-content-media", settings)
         except Exception:  # noqa: BLE001 - source creation boundary
@@ -71,6 +87,7 @@ class LibobsMediaSource:
             return False
         self._source = source
         self._path = path
+        self.set_volume(volume_percent)
         try:
             from solin.core.media.obs_runtime import MONITORING_MONITOR_ONLY
 
@@ -79,6 +96,24 @@ class LibobsMediaSource:
             log.debug("Could not set media source monitoring", exc_info=True)
         source.media_play_pause(not autoplay)
         return True
+
+    def set_volume(self, volume_percent: int) -> None:
+        """Set the source volume (100 = unity gain)."""
+        if self._source is None:
+            return
+        try:
+            self._source.volume = max(0.0, int(volume_percent) / 100.0)
+        except Exception:  # noqa: BLE001 - libobs boundary
+            log.debug("could not set media volume", exc_info=True)
+
+    def set_speed(self, speed_percent: int) -> None:
+        """Set the playback rate (100 = normal). Applied on the next decode pass."""
+        if self._source is None:
+            return
+        try:
+            self._source.update({"speed_percent": max(1, int(speed_percent))})
+        except Exception:  # noqa: BLE001 - libobs boundary
+            log.debug("could not set media speed", exc_info=True)
 
     def play(self) -> None:
         if self._source is not None:

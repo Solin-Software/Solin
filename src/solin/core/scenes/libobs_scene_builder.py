@@ -59,6 +59,11 @@ class LibobsSceneGraph:
         self._runtime = runtime
         self._scenes: dict[str, Any] = {}
         self._sources: list[Any] = []
+        # Scene items bound to the content slot, tracked so the content source can
+        # be swapped live (BGRA frame source <-> libobs-decoded media) without a
+        # full re-hydrate. Each entry: {scene, item, rect, placeholder}.
+        self._content_items: list[dict[str, Any]] = []
+        self._content_source: Any = None
         self._program_channel: int | None = None
         # Program transition: a transition source sits on the program channel and
         # holds the active scene; scene switches animate through take().
@@ -85,6 +90,7 @@ class LibobsSceneGraph:
         owned, so the scene graph never releases it.
         """
         self.clear()
+        self._content_source = content_source
         ob = self._runtime.ob
         canvas = self._runtime.video
         sources_by_id = {
@@ -114,13 +120,24 @@ class LibobsSceneGraph:
         content_source: Any | None,
     ) -> None:
         source, owned = self._resolve_source(ob, layer, canvas, sources_by_id, content_source)
+        is_content = self._is_content_layer(layer, sources_by_id)
+        placeholder = None
         if source is None:
             source = self._create_color(ob, layer, canvas, _PLACEHOLDER_COLOR)
             owned = True
+            if is_content:
+                placeholder = source  # owned stand-in until content arrives
         if owned:
             self._sources.append(source)  # released on clear (runtime owns shared cams)
         item = scene.add(source)
         rect = layer.get("rect") or {}
+        self._apply_item_geometry(item, rect, canvas, ob)
+        if is_content:
+            self._content_items.append(
+                {"scene": scene, "item": item, "rect": rect, "placeholder": placeholder}
+            )
+
+    def _apply_item_geometry(self, item: Any, rect: dict, canvas: Any, ob: Any) -> None:
         # Scale the source into its normalized rect (SCALE_INNER preserves aspect),
         # so real sources of any native size (media, camera, image) fill the rect
         # rather than rendering at their own dimensions.
@@ -134,6 +151,12 @@ class LibobsSceneGraph:
         )
         item.bounds_type = int(ob.BoundsType.SCALE_INNER)
         item.bounds_alignment = int(ob.Alignment.LEFT | ob.Alignment.TOP)
+
+    @staticmethod
+    def _is_content_layer(layer: dict, sources_by_id: dict) -> bool:
+        definition = sources_by_id.get(layer.get("source_id"))
+        kind = definition.get("type") if definition else None
+        return kind == "solin_content" or layer.get("source_id") == _CONTENT_SOURCE_ID
 
     def _resolve_source(
         self,
@@ -171,6 +194,60 @@ class LibobsSceneGraph:
         # image (needs app-side asset resolution) and scene_reference are not yet
         # wired → placeholder.
         return (None, False)
+
+    def set_content_source(self, new_source: Any | None) -> None:
+        """Retarget the content-slot items to ``new_source`` without re-hydrating.
+
+        Used to swap between the BGRA frame source and a libobs-decoded media
+        source live. Each content item is re-created with the new source at its
+        original z-order and geometry; an owned placeholder (used when there was
+        no content) is released once replaced.
+        """
+        if new_source is self._content_source:
+            return
+        self._content_source = new_source
+        ob = self._runtime.ob
+        canvas = self._runtime.video
+        for record in self._content_items:
+            scene = record["scene"]
+            old_item = record["item"]
+            rect = record["rect"]
+            old_placeholder = record["placeholder"]
+            try:
+                order = int(old_item.order_position)
+            except Exception:  # noqa: BLE001 - libobs boundary
+                order = None
+            if new_source is not None:
+                source = new_source
+                new_placeholder = None
+            else:  # reverting to "no content" — stand in with a placeholder
+                source = self._create_color(ob, {"id": "content", "rect": rect}, canvas,
+                                            _PLACEHOLDER_COLOR)
+                new_placeholder = source
+            new_item = scene.add(source)  # added on top; restore its z-order below
+            self._apply_item_geometry(new_item, rect, canvas, ob)
+            if order is not None:
+                try:
+                    new_item.order_position = order
+                except Exception:  # noqa: BLE001 - libobs boundary
+                    log.debug("content item order restore errored", exc_info=True)
+            try:
+                old_item.remove()
+            except Exception:  # noqa: BLE001 - libobs boundary
+                log.debug("content item remove errored", exc_info=True)
+            record["item"] = new_item
+            record["placeholder"] = new_placeholder
+            if old_placeholder is not None:
+                try:
+                    old_placeholder.release()
+                except Exception:  # noqa: BLE001 - libobs boundary
+                    log.debug("content placeholder release errored", exc_info=True)
+                try:
+                    self._sources.remove(old_placeholder)
+                except ValueError:
+                    pass
+            if new_placeholder is not None:
+                self._sources.append(new_placeholder)
 
     def _create_color(self, ob: Any, layer: dict, canvas: Any, color: int) -> Any:
         rect = layer.get("rect") or {}
@@ -262,6 +339,8 @@ class LibobsSceneGraph:
     def clear(self) -> None:
         """Release the current scenes/sources (keeps the reserved channel)."""
         self._pending.clear()
+        self._content_items = []
+        self._content_source = None
         if self._program_channel is not None:
             try:
                 self._runtime.set_channel_source(self._program_channel, None)
