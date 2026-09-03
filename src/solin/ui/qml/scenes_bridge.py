@@ -141,6 +141,10 @@ class ScenesBridge(QObject):
     pointerOverrideStarted = Signal(str, int)
     pointerOverrideEnded = Signal(str)
     ptzResult = Signal(str, bool, str)
+    # (x, y, width, height) of the preview canvas frame in the QQuickWidget's
+    # logical coordinates — reported by QML so a native GPU preview surface can be
+    # pinned exactly over it. (0,0,0,0) means "no canvas" (hide the surface).
+    canvasRectChanged = Signal(float, float, float, float)
 
     def __init__(
         self,
@@ -664,6 +668,12 @@ class ScenesBridge(QObject):
         if not active:
             self._clear_framing_session()
             self.stopAllPtz()
+
+    @Slot(float, float, float, float)
+    def reportCanvasRect(self, x: float, y: float, width: float, height: float) -> None:
+        """QML reports the preview canvas frame's geometry (in QQuickWidget logical
+        coords) so a native GPU preview surface can be pinned over it."""
+        self.canvasRectChanged.emit(float(x), float(y), float(width), float(height))
 
     @Slot(str)
     def selectScene(self, scene_id: str) -> None:

@@ -240,6 +240,11 @@ class SceneRuntimeController(QObject):
         self._program_recording_required = False
         self._preview_scene_id: str | None = None
         self._window_targets: tuple[OutputWindowTarget, ...] = ()
+        # A standalone MEDIA_WINDOWS target for the editor's direct-GPU preview,
+        # merged with the projection targets on dispatch. Independent of the
+        # projection native_presentation gate so the editor gets a GPU preview
+        # even where projection stays on the app-side path.
+        self._editor_preview_target: OutputWindowTarget | None = None
         self._local_cameras = _unavailable_local_cameras("engine_unavailable")
         self._source_health: dict[str, SourceHealthEvent] = {}
         self._local_camera_request_id = ""
@@ -1281,6 +1286,24 @@ class SceneRuntimeController(QObject):
         )
         self._track_future(future, "preview_geometry", context)
 
+    def _combined_window_targets(self) -> tuple[OutputWindowTarget, ...]:
+        """Projection targets plus the editor preview target (if any)."""
+        if self._editor_preview_target is None:
+            return self._window_targets
+        return self._window_targets + (self._editor_preview_target,)
+
+    def set_editor_preview_target(self, target: OutputWindowTarget | None) -> None:
+        """Install (or clear) the editor's direct-GPU preview window target.
+
+        Dispatched together with the projection targets; safe to call before the
+        engine is ready (it's picked up on the next dispatch)."""
+        if target is not None and not isinstance(target, OutputWindowTarget):
+            raise TypeError("editor preview target must be an OutputWindowTarget or None")
+        if target == self._editor_preview_target:
+            return
+        self._editor_preview_target = target
+        self._dispatch_window_targets()
+
     def _dispatch_window_targets(self) -> None:
         if self._engine is None or not self._engine_ready:
             return
@@ -1288,7 +1311,7 @@ class SceneRuntimeController(QObject):
             request_id=self._request_id_factory(),
             sequence=self._next_sequence(),
             document_revision=self._engine_document_revision,
-            targets=self._window_targets,
+            targets=self._combined_window_targets(),
         )
         future = self._engine.set_window_targets(
             context.targets,

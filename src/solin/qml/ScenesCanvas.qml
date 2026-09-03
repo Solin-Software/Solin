@@ -135,6 +135,20 @@ Item {
             height: Math.max(1, width / root.outputAspect)
             clip: true
 
+            // Report this frame's geometry (in the QQuickWidget's root coords) so a
+            // native GPU preview surface can be pinned exactly over it.
+            function _reportRect() {
+                if (root.bridge) {
+                    var p = mapToItem(null, 0, 0)
+                    root.bridge.reportCanvasRect(p.x, p.y, width, height)
+                }
+            }
+            onXChanged: _reportRect()
+            onYChanged: _reportRect()
+            onWidthChanged: _reportRect()
+            onHeightChanged: _reportRect()
+            Component.onCompleted: _reportRect()
+
             Rectangle { anchors.fill: parent; color: "#03070d" }
 
             Image {

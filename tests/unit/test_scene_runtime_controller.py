@@ -1852,6 +1852,33 @@ def test_native_window_target_updates_without_rehydrating_the_scene_graph() -> N
     controller.close()
 
 
+def test_editor_preview_target_merges_with_projection_window_targets() -> None:
+    engine = _Engine()
+    _documents, _runtime, controller = _runtime_controller(
+        engine,
+        _Projection(),
+        request_ids=("initial-hydrate", "attach-window", "attach-editor", "clear-editor"),
+    )
+    projection = OutputWindowTarget(
+        bus_id=BusId.MEDIA_WINDOWS, target_id="projection-preview", screen_id="primary",
+        native_handle=123, x=0, y=0, width=1280, height=720, device_pixel_ratio=1.0)
+    editor = OutputWindowTarget(
+        bus_id=BusId.MEDIA_WINDOWS, target_id="editor-preview", screen_id="primary",
+        native_handle=456, x=0, y=0, width=640, height=360, device_pixel_ratio=1.0,
+        scene_id=CAMERA_SCENE_ID)
+    controller.start_engine()
+    controller.set_window_targets((projection,))
+    assert engine.window_target_updates[-1] == ("attach-window", (projection,))
+
+    controller.set_editor_preview_target(editor)
+    # dispatched together — the editor preview target does not replace projection's
+    assert engine.window_target_updates[-1] == ("attach-editor", (projection, editor))
+
+    controller.set_editor_preview_target(None)
+    assert engine.window_target_updates[-1] == ("clear-editor", (projection,))
+    controller.close()
+
+
 def test_content_ingress_demand_follows_visible_routes_and_scene_sources() -> None:
     projection = _Projection()
     engine = _Engine()
