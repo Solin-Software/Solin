@@ -4,6 +4,7 @@ from __future__ import annotations
 from concurrent.futures import Future
 
 from PySide6.QtCore import QCoreApplication, QObject, Signal
+from PySide6.QtGui import QImage, QPixmap
 
 from solin.controllers.media_engine_route import SceneEngineMediaRoute
 from solin.core.media.cache import MediaCacheManager
@@ -304,3 +305,121 @@ def test_scene_engine_route_translates_to_engine_calls():
     assert engine.calls[2][2]["position_ms"] == 1500
     assert engine.calls[3][1] is MediaControlAction.CLOSE
     assert engine.calls[4][1]["volume_percent"] == 50
+
+
+# ── routed metadata / cover-art ───────────────────────────────────────────────
+
+
+class _FakeExtractor(QObject):
+    metadata_ready = Signal(int, str, object)
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.requests: list = []
+        self.cancels = 0
+
+    def request(self, session_id: int, path: str) -> None:
+        self.requests.append((session_id, path))
+
+    def cancel(self) -> None:
+        self.cancels += 1
+
+
+def _controller_with_extractor(tmp_path):
+    _app()
+    cache = MediaCacheManager(tmp_path, downloader_factory=lambda _p: _Downloader())
+    holder: dict = {}
+
+    def factory(parent):
+        holder["ex"] = _FakeExtractor(parent)
+        return holder["ex"]
+
+    controller = MediaController(
+        _MediaSettings(), cache, downloader_factory=lambda _p: _Downloader(),
+        metadata_extractor_factory=factory,
+    )
+    controller._play_source = lambda *_a, **_k: None  # intercept the Qt path
+    return controller, holder["ex"]
+
+
+def _pixmap() -> QPixmap:
+    img = QImage(4, 4, QImage.Format.Format_RGB32)
+    img.fill(0xFF3366CC)
+    return QPixmap.fromImage(img)
+
+
+def test_routed_playback_requests_metadata(tmp_path):
+    controller, extractor = _controller_with_extractor(tmp_path)
+    controller.set_engine_media_route(_FakeRoute())
+    controller.start_playback(MediaPlaybackRequest("/videos/clip.mp4"))
+    assert extractor.requests == [(controller.session_id, "/videos/clip.mp4")]
+
+
+def test_metadata_ready_emits_title_and_cover(tmp_path):
+    controller, extractor = _controller_with_extractor(tmp_path)
+    controller.set_engine_media_route(_FakeRoute())
+    controller.start_playback(MediaPlaybackRequest("/a.mp3"))
+
+    titles: list[str] = []
+    covers: list = []
+    controller.title_from_metadata.connect(titles.append)
+    controller.cover_art_changed.connect(covers.append)
+
+    px = _pixmap()
+    extractor.metadata_ready.emit(controller.session_id, "My Song", px)
+
+    assert titles == ["My Song"]
+    assert covers == [px]
+    assert controller._session.cover_emitted is True
+
+
+def test_metadata_ready_without_cover_emits_none(tmp_path):
+    controller, extractor = _controller_with_extractor(tmp_path)
+    controller.set_engine_media_route(_FakeRoute())
+    controller.start_playback(MediaPlaybackRequest("/a.mp4"))
+
+    titles: list[str] = []
+    covers: list = []
+    controller.title_from_metadata.connect(titles.append)
+    controller.cover_art_changed.connect(covers.append)
+
+    extractor.metadata_ready.emit(controller.session_id, "", None)
+
+    assert titles == []          # empty title is not emitted
+    assert covers == [None]
+    assert controller._session.cover_emitted is False
+
+
+def test_stale_session_metadata_is_dropped(tmp_path):
+    controller, extractor = _controller_with_extractor(tmp_path)
+    controller.set_engine_media_route(_FakeRoute())
+    controller.start_playback(MediaPlaybackRequest("/a.mp3"))
+
+    titles: list[str] = []
+    covers: list = []
+    controller.title_from_metadata.connect(titles.append)
+    controller.cover_art_changed.connect(covers.append)
+
+    # a result tagged with a superseded session id must not fire
+    extractor.metadata_ready.emit(controller.session_id - 1, "Old", _pixmap())
+    assert titles == [] and covers == []
+
+
+def test_non_routed_playback_does_not_request_metadata(tmp_path):
+    controller, extractor = _controller_with_extractor(tmp_path)
+    controller.set_engine_media_route(_FakeRoute())
+    controller.start_playback(MediaPlaybackRequest("https://cdn.example/clip.mp4"))
+    assert extractor.requests == []  # remote stays on Qt, which reads its own tags
+
+
+def test_stop_cancels_metadata_extraction(tmp_path):
+    controller, extractor = _controller_with_extractor(tmp_path)
+    controller.set_engine_media_route(_FakeRoute())
+    controller.start_playback(MediaPlaybackRequest("/a.mp3"))
+    controller.stop()
+    assert extractor.cancels >= 1
+    # a late result after stop is dropped (route no longer active)
+    titles: list[str] = []
+    controller.title_from_metadata.connect(titles.append)
+    extractor.metadata_ready.emit(controller.session_id, "Late", None)
+    assert titles == []

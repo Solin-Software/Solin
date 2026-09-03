@@ -20,6 +20,7 @@ Comportamento de buffer por modo
 """
 import logging
 import os
+from typing import Callable
 
 from PySide6.QtCore import QMetaObject, QObject, Signal, Slot, QUrl, QTimer
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput, QVideoSink, QVideoFrame
@@ -86,6 +87,7 @@ class MediaController(QObject):
         cache_manager: MediaCacheManager,
         *,
         downloader_factory: PlaybackDownloaderFactory,
+        metadata_extractor_factory: Callable[["QObject"], object] | None = None,
         parent=None,
     ) -> None:
         super().__init__(parent)
@@ -132,6 +134,14 @@ class MediaController(QObject):
         self._engine_duration_ms = 0
         self._engine_media_ended_emitted = False
         self._engine_media_state_received.connect(self._apply_engine_media_state)
+        # Routed local files bypass ``self.player``, so its ``metaDataChanged`` never
+        # fires; this reads the title + embedded cover out of band for parity.
+        if metadata_extractor_factory is None:
+            from solin.core.media.routed_metadata import RoutedMediaMetadataExtractor
+
+            metadata_extractor_factory = RoutedMediaMetadataExtractor
+        self._metadata_extractor = metadata_extractor_factory(self)
+        self._metadata_extractor.metadata_ready.connect(self._on_routed_metadata)
 
         self._connect_python_frame_delivery()
         self.player.playbackStateChanged.connect(self._on_state)
@@ -253,7 +263,26 @@ class MediaController(QObject):
             trim_start_ms=start_ms,
             trim_end_ms=end_trim_ms,
         )
+        # The sidecar decodes the media; read its title + cover here for the UI.
+        self._metadata_extractor.request(self._session.session_id, url)
         self.playback_source_changed.emit(True)
+
+    def _on_routed_metadata(self, session_id: int, title: str, cover) -> None:
+        """Apply a routed file's metadata, mirroring ``_on_metadata_changed``.
+
+        Guarded by ``session_id`` so a late read for a superseded playback (or one
+        that has since switched back to Qt) is dropped rather than clobbering the
+        current cover/title.
+        """
+        if not self._engine_route_active or session_id != self._session.session_id:
+            return
+        if title:
+            self.title_from_metadata.emit(title)
+        if cover is not None and not cover.isNull():
+            self._session.mark_cover_emitted()
+            self.cover_art_changed.emit(cover)
+        elif not self._session.cover_emitted:
+            self.cover_art_changed.emit(None)
 
     def on_engine_media_state(self, state) -> None:
         """Entry from the engine's event thread; hop to the GUI thread to apply.
@@ -376,6 +405,7 @@ class MediaController(QObject):
         self.player.pause()
 
     def stop(self):
+        self._metadata_extractor.cancel()
         if self._engine_route_active:
             self._engine_route.close()
             self._engine_route_active = False
