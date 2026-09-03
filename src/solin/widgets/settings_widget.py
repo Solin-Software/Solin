@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import sys
 from collections.abc import Callable
-from typing import TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 from PySide6.QtWidgets import (
     QWidget,
@@ -124,6 +124,7 @@ class SettingsWidget(
         remote_control_credentials: RemoteControlCredentialsStore,
         qr_generation_session_factory: QrGenerationSessionFactory,
         yeartext_service_factory: Callable[[QObject], YeartextService],
+        congregation_lookup_factory: Callable[[QObject], Any],
         auto_share_accessibility_trusted: Callable[[], bool],
         defer_build: bool = False,
         parent=None,
@@ -135,6 +136,7 @@ class SettingsWidget(
         self._ndi = ndi_service
         self._app_settings = app_settings
         self._yeartext_service_factory = yeartext_service_factory
+        self._congregation_lookup_factory = congregation_lookup_factory
         self._obs_settings = obs_settings
         self._zoom_settings = zoom_settings
         self._auto_share_settings = auto_share_settings
@@ -161,6 +163,7 @@ class SettingsWidget(
         self._ui_ready = False
         self._pending_meeting_schedule_focus = False
         self._init_yearly_text_section()
+        self._init_congregation_lookup()
         self._mark_startup("settings_service_initialized")
         if defer_build:
             self._prepare_incremental_ui()
@@ -186,6 +189,9 @@ class SettingsWidget(
         preparation = getattr(self, "preparation_handle", None)
         if preparation is not None:
             preparation.cancel()
+        lookup = getattr(self, "_congregation_lookup", None)
+        if lookup is not None:
+            lookup.shutdown()
         service = getattr(self, "_yt_service", None)
         if service is not None:
             unfinished = service.shutdown()

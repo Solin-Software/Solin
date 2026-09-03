@@ -9,14 +9,26 @@ import sys
 from collections.abc import Callable
 from typing import Any
 
-from PySide6.QtCore import QObject, Property, QCoreApplication, Signal, Slot, Qt, QUrl
+from PySide6.QtCore import (
+    QObject,
+    Property,
+    QCoreApplication,
+    QT_TRANSLATE_NOOP,
+    Signal,
+    Slot,
+    Qt,
+    QUrl,
+)
 from PySide6.QtGui import QDesktopServices, QKeySequence
 from PySide6.QtQuickWidgets import QQuickWidget
 
+from solin.core.i18n.meeting_schedule import meeting_weekday_names
 from solin.core.integrations.automation.obs import OBSConnectionState
 from solin.core.integrations.automation.screen_share import (
     macos_accessibility_trusted,
 )
+from solin.core.jw.congregation_lookup import RATE_LIMITED
+from solin.core.meetings.schedule import MeetingSchedule
 from solin.core.onboarding.application import (
     OBSOnboardingConfiguration,
     OnboardingService,
@@ -27,6 +39,7 @@ from solin.styles.icons import (
     ICON_ARROW_LEFT,
     ICON_AUTO_DOWNLOAD,
     ICON_BOOK,
+    ICON_CALENDAR,
     ICON_CHEVRON_DOWN,
     ICON_CLOSE,
     ICON_CROSSHAIR,
@@ -52,6 +65,29 @@ _PAGE_INTEGRATIONS = "integrations"
 _PAGE_OBS = "obs"
 _PAGE_ZOOM = "zoom"
 _PAGE_REVIEW = "review"
+_CONGREGATION_STATUS_SOURCES = {
+    "searching": QT_TRANSLATE_NOOP("OnboardingView", "Searching jw.org…"),
+    "resolving": QT_TRANSLATE_NOOP(
+        "OnboardingView",
+        "Reading the meeting times…",
+    ),
+    "empty": QT_TRANSLATE_NOOP(
+        "OnboardingView",
+        "No congregation found with that name.",
+    ),
+    "unpublished": QT_TRANSLATE_NOOP(
+        "OnboardingView",
+        "jw.org does not publish meeting times for this congregation.",
+    ),
+    "rate_limited": QT_TRANSLATE_NOOP(
+        "OnboardingView",
+        "Too many searches in a row. Wait a moment and type again.",
+    ),
+    "error": QT_TRANSLATE_NOOP(
+        "OnboardingView",
+        "Could not reach jw.org. Check the connection and try again.",
+    ),
+}
 _OBS_SETUP_GUIDE_URL = "https://solinav.vercel.app/guide/#obs-studio-integration"
 _ZOOM_SETUP_GUIDE_URL = "https://solinav.vercel.app/guide/#zoom-meetings-integration"
 
@@ -70,6 +106,7 @@ class OnboardingBridge(QObject):
         language_manager: Any,
         onboarding_service: OnboardingService,
         obs_probe: Any,
+        congregation_lookup: Any,
         target_picker_factory: Callable[..., Any] | None = None,
         parent: QObject | None = None,
     ) -> None:
@@ -77,6 +114,7 @@ class OnboardingBridge(QObject):
         self._language_manager = language_manager
         self._onboarding = onboarding_service
         self._obs_probe = obs_probe
+        self._congregation_lookup = congregation_lookup
         self._target_picker_factory = target_picker_factory
         self._target_picker: Any | None = None
         self._target_picker_token = 0
@@ -86,11 +124,20 @@ class OnboardingBridge(QObject):
         self._media_language_touched = False
         self._obs_status_state = OBSConnectionState.DISCONNECTED
         self._obs_status_message = ""
+        self._meeting_schedule: MeetingSchedule | None = None
+        self._congregation_status_kind = "idle"
         self._state: dict[str, Any] = {}
         self._reset_state("Profile 1", allow_cancel=False)
 
         self._obs_probe.state_changed.connect(self._on_obs_state_changed)
         self._obs_probe.scenes_updated.connect(self._on_obs_scenes_updated)
+        self._congregation_lookup.suggestions_ready.connect(
+            self._on_congregation_suggestions
+        )
+        self._congregation_lookup.schedule_ready.connect(
+            self._on_congregation_schedule
+        )
+        self._congregation_lookup.failed.connect(self._on_congregation_failed)
         if self._language_manager is not None:
             self._language_manager.language_changed.connect(
                 self._on_language_changed
@@ -156,6 +203,8 @@ class OnboardingBridge(QObject):
         self._history.clear()
         self._session_revision += 1
         self._media_language_touched = False
+        self._meeting_schedule = None
+        self._congregation_status_kind = "idle"
         self._obs_probe.stop()
         self._reset_state(profile_name, allow_cancel=allow_cancel)
         self.stateChanged.emit()
@@ -367,6 +416,44 @@ class OnboardingBridge(QObject):
     def openZoomSetupGuide(self) -> None:  # noqa: N802 - QML API
         QDesktopServices.openUrl(QUrl(_ZOOM_SETUP_GUIDE_URL))
 
+    @Slot(str)
+    def searchCongregation(self, text: str) -> None:  # noqa: N802 - QML API
+        self._state["congregationQuery"] = text
+        self._congregation_status_kind = "searching" if text.strip() else "idle"
+        self._publish_congregation_state()
+        self._congregation_lookup.search(text)
+
+    @Slot(str, str)
+    def chooseCongregation(self, guid: str, name: str) -> None:  # noqa: N802 - QML API
+        if not guid:
+            return
+        self._meeting_schedule = None
+        self._congregation_status_kind = "resolving"
+        self._state.update(
+            {
+                "congregationName": name,
+                "congregationQuery": name,
+                "congregationScheduleText": "",
+                "congregationSuggestions": [],
+            }
+        )
+        self._publish_congregation_state()
+        self._congregation_lookup.fetch_schedule(guid)
+
+    @Slot()
+    def clearCongregation(self) -> None:  # noqa: N802 - QML API
+        self._meeting_schedule = None
+        self._congregation_status_kind = "idle"
+        self._state.update(
+            {
+                "congregationName": "",
+                "congregationQuery": "",
+                "congregationScheduleText": "",
+                "congregationSuggestions": [],
+            }
+        )
+        self._publish_congregation_state()
+
     def _reset_state(self, profile_name: str, *, allow_cancel: bool) -> None:
         interface_code = (
             self._language_manager.current_code
@@ -389,6 +476,11 @@ class OnboardingBridge(QObject):
             "mediaCode": media_code,
             "mediaName": self._media_language_name(media_code),
             "downloadMeetingMedia": False,
+            "congregationQuery": "",
+            "congregationName": "",
+            "congregationScheduleText": "",
+            "congregationStatusText": self._congregation_status_text(),
+            "congregationSuggestions": [],
             "obsSelected": False,
             "zoomSelected": False,
             "obsPort": "4455",
@@ -503,6 +595,7 @@ class OnboardingBridge(QObject):
                     download_meeting_media=bool(
                         self._state["downloadMeetingMedia"]
                     ),
+                    meeting_schedule=self._meeting_schedule,
                     obs=OBSOnboardingConfiguration(
                         enabled=obs_enabled,
                         port=obs_port,
@@ -582,11 +675,63 @@ class OnboardingBridge(QObject):
         if picker is not None:
             picker.close()
 
+    def _on_congregation_suggestions(self, matches: list[Any]) -> None:
+        self._congregation_status_kind = "idle" if matches else "empty"
+        self._state["congregationSuggestions"] = [
+            {
+                "guid": match.guid,
+                "name": match.name,
+                "formattedName": match.formatted_name,
+            }
+            for match in matches
+        ]
+        self._publish_congregation_state()
+
+    def _on_congregation_schedule(self, schedule: MeetingSchedule | None) -> None:
+        self._meeting_schedule = schedule
+        self._congregation_status_kind = "idle" if schedule else "unpublished"
+        self._state["congregationScheduleText"] = self._congregation_schedule_text()
+        self._publish_congregation_state()
+
+    def _on_congregation_failed(self, reason: str) -> None:
+        self._congregation_status_kind = (
+            "rate_limited" if reason == RATE_LIMITED else "error"
+        )
+        self._state["congregationSuggestions"] = []
+        self._publish_congregation_state()
+
+    def _publish_congregation_state(self) -> None:
+        """Report lookup progress in the sheet instead of the blocking banner."""
+
+        self._state["congregationStatusText"] = self._congregation_status_text()
+        self._state["errorText"] = ""
+        self.stateChanged.emit()
+
+    def _congregation_status_text(self) -> str:
+        """Report progress and failures only; the idle sheet needs no caption."""
+
+        source = _CONGREGATION_STATUS_SOURCES.get(self._congregation_status_kind)
+        if source is None:
+            return ""
+        return QCoreApplication.translate("OnboardingView", source)
+
+    def _congregation_schedule_text(self) -> str:
+        if self._meeting_schedule is None:
+            return ""
+        weekdays = meeting_weekday_names()
+        return "  ·  ".join(
+            f"{weekdays[slot.weekday]} {slot.time_text}"
+            for slot in self._meeting_schedule.slots
+            if slot.is_configured
+        )
+
     def _on_language_changed(self, _code: str) -> None:
         zoom_available, zoom_reason = self._zoom_capability()
         self._state["zoomAvailable"] = zoom_available
         self._state["zoomUnavailableReason"] = zoom_reason
         self._state["obsStatusText"] = self._onboarding_obs_status_text()
+        self._state["congregationScheduleText"] = self._congregation_schedule_text()
+        self._state["congregationStatusText"] = self._congregation_status_text()
         if self._obs_status_state is OBSConnectionState.ERROR:
             self._state["errorText"] = self._state["obsStatusText"]
         self.stateChanged.emit()
@@ -662,6 +807,7 @@ class OnboardingQmlHost(QQuickWidget):
         language_manager: Any,
         onboarding_service: OnboardingService,
         obs_probe: Any,
+        congregation_lookup: Any,
         target_picker_factory: Callable[..., Any] | None,
         parent=None,
     ) -> None:
@@ -670,6 +816,7 @@ class OnboardingQmlHost(QQuickWidget):
             language_manager=language_manager,
             onboarding_service=onboarding_service,
             obs_probe=obs_probe,
+            congregation_lookup=congregation_lookup,
             target_picker_factory=target_picker_factory,
             parent=self,
         )
@@ -680,6 +827,7 @@ class OnboardingQmlHost(QQuickWidget):
             "arrow_left": ICON_ARROW_LEFT,
             "auto_download": ICON_AUTO_DOWNLOAD,
             "book": ICON_BOOK,
+            "calendar": ICON_CALENDAR,
             "chevron_down": ICON_CHEVRON_DOWN,
             "close": ICON_CLOSE,
             "crosshair": ICON_CROSSHAIR,

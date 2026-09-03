@@ -110,6 +110,7 @@ class MainWindowUiContext:
     remote_control_credentials: Any
     yeartext_settings: Any
     yeartext_service_factory: Callable[[QObject], Any]
+    congregation_lookup_factory: Callable[[QObject], Any]
     font_manager: Any
     yearly_projection_text: Callable[[], tuple[str, str, str]]
     auto_share_accessibility_trusted: Callable[[], bool]
@@ -474,6 +475,7 @@ class MainWindowUiController:
             qr_generation_session_factory=context.qr_generation_session_factory,
             yeartext_settings=context.yeartext_settings,
             yeartext_service_factory=context.yeartext_service_factory,
+            congregation_lookup_factory=context.congregation_lookup_factory,
             auto_share_accessibility_trusted=context.auto_share_accessibility_trusted,
             background_song_settings=context.background_song_settings,
             defer_build=True,

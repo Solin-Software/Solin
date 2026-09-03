@@ -228,6 +228,7 @@ def _build_main_window_service_factories(
     from solin.core.integrations.automation.zoom.service import ZoomService
     from solin.core.integrations.ndi import NDIReceiverService
     from solin.core.jw.background_song_service import BackgroundSongService
+    from solin.core.jw.congregation_lookup_service import CongregationLookupService
     from solin.core.jw.yeartext import YeartextService
     from solin.core.meetings.memorial import MemorialService
     from solin.core.meetings.publications import JwpubService
@@ -307,6 +308,7 @@ def _build_main_window_service_factories(
             cache_file=runtime_paths.cache_dir / "yeartext_cache.json",
             parent=parent,
         ),
+        congregation_lookup=CongregationLookupService,
         jwpub=lambda parent: JwpubService(
             runtime_paths.jwpub_cache_dir,
             jwpub_checksum_store,
@@ -542,6 +544,7 @@ def _run_zoom_poll_standalone(app, filepath: str, lang_manager) -> int:
 def _create_profile_screen(container, lang_manager):
     from solin.controllers.onboarding_obs_probe import OnboardingOBSProbe
     from solin.core.integrations.automation.obs import OBSWebSocketService
+    from solin.core.jw.congregation_lookup_service import CongregationLookupService
     from solin.ui.profile_screen import ProfileScreen
     from solin.widgets.screen_picker_overlay import ScreenPickerOverlay
 
@@ -549,6 +552,8 @@ def _create_profile_screen(container, lang_manager):
         lambda settings, parent: OBSWebSocketService(settings, parent=parent)
     )
     container.lifecycle.register_cleanup(obs_probe.shutdown)
+    congregation_lookup = CongregationLookupService()
+    container.lifecycle.register_cleanup(congregation_lookup.shutdown)
     return ProfileScreen(
         lang_manager,
         profile_service=container.profile_service,
@@ -557,6 +562,7 @@ def _create_profile_screen(container, lang_manager):
         ),
         onboarding_service=container.onboarding_service,
         obs_probe=obs_probe,
+        congregation_lookup=congregation_lookup,
         target_picker_factory=ScreenPickerOverlay,
     )
 

@@ -711,7 +711,7 @@
 <context>
     <name>BrowserWidget</name>
     <message>
-        <location filename="../../widgets/browser/widget.py" line="+1468"/>
+        <location filename="../../widgets/browser/widget.py" line="+1441"/>
         <source>Back (Alt+←)</source>
         <translation>Terug (Alt+←)</translation>
     </message>
@@ -1595,7 +1595,7 @@
         <translation>Solin</translation>
     </message>
     <message>
-        <location line="+693"/>
+        <location line="+694"/>
         <location filename="../../controllers/main_window_nav.py" line="+27"/>
         <source>Scenes</source>
         <translation>Scènes</translation>
@@ -2710,18 +2710,65 @@ Handmatig toegevoegde inhoud, bijgesneden delen, kadrering en de uitgeklapte sta
 <context>
     <name>MeetingScheduleSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/meeting_schedule_section.py" line="+468"/>
-        <location line="+149"/>
+        <location filename="../../widgets/settings/meeting_schedule_section.py" line="+528"/>
+        <location line="+334"/>
         <source>Used by automatic features that depend on the meeting start time.</source>
         <translation>Wordt gebruikt door automatische functies die afhankelijk zijn van de begintijd van de vergadering.</translation>
+    </message>
+    <message>
+        <location line="-275"/>
+        <location line="+285"/>
+        <source>Fill in from jw.org</source>
+        <translation>Invullen vanaf jw.org</translation>
+    </message>
+    <message>
+        <location line="-270"/>
+        <location line="+271"/>
+        <source>Congregation name</source>
+        <translation>Naam van de gemeente</translation>
+    </message>
+    <message>
+        <location line="-174"/>
+        <source>Searching jw.org…</source>
+        <translation>Zoeken op jw.org…</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>No congregation found with that name.</source>
+        <translation>Geen gemeente met die naam gevonden.</translation>
+    </message>
+    <message>
+        <location line="-6"/>
+        <source>Reading the meeting times…</source>
+        <translation>Vergadertijden worden gelezen…</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>jw.org does not publish meeting times for this congregation.</source>
+        <translation>jw.org publiceert geen vergadertijden voor deze gemeente.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Too many searches in a row. Wait a moment and type again.</source>
+        <translation>Te veel zoekopdrachten achter elkaar. Wacht even en typ opnieuw.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Could not reach jw.org. Check the connection and try again.</source>
+        <translation>Kon jw.org niet bereiken. Controleer de verbinding en probeer het opnieuw.</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Search your congregation to fill the days and times below.</source>
+        <translation>Zoek je gemeente om de dagen en tijden hieronder in te vullen.</translation>
     </message>
     <message>
         <source>Midweek meeting</source>
         <translation type="vanished">Doordeweekse vergadering</translation>
     </message>
     <message>
-        <location line="-133"/>
-        <location line="+137"/>
+        <location line="-193"/>
+        <location line="+320"/>
         <source>Day and time for the midweek meeting.</source>
         <translation>Dag en tijd van de doordeweekse vergadering.</translation>
     </message>
@@ -2730,8 +2777,8 @@ Handmatig toegevoegde inhoud, bijgesneden delen, kadrering en de uitgeklapte sta
         <translation type="vanished">Weekendvergadering</translation>
     </message>
     <message>
-        <location line="-130"/>
-        <location line="+134"/>
+        <location line="-313"/>
+        <location line="+317"/>
         <source>Day and time for the weekend meeting.</source>
         <translation>Dag en tijd van de weekendvergadering.</translation>
     </message>
@@ -2986,8 +3033,8 @@ Handmatig toegevoegde inhoud, bijgesneden delen, kadrering en de uitgeklapte sta
 <context>
     <name>OBSScenePopup</name>
     <message>
-        <location filename="../../widgets/obs_scene_popup.py" line="+110"/>
-        <location line="+541"/>
+        <location filename="../../widgets/obs_scene_popup.py" line="+111"/>
+        <location line="+544"/>
         <source>OBS Scenes</source>
         <translation>OBS-scènes</translation>
     </message>
@@ -3239,7 +3286,7 @@ Handmatig toegevoegde inhoud, bijgesneden delen, kadrering en de uitgeklapte sta
         <translation>Doorgaan</translation>
     </message>
     <message>
-        <location line="+47"/>
+        <location line="+52"/>
         <source>Welcome to Solin</source>
         <translation>Welkom bij Solin</translation>
     </message>
@@ -3287,6 +3334,27 @@ Handmatig toegevoegde inhoud, bijgesneden delen, kadrering en de uitgeklapte sta
     </message>
     <message>
         <location line="+5"/>
+        <location line="+406"/>
+        <source>Meeting schedule</source>
+        <translation>Vergaderschema</translation>
+    </message>
+    <message>
+        <location line="-400"/>
+        <location line="+1161"/>
+        <source>Congregation</source>
+        <translation>Gemeente</translation>
+    </message>
+    <message>
+        <source>Optional</source>
+        <translation type="vanished">Optioneel</translation>
+    </message>
+    <message>
+        <location line="-1150"/>
+        <source>Find your congregation to fill the meeting days and times from jw.org.</source>
+        <translation>Zoek je gemeente om de vergaderdagen en -tijden van jw.org in te vullen.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
         <location line="+375"/>
         <source>Meeting media</source>
         <translation>Vergadermedia</translation>
@@ -3488,6 +3556,8 @@ Handmatig toegevoegde inhoud, bijgesneden delen, kadrering en de uitgeklapte sta
         <translation>Deze week en volgende week</translation>
     </message>
     <message>
+        <location line="-393"/>
+        <location line="+400"/>
         <location line="+5"/>
         <location line="+9"/>
         <source>Not configured</source>
@@ -3519,17 +3589,37 @@ Handmatig toegevoegde inhoud, bijgesneden delen, kadrering en de uitgeklapte sta
         <translation>Kies een scène</translation>
     </message>
     <message>
-        <location line="+316"/>
+        <location line="+303"/>
+        <location line="+167"/>
         <source>Close</source>
         <translation>Sluiten</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="-159"/>
+        <source>Search by congregation name</source>
+        <translation>Zoeken op naam van de gemeente</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/onboarding.py" line="+69"/>
+        <source>Searching jw.org…</source>
+        <translation>Zoeken op jw.org…</translation>
+    </message>
+    <message>
+        <source>Meeting days and times come from jw.org.</source>
+        <translation type="vanished">Vergaderdagen en -tijden komen van jw.org.</translation>
+    </message>
+    <message>
+        <location filename="../../qml/OnboardingView.qml" line="+88"/>
+        <source>Remove congregation</source>
+        <translation>Gemeente verwijderen</translation>
+    </message>
+    <message>
+        <location line="+78"/>
         <source>Search languages</source>
         <translation>Talen zoeken</translation>
     </message>
     <message>
-        <location filename="../../ui/qml/onboarding.py" line="+275"/>
+        <location filename="../../ui/qml/onboarding.py" line="+255"/>
         <source>Enter a port between 1 and 65535.</source>
         <translation>Voer een poort in tussen 1 en 65535.</translation>
     </message>
@@ -3539,7 +3629,7 @@ Handmatig toegevoegde inhoud, bijgesneden delen, kadrering en de uitgeklapte sta
         <translation>De kiezer voor het deeldoel is niet beschikbaar.</translation>
     </message>
     <message>
-        <location line="+96"/>
+        <location line="+139"/>
         <source>Enter a profile name.</source>
         <translation>Voer een profielnaam in.</translation>
     </message>
@@ -3569,12 +3659,37 @@ Handmatig toegevoegde inhoud, bijgesneden delen, kadrering en de uitgeklapte sta
         <translation>Kies het doel in het deelvenster van Zoom.</translation>
     </message>
     <message>
-        <location line="+80"/>
+        <location line="+81"/>
         <source>Could not create the profile.</source>
         <translation>Het profiel kon niet worden gemaakt.</translation>
     </message>
     <message>
-        <location line="+99"/>
+        <location line="-542"/>
+        <source>jw.org does not publish meeting times for this congregation.</source>
+        <translation>jw.org publiceert geen vergadertijden voor deze gemeente.</translation>
+    </message>
+    <message>
+        <location line="-8"/>
+        <source>Reading the meeting times…</source>
+        <translation>Vergadertijden worden gelezen…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>No congregation found with that name.</source>
+        <translation>Geen gemeente met die naam gevonden.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Too many searches in a row. Wait a moment and type again.</source>
+        <translation>Te veel zoekopdrachten achter elkaar. Wacht even en typ opnieuw.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Could not reach jw.org. Check the connection and try again.</source>
+        <translation>Kon jw.org niet bereiken. Controleer de verbinding en probeer het opnieuw.</translation>
+    </message>
+    <message>
+        <location line="+685"/>
         <source>Allow Solin in macOS Accessibility settings.</source>
         <translation>Sta Solin toe in de toegankelijkheidsinstellingen van macOS.</translation>
     </message>
@@ -4557,17 +4672,17 @@ Deze actie kan niet ongedaan worden gemaakt.</translation>
 <context>
     <name>PopupHoverButton</name>
     <message>
-        <location filename="../../widgets/common/popup_hover_button.py" line="28"/>
+        <location filename="../../widgets/common/popup_hover_button.py" line="+28"/>
         <source>Open on hover</source>
         <translation>Openen bij aanwijzen</translation>
     </message>
     <message>
-        <location filename="../../widgets/common/popup_hover_button.py" line="30"/>
+        <location line="+2"/>
         <source>Opens when you hover over its toolbar icon. Click to disable.</source>
         <translation>Opent wanneer de muisaanwijzer boven het pictogram in de werkbalk staat. Klik om uit te schakelen.</translation>
     </message>
     <message>
-        <location filename="../../widgets/common/popup_hover_button.py" line="32"/>
+        <location line="+2"/>
         <source>Open this panel by hovering over its toolbar icon. Click to enable.</source>
         <translation>Open dit paneel door de muisaanwijzer boven het pictogram in de werkbalk te houden. Klik om in te schakelen.</translation>
     </message>
@@ -4615,7 +4730,7 @@ Deze actie kan niet ongedaan worden gemaakt.</translation>
 <context>
     <name>ProfileScreen</name>
     <message>
-        <location filename="../../ui/profile_screen.py" line="+145"/>
+        <location filename="../../ui/profile_screen.py" line="+147"/>
         <source>Who is using Solin?</source>
         <translation>Wie gebruikt Solin?</translation>
     </message>
@@ -5112,7 +5227,7 @@ Deze actie kan niet ongedaan worden gemaakt.</translation>
 <context>
     <name>QuickAccessToolbar</name>
     <message>
-        <location filename="../../widgets/quick_access_toolbar.py" line="+666"/>
+        <location filename="../../widgets/quick_access_toolbar.py" line="+632"/>
         <source>Remote control unavailable</source>
         <translation>Afstandsbediening niet beschikbaar</translation>
     </message>
@@ -5162,7 +5277,7 @@ Deze actie kan niet ongedaan worden gemaakt.</translation>
 <context>
     <name>QuickToolbarBridge</name>
     <message>
-        <location filename="../../ui/qml/quick_toolbar.py" line="+437"/>
+        <location filename="../../ui/qml/quick_toolbar.py" line="+450"/>
         <source>Manage monitors</source>
         <translation>Schermen beheren</translation>
     </message>
@@ -5559,49 +5674,49 @@ Deze actie kan niet ongedaan worden gemaakt.</translation>
 <context>
     <name>SceneControlPopup</name>
     <message>
-        <location filename="../../widgets/scenes/control_popup.py" line="+274"/>
-        <location line="+689"/>
+        <location filename="../../widgets/scenes/control_popup.py" line="+275"/>
+        <location line="+692"/>
         <source>Solin scenes</source>
         <translation>Solin-scènes</translation>
     </message>
     <message>
-        <location line="-668"/>
-        <location line="+669"/>
+        <location line="-669"/>
+        <location line="+670"/>
         <source>Configured</source>
         <translation>Geconfigureerd</translation>
     </message>
     <message>
-        <location line="-660"/>
-        <location line="+661"/>
+        <location line="-661"/>
+        <location line="+662"/>
         <source>Camera PiP</source>
         <translation>Camera-PiP</translation>
     </message>
     <message>
-        <location line="-652"/>
-        <location line="+653"/>
+        <location line="-653"/>
+        <location line="+654"/>
         <source>Other scenes</source>
         <translation>Andere scènes</translation>
     </message>
     <message>
-        <location line="-615"/>
-        <location line="+616"/>
+        <location line="-616"/>
+        <location line="+617"/>
         <source>Auto-switch media</source>
         <translation>Automatisch schakelen</translation>
     </message>
     <message>
-        <location line="-611"/>
-        <location line="+612"/>
+        <location line="-612"/>
+        <location line="+613"/>
         <source>Media windows</source>
         <translation>Mediavensters</translation>
     </message>
     <message>
-        <location line="-608"/>
-        <location line="+609"/>
+        <location line="-609"/>
+        <location line="+610"/>
         <source>Show in media windows</source>
         <translation>Tonen in de mediavensters</translation>
     </message>
     <message>
-        <location line="-596"/>
+        <location line="-597"/>
         <source>The recording state could not be changed.</source>
         <translation>De opnamestatus kon niet worden gewijzigd.</translation>
     </message>
@@ -5843,7 +5958,7 @@ Deze actie kan niet ongedaan worden gemaakt.</translation>
 <context>
     <name>SceneRuntimeController</name>
     <message>
-        <location filename="../../controllers/scene_runtime_controller.py" line="+1646"/>
+        <location filename="../../controllers/scene_runtime_controller.py" line="+1651"/>
         <source>The selected transition is unavailable. The scene was cut instead.</source>
         <translation>De geselecteerde overgang is niet beschikbaar. De scène is met een harde overgang gewisseld.</translation>
     </message>
@@ -7256,7 +7371,7 @@ Voeg inhoud, een camera of een andere scène toe.</translation>
 <context>
     <name>SettingsWidget</name>
     <message>
-        <location filename="../../widgets/settings_widget.py" line="+271"/>
+        <location filename="../../widgets/settings_widget.py" line="+277"/>
         <location line="+265"/>
         <source>Settings</source>
         <translation>Instellingen</translation>
@@ -8671,7 +8786,7 @@ Voeg er een toe wanneer u wilt.</translation>
 <context>
     <name>UpdateDialog</name>
     <message>
-        <location filename="../../ui/dialogs/update.py" line="+226"/>
+        <location filename="../../ui/dialogs/update.py" line="+227"/>
         <source>Update available</source>
         <translation>Update beschikbaar</translation>
     </message>
@@ -10908,7 +11023,7 @@ Gebruik de afspeelknop om te projecteren · Sleep de greep ⠿ om de volgorde te
 <context>
     <name>_TimePickerPopup</name>
     <message>
-        <location filename="../../widgets/settings/meeting_schedule_section.py" line="-292"/>
+        <location filename="../../widgets/settings/meeting_schedule_section.py" line="-477"/>
         <source>Hour</source>
         <translation>Uur</translation>
     </message>

@@ -697,7 +697,7 @@
 <context>
     <name>BrowserWidget</name>
     <message>
-        <location filename="../../widgets/browser/widget.py" line="+1468"/>
+        <location filename="../../widgets/browser/widget.py" line="+1441"/>
         <source>Back (Alt+←)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1504,7 +1504,7 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+693"/>
+        <location line="+694"/>
         <location filename="../../controllers/main_window_nav.py" line="+27"/>
         <source>Scenes</source>
         <translation type="unfinished"></translation>
@@ -2469,21 +2469,68 @@ Manually added content, trims, framing and expanded state will be kept.</source>
 <context>
     <name>MeetingScheduleSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/meeting_schedule_section.py" line="+468"/>
-        <location line="+149"/>
+        <location filename="../../widgets/settings/meeting_schedule_section.py" line="+528"/>
+        <location line="+334"/>
         <source>Used by automatic features that depend on the meeting start time.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-133"/>
-        <location line="+137"/>
+        <location line="-316"/>
+        <location line="+320"/>
         <source>Day and time for the midweek meeting.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-130"/>
-        <location line="+134"/>
+        <location line="-313"/>
+        <location line="+317"/>
         <source>Day and time for the weekend meeting.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-283"/>
+        <location line="+285"/>
+        <source>Fill in from jw.org</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-270"/>
+        <location line="+271"/>
+        <source>Congregation name</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-174"/>
+        <source>Searching jw.org…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>No congregation found with that name.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-6"/>
+        <source>Reading the meeting times…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>jw.org does not publish meeting times for this congregation.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Too many searches in a row. Wait a moment and type again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Could not reach jw.org. Check the connection and try again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Search your congregation to fill the days and times below.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -2705,8 +2752,8 @@ Manually added content, trims, framing and expanded state will be kept.</source>
 <context>
     <name>OBSScenePopup</name>
     <message>
-        <location filename="../../widgets/obs_scene_popup.py" line="+110"/>
-        <location line="+541"/>
+        <location filename="../../widgets/obs_scene_popup.py" line="+111"/>
+        <location line="+544"/>
         <source>OBS Scenes</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2942,7 +2989,7 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+47"/>
+        <location line="+52"/>
         <source>Welcome to Solin</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2990,6 +3037,23 @@ Manually added content, trims, framing and expanded state will be kept.</source>
     </message>
     <message>
         <location line="+5"/>
+        <location line="+406"/>
+        <source>Meeting schedule</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-400"/>
+        <location line="+1161"/>
+        <source>Congregation</source>
+        <translation type="unfinished">Congregation</translation>
+    </message>
+    <message>
+        <location line="-1150"/>
+        <source>Find your congregation to fill the meeting days and times from jw.org.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
         <location line="+375"/>
         <source>Meeting media</source>
         <translation type="unfinished"></translation>
@@ -3191,6 +3255,8 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location line="-393"/>
+        <location line="+400"/>
         <location line="+5"/>
         <location line="+9"/>
         <source>Not configured</source>
@@ -3222,17 +3288,33 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+316"/>
+        <location line="+303"/>
+        <location line="+167"/>
         <source>Close</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="-159"/>
+        <source>Search by congregation name</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/onboarding.py" line="+69"/>
+        <source>Searching jw.org…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../qml/OnboardingView.qml" line="+88"/>
+        <source>Remove congregation</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+78"/>
         <source>Search languages</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/qml/onboarding.py" line="+275"/>
+        <location filename="../../ui/qml/onboarding.py" line="+255"/>
         <source>Enter a port between 1 and 65535.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3242,7 +3324,7 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+96"/>
+        <location line="+139"/>
         <source>Enter a profile name.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3272,12 +3354,37 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+80"/>
+        <location line="+81"/>
         <source>Could not create the profile.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+99"/>
+        <location line="-542"/>
+        <source>jw.org does not publish meeting times for this congregation.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-8"/>
+        <source>Reading the meeting times…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>No congregation found with that name.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Too many searches in a row. Wait a moment and type again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Could not reach jw.org. Check the connection and try again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+685"/>
         <source>Allow Solin in macOS Accessibility settings.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4117,17 +4224,17 @@ This action cannot be undone.</source>
 <context>
     <name>PopupHoverButton</name>
     <message>
-        <location filename="../../widgets/common/popup_hover_button.py" line="28"/>
+        <location filename="../../widgets/common/popup_hover_button.py" line="+28"/>
         <source>Open on hover</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../widgets/common/popup_hover_button.py" line="30"/>
+        <location line="+2"/>
         <source>Opens when you hover over its toolbar icon. Click to disable.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../widgets/common/popup_hover_button.py" line="32"/>
+        <location line="+2"/>
         <source>Open this panel by hovering over its toolbar icon. Click to enable.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4148,7 +4255,7 @@ This action cannot be undone.</source>
 <context>
     <name>ProfileScreen</name>
     <message>
-        <location filename="../../ui/profile_screen.py" line="+145"/>
+        <location filename="../../ui/profile_screen.py" line="+147"/>
         <source>Who is using Solin?</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4457,7 +4564,7 @@ This action cannot be undone.</source>
 <context>
     <name>QuickAccessToolbar</name>
     <message>
-        <location filename="../../widgets/quick_access_toolbar.py" line="+666"/>
+        <location filename="../../widgets/quick_access_toolbar.py" line="+632"/>
         <source>Remote control unavailable</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4499,7 +4606,7 @@ This action cannot be undone.</source>
 <context>
     <name>QuickToolbarBridge</name>
     <message>
-        <location filename="../../ui/qml/quick_toolbar.py" line="+437"/>
+        <location filename="../../ui/qml/quick_toolbar.py" line="+450"/>
         <source>Manage monitors</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4896,49 +5003,49 @@ This action cannot be undone.</source>
 <context>
     <name>SceneControlPopup</name>
     <message>
-        <location filename="../../widgets/scenes/control_popup.py" line="+274"/>
-        <location line="+689"/>
+        <location filename="../../widgets/scenes/control_popup.py" line="+275"/>
+        <location line="+692"/>
         <source>Solin scenes</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-668"/>
-        <location line="+669"/>
+        <location line="-669"/>
+        <location line="+670"/>
         <source>Configured</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-660"/>
-        <location line="+661"/>
+        <location line="-661"/>
+        <location line="+662"/>
         <source>Camera PiP</source>
         <translation>Camera PiP</translation>
     </message>
     <message>
-        <location line="-652"/>
-        <location line="+653"/>
+        <location line="-653"/>
+        <location line="+654"/>
         <source>Other scenes</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-615"/>
-        <location line="+616"/>
+        <location line="-616"/>
+        <location line="+617"/>
         <source>Auto-switch media</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-611"/>
-        <location line="+612"/>
+        <location line="-612"/>
+        <location line="+613"/>
         <source>Media windows</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-608"/>
-        <location line="+609"/>
+        <location line="-609"/>
+        <location line="+610"/>
         <source>Show in media windows</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-596"/>
+        <location line="-597"/>
         <source>The recording state could not be changed.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -5180,7 +5287,7 @@ This action cannot be undone.</source>
 <context>
     <name>SceneRuntimeController</name>
     <message>
-        <location filename="../../controllers/scene_runtime_controller.py" line="+1646"/>
+        <location filename="../../controllers/scene_runtime_controller.py" line="+1651"/>
         <source>The selected transition is unavailable. The scene was cut instead.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -6592,7 +6699,7 @@ Add content, a camera, or another scene.</source>
 <context>
     <name>SettingsWidget</name>
     <message>
-        <location filename="../../widgets/settings_widget.py" line="+271"/>
+        <location filename="../../widgets/settings_widget.py" line="+277"/>
         <location line="+265"/>
         <source>Settings</source>
         <translation type="unfinished"></translation>
@@ -7997,7 +8104,7 @@ Add one when you are ready.</translation>
 <context>
     <name>UpdateDialog</name>
     <message>
-        <location filename="../../ui/dialogs/update.py" line="+226"/>
+        <location filename="../../ui/dialogs/update.py" line="+227"/>
         <source>Update available</source>
         <translation type="unfinished"></translation>
     </message>
@@ -10167,7 +10274,7 @@ Click an item to project it · Drag the grip ⠿ to reorder</source>
 <context>
     <name>_TimePickerPopup</name>
     <message>
-        <location filename="../../widgets/settings/meeting_schedule_section.py" line="-292"/>
+        <location filename="../../widgets/settings/meeting_schedule_section.py" line="-346"/>
         <source>Hour</source>
         <translation type="unfinished"></translation>
     </message>

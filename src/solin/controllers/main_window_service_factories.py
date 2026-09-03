@@ -17,6 +17,7 @@ class MainWindowServiceFactories:
     zoom: Callable[[Any, QObject], Any]
     background_song: Callable[[Any, Any, Any, Any, Any, QObject], Any]
     yeartext: Callable[[QObject], Any]
+    congregation_lookup: Callable[[QObject], Any]
     jwpub: Callable[[QObject], Any]
     memorial: Callable[[QObject], Any]
     remote_services: Callable[[QWidget], Any]

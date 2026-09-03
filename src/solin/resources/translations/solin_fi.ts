@@ -711,7 +711,7 @@
 <context>
     <name>BrowserWidget</name>
     <message>
-        <location filename="../../widgets/browser/widget.py" line="+1468"/>
+        <location filename="../../widgets/browser/widget.py" line="+1441"/>
         <source>Back (Alt+←)</source>
         <translation>Takaisin (Alt+←)</translation>
     </message>
@@ -1595,7 +1595,7 @@
         <translation>Solin</translation>
     </message>
     <message>
-        <location line="+693"/>
+        <location line="+694"/>
         <location filename="../../controllers/main_window_nav.py" line="+27"/>
         <source>Scenes</source>
         <translation>Näkymät</translation>
@@ -2710,18 +2710,65 @@ Manuaalisesti lisätty sisältö, leikkaukset, rajaukset ja laajennettu tila sä
 <context>
     <name>MeetingScheduleSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/meeting_schedule_section.py" line="+468"/>
-        <location line="+149"/>
+        <location filename="../../widgets/settings/meeting_schedule_section.py" line="+528"/>
+        <location line="+334"/>
         <source>Used by automatic features that depend on the meeting start time.</source>
         <translation>Automaattiset ominaisuudet käyttävät tätä kokouksen alkamisajan perusteella.</translation>
+    </message>
+    <message>
+        <location line="-275"/>
+        <location line="+285"/>
+        <source>Fill in from jw.org</source>
+        <translation>Täytä jw.orgista</translation>
+    </message>
+    <message>
+        <location line="-270"/>
+        <location line="+271"/>
+        <source>Congregation name</source>
+        <translation>Seurakunnan nimi</translation>
+    </message>
+    <message>
+        <location line="-174"/>
+        <source>Searching jw.org…</source>
+        <translation>Haetaan jw.orgista…</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>No congregation found with that name.</source>
+        <translation>Tällä nimellä ei löytynyt seurakuntaa.</translation>
+    </message>
+    <message>
+        <location line="-6"/>
+        <source>Reading the meeting times…</source>
+        <translation>Luetaan kokousaikoja…</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>jw.org does not publish meeting times for this congregation.</source>
+        <translation>jw.org ei julkaise tämän seurakunnan kokousaikoja.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Too many searches in a row. Wait a moment and type again.</source>
+        <translation>Liian monta hakua peräkkäin. Odota hetki ja kirjoita uudelleen.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Could not reach jw.org. Check the connection and try again.</source>
+        <translation>jw.orgiin ei saatu yhteyttä. Tarkista yhteys ja yritä uudelleen.</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Search your congregation to fill the days and times below.</source>
+        <translation>Hae seurakuntasi, niin alla olevat päivät ja ajat täyttyvät.</translation>
     </message>
     <message>
         <source>Midweek meeting</source>
         <translation type="vanished">Viikkokokous</translation>
     </message>
     <message>
-        <location line="-133"/>
-        <location line="+137"/>
+        <location line="-193"/>
+        <location line="+320"/>
         <source>Day and time for the midweek meeting.</source>
         <translation>Viikkokokouksen päivä ja aika.</translation>
     </message>
@@ -2730,8 +2777,8 @@ Manuaalisesti lisätty sisältö, leikkaukset, rajaukset ja laajennettu tila sä
         <translation type="vanished">Viikonlopun kokous</translation>
     </message>
     <message>
-        <location line="-130"/>
-        <location line="+134"/>
+        <location line="-313"/>
+        <location line="+317"/>
         <source>Day and time for the weekend meeting.</source>
         <translation>Viikonlopun kokouksen päivä ja aika.</translation>
     </message>
@@ -2986,8 +3033,8 @@ Manuaalisesti lisätty sisältö, leikkaukset, rajaukset ja laajennettu tila sä
 <context>
     <name>OBSScenePopup</name>
     <message>
-        <location filename="../../widgets/obs_scene_popup.py" line="+110"/>
-        <location line="+541"/>
+        <location filename="../../widgets/obs_scene_popup.py" line="+111"/>
+        <location line="+544"/>
         <source>OBS Scenes</source>
         <translation>OBS-skenet</translation>
     </message>
@@ -3239,7 +3286,7 @@ Manuaalisesti lisätty sisältö, leikkaukset, rajaukset ja laajennettu tila sä
         <translation>Jatka</translation>
     </message>
     <message>
-        <location line="+47"/>
+        <location line="+52"/>
         <source>Welcome to Solin</source>
         <translation>Tervetuloa Soliniin</translation>
     </message>
@@ -3287,6 +3334,27 @@ Manuaalisesti lisätty sisältö, leikkaukset, rajaukset ja laajennettu tila sä
     </message>
     <message>
         <location line="+5"/>
+        <location line="+406"/>
+        <source>Meeting schedule</source>
+        <translation>Kokousaikataulu</translation>
+    </message>
+    <message>
+        <location line="-400"/>
+        <location line="+1161"/>
+        <source>Congregation</source>
+        <translation>Seurakunta</translation>
+    </message>
+    <message>
+        <source>Optional</source>
+        <translation type="vanished">Valinnainen</translation>
+    </message>
+    <message>
+        <location line="-1150"/>
+        <source>Find your congregation to fill the meeting days and times from jw.org.</source>
+        <translation>Hae seurakuntasi, niin kokouspäivät ja -ajat täyttyvät jw.orgista.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
         <location line="+375"/>
         <source>Meeting media</source>
         <translation>Kokouksen media</translation>
@@ -3488,6 +3556,8 @@ Manuaalisesti lisätty sisältö, leikkaukset, rajaukset ja laajennettu tila sä
         <translation>Tämä ja ensi viikko</translation>
     </message>
     <message>
+        <location line="-393"/>
+        <location line="+400"/>
         <location line="+5"/>
         <location line="+9"/>
         <source>Not configured</source>
@@ -3519,17 +3589,37 @@ Manuaalisesti lisätty sisältö, leikkaukset, rajaukset ja laajennettu tila sä
         <translation>Valitse kohtaus</translation>
     </message>
     <message>
-        <location line="+316"/>
+        <location line="+303"/>
+        <location line="+167"/>
         <source>Close</source>
         <translation>Sulje</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="-159"/>
+        <source>Search by congregation name</source>
+        <translation>Hae seurakunnan nimellä</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/onboarding.py" line="+69"/>
+        <source>Searching jw.org…</source>
+        <translation>Haetaan jw.orgista…</translation>
+    </message>
+    <message>
+        <source>Meeting days and times come from jw.org.</source>
+        <translation type="vanished">Kokouspäivät ja -ajat tulevat jw.orgista.</translation>
+    </message>
+    <message>
+        <location filename="../../qml/OnboardingView.qml" line="+88"/>
+        <source>Remove congregation</source>
+        <translation>Poista seurakunta</translation>
+    </message>
+    <message>
+        <location line="+78"/>
         <source>Search languages</source>
         <translation>Etsi kieliä</translation>
     </message>
     <message>
-        <location filename="../../ui/qml/onboarding.py" line="+275"/>
+        <location filename="../../ui/qml/onboarding.py" line="+255"/>
         <source>Enter a port between 1 and 65535.</source>
         <translation>Anna portti väliltä 1–65535.</translation>
     </message>
@@ -3539,7 +3629,7 @@ Manuaalisesti lisätty sisältö, leikkaukset, rajaukset ja laajennettu tila sä
         <translation>Jakamiskohteen valitsin ei ole käytettävissä.</translation>
     </message>
     <message>
-        <location line="+96"/>
+        <location line="+139"/>
         <source>Enter a profile name.</source>
         <translation>Anna profiilin nimi.</translation>
     </message>
@@ -3569,12 +3659,37 @@ Manuaalisesti lisätty sisältö, leikkaukset, rajaukset ja laajennettu tila sä
         <translation>Valitse kohde Zoomin jakamisikkunassa.</translation>
     </message>
     <message>
-        <location line="+80"/>
+        <location line="+81"/>
         <source>Could not create the profile.</source>
         <translation>Profiilin luominen ei onnistunut.</translation>
     </message>
     <message>
-        <location line="+99"/>
+        <location line="-542"/>
+        <source>jw.org does not publish meeting times for this congregation.</source>
+        <translation>jw.org ei julkaise tämän seurakunnan kokousaikoja.</translation>
+    </message>
+    <message>
+        <location line="-8"/>
+        <source>Reading the meeting times…</source>
+        <translation>Luetaan kokousaikoja…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>No congregation found with that name.</source>
+        <translation>Tällä nimellä ei löytynyt seurakuntaa.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Too many searches in a row. Wait a moment and type again.</source>
+        <translation>Liian monta hakua peräkkäin. Odota hetki ja kirjoita uudelleen.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Could not reach jw.org. Check the connection and try again.</source>
+        <translation>jw.orgiin ei saatu yhteyttä. Tarkista yhteys ja yritä uudelleen.</translation>
+    </message>
+    <message>
+        <location line="+685"/>
         <source>Allow Solin in macOS Accessibility settings.</source>
         <translation>Salli Solin macOS:n Käyttöapu-asetuksissa.</translation>
     </message>
@@ -4557,17 +4672,17 @@ Tätä toimintoa ei voi peruuttaa.</translation>
 <context>
     <name>PopupHoverButton</name>
     <message>
-        <location filename="../../widgets/common/popup_hover_button.py" line="28"/>
+        <location filename="../../widgets/common/popup_hover_button.py" line="+28"/>
         <source>Open on hover</source>
         <translation>Avaa viemällä hiiri päälle</translation>
     </message>
     <message>
-        <location filename="../../widgets/common/popup_hover_button.py" line="30"/>
+        <location line="+2"/>
         <source>Opens when you hover over its toolbar icon. Click to disable.</source>
         <translation>Avautuu, kun hiiren osoitin viedään sen kuvakkeen päälle työkalurivillä. Poista käytöstä napsauttamalla.</translation>
     </message>
     <message>
-        <location filename="../../widgets/common/popup_hover_button.py" line="32"/>
+        <location line="+2"/>
         <source>Open this panel by hovering over its toolbar icon. Click to enable.</source>
         <translation>Avaa tämä paneeli viemällä hiiren osoitin sen kuvakkeen päälle työkalurivillä. Ota käyttöön napsauttamalla.</translation>
     </message>
@@ -4615,7 +4730,7 @@ Tätä toimintoa ei voi peruuttaa.</translation>
 <context>
     <name>ProfileScreen</name>
     <message>
-        <location filename="../../ui/profile_screen.py" line="+145"/>
+        <location filename="../../ui/profile_screen.py" line="+147"/>
         <source>Who is using Solin?</source>
         <translation>Kuka käyttää Solinia?</translation>
     </message>
@@ -5112,7 +5227,7 @@ Tätä toimintoa ei voi peruuttaa.</translation>
 <context>
     <name>QuickAccessToolbar</name>
     <message>
-        <location filename="../../widgets/quick_access_toolbar.py" line="+666"/>
+        <location filename="../../widgets/quick_access_toolbar.py" line="+632"/>
         <source>Remote control unavailable</source>
         <translation>Etäohjaus ei ole käytettävissä</translation>
     </message>
@@ -5162,7 +5277,7 @@ Tätä toimintoa ei voi peruuttaa.</translation>
 <context>
     <name>QuickToolbarBridge</name>
     <message>
-        <location filename="../../ui/qml/quick_toolbar.py" line="+437"/>
+        <location filename="../../ui/qml/quick_toolbar.py" line="+450"/>
         <source>Manage monitors</source>
         <translation>Hallitse näyttöjä</translation>
     </message>
@@ -5559,49 +5674,49 @@ Tätä toimintoa ei voi peruuttaa.</translation>
 <context>
     <name>SceneControlPopup</name>
     <message>
-        <location filename="../../widgets/scenes/control_popup.py" line="+274"/>
-        <location line="+689"/>
+        <location filename="../../widgets/scenes/control_popup.py" line="+275"/>
+        <location line="+692"/>
         <source>Solin scenes</source>
         <translation>Solin-näkymät</translation>
     </message>
     <message>
-        <location line="-668"/>
-        <location line="+669"/>
+        <location line="-669"/>
+        <location line="+670"/>
         <source>Configured</source>
         <translation>Määritetyt</translation>
     </message>
     <message>
-        <location line="-660"/>
-        <location line="+661"/>
+        <location line="-661"/>
+        <location line="+662"/>
         <source>Camera PiP</source>
         <translation>Kamera-PiP</translation>
     </message>
     <message>
-        <location line="-652"/>
-        <location line="+653"/>
+        <location line="-653"/>
+        <location line="+654"/>
         <source>Other scenes</source>
         <translation>Muut näkymät</translation>
     </message>
     <message>
-        <location line="-615"/>
-        <location line="+616"/>
+        <location line="-616"/>
+        <location line="+617"/>
         <source>Auto-switch media</source>
         <translation>Automaattinen vaihto</translation>
     </message>
     <message>
-        <location line="-611"/>
-        <location line="+612"/>
+        <location line="-612"/>
+        <location line="+613"/>
         <source>Media windows</source>
         <translation>Mediaikkunat</translation>
     </message>
     <message>
-        <location line="-608"/>
-        <location line="+609"/>
+        <location line="-609"/>
+        <location line="+610"/>
         <source>Show in media windows</source>
         <translation>Näytä mediaikkunoissa</translation>
     </message>
     <message>
-        <location line="-596"/>
+        <location line="-597"/>
         <source>The recording state could not be changed.</source>
         <translation>Tallennuksen tilaa ei voitu muuttaa.</translation>
     </message>
@@ -5843,7 +5958,7 @@ Tätä toimintoa ei voi peruuttaa.</translation>
 <context>
     <name>SceneRuntimeController</name>
     <message>
-        <location filename="../../controllers/scene_runtime_controller.py" line="+1646"/>
+        <location filename="../../controllers/scene_runtime_controller.py" line="+1651"/>
         <source>The selected transition is unavailable. The scene was cut instead.</source>
         <translation>Valittu siirtymä ei ole käytettävissä. Näkymä vaihdettiin leikkauksella.</translation>
     </message>
@@ -7256,7 +7371,7 @@ Lisää sisältöä, kamera tai toinen näkymä.</translation>
 <context>
     <name>SettingsWidget</name>
     <message>
-        <location filename="../../widgets/settings_widget.py" line="+271"/>
+        <location filename="../../widgets/settings_widget.py" line="+277"/>
         <location line="+265"/>
         <source>Settings</source>
         <translation>Asetukset</translation>
@@ -8671,7 +8786,7 @@ Lisää taso, kun olet valmis.</translation>
 <context>
     <name>UpdateDialog</name>
     <message>
-        <location filename="../../ui/dialogs/update.py" line="+226"/>
+        <location filename="../../ui/dialogs/update.py" line="+227"/>
         <source>Update available</source>
         <translation>Päivitys saatavilla</translation>
     </message>
@@ -10908,7 +11023,7 @@ Käytä toistopainiketta esittämiseen · Muuta järjestystä vetämällä kahva
 <context>
     <name>_TimePickerPopup</name>
     <message>
-        <location filename="../../widgets/settings/meeting_schedule_section.py" line="-292"/>
+        <location filename="../../widgets/settings/meeting_schedule_section.py" line="-477"/>
         <source>Hour</source>
         <translation>Tunti</translation>
     </message>

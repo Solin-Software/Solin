@@ -711,7 +711,7 @@
 <context>
     <name>BrowserWidget</name>
     <message>
-        <location filename="../../widgets/browser/widget.py" line="+1468"/>
+        <location filename="../../widgets/browser/widget.py" line="+1441"/>
         <source>Back (Alt+←)</source>
         <translation>Nyuma (Alt+←)</translation>
     </message>
@@ -1595,7 +1595,7 @@
         <translation>Solin</translation>
     </message>
     <message>
-        <location line="+693"/>
+        <location line="+694"/>
         <location filename="../../controllers/main_window_nav.py" line="+27"/>
         <source>Scenes</source>
         <translation>Mandhari</translation>
@@ -2710,18 +2710,65 @@ Maudhui yaliyoongezwa kwa mkono, upunguzaji, upangaji wa picha, na hali iliyopan
 <context>
     <name>MeetingScheduleSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/meeting_schedule_section.py" line="+468"/>
-        <location line="+149"/>
+        <location filename="../../widgets/settings/meeting_schedule_section.py" line="+528"/>
+        <location line="+334"/>
         <source>Used by automatic features that depend on the meeting start time.</source>
         <translation>Hutumiwa na vipengele vya kiotomatiki vinavyotegemea wakati wa kuanza kwa mkutano.</translation>
+    </message>
+    <message>
+        <location line="-275"/>
+        <location line="+285"/>
+        <source>Fill in from jw.org</source>
+        <translation>Jaza kutoka jw.org</translation>
+    </message>
+    <message>
+        <location line="-270"/>
+        <location line="+271"/>
+        <source>Congregation name</source>
+        <translation>Jina la kutaniko</translation>
+    </message>
+    <message>
+        <location line="-174"/>
+        <source>Searching jw.org…</source>
+        <translation>Inatafuta jw.org…</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>No congregation found with that name.</source>
+        <translation>Hakuna kutaniko lenye jina hilo.</translation>
+    </message>
+    <message>
+        <location line="-6"/>
+        <source>Reading the meeting times…</source>
+        <translation>Inasoma saa za mikutano…</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>jw.org does not publish meeting times for this congregation.</source>
+        <translation>jw.org haichapishi saa za mikutano za kutaniko hili.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Too many searches in a row. Wait a moment and type again.</source>
+        <translation>Utafutaji mwingi mfululizo. Subiri kidogo na uandike tena.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Could not reach jw.org. Check the connection and try again.</source>
+        <translation>Haikuwezekana kufikia jw.org. Angalia muunganisho na ujaribu tena.</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Search your congregation to fill the days and times below.</source>
+        <translation>Tafuta kutaniko lako ili kujaza siku na saa zilizo hapa chini.</translation>
     </message>
     <message>
         <source>Midweek meeting</source>
         <translation type="vanished">Mkutano wa katikati ya juma</translation>
     </message>
     <message>
-        <location line="-133"/>
-        <location line="+137"/>
+        <location line="-193"/>
+        <location line="+320"/>
         <source>Day and time for the midweek meeting.</source>
         <translation>Siku na wakati wa mkutano wa katikati ya juma.</translation>
     </message>
@@ -2730,8 +2777,8 @@ Maudhui yaliyoongezwa kwa mkono, upunguzaji, upangaji wa picha, na hali iliyopan
         <translation type="vanished">Mkutano wa mwisho wa juma</translation>
     </message>
     <message>
-        <location line="-130"/>
-        <location line="+134"/>
+        <location line="-313"/>
+        <location line="+317"/>
         <source>Day and time for the weekend meeting.</source>
         <translation>Siku na wakati wa mkutano wa mwisho wa juma.</translation>
     </message>
@@ -2986,8 +3033,8 @@ Maudhui yaliyoongezwa kwa mkono, upunguzaji, upangaji wa picha, na hali iliyopan
 <context>
     <name>OBSScenePopup</name>
     <message>
-        <location filename="../../widgets/obs_scene_popup.py" line="+110"/>
-        <location line="+541"/>
+        <location filename="../../widgets/obs_scene_popup.py" line="+111"/>
+        <location line="+544"/>
         <source>OBS Scenes</source>
         <translation>Maonyesho ya OBS</translation>
     </message>
@@ -3239,7 +3286,7 @@ Maudhui yaliyoongezwa kwa mkono, upunguzaji, upangaji wa picha, na hali iliyopan
         <translation>Endelea</translation>
     </message>
     <message>
-        <location line="+47"/>
+        <location line="+52"/>
         <source>Welcome to Solin</source>
         <translation>Karibu Solin</translation>
     </message>
@@ -3287,6 +3334,27 @@ Maudhui yaliyoongezwa kwa mkono, upunguzaji, upangaji wa picha, na hali iliyopan
     </message>
     <message>
         <location line="+5"/>
+        <location line="+406"/>
+        <source>Meeting schedule</source>
+        <translation>Ratiba ya mikutano</translation>
+    </message>
+    <message>
+        <location line="-400"/>
+        <location line="+1161"/>
+        <source>Congregation</source>
+        <translation>Kutaniko</translation>
+    </message>
+    <message>
+        <source>Optional</source>
+        <translation type="vanished">Si lazima</translation>
+    </message>
+    <message>
+        <location line="-1150"/>
+        <source>Find your congregation to fill the meeting days and times from jw.org.</source>
+        <translation>Tafuta kutaniko lako ili kujaza siku na saa za mikutano kutoka jw.org.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
         <location line="+375"/>
         <source>Meeting media</source>
         <translation>Midia za mkutano</translation>
@@ -3488,6 +3556,8 @@ Maudhui yaliyoongezwa kwa mkono, upunguzaji, upangaji wa picha, na hali iliyopan
         <translation>Wiki hii na wiki ijayo</translation>
     </message>
     <message>
+        <location line="-393"/>
+        <location line="+400"/>
         <location line="+5"/>
         <location line="+9"/>
         <source>Not configured</source>
@@ -3519,17 +3589,37 @@ Maudhui yaliyoongezwa kwa mkono, upunguzaji, upangaji wa picha, na hali iliyopan
         <translation>Chagua onyesho</translation>
     </message>
     <message>
-        <location line="+316"/>
+        <location line="+303"/>
+        <location line="+167"/>
         <source>Close</source>
         <translation>Funga</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="-159"/>
+        <source>Search by congregation name</source>
+        <translation>Tafuta kwa jina la kutaniko</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/onboarding.py" line="+69"/>
+        <source>Searching jw.org…</source>
+        <translation>Inatafuta jw.org…</translation>
+    </message>
+    <message>
+        <source>Meeting days and times come from jw.org.</source>
+        <translation type="vanished">Siku na saa za mikutano zinatoka jw.org.</translation>
+    </message>
+    <message>
+        <location filename="../../qml/OnboardingView.qml" line="+88"/>
+        <source>Remove congregation</source>
+        <translation>Ondoa kutaniko</translation>
+    </message>
+    <message>
+        <location line="+78"/>
         <source>Search languages</source>
         <translation>Tafuta lugha</translation>
     </message>
     <message>
-        <location filename="../../ui/qml/onboarding.py" line="+275"/>
+        <location filename="../../ui/qml/onboarding.py" line="+255"/>
         <source>Enter a port between 1 and 65535.</source>
         <translation>Weka mlango kati ya 1 na 65535.</translation>
     </message>
@@ -3539,7 +3629,7 @@ Maudhui yaliyoongezwa kwa mkono, upunguzaji, upangaji wa picha, na hali iliyopan
         <translation>Kichagua lengo la kushiriki hakipatikani.</translation>
     </message>
     <message>
-        <location line="+96"/>
+        <location line="+139"/>
         <source>Enter a profile name.</source>
         <translation>Weka jina la wasifu.</translation>
     </message>
@@ -3569,12 +3659,37 @@ Maudhui yaliyoongezwa kwa mkono, upunguzaji, upangaji wa picha, na hali iliyopan
         <translation>Chagua lengo katika kidirisha cha kushiriki cha Zoom.</translation>
     </message>
     <message>
-        <location line="+80"/>
+        <location line="+81"/>
         <source>Could not create the profile.</source>
         <translation>Haikuwezekana kuunda wasifu.</translation>
     </message>
     <message>
-        <location line="+99"/>
+        <location line="-542"/>
+        <source>jw.org does not publish meeting times for this congregation.</source>
+        <translation>jw.org haichapishi saa za mikutano za kutaniko hili.</translation>
+    </message>
+    <message>
+        <location line="-8"/>
+        <source>Reading the meeting times…</source>
+        <translation>Inasoma saa za mikutano…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>No congregation found with that name.</source>
+        <translation>Hakuna kutaniko lenye jina hilo.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Too many searches in a row. Wait a moment and type again.</source>
+        <translation>Utafutaji mwingi mfululizo. Subiri kidogo na uandike tena.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Could not reach jw.org. Check the connection and try again.</source>
+        <translation>Haikuwezekana kufikia jw.org. Angalia muunganisho na ujaribu tena.</translation>
+    </message>
+    <message>
+        <location line="+685"/>
         <source>Allow Solin in macOS Accessibility settings.</source>
         <translation>Ruhusu Solin katika mipangilio ya Ufikiaji ya macOS.</translation>
     </message>
@@ -4557,17 +4672,17 @@ Hutaweza kurudisha hatua hii.</translation>
 <context>
     <name>PopupHoverButton</name>
     <message>
-        <location filename="../../widgets/common/popup_hover_button.py" line="28"/>
+        <location filename="../../widgets/common/popup_hover_button.py" line="+28"/>
         <source>Open on hover</source>
         <translation>Fungua kwa kuelekeza kishale</translation>
     </message>
     <message>
-        <location filename="../../widgets/common/popup_hover_button.py" line="30"/>
+        <location line="+2"/>
         <source>Opens when you hover over its toolbar icon. Click to disable.</source>
         <translation>Hufunguka kishale kinapoelekezwa kwenye ikoni yake kwenye upau wa zana. Bofya ili kuzima.</translation>
     </message>
     <message>
-        <location filename="../../widgets/common/popup_hover_button.py" line="32"/>
+        <location line="+2"/>
         <source>Open this panel by hovering over its toolbar icon. Click to enable.</source>
         <translation>Fungua paneli hii kwa kuelekeza kishale kwenye ikoni yake kwenye upau wa zana. Bofya ili kuwezesha.</translation>
     </message>
@@ -4615,7 +4730,7 @@ Hutaweza kurudisha hatua hii.</translation>
 <context>
     <name>ProfileScreen</name>
     <message>
-        <location filename="../../ui/profile_screen.py" line="+145"/>
+        <location filename="../../ui/profile_screen.py" line="+147"/>
         <source>Who is using Solin?</source>
         <translation>Ni nani anayetumia Solin?</translation>
     </message>
@@ -5112,7 +5227,7 @@ Hutaweza kurudisha hatua hii.</translation>
 <context>
     <name>QuickAccessToolbar</name>
     <message>
-        <location filename="../../widgets/quick_access_toolbar.py" line="+666"/>
+        <location filename="../../widgets/quick_access_toolbar.py" line="+632"/>
         <source>Remote control unavailable</source>
         <translation>Udhibiti wa mbali haupatikani</translation>
     </message>
@@ -5162,7 +5277,7 @@ Hutaweza kurudisha hatua hii.</translation>
 <context>
     <name>QuickToolbarBridge</name>
     <message>
-        <location filename="../../ui/qml/quick_toolbar.py" line="+437"/>
+        <location filename="../../ui/qml/quick_toolbar.py" line="+450"/>
         <source>Manage monitors</source>
         <translation>Simamia skrini</translation>
     </message>
@@ -5559,49 +5674,49 @@ Hutaweza kurudisha hatua hii.</translation>
 <context>
     <name>SceneControlPopup</name>
     <message>
-        <location filename="../../widgets/scenes/control_popup.py" line="+274"/>
-        <location line="+689"/>
+        <location filename="../../widgets/scenes/control_popup.py" line="+275"/>
+        <location line="+692"/>
         <source>Solin scenes</source>
         <translation>Mandhari ya Solin</translation>
     </message>
     <message>
-        <location line="-668"/>
-        <location line="+669"/>
+        <location line="-669"/>
+        <location line="+670"/>
         <source>Configured</source>
         <translation>Zilizowekwa</translation>
     </message>
     <message>
-        <location line="-660"/>
-        <location line="+661"/>
+        <location line="-661"/>
+        <location line="+662"/>
         <source>Camera PiP</source>
         <translation>Kamera ya PiP</translation>
     </message>
     <message>
-        <location line="-652"/>
-        <location line="+653"/>
+        <location line="-653"/>
+        <location line="+654"/>
         <source>Other scenes</source>
         <translation>Mandhari mengine</translation>
     </message>
     <message>
-        <location line="-615"/>
-        <location line="+616"/>
+        <location line="-616"/>
+        <location line="+617"/>
         <source>Auto-switch media</source>
         <translation>Ubadilishaji otomatiki</translation>
     </message>
     <message>
-        <location line="-611"/>
-        <location line="+612"/>
+        <location line="-612"/>
+        <location line="+613"/>
         <source>Media windows</source>
         <translation>Madirisha ya media</translation>
     </message>
     <message>
-        <location line="-608"/>
-        <location line="+609"/>
+        <location line="-609"/>
+        <location line="+610"/>
         <source>Show in media windows</source>
         <translation>Onyesha kwenye madirisha ya media</translation>
     </message>
     <message>
-        <location line="-596"/>
+        <location line="-597"/>
         <source>The recording state could not be changed.</source>
         <translation>Hali ya kurekodi haikuweza kubadilishwa.</translation>
     </message>
@@ -5843,7 +5958,7 @@ Hutaweza kurudisha hatua hii.</translation>
 <context>
     <name>SceneRuntimeController</name>
     <message>
-        <location filename="../../controllers/scene_runtime_controller.py" line="+1646"/>
+        <location filename="../../controllers/scene_runtime_controller.py" line="+1651"/>
         <source>The selected transition is unavailable. The scene was cut instead.</source>
         <translation>Mpito uliochaguliwa haupatikani. Mandhari ilibadilishwa kwa kukata.</translation>
     </message>
@@ -7256,7 +7371,7 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
 <context>
     <name>SettingsWidget</name>
     <message>
-        <location filename="../../widgets/settings_widget.py" line="+271"/>
+        <location filename="../../widgets/settings_widget.py" line="+277"/>
         <location line="+265"/>
         <source>Settings</source>
         <translation>Mipangilio</translation>
@@ -8671,7 +8786,7 @@ Ongeza moja ukiwa tayari.</translation>
 <context>
     <name>UpdateDialog</name>
     <message>
-        <location filename="../../ui/dialogs/update.py" line="+226"/>
+        <location filename="../../ui/dialogs/update.py" line="+227"/>
         <source>Update available</source>
         <translation>Sasisho linapatikana</translation>
     </message>
@@ -10908,7 +11023,7 @@ Tumia kitufe cha kucheza ili kuonyesha · Buruta kishikio ⠿ ili kupanga upya</
 <context>
     <name>_TimePickerPopup</name>
     <message>
-        <location filename="../../widgets/settings/meeting_schedule_section.py" line="-292"/>
+        <location filename="../../widgets/settings/meeting_schedule_section.py" line="-477"/>
         <source>Hour</source>
         <translation>Saa</translation>
     </message>

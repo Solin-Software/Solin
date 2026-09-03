@@ -711,7 +711,7 @@
 <context>
     <name>BrowserWidget</name>
     <message>
-        <location filename="../../widgets/browser/widget.py" line="+1468"/>
+        <location filename="../../widgets/browser/widget.py" line="+1441"/>
         <source>Back (Alt+←)</source>
         <translation>뒤로 (Alt+←)</translation>
     </message>
@@ -1582,7 +1582,7 @@
         <translation>Solin</translation>
     </message>
     <message>
-        <location line="+693"/>
+        <location line="+694"/>
         <location filename="../../controllers/main_window_nav.py" line="+27"/>
         <source>Scenes</source>
         <translation>장면</translation>
@@ -2694,18 +2694,65 @@ Manually added content, trims, framing and expanded state will be kept.</source>
 <context>
     <name>MeetingScheduleSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/meeting_schedule_section.py" line="+468"/>
-        <location line="+149"/>
+        <location filename="../../widgets/settings/meeting_schedule_section.py" line="+528"/>
+        <location line="+334"/>
         <source>Used by automatic features that depend on the meeting start time.</source>
         <translation>집회 시작 시간에 따라 작동하는 자동 기능에서 사용됩니다.</translation>
+    </message>
+    <message>
+        <location line="-275"/>
+        <location line="+285"/>
+        <source>Fill in from jw.org</source>
+        <translation>jw.org에서 가져오기</translation>
+    </message>
+    <message>
+        <location line="-270"/>
+        <location line="+271"/>
+        <source>Congregation name</source>
+        <translation>회중 이름</translation>
+    </message>
+    <message>
+        <location line="-174"/>
+        <source>Searching jw.org…</source>
+        <translation>jw.org 검색 중…</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>No congregation found with that name.</source>
+        <translation>그 이름의 회중을 찾을 수 없습니다.</translation>
+    </message>
+    <message>
+        <location line="-6"/>
+        <source>Reading the meeting times…</source>
+        <translation>집회 시간을 읽는 중…</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>jw.org does not publish meeting times for this congregation.</source>
+        <translation>jw.org에 이 회중의 집회 시간이 게시되어 있지 않습니다.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Too many searches in a row. Wait a moment and type again.</source>
+        <translation>연속된 검색이 너무 많습니다. 잠시 기다린 후 다시 입력하세요.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Could not reach jw.org. Check the connection and try again.</source>
+        <translation>jw.org에 연결할 수 없습니다. 연결을 확인하고 다시 시도하세요.</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Search your congregation to fill the days and times below.</source>
+        <translation>회중을 검색하면 아래의 요일과 시간이 채워집니다.</translation>
     </message>
     <message>
         <source>Midweek meeting</source>
         <translation type="vanished">주중 집회</translation>
     </message>
     <message>
-        <location line="-133"/>
-        <location line="+137"/>
+        <location line="-193"/>
+        <location line="+320"/>
         <source>Day and time for the midweek meeting.</source>
         <translation>주중 집회 요일과 시간.</translation>
     </message>
@@ -2714,8 +2761,8 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation type="vanished">주말 집회</translation>
     </message>
     <message>
-        <location line="-130"/>
-        <location line="+134"/>
+        <location line="-313"/>
+        <location line="+317"/>
         <source>Day and time for the weekend meeting.</source>
         <translation>주말 집회 요일과 시간.</translation>
     </message>
@@ -2970,8 +3017,8 @@ Manually added content, trims, framing and expanded state will be kept.</source>
 <context>
     <name>OBSScenePopup</name>
     <message>
-        <location filename="../../widgets/obs_scene_popup.py" line="+110"/>
-        <location line="+541"/>
+        <location filename="../../widgets/obs_scene_popup.py" line="+111"/>
+        <location line="+544"/>
         <source>OBS Scenes</source>
         <translation>OBS 장면</translation>
     </message>
@@ -3222,7 +3269,7 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation>계속</translation>
     </message>
     <message>
-        <location line="+47"/>
+        <location line="+52"/>
         <source>Welcome to Solin</source>
         <translation>Solin에 오신 것을 환영합니다</translation>
     </message>
@@ -3270,6 +3317,27 @@ Manually added content, trims, framing and expanded state will be kept.</source>
     </message>
     <message>
         <location line="+5"/>
+        <location line="+406"/>
+        <source>Meeting schedule</source>
+        <translation>집회 일정</translation>
+    </message>
+    <message>
+        <location line="-400"/>
+        <location line="+1161"/>
+        <source>Congregation</source>
+        <translation>회중</translation>
+    </message>
+    <message>
+        <source>Optional</source>
+        <translation type="vanished">선택 사항</translation>
+    </message>
+    <message>
+        <location line="-1150"/>
+        <source>Find your congregation to fill the meeting days and times from jw.org.</source>
+        <translation>회중을 검색하면 jw.org에서 집회 요일과 시간을 채울 수 있습니다.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
         <location line="+375"/>
         <source>Meeting media</source>
         <translation>집회 미디어</translation>
@@ -3471,6 +3539,8 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation>이번 주와 다음 주</translation>
     </message>
     <message>
+        <location line="-393"/>
+        <location line="+400"/>
         <location line="+5"/>
         <location line="+9"/>
         <source>Not configured</source>
@@ -3502,17 +3572,37 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation>장면 선택</translation>
     </message>
     <message>
-        <location line="+316"/>
+        <location line="+303"/>
+        <location line="+167"/>
         <source>Close</source>
         <translation>닫기</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="-159"/>
+        <source>Search by congregation name</source>
+        <translation>회중 이름으로 검색</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/onboarding.py" line="+69"/>
+        <source>Searching jw.org…</source>
+        <translation>jw.org 검색 중…</translation>
+    </message>
+    <message>
+        <source>Meeting days and times come from jw.org.</source>
+        <translation type="vanished">집회 요일과 시간은 jw.org에서 가져옵니다.</translation>
+    </message>
+    <message>
+        <location filename="../../qml/OnboardingView.qml" line="+88"/>
+        <source>Remove congregation</source>
+        <translation>회중 삭제</translation>
+    </message>
+    <message>
+        <location line="+78"/>
         <source>Search languages</source>
         <translation>언어 검색</translation>
     </message>
     <message>
-        <location filename="../../ui/qml/onboarding.py" line="+275"/>
+        <location filename="../../ui/qml/onboarding.py" line="+255"/>
         <source>Enter a port between 1 and 65535.</source>
         <translation>1에서 65535 사이의 포트를 입력하세요.</translation>
     </message>
@@ -3522,7 +3612,7 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation>공유 대상 선택기를 사용할 수 없습니다.</translation>
     </message>
     <message>
-        <location line="+96"/>
+        <location line="+139"/>
         <source>Enter a profile name.</source>
         <translation>프로필 이름을 입력하세요.</translation>
     </message>
@@ -3552,12 +3642,37 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation>Zoom 공유 대화 상자에서 대상을 선택하세요.</translation>
     </message>
     <message>
-        <location line="+80"/>
+        <location line="+81"/>
         <source>Could not create the profile.</source>
         <translation>프로필을 만들 수 없습니다.</translation>
     </message>
     <message>
-        <location line="+99"/>
+        <location line="-542"/>
+        <source>jw.org does not publish meeting times for this congregation.</source>
+        <translation>jw.org에 이 회중의 집회 시간이 게시되어 있지 않습니다.</translation>
+    </message>
+    <message>
+        <location line="-8"/>
+        <source>Reading the meeting times…</source>
+        <translation>집회 시간을 읽는 중…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>No congregation found with that name.</source>
+        <translation>그 이름의 회중을 찾을 수 없습니다.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Too many searches in a row. Wait a moment and type again.</source>
+        <translation>연속된 검색이 너무 많습니다. 잠시 기다린 후 다시 입력하세요.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Could not reach jw.org. Check the connection and try again.</source>
+        <translation>jw.org에 연결할 수 없습니다. 연결을 확인하고 다시 시도하세요.</translation>
+    </message>
+    <message>
+        <location line="+685"/>
         <source>Allow Solin in macOS Accessibility settings.</source>
         <translation>macOS 손쉬운 사용 설정에서 Solin을 허용하세요.</translation>
     </message>
@@ -4528,17 +4643,17 @@ This action cannot be undone.</source>
 <context>
     <name>PopupHoverButton</name>
     <message>
-        <location filename="../../widgets/common/popup_hover_button.py" line="28"/>
+        <location filename="../../widgets/common/popup_hover_button.py" line="+28"/>
         <source>Open on hover</source>
         <translation>마우스를 올리면 열기</translation>
     </message>
     <message>
-        <location filename="../../widgets/common/popup_hover_button.py" line="30"/>
+        <location line="+2"/>
         <source>Opens when you hover over its toolbar icon. Click to disable.</source>
         <translation>도구 모음의 아이콘 위에 마우스를 올리면 열립니다. 클릭하여 사용을 중지하세요.</translation>
     </message>
     <message>
-        <location filename="../../widgets/common/popup_hover_button.py" line="32"/>
+        <location line="+2"/>
         <source>Open this panel by hovering over its toolbar icon. Click to enable.</source>
         <translation>도구 모음의 아이콘 위에 마우스를 올리면 이 패널이 열립니다. 클릭하여 사용하세요.</translation>
     </message>
@@ -4586,7 +4701,7 @@ This action cannot be undone.</source>
 <context>
     <name>ProfileScreen</name>
     <message>
-        <location filename="../../ui/profile_screen.py" line="+145"/>
+        <location filename="../../ui/profile_screen.py" line="+147"/>
         <source>Who is using Solin?</source>
         <translation>누가 Solin을 사용하고 있습니까?</translation>
     </message>
@@ -5082,7 +5197,7 @@ This action cannot be undone.</source>
 <context>
     <name>QuickAccessToolbar</name>
     <message>
-        <location filename="../../widgets/quick_access_toolbar.py" line="+666"/>
+        <location filename="../../widgets/quick_access_toolbar.py" line="+632"/>
         <source>Remote control unavailable</source>
         <translation>원격 제어를 사용할 수 없습니다</translation>
     </message>
@@ -5131,7 +5246,7 @@ This action cannot be undone.</source>
 <context>
     <name>QuickToolbarBridge</name>
     <message>
-        <location filename="../../ui/qml/quick_toolbar.py" line="+437"/>
+        <location filename="../../ui/qml/quick_toolbar.py" line="+450"/>
         <source>Manage monitors</source>
         <translation>모니터 관리</translation>
     </message>
@@ -5528,49 +5643,49 @@ This action cannot be undone.</source>
 <context>
     <name>SceneControlPopup</name>
     <message>
-        <location filename="../../widgets/scenes/control_popup.py" line="+274"/>
-        <location line="+689"/>
+        <location filename="../../widgets/scenes/control_popup.py" line="+275"/>
+        <location line="+692"/>
         <source>Solin scenes</source>
         <translation>Solin 장면</translation>
     </message>
     <message>
-        <location line="-668"/>
-        <location line="+669"/>
+        <location line="-669"/>
+        <location line="+670"/>
         <source>Configured</source>
         <translation>구성됨</translation>
     </message>
     <message>
-        <location line="-660"/>
-        <location line="+661"/>
+        <location line="-661"/>
+        <location line="+662"/>
         <source>Camera PiP</source>
         <translation>카메라 PiP</translation>
     </message>
     <message>
-        <location line="-652"/>
-        <location line="+653"/>
+        <location line="-653"/>
+        <location line="+654"/>
         <source>Other scenes</source>
         <translation>다른 장면</translation>
     </message>
     <message>
-        <location line="-615"/>
-        <location line="+616"/>
+        <location line="-616"/>
+        <location line="+617"/>
         <source>Auto-switch media</source>
         <translation>자동 전환</translation>
     </message>
     <message>
-        <location line="-611"/>
-        <location line="+612"/>
+        <location line="-612"/>
+        <location line="+613"/>
         <source>Media windows</source>
         <translation>미디어 창</translation>
     </message>
     <message>
-        <location line="-608"/>
-        <location line="+609"/>
+        <location line="-609"/>
+        <location line="+610"/>
         <source>Show in media windows</source>
         <translation>미디어 창에 표시</translation>
     </message>
     <message>
-        <location line="-596"/>
+        <location line="-597"/>
         <source>The recording state could not be changed.</source>
         <translation>녹화 상태를 변경할 수 없습니다.</translation>
     </message>
@@ -5812,7 +5927,7 @@ This action cannot be undone.</source>
 <context>
     <name>SceneRuntimeController</name>
     <message>
-        <location filename="../../controllers/scene_runtime_controller.py" line="+1646"/>
+        <location filename="../../controllers/scene_runtime_controller.py" line="+1651"/>
         <source>The selected transition is unavailable. The scene was cut instead.</source>
         <translation>선택한 전환을 사용할 수 없습니다. 대신 컷으로 전환했습니다.</translation>
     </message>
@@ -7225,7 +7340,7 @@ Add content, a camera, or another scene.</source>
 <context>
     <name>SettingsWidget</name>
     <message>
-        <location filename="../../widgets/settings_widget.py" line="+271"/>
+        <location filename="../../widgets/settings_widget.py" line="+277"/>
         <location line="+265"/>
         <source>Settings</source>
         <translation>설정</translation>
@@ -8640,7 +8755,7 @@ Add one when you are ready.</source>
 <context>
     <name>UpdateDialog</name>
     <message>
-        <location filename="../../ui/dialogs/update.py" line="+226"/>
+        <location filename="../../ui/dialogs/update.py" line="+227"/>
         <source>Update available</source>
         <translation>업데이트 사용 가능</translation>
     </message>
@@ -10866,7 +10981,7 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
 <context>
     <name>_TimePickerPopup</name>
     <message>
-        <location filename="../../widgets/settings/meeting_schedule_section.py" line="-292"/>
+        <location filename="../../widgets/settings/meeting_schedule_section.py" line="-477"/>
         <source>Hour</source>
         <translation>시간</translation>
     </message>
