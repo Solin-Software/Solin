@@ -34,6 +34,18 @@ from solin.core.profiles.application import ProfileRegistryLoadError
 from solin.bootstrap.startup_timeline import startup_timeline
 
 
+def _scenes_engine_available() -> bool:
+    """True when a scene engine owns the cameras — native (Windows) or libobs.
+
+    When it does, the legacy Qt camera stack must stay off: a V4L2 device opens
+    once, so a second QCamera consumer racing libobs' ``v4l2_input`` triggers
+    "Camera is in use". Only build the legacy camera when nothing else drives it.
+    """
+    from solin.core.scenes.libobs_engine import libobs_scene_engine_selected
+
+    return NATIVE_SCENES_SUPPORTED or libobs_scene_engine_selected()
+
+
 def _build_main_window_profile_settings(profile_settings):
     from solin.controllers.main_window_profile_settings import MainWindowProfileSettings
     from solin.core.ingest.watched_folder_settings import WatchedFolderSettingsStore
@@ -72,7 +84,7 @@ def _build_main_window_profile_settings(profile_settings):
         auto_key=AutoKeySettingsStore.for_profile_settings(profile_settings),
         camera=(
             CameraSettingsStore.for_profile_settings(profile_settings)
-            if not NATIVE_SCENES_SUPPORTED
+            if not _scenes_engine_available()
             else None
         ),
         projection_playback=ProjectionPlaybackSettingsStore.for_profile_settings(profile_settings),
@@ -235,7 +247,7 @@ def _build_main_window_service_factories(
     install_id_provider = lambda: get_install_id(installation_settings)
 
     camera_factory = None
-    if not NATIVE_SCENES_SUPPORTED:
+    if not _scenes_engine_available():
         from solin.core.integrations.camera import CameraService
 
         camera_factory = CameraService
