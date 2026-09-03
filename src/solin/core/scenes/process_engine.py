@@ -1962,6 +1962,7 @@ def _window_target_record(target: OutputWindowTarget) -> dict[str, object]:
         "height": target.height,
         "device_pixel_ratio": target.device_pixel_ratio,
         "visible": target.visible,
+        "scene_id": target.scene_id,
     }
 
 

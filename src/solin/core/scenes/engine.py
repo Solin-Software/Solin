@@ -302,12 +302,15 @@ class OutputWindowTarget:
     height: int
     device_pixel_ratio: float
     visible: bool = True
+    scene_id: str = ""  # render this one scene directly ("" = the composited main mix)
 
     def __post_init__(self) -> None:
         if not isinstance(self.bus_id, BusId):
             raise ValueError("Invalid window render bus")
         _identity(self.target_id, "window target id")
         _identity(self.screen_id, "screen id")
+        if self.scene_id:
+            _bounded_text(self.scene_id, 256, "window target scene id")
         _bounded_int(self.native_handle, 1, 2**64 - 1, "window native handle")
         _bounded_int(self.x, -(2**31), 2**31 - 1, "window x")
         _bounded_int(self.y, -(2**31), 2**31 - 1, "window y")

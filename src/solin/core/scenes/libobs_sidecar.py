@@ -240,6 +240,12 @@ class LibobsSidecarEngine:
 
         self._scene_graph = LibobsSceneGraph(runtime)
         self._window_output = LibobsWindowOutput(runtime)
+        # Let a window target render a specific scene directly (editor preview);
+        # re-resolved every frame against the current graph.
+        self._window_output.set_scene_resolver(
+            lambda scene_id: self._scene_graph.scene_source(scene_id)  # type: ignore[attr-defined]
+            if self._scene_graph is not None else None
+        )
         from solin.core.scenes.libobs_preview_egress import LibobsPreviewEgress
         from solin.core.scenes.libobs_program_egress import LibobsProgramEgress
 
@@ -679,11 +685,18 @@ class LibobsSidecarEngine:
             active_scenes = payload.get("active_scenes") or {}
             # An open media source owns the content slot; otherwise the BGRA
             # frame-ingress source does (both may be absent → placeholder).
-            graph.hydrate(  # type: ignore[attr-defined]
-                payload.get("document") or {},
-                active_scenes,
-                self._effective_content_source(),
-            )
+            # Hold the window-output lock so a per-scene draw callback on the
+            # graphics thread can't resolve a scene while it is being released.
+            from contextlib import nullcontext
+
+            output = self._window_output
+            rebuild_guard = output.hydrate_lock if output is not None else nullcontext()
+            with rebuild_guard:
+                graph.hydrate(  # type: ignore[attr-defined]
+                    payload.get("document") or {},
+                    active_scenes,
+                    self._effective_content_source(),
+                )
             self._reconcile_preview_egress(payload.get("preview_egress"), active_scenes)
             if self._program_egress is not None:
                 self._program_egress.configure(payload.get("program_egress"))

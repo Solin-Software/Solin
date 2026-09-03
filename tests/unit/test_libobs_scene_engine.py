@@ -849,6 +849,47 @@ def test_window_output_shutdown_releases_all():
     assert output.handles == ()
 
 
+def test_window_output_draws_main_texture_without_scene_id(monkeypatch):
+    calls: list = []
+    monkeypatch.setattr("pylibobs.display.render_main_texture_letterboxed",
+                        lambda cw, ch, ww, wh: calls.append("main"), raising=False)
+    output, created = _window_output_with_recorder()
+    output.set_targets([_window_target(1)])  # no scene_id → composited main mix
+    created[0].draw_callbacks[0](640, 360)
+    assert calls == ["main"]
+
+
+def test_window_output_draws_a_specific_scene_when_scene_id_is_set(monkeypatch):
+    calls: list = []
+    monkeypatch.setattr("pylibobs.display.render_source_letterboxed",
+                        lambda ptr, cw, ch, ww, wh: calls.append(("source", ptr)), raising=False)
+    monkeypatch.setattr("pylibobs.display.render_main_texture_letterboxed",
+                        lambda cw, ch, ww, wh: calls.append("main"), raising=False)
+    output, created = _window_output_with_recorder()
+    output.set_scene_resolver(
+        lambda sid: types.SimpleNamespace(_ptr="PTR-%s" % sid) if sid == "edit" else None)
+    target = _window_target(1)
+    target["scene_id"] = "edit"
+    output.set_targets([target])
+    created[0].draw_callbacks[0](640, 360)
+    assert calls == [("source", "PTR-edit")]  # the selected scene, not the main mix
+
+
+def test_window_output_scene_change_needs_no_new_display(monkeypatch):
+    resolved: list = []
+    monkeypatch.setattr("pylibobs.display.render_source_letterboxed",
+                        lambda ptr, cw, ch, ww, wh: resolved.append(ptr), raising=False)
+    output, created = _window_output_with_recorder()
+    output.set_scene_resolver(lambda sid: types.SimpleNamespace(_ptr=sid))
+    first = _window_target(1); first["scene_id"] = "a"
+    output.set_targets([first])
+    second = _window_target(1); second["scene_id"] = "b"
+    output.set_targets([second])  # same handle+size, only the scene changed
+    assert len(created) == 1  # display reused, not recreated
+    created[0].draw_callbacks[0](640, 360)
+    assert resolved == ["b"]  # renders the newly-selected scene live
+
+
 class _RecordingWindowOutput:
     def __init__(self) -> None:
         self.calls: list[list] = []

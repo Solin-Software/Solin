@@ -7,14 +7,22 @@ process — ``pylibobs`` ``Display.from_window`` binds to the server-global wind
 handle (X11 ``Window`` XID / Win32 ``HWND``), the same cross-process pattern the
 native engine uses; on X11 it opens its own connection to ``$DISPLAY``.
 
-The rendered content is the main texture (the composited output channels), so the
-program scene routed by :class:`~solin.core.scenes.libobs_scene_builder.LibobsSceneGraph`
-appears on every target window. Per-bus views are a later refinement.
+By default a target renders the main texture (the composited output channels), so
+the program scene routed by :class:`~solin.core.scenes.libobs_scene_builder.LibobsSceneGraph`
+appears on it. A target may instead carry a ``scene_id`` to render one specific
+scene directly on the GPU (e.g. the editor's preview of the selected scene) — the
+draw callback resolves that scene per frame through an injected resolver.
+
+Thread-safety: draw callbacks run on libobs' graphics thread while ``hydrate``
+rebuilds the scene graph on the handler thread. A per-scene callback resolves and
+renders under :attr:`hydrate_lock`; the sidecar holds the same lock while it
+clears/rebuilds the graph, so the callback never renders a released scene source.
 """
 
 from __future__ import annotations
 
 import logging
+import threading
 from typing import Any, Callable
 
 log = logging.getLogger(__name__)
@@ -41,15 +49,30 @@ class LibobsWindowOutput:
         self._display_factory = display_factory or _default_display_factory
         self._displays: dict[int, Any] = {}
         self._sizes: dict[int, tuple[int, int]] = {}
+        self._scene_ids: dict[int, str] = {}  # handle → scene to render ("" = main mix)
+        self._scene_resolver: Callable[[str], Any] | None = None
+        self._lock = threading.RLock()
 
     @property
     def handles(self) -> tuple[int, ...]:
         return tuple(self._displays)
 
+    @property
+    def hydrate_lock(self) -> "threading.RLock":
+        """Held by per-scene draw callbacks; the sidecar holds it across a graph
+        rebuild so a callback can't resolve a scene mid-clear."""
+        return self._lock
+
+    def set_scene_resolver(self, resolver: Callable[[str], Any] | None) -> None:
+        """Install the ``scene_id -> source`` resolver (the live scene graph's
+        ``scene_source``). Re-resolved every frame, so a rebuilt graph is picked up."""
+        with self._lock:
+            self._scene_resolver = resolver
+
     def set_targets(self, targets: list) -> None:
         """Reconcile the live displays against the requested window targets."""
         canvas = self._runtime.video
-        wanted: dict[int, tuple[int, int]] = {}
+        wanted: dict[int, tuple[int, int, str]] = {}
         for target in targets:
             if not isinstance(target, dict) or not target.get("visible", True):
                 continue
@@ -59,22 +82,25 @@ class LibobsWindowOutput:
             dpr = float(target.get("device_pixel_ratio", 1.0) or 1.0)
             width = max(1, round(int(target.get("width", 1)) * dpr))
             height = max(1, round(int(target.get("height", 1)) * dpr))
-            wanted[handle] = (width, height)
+            scene_id = str(target.get("scene_id", "") or "")
+            wanted[handle] = (width, height, scene_id)
 
-        for handle in list(self._displays):
-            if handle not in wanted:
-                self._release_one(handle)
+        with self._lock:
+            for handle in list(self._displays):
+                if handle not in wanted:
+                    self._release_one(handle)
 
-        for handle, (width, height) in wanted.items():
-            display = self._displays.get(handle)
-            if display is None:
-                self._create(handle, width, height, canvas)
-            elif self._sizes.get(handle) != (width, height):
-                try:
-                    display.resize(width, height)
-                    self._sizes[handle] = (width, height)
-                except Exception:  # noqa: BLE001 - libobs boundary
-                    log.warning("libobs display resize failed for handle %d", handle, exc_info=True)
+            for handle, (width, height, scene_id) in wanted.items():
+                self._scene_ids[handle] = scene_id  # picked up live by the draw callback
+                display = self._displays.get(handle)
+                if display is None:
+                    self._create(handle, width, height, canvas)
+                elif self._sizes.get(handle) != (width, height):
+                    try:
+                        display.resize(width, height)
+                        self._sizes[handle] = (width, height)
+                    except Exception:  # noqa: BLE001 - libobs boundary
+                        log.warning("libobs display resize failed for handle %d", handle, exc_info=True)
 
     def _create(self, handle: int, width: int, height: int, canvas: Any) -> None:
         try:
@@ -85,9 +111,22 @@ class LibobsWindowOutput:
         canvas_w, canvas_h = canvas.width, canvas.height
 
         def _draw(display_cx: int, display_cy: int) -> None:
-            from pylibobs.display import render_main_texture_letterboxed
+            # Resolve + render under the lock so a scene source can't be released
+            # by a concurrent graph rebuild between resolve and render.
+            with self._lock:
+                scene_id = self._scene_ids.get(handle, "")
+                resolver = self._scene_resolver
+                if scene_id and resolver is not None:
+                    from pylibobs.display import render_source_letterboxed
 
-            render_main_texture_letterboxed(canvas_w, canvas_h, display_cx, display_cy)
+                    source = resolver(scene_id)
+                    render_source_letterboxed(
+                        getattr(source, "_ptr", None) if source is not None else None,
+                        canvas_w, canvas_h, display_cx, display_cy)
+                else:
+                    from pylibobs.display import render_main_texture_letterboxed
+
+                    render_main_texture_letterboxed(canvas_w, canvas_h, display_cx, display_cy)
 
         try:
             display.add_draw_callback(_draw)
@@ -104,6 +143,7 @@ class LibobsWindowOutput:
     def _release_one(self, handle: int) -> None:
         display = self._displays.pop(handle, None)
         self._sizes.pop(handle, None)
+        self._scene_ids.pop(handle, None)
         if display is None:
             return
         try:
@@ -112,5 +152,6 @@ class LibobsWindowOutput:
             log.debug("display release errored for handle %d", handle, exc_info=True)
 
     def shutdown(self) -> None:
-        for handle in list(self._displays):
-            self._release_one(handle)
+        with self._lock:
+            for handle in list(self._displays):
+                self._release_one(handle)
