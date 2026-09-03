@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from functools import lru_cache
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import (
@@ -17,7 +18,7 @@ from PySide6.QtCore import (
     QUrl,
     Signal,
 )
-from PySide6.QtGui import QColor, QRegion
+from PySide6.QtGui import QBitmap, QColor, QPainter, QRegion
 from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtWidgets import QApplication, QWidget
 
@@ -68,6 +69,26 @@ _QAT_MINI_RADIUS = 8
 _MAC = sys.platform == "darwin"
 _LINUX = sys.platform.startswith("linux")
 _WINDOWS = sys.platform.startswith("win")
+
+
+@lru_cache(maxsize=8)
+def _rounded_region(width: int, height: int, radius: int) -> QRegion:
+    """A rounded-rect ``QRegion`` for masking the pill's corners.
+
+    On Linux the QQuickWidget composites its transparent corner pixels as opaque
+    black (the alpha the pill relies on does not reach the widget backing on every
+    GPU/compositor), so a plain rectangular mask leaves black corners. Clipping the
+    widget to a rounded region removes those corner pixels from the paint area
+    entirely, so the content behind shows through regardless of alpha support.
+    """
+    bitmap = QBitmap(width, height)
+    bitmap.fill(Qt.GlobalColor.color0)  # 0 = outside the region
+    painter = QPainter(bitmap)
+    painter.setPen(Qt.GlobalColor.color1)
+    painter.setBrush(Qt.GlobalColor.color1)  # 1 = inside the region
+    painter.drawRoundedRect(0, 0, width, height, radius, radius)
+    painter.end()
+    return QRegion(bitmap)
 
 
 def _icon_hex(color: str) -> str:
@@ -972,24 +993,30 @@ class QuickAccessToolbar(QQuickWidget):
             x = p.width() - _QAT_MAX_W
             surface.move(self._anchor_point(x, base_y))
             # Mask: only the miniTab area at the right edge is interactive.
-            surface.setMask(
-                QRegion(
-                    _QAT_MAX_W - _QAT_MINI_W,
-                    (_QAT_H - _QAT_MINI_H) // 2,
-                    _QAT_MINI_W,
-                    _QAT_MINI_H,
-                )
-            )
+            mini_x = _QAT_MAX_W - _QAT_MINI_W
+            mini_y = (_QAT_H - _QAT_MINI_H) // 2
+            if _LINUX:
+                surface.setMask(
+                    _rounded_region(_QAT_MINI_W, _QAT_MINI_H, _QAT_MINI_RADIUS)
+                    .translated(mini_x, mini_y))
+            else:
+                surface.setMask(QRegion(mini_x, mini_y, _QAT_MINI_W, _QAT_MINI_H))
         else:
             # Centre the *visible pill* within the parent.
             # The pill is centred inside the fixed-width QML root, so we
             # centre the entire QQuickWidget based on _QAT_MAX_W.
             x = (p.width() - _QAT_MAX_W) // 2
             surface.move(self._anchor_point(x, base_y))
-            # Mask: the pill is centred in the QQuickWidget; expose only that
-            # rectangle so surrounding transparent pixels pass clicks through.
+            # Mask: expose only the pill so the surrounding transparent pixels pass
+            # clicks through. On Linux the mask is rounded to the pill radius so the
+            # corners are clipped out (the QQuickWidget renders them black there);
+            # Windows keeps the proven rectangle + QML alpha for the rounding.
             pill_x = (_QAT_MAX_W - pill_w) // 2
-            surface.setMask(QRegion(pill_x, 0, pill_w, _QAT_H))
+            if _LINUX:
+                surface.setMask(
+                    _rounded_region(pill_w, _QAT_H, _QAT_PILL_RADIUS).translated(pill_x, 0))
+            else:
+                surface.setMask(QRegion(pill_x, 0, pill_w, _QAT_H))
             # Keep the monitor-button popup anchor aligned with the pill.
             monitor_button.move(pill_x + 6, (_QAT_H - 30) // 2)
         if self._browser_overlay_mode:
