@@ -192,7 +192,17 @@ class LibobsSceneGraph:
         if kind == "local_camera":
             device = str(config.get("device_id", ""))
             name = str(definition.get("name", "")) if definition else ""
-            return (self._runtime.camera_source(device, name), False)  # runtime-owned
+            # Pin the selected capture format (empty when "Automatic"); pinning MJPG
+            # at a resolution restores full frame rate vs the plugin's heavy default.
+            return (
+                self._runtime.camera_source(
+                    device, name,
+                    pixel_format=str(config.get("pixel_format", "")),
+                    width=int(config.get("width", 0) or 0),
+                    height=int(config.get("height", 0) or 0),
+                ),
+                False,  # runtime-owned
+            )
         if kind == "rtsp_camera":
             uri = str(config.get("uri", ""))
             if not uri:

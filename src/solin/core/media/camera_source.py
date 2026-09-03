@@ -24,7 +24,20 @@ _ENUM_SOURCE_ID = {
 }
 
 
-def camera_source_spec(device_path: str, device_name: str = "") -> tuple[str, dict]:
+def v4l2_fourcc(pixel_format: str) -> int:
+    """Pack a V4L2 fourcc string (e.g. ``"MJPG"``) into its ``__u32`` code."""
+    padded = (pixel_format + "    ")[:4]
+    return sum(ord(char) << (8 * index) for index, char in enumerate(padded))
+
+
+def camera_source_spec(
+    device_path: str,
+    device_name: str = "",
+    *,
+    pixel_format: str = "",
+    width: int = 0,
+    height: int = 0,
+) -> tuple[str, dict]:
     """The libobs capture-source kind + settings for a camera, per platform.
 
     ``QCameraDevice.id()`` yields the platform-native device id — Linux:
@@ -38,6 +51,14 @@ def camera_source_spec(device_path: str, device_name: str = "") -> tuple[str, di
     (Windows' dshow matches ``"<friendly name>:<device path>"``; the plain path is
     a best-effort fallback.) If the native source can't be created the caller
     keeps its fallback path, so an imperfect id degrades, it doesn't break.
+
+    On Linux a selected ``pixel_format`` + ``width``/``height`` pins the v4l2
+    capture format. This matters for performance: with only ``device_id`` the
+    plugin defaults to an uncompressed mode (e.g. YUYV 1080p) that a UVC camera
+    can only deliver at a few FPS — visibly sluggish. Selecting a compressed
+    format (MJPG) at the same resolution restores full frame rate. ``framerate``
+    is deliberately left unset — pinning it makes the v4l2 plugin reject the mode
+    (empty 0×0 capture); the plugin picks the format's native rate on its own.
     """
     if sys.platform == "win32":
         # libobs already reports ids as "<name>:<path>"; prefixing again would
@@ -49,7 +70,11 @@ def camera_source_spec(device_path: str, device_name: str = "") -> tuple[str, di
         return "dshow_input", {"video_device_id": vid, "last_video_device_id": vid}
     if sys.platform == "darwin":
         return "av_capture_input", {"device": device_path}
-    return "v4l2_input", {"device_id": device_path}
+    settings: dict = {"device_id": device_path}
+    if pixel_format and width > 0 and height > 0:
+        settings["pixelformat"] = v4l2_fourcc(pixel_format)
+        settings["resolution"] = (int(width) << 16) | (int(height) & 0xFFFF)
+    return "v4l2_input", settings
 
 
 def libobs_cameras() -> list[tuple[str, str]]:

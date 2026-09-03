@@ -237,7 +237,15 @@ class ObsRuntime:
     def video(self) -> ObsVideoConfig:
         return self._video
 
-    def camera_source(self, device_path: str, device_name: str = "") -> Any:
+    def camera_source(
+        self,
+        device_path: str,
+        device_name: str = "",
+        *,
+        pixel_format: str = "",
+        width: int = 0,
+        height: int = 0,
+    ) -> Any:
         """The ONE shared capture source for ``device_path``, created on first use.
 
         A camera device can be opened only once, so every consumer (the projector's
@@ -246,17 +254,35 @@ class ObsRuntime:
         the device once while it is active in any of them. The runtime owns these
         sources and frees them on shutdown; callers add them ``owned=False``.
         Returns None (logged) if the source can't be created.
+
+        The capture format (``pixel_format`` + ``width``/``height``) is applied to
+        the source. Changing it for the same device updates the existing shared
+        source in place — so selecting a new resolution/format takes effect live
+        without reopening the device.
         """
         if not device_path:
             return None
+        from .camera_source import camera_source_spec
+
+        signature = (pixel_format, int(width), int(height))
         with self._lock:
             existing = self._camera_sources.get(device_path)
             if existing is not None:
-                return existing
+                source, cached_signature = existing
+                if cached_signature != signature:
+                    _, settings = camera_source_spec(
+                        device_path, device_name,
+                        pixel_format=pixel_format, width=width, height=height)
+                    try:
+                        source.update(settings)  # re-negotiate the capture format live
+                        self._camera_sources[device_path] = (source, signature)
+                    except Exception:  # noqa: BLE001 - update/plugin boundary
+                        log.warning("Could not update %s format", device_path, exc_info=True)
+                return source
             self.ensure_started()
-            from .camera_source import camera_source_spec
-
-            kind, settings = camera_source_spec(device_path, device_name)
+            kind, settings = camera_source_spec(
+                device_path, device_name,
+                pixel_format=pixel_format, width=width, height=height)
             self._camera_source_seq += 1
             try:
                 source = self.ob.Source.create(
@@ -267,11 +293,11 @@ class ObsRuntime:
                 return None
             if source is None:
                 return None
-            self._camera_sources[device_path] = source
+            self._camera_sources[device_path] = (source, signature)
             return source
 
     def _release_camera_sources(self) -> None:
-        for source in self._camera_sources.values():
+        for source, _signature in self._camera_sources.values():
             try:
                 source.release()
             except Exception:  # noqa: BLE001 - shutdown must be total

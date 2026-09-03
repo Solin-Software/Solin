@@ -188,6 +188,7 @@ class LibobsSidecarEngine:
         self._virtual_camera: Any | None = None
         self._recorder: Any | None = None
         self._audio_mixer: Any | None = None
+        self._camera_generation = 0
         self._media_source: Any | None = None
         self._media_lock = threading.Lock()
         self._media_poller: threading.Thread | None = None
@@ -278,10 +279,7 @@ class LibobsSidecarEngine:
         if message_type == "list_local_cameras":
             if not self._runtime_started:
                 return _reply(request, "local_camera_list", _unavailable_discovery())
-            return _reply(request, "local_camera_list", {
-                "supported": True, "ready": True,
-                "generation": 0, "devices": [], "error_code": "",
-            })
+            return _reply(request, "local_camera_list", self._local_camera_list())
         if message_type == "list_audio_devices":
             return _reply(request, "audio_device_list", self._audio_device_list())
         if message_type == "hydrate":
@@ -382,6 +380,26 @@ class LibobsSidecarEngine:
         except Exception:  # noqa: BLE001 - enumeration boundary
             log.warning("libobs audio device enumeration failed", exc_info=True)
             return _unavailable_discovery("audio_enumeration_failed")
+
+    def _local_camera_list(self) -> dict[str, object]:
+        from solin.core.scenes.v4l2_camera_discovery import (
+            discover_local_cameras,
+            serialize_camera_device,
+        )
+
+        try:
+            devices = discover_local_cameras()
+        except Exception:  # noqa: BLE001 - enumeration boundary
+            log.warning("libobs camera enumeration failed", exc_info=True)
+            return _unavailable_discovery("camera_enumeration_failed")
+        self._camera_generation += 1
+        return {
+            "supported": True,
+            "ready": True,
+            "generation": self._camera_generation,
+            "devices": [serialize_camera_device(device) for device in devices],
+            "error_code": "",
+        }
 
     def _emit_recording_state(
         self,

@@ -618,7 +618,8 @@ class _CompositingRuntime:
         self.monitored.append((source, monitoring_type))
 
     # shared camera source (runtime-owned)
-    def camera_source(self, device_id: str, name: str = ""):
+    def camera_source(self, device_id: str, name: str = "", *,
+                      pixel_format: str = "", width: int = 0, height: int = 0):
         self.camera_sources.append((device_id, name))
         return types.SimpleNamespace(kind="camera", device_id=device_id, name=name)
 
@@ -1293,14 +1294,35 @@ def test_engine_list_audio_devices_reports_real_devices():
     assert all(d.device_id != "default" for d in discovery.devices)
 
 
-def test_engine_list_local_cameras_returns_an_empty_discovery():
+def test_engine_list_local_cameras_returns_discovered_devices(monkeypatch):
+    from solin.core.scenes.engine import (
+        LocalCameraDevice,
+        LocalCameraProbe,
+        LocalCameraProbeStatus,
+    )
+
+    fake_devices = [
+        LocalCameraDevice(
+            device_id="/dev/video1", display_name="Brio 105", software_device=False,
+            formats=(),
+            probe=LocalCameraProbe(
+                status=LocalCameraProbeStatus.UNVERIFIED, backend="v4l2",
+                failure_stage="format_probe", error_code="no_formats")),
+    ]
+    # The handler discovers cameras out of band (real V4L2 scan); patch it so the
+    # test is deterministic and does not depend on the host's cameras.
+    monkeypatch.setattr(
+        "solin.core.scenes.v4l2_camera_discovery.discover_local_cameras",
+        lambda: fake_devices,
+    )
     runtime = _CompositingRuntime()
     engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
     engine.handle(_request("hello"))
     discovery = _local_camera_discovery_from_envelope(
         engine.handle(_request("list_local_cameras"))
     )
-    assert discovery.devices == ()
+    assert discovery.supported and discovery.ready and discovery.error_code == ""
+    assert [device.device_id for device in discovery.devices] == ["/dev/video1"]
 
 
 def test_hello_advertises_program_recording_when_booted():
