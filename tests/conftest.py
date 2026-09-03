@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gc
 import os
 from pathlib import Path
 
@@ -15,6 +16,30 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 
 
 _QT_APPLICATION = QApplication.instance() or QApplication([])
+
+
+# Reclaim PySide ``QObject`` cycles periodically so they cannot pile up across
+# the suite. PySide6 objects routinely sit in reference cycles (signal/slot
+# connections, parent/child links, closures), so plain refcounting never frees
+# them — they wait for the cyclic collector, which the test process seldom
+# triggers on its own. Under the ``offscreen`` platform those still-live C++
+# objects (and the native resources they hold, e.g. Qt Multimedia pipelines)
+# accumulate until constructing a fresh ``QVideoWidget`` faults in the native
+# layer — a load-dependent segfault whose crash site drifts between widget
+# tests. The crash needs roughly ~130 accumulated tests, so collecting every
+# _GC_EVERY tests keeps the population far below that at a fraction of the cost
+# of collecting after every test. Headless-test hygiene only; the app runs a
+# real event loop that drains deferred deletions continuously.
+_GC_EVERY = 20
+_tests_since_gc = 0
+
+
+def pytest_runtest_teardown(item: pytest.Item, nextitem: pytest.Item | None) -> None:
+    global _tests_since_gc
+    _tests_since_gc += 1
+    if nextitem is None or _tests_since_gc >= _GC_EVERY:
+        _tests_since_gc = 0
+        gc.collect()
 
 
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
