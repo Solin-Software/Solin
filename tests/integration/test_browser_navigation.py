@@ -57,6 +57,29 @@ def test_browser_overlay_js_context_menu_uses_the_hover_media_pair():
     assert "_gatherFromElement" not in overlay_js
 
 
+def test_browser_overlay_js_resolves_relative_image_urls():
+    overlay_js = browser_widget.OVERLAY_JS
+
+    # src relativo (wol.jw.org) precisa virar absoluto antes do filtro http,
+    # senão o menu de mídia não abre e o menu nativo assume.
+    assert "function absMediaUrl(url)" in overlay_js
+    assert "var abs = new URL(url, location.href).href;" in overlay_js
+
+    # Os três pontos que transformam atributo em URL candidata usam o helper.
+    assert "return m ? absMediaUrl(m[1]) : '';" in overlay_js
+    assert (
+        "var url = absMediaUrl((img.getAttribute('src') || img.currentSrc || '')"
+        ".split('?')[0]);" in overlay_js
+    )
+    assert (
+        "|| absMediaUrl((el.getAttribute('src') || el.currentSrc || '')"
+        ".split('?')[0]);" in overlay_js
+    )
+
+    # A cadeia antiga parava no src relativo e nunca chegava ao currentSrc.
+    assert "|| (el.getAttribute('src') || '').split('?')[0]" not in overlay_js
+
+
 def test_browser_zoom_change_persists_once_and_updates_other_tabs(monkeypatch):
     class ViewDouble:
         def __init__(self):

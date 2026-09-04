@@ -435,6 +435,18 @@ _OVERLAY_JS_RAW = r"""
     }
 
     // ── Mídia sob o cursor ────────────────────────────────────────────────
+    //
+    // Resolve o src contra o documento antes do filtro http: páginas como
+    // wol.jw.org servem src relativo, que sem isso é rejeitado e derruba o
+    // menu de mídia. Retorna '' para data:, blob: e URLs inválidas.
+    function absMediaUrl(url) {
+        if (!url) return '';
+        try {
+            var abs = new URL(url, location.href).href;
+            return abs.startsWith('http') ? abs : '';
+        } catch (e) { return ''; }
+    }
+
     function cssBgUrl(el) {
         if (!el || !el.getAttribute) return '';
         var stored = _imgSaveUrlMap.get(el);
@@ -442,7 +454,7 @@ _OVERLAY_JS_RAW = r"""
         var m = (el.getAttribute('style') || '').match(
             /background-image\s*:\s*url\(\s*['"]?([^'")\s]+)['"]?\s*\)/i
         );
-        return (m && m[1] && m[1].startsWith('http')) ? m[1] : '';
+        return m ? absMediaUrl(m[1]) : '';
     }
 
     function isProjectableImg(el) {
@@ -594,8 +606,8 @@ _OVERLAY_JS_RAW = r"""
     function captureMediaUrls() {
         document.querySelectorAll('img').forEach(function (img) {
             if (_imgSaveUrlMap.has(img)) return;
-            var url = (img.getAttribute('src') || img.currentSrc || '').split('?')[0];
-            if (url && url.startsWith('http')) _imgSaveUrlMap.set(img, url);
+            var url = absMediaUrl((img.getAttribute('src') || img.currentSrc || '').split('?')[0]);
+            if (url) _imgSaveUrlMap.set(img, url);
         });
         document.querySelectorAll('video').forEach(captureVideoSrc);
         document.querySelectorAll('[style*="background-image"]').forEach(function (el) {
@@ -645,8 +657,7 @@ _OVERLAY_JS_RAW = r"""
     function imageUrlOf(el) {
         if (el.tagName === 'IMG') {
             return _imgSaveUrlMap.get(el)
-                || (el.getAttribute('src') || '').split('?')[0]
-                || (el.currentSrc || '').split('?')[0];
+                || absMediaUrl((el.getAttribute('src') || el.currentSrc || '').split('?')[0]);
         }
         return cssBgUrl(el);
     }
