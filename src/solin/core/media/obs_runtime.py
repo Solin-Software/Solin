@@ -369,23 +369,10 @@ class ObsRuntime:
         with self._lock:
             if self._context is None:
                 return
-            # Tear the projection program (channel-0 transition + content
-            # scenes) down first: freeing the OBS context while those sources
-            # are live crashes libobs. Lazy import breaks the cycle.
-            try:
-                from .obs_program import projection_program
-
-                projection_program().shutdown()
-            except Exception:  # noqa: BLE001 - shutdown must be total
-                log.warning("Projection program shutdown errored", exc_info=True)
-            # The virtual camera holds an output + its own view/scene referencing
-            # this context — release them before it is freed. Lazy import.
-            try:
-                from .obs_virtual_camera import virtual_camera
-
-                virtual_camera().shutdown()
-            except Exception:  # noqa: BLE001 - shutdown must be total
-                log.warning("Virtual camera shutdown errored", exc_info=True)
+            # Under the libobs-sidecar architecture the sidecar owns and tears
+            # down its own program graph, recorder, media, window output, and
+            # virtual camera before it calls this — so this only releases the
+            # runtime's own channels/sources and shuts the context down.
             for channel in sorted(self._used_channels):
                 try:
                     self.set_channel_source(channel, None)
