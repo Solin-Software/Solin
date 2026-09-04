@@ -156,7 +156,7 @@ def test_profile_preparation_prunes_only_expired_meeting_tree_records(
         lambda: (date(2026, 6, 1), date(2026, 7, 20)),
     )
 
-    prepared = bootstrap_application._prepare_profile_main_window(paths)
+    prepared = bootstrap_application._prepare_profile_main_window(paths, native_scenes_enabled=False)
 
     assert prepared is main_window_class
     persisted = json.loads(paths.meeting_trees_file.read_text(encoding="utf-8"))
@@ -179,7 +179,7 @@ def test_profile_preparation_fails_closed_on_unsupported_storage_schema(
     monkeypatch.setattr(bootstrap_application, "_import_main_window_class", object)
 
     with pytest.raises(ValueError, match="Unsupported playlist storage version"):
-        bootstrap_application._prepare_profile_main_window(paths)
+        bootstrap_application._prepare_profile_main_window(paths, native_scenes_enabled=False)
 
     assert json.loads(paths.playlists_file.read_text(encoding="utf-8")) == unsupported
 
