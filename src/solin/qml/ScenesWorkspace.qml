@@ -966,26 +966,13 @@ Item {
             border.width: 1
             border.color: root.borderColor
         }
-        ScenesMenuItem {
-            theme: root.theme
-            text: qsTr("Projected Solin content")
-            onTriggered: root.bridge.addContentSource()
-        }
+        // The picker only creates NEW sources: the year text, a camera, or the
+        // Solin media slot. Already-added sources, other scenes, and duplicates
+        // are intentionally not listed.
         ScenesMenuItem {
             theme: root.theme
             text: qsTr("Year text")
             onTriggered: root.bridge.addYearText()
-        }
-        ScenesMenuSeparator { theme: root.theme }
-        ScenesMenuItem { theme: root.theme; text: qsTr("Cameras"); section: true; enabled: false }
-        Repeater {
-            model: root.bridge ? root.bridge.configuredCameras : []
-            ScenesMenuItem {
-                required property var modelData
-                theme: root.theme
-                text: modelData.name
-                onTriggered: root.bridge.addConfiguredCamera(modelData.id)
-            }
         }
         ScenesMenuItem {
             theme: root.theme
@@ -997,16 +984,10 @@ Item {
             text: qsTr("New network camera…")
             onTriggered: cameraDialog.openForCamera("rtsp_camera")
         }
-        ScenesMenuSeparator { theme: root.theme }
-        ScenesMenuItem { theme: root.theme; text: qsTr("Existing scenes"); section: true; enabled: false }
-        Repeater {
-            model: root.bridge ? root.bridge.referencedScenes : []
-            ScenesMenuItem {
-                required property var modelData
-                theme: root.theme
-                text: modelData.name
-                onTriggered: root.bridge.addSceneReference(modelData.id)
-            }
+        ScenesMenuItem {
+            theme: root.theme
+            text: qsTr("Media")
+            onTriggered: root.bridge.addContentSource()
         }
     }
 

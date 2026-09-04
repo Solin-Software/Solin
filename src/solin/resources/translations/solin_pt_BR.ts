@@ -6393,6 +6393,14 @@ Esta ação não pode ser desfeita.</translation>
         <translation>Nova câmera IP…</translation>
     </message>
     <message>
+        <source>Media</source>
+        <translation>Mídia</translation>
+    </message>
+    <message>
+        <source>Year text</source>
+        <translation>Texto do ano</translation>
+    </message>
+    <message>
         <location line="+4"/>
         <source>Existing scenes</source>
         <translation>Cenas existentes</translation>
