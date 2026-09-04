@@ -15,6 +15,7 @@ from ..core.foundation.constants import (
     ALLOW_ZOOM_PAN_ON_LIVE_TAB,
 )
 from ..core.media.formats import AUDIO_EXTS
+from ..core.media.frame_conversion import VideoFrameConverter
 from ..core.media.playback_request import MediaPlaybackRequest, MediaTrim
 from ..core.projection.aspect_ratio import (
     DEFAULT_PROJECTION_ASPECT_RATIO,
@@ -36,6 +37,9 @@ _TRANSFORMABLE_STATES = frozenset({"image"})
 
 #: Identity transform (no zoom, no pan).
 _IDENTITY_TRANSFORM = (1.0, 0.0, 0.0)
+
+#: QPainter's native format — the surfaces paint it without reconverting.
+PROJECTION_VIDEO_IMAGE_FORMAT = QImage.Format.Format_ARGB32_Premultiplied
 
 _TR_CONTEXT = "MediaProjection"
 _SHOWING_IMAGE_SOURCE = QT_TRANSLATE_NOOP(
@@ -98,6 +102,7 @@ class MediaProjectionController:
         self._handlers = handlers
         self._session = context.projection_session
         self._next_is_sjjm = False
+        self._video_converter: VideoFrameConverter | None = None
 
     def on_song_project(
         self,
@@ -552,10 +557,38 @@ class MediaProjectionController:
             return
         if context.content_frame_sink is not None:
             context.content_frame_sink(frame)
-        for projection_window in context.projection_windows():
-            if getattr(projection_window, "native_output_active", False):
-                continue
-            projection_window.update_frame(frame)
+        if not self._qt_projection_windows():
+            return
+        self._ensure_video_converter().convert(frame)
+
+    def _qt_projection_windows(self) -> list:
+        """Surfaces the Qt renderer still owns; native outputs draw themselves."""
+        return [
+            projection_window
+            for projection_window in self._context.projection_windows()
+            if not getattr(projection_window, "native_output_active", False)
+        ]
+
+    def _ensure_video_converter(self) -> VideoFrameConverter:
+        """One converter for every surface: one decode, one conversion, N paints.
+
+        Conversion must not happen on the GUI thread, and it must not happen
+        once per surface either — the surfaces all paint the same frame, so the
+        same QImage is shared read-only between them.
+        """
+        if self._video_converter is None:
+            # Owned by the frame producer: destroying the media controller stops
+            # the conversion thread, in that order.
+            self._video_converter = VideoFrameConverter(
+                PROJECTION_VIDEO_IMAGE_FORMAT,
+                self._context.media_controller,
+            )
+            self._video_converter.image_ready.connect(self._distribute_video_image)
+        return self._video_converter
+
+    def _distribute_video_image(self, image: QImage) -> None:
+        for projection_window in self._qt_projection_windows():
+            projection_window.update_video_image(image)
 
     def project_media_at_index(
         self,

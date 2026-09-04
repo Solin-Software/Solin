@@ -34,6 +34,10 @@ _IGNORED_MESSAGE_FRAGMENTS = (
     # cadence successfully but emits this warning once per frame, so routing it
     # through Python creates sustained work without an actionable diagnostic.
     "QFFmpeg::Demuxer received AVPacket with pts == AV_NOPTS_VALUE",
+    # Video frames are converted on a worker thread precisely because that
+    # thread has no RHI. Qt reports the CPU fallback once per conversion, so
+    # routing it through Python would put file logging on the frame path.
+    "No RHI backend. Using CPU conversion.",
 )
 _MAX_MESSAGE_LENGTH = 8 * 1024
 _MAX_CONTEXT_LENGTH = 512

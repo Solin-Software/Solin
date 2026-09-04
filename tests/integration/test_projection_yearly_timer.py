@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from PySide6.QtCore import QAbstractAnimation, QObject, Signal
 from PySide6.QtGui import QColor, QImage
-from PySide6.QtMultimedia import QVideoFrame
 from PySide6.QtTest import QSignalSpy, QTest
 from PySide6.QtWidgets import QApplication, QVBoxLayout
 
@@ -179,7 +178,7 @@ def test_first_video_frame_switches_qt_projection_to_media_page():
 
     image = QImage(8, 8, QImage.Format.Format_RGB32)
     image.fill(QColor("black"))
-    view.update_frame(QVideoFrame(image))
+    view.update_video_image(image)
 
     assert view._is_showing_media is True
     assert view._stack.currentIndex() == view._PAGE_MEDIA
@@ -192,11 +191,11 @@ def test_native_video_output_bypasses_qt_frame_materialization() -> None:
     view.begin_video()
 
     view.set_native_output_active(True)
-    view.update_frame(QVideoFrame(image))
+    view.update_video_image(image)
 
     assert view.native_output_active
     assert view._stack.currentIndex() == view._PAGE_MEDIA
-    assert view.display_label._video_frame is None
+    assert view.display_label._video_image is None
 
     view.clear()
     assert view.native_output_active
@@ -275,7 +274,7 @@ def test_first_fallback_frame_after_native_routing_loss_fades_in() -> None:
     view.set_native_output_active(True)
 
     view.set_native_output_active(False)
-    view.update_frame(QVideoFrame(image))
+    view.update_video_image(image)
 
     assert not view.native_output_active
     assert view._stack.currentIndex() == view._PAGE_MEDIA

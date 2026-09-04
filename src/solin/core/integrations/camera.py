@@ -44,9 +44,13 @@ from PySide6.QtMultimedia import (
 
 from solin.core.foundation.constants import APP_PLATFORM
 from solin.core.integrations import camera_options
+from solin.core.media.frame_conversion import VideoFrameConverter
 
 
 _log = logging.getLogger(__name__)
+
+# Format every camera frame consumer expects.
+_TARGET_FORMAT = QImage.Format.Format_RGB888
 
 
 class CameraService(QObject):
@@ -81,6 +85,9 @@ class CameraService(QObject):
         self._qt_sink: QVideoSink = QVideoSink(self)
         self._qt_session.setVideoSink(self._qt_sink)
         self._qt_sink.videoFrameChanged.connect(self._on_qt_frame)
+
+        self._converter = VideoFrameConverter(_TARGET_FORMAT, self)
+        self._converter.image_ready.connect(self._on_converted_frame)
 
     @property
     def is_running(self) -> bool:
@@ -210,14 +217,14 @@ class CameraService(QObject):
     def _on_qt_frame(self, frame: QVideoFrame) -> None:
         if self._active is None or not frame.isValid():
             return
-        try:
-            image = frame.toImage()
-        except Exception:  # noqa: BLE001 - Qt video-frame conversion boundary
-            image = QImage()
-        if not image.isNull():
-            if image.format() != QImage.Format.Format_RGB888:
-                image = image.convertToFormat(QImage.Format.Format_RGB888)
-            self.frame_ready.emit(image.copy())
+        self._converter.convert(frame)
+
+    @Slot(QImage)
+    def _on_converted_frame(self, image: QImage) -> None:
+        """Publish a converted frame — may land after capture already stopped."""
+        if self._active is None:
+            return
+        self.frame_ready.emit(image)
 
     def _on_qt_error(self, *_args: object) -> None:
         if self._qt_camera is None:

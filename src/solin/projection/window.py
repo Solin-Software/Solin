@@ -23,7 +23,6 @@ from PySide6.QtGui import (
     QPainter,
     QPixmap,
 )
-from PySide6.QtMultimedia import QVideoFrame
 from PySide6.QtWidgets import (
     QGraphicsOpacityEffect,
     QStackedLayout,
@@ -211,12 +210,16 @@ class VideoDisplayWidget(QWidget):
     High-performance video/image display widget.
 
     Video path (per frame):
-      • Receives QVideoFrame via set_video_frame() — no conversion yet.
+      • Receives an already converted QImage via set_video_image().  Decoded
+        frames are converted once for every surface, off the GUI thread, by
+        the pipeline (see core.media.frame_conversion) — converting here would
+        put Qt's RHI on the paint path, which costs over 100 ms per frame on
+        GPUs the RHI cannot drive at video rates.
       • Calls self.update() *only once* per pending paint (throttle flag).
-      • paintEvent converts the frame to QImage and draws it directly onto
-        the widget via QPainter.drawImage(), with SmoothPixmapTransform
-        render hint so the GPU compositor handles the scaling instead of
-        doing pixmap.scaled() on the CPU.
+      • paintEvent draws the image directly onto the widget via
+        QPainter.drawImage(), with SmoothPixmapTransform render hint so the
+        GPU compositor handles the scaling instead of doing pixmap.scaled()
+        on the CPU.
       • The aspect-ratio destination rect is cached and recalculated only
         when the widget is resized.
 
@@ -235,7 +238,6 @@ class VideoDisplayWidget(QWidget):
         self.setStyleSheet("background-color: black;")
 
         # ── video state ───────────────────────────────────────────────────
-        self._video_frame: QVideoFrame | None = None
         self._video_image: QImage | None = None
         self._paint_pending: bool = False
 
@@ -256,11 +258,12 @@ class VideoDisplayWidget(QWidget):
 
     # ── public API ────────────────────────────────────────────────────────
 
-    def set_video_frame(self, frame: QVideoFrame) -> None:
-        """Accept a new video frame (called up to 60× per second)."""
-        if not frame.isValid():
+    @Slot(QImage)
+    def set_video_image(self, image: QImage) -> None:
+        """Accept a converted video frame (called up to 60× per second)."""
+        if image.isNull():
             return
-        self._video_frame = frame
+        self._video_image = image
         self._mode = "video"
         if not self._paint_pending:
             self._paint_pending = True
@@ -273,7 +276,6 @@ class VideoDisplayWidget(QWidget):
         initial_transform: ImageTransform | None = None,
     ) -> None:
         """Display a static QImage (replaces any active video)."""
-        self._video_frame = None
         self._video_image = None
         self._static_image = image
         self._mode = "image"
@@ -290,7 +292,6 @@ class VideoDisplayWidget(QWidget):
 
     def clear(self) -> None:
         """Go black — clear any displayed content."""
-        self._video_frame = None
         self._video_image = None
         self._static_image = None
         self._mode = "black"
@@ -380,13 +381,6 @@ class VideoDisplayWidget(QWidget):
 
         # ── Resolve image to draw ─────────────────────────────────────────
         if self._mode == "video":
-            if self._video_frame is not None:
-                img = self._video_frame.toImage()
-                if not img.isNull():
-                    if img.format() != QImage.Format.Format_ARGB32_Premultiplied:
-                        img = img.convertToFormat(QImage.Format.Format_ARGB32_Premultiplied)
-                    self._video_image = img
-                self._video_frame = None
             img_to_draw = self._video_image
         else:
             img_to_draw = self._static_image
@@ -536,7 +530,7 @@ class BaseProjectionView(QWidget):
         self._timer_presentation: MediaCountdownPresentation | None = None
 
         # Guard: only True while a *video* (not audio) is expected.
-        # Set to True only by begin_video() / update_frame() explicitly called
+        # Set to True only by begin_video() / update_video_image() explicitly called
         # for video content.  Set to False by clear(), show_image* and show_timer.
         # Prevents residual pipeline frames from a just-
         # stopped video from being painted after clear() is called.
@@ -638,7 +632,7 @@ class BaseProjectionView(QWidget):
 
         Must be called once per video playback session, *after* clear() and
         *before* the first frame arrives from the media pipeline.  This is the
-        single authoritative place that re-enables update_frame(); every other
+        single authoritative place that re-enables update_video_image(); every other
         path (clear, show_image* or show_timer) disables it.
         """
         self._cancel_pending_timer_exit()
@@ -670,20 +664,19 @@ class BaseProjectionView(QWidget):
         """Whether the native renderer owns this projection surface."""
         return self._native_output_active
 
-    @Slot(QVideoFrame)
-    def update_frame(self, frame: QVideoFrame) -> None:
-        """Receive a video frame and display it."""
+    @Slot(QImage)
+    def update_video_image(self, image: QImage) -> None:
+        """Receive a converted video frame and display it."""
         # Reject frames when we are not expecting video — this is the primary
         # defence against residual pipeline frames arriving after clear() is
         # called (e.g. when switching from video to audio).
         if not self._accept_video_frames:
             return
-        # Pass the raw QVideoFrame — VideoDisplayWidget handles throttle + conversion
-        if not frame.isValid():
+        if image.isNull():
             return
         if self._native_output_active:
             return
-        self.display_label.set_video_frame(frame)
+        self.display_label.set_video_image(image)
 
         if not self._is_showing_media or self._fallback_media_entry_pending:
             self._is_showing_media = True
@@ -781,7 +774,7 @@ class BaseProjectionView(QWidget):
         """Return media to idle through the renderer that owns presentation."""
         # Immediately stop accepting video frames — this is the earliest possible
         # point to cut off the pipeline, before any async frames already queued
-        # in the Qt event loop can reach update_frame().
+        # in the Qt event loop can reach update_video_image().
         self._accept_video_frames = False
         native_presentation_is_active = self._native_output_active
         fallback_media_entry_was_pending = self._fallback_media_entry_pending

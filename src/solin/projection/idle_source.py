@@ -42,6 +42,7 @@ from PySide6.QtGui import QImage
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput, QVideoSink, QVideoFrame
 
 from ..core.media.formats import media_type_from_path
+from ..core.media.frame_conversion import VideoFrameConverter
 
 _TARGET_FORMAT = QImage.Format.Format_ARGB32_Premultiplied
 
@@ -80,6 +81,9 @@ class IdleMediaSource(QObject):
         self._player.setAudioOutput(self._audio_output)
         self._player.setVideoSink(self._video_sink)
         self._player.setLoops(QMediaPlayer.Loops.Infinite)
+
+        self._converter = VideoFrameConverter(_TARGET_FORMAT, self)
+        self._converter.image_ready.connect(self._on_converted_frame)
 
     # ── Read-only state ────────────────────────────────────────────────────
 
@@ -147,25 +151,29 @@ class IdleMediaSource(QObject):
     def cleanup(self) -> None:
         """Release media resources — call before application shutdown."""
         self._stop_player()
+        self._converter.stop()
 
     # ── Video frame slot ───────────────────────────────────────────────────
 
     @Slot(QVideoFrame)
     def _on_video_frame(self, frame: QVideoFrame) -> None:
-        """Convert a decoded video frame to a paint-ready QImage and fan it out.
+        """Hand a decoded video frame to the converter.
 
-        Conversion happens here exactly once; the same QImage is then shared by
-        every idle surface (implicitly shared, read-only on the GUI thread).
+        Conversion happens exactly once per frame, off the GUI thread, and the
+        resulting QImage is then shared by every idle surface (implicitly
+        shared, read-only on the GUI thread).
         """
         if self._type != "video" or not frame.isValid():
             return
-        img = frame.toImage()  # toImage() already returns a detached QImage
-        if img.isNull():
+        self._converter.convert(frame)
+
+    @Slot(QImage)
+    def _on_converted_frame(self, image: QImage) -> None:
+        """Fan out a converted frame — may land after the media changed."""
+        if self._type != "video":
             return
-        if img.format() != _TARGET_FORMAT:
-            img = img.convertToFormat(_TARGET_FORMAT)
-        self._image = img
-        self.frame_ready.emit(img)
+        self._image = image
+        self.frame_ready.emit(image)
 
     # ── Internals ──────────────────────────────────────────────────────────
 

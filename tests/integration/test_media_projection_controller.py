@@ -211,7 +211,7 @@ class _ProjectionWindowStub:
         self.began_video = 0
         self.images = []
         self.pixmaps = []
-        self.frames = []
+        self.video_images = []
         self.transforms = []
         self.image_initial_transforms = []
         self.instant_resets = 0
@@ -233,14 +233,24 @@ class _ProjectionWindowStub:
     def show_image_from_pixmap(self, frame):
         self.pixmaps.append(frame)
 
-    def update_frame(self, frame):
-        self.frames.append(frame)
+    def update_video_image(self, image):
+        self.video_images.append(image)
 
     def set_image_transform(self, zoom, norm_x, norm_y, *, animate=True):
         self.transforms.append((zoom, norm_x, norm_y, animate))
 
     def reset_image_transform_instant(self):
         self.instant_resets += 1
+
+
+class _VideoConverterStub:
+    """Records submissions so the fan-out can be driven synchronously."""
+
+    def __init__(self):
+        self.frames = []
+
+    def convert(self, frame):
+        self.frames.append(frame)
 
 
 class _EditViewStub:
@@ -977,18 +987,25 @@ def test_frame_and_image_transform_helpers_respect_projection_modes(program_cont
     if not program_content_enabled:
         controller._context = replace(controller._context, content_frame_sink=None)
 
+    converter = _VideoConverterStub()
+    controller._video_converter = converter
+
     window.proj_bar.video_mode = True
     window.projection_session.set_state({"type": "video", "is_audio": False})
     controller.distribute_frame("frame-1")
     window.proj_bar.audio_mode = True
     window.projection_session.update_state(is_audio=True)
     controller.distribute_frame("frame-2")
+    controller._distribute_video_image("image-1")
     controller.on_image_apply_transform(1.5, 0.2, 0.3)
     controller.on_image_reset_transform()
 
-    assert [projection_window.frames for projection_window in window.windows] == [
-        ["frame-1"],
-        ["frame-1"],
+    assert converter.frames == ["frame-1"]
+    assert [
+        projection_window.video_images for projection_window in window.windows
+    ] == [
+        ["image-1"],
+        ["image-1"],
     ]
     assert window.content_frames == (["frame-1"] if program_content_enabled else [])
     assert [projection_window.transforms for projection_window in window.windows] == [
@@ -1000,13 +1017,32 @@ def test_frame_and_image_transform_helpers_respect_projection_modes(program_cont
 def test_video_frame_fanout_skips_native_projection_outputs():
     window = _WindowStub()
     controller = _controller(window)
+    converter = _VideoConverterStub()
+    controller._video_converter = converter
     window.windows[0].native_output_active = True
     window.projection_session.set_state({"type": "video", "is_audio": False})
 
     controller.distribute_frame("frame-1")
+    controller._distribute_video_image("image-1")
 
-    assert window.windows[0].frames == []
-    assert window.windows[1].frames == ["frame-1"]
+    assert converter.frames == ["frame-1"]
+    assert window.windows[0].video_images == []
+    assert window.windows[1].video_images == ["image-1"]
+    assert window.content_frames == ["frame-1"]
+
+
+def test_video_frames_are_not_converted_without_a_qt_surface():
+    window = _WindowStub()
+    controller = _controller(window)
+    converter = _VideoConverterStub()
+    controller._video_converter = converter
+    for projection_window in window.windows:
+        projection_window.native_output_active = True
+    window.projection_session.set_state({"type": "video", "is_audio": False})
+
+    controller.distribute_frame("frame-1")
+
+    assert converter.frames == []
     assert window.content_frames == ["frame-1"]
 
 
