@@ -1,3 +1,7 @@
+from dataclasses import replace
+
+import pytest
+
 from PySide6.QtCore import QByteArray, QBuffer, QIODevice
 from PySide6.QtGui import QColor, QImage
 
@@ -346,6 +350,20 @@ def test_image_identity_is_committed_before_first_frame():
     controller.project_image_bytes(_png_bytes())
 
     assert events[-2:] == [("state", 1), ("frame", 1)]
+
+
+def test_image_projection_updates_qt_surfaces_without_program_content():
+    window = _WindowStub()
+    controller = _controller(window)
+    controller._context = replace(controller._context, content_frame_sink=None)
+    data = _png_bytes()
+
+    controller.project_image_bytes(data)
+
+    assert window.projection_session.state_type == "image"
+    assert [surface.images for surface in window.windows] == [[data], [data]]
+    assert window.proj_bar.images[0][1] == data
+    assert window.content_frames == []
 
 
 def test_video_identity_is_committed_before_decoder_can_emit():
@@ -927,10 +945,13 @@ def test_automatic_advance_keeps_complete_image_item_framing(tmp_path):
     assert window.projection_session.state["transform"] == (1.5, -0.2, 0.0)
 
 
-def test_project_tab_frame_initializes_live_tab_once():
+@pytest.mark.parametrize("program_content_enabled", [True, False])
+def test_project_tab_frame_initializes_live_tab_once(program_content_enabled):
     window = _WindowStub()
     window.projection_session.set_tab_projection_active(False)
     controller = _controller(window)
+    if not program_content_enabled:
+        controller._context = replace(controller._context, content_frame_sink=None)
     frame = object()
 
     controller.project_tab_frame(frame)
@@ -946,12 +967,15 @@ def test_project_tab_frame_initializes_live_tab_once():
         [frame, frame],
         [frame, frame],
     ]
-    assert window.content_frames == [frame, frame]
+    assert window.content_frames == ([frame, frame] if program_content_enabled else [])
 
 
-def test_frame_and_image_transform_helpers_respect_projection_modes():
+@pytest.mark.parametrize("program_content_enabled", [True, False])
+def test_frame_and_image_transform_helpers_respect_projection_modes(program_content_enabled):
     window = _WindowStub()
     controller = _controller(window)
+    if not program_content_enabled:
+        controller._context = replace(controller._context, content_frame_sink=None)
 
     window.proj_bar.video_mode = True
     window.projection_session.set_state({"type": "video", "is_audio": False})
@@ -966,7 +990,7 @@ def test_frame_and_image_transform_helpers_respect_projection_modes():
         ["frame-1"],
         ["frame-1"],
     ]
-    assert window.content_frames == ["frame-1"]
+    assert window.content_frames == (["frame-1"] if program_content_enabled else [])
     assert [projection_window.transforms for projection_window in window.windows] == [
         [(1.5, 0.2, 0.3, True), (1.0, 0.0, 0.0, True)],
         [(1.5, 0.2, 0.3, True), (1.0, 0.0, 0.0, True)],

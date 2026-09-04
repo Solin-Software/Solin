@@ -34,7 +34,13 @@ from solin.core.profiles.application import ProfileRegistryLoadError
 from solin.bootstrap.startup_timeline import startup_timeline
 
 
-def _build_main_window_profile_settings(profile_settings):
+def _native_scenes_enabled(app_settings) -> bool:
+    return NATIVE_SCENES_SUPPORTED and app_settings.native_scenes_enabled()
+
+
+def _build_main_window_profile_settings(
+    profile_settings, *, app_settings, native_scenes_enabled: bool
+):
     from solin.controllers.main_window_profile_settings import MainWindowProfileSettings
     from solin.core.ingest.watched_folder_settings import WatchedFolderSettingsStore
     from solin.core.integrations.automation.settings import (
@@ -63,7 +69,7 @@ def _build_main_window_profile_settings(profile_settings):
     from solin.core.windowing.settings import WindowGeometrySettingsStore
 
     return MainWindowProfileSettings(
-        app=profile_settings.app_settings(),
+        app=app_settings,
         media=MediaSettingsStore.for_profile_settings(profile_settings),
         browser=BrowserSettingsStore.for_profile_settings(profile_settings),
         obs=OBSSettingsStore.for_profile_settings(profile_settings),
@@ -72,7 +78,7 @@ def _build_main_window_profile_settings(profile_settings):
         auto_key=AutoKeySettingsStore.for_profile_settings(profile_settings),
         camera=(
             CameraSettingsStore.for_profile_settings(profile_settings)
-            if not NATIVE_SCENES_SUPPORTED
+            if not native_scenes_enabled
             else None
         ),
         projection_playback=ProjectionPlaybackSettingsStore.for_profile_settings(profile_settings),
@@ -85,9 +91,9 @@ def _build_main_window_profile_settings(profile_settings):
         window_geometry=WindowGeometrySettingsStore.for_profile_settings(profile_settings),
         notification=NotificationSettingsStore.for_profile_settings(profile_settings),
         talk_theme=TalkThemeSettingsStore.for_profile_settings(profile_settings),
-        remote_control=RemoteControlSettingsStore.create(profile_settings.app_settings()),
+        remote_control=RemoteControlSettingsStore.create(app_settings),
         remote_control_credentials=RemoteControlCredentialsStore.create(
-            profile_settings.app_settings()
+            app_settings
         ),
     )
 
@@ -146,7 +152,9 @@ def _import_main_window_class():
     return MainWindow
 
 
-def _prepare_profile_main_window(profile_paths, cancellation=None):
+def _prepare_profile_main_window(
+    profile_paths, cancellation=None, *, native_scenes_enabled: bool
+):
     """Prepare code and fail-closed housekeeping before profile UI is mutable."""
 
     main_window_class = _import_main_window_class()
@@ -177,8 +185,9 @@ def _prepare_profile_main_window(profile_paths, cancellation=None):
     # async-load error boundary so the UI cannot mutate unsupported/corrupt data.
     playlist_repository.migrate_strict()
     meeting_tree_store.migrate_strict()
-    scene_workspace = _build_scene_workspace(profile_paths)
-    scene_workspace.close()
+    if native_scenes_enabled:
+        scene_workspace = _build_scene_workspace(profile_paths)
+        scene_workspace.close()
 
     try:
         maintenance = ProfileMaintenanceService(
@@ -235,7 +244,7 @@ def _build_main_window_service_factories(
     install_id_provider = lambda: get_install_id(installation_settings)
 
     camera_factory = None
-    if not NATIVE_SCENES_SUPPORTED:
+    if profile_settings.camera is not None:
         from solin.core.integrations.camera import CameraService
 
         camera_factory = CameraService
@@ -342,6 +351,7 @@ def _build_main_window_runtime(
     *,
     talk_theme_output_settings,
     window_host,
+    native_scenes_enabled: bool,
     main_window_class=None,
 ):
     """Build application content for an already visible native window host."""
@@ -432,15 +442,25 @@ def _build_main_window_runtime(
     )
     watched_folder_file_store = WatchedFolderFileStore()
     watched_folder_playlist_store = WatchedFolderPlaylistStore()
-    main_window_profile_settings = _build_main_window_profile_settings(profile_settings)
-    scene_workspace = _build_scene_workspace(profile_paths)
+    app_settings = profile_settings.app_settings()
+    main_window_profile_settings = _build_main_window_profile_settings(
+        profile_settings,
+        app_settings=app_settings,
+        native_scenes_enabled=native_scenes_enabled,
+    )
+    scene_workspace = (
+        _build_scene_workspace(profile_paths) if native_scenes_enabled else None
+    )
     scene_engine = (
         create_native_scene_engine(runtime_paths.cache_dir)
-        if NATIVE_SCENES_SUPPORTED
+        if native_scenes_enabled
         else None
     )
-    ptz_services = create_ptz_runtime_services(active_profile.id)
-    scene_workspace.set_credential_cleaner(ptz_services.credentials.delete)
+    ptz_services = (
+        create_ptz_runtime_services(active_profile.id) if native_scenes_enabled else None
+    )
+    if ptz_services is not None and scene_workspace is not None:
+        scene_workspace.set_credential_cleaner(ptz_services.credentials.delete)
     meeting_linked_folder_sync = MeetingLinkedFolderSync(
         _meeting_weekday_resolver(main_window_profile_settings.meeting_schedule)
     )
@@ -502,13 +522,15 @@ def _build_main_window_runtime(
             talk_theme_output_settings=talk_theme_output_settings,
             scene_workspace=scene_workspace,
             scene_engine=scene_engine,
-            ptz_executor=ptz_services.executor,
-            ptz_credentials=ptz_services.credentials,
+            ptz_executor=ptz_services.executor if ptz_services is not None else None,
+            ptz_credentials=ptz_services.credentials if ptz_services is not None else None,
             window_host=window_host,
         )
     except Exception:  # noqa: BLE001 - transactional startup rollback boundary
-        ptz_services.executor.close()
-        scene_workspace.close()
+        if ptz_services is not None:
+            ptz_services.executor.close()
+        if scene_workspace is not None:
+            scene_workspace.close()
         window_host.abort_runtime_construction()
         for controller in (media_controller, background_media_controller):
             stop = getattr(controller, "stop", None)
@@ -579,7 +601,10 @@ def _launch_profile_window(
         raise RuntimeError(f"Profile disappeared during startup: {profile_id}")
 
     lang_manager.activate_profile(profile_context.settings)
-    theme = activate_theme(profile_context.settings.app_settings().app_theme_id())
+    app_settings = profile_context.settings.app_settings()
+    # Snapshot before asynchronous preparation; Settings only changes the next launch.
+    native_scenes_enabled = _native_scenes_enabled(app_settings)
+    theme = activate_theme(app_settings.app_theme_id())
     apply_application_palette(container.app, theme)
     container.app.setStyleSheet(app_stylesheet(theme))
     startup_timeline().mark("profile_ready")
@@ -623,6 +648,7 @@ def _launch_profile_window(
             active_profile,
             talk_theme_output_settings=container.talk_theme_output_settings,
             window_host=window,
+            native_scenes_enabled=native_scenes_enabled,
             main_window_class=main_window_class,
         )
         window.install_runtime(runtime)
@@ -658,6 +684,7 @@ def _launch_profile_window(
             lambda: _prepare_profile_main_window(
                 profile_context.paths,
                 startup_cancellation,
+                native_scenes_enabled=native_scenes_enabled,
             ),
             install_main_window,
             window,

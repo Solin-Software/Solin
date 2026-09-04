@@ -133,3 +133,28 @@ def test_settings_store_clears_removes_and_lists_keys(monkeypatch) -> None:
     store.clear()
     assert store.all_keys() == []
     assert _FakeSettings.cleared == [("Org", "App")]
+
+
+def test_native_scenes_preference_is_profile_scoped_and_controls_camera_fallback(monkeypatch):
+    from solin.bootstrap import application
+    from solin.core.profiles.settings import ProfileSettings
+
+    _install_fake_settings(monkeypatch)
+    profile = ProfileSettings.for_profile_id("engine-test")
+    store = profile.app_settings()
+    assert store.native_scenes_enabled() is True
+    for supported in (False, True):
+        monkeypatch.setattr(application, "NATIVE_SCENES_SUPPORTED", supported)
+        for enabled in (False, True):
+            store.set_native_scenes_enabled(enabled)
+            active = application._native_scenes_enabled(store)
+            assert active is (supported and enabled)
+            bundle = application._build_main_window_profile_settings(
+                profile, app_settings=store, native_scenes_enabled=active
+            )
+            assert (bundle.camera is None) is active
+            factories = application._build_main_window_service_factories(
+                None, None, bundle, None, None, None
+            )
+            assert (factories.camera is None) is active
+    assert ProfileSettings.for_profile_id("another-profile").app_settings().native_scenes_enabled()

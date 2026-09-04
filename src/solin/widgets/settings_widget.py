@@ -39,6 +39,7 @@ from ..core.media.settings import MediaSettingsStore
 from ..core.meetings.schedule_settings import MeetingScheduleSettingsStore
 from ..core.remote_control.security import RemoteControlCredentialsStore
 from ..core.remote_control.settings import RemoteControlSettingsStore
+from ..core.foundation.constants import NATIVE_SCENES_SUPPORTED
 from ..core.foundation.settings_store import ProfileAppSettingsStore
 from ..styles.theme import available_themes, current_theme, normalize_theme_id
 from ..ui.controls import NoScrollComboBox
@@ -53,6 +54,7 @@ from .settings.media_section import MediaSectionMixin
 from .settings.meeting_schedule_section import MeetingScheduleSectionMixin
 from .settings.obs_section import ObsSectionMixin
 from .settings.remote_control_section import RemoteControlSectionMixin
+from .settings.scenes_section import ScenesSectionMixin
 from .settings.screens_section import ScreensSectionMixin
 from .settings.shared import SettingsToggleSwitch
 from .settings.watched_folder_section import WatchedFolderSectionMixin
@@ -76,6 +78,7 @@ class SettingsWidget(
     LanguageSectionMixin,
     MeetingScheduleSectionMixin,
     MediaSectionMixin,
+    ScenesSectionMixin,
     RemoteControlSectionMixin,
     ObsSectionMixin,
     CameraSectionMixin,
@@ -109,6 +112,7 @@ class SettingsWidget(
         ndi_service: NDIReceiverService | None = None,
         *,
         app_settings: ProfileAppSettingsStore,
+        native_scenes_enabled: bool,
         obs_settings: OBSSettingsStore,
         zoom_settings: ZoomSettingsStore,
         auto_share_settings: AutoShareSettingsStore,
@@ -134,6 +138,7 @@ class SettingsWidget(
         self._obs = obs_service
         self._ndi = ndi_service
         self._app_settings = app_settings
+        self._native_scenes_enabled = native_scenes_enabled
         self._yeartext_service_factory = yeartext_service_factory
         self._obs_settings = obs_settings
         self._zoom_settings = zoom_settings
@@ -295,6 +300,7 @@ class SettingsWidget(
         return (
             self._build_language_settings_unit,
             self._build_media_settings_unit,
+            self._build_scenes_settings_unit,
             self._build_meeting_settings_unit,
             self._build_folder_settings_unit,
             self._build_remote_settings_unit,
@@ -331,6 +337,16 @@ class SettingsWidget(
             self._build_media_card(),
         )
         self._mark_startup("settings_media_constructed")
+
+    def _build_scenes_settings_unit(self) -> None:
+        if not NATIVE_SCENES_SUPPORTED:
+            return
+        self._add_settings_section(
+            self.tr("Scenes"),
+            "_scenes_section_title",
+            self._build_scenes_card(),
+        )
+        self._mark_startup("settings_scenes_constructed")
 
     def _build_meeting_settings_unit(self) -> None:
         self._add_settings_section(
@@ -537,6 +553,7 @@ class SettingsWidget(
         self._populate_theme_selector()
         self._lang_section_title.setText(self.tr("Language").upper())
         self._media_section_title.setText(self.tr("Media").upper())
+        self._retranslate_scenes()
         self._meetings_section_title.setText(self.tr("Meetings").upper())
         self._folders_section_title.setText(self.tr("Folders").upper())
         self._remote_control_section_title.setText(self.tr("Remote access").upper())

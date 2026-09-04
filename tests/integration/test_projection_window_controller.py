@@ -1,5 +1,7 @@
 from dataclasses import replace
 
+import pytest
+
 from PySide6.QtCore import QDateTime
 
 from solin.controllers import projection_window_controller as projection_controller
@@ -248,15 +250,19 @@ def test_all_windows_includes_floating_preview_when_present():
     assert controller.all_windows() == [secondary, floating]
 
 
-def test_on_idle_media_changed_activates_source_and_windows(tmp_path):
+@pytest.mark.parametrize("program_content_enabled", [True, False])
+def test_on_idle_media_changed_activates_source_and_windows(tmp_path, program_content_enabled):
     img = tmp_path / "idle.png"
     img.write_bytes(b"fake")
     src = _StubIdleSource()
     window = _WindowStub()
     win = _ProjectionWindowStub()
     window.projection_session.projection_windows = [win]
+    context = _projection_context(window)
+    if not program_content_enabled:
+        context = replace(context, content_frame_sink=None, refresh_program_content=None)
     controller = ProjectionWindowController(
-        _projection_context(window),
+        context,
         idle_source_factory=lambda: src,
     )
 
@@ -270,6 +276,7 @@ def test_on_idle_media_changed_activates_source_and_windows(tmp_path):
     assert src.cleared == 1
     assert win.cleared_idle == 1
     assert window._monitor_popup.idle_paths == [str(img), ""]
+    assert window.program_refreshes == (2 if program_content_enabled else 0)
 
 
 def test_on_idle_media_changed_rejects_missing_file():
@@ -289,7 +296,8 @@ def test_on_idle_media_changed_rejects_missing_file():
     assert win.cleared_idle == 1
 
 
-def test_distribute_idle_frame_fans_out_to_all_surfaces(tmp_path):
+@pytest.mark.parametrize("program_content_enabled", [True, False])
+def test_distribute_idle_frame_fans_out_to_all_surfaces(tmp_path, program_content_enabled):
     """The single shared decoder must hand the *same* frame to every surface —
     this is what keeps the monitors frame-locked instead of each decoding its own
     copy and drifting out of sync."""
@@ -301,8 +309,11 @@ def test_distribute_idle_frame_fans_out_to_all_surfaces(tmp_path):
     floating = _ProjectionWindowStub()
     window.projection_session.projection_windows = [secondary]
     window.projection_session.floating_preview_window = floating
+    context = _projection_context(window)
+    if not program_content_enabled:
+        context = replace(context, content_frame_sink=None, refresh_program_content=None)
     controller = ProjectionWindowController(
-        _projection_context(window),
+        context,
         idle_source_factory=lambda: src,
     )
 
@@ -313,6 +324,7 @@ def test_distribute_idle_frame_fans_out_to_all_surfaces(tmp_path):
     assert secondary.idle_images == [frame]
     assert floating.idle_images == [frame]
     assert secondary.idle_images[0] is floating.idle_images[0]
+    assert window.program_frames == ([frame] if program_content_enabled else [])
 
 
 def test_apply_full_state_pushes_current_frame_to_new_surface(tmp_path):
