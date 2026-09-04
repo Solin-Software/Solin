@@ -314,7 +314,7 @@ class _WindowsSharedRingFile:
             # this hardening rather than the camera.
             self._tighten_dacl_to_read_only(k32, a32, ctypes, wintypes, sid,
                                             DACL_SECURITY_INFORMATION)
-        except Exception:
+        except Exception:  # noqa: BLE001 - cleaned up and re-raised below
             if handle is not None:
                 k32.CloseHandle(handle)
             self._cleanup_partial()
@@ -355,8 +355,8 @@ class _WindowsSharedRingFile:
         if self._buffer is not None:
             try:
                 self._buffer.close()
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception:  # noqa: BLE001 - buffer close is best-effort
+                log.debug("virtual camera buffer close errored", exc_info=True)
             self._buffer = None
         if self._fd >= 0:
             try:

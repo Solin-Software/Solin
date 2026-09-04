@@ -8,6 +8,7 @@ tagged media) generated with ffmpeg/Qt so the harness needs no fixtures on disk.
 
 from __future__ import annotations
 
+import logging
 import subprocess
 import threading
 import time
@@ -16,6 +17,8 @@ from pathlib import Path
 from typing import Any
 
 from solin.tools.gui_validation.harness import CheckResult, CheckStatus, HarnessConfig
+
+log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -80,7 +83,7 @@ class HarnessContext:
             try:
                 self._runtime.shutdown()
             except Exception:  # noqa: BLE001 - teardown is best-effort in a dying child
-                pass
+                log.debug("runtime shutdown during close errored", exc_info=True)
             self._runtime = None
 
     # ── scene documents ────────────────────────────────────────────────────
@@ -127,7 +130,7 @@ class HarnessContext:
             try:
                 ob.remove_raw_video_callback(cb)
             except Exception:  # noqa: BLE001 - libobs boundary
-                pass
+                log.debug("remove_raw_video_callback errored", exc_info=True)
         return got.get("frame")
 
     def dwell(self) -> None:

@@ -27,10 +27,13 @@ pushes genuinely new frames.
 
 from __future__ import annotations
 
+import logging
 import struct
 import sys
 from dataclasses import dataclass
 from multiprocessing import shared_memory
+
+log = logging.getLogger(__name__)
 
 _MAGIC = b"SFC1"
 _HEADER_SIZE = 64
@@ -77,7 +80,7 @@ def _attach_shared_memory(name: str) -> shared_memory.SharedMemory:
 
             resource_tracker.unregister(shm._name, "shared_memory")  # type: ignore[attr-defined]
         except Exception:  # noqa: BLE001 - best-effort; a missing tracker is fine
-            pass
+            log.debug("resource_tracker unregister skipped", exc_info=True)
     return shm
 
 

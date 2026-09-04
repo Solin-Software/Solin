@@ -63,7 +63,7 @@ class SceneEngineMediaRoute:
         try:
             future.add_done_callback(_log)
         except Exception:  # noqa: BLE001 - defensive; a plain value is fine too
-            pass
+            log.debug("could not attach media engine done-callback", exc_info=True)
 
     def open(
         self,

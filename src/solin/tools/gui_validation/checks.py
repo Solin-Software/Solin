@@ -9,6 +9,7 @@ checks into the harness registry.
 from __future__ import annotations
 
 import itertools
+import logging
 import os
 import subprocess
 import time
@@ -21,6 +22,8 @@ from solin.tools.gui_validation.harness import (
     CheckStatus,
     register_check,
 )
+
+log = logging.getLogger(__name__)
 
 _SEQ = itertools.count(1)
 
@@ -503,4 +506,4 @@ def subprocess_engine(ctx):
         try:
             engine.stop()
         except Exception:  # noqa: BLE001 - teardown best-effort
-            pass
+            log.debug("engine stop during check teardown errored", exc_info=True)
