@@ -15,9 +15,25 @@ this is the decode + basic transport core.
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 
 log = logging.getLogger(__name__)
+
+
+def _hw_decode_enabled() -> bool:
+    """Whether to request libobs' hardware video decode for media playback.
+
+    On by default. ``ffmpeg_source`` degrades to software **per stream** when the
+    codec has no hardware support or no HW device can be created (OBS'
+    media-playback ``init_hw_decoder`` only enables HW after a successful
+    ``av_hwdevice_ctx_create``), so leaving this on is safe — it uses the GPU
+    decoder when the box has one and silently falls back otherwise. Set
+    ``SOLIN_MEDIA_HW_DECODE=0`` to force software decode globally (e.g. a
+    GPU/driver that produces corrupt hardware-decoded output).
+    """
+    flag = os.environ.get("SOLIN_MEDIA_HW_DECODE", "1").strip().lower()
+    return flag not in ("0", "false", "off", "no")
 
 # obs_media_state enum values (see obs/media-io).
 STATE_NONE = 0
@@ -76,6 +92,9 @@ class LibobsMediaSource:
             if local
             else {"is_local_file": False, "input": path}
         )
+        # Ask libobs to decode on the GPU when hardware is available; it falls
+        # back to software per stream (see _hw_decode_enabled).
+        settings["hw_decode"] = _hw_decode_enabled()
         if speed_percent and speed_percent != 100:
             settings["speed_percent"] = int(speed_percent)
         try:

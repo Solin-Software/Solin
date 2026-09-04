@@ -428,6 +428,7 @@ class _FakeOutput:
         self.stopped = 0
         self.released = 0
         self.start_ok = True
+        self.failing_encoders: set[str] = set()
 
     def set_media(self, video, audio) -> None:
         self.media = (video, audio)
@@ -440,7 +441,12 @@ class _FakeOutput:
 
     def start(self) -> bool:
         self.started += 1
-        return self.start_ok
+        if not self.start_ok:
+            return False
+        # A hardware encoder that creates fine but won't start (no GPU session).
+        if getattr(self.video_encoder, "kind", None) in self.failing_encoders:
+            return False
+        return True
 
     def stop(self, *args, **kwargs) -> None:
         self.stopped += 1
@@ -494,6 +500,14 @@ class _CompositingRuntime:
         self.released_channels: list[int] = []
         self.output_types = ["virtualcam_output", "mp4_output", "ffmpeg_muxer"]
         self.output_start_ok = True
+        # Encoders the runtime "loaded". Default is CPU-only so existing tests get
+        # x264; HW-fallback tests extend this. ``fail_encoder_kinds`` makes
+        # VideoEncoder.create raise for a kind; ``failing_video_encoders`` makes an
+        # output bound to that encoder fail to start (create-time vs start-time HW
+        # failure).
+        self.encoder_types = ["obs_x264"]
+        self.fail_encoder_kinds: set[str] = set()
+        self.failing_video_encoders: set[str] = set()
         self.source_types = [
             "color_source_v3", "ffmpeg_source", "solin_frame_source",
             "pulse_input_capture", "pulse_output_capture",
@@ -551,12 +565,15 @@ class _CompositingRuntime:
             def create(kind: str, name: str, settings: dict) -> _FakeOutput:
                 output = _FakeOutput(kind, name, settings)
                 output.start_ok = runtime.output_start_ok
+                output.failing_encoders = runtime.failing_video_encoders
                 runtime.outputs.append(output)
                 return output
 
         class _VideoEncoderNS:
             @staticmethod
             def create(kind: str, name: str, settings: dict, *, attach_global: bool = True):
+                if kind in runtime.fail_encoder_kinds:
+                    raise RuntimeError(f"cannot create {kind}")  # HW encoder absent
                 encoder = _FakeEncoder(kind, name, settings)
                 runtime.encoders.append(encoder)
                 return encoder
@@ -596,6 +613,7 @@ class _CompositingRuntime:
             AudioEncoder=_AudioEncoderNS,
             Properties=_PropertiesNS,
             enum_output_types=lambda: list(runtime.output_types),
+            enum_encoder_types=lambda: list(runtime.encoder_types),
             enum_source_types=_enum_source_types,
             BoundsType=types.SimpleNamespace(SCALE_INNER=2),
             Alignment=types.SimpleNamespace(LEFT=1, TOP=4),
@@ -1562,6 +1580,62 @@ def test_recorder_unavailable_when_muxer_missing():
 
     assert recorder.start("/tmp/x.mp4") is False
     assert runtime.outputs == [] and runtime.encoders == []
+
+
+def test_recorder_prefers_a_hardware_encoder_when_available():
+    from solin.core.scenes.libobs_recorder import LibobsRecorder
+
+    runtime = _CompositingRuntime()
+    runtime.encoder_types = ["obs_x264", "obs_qsv11", "obs_nvenc_h264_tex"]
+    recorder = LibobsRecorder(runtime)
+
+    assert recorder.start("/tmp/hw.mp4") is True
+    # NVENC outranks QSV outranks x264, so the NVENC encoder is chosen.
+    assert runtime.outputs[-1].video_encoder.kind == "obs_nvenc_h264_tex"
+
+
+def test_recorder_falls_back_to_software_when_hardware_fails_to_start():
+    from solin.core.scenes.libobs_recorder import LibobsRecorder
+
+    runtime = _CompositingRuntime()
+    runtime.encoder_types = ["obs_x264", "obs_nvenc_h264_tex"]
+    runtime.failing_video_encoders = {"obs_nvenc_h264_tex"}  # creates, won't start
+    recorder = LibobsRecorder(runtime)
+
+    assert recorder.start("/tmp/fallback.mp4") is True
+    assert recorder.active is True
+    # Two outputs were attempted: the NVENC one failed+released, x264 records.
+    assert len(runtime.outputs) == 2
+    assert runtime.outputs[0].video_encoder.kind == "obs_nvenc_h264_tex"
+    assert runtime.outputs[0].released == 1
+    assert runtime.outputs[1].video_encoder.kind == "obs_x264"
+    assert recorder._video_encoder.kind == "obs_x264"
+
+
+def test_recorder_falls_back_when_hardware_encoder_cannot_be_created():
+    from solin.core.scenes.libobs_recorder import LibobsRecorder
+
+    runtime = _CompositingRuntime()
+    runtime.encoder_types = ["obs_x264", "obs_nvenc_h264_tex"]
+    runtime.fail_encoder_kinds = {"obs_nvenc_h264_tex"}  # create() raises
+    recorder = LibobsRecorder(runtime)
+
+    assert recorder.start("/tmp/fallback2.mp4") is True
+    assert recorder._video_encoder.kind == "obs_x264"
+
+
+def test_recorder_hardware_encode_can_be_disabled_by_env(monkeypatch):
+    from solin.core.scenes.libobs_recorder import LibobsRecorder
+
+    monkeypatch.setenv("SOLIN_RECORD_HW_ENCODE", "0")
+    runtime = _CompositingRuntime()
+    runtime.encoder_types = ["obs_x264", "obs_nvenc_h264_tex"]
+    recorder = LibobsRecorder(runtime)
+
+    assert recorder.start("/tmp/sw.mp4") is True
+    assert recorder._video_encoder.kind == "obs_x264"
+    # the hardware encoder was never even created
+    assert all(enc.kind != "obs_nvenc_h264_tex" for enc in runtime.encoders)
 
 
 def test_engine_start_and_stop_recording_acks_and_emits_state():

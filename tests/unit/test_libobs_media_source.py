@@ -56,7 +56,8 @@ class _Runtime:
         self.monitored.append((source, monitoring_type))
 
 
-def test_open_local_file_creates_ffmpeg_source_and_autoplays():
+def test_open_local_file_creates_ffmpeg_source_and_autoplays(monkeypatch):
+    monkeypatch.delenv("SOLIN_MEDIA_HW_DECODE", raising=False)  # default: HW on
     runtime = _Runtime()
     media = LibobsMediaSource(runtime)
 
@@ -64,22 +65,42 @@ def test_open_local_file_creates_ffmpeg_source_and_autoplays():
 
     source = runtime.created[-1]
     assert source.kind == "ffmpeg_source"
-    assert source.settings == {"is_local_file": True, "local_file": "/tmp/clip.mp4"}
+    assert source.settings == {
+        "is_local_file": True, "local_file": "/tmp/clip.mp4", "hw_decode": True,
+    }
     assert source.play_pause == [False]  # autoplay → not paused
     assert runtime.monitored == [(source, runtime.monitored[0][1])]  # monitoring set
     assert media.source is source
     assert media.path == "/tmp/clip.mp4"
 
 
-def test_open_remote_url_uses_the_input_setting_and_can_start_paused():
+def test_open_remote_url_uses_the_input_setting_and_can_start_paused(monkeypatch):
+    monkeypatch.delenv("SOLIN_MEDIA_HW_DECODE", raising=False)  # default: HW on
     runtime = _Runtime()
     media = LibobsMediaSource(runtime)
 
     assert media.open("https://cdn.example/v.mp4", autoplay=False) is True
 
     source = runtime.created[-1]
-    assert source.settings == {"is_local_file": False, "input": "https://cdn.example/v.mp4"}
+    assert source.settings == {
+        "is_local_file": False, "input": "https://cdn.example/v.mp4", "hw_decode": True,
+    }
     assert source.play_pause == [True]  # paused
+
+
+def test_hardware_decode_requested_by_default(monkeypatch):
+    monkeypatch.delenv("SOLIN_MEDIA_HW_DECODE", raising=False)
+    runtime = _Runtime()
+    LibobsMediaSource(runtime).open("/tmp/clip.mp4")
+    # ffmpeg_source decodes on the GPU when possible, software per-stream otherwise.
+    assert runtime.created[-1].settings["hw_decode"] is True
+
+
+def test_hardware_decode_can_be_disabled_by_env(monkeypatch):
+    monkeypatch.setenv("SOLIN_MEDIA_HW_DECODE", "0")
+    runtime = _Runtime()
+    LibobsMediaSource(runtime).open("/tmp/clip.mp4")
+    assert runtime.created[-1].settings["hw_decode"] is False
 
 
 def test_transport_and_state():
