@@ -136,22 +136,22 @@ class VideoFrameConverter(QObject):
                 if frame is None:
                     break
                 image = self._to_image(frame)
-                if image is None:
-                    return
                 if state.stopping:
                     return
                 if image.isNull():
+                    # Nothing this thread can do with the frame. Hand the work
+                    # back to the owning thread, which also releases the caller.
                     self._unavailable.emit()
                     return
                 self._converted.emit(image)
 
-    def _to_image(self, frame: QVideoFrame) -> QImage | None:
-        """Convert one frame off the GUI thread, or None to give the worker up."""
+    def _to_image(self, frame: QVideoFrame) -> QImage:
+        """Convert one frame off the GUI thread; a null image gives the worker up."""
         try:
             image = frame.toImage()
         except Exception:  # noqa: BLE001 - Qt video-frame conversion boundary
             log_ignored_exception(__name__, "Could not convert a video frame")
-            return None
+            return QImage()
         if image.isNull():
             return image
         if image.format() != self._target_format:

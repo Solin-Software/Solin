@@ -121,3 +121,26 @@ def test_stop_is_idempotent():
     converter = VideoFrameConverter(_TARGET)
     converter.stop()
     converter.stop()
+
+
+def test_a_raising_frame_releases_the_caller_instead_of_wedging():
+    """A conversion that throws must not leave the converter permanently busy."""
+
+    class _RaisingFrame:
+        def toImage(self):
+            raise RuntimeError("boom")
+
+    converter = VideoFrameConverter(_TARGET)
+    failures: list[int] = []
+    converter.conversion_failed.connect(lambda: failures.append(1))
+    try:
+        converter.convert(_RaisingFrame())
+        assert _wait_for(lambda: bool(failures))
+        assert converter.busy is False
+        # The next frame still converts, now on the calling thread.
+        received: list[QImage] = []
+        converter.image_ready.connect(received.append)
+        converter.convert(_frame())
+        assert len(received) == 1
+    finally:
+        converter.stop()
