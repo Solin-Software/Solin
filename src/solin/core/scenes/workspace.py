@@ -32,6 +32,7 @@ from solin.core.scenes.presets import (
     CONTENT_SCENE_ID,
     SceneSeedNames,
     create_fresh_scene_collection_document,
+    ensure_default_scene,
 )
 from solin.core.scenes.repository import (
     SceneCollectionCatalogRepository,
@@ -383,7 +384,7 @@ class SceneWorkspaceService:
         if collection_id == self._catalog.active_collection_id:
             raise SceneWorkspaceOperationError("Scene profile is already active")
         repository = self._document_repository(collection_id)
-        document = self._materialize_resources(self._load_recovering(repository))
+        document = self._load_document_for_use(repository)
         documents = SceneDocumentService(document, store=repository)
         base_runtime = create_default_runtime_state(document)
         runtime_state = self._preserved_runtime_state(
@@ -749,7 +750,7 @@ class SceneWorkspaceService:
         SceneRuntimePersistenceQueue,
     ]:
         repository = self._document_repository(collection_id)
-        document = self._materialize_resources(self._load_recovering(repository))
+        document = self._load_document_for_use(repository)
         documents = SceneDocumentService(document, store=repository)
         runtime_state = self._runtime_repository.load_or_create(document)
         if previous_runtime is not None:
@@ -771,6 +772,21 @@ class SceneWorkspaceService:
             documents,
             SceneRuntimeService(documents, runtime_state, store=persistence),
             persistence,
+        )
+
+    def _load_document_for_use(
+        self,
+        repository: SceneDocumentRepository | SceneCollectionDocumentRepository,
+    ) -> SceneDocument:
+        """Load a collection document ready to drive a live SceneDocumentService.
+
+        Materializes the shared camera resources, then self-heals collections
+        saved before the year-text-as-a-scene feature by adding the Default (year
+        text) scene as the idle default when it is missing.
+        """
+        return ensure_default_scene(
+            self._materialize_resources(self._load_recovering(repository)),
+            self._seed_names,
         )
 
     def _materialize_resources(self, document: SceneDocument) -> SceneDocument:

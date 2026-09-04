@@ -224,6 +224,64 @@ def create_fresh_scene_collection_document(
         document_id=document_id,
         created_at=created_at,
     )
+    yeartext_source, default_scene = _yeartext_source_and_default_scene(names, timestamp)
+    return replace(
+        document,
+        sources=(*document.sources, yeartext_source),
+        scenes=(
+            default_scene,
+            document.scene(CAMERA_SCENE_ID),
+            document.scene(CONTENT_SCENE_ID),
+        ),
+        outputs=tuple(
+            replace(route, default_scene_id=DEFAULT_SCENE_ID)
+            for route in document.outputs
+        ),
+    )
+
+
+def ensure_default_scene(
+    document: SceneDocument,
+    names: SceneSeedNames,
+    *,
+    created_at: str | None = None,
+) -> SceneDocument:
+    """Guarantee a year-text Default scene exists and is the shared idle default.
+
+    Scene collections saved before the year-text-as-a-scene feature have no
+    Default scene, so after upgrading, their idle projection would have no year
+    text (it would fall back to whatever default the old document shipped). This
+    self-heals such documents on load: it adds the year-text source (if absent)
+    and a Default scene holding it, then makes that scene the shared
+    ``default_scene_id`` for every output — matching what a fresh install ships.
+
+    It is a no-op once a Default scene is present, so a user who later sets a
+    *different* scene as their default keeps that choice (the Default scene still
+    exists, so this does nothing). A valid document always has at least one scene,
+    so the "no scenes" case cannot occur here.
+    """
+    if any(scene.id == DEFAULT_SCENE_ID for scene in document.scenes):
+        return document
+    timestamp = created_at or utc_now_iso()
+    yeartext_source, default_scene = _yeartext_source_and_default_scene(names, timestamp)
+    sources = document.sources
+    if not any(source.id == YEARTEXT_SOURCE_ID for source in sources):
+        sources = (*sources, yeartext_source)
+    return replace(
+        document,
+        sources=sources,
+        scenes=(default_scene, *document.scenes),
+        outputs=tuple(
+            replace(route, default_scene_id=DEFAULT_SCENE_ID)
+            for route in document.outputs
+        ),
+    )
+
+
+def _yeartext_source_and_default_scene(
+    names: SceneSeedNames, timestamp: str
+) -> tuple[SourceDefinition, SceneDefinition]:
+    """Build the year-text source and the full-size Default scene that holds it."""
     yeartext_source = SourceDefinition(
         id=YEARTEXT_SOURCE_ID,
         kind=SourceKind.YEARTEXT,
@@ -243,19 +301,7 @@ def create_fresh_scene_collection_document(
         created_at=timestamp,
         updated_at=timestamp,
     )
-    return replace(
-        document,
-        sources=(*document.sources, yeartext_source),
-        scenes=(
-            default_scene,
-            document.scene(CAMERA_SCENE_ID),
-            document.scene(CONTENT_SCENE_ID),
-        ),
-        outputs=tuple(
-            replace(route, default_scene_id=DEFAULT_SCENE_ID)
-            for route in document.outputs
-        ),
-    )
+    return yeartext_source, default_scene
 
 
 def _layer(

@@ -50,9 +50,13 @@ from solin.core.scenes.presets import (
     CAMERA_SCENE_ID,
     CONTENT_CAMERA_PIP_SCENE_ID,
     CONTENT_SCENE_ID,
+    DEFAULT_SCENE_ID,
     NO_SIGNAL_SCENE_ID,
+    YEARTEXT_SOURCE_ID,
     SceneSeedNames,
     create_default_scene_document,
+    create_fresh_scene_collection_document,
+    ensure_default_scene,
 )
 
 
@@ -382,6 +386,53 @@ def test_yeartext_source_definition_rejects_a_mismatched_configuration() -> None
             name="Year text",
             configuration=ImageSourceConfig(asset_id="not-yeartext"),
         )
+
+
+def test_ensure_default_scene_heals_a_document_without_a_year_text_default() -> None:
+    # A document from before the year-text-as-a-scene feature: it has scenes but
+    # no Default (year text) scene. ensure_default_scene must add the year-text
+    # source + Default scene and make that scene the shared idle default, keeping
+    # the existing scenes. The result must be a valid document.
+    legacy = _document()
+    assert all(scene.id != DEFAULT_SCENE_ID for scene in legacy.scenes)
+
+    healed = ensure_default_scene(legacy, _names())
+
+    yeartext = healed.source(YEARTEXT_SOURCE_ID)
+    assert yeartext.kind is SourceKind.YEARTEXT
+    default_scene = healed.scene(DEFAULT_SCENE_ID)
+    assert [layer.source_id for layer in default_scene.layers] == [YEARTEXT_SOURCE_ID]
+    assert {route.default_scene_id for route in healed.outputs} == {DEFAULT_SCENE_ID}
+    # existing scenes are preserved
+    assert {scene.id for scene in legacy.scenes} <= {scene.id for scene in healed.scenes}
+    # round-trips (i.e. it validated as a real document)
+    assert SceneDocument.from_record(healed.to_record()) == healed
+
+
+def test_ensure_default_scene_is_a_no_op_when_a_default_scene_exists() -> None:
+    fresh = create_fresh_scene_collection_document(
+        _names(), document_id="fresh", created_at="2026-08-02T12:00:00+00:00"
+    )
+    assert ensure_default_scene(fresh, _names()) is fresh  # unchanged, same object
+
+
+def test_ensure_default_scene_keeps_a_user_chosen_default() -> None:
+    # If a user set a different scene as their default, the Default scene still
+    # exists, so ensure_default_scene must not override their choice.
+    fresh = create_fresh_scene_collection_document(
+        _names(), document_id="fresh", created_at="2026-08-02T12:00:00+00:00"
+    )
+    customized = replace(
+        fresh,
+        outputs=tuple(
+            replace(route, default_scene_id=CAMERA_SCENE_ID) for route in fresh.outputs
+        ),
+    )
+
+    result = ensure_default_scene(customized, _names())
+
+    assert result is customized  # no-op: Default scene present
+    assert {route.default_scene_id for route in result.outputs} == {CAMERA_SCENE_ID}
 
 
 @pytest.mark.parametrize(

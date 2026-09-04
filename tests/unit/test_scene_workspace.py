@@ -116,23 +116,43 @@ def test_fresh_workspace_default_scene_holds_the_year_text_source(tmp_path: Path
     assert {route.default_scene_id for route in document.outputs} == {DEFAULT_SCENE_ID}
 
 
-def test_legacy_document_is_migrated_integrally_and_idempotently(tmp_path: Path) -> None:
+def test_legacy_document_gains_the_year_text_default_scene_on_load(tmp_path: Path) -> None:
+    # A collection saved before the year-text-as-a-scene feature has no Default
+    # scene, so its idle projection would have no year text after upgrading. On
+    # load it is self-healed: the year-text source + Default scene are added and
+    # the Default scene becomes the shared idle default, while the legacy scenes,
+    # sources, and document identity are preserved.
     paths = _paths(tmp_path)
     legacy = create_default_scene_document(
         _names(),
         document_id="legacy-document",
         created_at="2026-08-10T12:00:00+00:00",
     )
+    assert all(scene.id != DEFAULT_SCENE_ID for scene in legacy.scenes)  # precondition
+    assert all(source.id != YEARTEXT_SOURCE_ID for source in legacy.sources)
     SceneDocumentRepository(paths.scenes_file, seed_factory=lambda: legacy).save(legacy)
 
     first = SceneWorkspaceService(paths, seed_names=_names())
-    first_document = first.documents.document
+    healed = first.documents.document
     first.close()
-    second = SceneWorkspaceService(paths, seed_names=_names())
 
-    assert first_document == legacy
-    assert second.documents.document == legacy
-    assert paths.scenes_file.exists()
+    yeartext_sources = [s for s in healed.sources if s.kind is SourceKind.YEARTEXT]
+    assert [s.id for s in yeartext_sources] == [YEARTEXT_SOURCE_ID]
+    default_scene = healed.scene(DEFAULT_SCENE_ID)
+    assert [layer.source_id for layer in default_scene.layers] == [YEARTEXT_SOURCE_ID]
+    assert {route.default_scene_id for route in healed.outputs} == {DEFAULT_SCENE_ID}
+    # Legacy scenes + identity survive; nothing was dropped.
+    assert healed.document_id == "legacy-document"
+    assert {scene.id for scene in legacy.scenes} <= {scene.id for scene in healed.scenes}
+
+    # Idempotent: reloading heals to the same structure — no duplicate Default
+    # scene or year-text source.
+    second = SceneWorkspaceService(paths, seed_names=_names())
+    reloaded = second.documents.document
+    assert [s.id for s in reloaded.scenes] == [s.id for s in healed.scenes]
+    assert sum(s.kind is SourceKind.YEARTEXT for s in reloaded.sources) == 1
+    assert sum(scene.id == DEFAULT_SCENE_ID for scene in reloaded.scenes) == 1
+    assert {route.default_scene_id for route in reloaded.outputs} == {DEFAULT_SCENE_ID}
     assert len(second.catalog.collections) == 1
 
 
