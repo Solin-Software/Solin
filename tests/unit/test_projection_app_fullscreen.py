@@ -8,10 +8,7 @@ from PySide6.QtGui import QShowEvent
 from PySide6.QtWidgets import QApplication, QFrame, QWidget
 
 import solin.widgets.projection.bar as projection_bar
-from solin.widgets.projection.fullscreen import (
-    FullscreenVideoOverlay,
-    FullscreenVideoSurface,
-)
+from solin.widgets.projection.fullscreen import FullscreenVideoOverlay
 
 
 _APP = QApplication.instance() or QApplication([])
@@ -203,92 +200,6 @@ def test_fullscreen_selects_native_presenter_before_showing_its_window(
     assert events == [("native", True), ("show", None)]
 
 
-def test_video_frames_reach_active_app_fullscreen_when_overlay_is_collapsed():
-    overlay = _Overlay(active=True)
-    bar = _bar(mode="video", audio=False, overlay=overlay)
-    frame = object()
-
-    bar._on_video_frame(frame)
-
-    assert overlay.frames == [frame]
-
-
-def test_audio_frames_do_not_reach_app_fullscreen():
-    overlay = _Overlay(active=True)
-    bar = _bar(mode="video", audio=True, overlay=overlay)
-
-    bar._on_video_frame(object())
-
-    assert overlay.frames == []
-
-
-def test_expanded_preview_forwards_the_original_video_frame_without_materializing_it():
-    overlay = _Overlay(active=True)
-    bar = _bar(mode="video", audio=False, overlay=overlay)
-    bar._expanded = True
-
-    class _Frame:
-        def toImage(self):
-            raise AssertionError("the expanded preview must not materialize a QImage")
-
-    class _VideoPreview:
-        def __init__(self):
-            self.frames = []
-
-        def set_frame(self, frame):
-            self.frames.append(frame)
-
-    bar.video_preview = _VideoPreview()
-    frame = _Frame()
-
-    bar._on_video_frame(frame)
-
-    assert overlay.frames == [frame]
-    assert bar.video_preview.frames == [frame]
-
-
-def test_video_preview_leaves_letterbox_to_the_themed_container(monkeypatch):
-    from PySide6.QtGui import QColor, QImage
-    from PySide6.QtMultimedia import QVideoFrame
-
-    preview = projection_bar._ThemedVideoPreview()
-    preview.resize(1000, 800)
-    frame = QVideoFrame(QImage(1600, 900, QImage.Format.Format_ARGB32))
-
-    preview.set_frame(frame)
-
-    geometry = preview._video_widget.geometry()
-    assert geometry.width() == 1000
-    assert geometry.height() == 562
-    assert geometry.x() == 0
-    assert geometry.y() == 119
-    assert QColor(projection_bar.PALETTE.bg0).name() in preview.styleSheet()
-
-    themed_palette = type("Palette", (), {"bg0": "#f2f4f8"})()
-    monkeypatch.setattr(projection_bar, "PALETTE", themed_palette)
-    preview.apply_theme()
-
-    assert "#f2f4f8" in preview.styleSheet()
-
-
-def test_fullscreen_fallback_presents_qvideo_frame_without_cpu_materialization():
-    from PySide6.QtGui import QImage
-    from PySide6.QtMultimedia import QVideoFrame
-
-    class _NoCpuMaterializationFrame(QVideoFrame):
-        def toImage(self):
-            raise AssertionError("fullscreen fallback must not map frames to a QImage")
-
-    surface = FullscreenVideoSurface()
-    frame = _NoCpuMaterializationFrame(
-        QImage(1600, 900, QImage.Format.Format_ARGB32)
-    )
-
-    surface.set_frame(frame)
-
-    assert surface.video_widget.videoSink().videoFrame().isValid()
-
-
 def test_video_preview_creates_native_surface_only_when_route_is_enabled():
     preview = projection_bar._ThemedVideoPreview()
     preview.resize(1000, 800)
@@ -299,105 +210,15 @@ def test_video_preview_creates_native_surface_only_when_route_is_enabled():
 
     assert preview.native_output_active is True
     assert preview.native_surface is not None
-    assert preview.native_surface.geometry().width() == 1000
-    assert preview.native_surface.geometry().height() == 562
-    assert preview.native_surface.geometry().y() == 119
+    # The sidecar renders and letterboxes internally, so the native surface
+    # fills the whole preview — there is no Qt-side letterboxing.
+    assert preview.native_surface.geometry().getRect() == (0, 0, 1000, 800)
     assert preview.native_surface.cursor().shape() == Qt.CursorShape.ArrowCursor
     assert preview.native_surface.input_overlay is not None
     assert (
         preview.native_surface.input_overlay.cursor().shape()
         == Qt.CursorShape.ArrowCursor
     )
-    assert preview._video_widget.isHidden()
-
-
-def test_native_video_preview_tracks_source_aspect_without_copying_frames():
-    from PySide6.QtCore import QSize
-
-    preview = projection_bar._ThemedVideoPreview()
-    preview.resize(1000, 800)
-    preview.set_native_output_active(True)
-
-    preview.set_video_size(QSize(4, 3))
-
-    assert preview.native_surface is not None
-    assert preview.native_surface.geometry().getRect() == (0, 25, 1000, 750)
-    assert preview._video_widget.geometry() == preview.native_surface.geometry()
-
-
-def test_video_size_notification_reads_the_sink_property_without_signal_arguments():
-    from PySide6.QtGui import QImage
-    from PySide6.QtMultimedia import QVideoFrame, QVideoSink
-
-    source_sink = QVideoSink()
-    preview = projection_bar._ThemedVideoPreview()
-    preview.resize(1000, 800)
-    bar = _bar()
-    bar.media = SimpleNamespace(video_sink=source_sink)
-    bar.video_preview = preview
-    source_sink.videoSizeChanged.connect(bar._sync_video_preview_size)
-
-    source_sink.setVideoFrame(
-        QVideoFrame(QImage(800, 600, QImage.Format.Format_ARGB32))
-    )
-
-    assert preview._video_widget.geometry().getRect() == (0, 25, 1000, 750)
-
-
-def test_native_video_preview_does_not_feed_the_qt_presenter():
-    from PySide6.QtGui import QImage
-    from PySide6.QtMultimedia import QVideoFrame
-
-    preview = projection_bar._ThemedVideoPreview()
-    frame = QVideoFrame(QImage(1600, 900, QImage.Format.Format_ARGB32))
-
-    preview.set_native_output_active(True)
-    preview.set_frame(frame)
-
-    assert not preview._video_widget.videoSink().videoFrame().isValid()
-
-    preview.set_native_output_active(False)
-    preview.set_frame(frame)
-
-    assert preview._video_widget.videoSink().videoFrame().isValid()
-
-
-def test_collapsed_video_does_not_require_python_frame_delivery():
-    bar = _bar(mode="video", audio=False)
-
-    assert bar.python_video_frame_delivery_required is False
-
-
-def test_expanded_qt_preview_requires_python_frame_delivery():
-    bar = _bar(mode="video", audio=False)
-    bar._expanded = True
-    bar.video_preview = type("Preview", (), {"native_output_active": False})()
-
-    assert bar.python_video_frame_delivery_required is True
-
-
-def test_expanded_native_preview_does_not_require_python_frame_delivery():
-    bar = _bar(mode="video", audio=False)
-    bar._expanded = True
-    bar.video_preview = type("Preview", (), {"native_output_active": True})()
-
-    assert bar.python_video_frame_delivery_required is False
-
-
-def test_qt_app_fullscreen_requires_python_frame_delivery():
-    bar = _bar(mode="video", audio=False, overlay=_Overlay(active=True))
-
-    assert bar.python_video_frame_delivery_required is True
-
-
-def test_native_app_fullscreen_does_not_require_python_frame_delivery():
-    bar = _bar(
-        mode="video",
-        audio=False,
-        overlay=_Overlay(active=True, native_output_active=True),
-    )
-
-    assert bar.python_video_frame_delivery_required is False
 
 
 def test_fullscreen_replaces_expanded_native_target_instead_of_duplicating_it():
@@ -424,7 +245,6 @@ def test_fullscreen_replaces_expanded_native_target_instead_of_duplicating_it():
     assert overlay.native_output_active is True
     assert preview.states == [False]
     assert bar.native_video_output_surface is overlay.native_video_surface
-    assert bar.python_video_frame_delivery_required is False
 
 
 def test_fullscreen_visibility_notifies_output_routing_without_forwarding_bool():

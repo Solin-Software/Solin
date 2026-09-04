@@ -44,9 +44,25 @@ def create_libobs_scene_engine(images_dir: Path | None = None) -> SubprocessScen
     """
     if images_dir is not None:
         os.environ["SOLIN_SCENE_IMAGES_DIR"] = str(images_dir)
+        # The app renders the styled year text to this PNG; the sidecar shows it as
+        # the "Year text" scene source. Exported before the content controller is
+        # built so the file exists by the first hydrate.
+        os.environ["SOLIN_YEARTEXT_IMAGE"] = str(images_dir / "__solin_yeartext__.png")
     return SubprocessSceneEngine(
         SceneEngineProcessConfig(
             executable=Path(sys.executable),
             arguments=("-m", _SIDECAR_MODULE),
+            # Resilience: the sidecar handles IPC (incl. heartbeats) on one thread,
+            # so a heavy hydrate under load — many outputs + a flaky camera
+            # saturating the single obs graphics thread — can briefly delay a
+            # heartbeat. A tight timeout would kill a *working* engine and, after a
+            # few such kills, the supervisor would give up mid-meeting. Give the
+            # heartbeat generous slack and allow many restarts over a long window so
+            # a transiently-slow (not dead) engine is never abandoned; the app
+            # re-hydrates automatically on each restart.
+            heartbeat_interval_ms=1000,
+            heartbeat_timeout_ms=10000,
+            maximum_restarts=30,
+            restart_window_seconds=180.0,
         )
     )

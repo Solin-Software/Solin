@@ -67,12 +67,6 @@ else:
 # its engine, and selecting the legacy Qt camera workflow on other platforms.
 NATIVE_SCENES_SUPPORTED: bool = APP_PLATFORM == "windows"
 
-# The accelerated Qt decoder ingress intentionally crosses Qt's private ABI.
-# Keep it independently switchable from the native scenes feature so a bridge
-# compatibility issue can fall back to the public QVideoFrame/SHM route without
-# disabling the engine or changing playback policy.
-NATIVE_QT_MEDIA_BRIDGE_ENABLED: bool = NATIVE_SCENES_SUPPORTED
-
 # ── Arquivos temporários de stream (cache OFF) ─────────────────────────────────
 # Prefixo obrigatório em todo tempfile e lockfile gerado pelo Solin.
 # A limpeza de órfãos na inicialização filtra EXCLUSIVAMENTE por este prefixo,

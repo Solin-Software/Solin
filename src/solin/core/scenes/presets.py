@@ -27,15 +27,23 @@ from solin.core.scenes.model import (
     VideoColorSpace,
     VideoFormat,
     VideoPixelFormat,
+    YeartextSourceConfig,
     stable_identity,
     utc_now_iso,
 )
 
 
+# The year text is rendered by the app in its own styling and shown as an image
+# source; there is a single global instance, so it has a stable well-known id.
+YEARTEXT_SOURCE_ID = "solin.yeartext.current"
+
 CONTENT_SCENE_ID = stable_identity("default-scene:content")
 CAMERA_SCENE_ID = stable_identity("default-scene:camera")
 CONTENT_CAMERA_PIP_SCENE_ID = stable_identity("default-scene:content-camera-pip")
 NO_SIGNAL_SCENE_ID = stable_identity("default-scene:no-signal")
+# The idle-fallback scene ("default" label): shown whenever nothing else is
+# presented. On first run it holds the full-size year text and is the default.
+DEFAULT_SCENE_ID = stable_identity("default-scene:default")
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,6 +58,9 @@ class SceneSeedNames:
     content_layer: str
     camera_layer: str
     background_layer: str
+    yeartext_source: str = "Year text"
+    default_scene: str = "Default"
+    yeartext_layer: str = "Year text"
 
 
 def create_default_scene_document(
@@ -197,18 +208,52 @@ def create_fresh_scene_collection_document(
     document_id: str,
     created_at: str | None = None,
 ) -> SceneDocument:
-    """Create the minimal first Scene profile without visible technical scenes."""
+    """Create the minimal first Scene profile.
 
+    The first-run collection is a **Default** scene (the idle fallback, holding the
+    full-size year text) plus Camera and Content. The Default scene is the shared
+    ``default_scene_id`` for every output bus, so whenever nothing else is
+    presented the year text shows on both the projection and the virtual camera.
+    The year-text source ships only here (fresh installs); other collections add
+    it on demand via the source picker.
+    """
+
+    timestamp = created_at or utc_now_iso()
     document = create_default_scene_document(
         names,
         document_id=document_id,
         created_at=created_at,
     )
+    yeartext_source = SourceDefinition(
+        id=YEARTEXT_SOURCE_ID,
+        kind=SourceKind.YEARTEXT,
+        name=names.yeartext_source,
+        configuration=YeartextSourceConfig(),
+    )
+    yeartext_layer = _layer(
+        "default:yeartext",
+        YEARTEXT_SOURCE_ID,
+        names.yeartext_layer,
+        fit_mode=FitMode.CONTAIN,
+    )
+    default_scene = SceneDefinition(
+        id=DEFAULT_SCENE_ID,
+        name=names.default_scene,
+        layers=(yeartext_layer,),
+        created_at=timestamp,
+        updated_at=timestamp,
+    )
     return replace(
         document,
+        sources=(*document.sources, yeartext_source),
         scenes=(
+            default_scene,
             document.scene(CAMERA_SCENE_ID),
             document.scene(CONTENT_SCENE_ID),
+        ),
+        outputs=tuple(
+            replace(route, default_scene_id=DEFAULT_SCENE_ID)
+            for route in document.outputs
         ),
     )
 

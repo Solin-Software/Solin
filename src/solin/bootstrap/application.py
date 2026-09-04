@@ -137,6 +137,9 @@ def _scene_seed_names():
         content_layer=translate("Content"),
         camera_layer=translate("Camera"),
         background_layer=translate("Background"),
+        yeartext_source=translate("Year text"),
+        default_scene=translate("Default"),
+        yeartext_layer=translate("Year text"),
     )
 
 
@@ -246,11 +249,9 @@ def _build_main_window_service_factories(
 
     install_id_provider = lambda: get_install_id(installation_settings)
 
+    # The legacy Qt (QtMultimedia) camera has been removed; the libobs sidecar
+    # owns camera capture/discovery, so no app-side camera service is created.
     camera_factory = None
-    if not _scenes_engine_available():
-        from solin.core.integrations.camera import CameraService
-
-        camera_factory = CameraService
 
     def create_remote_services(parent):
         from typing import cast

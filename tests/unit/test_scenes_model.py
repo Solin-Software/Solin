@@ -11,6 +11,7 @@ from solin.core.scenes.engine import (
     FrameChannelTransport,
     FrameProducerKind,
     OutputWindowTarget,
+    scene_engine_graph_signature,
     SceneEngineHealth,
     SceneEngineSnapshot,
     SceneEngineStatus,
@@ -26,6 +27,7 @@ from solin.core.scenes.model import (
     ContentCategory,
     ImageSourceConfig,
     LocalCameraConfig,
+    NormalizedRect,
     OnvifPtzBinding,
     RtspCameraConfig,
     SCHEMA_VERSION,
@@ -42,6 +44,7 @@ from solin.core.scenes.model import (
     VideoColorRange,
     VideoColorSpace,
     VideoPixelFormat,
+    YeartextSourceConfig,
 )
 from solin.core.scenes.presets import (
     CAMERA_SCENE_ID,
@@ -320,6 +323,65 @@ def test_local_camera_preserves_exact_native_fps_components_through_persistence(
     assert LocalCameraConfig.from_record(configuration.to_record()) == configuration
     assert configuration.fps_numerator == numerator
     assert configuration.fps_denominator == denominator
+
+
+def test_graph_signature_ignores_geometry_and_timestamps_but_tracks_structure() -> None:
+    document = _document()
+    baseline = scene_engine_graph_signature(document)
+    scene = document.scenes[0]
+    layer = scene.layers[0]
+
+    # A real edit (via update_scene) both moves the layer AND bumps the scene's
+    # updated_at. Neither is structural — geometry is applied live and timestamps
+    # are metadata — so the signature must be unchanged (else every resize/move
+    # would force a full re-hydrate and re-open every source).
+    edited_scene = replace(
+        scene,
+        layers=(replace(layer, rect=NormalizedRect(x=0.3, y=0.3, width=0.4, height=0.4)),
+                *scene.layers[1:]),
+        updated_at="2099-12-31T23:59:59+00:00",
+    )
+    edited_document = replace(
+        document, scenes=(edited_scene, *document.scenes[1:]),
+    )
+    assert scene_engine_graph_signature(edited_document) == baseline
+
+    # A structural change (hiding a layer) DOES change the signature → rebuild.
+    hidden = replace(layer, visible=not layer.visible)
+    hidden_document = replace(
+        document,
+        scenes=(replace(scene, layers=(hidden, *scene.layers[1:])), *document.scenes[1:]),
+    )
+    assert scene_engine_graph_signature(hidden_document) != baseline
+
+
+def test_yeartext_source_config_round_trips_with_an_empty_record() -> None:
+    configuration = YeartextSourceConfig()
+    assert configuration.to_record() == {}
+    assert YeartextSourceConfig.from_record(configuration.to_record()) == configuration
+
+
+def test_yeartext_source_definition_round_trips_through_the_document_codec() -> None:
+    source = SourceDefinition(
+        id="solin.yeartext",
+        kind=SourceKind.YEARTEXT,
+        name="Year text",
+        configuration=YeartextSourceConfig(),
+    )
+    record = source.to_record()
+    assert record["type"] == "yeartext"
+    assert record["configuration"] == {}
+    assert SourceDefinition.from_record(record) == source
+
+
+def test_yeartext_source_definition_rejects_a_mismatched_configuration() -> None:
+    with pytest.raises(SceneValidationError):
+        SourceDefinition(
+            id="solin.yeartext",
+            kind=SourceKind.YEARTEXT,
+            name="Year text",
+            configuration=ImageSourceConfig(asset_id="not-yeartext"),
+        )
 
 
 @pytest.mark.parametrize(

@@ -164,6 +164,26 @@ def _use_native_media_presentation(
 ) -> bool:
     """Keep every media surface on the same native routing policy."""
     return native_window_routing_ready and (mirror_enabled or raw_visual)
+
+
+def _native_scene_routing_supported() -> bool:
+    """Whether the sidecar can paint scene video into shared native window handles.
+
+    True on the Windows native engine, and under the libobs engine on any platform
+    whose top-level window handles can be shared cross-process with the sidecar so
+    it can bind an ``obs_display`` to them: X11/XWayland (``xcb``) or Windows.
+    Native Wayland cannot share a window handle, so those sessions keep the
+    CPU-readback (egress) path instead of direct native painting.
+    """
+    if NATIVE_SCENES_SUPPORTED:
+        return True
+    if not libobs_scene_engine_selected():
+        return False
+    from PySide6.QtGui import QGuiApplication
+
+    return QGuiApplication.platformName() in ("xcb", "windows")
+
+
 log = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
@@ -335,26 +355,20 @@ class MainWindow(QWidget):
                 canvas_width=program_output.video_format.width,
                 canvas_height=program_output.video_format.height,
             )
-        self._content_frame_ingress.bind_video_sink(self.media_ctrl.video_sink)
-        self._content_frame_ingress.direct_submission_changed.connect(
-            self._reconcile_python_video_frame_delivery,
-            Qt.ConnectionType.QueuedConnection,
-        )
-        self.media_ctrl.decoded_frame_acceptance_changed.connect(
-            self._content_frame_ingress.set_decoder_frame_gate
-        )
-        self._content_frame_ingress.set_decoder_frame_gate(
-            self.media_ctrl.session_id,
-            self.media_ctrl.decoded_frames_accepted,
-        )
         # Fork A: with the libobs engine, local media files decode in the sidecar.
         # Route the foreground controller through the engine and mirror its
         # media_playback_state events back onto the controller's usual signals.
         self._unsubscribe_media_engine = None
         if libobs_scene_engine_selected() and scene_engine is not None:
             from .controllers.media_engine_route import SceneEngineMediaRoute
+            from .core.scenes.media_control import MEDIA_SLOT_BACKGROUND
 
             self.media_ctrl.set_engine_media_route(SceneEngineMediaRoute(scene_engine))
+            # The background song plays through a second, monitored-only sidecar
+            # audio slot (not composited into the scene).
+            self._background_media_controller.set_engine_media_route(
+                SceneEngineMediaRoute(scene_engine, slot=MEDIA_SLOT_BACKGROUND)
+            )
             self._unsubscribe_media_engine = scene_engine.subscribe(
                 self._on_engine_media_event
             )
@@ -365,6 +379,8 @@ class MainWindow(QWidget):
             self._current_yearly_projection_text,
             media_epoch_sink=self._content_frame_ingress.begin_presentation,
             image_transform_sink=self._content_frame_ingress.set_image_transform,
+            # Lazy: scene_runtime is constructed just after this controller.
+            yeartext_reloaded=lambda: self.scene_runtime.reload_yeartext(),
             width=program_output.video_format.width,
             height=program_output.video_format.height,
             parent=self,
@@ -1153,8 +1169,13 @@ class MainWindow(QWidget):
         # Runs on the engine's event thread; on_engine_media_state only emits
         # (queued) Qt signals and sets plain attributes, so this is thread-safe.
         from .core.scenes.engine import MediaPlaybackEvent
+        from .core.scenes.media_control import MEDIA_SLOT_BACKGROUND
 
-        if isinstance(event, MediaPlaybackEvent):
+        if not isinstance(event, MediaPlaybackEvent):
+            return
+        if getattr(event.state, "slot", 0) == MEDIA_SLOT_BACKGROUND:
+            self._background_media_controller.on_engine_media_state(event.state)
+        else:
             self.media_ctrl.on_engine_media_state(event.state)
 
     def _on_native_content_source_health_changed(self, source_id: str) -> None:
@@ -1181,8 +1202,12 @@ class MainWindow(QWidget):
             "obs_stream",
             "camera_stream",
         }
+        # The projection windows render the composited main mix (the program). The
+        # program's idle scene is the Default scene (which shows the Year text), so
+        # at idle the projection shows the year text with no special-casing here;
+        # media presentations transition the program to the Content scene as usual.
         native_window_routing_ready = (
-            NATIVE_SCENES_SUPPORTED
+            _native_scene_routing_supported()
             and self.scene_runtime.native_window_routing_ready
             and not self._native_window_output_suppressed
         )
@@ -1271,32 +1296,6 @@ class MainWindow(QWidget):
         for window in raw_fallback_windows:
             self._projection_targets.restore_state_to_window(window)
         self._reconcile_scene_media_egress()
-        self._reconcile_python_video_frame_delivery()
-
-    @Slot()
-    @Slot(bool)
-    def _reconcile_python_video_frame_delivery(
-        self,
-        _direct_active: bool | None = None,
-    ) -> None:
-        """Keep Qt frame delivery only while a Qt surface actually consumes it."""
-
-        delivery_required = True
-        state = self.projection_session.state
-        if (
-            self._content_frame_ingress.direct_submission_active
-            and state.get("type") == "video"
-            and not state.get("is_audio", False)
-        ):
-            projection_bar = getattr(self, "proj_bar", None)
-            bar_requires_frames = (
-                projection_bar is None
-                or projection_bar.python_video_frame_delivery_required
-            )
-            delivery_required = bool(
-                bar_requires_frames or self._raw_projection_windows()
-            )
-        self.media_ctrl.set_python_frame_delivery_required(delivery_required)
 
     def _on_native_scene_engine_ready_changed(self, ready: bool) -> None:
         if ready:
@@ -1410,12 +1409,9 @@ class MainWindow(QWidget):
         self._content_frame_ingress.set_enabled(required)
         if not required:
             return
+        # Media video is composited by the libobs sidecar; the app only re-primes
+        # its own rendered content (text/images) here.
         self._program_content.refresh()
-        if projection_presentation_type(self.projection_session.state) != "video":
-            return
-        frame = self.media_ctrl.video_sink.videoFrame()
-        if frame.isValid():
-            self._program_content.submit_frame(frame)
 
     def _raw_projection_windows(self) -> list:
         if self._program_mirror_enabled():

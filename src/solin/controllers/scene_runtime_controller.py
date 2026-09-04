@@ -73,7 +73,7 @@ from solin.core.scenes.workspace import (
 
 
 _START_DEADLINE_MS = DEFAULT_ENGINE_STARTUP_DEADLINE_MS
-_HYDRATE_DEADLINE_MS = 3000
+_HYDRATE_DEADLINE_MS = 12000
 _PREPARE_DEADLINE_MS = 1500
 _TAKE_DEADLINE_MS = 1000
 _PREVIEW_GEOMETRY_DEADLINE_MS = 500
@@ -670,6 +670,15 @@ class SceneRuntimeController(QObject):
         )
         self._track_future(future, "start", None)
         return future
+
+    @Slot()
+    def reload_yeartext(self) -> None:
+        """Notify the engine to re-read the year-text source image in place.
+
+        Called after the app re-renders the year-text PNG so a mid-session change
+        shows without a full re-hydrate. A no-op when no engine hosts the source."""
+        if self._engine is not None:
+            self._engine.reload_yeartext()
 
     @Slot(object)
     def set_content_ingress(self, descriptor: FrameChannelDescriptor | None) -> None:

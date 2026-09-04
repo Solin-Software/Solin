@@ -29,9 +29,16 @@ _DEFAULT_DEADLINE_MS = 4000
 class SceneEngineMediaRoute:
     """Adapts MediaController transport calls onto the scene-engine media protocol."""
 
-    def __init__(self, engine: Any, *, deadline_ms: int = _DEFAULT_DEADLINE_MS) -> None:
+    def __init__(
+        self,
+        engine: Any,
+        *,
+        deadline_ms: int = _DEFAULT_DEADLINE_MS,
+        slot: int = 0,
+    ) -> None:
         self._engine = engine
         self._deadline_ms = deadline_ms
+        self._slot = int(slot)
 
     def is_ready(self) -> bool:
         """True when the sidecar is READY to accept media commands."""
@@ -78,6 +85,7 @@ class SceneEngineMediaRoute:
                 speed_percent=speed_percent,
                 trim_start_ms=trim_start_ms,
                 trim_end_ms=trim_end_ms,
+                slot=self._slot,
                 request_id=self._request_id("open"),
                 deadline_ms=self._deadline_ms,
             ),
@@ -89,6 +97,7 @@ class SceneEngineMediaRoute:
             self._engine.control_media(
                 action,
                 position_ms=position_ms,
+                slot=self._slot,
                 request_id=self._request_id(action.value),
                 deadline_ms=self._deadline_ms,
             ),
@@ -118,6 +127,7 @@ class SceneEngineMediaRoute:
             self._engine.set_media_properties(
                 volume_percent=volume_percent,
                 speed_percent=speed_percent,
+                slot=self._slot,
                 request_id=self._request_id("props"),
                 deadline_ms=self._deadline_ms,
             ),

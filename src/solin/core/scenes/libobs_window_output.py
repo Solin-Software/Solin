@@ -111,22 +111,38 @@ class LibobsWindowOutput:
         canvas_w, canvas_h = canvas.width, canvas.height
 
         def _draw(display_cx: int, display_cy: int) -> None:
-            # Resolve + render under the lock so a scene source can't be released
-            # by a concurrent graph rebuild between resolve and render.
-            with self._lock:
-                scene_id = self._scene_ids.get(handle, "")
-                resolver = self._scene_resolver
-                if scene_id and resolver is not None:
-                    from pylibobs.display import render_source_letterboxed
+            # This runs on libobs' graphics thread while it holds the graphics
+            # mutex for the whole render pass. The reconcile/hydrate thread holds
+            # ``self._lock`` while creating/destroying a display or rebuilding the
+            # graph — operations that in turn need that same graphics mutex. So we
+            # must NEVER block on ``self._lock`` here: doing so is a lock-order
+            # inversion (self._lock ↔ graphics mutex) that deadlocks the whole
+            # engine the instant an edit changes a window handle or re-hydrates.
+            #
+            # Take the lock only if it's free right now. Held only to render a
+            # *borrowed* per-scene source (a concurrent rebuild could release it);
+            # the main texture is owned by libobs and always valid, so it needs no
+            # lock. If we can't take the lock (a reconcile is in flight), fall back
+            # to the main texture for this one frame — a rare, invisible blip for
+            # the program windows and a momentary program frame for a scene preview.
+            from pylibobs.display import (
+                render_main_texture_letterboxed,
+                render_source_letterboxed,
+            )
 
-                    source = resolver(scene_id)
-                    render_source_letterboxed(
-                        getattr(source, "_ptr", None) if source is not None else None,
-                        canvas_w, canvas_h, display_cx, display_cy)
-                else:
-                    from pylibobs.display import render_main_texture_letterboxed
-
-                    render_main_texture_letterboxed(canvas_w, canvas_h, display_cx, display_cy)
+            if self._lock.acquire(blocking=False):
+                try:
+                    scene_id = self._scene_ids.get(handle, "")
+                    resolver = self._scene_resolver
+                    if scene_id and resolver is not None:
+                        source = resolver(scene_id)
+                        render_source_letterboxed(
+                            getattr(source, "_ptr", None) if source is not None else None,
+                            canvas_w, canvas_h, display_cx, display_cy)
+                        return
+                finally:
+                    self._lock.release()
+            render_main_texture_letterboxed(canvas_w, canvas_h, display_cx, display_cy)
 
         try:
             display.add_draw_callback(_draw)

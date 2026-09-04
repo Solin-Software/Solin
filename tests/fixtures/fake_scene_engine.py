@@ -325,8 +325,8 @@ def main() -> int:
             if mode == "ignore_heartbeat":
                 continue
             _respond(request, "heartbeat", {"monotonic_ms": int(time.monotonic() * 1000)})
-        elif request.message_type == "cancel_preparation":
-            continue
+        elif request.message_type in {"cancel_preparation", "reload_yeartext"}:
+            continue  # fire-and-forget notifications — no response
         elif request.message_type == "stop":
             if mode == "ignore_stop":
                 continue

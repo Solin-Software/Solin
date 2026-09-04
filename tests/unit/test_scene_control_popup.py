@@ -22,7 +22,12 @@ from solin.core.scenes.model import (
     TransitionKind,
     TransitionSpec,
 )
-from solin.core.scenes.presets import SceneSeedNames
+from solin.core.scenes.presets import (
+    CAMERA_SCENE_ID,
+    CONTENT_SCENE_ID,
+    DEFAULT_SCENE_ID,
+    SceneSeedNames,
+)
 from solin.core.scenes.recording import (
     AudioDeviceDiscovery,
     ProgramRecordingState,
@@ -319,9 +324,9 @@ def test_scene_chips_keep_identity_and_move_roles_out_of_visible_text(
     assert default_scene_id is not None
     default_row = popup._scene_rows[default_scene_id]
 
-    assert default_row.text() == "Camera"
+    assert default_row.text() == "Default"
     assert "DEFAULT" not in default_row.text()
-    assert default_row.accessibleName() == "Camera"
+    assert default_row.accessibleName() == "Default"
     assert "Default scene" in default_row.accessibleDescription()
     assert "Default scene" in default_row.toolTip()
 
@@ -353,6 +358,7 @@ def test_configured_scenes_are_pinned_in_scene_list_order(
         popup._scene_rows[default_scene_id],
     )
     assert popup._other_cards.widgets == (
+        popup._scene_rows[CAMERA_SCENE_ID],
         popup._scene_rows["speaker-reader"],
         popup._scene_rows["audience-overview"],
     )
@@ -374,12 +380,15 @@ def test_camera_pip_scenes_are_grouped_between_configured_and_other_scenes(
     assert popup._pip_label.text() == "Camera PiP"
     assert popup._pip_cards.widgets == (popup._scene_rows["speaker-pip"],)
     assert popup._other_cards.widgets == (
+        popup._scene_rows[CAMERA_SCENE_ID],
         popup._scene_rows["before"],
         popup._scene_rows["after"],
     )
     assert popup._scene_order == (
-        *(scene.id for scene in controller.document.scenes[:2]),
+        DEFAULT_SCENE_ID,
+        CONTENT_SCENE_ID,
         "speaker-pip",
+        CAMERA_SCENE_ID,
         "before",
         "after",
     )
@@ -406,8 +415,7 @@ def test_camera_pip_group_follows_nested_camera_sources_and_live_edits(
     tmp_path: Path,
 ) -> None:
     controller = _controller(tmp_path)
-    camera_scene_id = controller.documents.program_default_scene_id
-    assert camera_scene_id is not None
+    camera_scene_id = CAMERA_SCENE_ID
     nested_source = SourceDefinition(
         id="nested-camera-source",
         kind=SourceKind.SCENE_REFERENCE,
@@ -469,7 +477,10 @@ def test_camera_below_content_stays_in_other_scenes(tmp_path: Path) -> None:
     popup = SceneControlPopup(controller)
 
     assert popup._pip_cards.widgets == ()
-    assert popup._other_cards.widgets == (popup._scene_rows["camera-below"],)
+    assert popup._other_cards.widgets == (
+        popup._scene_rows[CAMERA_SCENE_ID],
+        popup._scene_rows["camera-below"],
+    )
     popup.deleteLater()
     QCoreApplication.processEvents()
     controller.close()

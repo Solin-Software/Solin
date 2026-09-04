@@ -1,194 +1,133 @@
-"""Tests for engine-routed media title/cover extraction."""
+"""Tests for libobs-routed media title/cover extraction (ffprobe-backed)."""
 from __future__ import annotations
 
-from PySide6.QtCore import QCoreApplication, QObject, Signal
-from PySide6.QtGui import QImage, QPixmap
-from PySide6.QtMultimedia import QMediaMetaData, QMediaPlayer
+import solin.core.media.routed_metadata as routed_metadata
+from PySide6.QtCore import QCoreApplication
 
-from solin.core.media.routed_metadata import (
-    RoutedMediaMetadataExtractor,
-    read_playback_metadata,
-)
+from solin.core.media.routed_metadata import RoutedMediaMetadataExtractor
 
 
 def _app():
     return QCoreApplication.instance() or QCoreApplication([])
 
 
-def _image() -> QImage:
-    img = QImage(4, 4, QImage.Format.Format_RGB32)
-    img.fill(0xFF00FF00)
-    return img
+# These fakes stand in for QImage/QPixmap so the delivery logic is exercised
+# without a real native image decode. That decode is Qt's responsibility, and
+# QImageReader is known to segfault when a real image is decoded very late in a
+# large single-process suite (pre-existing environment fragility, unrelated to
+# this code); mocking it keeps the unit test isolated to the extractor's logic.
+class _FakeImage:
+    def __init__(self, null: bool) -> None:
+        self._null = null
+
+    def isNull(self) -> bool:
+        return self._null
 
 
-class _FakeMeta:
-    def __init__(self, values: dict) -> None:
-        self._values = values
+class _FakePixmap:
+    def __init__(self) -> None:
+        self.from_image = None
 
-    def value(self, key):
-        return self._values.get(key)
-
-
-# ── read_playback_metadata (pure) ─────────────────────────────────────────────
+    def isNull(self) -> bool:
+        return False
 
 
-def test_reads_title_and_cover_image():
+def _install_fake_decode(monkeypatch, *, valid: bool):
+    class FakeQImage:
+        @staticmethod
+        def fromData(_data) -> _FakeImage:
+            return _FakeImage(null=not valid)
+
+    class FakeQPixmap:
+        @staticmethod
+        def fromImage(image) -> _FakePixmap:
+            px = _FakePixmap()
+            px.from_image = image
+            return px
+
+    monkeypatch.setattr(routed_metadata, "QImage", FakeQImage)
+    monkeypatch.setattr(routed_metadata, "QPixmap", FakeQPixmap)
+
+
+def _extractor(metadata_fn):
+    """An extractor with a synchronous runner and injected metadata function."""
     _app()
-    meta = _FakeMeta({
-        QMediaMetaData.Key.Title: "  Song  ",
-        QMediaMetaData.Key.CoverArtImage: _image(),
-    })
-    title, cover = read_playback_metadata(meta)
-    assert title == "Song"
-    assert isinstance(cover, QPixmap) and not cover.isNull()
+    pending: list = []
+    extractor = RoutedMediaMetadataExtractor(
+        metadata_fn=metadata_fn,
+        runner=lambda work: pending.append(work),
+    )
+    results: list = []
+    extractor.metadata_ready.connect(
+        lambda sid, title, cover: results.append((sid, title, cover))
+    )
+    return extractor, pending, results
+
+
+def test_title_and_cover_bytes_emit_a_pixmap(monkeypatch):
+    _install_fake_decode(monkeypatch, valid=True)
+    extractor, pending, results = _extractor(lambda path: ("Song", b"cover-bytes"))
+    extractor.request(7, "/a.mp3")
+    pending.pop(0)()  # run the worker synchronously
+    assert len(results) == 1
+    sid, title, px = results[0]
+    assert sid == 7 and title == "Song"
+    assert isinstance(px, _FakePixmap) and not px.isNull()
 
 
 def test_title_only_yields_no_cover():
-    _app()
-    title, cover = read_playback_metadata(_FakeMeta({QMediaMetaData.Key.Title: "T"}))
-    assert title == "T" and cover is None
-
-
-def test_blank_title_is_empty():
-    _app()
-    title, cover = read_playback_metadata(_FakeMeta({QMediaMetaData.Key.Title: "   "}))
-    assert title == "" and cover is None
-
-
-def test_cover_pixmap_is_passed_through():
-    _app()
-    px = QPixmap.fromImage(_image())
-    title, cover = read_playback_metadata(_FakeMeta({QMediaMetaData.Key.CoverArtImage: px}))
-    assert title == "" and cover is px
-
-
-def test_thumbnail_used_when_no_cover_art():
-    _app()
-    meta = _FakeMeta({QMediaMetaData.Key.ThumbnailImage: _image()})
-    _title, cover = read_playback_metadata(meta)
-    assert isinstance(cover, QPixmap) and not cover.isNull()
-
-
-def test_null_cover_image_is_ignored():
-    _app()
-    meta = _FakeMeta({QMediaMetaData.Key.CoverArtImage: QImage()})  # null image
-    _title, cover = read_playback_metadata(meta)
-    assert cover is None
-
-
-# ── RoutedMediaMetadataExtractor (fake player) ────────────────────────────────
-
-
-class _FakePlayer(QObject):
-    metaDataChanged = Signal()
-    mediaStatusChanged = Signal(object)
-    errorOccurred = Signal(object, str)
-
-    def __init__(self, parent=None) -> None:
-        super().__init__(parent)
-        self.meta = _FakeMeta({})
-        self.sources: list = []
-        self.stopped = 0
-
-    def setSource(self, url):
-        self.sources.append(url)
-
-    def stop(self):
-        self.stopped += 1
-
-    def metaData(self):
-        return self.meta
-
-
-def _extractor():
-    _app()
-    players: list[_FakePlayer] = []
-
-    def factory(parent):
-        player = _FakePlayer(parent)
-        players.append(player)
-        return player
-
-    extractor = RoutedMediaMetadataExtractor(player_factory=factory)
-    results: list = []
-    extractor.metadata_ready.connect(lambda sid, title, cover: results.append((sid, title, cover)))
-    return extractor, players, results
-
-
-def test_cover_at_loaded_emits_immediately():
-    extractor, players, results = _extractor()
-    extractor.request(7, "/a.mp3")
-    players[-1].meta = _FakeMeta({
-        QMediaMetaData.Key.Title: "Song",
-        QMediaMetaData.Key.CoverArtImage: _image(),
-    })
-    players[-1].mediaStatusChanged.emit(QMediaPlayer.MediaStatus.LoadedMedia)
-    assert len(results) == 1
-    sid, title, cover = results[0]
-    assert sid == 7 and title == "Song"
-    assert isinstance(cover, QPixmap) and not cover.isNull()
-
-
-def test_no_cover_waits_then_emits_none_on_grace():
-    extractor, players, results = _extractor()
+    extractor, pending, results = _extractor(lambda path: ("T", None))
     extractor.request(3, "/a.mp3")
-    players[-1].meta = _FakeMeta({QMediaMetaData.Key.Title: "Song"})
-    players[-1].mediaStatusChanged.emit(QMediaPlayer.MediaStatus.LoadedMedia)
-    assert results == []  # holding for a late cover
-    extractor._finish()  # simulate the grace-timer expiry
-    assert results == [(3, "Song", None)]
+    pending.pop(0)()
+    assert results == [(3, "T", None)]
 
 
-def test_late_cover_via_metadata_changed_settles():
-    extractor, players, results = _extractor()
-    extractor.request(9, "/a.mp3")
-    player = players[-1]
-    player.meta = _FakeMeta({QMediaMetaData.Key.Title: "Song"})
-    player.mediaStatusChanged.emit(QMediaPlayer.MediaStatus.LoadedMedia)
-    assert results == []
-    player.meta = _FakeMeta({
-        QMediaMetaData.Key.Title: "Song",
-        QMediaMetaData.Key.CoverArtImage: _image(),
-    })
-    player.metaDataChanged.emit()
-    assert len(results) == 1 and results[0][0] == 9
-    assert isinstance(results[0][2], QPixmap) and not results[0][2].isNull()
+def test_invalid_cover_bytes_yield_no_cover(monkeypatch):
+    _install_fake_decode(monkeypatch, valid=False)  # decoded image is null
+    extractor, pending, results = _extractor(lambda path: ("T", b"not-an-image"))
+    extractor.request(4, "/a.mp3")
+    pending.pop(0)()
+    sid, title, px = results[0]
+    assert sid == 4 and title == "T" and px is None
 
 
-def test_invalid_media_emits_empty():
-    extractor, players, results = _extractor()
-    extractor.request(1, "/bad.mp3")
-    players[-1].mediaStatusChanged.emit(QMediaPlayer.MediaStatus.InvalidMedia)
+def test_empty_path_emits_immediately_without_running():
+    extractor, pending, results = _extractor(lambda path: ("x", None))
+    extractor.request(1, "")
     assert results == [(1, "", None)]
-
-
-def test_error_emits():
-    extractor, players, results = _extractor()
-    extractor.request(2, "/bad.mp3")
-    players[-1].errorOccurred.emit(QMediaPlayer.Error.ResourceError, "boom")
-    assert results == [(2, "", None)]
+    assert pending == []  # no worker scheduled
 
 
 def test_request_supersedes_previous():
-    extractor, players, results = _extractor()
+    calls: list[str] = []
+
+    def metadata_fn(path):
+        calls.append(path)
+        return (path, None)
+
+    extractor, pending, results = _extractor(metadata_fn)
     extractor.request(1, "/a.mp3")
     extractor.request(2, "/b.mp3")
-    # Late signals on the superseded player must never touch the new session — not
-    # a stale LoadedMedia, and (the review's finding) not a stale error/InvalidMedia
-    # that would otherwise read the not-yet-loaded new player and emit empty tags.
-    players[0].mediaStatusChanged.emit(QMediaPlayer.MediaStatus.LoadedMedia)
-    players[0].mediaStatusChanged.emit(QMediaPlayer.MediaStatus.InvalidMedia)
-    players[0].errorOccurred.emit(QMediaPlayer.Error.ResourceError, "stale")
+    # Running the first (superseded) worker must not emit — its generation is stale.
+    pending.pop(0)()
     assert results == []
-    players[1].meta = _FakeMeta({QMediaMetaData.Key.Title: "B"})
-    players[1].mediaStatusChanged.emit(QMediaPlayer.MediaStatus.LoadedMedia)
-    extractor._finish()
-    assert results == [(2, "B", None)]
+    pending.pop(0)()
+    assert results == [(2, "/b.mp3", None)]
 
 
 def test_cancel_prevents_emit():
-    extractor, players, results = _extractor()
+    extractor, pending, results = _extractor(lambda path: ("Song", _png_bytes()))
     extractor.request(5, "/a.mp3")
     extractor.cancel()
-    players[-1].mediaStatusChanged.emit(QMediaPlayer.MediaStatus.LoadedMedia)
+    pending.pop(0)()  # the worker still runs, but its result is dropped
     assert results == []
+
+
+def test_extraction_error_emits_empty():
+    def boom(path):
+        raise RuntimeError("ffprobe blew up")
+
+    extractor, pending, results = _extractor(boom)
+    extractor.request(9, "/a.mp3")
+    pending.pop(0)()
+    assert results == [(9, "", None)]

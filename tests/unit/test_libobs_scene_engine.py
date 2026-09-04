@@ -326,6 +326,9 @@ class _FakeColorSource:
         self.settings = dict(settings)
         self.released = 0
 
+    def update(self, settings: dict) -> None:
+        self.settings = dict(settings)
+
     def release(self) -> None:
         self.released += 1
 
@@ -890,10 +893,65 @@ def test_window_output_scene_change_needs_no_new_display(monkeypatch):
     assert resolved == ["b"]  # renders the newly-selected scene live
 
 
+def test_window_output_draw_never_blocks_on_the_reconcile_lock(monkeypatch):
+    """Regression for the editing-crash deadlock.
+
+    The draw callback runs on libobs' graphics thread while it holds the graphics
+    mutex; the reconcile/hydrate thread holds ``self._lock`` while creating or
+    destroying a display (which needs that same graphics mutex). If the draw
+    callback *blocked* on ``self._lock`` the two would deadlock (AB–BA) the moment
+    an edit changed a window handle or re-hydrated — freezing the whole engine.
+    So the callback must take the lock non-blockingly and, when it can't, fall
+    back to the always-valid main texture instead of blocking or touching a
+    borrowed scene source it isn't holding the lock for.
+    """
+    import threading
+
+    calls: list = []
+    monkeypatch.setattr("pylibobs.display.render_source_letterboxed",
+                        lambda ptr, cw, ch, ww, wh: calls.append("source"), raising=False)
+    monkeypatch.setattr("pylibobs.display.render_main_texture_letterboxed",
+                        lambda cw, ch, ww, wh: calls.append("main"), raising=False)
+    output, created = _window_output_with_recorder()
+    output.set_scene_resolver(lambda sid: types.SimpleNamespace(_ptr="P"))
+    target = _window_target(1); target["scene_id"] = "edit"
+    output.set_targets([target])
+    draw = created[0].draw_callbacks[0]
+
+    held = threading.Event()
+    release = threading.Event()
+
+    def _hold_lock() -> None:
+        with output.hydrate_lock:  # simulate a reconcile/hydrate in flight
+            held.set()
+            release.wait(2.0)
+
+    holder = threading.Thread(target=_hold_lock)
+    holder.start()
+    assert held.wait(2.0)
+
+    # Draw while another thread holds the lock: must return promptly (no deadlock)
+    # and must render the main texture, never the borrowed source.
+    finished = threading.Event()
+    threading.Thread(target=lambda: (draw(640, 360), finished.set())).start()
+    assert finished.wait(2.0), "draw callback blocked on the held lock (deadlock)"
+    assert calls == ["main"]
+
+    release.set()
+    holder.join(2.0)
+    # Once the lock is free again the callback renders the selected scene as usual.
+    calls.clear()
+    draw(640, 360)
+    assert calls == ["source"]
+
+
 class _RecordingWindowOutput:
     def __init__(self) -> None:
+        import threading
+
         self.calls: list[list] = []
         self.shutdowns = 0
+        self.hydrate_lock = threading.RLock()  # the sidecar guards rebuilds with it
 
     def set_targets(self, targets) -> None:
         self.calls.append(list(targets))
@@ -1008,6 +1066,151 @@ def test_rtsp_layer_creates_an_ffmpeg_source():
     assert source.settings["input"] == "rtsp://host/stream"
 
 
+# ── year-text source (rendered PNG shown as an image source) ─────────────────
+
+
+_YEARTEXT_DOC = {
+    "sources": [
+        {"id": "yt", "type": "yeartext", "name": "Year text", "configuration": {}},
+    ],
+    "scenes": [
+        {"id": "default", "layers": [
+            {"id": "l1", "source_id": "yt", "visible": True,
+             "rect": {"x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0}},
+        ]},
+    ],
+}
+
+
+def test_yeartext_layer_builds_an_image_source_from_the_rendered_png(tmp_path, monkeypatch):
+    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+
+    png = tmp_path / "yeartext.png"
+    png.write_bytes(b"not-a-real-png")  # the fake never decodes it
+    monkeypatch.setenv("SOLIN_YEARTEXT_IMAGE", str(png))
+    runtime = _CompositingRuntime()
+    graph = LibobsSceneGraph(runtime)
+    graph.hydrate(_YEARTEXT_DOC, {"virtual_camera": "default"})
+
+    image_sources = [s for s in runtime.sources if s.kind == "image_source"]
+    assert len(image_sources) == 1
+    assert image_sources[0].settings["file"] == str(png)
+
+
+def test_yeartext_reload_rereads_the_png_in_place(tmp_path, monkeypatch):
+    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+
+    png = tmp_path / "yeartext.png"
+    png.write_bytes(b"v1")
+    monkeypatch.setenv("SOLIN_YEARTEXT_IMAGE", str(png))
+    runtime = _CompositingRuntime()
+    graph = LibobsSceneGraph(runtime)
+    graph.hydrate(_YEARTEXT_DOC, {"virtual_camera": "default"})
+
+    assert graph.reload_yeartext() is True
+    image_source = next(s for s in runtime.sources if s.kind == "image_source")
+    assert image_source.settings["file"] == str(png)  # re-applied the file
+
+
+def test_yeartext_layer_without_a_rendered_png_falls_back_to_placeholder(monkeypatch):
+    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+
+    monkeypatch.delenv("SOLIN_YEARTEXT_IMAGE", raising=False)
+    runtime = _CompositingRuntime()
+    graph = LibobsSceneGraph(runtime)
+    graph.hydrate(_YEARTEXT_DOC, {"virtual_camera": "default"})
+
+    # No PNG yet → no image source; the layer takes a colour placeholder instead.
+    assert not [s for s in runtime.sources if s.kind == "image_source"]
+    assert graph.reload_yeartext() is False  # nothing to refresh
+
+
+def test_engine_reload_yeartext_notification_rereads_the_source(tmp_path, monkeypatch):
+    png = tmp_path / "yeartext.png"
+    png.write_bytes(b"v1")
+    monkeypatch.setenv("SOLIN_YEARTEXT_IMAGE", str(png))
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+    engine.handle(_request("hydrate", {
+        "document": _YEARTEXT_DOC,
+        "active_scenes": {"virtual_camera": "default"},
+    }))
+    image_source = next(s for s in runtime.sources if s.kind == "image_source")
+    image_source.settings["file"] = "STALE"  # simulate the PNG being re-rendered
+
+    result = engine.handle(_request("reload_yeartext", {}))
+
+    assert result is None  # a fire-and-forget notification — no response
+    assert image_source.settings["file"] == str(png)  # re-read in place
+
+
+# ── live layer geometry (preview_layer_geometry, no re-hydrate) ──────────────
+
+
+_GEOMETRY_DOC = {
+    "scenes": [
+        {"id": "s1", "layers": [
+            {"id": "L1", "source_id": "", "visible": True,
+             "rect": {"x": 0.0, "y": 0.0, "width": 0.5, "height": 0.5}},
+        ]},
+    ],
+}
+
+
+def test_apply_layer_geometry_updates_the_live_item_without_rebuild():
+    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+
+    runtime = _CompositingRuntime()
+    graph = LibobsSceneGraph(runtime)
+    graph.hydrate(_GEOMETRY_DOC, {"virtual_camera": "s1"})
+    scene = next(s for s in runtime.scenes if s.name == "solin-scene-s1")
+    item = scene.items[0]
+    before = (item.pos, item.bounds)
+
+    assert graph.apply_layer_geometry(
+        "s1", "L1", {"x": 0.25, "y": 0.25, "width": 1.0, "height": 1.0}
+    ) is True
+    assert (item.pos, item.bounds) != before  # transformed in place
+    assert scene.items[0] is item  # same item — not rebuilt
+
+    assert graph.apply_layer_geometry("s1", "missing", {}) is False
+
+
+def test_engine_preview_layer_geometry_applies_live_and_acks():
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+    engine.handle(_request("hydrate", {
+        "document": _GEOMETRY_DOC, "active_scenes": {"virtual_camera": "s1"},
+    }))
+    scene = next(s for s in runtime.scenes if s.name == "solin-scene-s1")
+    item = scene.items[0]
+    before = item.pos
+
+    ack = _ack_from_envelope(engine.handle(_request("preview_layer_geometry", {
+        "scene_id": "s1",
+        "layer": {"id": "L1", "source_id": "",
+                  "rect": {"x": 0.5, "y": 0.5, "width": 0.4, "height": 0.4}},
+    })))
+    assert ack.applied is True
+    assert item.pos != before  # applied live, no new item
+    assert scene.items[0] is item
+
+
+def test_engine_preview_layer_geometry_rejects_an_unbuilt_layer():
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+    engine.handle(_request("hydrate", {
+        "document": _GEOMETRY_DOC, "active_scenes": {"virtual_camera": "s1"},
+    }))
+    ack = _ack_from_envelope(engine.handle(_request("preview_layer_geometry", {
+        "scene_id": "s1", "layer": {"id": "missing", "rect": {}},
+    })))
+    assert ack.applied is False and ack.error_code == "unknown_layer"
+
+
 # ── transitions (prepare_scene / take_prepared) ──────────────────────────────
 
 
@@ -1063,6 +1266,23 @@ def test_take_unknown_token_returns_false():
     assert graph.take("prep-999") is False
 
 
+def test_discard_drops_pending_without_moving_the_program():
+    runtime, graph = _graph_on_scene_a()
+    assert graph._active_scene_id == "a"
+    result = graph.prepare("b", "cut", 0)
+    assert graph.discard(result["token"]) is True
+    # the program channel is untouched — discard does not animate a take
+    assert graph._active_scene_id == "a"
+    assert runtime.channels[0].current_source == "scene-source:solin-scene-a"
+    # the token is consumed, so a later take of it is a no-op
+    assert graph.take(result["token"]) is False
+
+
+def test_discard_unknown_token_returns_false():
+    _runtime, graph = _graph_on_scene_a()
+    assert graph.discard("prep-999") is False
+
+
 def test_cancel_all_drops_pending_preparations():
     _runtime, graph = _graph_on_scene_a()
     result = graph.prepare("b", "cut", 0)
@@ -1092,6 +1312,74 @@ def test_engine_prepare_then_take_scene():
     assert taken is not None and taken.message_type == "ack"
     assert taken.payload["applied"] is True
     assert runtime.channels[0].starts[-1] == ("scene-source:solin-scene-b", 300)
+
+
+def _engine_hydrated_on_a_with_fake_preview():
+    """Engine hydrated with both buses on scene 'a' and a recording preview egress."""
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+    fake = _FakePreviewEgress()
+    engine._preview_egress = fake
+    engine.handle(_request("hydrate", {
+        "document": _TWO_SCENE_DOC,
+        "active_scenes": {"media_windows": "a", "virtual_camera": "a"},
+    }))
+    return runtime, engine, fake
+
+
+def test_engine_media_windows_take_repoints_preview_without_moving_program():
+    # Selecting a scene in the editor takes the MEDIA_WINDOWS bus. That must move
+    # the editor preview to the new scene while leaving the program (and thus the
+    # virtual camera) on its own scene — the editor-preview regression fix.
+    runtime, engine, fake = _engine_hydrated_on_a_with_fake_preview()
+    assert engine._scene_graph._active_scene_id == "a"
+
+    prepared = engine.handle(_request("prepare_scene", {
+        "bus_id": "media_windows", "scene_id": "b",
+        "transition": {"kind": "cut", "duration_ms": 0},
+    }))
+    token = prepared.payload["preparation_token"]
+    taken = engine.handle(_request("take_prepared", {
+        "bus_id": "media_windows", "scene_id": "b", "preparation_token": token,
+    }))
+    assert _ack_from_envelope(taken).applied is True
+    # the editor preview now renders scene b …
+    assert fake.sources[-1] == "scene-source:solin-scene-b"
+    # … but the program channel is untouched (still scene a) and no take animated
+    assert engine._scene_graph._active_scene_id == "a"
+    assert runtime.channels[0].current_source == "scene-source:solin-scene-a"
+    assert token not in engine._scene_graph._pending
+
+
+def test_engine_program_take_moves_program_and_leaves_preview_untouched():
+    runtime, engine, fake = _engine_hydrated_on_a_with_fake_preview()
+    fake.sources.clear()
+
+    prepared = engine.handle(_request("prepare_scene", {
+        "bus_id": "virtual_camera", "scene_id": "b",
+        "transition": {"kind": "cut", "duration_ms": 0},
+    }))
+    token = prepared.payload["preparation_token"]
+    taken = engine.handle(_request("take_prepared", {
+        "bus_id": "virtual_camera", "scene_id": "b", "preparation_token": token,
+    }))
+    assert _ack_from_envelope(taken).applied is True
+    # the program moved …
+    assert engine._scene_graph._active_scene_id == "b"
+    assert runtime.channels[0].starts[-1] == ("scene-source:solin-scene-b", 0)
+    # … and a program take does not re-point the editor preview egress
+    assert fake.sources == []
+
+
+def test_engine_media_windows_take_unknown_token_errors_and_keeps_preview():
+    _runtime, engine, fake = _engine_hydrated_on_a_with_fake_preview()
+    fake.sources.clear()
+    ack = _ack_from_envelope(engine.handle(_request("take_prepared", {
+        "bus_id": "media_windows", "scene_id": "b", "preparation_token": "prep-999",
+    })))
+    assert ack.applied is False and ack.error_code == "unknown_preparation"
+    assert fake.sources == []  # nothing re-pointed on an unknown token
 
 
 def test_engine_prepare_unknown_scene_errors():
@@ -1166,6 +1454,34 @@ def test_engine_set_output_enabled_toggles_the_virtual_camera():
     off = engine.handle(_request("set_output_enabled", {"bus_id": "virtual_camera", "enabled": False}))
     assert off is not None and off.payload["applied"] is True
     assert runtime.outputs[-1].stopped == 1
+
+
+def test_engine_hydrate_restores_the_virtual_camera_output():
+    # A restart brings up a fresh sidecar with the vcam stopped, while the app's
+    # output cache still reads "enabled" so it never re-sends set_output_enabled.
+    # Hydrate carries output_enabled, so it must restart the vcam itself — the
+    # meeting's program output comes back on its own after a restart.
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+
+    engine.handle(_request("hydrate", {
+        "document": _MEDIA_DOC,
+        "active_scenes": {"media_windows": "s1", "virtual_camera": "s1"},
+        "output_enabled": {"virtual_camera": True},
+    }))
+    assert runtime.outputs[-1].started == 1
+
+    # Idempotent: a structural-edit re-hydrate with the vcam already on must not
+    # restart it (no flicker mid-meeting).
+    before = len(runtime.outputs)
+    engine.handle(_request("hydrate", {
+        "document": _MEDIA_DOC,
+        "active_scenes": {"media_windows": "s1", "virtual_camera": "s1"},
+        "output_enabled": {"virtual_camera": True},
+    }))
+    assert len(runtime.outputs) == before  # no second output created
+    assert runtime.outputs[-1].started == 1
 
 
 def test_engine_set_output_enabled_other_bus_is_a_noop_ack():
@@ -2068,6 +2384,55 @@ def test_engine_hydrate_configures_preview_egress_and_sets_scene():
     assert fake.sources[-1] == "scene-source:solin-scene-s1"
 
 
+def test_engine_hydrate_restores_preview_enable_from_render_enabled():
+    # Regression: after a sidecar restart the fresh preview egress defaults to
+    # disabled, and the app's edge-triggered render cache still reads "enabled" so
+    # it never re-sends set_render_enabled. Hydrate carries render_enabled, so it
+    # must re-apply the preview enable itself — otherwise the editor canvas stays
+    # blank after a restart.
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+    fake = _FakePreviewEgress()
+    engine._preview_egress = fake
+
+    engine.handle(_request("hydrate", {
+        "document": _MEDIA_DOC,
+        "active_scenes": {"media_windows": "s1", "virtual_camera": "s1"},
+        "preview_egress": {"transport": "shared_memory_bgra", "handle_token": "tok",
+                           "width": 1920, "height": 1080},
+        "render_enabled": {"media_windows": True, "virtual_camera": True},
+    }))
+    assert fake.enabled[-1] is True  # preview re-enabled by the hydrate alone
+
+    engine.handle(_request("hydrate", {
+        "document": _MEDIA_DOC,
+        "active_scenes": {"media_windows": "s1", "virtual_camera": "s1"},
+        "render_enabled": {"media_windows": False, "virtual_camera": True},
+    }))
+    assert fake.enabled[-1] is False
+
+
+def test_engine_hydrate_rebinds_window_targets():
+    # Regression: after a restart the sidecar holds no displays while the app's
+    # window-target cache still equals the recomputed targets (so it never
+    # re-dispatches). Hydrate carries window_targets, so it must rebind the
+    # projection displays itself — otherwise the projection stays black after a
+    # restart.
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+    recorder = _RecordingWindowOutput()
+    engine._window_output = recorder
+
+    engine.handle(_request("hydrate", {
+        "document": _MEDIA_DOC,
+        "active_scenes": {"media_windows": "s1", "virtual_camera": "s1"},
+        "window_targets": [_window_target(101)],
+    }))
+    assert recorder.calls[-1] == [_window_target(101)]
+
+
 def test_engine_set_render_enabled_toggles_preview_and_acks():
     runtime = _CompositingRuntime()
     engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
@@ -2340,6 +2705,17 @@ def test_factory_targets_the_sidecar_module():
     # No GStreamer runtime — libobs is self-contained via pylibobs.
     assert config.gstreamer_runtime_root is None
     assert config.gstreamer_registry_path is None
+
+
+def test_factory_is_resilient_to_transient_engine_stalls():
+    # The sidecar handles IPC (incl. heartbeats) on one thread, so a heavy hydrate
+    # under load can briefly delay a heartbeat. The engine must tolerate that
+    # instead of killing a working engine and giving up mid-meeting.
+    config = create_libobs_scene_engine()._config
+    assert config.heartbeat_timeout_ms >= 8000
+    assert config.heartbeat_timeout_ms > config.heartbeat_interval_ms
+    assert config.maximum_restarts >= 20
+    assert config.restart_window_seconds >= 120
 
 
 def test_selection_reads_the_environment(monkeypatch):

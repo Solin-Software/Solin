@@ -190,6 +190,7 @@ class LibobsSidecarEngine:
         self._audio_mixer: Any | None = None
         self._camera_generation = 0
         self._media_source: Any | None = None
+        self._bg_media_source: Any | None = None
         self._media_lock = threading.Lock()
         self._media_poller: threading.Thread | None = None
         self._media_poll_stop = threading.Event()
@@ -260,6 +261,8 @@ class LibobsSidecarEngine:
         self._recorder = LibobsRecorder(runtime)
         self._audio_mixer = LibobsAudioMixer(runtime)
         self._media_source = LibobsMediaSource(runtime)
+        # Background audio slot: monitored, but not composited into the scene.
+        self._bg_media_source = LibobsMediaSource(runtime)
 
     def handle(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope | None:
         # Remember correlation ids so unsolicited events (recording state) are
@@ -299,6 +302,13 @@ class LibobsSidecarEngine:
             if graph is not None:
                 graph.cancel_all()  # type: ignore[attr-defined]
             return None  # a notification — no response
+        if message_type == "reload_yeartext":
+            graph = self._scene_graph
+            if graph is not None:
+                graph.reload_yeartext()  # type: ignore[attr-defined]
+            return None  # a notification — no response
+        if message_type == "preview_layer_geometry":
+            return self._handle_preview_layer_geometry(request)
         if message_type == "set_output_enabled":
             return self._handle_set_output_enabled(request)
         if message_type == "set_render_enabled":
@@ -447,12 +457,21 @@ class LibobsSidecarEngine:
 
     # ── media control (Fork A: libobs decodes; app drives over IPC) ─────────
 
+    def _media_slot(self, payload: dict) -> int:
+        from solin.core.scenes.media_control import MEDIA_SLOT_BACKGROUND
+
+        return MEDIA_SLOT_BACKGROUND if int(payload.get("slot", 0) or 0) else 0
+
+    def _media_for_slot(self, slot: int) -> Any | None:
+        return self._bg_media_source if slot else self._media_source
+
     def _handle_open_media(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope:
-        media = self._media_source
+        payload = request.payload
+        slot = self._media_slot(payload)
+        media = self._media_for_slot(slot)
         if not self._runtime_started or media is None:
             return _ack(request, applied=False, error_code="runtime_unavailable",
                         error_message="the libobs runtime is not running")
-        payload = request.payload
         path = str(payload.get("path") or "")
         if not path:
             return _ack(request, applied=False, error_code="invalid_path",
@@ -466,7 +485,8 @@ class LibobsSidecarEngine:
         with self._media_lock:
             opened = media.open(path, autoplay=autoplay, is_local_file=is_local,
                                 volume_percent=volume, speed_percent=speed)
-            if opened:
+            if opened and not slot:
+                # Foreground slot: apply trim and composite into the scene content.
                 self._media_trim_start_ms = trim_start
                 self._media_trim_end_from_ms = trim_end  # from the end
                 self._media_trim_ended = False
@@ -479,20 +499,22 @@ class LibobsSidecarEngine:
                         log.warning("could not route media into the content slot",
                                     exc_info=True)
         if not opened:
-            self._emit_media_state(7, 0, 0, path, error_code="media_open_failed")  # ERROR
+            self._emit_media_state(7, 0, 0, path, slot=slot, error_code="media_open_failed")
             return _ack(request, applied=False, error_code="media_open_failed",
                         error_message="could not open the media source")
         self._ensure_media_poller()
-        self._emit_media_state_now()
+        self._emit_media_state_now(slot)
         return _ack(request, applied=True)
 
     def _handle_control_media(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope:
-        media = self._media_source
+        slot = self._media_slot(request.payload)
+        media = self._media_for_slot(slot)
         if not self._runtime_started or media is None:
             return _ack(request, applied=False, error_code="runtime_unavailable",
                         error_message="the libobs runtime is not running")
         action = str(request.payload.get("action") or "")
         position_ms = max(0, int(request.payload.get("position_ms", 0) or 0))
+        trim_start = self._media_trim_start_ms if not slot else 0
         reverted = False
         with self._media_lock:
             if action == "play":
@@ -503,36 +525,41 @@ class LibobsSidecarEngine:
                 media.stop()
             elif action == "restart":
                 media.restart()
-                self._media_trim_ended = False
-                if self._media_trim_start_ms:
-                    media.seek(self._media_trim_start_ms)
+                if not slot:
+                    self._media_trim_ended = False
+                    if trim_start:
+                        media.seek(trim_start)
             elif action == "seek":
-                media.seek(position_ms + self._media_trim_start_ms)  # trim-relative → absolute
-                self._media_trim_ended = False  # re-evaluated on the next poll
+                media.seek(position_ms + trim_start)  # trim-relative → absolute
+                if not slot:
+                    self._media_trim_ended = False  # re-evaluated on the next poll
             elif action == "close":
                 media.close()
-                self._media_trim_start_ms = 0
-                self._media_trim_end_from_ms = 0
-                self._media_trim_ended = False
-                if self._scene_graph is not None:
-                    try:
-                        self._scene_graph.set_content_source(  # type: ignore[attr-defined]
-                            self._frame_content_source()
-                        )
-                    except Exception:  # noqa: BLE001 - a scene error must not kill the sidecar
-                        log.warning("could not revert the content slot", exc_info=True)
+                if not slot:
+                    self._media_trim_start_ms = 0
+                    self._media_trim_end_from_ms = 0
+                    self._media_trim_ended = False
+                    if self._scene_graph is not None:
+                        try:
+                            self._scene_graph.set_content_source(  # type: ignore[attr-defined]
+                                self._frame_content_source()
+                            )
+                        except Exception:  # noqa: BLE001 - a scene error must not kill the sidecar
+                            log.warning("could not revert the content slot", exc_info=True)
                 reverted = True
             else:
                 return _ack(request, applied=False, error_code="invalid_media_action",
                             error_message=f"unknown media action {action!r}")
         if reverted:
-            self._stop_media_poller()
+            self._maybe_stop_media_poller()
+            self._emit_media_state(5, 0, 0, "", slot=slot)  # STOPPED, so the app clears state
         else:
-            self._emit_media_state_now()
+            self._emit_media_state_now(slot)
         return _ack(request, applied=True)
 
     def _handle_set_media_properties(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope:
-        media = self._media_source
+        slot = self._media_slot(request.payload)
+        media = self._media_for_slot(slot)
         if not self._runtime_started or media is None:
             return _ack(request, applied=False, error_code="runtime_unavailable",
                         error_message="the libobs runtime is not running")
@@ -554,23 +581,28 @@ class LibobsSidecarEngine:
             return media.source
         return self._frame_content_source()
 
-    def _sample_media(self) -> tuple[int, int, int, str] | None:
-        """Read (state, position_ms, duration_ms, path), trim-adjusted, or None.
+    def _sample_media(self, slot: int = 0) -> tuple[int, int, int, str] | None:
+        """Read (state, position_ms, duration_ms, path) for ``slot``, or None.
 
-        Positions/durations are reported relative to the trim window so the app's
-        scrubber matches; the trim end is enforced by pausing and reporting ENDED.
+        The foreground slot (0) is trim-adjusted: positions/durations are reported
+        relative to the trim window and the trim end is enforced by pausing and
+        reporting ENDED. The background slot (1) has no trim and is reported raw.
         """
         from solin.core.scenes.libobs_media_source import STATE_ENDED, STATE_PLAYING
 
         with self._media_lock:
-            media = self._media_source
+            media = self._media_for_slot(slot)
             if media is None or media.source is None:
                 return None
-            start = self._media_trim_start_ms
-            trim_from_end = self._media_trim_end_from_ms
             position = media.position_ms
             state = media.state
             duration = media.duration_ms
+            path = media.path
+            if slot:
+                # Background audio: raw, no trim.
+                return (state, max(0, position), max(0, duration), path)
+            start = self._media_trim_start_ms
+            trim_from_end = self._media_trim_end_from_ms
             # Resolve the trim end against the real duration (the app can't know it
             # before decode); trim_end is "ms removed from the end". Only enforce a
             # window that is actually inside the media and wider than the start —
@@ -585,16 +617,15 @@ class LibobsSidecarEngine:
                 self._media_trim_ended = True
             if self._media_trim_ended:
                 state = STATE_ENDED  # latched: keep reporting ENDED past the trim end
-            path = media.path
         window_end = effective_end if effective_end else duration
         rel_position = max(0, position - start)
         rel_duration = max(0, window_end - start) if window_end else 0
         return (state, rel_position, rel_duration, path)
 
-    def _emit_media_state_now(self) -> None:
-        snapshot = self._sample_media()
+    def _emit_media_state_now(self, slot: int = 0) -> None:
+        snapshot = self._sample_media(slot)
         if snapshot is not None:
-            self._emit_media_state(*snapshot)
+            self._emit_media_state(*snapshot, slot=slot)
 
     def _emit_media_state(
         self,
@@ -603,6 +634,7 @@ class LibobsSidecarEngine:
         duration_ms: int,
         path: str,
         *,
+        slot: int = 0,
         error_code: str = "",
     ) -> None:
         sink = self._event_sink
@@ -622,12 +654,22 @@ class LibobsSidecarEngine:
                 "duration_ms": max(0, int(duration_ms)),
                 "path": str(path or ""),
                 "error_code": str(error_code or ""),
+                "slot": int(slot),
             },
         )
         try:
             sink(envelope)
         except Exception:  # noqa: BLE001 - an event write must not break handling
             log.debug("could not emit media playback state", exc_info=True)
+
+    def _maybe_stop_media_poller(self) -> None:
+        """Stop the poller only when neither media slot has an open source."""
+        fg = self._media_source
+        bg = self._bg_media_source
+        fg_open = fg is not None and fg.source is not None
+        bg_open = bg is not None and bg.source is not None
+        if not fg_open and not bg_open:
+            self._stop_media_poller()
 
     def _ensure_media_poller(self) -> None:
         if self._media_poller is not None and self._media_poller.is_alive():
@@ -645,11 +687,31 @@ class LibobsSidecarEngine:
             poller.join(timeout=1.0)
 
     def _media_poll_loop(self) -> None:
+        from solin.core.scenes.media_control import MEDIA_SLOT_BACKGROUND
+
         while not self._media_poll_stop.wait(_MEDIA_POLL_INTERVAL_S):
-            snapshot = self._sample_media()
-            if snapshot is None:
-                continue
-            self._emit_media_state(*snapshot)
+            for slot in (0, MEDIA_SLOT_BACKGROUND):
+                snapshot = self._sample_media(slot)
+                if snapshot is not None:
+                    self._emit_media_state(*snapshot, slot=slot)
+
+    def _handle_preview_layer_geometry(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope:
+        graph = self._scene_graph
+        if not self._runtime_started or graph is None:
+            return _ack(request, applied=False, error_code="runtime_unavailable",
+                        error_message="the libobs runtime is not running")
+        payload = request.payload
+        scene_id = str(payload.get("scene_id") or "")
+        layer = payload.get("layer") or {}
+        layer_id = str(layer.get("id") or "") if isinstance(layer, dict) else ""
+        rect = layer.get("rect") if isinstance(layer, dict) else None
+        # Apply the transform to the live scene item — no re-hydrate, so a resize
+        # or move takes effect without rebuilding sources (the camera stays up).
+        applied = graph.apply_layer_geometry(scene_id, layer_id, rect or {})  # type: ignore[attr-defined]
+        if not applied:
+            return _ack(request, applied=False, error_code="unknown_layer",
+                        error_message="no such built layer")
+        return _ack(request, applied=True)
 
     def _handle_set_output_enabled(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope:
         payload = request.payload
@@ -697,16 +759,52 @@ class LibobsSidecarEngine:
                     active_scenes,
                     self._effective_content_source(),
                 )
-            self._reconcile_preview_egress(payload.get("preview_egress"), active_scenes)
+            self._reconcile_preview_egress(
+                payload.get("preview_egress"),
+                active_scenes,
+                payload.get("render_enabled") or {},
+            )
             if self._program_egress is not None:
                 self._program_egress.configure(payload.get("program_egress"))
+            # Hydrate is the full-state sync. After a restart the sidecar is fresh
+            # and holds no window displays, while the app's window-target cache
+            # still equals the recomputed targets and so never re-dispatches. Re-
+            # bind the projection displays here so one hydrate restores them too.
+            # set_targets reconciles idempotently (a no-op when unchanged), so this
+            # adds no churn on the structural-edit re-hydrate path.
+            output = self._window_output
+            if output is not None:
+                targets = payload.get("window_targets") or []
+                try:
+                    output.set_targets(targets if isinstance(targets, list) else [])  # type: ignore[attr-defined]
+                except Exception:  # noqa: BLE001 - a bad target must not fail the hydrate
+                    log.warning("libobs hydrate window-target rebind failed", exc_info=True)
+            # Likewise restore the virtual-camera output from the snapshot's
+            # desired output state, so the meeting's program output comes back on
+            # its own after a restart. start()/stop() are idempotent, so this is a
+            # no-op on the structural-edit re-hydrate path when it's already right.
+            camera = self._virtual_camera
+            output_enabled = payload.get("output_enabled") or {}
+            if camera is not None and "virtual_camera" in output_enabled:
+                try:
+                    if output_enabled["virtual_camera"]:
+                        camera.start()
+                    else:
+                        camera.stop()
+                except Exception:  # noqa: BLE001 - vcam must not fail the hydrate
+                    log.warning("libobs hydrate virtual-camera restore failed", exc_info=True)
         except Exception:  # noqa: BLE001 - a bad document must not crash the engine
             log.warning("libobs hydrate failed", exc_info=True)
             return _ack(request, applied=False, error_code="hydrate_failed",
                         error_message="could not build the libobs scene graph")
         return _ack(request, applied=True)
 
-    def _reconcile_preview_egress(self, descriptor: object, active_scenes: dict) -> None:
+    def _reconcile_preview_egress(
+        self,
+        descriptor: object,
+        active_scenes: dict,
+        render_enabled: dict | None = None,
+    ) -> None:
         egress = self._preview_egress
         graph = self._scene_graph
         if egress is None or graph is None:
@@ -716,6 +814,13 @@ class LibobsSidecarEngine:
         preview_scene_id = active_scenes.get("media_windows") or active_scenes.get("virtual_camera")
         source = graph.scene_source(preview_scene_id) if preview_scene_id else None  # type: ignore[attr-defined]
         egress.set_scene_source(source)
+        # Hydrate is the full-state sync: after a restart the sidecar is fresh and
+        # the egress defaults to disabled, while the app's edge-triggered render
+        # cache still reads "enabled" and so never re-sends set_render_enabled.
+        # Apply the snapshot's render demand here so one hydrate fully restores the
+        # editor preview (source *and* enable) — the canvas updates after a restart.
+        if render_enabled is not None and "media_windows" in render_enabled:
+            egress.set_enabled(bool(render_enabled["media_windows"]))
 
     def _handle_set_render_enabled(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope:
         # The MEDIA_WINDOWS bus render demand gates the editor preview egress;
@@ -784,7 +889,25 @@ class LibobsSidecarEngine:
         if not self._runtime_started or graph is None:
             return _ack(request, applied=False, error_code="runtime_unavailable",
                         error_message="the libobs runtime is not running")
-        token = str(request.payload.get("preparation_token") or "")
+        payload = request.payload
+        token = str(payload.get("preparation_token") or "")
+        if payload.get("bus_id") == "media_windows":
+            # The editor-preview bus does not drive the single program channel:
+            # taking one of its scenes only re-points the off-screen preview
+            # egress to that scene (the scene-source half of
+            # _reconcile_preview_egress). Dropping — not taking — the prepared
+            # token keeps an edit-bus selection from moving the virtual-camera
+            # program output. This is what makes the editor canvas follow the
+            # selected scene on the prepare/take hot path (not just on hydrate).
+            if not graph.discard(token):  # type: ignore[attr-defined]
+                return _ack(request, applied=False, error_code="unknown_preparation",
+                            error_message="no such prepared scene")
+            egress = self._preview_egress
+            if egress is not None:
+                scene_id = str(payload.get("scene_id") or "")
+                source = graph.scene_source(scene_id) if scene_id else None  # type: ignore[attr-defined]
+                egress.set_scene_source(source)
+            return _ack(request, applied=True)
         if graph.take(token):  # type: ignore[attr-defined]
             return _ack(request, applied=True)
         return _ack(request, applied=False, error_code="unknown_preparation",

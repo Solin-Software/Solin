@@ -796,10 +796,11 @@ Item {
         ScenesMenuSeparator { theme: root.theme }
         ScenesMenuItem {
             theme: root.theme
-            text: root.contextSceneDefault
-                ? qsTr("Remove default") : qsTr("Set as default")
-            onTriggered: root.bridge.setDefaultScene(
-                root.contextSceneId, !root.contextSceneDefault)
+            // There is always exactly one default scene, so it can only be moved to
+            // another scene, never removed. The current default shows it as disabled.
+            text: qsTr("Set as default")
+            enabled: !root.contextSceneDefault
+            onTriggered: root.bridge.setDefaultScene(root.contextSceneId, true)
         }
         ScenesMenuItem {
             theme: root.theme
@@ -969,6 +970,11 @@ Item {
             theme: root.theme
             text: qsTr("Projected Solin content")
             onTriggered: root.bridge.addContentSource()
+        }
+        ScenesMenuItem {
+            theme: root.theme
+            text: qsTr("Year text")
+            onTriggered: root.bridge.addYearText()
         }
         ScenesMenuSeparator { theme: root.theme }
         ScenesMenuItem { theme: root.theme; text: qsTr("Cameras"); section: true; enabled: false }

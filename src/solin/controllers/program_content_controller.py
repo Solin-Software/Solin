@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from collections.abc import Callable, Mapping
 from typing import Any, Protocol
 
@@ -57,6 +58,7 @@ class ProgramContentController(QObject):
         *,
         media_epoch_sink: Callable[[int], None],
         image_transform_sink: Callable[..., None] = _discard_image_transform,
+        yeartext_reloaded: Callable[[], None] = lambda: None,
         width: int,
         height: int,
         parent: QObject | None = None,
@@ -68,6 +70,7 @@ class ProgramContentController(QObject):
         self._frame_sink = frame_sink
         self._media_epoch_sink = media_epoch_sink
         self._image_transform_sink = image_transform_sink
+        self._yeartext_reloaded = yeartext_reloaded
         self._yearly_text = yearly_text
         self._width = width
         self._height = height
@@ -84,6 +87,12 @@ class ProgramContentController(QObject):
             widget.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen)
             widget.resize(width, height)
         self._unsubscribe = session.subscribe(self._on_projection_changed)
+        # Render the year-text source image on the next event-loop turn, not now:
+        # the yearly-text provider reads the settings widget, which is constructed
+        # after this controller. Deferring lets it exist; the on-disk PNG (from a
+        # prior run) covers the first hydrate until then, and update_yearly_text
+        # refreshes it live thereafter.
+        QTimer.singleShot(0, self.render_yeartext_source_image)
         QTimer.singleShot(0, self.refresh)
 
     @Slot(object)
@@ -109,6 +118,10 @@ class ProgramContentController(QObject):
 
     @Slot(str, str, str)
     def update_yearly_text(self, _quote: str, _reference: str, _api_code: str) -> None:
+        # Refresh the standalone year-text source image (shown by the Default scene)
+        # and ask the engine to re-read it in place, so the change shows live.
+        self.render_yeartext_source_image()
+        self._yeartext_reloaded()
         if (
             projection_presentation_type(self._session.state) == "idle"
             and not self._session.idle_media_path
@@ -238,6 +251,40 @@ class ProgramContentController(QObject):
         self._yearly_widget.clear_countdown()
         self._yearly_widget.set_text(quote, reference, api_code)
         self._render_widget(self._yearly_widget)
+
+    def render_yeartext_source_image(self) -> None:
+        """Render the styled year text to the "Year text" scene source's PNG.
+
+        The libobs sidecar shows this file (``SOLIN_YEARTEXT_IMAGE``) as the year-
+        text image source. Rendered transparently so it composites as a layer, and
+        written atomically. A no-op when the engine did not export a path (e.g. the
+        native engine) or the year text is not ready yet. Runtime changes update the
+        file; the sidecar picks them up on the next hydrate/restart.
+        """
+        if self._closed:
+            return
+        path = os.environ.get("SOLIN_YEARTEXT_IMAGE")
+        if not path:
+            return
+        try:
+            quote, reference, api_code = self._yearly_text()
+        except Exception:  # noqa: BLE001 - settings may still be loading
+            log.debug("Yearly text is not ready for the year-text source", exc_info=True)
+            return
+        self._yearly_widget.clear_countdown()
+        self._yearly_widget.set_text(quote, reference, api_code)
+        image = QImage(self._width, self._height, QImage.Format.Format_ARGB32)
+        image.fill(Qt.GlobalColor.transparent)
+        self._yearly_widget.ensurePolished()
+        self._yearly_widget.render(image)
+        temporary = f"{path}.tmp"
+        try:
+            if image.save(temporary, "PNG"):
+                os.replace(temporary, path)
+            else:
+                log.warning("Could not encode the year-text source image")
+        except OSError:
+            log.warning("Could not write the year-text source image", exc_info=True)
 
     def _render_timer(self, state: Mapping[str, Any]) -> None:
         remaining = state.get("remaining")

@@ -73,7 +73,6 @@ def test_stage_qt_qml_runtime_copies_selected_modules_without_unused_submodules(
         "QtQuick/Effects": ["qmldir", "libeffectsplugin.dylib"],
         "QtQuick/Layouts": ["qmldir", "libqquicklayoutsplugin.dylib"],
         "QtQuick/Templates": ["qmldir", "libqtquicktemplates2plugin.dylib"],
-        "QtMultimedia": ["qmldir", "libquickmultimediaplugin.dylib"],
     }
     for module_name, filenames in module_files.items():
         module_dir = source_root.joinpath(*module_name.split("/"))
@@ -104,7 +103,7 @@ def test_stage_qt_qml_runtime_copies_selected_modules_without_unused_submodules(
     assert (output_root / "QtQuick" / "Effects" / "libeffectsplugin.dylib").exists()
     assert (output_root / "QtQuick" / "Layouts" / "libqquicklayoutsplugin.dylib").exists()
     assert (output_root / "QtQuick" / "Templates" / "libqtquicktemplates2plugin.dylib").exists()
-    assert (output_root / "QtMultimedia" / "libquickmultimediaplugin.dylib").exists()
+    assert not (output_root / "QtMultimedia").exists()
     assert not (output_root / "QtQml" / "StateMachine").exists()
     assert not (output_root / "QtQml" / "XmlListModel").exists()
     assert not (output_root / "QtQuick" / "Controls" / "Material").exists()

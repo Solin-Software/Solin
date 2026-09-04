@@ -64,6 +64,12 @@ class LibobsSceneGraph:
         # full re-hydrate. Each entry: {scene, item, rect, placeholder}.
         self._content_items: list[dict[str, Any]] = []
         self._content_source: Any = None
+        # Year-text image sources built this hydrate, tracked so the app can force a
+        # re-read of the rendered PNG (reload_yeartext) without a full re-hydrate.
+        self._yeartext_sources: list[Any] = []
+        # Scene items keyed by (scene_id, layer_id), so a layer's geometry can be
+        # updated live (obs_sceneitem transform) without rebuilding the graph.
+        self._layer_items: dict[tuple[str, str], Any] = {}
         self._program_channel: int | None = None
         # Program transition: a transition source sits on the program channel and
         # holds the active scene; scene switches animate through take().
@@ -115,16 +121,18 @@ class LibobsSceneGraph:
             self._scenes[scene_id] = ob.Scene.create(f"solin-scene-{scene_id}")
         # Pass 2: populate each scene's layers.
         for scene_record in scene_records:
-            scene = self._scenes[scene_record["id"]]
+            scene_id = scene_record["id"]
+            scene = self._scenes[scene_id]
             for layer in scene_record.get("layers") or ():
                 if not layer.get("visible", True):
                     continue
-                self._add_layer(ob, scene, layer, canvas, sources_by_id, content_source)
+                self._add_layer(ob, scene_id, scene, layer, canvas, sources_by_id, content_source)
         self._setup_program(active_scenes)
 
     def _add_layer(
         self,
         ob: Any,
+        scene_id: str,
         scene: Any,
         layer: dict,
         canvas: Any,
@@ -144,10 +152,24 @@ class LibobsSceneGraph:
         item = scene.add(source)
         rect = layer.get("rect") or {}
         self._apply_item_geometry(item, rect, canvas, ob)
+        layer_id = str(layer.get("id") or "")
+        if layer_id:
+            self._layer_items[(scene_id, layer_id)] = item
         if is_content:
             self._content_items.append(
                 {"scene": scene, "item": item, "rect": rect, "placeholder": placeholder}
             )
+
+    def apply_layer_geometry(self, scene_id: str, layer_id: str, rect: dict) -> bool:
+        """Update one layer's geometry on the live scene item (no rebuild).
+
+        Returns ``False`` when the layer is not built in the current graph (e.g.
+        a stale request after a re-hydrate), so the caller can reject it."""
+        item = self._layer_items.get((scene_id, layer_id))
+        if item is None:
+            return False
+        self._apply_item_geometry(item, rect or {}, self._runtime.video, self._runtime.ob)
+        return True
 
     def _apply_item_geometry(self, item: Any, rect: dict, canvas: Any, ob: Any) -> None:
         # Scale the source into its normalized rect (SCALE_INNER preserves aspect),
@@ -229,7 +251,31 @@ class LibobsSceneGraph:
                 {"file": path},
             )
             return (source, True)
+        if kind == "yeartext":
+            # The year text is rendered by the app (in its own styling) to a PNG at
+            # SOLIN_YEARTEXT_IMAGE; the sidecar shows it as a plain image source. A
+            # layer positions/sizes it. When the PNG is re-rendered the app calls
+            # reload_yeartext() to re-read the file in place.
+            path = self._resolve_yeartext_image()
+            if not path:
+                return (None, False)  # not rendered yet → placeholder
+            source = ob.Source.create(
+                "image_source",
+                f"solin-yeartext-{layer.get('id', 'layer')}",
+                {"file": path},
+            )
+            self._yeartext_sources.append(source)
+            return (source, True)
         return (None, False)
+
+    @staticmethod
+    def _resolve_yeartext_image() -> str | None:
+        """Absolute path to the app-rendered year-text PNG (``SOLIN_YEARTEXT_IMAGE``),
+        or ``None`` when it has not been rendered yet."""
+        import os
+
+        path = os.environ.get("SOLIN_YEARTEXT_IMAGE")
+        return path if path and os.path.isfile(path) else None
 
     @staticmethod
     def _resolve_image_asset(asset_id: str) -> str | None:
@@ -378,6 +424,17 @@ class LibobsSceneGraph:
         self._active_scene_id = scene_id
         return True
 
+    def discard(self, token: str) -> bool:
+        """Consume a prepared switch without executing it on the program channel.
+
+        The editor-preview (MEDIA_WINDOWS) bus never drives the single program
+        channel — taking one of its scenes re-points the off-screen preview
+        egress instead of animating the program transition. Its prepared token is
+        dropped here rather than through :meth:`take`, so an edit-bus selection
+        cannot move the virtual-camera program output. Returns ``False`` for an
+        unknown token, matching :meth:`take`."""
+        return self._pending.pop(token, None) is not None
+
     def _swap_transition(self, model_kind: str) -> None:
         # Changing kind means a new transition source; carry the live scene into
         # it so the program does not blink.
@@ -398,11 +455,28 @@ class LibobsSceneGraph:
     def cancel_all(self) -> None:
         self._pending.clear()
 
+    def reload_yeartext(self) -> bool:
+        """Force the year-text image sources to re-read their PNG in place.
+
+        Called after the app re-renders the year-text image so the change shows
+        without a full re-hydrate. Returns True if any source was refreshed."""
+        path = self._resolve_yeartext_image()
+        refreshed = False
+        for source in self._yeartext_sources:
+            try:
+                source.update({"file": path} if path else {"file": ""})
+                refreshed = True
+            except Exception:  # noqa: BLE001 - libobs boundary
+                log.debug("yeartext source reload errored", exc_info=True)
+        return refreshed
+
     def clear(self) -> None:
         """Release the current scenes/sources (keeps the reserved channel)."""
         self._pending.clear()
         self._content_items = []
         self._content_source = None
+        self._yeartext_sources = []
+        self._layer_items = {}
         if self._program_channel is not None:
             try:
                 self._runtime.set_channel_source(self._program_channel, None)

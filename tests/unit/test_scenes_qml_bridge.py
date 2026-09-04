@@ -40,7 +40,12 @@ from solin.core.scenes.model import (
     TransitionKind,
     new_identity,
 )
-from solin.core.scenes.presets import CAMERA_SCENE_ID, CONTENT_SCENE_ID, SceneSeedNames
+from solin.core.scenes.presets import (
+    CAMERA_SCENE_ID,
+    CONTENT_SCENE_ID,
+    DEFAULT_SCENE_ID,
+    SceneSeedNames,
+)
 from solin.core.scenes.recording import (
     AudioDevice,
     AudioDeviceDirection,
@@ -394,6 +399,7 @@ def test_recording_bridge_projects_one_controller_and_applies_live_settings(
 
 def test_camera_source_health_surfaces_an_actionable_layer_warning(tmp_path: Path) -> None:
     workspace, controller, bridge, _preview_store = _bridge(tmp_path)
+    bridge.selectScene(CAMERA_SCENE_ID)  # the camera layer lives in the Camera scene
     camera_id = workspace.configured_cameras[0].id
     controller._consume_engine_event(  # noqa: SLF001 - exercise the queued event boundary
         SourceHealthEvent(
@@ -428,7 +434,10 @@ def test_camera_source_health_surfaces_an_actionable_layer_warning(tmp_path: Pat
 
 def test_bridge_persists_shared_ptz_presets_and_scene_actions(tmp_path: Path) -> None:
     workspace, controller, bridge, _preview_store = _bridge(tmp_path)
-    camera_id, layer_id = _enable_default_camera_ptz(workspace, controller)
+    camera_id, _ = _enable_default_camera_ptz(workspace, controller)
+    # The default camera layer lives in the Camera scene (scene 0 is now Default).
+    bridge.selectScene(CAMERA_SCENE_ID)
+    layer_id = controller.document.scene(CAMERA_SCENE_ID).layers[0].id
     bridge.selectLayer(layer_id)
 
     assert bridge.savePtzPreset(
@@ -509,13 +518,49 @@ def test_bridge_edits_a_scene_and_tracks_desired_separately_from_applied(
 
     scene = controller.document.scene(bridge.selectedSceneId)
     virtual = controller.runtime.state.output(BusId.VIRTUAL_CAMERA)
-    assert bridge.scenesModel.rowCount() == 3
+    # First-run ships Default + Camera + Content; the new "Custom" scene makes four.
+    assert bridge.scenesModel.rowCount() == 4
     assert len(scene.layers) == 1
     assert virtual.mode is OutputMode.AUTO
     assert virtual.manual_scene_id == scene.id
     assert bridge.selectedSceneDesired
     assert not bridge.selectedSceneLive
     assert bridge.engineStatus == "Scene engine unavailable"
+    bridge.close()
+    controller.close()
+
+
+def test_bridge_add_year_text_adds_a_full_size_layer_and_reuses_one_source(
+    tmp_path: Path,
+) -> None:
+    from solin.core.scenes.model import SourceKind
+
+    _workspace, controller, bridge, _preview_store = _bridge(tmp_path)
+    bridge.createScene("Talk")
+    talk_id = bridge.selectedSceneId
+
+    bridge.addYearText()
+
+    scene = controller.document.scene(talk_id)
+    assert len(scene.layers) == 1
+    layer = scene.layers[0]
+    source = controller.document.source(layer.source_id)
+    assert source.kind is SourceKind.YEARTEXT
+    # full-size by default
+    assert (layer.rect.x, layer.rect.y, layer.rect.width, layer.rect.height) == (
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+    )
+
+    # Adding the year text to another scene reuses the single global source.
+    bridge.createScene("Consideration")
+    bridge.addYearText()
+    yeartext_sources = [
+        s for s in controller.document.sources if s.kind is SourceKind.YEARTEXT
+    ]
+    assert len(yeartext_sources) == 1
     bridge.close()
     controller.close()
 
@@ -663,6 +708,7 @@ def test_bridge_cancels_and_invalidates_framing_without_document_mutation(
     tmp_path: Path,
 ) -> None:
     _workspace, controller, bridge, _preview_store = _bridge(tmp_path)
+    bridge.selectScene(CAMERA_SCENE_ID)  # a framable camera layer (not the year text)
     layer_id = controller.document.scene(bridge.selectedSceneId).layers[0].id
     bridge.selectLayer(layer_id)
     revision = controller.document.revision
@@ -827,19 +873,21 @@ def test_bridge_delete_requires_a_replacement_only_for_program_scene(
         notifications=notifications,
     )
     bridge.setVirtualCameraEnabled(True)
-    bridge.selectScene(CAMERA_SCENE_ID)
+    # The Default scene is the program/default role holder now, so deleting it is
+    # what requires a replacement.
+    bridge.selectScene(DEFAULT_SCENE_ID)
     assert bridge.selectedSceneRequiresReplacement
     assert not bridge.selectedSceneLive
 
-    bridge.deleteScene(CAMERA_SCENE_ID, "")
-    assert controller.document.scene(CAMERA_SCENE_ID).id == CAMERA_SCENE_ID
+    bridge.deleteScene(DEFAULT_SCENE_ID, "")
+    assert controller.document.scene(DEFAULT_SCENE_ID).id == DEFAULT_SCENE_ID
     assert notifications.errors[-1][1]["dedupe_key"] == (
         "scenes-live-delete-replacement-required"
     )
 
-    bridge.deleteScene(CAMERA_SCENE_ID, CONTENT_SCENE_ID)
+    bridge.deleteScene(DEFAULT_SCENE_ID, CONTENT_SCENE_ID)
 
-    assert all(scene.id != CAMERA_SCENE_ID for scene in controller.document.scenes)
+    assert all(scene.id != DEFAULT_SCENE_ID for scene in controller.document.scenes)
     assert {
         output.manual_scene_id for output in controller.runtime.state.outputs
     } == {CONTENT_SCENE_ID}
@@ -863,7 +911,9 @@ def test_bridge_deletes_offline_scene_without_confusing_editor_preview(
     controller.close()
 
 
-def test_bridge_invalidates_preview_on_scene_and_profile_changes(tmp_path: Path) -> None:
+def test_bridge_keeps_preview_across_scene_switch_but_invalidates_on_profile_change(
+    tmp_path: Path,
+) -> None:
     workspace, controller, bridge, preview_store = _bridge(tmp_path)
     bridge.setActive(True)
     scene_id = bridge.selectedSceneId
@@ -876,10 +926,18 @@ def test_bridge_invalidates_preview_on_scene_and_profile_changes(tmp_path: Path)
     other_scene_id = next(
         scene.id for scene in controller.document.scenes if scene.id != scene_id
     )
+    # Switching scenes must NOT blank the canvas (no blink): the last frame is
+    # retained until the newly selected scene renders its first frame.
     bridge.selectScene(other_scene_id)
-    assert not bridge.previewAvailable
+    assert bridge.previewAvailable
+    # A frame from the previously selected scene is ignored — only the newly
+    # selected scene updates the canvas.
     controller.preview_frame_changed.emit(scene_id, frame)
-    assert not bridge.previewAvailable
+    assert bridge.previewAvailable
+    other_frame = QImage(64, 36, QImage.Format.Format_ARGB32)
+    other_frame.fill(Qt.GlobalColor.green)
+    controller.preview_frame_changed.emit(other_scene_id, other_frame)
+    assert bridge.previewAvailable
 
     bridge.selectScene(scene_id)
     controller.preview_frame_changed.emit(scene_id, frame)

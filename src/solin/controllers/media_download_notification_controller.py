@@ -60,10 +60,6 @@ class MediaDownloadNotificationController(QObject):
         if self._started:
             return
         self._cache_manager.prefetch_error.connect(self.on_prefetch_error)
-        if self._media_controller is not None:
-            self._media_controller.playback_download_failed.connect(
-                self.on_playback_download_error
-            )
         self._started = True
 
     def stop(self) -> None:
@@ -73,13 +69,6 @@ class MediaDownloadNotificationController(QObject):
             self._cache_manager.prefetch_error.disconnect(self.on_prefetch_error)
         except (RuntimeError, TypeError):
             pass
-        if self._media_controller is not None:
-            try:
-                self._media_controller.playback_download_failed.disconnect(
-                    self.on_playback_download_error
-                )
-            except (RuntimeError, TypeError):
-                pass
         self._started = False
 
     @Slot(str, str)

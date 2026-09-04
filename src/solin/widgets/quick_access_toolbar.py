@@ -1043,6 +1043,25 @@ class QuickAccessToolbar(QQuickWidget):
         self.move(x, y)
         self._apply_mac_corners()
 
+    def _apply_animation_mask(self, surface) -> None:
+        """Mask the surface to the rounded pill while it slides.
+
+        The pill content stays full-width and centred inside the fixed-width
+        surface during the slide, and the mask is in surface-local coordinates so
+        it travels with the surface. Clearing the mask instead (as before) exposed
+        the transparent padding, which a ``QQuickWidget`` paints **black** on Linux
+        — the "black background when moving" artifact. Windows keeps its proven
+        QML-alpha rounding, so an unmasked surface is fine there.
+        """
+        if _LINUX:
+            pill_w = self._calc_pill_width()
+            pill_x = (_QAT_MAX_W - pill_w) // 2
+            surface.setMask(
+                _rounded_region(pill_w, _QAT_H, _QAT_PILL_RADIUS).translated(pill_x, 0)
+            )
+        else:
+            surface.clearMask()
+
     def _toggle_minimize(self):
         self._popup_hover.cancel()
         hide_themed_tooltip()
@@ -1070,7 +1089,7 @@ class QuickAccessToolbar(QQuickWidget):
             start = self._anchor_point(start_x, base_y)
             target = self._anchor_point(target_x, base_y)
             surface.move(start)
-            surface.clearMask()  # full widget visible during animation
+            self._apply_animation_mask(surface)  # keep rounded pill; no black padding
 
             self._slide_anim.stop()
             self._slide_anim.setTargetObject(surface)
@@ -1083,7 +1102,7 @@ class QuickAccessToolbar(QQuickWidget):
             self._minimized = True
             target_x = p.width() - _QAT_MAX_W
 
-            surface.clearMask()  # full widget visible during animation
+            self._apply_animation_mask(surface)  # keep rounded pill; no black padding
             self._slide_anim.stop()
             self._slide_anim.setTargetObject(surface)
             self._slide_anim.setStartValue(surface.pos())

@@ -146,7 +146,7 @@ _PROGRAM_RECORDING_STATE_FIELDS = frozenset(
     }
 )
 _MEDIA_PLAYBACK_STATE_FIELDS = frozenset(
-    {"state", "position_ms", "duration_ms", "path", "error_code"}
+    {"state", "position_ms", "duration_ms", "path", "error_code", "slot"}
 )
 _T = TypeVar("_T")
 log = logging.getLogger(__name__)
@@ -618,6 +618,9 @@ class SubprocessSceneEngine:
             payload={"cancelled_request_id": request_id},
         )
 
+    def reload_yeartext(self) -> None:
+        self._notify(message_type="reload_yeartext", payload={})
+
     def preview_layer_geometry(
         self,
         bus_id: BusId,
@@ -826,6 +829,7 @@ class SubprocessSceneEngine:
         speed_percent: int = 100,
         trim_start_ms: int = 0,
         trim_end_ms: int = 0,
+        slot: int = 0,
         request_id: str,
         deadline_ms: int,
     ) -> Future[SceneEngineAck]:
@@ -848,6 +852,7 @@ class SubprocessSceneEngine:
                 "speed_percent": int(speed_percent),
                 "trim_start_ms": int(trim_start_ms),
                 "trim_end_ms": int(trim_end_ms),
+                "slot": int(slot),
             },
             converter=_ack_from_envelope,
         )
@@ -857,6 +862,7 @@ class SubprocessSceneEngine:
         action: MediaControlAction,
         *,
         position_ms: int = 0,
+        slot: int = 0,
         request_id: str,
         deadline_ms: int,
     ) -> Future[SceneEngineAck]:
@@ -871,7 +877,11 @@ class SubprocessSceneEngine:
             sequence=0,
             document_revision=document_revision,
             deadline_ms=deadline_ms,
-            payload={"action": action.value, "position_ms": int(position_ms)},
+            payload={
+                "action": action.value,
+                "position_ms": int(position_ms),
+                "slot": int(slot),
+            },
             converter=_ack_from_envelope,
         )
 
@@ -880,6 +890,7 @@ class SubprocessSceneEngine:
         *,
         volume_percent: int,
         speed_percent: int,
+        slot: int = 0,
         request_id: str,
         deadline_ms: int,
     ) -> Future[SceneEngineAck]:
@@ -895,6 +906,7 @@ class SubprocessSceneEngine:
             payload={
                 "volume_percent": int(volume_percent),
                 "speed_percent": int(speed_percent),
+                "slot": int(slot),
             },
             converter=_ack_from_envelope,
         )
@@ -1922,6 +1934,8 @@ def _media_playback_event_from_envelope(
         state = MediaPlaybackState(raw_state)
     except ValueError as exc:
         raise SceneIpcMessageError("Invalid media playback state") from exc
+    slot = payload.get("slot", 0)
+    slot = int(slot) if isinstance(slot, int) and not isinstance(slot, bool) else 0
     return MediaPlaybackEvent(
         MediaPlaybackNativeState(
             state=state,
@@ -1929,6 +1943,7 @@ def _media_playback_event_from_envelope(
             duration_ms=require_non_negative_int(payload["duration_ms"], "Media duration"),
             path=require_text(payload["path"], "Media path", maximum=MAXIMUM_MEDIA_PATH_LENGTH),
             error_code=require_text(payload["error_code"], "Media error code", maximum=128),
+            slot=slot,
         )
     )
 

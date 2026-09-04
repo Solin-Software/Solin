@@ -91,9 +91,11 @@ class LibobsMediaSource:
         try:
             from solin.core.media.obs_runtime import MONITORING_MONITOR_ONLY
 
+            # Route decoded audio to the monitoring device so it is audible on the
+            # host (libobs → PipeWire/Pulse), not only mixed into program output.
             self._runtime.set_source_monitoring(source, MONITORING_MONITOR_ONLY)
         except Exception:  # noqa: BLE001 - monitoring is best-effort
-            log.debug("Could not set media source monitoring", exc_info=True)
+            log.warning("Could not set media source monitoring", exc_info=True)
         source.media_play_pause(not autoplay)
         return True
 

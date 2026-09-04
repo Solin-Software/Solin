@@ -949,43 +949,6 @@ def test_project_tab_frame_initializes_live_tab_once():
     assert window.content_frames == [frame, frame]
 
 
-def test_frame_and_image_transform_helpers_respect_projection_modes():
-    window = _WindowStub()
-    controller = _controller(window)
-
-    window.proj_bar.video_mode = True
-    window.projection_session.set_state({"type": "video", "is_audio": False})
-    controller.distribute_frame("frame-1")
-    window.proj_bar.audio_mode = True
-    window.projection_session.update_state(is_audio=True)
-    controller.distribute_frame("frame-2")
-    controller.on_image_apply_transform(1.5, 0.2, 0.3)
-    controller.on_image_reset_transform()
-
-    assert [projection_window.frames for projection_window in window.windows] == [
-        ["frame-1"],
-        ["frame-1"],
-    ]
-    assert window.content_frames == ["frame-1"]
-    assert [projection_window.transforms for projection_window in window.windows] == [
-        [(1.5, 0.2, 0.3, True), (1.0, 0.0, 0.0, True)],
-        [(1.5, 0.2, 0.3, True), (1.0, 0.0, 0.0, True)],
-    ]
-
-
-def test_video_frame_fanout_skips_native_projection_outputs():
-    window = _WindowStub()
-    controller = _controller(window)
-    window.windows[0].native_output_active = True
-    window.projection_session.set_state({"type": "video", "is_audio": False})
-
-    controller.distribute_frame("frame-1")
-
-    assert window.windows[0].frames == []
-    assert window.windows[1].frames == ["frame-1"]
-    assert window.content_frames == ["frame-1"]
-
-
 def test_image_transform_is_persisted_in_projection_state():
     window = _WindowStub()
     controller = _controller(window)

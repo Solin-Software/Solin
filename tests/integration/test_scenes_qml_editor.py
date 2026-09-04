@@ -166,7 +166,8 @@ def test_scenes_qml_editor_loads_with_the_real_workspace(tmp_path: Path) -> None
     assert widget._qml.rootObject() is not None
     assert widget._qml.rootObject().objectName() == "scenesEditorView"
     assert widget._qml.rootObject().findChild(QQuickItem, "scenesPreviewImage") is not None
-    assert widget.bridge.scenesModel.rowCount() == 2
+    # First-run ships Default (year text) + Camera + Content.
+    assert widget.bridge.scenesModel.rowCount() == 3
     assert widget.bridge.outputFormatLabel == "1920 × 1080"
 
     root = widget._qml.rootObject()

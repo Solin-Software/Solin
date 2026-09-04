@@ -70,6 +70,10 @@ class SourceKind(StrEnum):
     IMAGE = "image"
     COLOR = "color"
     SCENE_REFERENCE = "scene_reference"
+    # The year text, rendered by the app in its own styling and shown as an image
+    # source. There is a single global year text, so the source carries no config;
+    # a layer positions/sizes it like any other. See YeartextSourceConfig.
+    YEARTEXT = "yeartext"
 
 
 class CameraMediaType(StrEnum):
@@ -1052,6 +1056,23 @@ class ImageSourceConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class YeartextSourceConfig:
+    """Configuration for a year-text source.
+
+    The year text is a single global value rendered by the app in its own
+    styling and surfaced as an image; a layer positions/sizes it. There is
+    nothing per-source to configure, so the record is empty."""
+
+    def to_record(self) -> dict[str, object]:
+        return {}
+
+    @classmethod
+    def from_record(cls, raw: object) -> "YeartextSourceConfig":
+        _mapping(raw, field_name="source.configuration", allowed_keys=set())
+        return cls()
+
+
+@dataclass(frozen=True, slots=True)
 class ColorSourceConfig:
     color: str = "#000000FF"
 
@@ -1110,6 +1131,7 @@ SourceConfig: TypeAlias = (
     | ImageSourceConfig
     | ColorSourceConfig
     | SceneReferenceConfig
+    | YeartextSourceConfig
 )
 
 _CONFIG_BY_SOURCE_KIND = {
@@ -1119,6 +1141,7 @@ _CONFIG_BY_SOURCE_KIND = {
     SourceKind.IMAGE: ImageSourceConfig,
     SourceKind.COLOR: ColorSourceConfig,
     SourceKind.SCENE_REFERENCE: SceneReferenceConfig,
+    SourceKind.YEARTEXT: YeartextSourceConfig,
 }
 
 

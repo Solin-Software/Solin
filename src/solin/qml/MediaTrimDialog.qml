@@ -1,7 +1,6 @@
 import QtQuick 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Controls 2.15
-import QtMultimedia
 
 Dialog {
     id: dialog
@@ -39,13 +38,13 @@ Dialog {
                                        && endMs - startMs >= minimumRangeMs
     readonly property bool initialPreviewLoading: !previewPrepared
                                                   && preparationError === ""
-                                                  && (previewPlayer.mediaStatus === MediaPlayer.LoadingMedia
-                                                      || previewPlayer.mediaStatus === MediaPlayer.BufferingMedia)
+                                                  && (previewPlayer.mediaStatus === 101
+                                                      || previewPlayer.mediaStatus === 102)
     readonly property bool previewActuallyStalled: previewPrepared
                                                    && stalledLongEnough
                                                    && preparationError === ""
-                                                   && previewPlayer.playbackState === MediaPlayer.PlayingState
-                                                   && previewPlayer.mediaStatus === MediaPlayer.StalledMedia
+                                                   && previewPlayer.playbackState === 1
+                                                   && previewPlayer.mediaStatus === 103
 
     parent: Overlay.overlay
     anchors.centerIn: parent
@@ -137,14 +136,19 @@ Dialog {
         endMs = durationMs > 0 ? Math.max(startMs, durationMs - initialEndTicks / 10000) : 0
         preparationError = ""
         rangeDirty = false
-        previewPrepared = false
         stalledLongEnough = false
         if (node.trimAvailable === false || mediaSource === "") {
+            previewPrepared = false
             preparationError = qsTr("This media is not available for editing.")
             open()
             return
         }
         previewPlayer.source = mediaSource
+        // No live preview without QtMultimedia: the item's known duration makes the
+        // range editor ready immediately.
+        previewPrepared = durationMs > 0
+        if (!previewPrepared)
+            preparationError = qsTr("This media has no known duration to edit.")
         open()
     }
 
@@ -159,7 +163,7 @@ Dialog {
     function togglePreview() {
         if (!rangeValid)
             return
-        if (previewPlayer.playbackState === MediaPlayer.PlayingState) {
+        if (previewPlayer.playbackState === 1) {
             previewPlayer.pause()
             return
         }
@@ -186,83 +190,21 @@ Dialog {
 
     Overlay.modal: Rectangle { color: Qt.rgba(0, 0, 0, 0.58) }
 
-    MediaPlayer {
+    // libobs is the only media engine and QtMultimedia is removed, so the trim
+    // dialog no longer previews playback. This inert stand-in keeps the range
+    // editor's bindings intact; the duration comes from the item (initialBaseTicks)
+    // and the range is set numerically / with the timeline handles.
+    QtObject {
         id: previewPlayer
         objectName: "trimPreviewPlayer"
-        audioOutput: AudioOutput {
-            volume: 0.72
-            muted: !dialog.previewAudioEnabled
-        }
-        videoOutput: previewOutput
-
-        onDurationChanged: function(duration) {
-            if (duration <= 0)
-                return
-            dialog.durationMs = duration
-            if (!dialog.rangeDirty) {
-                dialog.startMs = dialog.clamp(dialog.initialStartTicks / 10000,
-                                              0, Math.max(0, duration - dialog.minimumRangeMs))
-                dialog.endMs = dialog.clamp(
-                            duration - dialog.initialEndTicks / 10000,
-                            dialog.startMs + dialog.minimumRangeMs,
-                            duration)
-            } else {
-                dialog.startMs = dialog.clamp(dialog.startMs, 0,
-                                              Math.max(0, duration - dialog.minimumRangeMs))
-                dialog.endMs = dialog.clamp(dialog.endMs,
-                                            dialog.startMs + dialog.minimumRangeMs,
-                                            duration)
-            }
-            if (previewPlayer.seekable)
-                dialog.previewPrepared = true
-        }
-        onPositionChanged: function(position) {
-            if (playbackState === MediaPlayer.PlayingState
-                    && dialog.endMs > 0 && position >= dialog.endMs) {
-                pause()
-                previewPlayer.position = dialog.endMs
-            }
-        }
-        onErrorOccurred: function(error, errorString) {
-            dialog.preparationError = errorString || qsTr("The media could not be opened.")
-        }
-        onSeekableChanged: function(seekable) {
-            if (seekable && dialog.durationMs > 0)
-                dialog.previewPrepared = true
-            if ((mediaStatus === MediaPlayer.LoadedMedia
-                 || mediaStatus === MediaPlayer.BufferedMedia) && !seekable)
-                dialog.preparationError = qsTr("This source does not support reliable seeking. Download it for offline use before setting custom times.")
-        }
-        onMediaStatusChanged: function(status) {
-            dialog.stalledLongEnough = false
-            if (status === MediaPlayer.LoadedMedia
-                    || status === MediaPlayer.BufferedMedia)
-                dialog.previewPrepared = true
-            if (status === MediaPlayer.InvalidMedia)
-                dialog.preparationError = qsTr("The media could not be opened.")
-        }
-        onPlaybackStateChanged: function(state) {
-            if (state !== MediaPlayer.PlayingState)
-                dialog.stalledLongEnough = false
-        }
-    }
-
-    Timer {
-        interval: 350
-        running: dialog.visible
-                 && dialog.previewPrepared
-                 && !dialog.stalledLongEnough
-                 && dialog.preparationError === ""
-                 && previewPlayer.playbackState === MediaPlayer.PlayingState
-                 && previewPlayer.mediaStatus === MediaPlayer.StalledMedia
-        onTriggered: dialog.stalledLongEnough = true
-    }
-
-    Timer {
-        interval: 10000
-        running: dialog.visible && !dialog.sourceReady
-                 && dialog.preparationError === ""
-        onTriggered: dialog.preparationError = qsTr("Timed out while checking whether this source supports seeking.")
+        property bool seekable: true
+        property real position: 0
+        property string source: ""
+        readonly property int playbackState: 0   // never "playing"
+        readonly property int mediaStatus: 2      // treated as "loaded"
+        function play() {}
+        function pause() {}
+        function stop() {}
     }
 
     component SoftButton: Button {
@@ -450,11 +392,36 @@ Dialog {
                     border.color: appTheme.border_
                     clip: true
 
-                    VideoOutput {
+                    Column {
                         id: previewOutput
-                        anchors.fill: parent
+                        anchors.centerIn: parent
                         visible: dialog.mediaType === "video"
-                        fillMode: VideoOutput.PreserveAspectFit
+                        spacing: 9
+
+                        Rectangle {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            width: 54
+                            height: 54
+                            radius: 18
+                            color: appTheme.accentTint
+
+                            Image {
+                                anchors.centerIn: parent
+                                width: 25
+                                height: 25
+                                source: dialog.iconSource("media_video", 25, appTheme.accent)
+                                sourceSize.width: 25
+                                sourceSize.height: 25
+                                fillMode: Image.PreserveAspectFit
+                            }
+                        }
+                        Label {
+                            objectName: "trimVideoPreviewLabel"
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: qsTr("Set start and end times")
+                            color: dialog.previewSurfaceText
+                            font.pixelSize: 12
+                        }
                     }
 
                     Column {
@@ -565,7 +532,7 @@ Dialog {
 
                         ToolTip.visible: hovered
                         ToolTip.delay: 450
-                        ToolTip.text: previewPlayer.playbackState === MediaPlayer.PlayingState
+                        ToolTip.text: previewPlayer.playbackState === 1
                                       ? qsTr("Pause") : qsTr("Play")
 
                         contentItem: Image {
@@ -573,7 +540,7 @@ Dialog {
                             width: 10
                             height: 10
                             source: dialog.iconSource(
-                                        previewPlayer.playbackState === MediaPlayer.PlayingState
+                                        previewPlayer.playbackState === 1
                                         ? "pause" : "play",
                                         20,
                                         previewButton.enabled

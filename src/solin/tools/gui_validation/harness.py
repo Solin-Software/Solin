@@ -179,13 +179,18 @@ def loopback_devices() -> list[str]:
     if not base.exists():
         return []
     for node in sorted(base.glob("video*")):
-        name_file = node / "name"
-        try:
-            name = name_file.read_text(errors="replace").strip().lower()
-        except OSError:
-            continue
         dev = Path("/dev") / node.name
-        if "loopback" in name and dev.exists() and os.access(dev, os.W_OK):
+        if not dev.exists() or not os.access(dev, os.W_OK):
+            continue
+        try:
+            name = (node / "name").read_text(errors="replace").strip().lower()
+        except OSError:
+            name = ""
+        # v4l2loopback devices are virtual (not on a physical bus) and can carry
+        # any card_label (e.g. "Solin Virtual Camera"), so match the virtual sysfs
+        # path — not just the word "loopback" in the name.
+        is_virtual = "/devices/virtual/" in os.path.realpath(str(node))
+        if is_virtual or "loopback" in name:
             found.append(str(dev))
     return found
 

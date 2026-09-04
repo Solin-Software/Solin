@@ -548,17 +548,6 @@ class MediaProjectionController:
             if self._session.state_type == "video":
                 self._session.update_state(title=title)
 
-    def distribute_frame(self, frame) -> None:
-        context = self._context
-        state = self._session.state
-        if state.get("type") != "video" or state.get("is_audio", False):
-            return
-        context.content_frame_sink(frame)
-        for projection_window in context.projection_windows():
-            if getattr(projection_window, "native_output_active", False):
-                continue
-            projection_window.update_frame(frame)
-
     def project_media_at_index(
         self,
         playlist: list,

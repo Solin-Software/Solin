@@ -46,10 +46,42 @@ def scene_engine_document_record(document: SceneDocument) -> dict[str, object]:
 
 
 def scene_engine_graph_signature(document: SceneDocument) -> dict[str, object]:
-    """Return revision-independent graph state for hydration invalidation."""
+    """Return revision-independent graph state for hydration invalidation.
+
+    A layer's geometry (``rect``) is applied to the live scene item in place via
+    ``preview_layer_geometry`` — it must NOT invalidate the graph, or every
+    resize/move would force a full re-hydrate (rebuilding sources, re-opening
+    cameras, jumping the program). Strip it from the signature; structural changes
+    (sources, layer add/remove, visibility, z-order, source configuration) still
+    change the signature and trigger a rebuild. The record sent to the sidecar
+    (``scene_engine_document_record``) keeps ``rect`` for the initial layout.
+    """
 
     record = scene_engine_document_record(document)
-    record.pop("revision", None)
+    # Non-structural fields must NOT invalidate the graph. Timestamps change on
+    # every edit (update_scene bumps updated_at); layer geometry (rect/crop) is
+    # applied live via preview_layer_geometry. If either invalidated the graph, a
+    # simple resize would force a full re-hydrate (rebuilding sources, re-opening
+    # cameras). Only structural content (sources, source configs, which layers
+    # reference which sources, visibility, z-order, scene topology, outputs,
+    # automation) remains and still triggers a rebuild.
+    for key in ("revision", "created_at", "updated_at"):
+        record.pop(key, None)
+    for source in record.get("sources") or ():
+        if isinstance(source, dict):
+            source.pop("created_at", None)
+            source.pop("updated_at", None)
+    for scene in record.get("scenes") or ():
+        if not isinstance(scene, dict):
+            continue
+        scene.pop("created_at", None)
+        scene.pop("updated_at", None)
+        for layer in scene.get("layers") or ():
+            if isinstance(layer, dict):
+                layer.pop("rect", None)
+                layer.pop("crop", None)
+                layer.pop("created_at", None)
+                layer.pop("updated_at", None)
     return record
 
 
@@ -627,6 +659,14 @@ class SceneEngine(Protocol):
 
     def cancel_preparation(self, request_id: str) -> None: ...
 
+    def reload_yeartext(self) -> None:
+        """Ask the engine to re-read the year-text source image in place.
+
+        A fire-and-forget notification sent after the app re-renders the year-text
+        PNG so the change shows without a full re-hydrate. No-op on engines that
+        do not host a year-text source."""
+        ...
+
     def preview_layer_geometry(
         self,
         bus_id: BusId,
@@ -702,6 +742,7 @@ class SceneEngine(Protocol):
         speed_percent: int = 100,
         trim_start_ms: int = 0,
         trim_end_ms: int = 0,
+        slot: int = 0,
         request_id: str,
         deadline_ms: int,
     ) -> Future[SceneEngineAck]: ...
@@ -711,6 +752,7 @@ class SceneEngine(Protocol):
         action: MediaControlAction,
         *,
         position_ms: int = 0,
+        slot: int = 0,
         request_id: str,
         deadline_ms: int,
     ) -> Future[SceneEngineAck]: ...
@@ -720,6 +762,7 @@ class SceneEngine(Protocol):
         *,
         volume_percent: int,
         speed_percent: int,
+        slot: int = 0,
         request_id: str,
         deadline_ms: int,
     ) -> Future[SceneEngineAck]: ...

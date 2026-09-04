@@ -105,22 +105,33 @@ def test_local_file_routes_to_engine_and_not_qt(tmp_path):
     assert controller._engine_route_active is True
 
 
-def test_remote_url_does_not_route(tmp_path):
+def test_remote_url_routes_and_streams(tmp_path):
     controller, played = _controller(tmp_path)
     route = _FakeRoute()
     controller.set_engine_media_route(route)
 
     controller.start_playback(MediaPlaybackRequest("https://cdn.example/clip.mp4"))
 
-    assert route.calls == []  # remote stays on Qt
-    assert played == ["https://cdn.example/clip.mp4"]
-    assert controller._engine_route_active is False
+    # Full libobs cutover: an uncached remote URL streams through the sidecar's
+    # ffmpeg_source (is_local_file=False), not Qt.
+    assert _tags(route) == ["open"]
+    assert route.calls[0][1] == "https://cdn.example/clip.mp4"
+    assert route.calls[0][2]["is_local_file"] is False
+    assert played == []  # the Qt player was not used
+    assert controller._engine_route_active is True
 
 
-def test_without_a_route_local_file_uses_qt(tmp_path):
+def test_without_a_route_emits_engine_unavailable(tmp_path):
     controller, played = _controller(tmp_path)
+    errors: list[str] = []
+    controller.error_occurred.connect(errors.append)
+
     controller.start_playback(MediaPlaybackRequest("/videos/clip.mp4"))
-    assert played == ["/videos/clip.mp4"]
+
+    # libobs is the only engine; with no route there is nothing to decode, so the
+    # failure is surfaced rather than silently played via Qt.
+    assert errors == ["engine_unavailable"]
+    assert played == []
     assert controller._engine_route_active is False
 
 
@@ -134,12 +145,19 @@ class _ReadyRoute(_FakeRoute):
         return True
 
 
-def test_engine_not_ready_falls_back_to_qt(tmp_path):
+def test_engine_not_ready_emits_engine_unavailable(tmp_path):
     controller, played = _controller(tmp_path)
-    controller.set_engine_media_route(_NotReadyRoute())
+    route = _NotReadyRoute()
+    controller.set_engine_media_route(route)
+    errors: list[str] = []
+    controller.error_occurred.connect(errors.append)
+
     controller.start_playback(MediaPlaybackRequest("/videos/clip.mp4"))
-    # the sidecar is not ready → the local file still plays via Qt, not silently lost
-    assert played == ["/videos/clip.mp4"]
+
+    # the sidecar is not ready → surface engine_unavailable, do not open the route
+    assert errors == ["engine_unavailable"]
+    assert route.calls == []
+    assert played == []
     assert controller._engine_route_active is False
 
 
@@ -406,10 +424,11 @@ def test_stale_session_metadata_is_dropped(tmp_path):
 
 
 def test_non_routed_playback_does_not_request_metadata(tmp_path):
+    # With no engine route configured, playback falls back to Qt, which reads its
+    # own tags — so the routed-metadata extractor is not invoked.
     controller, extractor = _controller_with_extractor(tmp_path)
-    controller.set_engine_media_route(_FakeRoute())
     controller.start_playback(MediaPlaybackRequest("https://cdn.example/clip.mp4"))
-    assert extractor.requests == []  # remote stays on Qt, which reads its own tags
+    assert extractor.requests == []
 
 
 def test_stop_cancels_metadata_extraction(tmp_path):

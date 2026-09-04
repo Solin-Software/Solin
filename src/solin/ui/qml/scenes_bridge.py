@@ -64,6 +64,7 @@ from solin.core.scenes.model import (
     ViscaIpPtzBinding,
     ViscaSerialPtzBinding,
     ViscaTransport,
+    YeartextSourceConfig,
     new_identity,
 )
 from solin.core.scenes.recording import (
@@ -96,6 +97,7 @@ _SOURCE_COLORS = {
     SourceKind.IMAGE: "#8B5CF6",
     SourceKind.COLOR: "#64748B",
     SourceKind.SCENE_REFERENCE: "#F59E0B",
+    SourceKind.YEARTEXT: "#EAB308",
 }
 
 
@@ -684,7 +686,9 @@ class ScenesBridge(QObject):
         self._selected_scene_id = scene_id
         self._selected_layer_id = ""
         self._active_guides = ()
-        self._clear_preview()
+        # Do NOT blank the canvas here: _on_preview_frame already ignores frames
+        # from other scenes, so the last frame stays until the newly selected
+        # scene produces its first frame — a smooth cross-over instead of a blink.
         if self._active:
             self._controller.set_preview_scene(scene_id)
         self._refresh_models()
@@ -959,6 +963,27 @@ class ScenesBridge(QObject):
     @Slot()
     def addContentSource(self) -> None:
         self._add_source_layer(CONTENT_SOURCE_ID)
+
+    @Slot()
+    def addYearText(self) -> None:
+        # The year text is a single global source (all layers show the same rendered
+        # image); reuse the document's year-text source if one exists, else create it.
+        document = self._controller.document
+        source = next(
+            (candidate for candidate in document.sources
+             if candidate.kind is SourceKind.YEARTEXT),
+            None,
+        )
+        if source is None:
+            source = SourceDefinition(
+                id=new_identity(),
+                kind=SourceKind.YEARTEXT,
+                name=self.tr("Year text"),
+                configuration=YeartextSourceConfig(),
+            )
+            if not self._run_edit(lambda: self._controller.documents.create_source(source)):
+                return
+        self._add_source_layer(source.id)
 
     @Slot(str)
     def addConfiguredCamera(self, camera_id: str) -> None:

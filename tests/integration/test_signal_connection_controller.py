@@ -80,7 +80,6 @@ class _WindowStub:
 
         self.media_ctrl = _signal_namespace(
             "media_ctrl",
-            "frame_ready",
             "state_changed",
             "cover_art_changed",
             "title_from_metadata",
@@ -230,7 +229,7 @@ def test_connect_signals_wires_expected_signal_graph():
     controller.connect_signals()
 
     total_connections = sum(len(signal.connected) for signal in _Signal.registry)
-    assert total_connections == 49
+    assert total_connections == 48
     assert window.library_widget.project_media_signal.connected == [
         controller._project_library_media
     ]

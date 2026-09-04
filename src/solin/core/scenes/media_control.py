@@ -48,15 +48,22 @@ class MediaControlAction(StrEnum):
     CLOSE = "close"
 
 
+#: Media slot ids. 0 is the foreground content player (composited into the scene);
+#: 1 is the background audio player (monitored only, not composited).
+MEDIA_SLOT_FOREGROUND = 0
+MEDIA_SLOT_BACKGROUND = 1
+
+
 @dataclass(frozen=True, slots=True)
 class MediaPlaybackNativeState:
-    """A snapshot of the sidecar media source's playback state."""
+    """A snapshot of a sidecar media source's playback state."""
 
     state: MediaPlaybackState
     position_ms: int
     duration_ms: int
     path: str = ""
     error_code: str = ""
+    slot: int = MEDIA_SLOT_FOREGROUND
 
     def __post_init__(self) -> None:
         if not isinstance(self.state, MediaPlaybackState):

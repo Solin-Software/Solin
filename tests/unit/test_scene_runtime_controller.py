@@ -42,6 +42,7 @@ from solin.core.scenes.model import (
     ContentCategory,
     DEFAULT_CAMERA_SOURCE_ID,
     LocalCameraConfig,
+    NormalizedRect,
     OnvifPtzBinding,
     OutputMode,
     PtzTimeoutPolicy,
@@ -67,6 +68,7 @@ from solin.core.scenes.presets import (
     CAMERA_SCENE_ID,
     CONTENT_CAMERA_PIP_SCENE_ID,
     CONTENT_SCENE_ID,
+    DEFAULT_SCENE_ID,
     NO_SIGNAL_SCENE_ID,
     SceneSeedNames,
     create_default_scene_document,
@@ -373,6 +375,9 @@ class _Engine:
     def cancel_preparation(self, request_id: str) -> None:
         self.cancelled.append(request_id)
 
+    def reload_yeartext(self) -> None:
+        self.yeartext_reloads = getattr(self, "yeartext_reloads", 0) + 1
+
     def preview_layer_geometry(
         self,
         bus_id,
@@ -473,7 +478,7 @@ def test_preview_geometry_coalesces_mouse_moves_without_hydrating_each_frame() -
     documents, _runtime, controller = _runtime_controller(
         engine,
         _Projection(),
-        request_ids=("hydrate", "preview-1", "preview-2", "commit-hydrate"),
+        request_ids=("hydrate", "preview-1", "preview-2"),
     )
     controller.start_engine()
     scene = documents.document.scenes[0]
@@ -512,8 +517,10 @@ def test_preview_geometry_coalesces_mouse_moves_without_hydrating_each_frame() -
     engine.preview_futures[-1].set_result(
         engine._ack(second[0], second[5], second[4])
     )
-    assert len(engine.snapshots) == 2
-    assert engine.snapshots[-1][1].document.revision == 1
+    # Committing the geometry must NOT re-hydrate: the final transform was already
+    # applied live by the coalesced preview, so the graph is never rebuilt (which
+    # would re-open every source, e.g. cameras).
+    assert len(engine.snapshots) == 1
     controller.close()
 
 
@@ -945,7 +952,7 @@ def test_scene_profile_is_published_only_after_native_hydration_ack(tmp_path: Pa
     )
     assert controller.preview_scene_id == CONTENT_SCENE_ID
     assert published_document_ids[-1] == "document-b"
-    assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
+    assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == DEFAULT_SCENE_ID
 
 
 def test_rejected_scene_profile_hydration_preserves_the_previous_profile(
@@ -1094,6 +1101,46 @@ def test_runtime_coalesces_camera_refreshes_while_discovery_is_in_flight() -> No
     assert first is engine.camera_future
     assert second is first
     assert engine.camera_requests == ["list-cameras"]
+    controller.close()
+
+
+def test_reload_yeartext_forwards_a_notification_to_the_engine() -> None:
+    projection = _Projection()
+    engine = _Engine()
+    _documents, _runtime, controller = _runtime_controller(
+        engine, projection, request_ids=("hydrate",)
+    )
+
+    controller.reload_yeartext()
+
+    assert getattr(engine, "yeartext_reloads", 0) == 1
+    controller.close()
+
+
+def test_committing_a_layer_resize_does_not_rehydrate() -> None:
+    # Resizing/moving a source in the canvas must NOT rebuild the scene graph
+    # (which re-opens every source, e.g. the camera). It should be applied live.
+    projection = _Projection()
+    engine = _Engine()
+    documents, _runtime, controller = _runtime_controller(
+        engine, projection,
+        request_ids=("hydrate",) + tuple(f"take-{i}" for i in range(20)),
+    )
+    controller.start_engine()
+    assert controller.engine_ready
+    baseline = len(engine.snapshots)
+
+    scene = documents.document.scene(CONTENT_SCENE_ID)
+    layer = scene.layers[0]
+    documents.update_layer(
+        CONTENT_SCENE_ID,
+        layer.id,
+        replace(layer, rect=NormalizedRect(x=0.3, y=0.3, width=0.4, height=0.4)),
+    )
+
+    assert len(engine.snapshots) == baseline, (
+        "a layer resize must not re-hydrate the engine"
+    )
     controller.close()
 
 
