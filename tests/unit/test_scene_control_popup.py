@@ -35,7 +35,7 @@ from solin.core.scenes.recording import (
     SceneRecordingConfig,
 )
 from solin.core.scenes.workspace import SceneWorkspaceService
-from solin.widgets.scenes.control_popup import SceneControlPopup
+from solin.widgets.scenes.control_popup import SceneControlPopup, _SceneCard
 
 
 class _Projection:
@@ -491,7 +491,7 @@ def test_scene_cards_follow_the_document_with_canvas_proportions(tmp_path: Path)
     preview = card._preview
     assert preview.height() == SceneControlPopup._SCENE_CARD_PREVIEW_HEIGHT
     assert preview.width() == round(preview.height() * video.width / video.height)
-    assert card.width() == preview.width()
+    assert card.width() == preview.width() + 2 * _SceneCard._BORDER_WIDTH
     assert card._name.text() == document.scenes[0].name
 
     # renaming and removing a scene is reflected without rebuilding the strip

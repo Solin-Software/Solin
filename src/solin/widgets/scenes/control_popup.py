@@ -133,6 +133,7 @@ class _SceneCard(QFrame):
 
     _BUTTON_SIZE = 22
     _FOOTER_HEIGHT = 30
+    _BORDER_WIDTH = 1
 
     def __init__(
         self,
@@ -146,7 +147,11 @@ class _SceneCard(QFrame):
         self.scene_id = scene_id
         self.setObjectName("SceneCard")
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
+        # Inset by the card's own 1px border, or the preview paints straight over
+        # it and the card looks borderless down its sides.
+        layout.setContentsMargins(
+            self._BORDER_WIDTH, self._BORDER_WIDTH, self._BORDER_WIDTH, self._BORDER_WIDTH
+        )
         layout.setSpacing(0)
 
         self._preview = QFrame()
@@ -196,7 +201,8 @@ class _SceneCard(QFrame):
         """Keep the preview at the scene's proportions; the footer adds its own row."""
         width = max(1, round(preview_height * aspect))
         self._preview.setFixedSize(width, preview_height)
-        self.setFixedSize(width, preview_height + self._FOOTER_HEIGHT)
+        border = self._BORDER_WIDTH * 2
+        self.setFixedSize(width + border, preview_height + self._FOOTER_HEIGHT + border)
 
     def set_routing(self, *, on_projection: bool, on_program: bool, program_available: bool) -> None:
         for button, active, pulse in (
@@ -237,7 +243,11 @@ class SceneControlPopup(QWidget):
     # A card is a canvas-proportioned preview plus a fixed footer row, so only
     # the preview height is chosen here; the width follows the scene's aspect.
     _SCENE_CARD_PREVIEW_HEIGHT = 78
-    _SCENE_CARD_HEIGHT = _SCENE_CARD_PREVIEW_HEIGHT + _SceneCard._FOOTER_HEIGHT
+    _SCENE_CARD_HEIGHT = (
+        _SCENE_CARD_PREVIEW_HEIGHT
+        + _SceneCard._FOOTER_HEIGHT
+        + 2 * _SceneCard._BORDER_WIDTH  # the card's own border, or the strip clips it
+    )
     _SCENE_CARD_SPACING = 8
     _SCENE_CARD_SCROLLBAR_ALLOWANCE = 12
     _SCENE_CARD_EDGE_PAD = 2
@@ -857,9 +867,9 @@ class SceneControlPopup(QWidget):
             QPushButton:disabled {{ color:{PALETTE.text_faint}; border-color:{PALETTE.border_muted}; }}
             QScrollArea#SceneCardStrip {{ border:none; background:transparent; }}
             QWidget#SceneCardStripHost {{ background:transparent; }}
-            QFrame#SceneCard {{ background:{qss_rgba(PALETTE.surface, 0.60)}; border:1px solid {qss_rgba(PALETTE.border, 0.60)}; border-radius:10px; }}
-            QFrame#SceneCardPreview {{ background:{qss_rgba(PALETTE.surface_alt, 0.75)}; border:none; border-top-left-radius:9px; border-top-right-radius:9px; }}
-            QWidget#SceneCardFooter {{ background:transparent; }}
+            QFrame#SceneCard {{ background:{qss_rgba(PALETTE.border, 0.75)}; border:none; border-radius:10px; }}
+            QFrame#SceneCardPreview {{ background:{qss_rgba(PALETTE.surface_alt, 0.95)}; border:none; border-top-left-radius:9px; border-top-right-radius:9px; }}
+            QWidget#SceneCardFooter {{ background:{PALETTE.surface}; border-bottom-left-radius:9px; border-bottom-right-radius:9px; }}
             QLabel#SceneCardName {{ background:transparent; color:{PALETTE.text_secondary}; font-size:11px; font-weight:550; }}
             QPushButton#SceneCardProjection, QPushButton#SceneCardProgram {{ min-width:{_SceneCard._BUTTON_SIZE}px; max-width:{_SceneCard._BUTTON_SIZE}px; min-height:{_SceneCard._BUTTON_SIZE}px; max-height:{_SceneCard._BUTTON_SIZE}px; padding:0; border-radius:7px; background:transparent; border:1px solid transparent; }}
             QPushButton#SceneCardProjection:hover, QPushButton#SceneCardProgram:hover {{ background:{PALETTE.surface_hover}; border-color:{PALETTE.border_strong}; }}
