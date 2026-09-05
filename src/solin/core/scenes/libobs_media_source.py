@@ -95,6 +95,13 @@ class LibobsMediaSource:
         # Ask libobs to decode on the GPU when hardware is available; it falls
         # back to software per stream (see _hw_decode_enabled).
         settings["hw_decode"] = _hw_decode_enabled()
+        # ffmpeg_source normally starts decoding from its `activate` callback, which
+        # only fires for the MAIN view — a source on an output channel. Solin shows
+        # media on outputs that are deliberately *not* on a channel (the projection
+        # route, the editor preview, scene-card thumbnails: show refs, not activate
+        # refs), where that callback never comes and playback sits frozen at 0 ms.
+        # Solin drives the transport itself, so decouple decoding from activation.
+        settings["restart_on_activate"] = False
         if speed_percent and speed_percent != 100:
             settings["speed_percent"] = int(speed_percent)
         try:

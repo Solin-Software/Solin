@@ -67,6 +67,7 @@ def test_open_local_file_creates_ffmpeg_source_and_autoplays(monkeypatch):
     assert source.kind == "ffmpeg_source"
     assert source.settings == {
         "is_local_file": True, "local_file": "/tmp/clip.mp4", "hw_decode": True,
+        "restart_on_activate": False,
     }
     assert source.play_pause == [False]  # autoplay → not paused
     assert runtime.monitored == [(source, runtime.monitored[0][1])]  # monitoring set
@@ -84,6 +85,7 @@ def test_open_remote_url_uses_the_input_setting_and_can_start_paused(monkeypatch
     source = runtime.created[-1]
     assert source.settings == {
         "is_local_file": False, "input": "https://cdn.example/v.mp4", "hw_decode": True,
+        "restart_on_activate": False,
     }
     assert source.play_pause == [True]  # paused
 
@@ -153,3 +155,19 @@ def test_close_stops_and_releases():
     assert source.released == 1
     assert media.source is None
     assert media.state == STATE_NONE
+
+
+def test_decoding_does_not_wait_for_libobs_to_activate_the_source(monkeypatch):
+    """Media shown only on projection/preview must still decode.
+
+    ffmpeg_source starts playback from its `activate` callback, which fires only for
+    sources on an output channel (the MAIN view). Projection, the editor preview and
+    the scene-card thumbnails hold show refs instead, so an activation-gated source
+    sits frozen at 0 ms on them. Solin owns the transport, so it opts out.
+    """
+    monkeypatch.delenv("SOLIN_MEDIA_HW_DECODE", raising=False)
+    runtime = _Runtime()
+
+    LibobsMediaSource(runtime).open("/tmp/clip.mp4")
+
+    assert runtime.created[-1].settings["restart_on_activate"] is False
