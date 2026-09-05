@@ -3,8 +3,8 @@
 The libobs engine reuses main's :class:`~solin.core.scenes.process_engine.SubprocessSceneEngine`
 supervision (launch, heartbeat, restart, IPC) but points it at the libobs sidecar
 (:mod:`solin.core.scenes.libobs_sidecar`) instead of the native GStreamer
-executable. It is selected at bootstrap when ``SOLIN_SCENE_ENGINE=libobs``, so it
-never changes default behaviour until explicitly opted into.
+executable. On this branch libobs is THE engine, so it is selected by default;
+``SOLIN_SCENE_ENGINE`` only exists as an escape hatch to opt back out.
 """
 
 from __future__ import annotations
@@ -24,9 +24,14 @@ _LIBOBS_SELECTION_VALUE = "libobs"
 
 
 def libobs_scene_engine_selected() -> bool:
-    """True when the operator opted into the libobs engine via the environment."""
+    """True unless the operator explicitly asked for a different engine.
+
+    libobs is the only media engine on this branch, so it is the default and
+    needs no environment variable. ``SOLIN_SCENE_ENGINE`` remains an escape
+    hatch: set it to anything other than ``libobs`` (e.g. ``native``) to opt out.
+    """
     selection = os.environ.get(ENGINE_SELECTION_ENV, "").strip().lower()
-    return selection == _LIBOBS_SELECTION_VALUE
+    return not selection or selection == _LIBOBS_SELECTION_VALUE
 
 
 def create_libobs_scene_engine(images_dir: Path | None = None) -> SubprocessSceneEngine:
@@ -43,6 +48,9 @@ def create_libobs_scene_engine(images_dir: Path | None = None) -> SubprocessScen
     when it launches the sidecar).
     """
     if images_dir is not None:
+        # Callers may hand this over as a plain string; libobs is the default
+        # engine now, so this runs on every start and must not care.
+        images_dir = Path(images_dir)
         os.environ["SOLIN_SCENE_IMAGES_DIR"] = str(images_dir)
         # The app renders the styled year text to this PNG; the sidecar shows it as
         # the "Year text" scene source. Exported before the content controller is

@@ -2799,8 +2799,11 @@ def test_selection_reads_the_environment(monkeypatch):
     assert libobs_scene_engine_selected() is True
     monkeypatch.setenv(ENGINE_SELECTION_ENV, "native")
     assert libobs_scene_engine_selected() is False
+    # libobs is the default engine on this branch: no env var needed.
     monkeypatch.delenv(ENGINE_SELECTION_ENV, raising=False)
-    assert libobs_scene_engine_selected() is False
+    assert libobs_scene_engine_selected() is True
+    monkeypatch.setenv(ENGINE_SELECTION_ENV, "   ")
+    assert libobs_scene_engine_selected() is True
 
 
 # ── end-to-end: real subprocess under the real supervisor ────────────────────

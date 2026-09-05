@@ -451,8 +451,8 @@ def _build_main_window_runtime(
     watched_folder_playlist_store = WatchedFolderPlaylistStore()
     main_window_profile_settings = _build_main_window_profile_settings(profile_settings)
     scene_workspace = _build_scene_workspace(profile_paths)
-    # SOLIN_SCENE_ENGINE=libobs opts into the libobs sidecar engine on any
-    # platform; otherwise the native engine is used where supported.
+    # libobs is the default engine on this branch and runs on any platform;
+    # SOLIN_SCENE_ENGINE only opts back out to the native engine where supported.
     if libobs_scene_engine_selected():
         scene_engine = create_libobs_scene_engine(profile_paths.images_dir)
     elif NATIVE_SCENES_SUPPORTED:
