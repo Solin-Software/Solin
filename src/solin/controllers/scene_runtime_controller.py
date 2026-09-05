@@ -717,6 +717,35 @@ class SceneRuntimeController(QObject):
                 return
         self._hydrate_if_ready()
 
+    def set_thumbnail_egress(
+        self,
+        descriptor: FrameChannelDescriptor | None,
+        scene_ids: tuple[str, ...],
+        cell_width: int,
+        cell_height: int,
+    ) -> None:
+        """Point the engine at the scene-card thumbnail atlas.
+
+        Sent as its own command rather than through the snapshot: a hydrate
+        rebuilds the whole scene graph (and reopens cameras), which is far too
+        much to pay for opening a panel.
+        """
+        if self._engine is None or not self._engine_ready:
+            return
+        self._track_future(
+            self._engine.set_thumbnail_egress(
+                descriptor,
+                tuple(scene_ids),
+                int(cell_width),
+                int(cell_height),
+                request_id=self._request_id_factory(),
+                sequence=self._next_sequence(),
+                deadline_ms=_TAKE_DEADLINE_MS,
+            ),
+            "thumbnail_egress",
+            None,
+        )
+
     def set_window_targets(
         self,
         targets: tuple[OutputWindowTarget, ...],
@@ -1550,6 +1579,8 @@ class SceneRuntimeController(QObject):
                 self._handle_output_ack("output", context, result)
             elif operation == "render":
                 self._handle_output_ack("render", context, result)
+            elif operation == "thumbnail_egress":
+                pass  # thumbnails are best-effort; a failure must not disturb a take
             elif operation == "window_targets":
                 self._handle_window_targets_ack(context, result)
             elif operation == "local_cameras":

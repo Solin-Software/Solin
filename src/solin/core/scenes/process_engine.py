@@ -707,6 +707,41 @@ class SubprocessSceneEngine:
             converter=_ack_from_envelope,
         )
 
+    def set_thumbnail_egress(
+        self,
+        descriptor: FrameChannelDescriptor | None,
+        scene_ids: tuple[str, ...],
+        cell_width: int,
+        cell_height: int,
+        *,
+        request_id: str,
+        sequence: int,
+        deadline_ms: int,
+    ) -> Future[SceneEngineAck]:
+        if descriptor is not None and not isinstance(descriptor, FrameChannelDescriptor):
+            return _failed_future(TypeError("Invalid thumbnail egress descriptor"))
+        if not isinstance(scene_ids, tuple) or not all(
+            isinstance(scene_id, str) and scene_id for scene_id in scene_ids
+        ):
+            return _failed_future(TypeError("Invalid thumbnail scene ids"))
+        with self._lock:
+            document_revision = self._document_revision
+        return self._request(
+            message_type="set_thumbnail_egress",
+            expected_message_type="ack",
+            request_id=request_id,
+            sequence=sequence,
+            document_revision=document_revision,
+            deadline_ms=deadline_ms,
+            payload={
+                "thumbnail_egress": _frame_channel_record(descriptor),
+                "scene_ids": list(scene_ids),
+                "cell_width": int(cell_width),
+                "cell_height": int(cell_height),
+            },
+            converter=_ack_from_envelope,
+        )
+
     def set_window_targets(
         self,
         targets: tuple[OutputWindowTarget, ...],

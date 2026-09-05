@@ -183,6 +183,7 @@ class LibobsSidecarEngine:
         self._scene_graph: object | None = None
         self._window_output: object | None = None
         self._projection_route: object | None = None
+        self._thumbnail_egress: object | None = None
         self._content_consumer: Any | None = None
         self._preview_egress: Any | None = None
         self._program_egress: Any | None = None
@@ -260,7 +261,14 @@ class LibobsSidecarEngine:
         from solin.core.scenes.libobs_preview_egress import LibobsPreviewEgress
         from solin.core.scenes.libobs_program_egress import LibobsProgramEgress
 
+        from solin.core.scenes.libobs_thumbnail_egress import LibobsThumbnailEgress
+
         self._preview_egress = LibobsPreviewEgress(runtime)
+        self._thumbnail_egress = LibobsThumbnailEgress(
+            runtime,
+            lambda scene_id: self._scene_graph.scene_source(scene_id)  # type: ignore[attr-defined]
+            if self._scene_graph is not None else None,
+        )
         self._program_egress = LibobsProgramEgress(runtime)
         from solin.core.scenes.libobs_audio_sources import LibobsAudioMixer
         from solin.core.scenes.libobs_media_source import LibobsMediaSource
@@ -323,6 +331,8 @@ class LibobsSidecarEngine:
             return self._handle_set_output_enabled(request)
         if message_type == "set_render_enabled":
             return self._handle_set_render_enabled(request)
+        if message_type == "set_thumbnail_egress":
+            return self._handle_set_thumbnail_egress(request)
         if message_type == "set_window_targets":
             return self._handle_set_window_targets(request)
         return build_response(request)
@@ -957,6 +967,26 @@ class LibobsSidecarEngine:
         return _ack(request, applied=False, error_code="unknown_preparation",
                     error_message="no such prepared scene")
 
+    def _handle_set_thumbnail_egress(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope:
+        egress = self._thumbnail_egress
+        if not self._runtime_started or egress is None:
+            return _ack(request, applied=False, error_code="runtime_unavailable",
+                        error_message="the libobs runtime is not running")
+        payload = request.payload
+        scene_ids = payload.get("scene_ids") or []
+        try:
+            egress.configure(  # type: ignore[attr-defined]
+                payload.get("thumbnail_egress"),
+                tuple(str(scene_id) for scene_id in scene_ids),
+                int(payload.get("cell_width") or 0),
+                int(payload.get("cell_height") or 0),
+            )
+        except Exception:  # noqa: BLE001 - thumbnails must never break the engine
+            log.warning("could not configure the thumbnail egress", exc_info=True)
+            return _ack(request, applied=False, error_code="thumbnail_egress_failed",
+                        error_message="could not attach the thumbnail channel")
+        return _ack(request, applied=True)
+
     def _handle_set_window_targets(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope:
         output = self._window_output
         if not self._runtime_started or output is None:
@@ -1021,6 +1051,12 @@ class LibobsSidecarEngine:
                 program_egress.shutdown()
             except Exception:  # noqa: BLE001 - shutdown must not raise out of the sidecar
                 log.warning("program egress shutdown errored", exc_info=True)
+        thumbnails, self._thumbnail_egress = self._thumbnail_egress, None
+        if thumbnails is not None:
+            try:
+                thumbnails.shutdown()
+            except Exception:  # noqa: BLE001 - shutdown must not raise out of the sidecar
+                log.warning("thumbnail egress shutdown errored", exc_info=True)
         route, self._projection_route = self._projection_route, None
         if route is not None:
             try:

@@ -745,3 +745,55 @@ def test_card_virtual_camera_button_only_shows_while_that_output_runs(
     popup.deleteLater()
     QCoreApplication.processEvents()
     controller.close()
+
+
+def test_panel_requests_thumbnails_only_while_it_is_on_screen(tmp_path: Path) -> None:
+    # Thumbnails cost GPU renders in the sidecar, so a closed panel must not ask
+    # for them.
+    controller = _controller(tmp_path)
+    asked: list[tuple] = []
+    controller.set_thumbnail_egress = lambda d, ids, w, h: asked.append((d, ids, w, h))
+    popup = SceneControlPopup(controller)
+    popup.show()
+    QCoreApplication.processEvents()
+    popup._sync_geometry()
+    popup._sync_thumbnail_feed()
+
+    assert asked, "no thumbnail feed requested while visible"
+    descriptor, scene_ids, width, height = asked[-1]
+    assert descriptor is not None
+    assert scene_ids == tuple(popup._scene_cards)
+    # the atlas cell matches the card's preview, so rows map 1:1 onto cards
+    preview = next(iter(popup._scene_cards.values()))._preview
+    assert (width, height) == (preview.width(), preview.height())
+    assert descriptor.height == height * len(scene_ids)
+
+    popup.hide()
+    QCoreApplication.processEvents()
+    assert asked[-1] == (None, (), 0, 0)  # released on hide
+
+    popup.deleteLater()
+    QCoreApplication.processEvents()
+    controller.close()
+
+
+def test_scene_card_paints_the_live_thumbnail_it_is_given(tmp_path: Path) -> None:
+    from PySide6.QtGui import QImage
+
+    controller = _controller(tmp_path)
+    popup = SceneControlPopup(controller)
+    QCoreApplication.processEvents()
+    scene_id = next(iter(popup._scene_cards))
+    card = popup._scene_cards[scene_id]
+
+    image = QImage(card._preview.width(), card._preview.height(), QImage.Format.Format_ARGB32)
+    image.fill(0xFF00FF00)
+    popup._on_thumbnail(scene_id, image)
+
+    painted = card._preview.grab().toImage()
+    centre = painted.pixelColor(painted.width() // 2, painted.height() // 2)
+    assert (centre.red(), centre.green(), centre.blue()) == (0, 255, 0)
+
+    popup.deleteLater()
+    QCoreApplication.processEvents()
+    controller.close()

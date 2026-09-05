@@ -708,6 +708,18 @@ class SceneEngine(Protocol):
         deadline_ms: int,
     ) -> Future[SceneEngineAck]: ...
 
+    def set_thumbnail_egress(
+        self,
+        descriptor: FrameChannelDescriptor | None,
+        scene_ids: tuple[str, ...],
+        cell_width: int,
+        cell_height: int,
+        *,
+        request_id: str,
+        sequence: int,
+        deadline_ms: int,
+    ) -> Future[SceneEngineAck]: ...
+
     def start_program_recording(
         self,
         recording: ProgramRecordingRequest,

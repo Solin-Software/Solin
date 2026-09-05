@@ -15,7 +15,7 @@ from PySide6.QtCore import (
     QVariantAnimation,
     Signal,
 )
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtGui import QGuiApplication, QImage, QPainter
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -120,6 +120,28 @@ class _PulseEffect:
         self._widget.setStyleSheet("")  # back to the panel's own rules
 
 
+class _ScenePreview(QFrame):
+    """The card's thumbnail area: paints the scene's live frame when there is one."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._image: QImage | None = None
+
+    def set_image(self, image: QImage | None) -> None:
+        self._image = image if image is not None and not image.isNull() else None
+        self.update()
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        super().paintEvent(event)  # keeps the stylesheet background/rounding
+        image = self._image
+        if image is None:
+            return
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+        painter.drawImage(self.rect(), image)
+        painter.end()
+
+
 class _SceneCard(QFrame):
     """A scene: a canvas-proportioned preview over a name and its routing buttons.
 
@@ -154,7 +176,7 @@ class _SceneCard(QFrame):
         )
         layout.setSpacing(0)
 
-        self._preview = QFrame()
+        self._preview = _ScenePreview()
         self._preview.setObjectName("SceneCardPreview")
         layout.addWidget(self._preview)
 
@@ -196,6 +218,9 @@ class _SceneCard(QFrame):
     def set_name(self, name: str) -> None:
         if self._name.text() != name:
             self._name.setText(name)
+
+    def set_thumbnail(self, image: QImage | None) -> None:
+        self._preview.set_image(image)
 
     def set_canvas_aspect(self, preview_height: int, aspect: float) -> None:
         """Keep the preview at the scene's proportions; the footer adds its own row."""
@@ -273,6 +298,11 @@ class SceneControlPopup(QWidget):
         self._engine_visual_state = "unavailable"
         self._hidden_at: float | None = None
         self._scene_cards: dict[str, _SceneCard] = {}
+        # Live card thumbnails, requested only while the panel is on screen.
+        from solin.controllers.scene_thumbnail_egress import SceneThumbnailEgressController
+
+        self._thumbnails = SceneThumbnailEgressController(parent=self)
+        self._thumbnails.thumbnail_ready.connect(self._on_thumbnail)
         self._recording_clock = QTimer(self)
         self._recording_clock.setInterval(1000)
         self._recording_clock.timeout.connect(self._render_recording)
@@ -405,6 +435,28 @@ class SceneControlPopup(QWidget):
         if self._cards_scroll.height() != height:
             self._cards_scroll.setFixedHeight(height)
 
+    def _on_thumbnail(self, scene_id: str, image: object) -> None:
+        card = self._scene_cards.get(scene_id)
+        if card is not None:
+            card.set_thumbnail(image)
+
+    def _sync_thumbnail_feed(self) -> None:
+        """Ask the engine for thumbnails of exactly the cards now on screen."""
+        on_screen = self.isVisible() and bool(self._scene_cards)
+        scene_ids = tuple(self._scene_cards) if on_screen else ()
+        cell = (
+            self._scene_cards[scene_ids[0]]._preview.size() if scene_ids else None
+        )
+        if not scene_ids or cell is None or cell.width() <= 0:
+            if self._thumbnails.descriptor is not None:
+                self._thumbnails.stop()
+                self._controller.set_thumbnail_egress(None, (), 0, 0)
+            return
+        if self._thumbnails.reconfigure(scene_ids, cell.width(), cell.height()):
+            self._controller.set_thumbnail_egress(
+                self._thumbnails.descriptor, scene_ids, cell.width(), cell.height()
+            )
+
     def _sync_scene_cards(self) -> None:
         """Match one card per scene, in document order, reusing existing cards."""
         document = self._controller.document
@@ -452,6 +504,7 @@ class SceneControlPopup(QWidget):
                 on_program=scene.id == program_scene,
                 program_available=program_available,
             )
+        self._sync_thumbnail_feed()
 
     def _on_card_routing_requested(self, scene_id: str, role: str) -> None:
         """Put a scene on an output from its card."""
@@ -762,12 +815,20 @@ class SceneControlPopup(QWidget):
         if root_layout is not None:
             root_layout.activate()
 
+    def showEvent(self, event) -> None:  # noqa: N802
+        super().showEvent(event)
+        self._sync_thumbnail_feed()
+
     def hideEvent(self, event) -> None:  # noqa: N802
         # Whatever interrupted the fade, a hidden panel must never stay
         # transparent — the next open has to be visible.
         self._fade.stop()
         self.setWindowOpacity(1.0)
         self._hidden_at = time.monotonic()
+        if not self._docked:
+            # Nobody is looking: stop paying for thumbnail renders.
+            self._thumbnails.stop()
+            self._controller.set_thumbnail_egress(None, (), 0, 0)
         super().hideEvent(event)
 
     def dismissed_within(self, milliseconds: int) -> bool:
