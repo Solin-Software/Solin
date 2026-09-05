@@ -127,3 +127,81 @@ def test_content_publisher_rejects_non_bgra_planes():
             )
     finally:
         publisher.close()
+
+
+def test_a_frame_smaller_than_the_channel_reports_its_own_size():
+    """The header must describe the frame, not the channel it travels through.
+
+    Stamping the channel's dimensions told the sidecar a small picture was a
+    full-canvas frame, so the scene item scaled the *canvas* to fit and the
+    picture rendered at native size in the corner.
+    """
+    writer = SharedFrameChannelWriter(4, 4)  # channel capacity: 4x4
+    try:
+        reader = SharedFrameChannelReader(writer.name, 4, 4)
+        try:
+            picture = bytes(range(2 * 2 * 4))  # a 2x2 BGRA picture
+            writer.write(picture, stride=2 * 4, width=2, height=2)
+
+            frame = reader.read_latest()
+            assert frame is not None
+            assert (frame.width, frame.height, frame.stride) == (2, 2, 8)
+            assert frame.data[: len(picture)] == picture
+        finally:
+            reader.close()
+    finally:
+        writer.close()
+        writer.unlink()
+
+
+def test_a_frame_taller_than_the_block_is_never_over_promised():
+    """The reader trusts the header, so never claim rows the block cannot hold."""
+    writer = SharedFrameChannelWriter(2, 2)  # room for 2 rows of 8 bytes
+    try:
+        reader = SharedFrameChannelReader(writer.name, 2, 2)
+        try:
+            writer.write(bytes(64), stride=8, width=2, height=8)  # claims 8 rows
+
+            frame = reader.read_latest()
+            assert frame is not None
+            assert frame.height == 2  # clamped to what actually fits
+            assert frame.height * frame.stride <= len(frame.data)
+        finally:
+            reader.close()
+    finally:
+        writer.close()
+        writer.unlink()
+
+
+def test_full_frame_writers_still_describe_the_whole_channel():
+    """The egress writers send canvas-sized frames and pass no explicit size."""
+    writer = SharedFrameChannelWriter(4, 2)
+    try:
+        reader = SharedFrameChannelReader(writer.name, 4, 2)
+        try:
+            writer.write(bytes(32))
+            frame = reader.read_latest()
+            assert frame is not None
+            assert (frame.width, frame.height, frame.stride) == (4, 2, 16)
+        finally:
+            reader.close()
+    finally:
+        writer.close()
+        writer.unlink()
+
+
+def test_content_publisher_forwards_the_pictures_own_dimensions():
+    from solin.core.scenes.content_frame_publisher import SharedMemoryContentPublisher
+
+    publisher = SharedMemoryContentPublisher(4, 4)
+    try:
+        reader = SharedFrameChannelReader(publisher.descriptor.handle_token, 4, 4)
+        try:
+            publisher.publish(bytes(2 * 1 * 4), frame_width=2, frame_height=1)
+            frame = reader.read_latest()
+            assert frame is not None
+            assert (frame.width, frame.height) == (2, 1)
+        finally:
+            reader.close()
+    finally:
+        publisher.close()

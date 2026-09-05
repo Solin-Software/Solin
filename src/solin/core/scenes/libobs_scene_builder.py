@@ -52,6 +52,25 @@ def _parse_color(hex_color: str) -> int:
     return _PLACEHOLDER_COLOR
 
 
+_DEFAULT_FIT_MODE = "contain"
+# libobs centres bounded content when no edge flag is set; there is no CENTER member.
+_CENTER_ALIGNMENT = 0
+
+
+def _bounds_type(ob: Any, fit_mode: str) -> Any:
+    """Map the document's fit mode onto the libobs bounds type that expresses it."""
+    kinds = {
+        "contain": ob.BoundsType.SCALE_INNER,
+        "cover": ob.BoundsType.SCALE_OUTER,
+        "stretch": ob.BoundsType.STRETCH,
+    }
+    return kinds.get(str(fit_mode or "").strip().lower(), ob.BoundsType.SCALE_INNER)
+
+
+def _layer_fit_mode(layer: dict) -> str:
+    return str(layer.get("fit_mode") or _DEFAULT_FIT_MODE)
+
+
 class LibobsSceneGraph:
     """Owns the libobs scenes/sources built for one hydrate snapshot."""
 
@@ -70,6 +89,9 @@ class LibobsSceneGraph:
         # Scene items keyed by (scene_id, layer_id), so a layer's geometry can be
         # updated live (obs_sceneitem transform) without rebuilding the graph.
         self._layer_items: dict[tuple[str, str], Any] = {}
+        # A live geometry edit carries only a rect, so remember what fit each layer
+        # was built with and re-apply it rather than silently reverting to contain.
+        self._layer_fit_modes: dict[tuple[str, str], str] = {}
         self._program_channel: int | None = None
         # Program transition: a transition source sits on the program channel and
         # holds the active scene; scene switches animate through take().
@@ -151,13 +173,21 @@ class LibobsSceneGraph:
             self._sources.append(source)  # released on clear (runtime owns shared cams)
         item = scene.add(source)
         rect = layer.get("rect") or {}
-        self._apply_item_geometry(item, rect, canvas, ob)
+        fit_mode = _layer_fit_mode(layer)
+        self._apply_item_geometry(item, rect, canvas, ob, fit_mode)
         layer_id = str(layer.get("id") or "")
         if layer_id:
             self._layer_items[(scene_id, layer_id)] = item
+            self._layer_fit_modes[(scene_id, layer_id)] = fit_mode
         if is_content:
             self._content_items.append(
-                {"scene": scene, "item": item, "rect": rect, "placeholder": placeholder}
+                {
+                    "scene": scene,
+                    "item": item,
+                    "rect": rect,
+                    "fit_mode": fit_mode,
+                    "placeholder": placeholder,
+                }
             )
 
     def apply_layer_geometry(self, scene_id: str, layer_id: str, rect: dict) -> bool:
@@ -168,13 +198,27 @@ class LibobsSceneGraph:
         item = self._layer_items.get((scene_id, layer_id))
         if item is None:
             return False
-        self._apply_item_geometry(item, rect or {}, self._runtime.video, self._runtime.ob)
+        self._apply_item_geometry(
+            item,
+            rect or {},
+            self._runtime.video,
+            self._runtime.ob,
+            self._layer_fit_modes.get((scene_id, layer_id), _DEFAULT_FIT_MODE),
+        )
         return True
 
-    def _apply_item_geometry(self, item: Any, rect: dict, canvas: Any, ob: Any) -> None:
-        # Scale the source into its normalized rect (SCALE_INNER preserves aspect),
-        # so real sources of any native size (media, camera, image) fill the rect
-        # rather than rendering at their own dimensions.
+    def _apply_item_geometry(
+        self,
+        item: Any,
+        rect: dict,
+        canvas: Any,
+        ob: Any,
+        fit_mode: str = _DEFAULT_FIT_MODE,
+    ) -> None:
+        # Scale the source into its normalized rect, honouring the fit the layer
+        # asked for: contain letterboxes, cover fills and crops, stretch ignores
+        # the aspect. Hardcoding SCALE_INNER letterboxed everything, so a camera
+        # asking to cover its rect sat in a box instead of filling it.
         item.pos = (
             float(rect.get("x", 0.0)) * canvas.width,
             float(rect.get("y", 0.0)) * canvas.height,
@@ -183,8 +227,10 @@ class LibobsSceneGraph:
             max(1.0, float(rect.get("width", 1.0)) * canvas.width),
             max(1.0, float(rect.get("height", 1.0)) * canvas.height),
         )
-        item.bounds_type = int(ob.BoundsType.SCALE_INNER)
-        item.bounds_alignment = int(ob.Alignment.LEFT | ob.Alignment.TOP)
+        item.bounds_type = int(_bounds_type(ob, fit_mode))
+        # Centre what is scaled inside the rect. LEFT|TOP shoved a letterboxed
+        # picture into the rect's corner and piled all the empty space on one side.
+        item.bounds_alignment = _CENTER_ALIGNMENT
 
     @staticmethod
     def _is_content_layer(layer: dict, sources_by_id: dict) -> bool:
@@ -333,7 +379,9 @@ class LibobsSceneGraph:
                                             _PLACEHOLDER_COLOR)
                 new_placeholder = source
             new_item = scene.add(source)  # added on top; restore its z-order below
-            self._apply_item_geometry(new_item, rect, canvas, ob)
+            self._apply_item_geometry(
+                new_item, rect, canvas, ob, record.get("fit_mode", _DEFAULT_FIT_MODE)
+            )
             if order is not None:
                 try:
                     new_item.order_position = order

@@ -129,13 +129,39 @@ class SharedFrameChannelWriter:
     def name(self) -> str:
         return self._shm.name
 
-    def write(self, data: bytes, *, stride: int | None = None) -> None:
-        """Publish one BGRA frame (tear-free via the seqlock)."""
-        stride = self._width * 4 if stride is None else int(stride)
-        count = min(len(data), self._payload)
+    def write(
+        self,
+        data: bytes,
+        *,
+        stride: int | None = None,
+        width: int | None = None,
+        height: int | None = None,
+    ) -> None:
+        """Publish one BGRA frame (tear-free via the seqlock).
+
+        ``width``/``height`` describe *this frame*, which may be smaller than the
+        channel — the content ingress publishes a picture at its own size and lets
+        the scene item scale it up. Stamping the channel's dimensions instead told
+        the reader that a small picture was a full-canvas frame, so it rendered at
+        native size in the canvas corner with the rest left empty. Both default to
+        the channel's dimensions, which is what the full-frame egress writers send.
+        """
+        frame_width = self._width if width is None else int(width)
+        frame_height = self._height if height is None else int(height)
+        stride = frame_width * 4 if stride is None else int(stride)
+        if frame_width <= 0 or frame_height <= 0 or stride <= 0:
+            return
+        # Never promise the reader more rows than the block can hold: it trusts the
+        # header and would read past the frame it was given.
+        frame_height = min(frame_height, self._payload // stride)
+        if frame_height <= 0:
+            return
+        count = min(len(data), frame_height * stride)
         writing = self._version + 1  # odd → a write is in progress
         struct.pack_into("<Q", self._buf, _SEQ_OFFSET, writing)
-        struct.pack_into("<III", self._buf, _DIMS_OFFSET, self._width, self._height, stride)
+        struct.pack_into(
+            "<III", self._buf, _DIMS_OFFSET, frame_width, frame_height, stride
+        )
         self._buf[_HEADER_SIZE:_HEADER_SIZE + count] = data[:count]
         done = writing + 1  # even → complete
         struct.pack_into("<Q", self._buf, _SEQ_OFFSET, done)

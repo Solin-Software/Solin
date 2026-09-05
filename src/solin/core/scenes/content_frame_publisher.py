@@ -68,7 +68,12 @@ class SharedMemoryContentPublisher:
         duration_ns: int = 0,
         media_epoch: int = 0,
     ) -> int:
-        return self._write(bytes(pixels), stride=frame_width * 4)
+        return self._write(
+            bytes(pixels),
+            stride=frame_width * 4,
+            width=frame_width,
+            height=frame_height,
+        )
 
     def publish_planes(
         self,
@@ -84,10 +89,15 @@ class SharedMemoryContentPublisher:
     ) -> int:
         if pixel_format is not VideoPixelFormat.BGRA:
             raise ValueError("the libobs content channel accepts only BGRA frames")
-        return self._write(bytes(planes[0]), stride=plane_strides[0])
+        return self._write(
+            bytes(planes[0]),
+            stride=plane_strides[0],
+            width=frame_width,
+            height=frame_height,
+        )
 
-    def _write(self, data: bytes, *, stride: int) -> int:
-        self._writer.write(data, stride=stride)
+    def _write(self, data: bytes, *, stride: int, width: int, height: int) -> int:
+        self._writer.write(data, stride=stride, width=width, height=height)
         self._sequence += 1
         return self._sequence
 

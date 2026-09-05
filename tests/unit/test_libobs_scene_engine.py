@@ -618,7 +618,7 @@ class _CompositingRuntime:
             enum_output_types=lambda: list(runtime.output_types),
             enum_encoder_types=lambda: list(runtime.encoder_types),
             enum_source_types=_enum_source_types,
-            BoundsType=types.SimpleNamespace(SCALE_INNER=2),
+            BoundsType=types.SimpleNamespace(SCALE_INNER=2, SCALE_OUTER=3, STRETCH=1),
             Alignment=types.SimpleNamespace(LEFT=1, TOP=4),
         )
 
@@ -700,8 +700,8 @@ def test_scene_graph_builds_scenes_and_positions_visible_layers():
     # Full-canvas layer: placed at the origin, scaled to fill the canvas.
     assert scene_a.items[0].pos == (0.0, 0.0)
     assert scene_a.items[0].bounds == (1920.0, 1080.0)
-    assert scene_a.items[0].bounds_type == 2  # SCALE_INNER
-    assert scene_a.items[0].bounds_alignment == 5  # LEFT | TOP
+    assert scene_a.items[0].bounds_type == 2  # SCALE_INNER: the default fit
+    assert scene_a.items[0].bounds_alignment == 0  # centred in its rect
     assert scene_a.items[0].source.settings["width"] == 1920
     # Bottom-right quadrant PiP: positioned + bounded to that quadrant.
     assert scene_a.items[1].pos == (960.0, 540.0)
@@ -3036,3 +3036,54 @@ def test_thumbnail_show_refs_are_dropped_across_a_graph_rebuild(monkeypatch):
     assert all(count == 0 for count in lib.counts.values())
     block.close()
     block.unlink()
+
+
+_FIT_DOCUMENT = {
+    "scenes": [
+        {
+            "id": "scene-fit",
+            "layers": [
+                {"id": "contain", "source_id": "content", "visible": True,
+                 "fit_mode": "contain",
+                 "rect": {"x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0}},
+                {"id": "cover", "source_id": "cam", "visible": True,
+                 "fit_mode": "cover",
+                 "rect": {"x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0}},
+                {"id": "stretch", "source_id": "hidden", "visible": True,
+                 "fit_mode": "stretch",
+                 "rect": {"x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0}},
+            ],
+        },
+    ],
+}
+
+
+def test_each_layer_is_bounded_by_the_fit_it_asked_for():
+    """contain letterboxes, cover fills and crops, stretch ignores the aspect.
+
+    Hardcoding SCALE_INNER letterboxed everything, so a camera set to cover its
+    rect rendered inside a box instead of filling it.
+    """
+    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+
+    runtime = _CompositingRuntime()
+    LibobsSceneGraph(runtime).hydrate(_FIT_DOCUMENT, {"virtual_camera": "scene-fit"})
+
+    items = next(s for s in runtime.scenes if s.name == "solin-scene-scene-fit").items
+    assert [item.bounds_type for item in items] == [2, 3, 1]  # INNER, OUTER, STRETCH
+    assert all(item.bounds_alignment == 0 for item in items)  # all centred
+
+
+def test_an_unknown_fit_mode_falls_back_to_letterboxing() -> None:
+    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+
+    runtime = _CompositingRuntime()
+    LibobsSceneGraph(runtime).hydrate(
+        {"scenes": [{"id": "s", "layers": [
+            {"id": "L", "source_id": "content", "visible": True, "fit_mode": "wat",
+             "rect": {"x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0}}]}]},
+        {"virtual_camera": "s"},
+    )
+
+    items = next(s for s in runtime.scenes if s.name == "solin-scene-s").items
+    assert items[0].bounds_type == 2  # contain: never crop on a bad value
