@@ -723,15 +723,18 @@ class SceneRuntimeController(QObject):
         scene_ids: tuple[str, ...],
         cell_width: int,
         cell_height: int,
-    ) -> None:
+    ) -> bool:
         """Point the engine at the scene-card thumbnail atlas.
+
+        Returns False when there is no engine to tell yet, so the caller knows to
+        try again rather than assuming the engine heard it.
 
         Sent as its own command rather than through the snapshot: a hydrate
         rebuilds the whole scene graph (and reopens cameras), which is far too
         much to pay for opening a panel.
         """
         if self._engine is None or not self._engine_ready:
-            return
+            return False
         self._track_future(
             self._engine.set_thumbnail_egress(
                 descriptor,
@@ -745,6 +748,7 @@ class SceneRuntimeController(QObject):
             "thumbnail_egress",
             None,
         )
+        return True
 
     def set_window_targets(
         self,

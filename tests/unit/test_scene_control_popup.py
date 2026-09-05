@@ -797,3 +797,42 @@ def test_scene_card_paints_the_live_thumbnail_it_is_given(tmp_path: Path) -> Non
     popup.deleteLater()
     QCoreApplication.processEvents()
     controller.close()
+
+
+def test_thumbnail_request_is_retried_until_the_engine_hears_it(tmp_path: Path) -> None:
+    # Regression: the panel opens before the engine is ready, the controller drops
+    # the command, and because the block had already been allocated every later
+    # sync short-circuited — so the cards stayed dead for the whole session.
+    controller = _controller(tmp_path)
+    ready = {"value": False}
+    calls: list[tuple] = []
+
+    def _set(descriptor, scene_ids, width, height):
+        calls.append((descriptor, scene_ids, width, height))
+        return ready["value"]  # False = engine not ready, nothing dispatched
+
+    controller.set_thumbnail_egress = _set
+    popup = SceneControlPopup(controller)
+    popup.show()
+    QCoreApplication.processEvents()
+    popup._sync_geometry()
+
+    popup._sync_thumbnail_feed()
+    assert calls, "nothing attempted"
+    assert popup._thumbnail_sent is None  # not recorded: the engine never heard it
+
+    popup._sync_thumbnail_feed()
+    assert len(calls) >= 2, "a dropped request must be retried"
+
+    ready["value"] = True
+    popup._sync_thumbnail_feed()
+    assert popup._thumbnail_sent is not None  # recorded only once delivered
+
+    before = len(calls)
+    popup._sync_thumbnail_feed()
+    assert len(calls) == before  # and not re-sent forever afterwards
+
+    popup.close()
+    popup.deleteLater()
+    QCoreApplication.processEvents()
+    controller.close()

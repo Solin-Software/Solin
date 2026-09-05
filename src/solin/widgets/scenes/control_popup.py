@@ -303,6 +303,10 @@ class SceneControlPopup(QWidget):
 
         self._thumbnails = SceneThumbnailEgressController(parent=self)
         self._thumbnails.thumbnail_ready.connect(self._on_thumbnail)
+        # What the engine was actually told. Allocating the block is not the same
+        # as the engine hearing about it: the panel can open before the engine is
+        # ready, and that request has to be retried rather than assumed delivered.
+        self._thumbnail_sent: tuple | None = None
         self._recording_clock = QTimer(self)
         self._recording_clock.setInterval(1000)
         self._recording_clock.timeout.connect(self._render_recording)
@@ -448,14 +452,21 @@ class SceneControlPopup(QWidget):
             self._scene_cards[scene_ids[0]]._preview.size() if scene_ids else None
         )
         if not scene_ids or cell is None or cell.width() <= 0:
-            if self._thumbnails.descriptor is not None:
+            if self._thumbnail_sent is not None or self._thumbnails.descriptor is not None:
                 self._thumbnails.stop()
                 self._controller.set_thumbnail_egress(None, (), 0, 0)
+                self._thumbnail_sent = None
             return
-        if self._thumbnails.reconfigure(scene_ids, cell.width(), cell.height()):
-            self._controller.set_thumbnail_egress(
-                self._thumbnails.descriptor, scene_ids, cell.width(), cell.height()
-            )
+        width, height = cell.width(), cell.height()
+        self._thumbnails.reconfigure(scene_ids, width, height)  # no-op if unchanged
+        descriptor = self._thumbnails.descriptor
+        if descriptor is None:
+            return
+        desired = (descriptor, scene_ids, width, height)
+        if desired == self._thumbnail_sent:
+            return
+        if self._controller.set_thumbnail_egress(descriptor, scene_ids, width, height):
+            self._thumbnail_sent = desired
 
     def _sync_scene_cards(self) -> None:
         """Match one card per scene, in document order, reusing existing cards."""
