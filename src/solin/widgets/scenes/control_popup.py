@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
 
 from solin.controllers.scene_runtime_controller import SceneRuntimeController
 from solin.controllers.program_recording_controller import ProgramRecordingController
+from solin.core.scenes.composition import scene_uses_content_source
 from solin.core.scenes.model import BusId
 from solin.core.scenes.recording import ProgramRecordingStatus
 from solin.styles.icons import (
@@ -38,6 +39,7 @@ from solin.styles.icons import (
     ICON_REC_CIRCLE,
     ICON_REC_STOP,
     ICON_SCREEN,
+    ICON_VIDEO,
     make_icon,
 )
 from solin.styles.theme import PALETTE, qss_rgba
@@ -132,19 +134,29 @@ class _ScenePreview(QFrame):
     """The card's thumbnail area: paints the scene's live frame when there is one."""
 
     _CORNER_RADIUS = 9  # matches the card's radius minus its 1px border
+    _PLACEHOLDER_SIZE = 26
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._image: QImage | None = None
+        self._placeholder = False
 
     def set_image(self, image: QImage | None) -> None:
         self._image = image if image is not None and not image.isNull() else None
+        self.update()
+
+    def set_placeholder(self, visible: bool) -> None:
+        """Mark the scene's media slot as waiting rather than simply black."""
+        if self._placeholder == visible:
+            return
+        self._placeholder = visible
         self.update()
 
     def paintEvent(self, event) -> None:  # noqa: N802
         super().paintEvent(event)  # keeps the stylesheet background/rounding
         image = self._image
         if image is None:
+            self._paint_placeholder()
             return
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
@@ -164,6 +176,23 @@ class _ScenePreview(QFrame):
         path.closeSubpath()
         painter.setClipPath(path)
         painter.drawImage(rect, image)
+        painter.end()
+        self._paint_placeholder()
+
+    def _paint_placeholder(self) -> None:
+        """A faint media glyph so an empty media slot reads as waiting, not broken."""
+        if not self._placeholder:
+            return
+        side = min(self._PLACEHOLDER_SIZE, self.width() // 3, self.height() // 2)
+        if side < 8:
+            return
+        icon = make_icon(_svg(ICON_VIDEO), side, PALETTE.text_muted)
+        painter = QPainter(self)
+        painter.setOpacity(0.35)  # subtle: a hint, not a badge
+        painter.drawPixmap(
+            (self.width() - side) // 2, (self.height() - side) // 2,
+            icon.pixmap(side, side),
+        )
         painter.end()
 
 
@@ -246,6 +275,9 @@ class _SceneCard(QFrame):
 
     def set_thumbnail(self, image: QImage | None) -> None:
         self._preview.set_image(image)
+
+    def set_content_placeholder(self, visible: bool) -> None:
+        self._preview.set_placeholder(visible)
 
     def set_canvas_aspect(self, preview_height: int, aspect: float) -> None:
         """Keep the preview at the scene's proportions; the footer adds its own row."""
@@ -516,6 +548,9 @@ class SceneControlPopup(QWidget):
         program_available = self._controller.runtime.state.output(
             BusId.VIRTUAL_CAMERA
         ).enabled
+        # A scene whose media slot is empty renders black; mark those so the card
+        # reads as "waiting for media" rather than broken.
+        content_idle = not self._controller.content_is_playing
 
         for index, scene in enumerate(scenes):
             card = self._scene_cards.get(scene.id)
@@ -535,6 +570,9 @@ class SceneControlPopup(QWidget):
                     self._cards_layout.removeWidget(card)
                     self._cards_layout.insertWidget(index, card)
             card.set_canvas_aspect(self._SCENE_CARD_PREVIEW_HEIGHT, aspect)
+            card.set_content_placeholder(
+                content_idle and scene_uses_content_source(document, scene.id)
+            )
             card.set_routing(
                 on_projection=scene.id == projection_scene,
                 on_program=scene.id == program_scene,
@@ -548,7 +586,9 @@ class SceneControlPopup(QWidget):
         if bus_id is None:
             return
         try:
-            self._controller.take_scene(bus_id, scene_id)
+            # select, not take: pinning the output would stop media from ever
+            # taking it over, and the panel has no control to undo that.
+            self._controller.select_scene(bus_id, scene_id)
         except Exception:  # noqa: BLE001 - UI operation boundary
             log.exception("Could not route the scene from its card")
         self._render()

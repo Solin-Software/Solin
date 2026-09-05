@@ -901,3 +901,73 @@ def test_live_thumbnail_is_clipped_to_the_card_corners(tmp_path: Path) -> None:
     popup.deleteLater()
     QCoreApplication.processEvents()
     controller.close()
+
+
+def test_choosing_a_scene_from_a_card_keeps_media_auto_switch_working(
+    tmp_path: Path,
+) -> None:
+    # Regression: the card pinned its output to MANUAL, so media stopped taking
+    # the output over — the video played but was never shown — and the panel no
+    # longer has the auto-switch control that used to undo that.
+    projection = _Projection()
+    controller = _controller(tmp_path, projection=projection)
+    popup = SceneControlPopup(controller)
+    QCoreApplication.processEvents()
+    camera_scene = next(
+        scene.id for scene in controller.document.scenes if scene.name == "Camera"
+    )
+    media_scene = controller.documents.program_media_scene_id
+
+    popup._scene_cards[camera_scene]._projection.click()
+    QCoreApplication.processEvents()
+    assert controller.desired_scene(BusId.MEDIA_WINDOWS) == camera_scene
+
+    projection.set_type("video")
+    QCoreApplication.processEvents()
+    assert controller.desired_scene(BusId.MEDIA_WINDOWS) == media_scene  # media wins
+
+    projection.set_type("idle")
+    QCoreApplication.processEvents()
+    assert controller.desired_scene(BusId.MEDIA_WINDOWS) == camera_scene  # and returns
+
+    popup.deleteLater()
+    QCoreApplication.processEvents()
+    controller.close()
+
+
+def test_idle_media_slot_shows_a_faded_glyph_instead_of_pure_black(
+    tmp_path: Path,
+) -> None:
+    projection = _Projection()
+    controller = _controller(tmp_path, projection=projection)
+    popup = SceneControlPopup(controller)
+    popup.show()
+    QCoreApplication.processEvents()
+    popup._render()
+
+    content_scene = controller.documents.program_media_scene_id
+    camera_scene = next(
+        scene.id for scene in controller.document.scenes if scene.name == "Camera"
+    )
+    # only the scene that actually holds the media slot is marked
+    assert popup._scene_cards[content_scene]._preview._placeholder
+    assert not popup._scene_cards[camera_scene]._preview._placeholder
+
+    # Something really is painted: the same preview differs with the hint off.
+    # (Comparing whole renders rather than one pixel — the glyph is an outline,
+    # so its exact centre is hollow.)
+    preview = popup._scene_cards[content_scene]._preview
+    with_hint = preview.grab().toImage()
+    preview.set_placeholder(False)
+    without_hint = preview.grab().toImage()
+    assert with_hint != without_hint
+    preview.set_placeholder(True)
+
+    projection.set_type("video")
+    popup._render()
+    assert not popup._scene_cards[content_scene]._preview._placeholder
+
+    popup.close()
+    popup.deleteLater()
+    QCoreApplication.processEvents()
+    controller.close()

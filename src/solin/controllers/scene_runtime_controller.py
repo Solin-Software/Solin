@@ -363,6 +363,24 @@ class SceneRuntimeController(QObject):
             None,
         )
 
+    @property
+    def content_is_playing(self) -> bool:
+        """Whether Solin is currently projecting media/content, not sitting idle."""
+        return (
+            content_category_for_projection(self._projection.state)
+            in AUTOMATIC_MEDIA_CATEGORIES
+        )
+
+    def select_scene(self, bus_id: BusId, scene_id: str) -> SceneRuntimeState:
+        """Set one output's base scene, keeping automation live for it.
+
+        Media playing still takes the output over; the chosen scene is what it
+        returns to. Pinning an output against automation is :meth:`take_scene`.
+        """
+        state = self._runtime.select_scene(bus_id, scene_id)
+        self._reconcile_desired(prepare=True)
+        return state
+
     def take_scene(self, bus_id: BusId, scene_id: str) -> SceneRuntimeState:
         """Route one output to a scene; the other outputs keep their own."""
         state = self._runtime.take_scene(bus_id, scene_id)

@@ -249,6 +249,17 @@ class SceneRuntimeService:
             )
         )
 
+    def select_scene(self, bus_id: BusId, scene_id: str) -> SceneRuntimeState:
+        """Choose ONE output's base scene, leaving its automation mode alone.
+
+        This is what picking a scene for an output means day to day: it is the
+        scene that output rests on, and media still takes it over while playing.
+        Use :meth:`take_scene` to pin an output and ignore automation entirely.
+        """
+        self._documents.document.scene(scene_id)
+        current = self._state.output(bus_id)
+        return self._commit(self._with_output(replace(current, manual_scene_id=scene_id)))
+
     def take_program_scene(self, scene_id: str) -> SceneRuntimeState:
         """Route every delivery output to ``scene_id`` (the old lockstep take).
 
