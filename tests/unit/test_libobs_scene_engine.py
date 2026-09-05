@@ -2974,3 +2974,65 @@ def test_a_take_cannot_move_an_output_its_token_was_not_prepared_for():
     assert ack.applied is False and ack.error_code == "bus_mismatch"
     assert engine._scene_graph._active_scene_id == "a"  # program untouched
     assert route.starts == []  # and the projection did not move either
+
+
+class _ShowRefLib:
+    """Stands in for the unwrapped obs_source_inc/dec_showing symbols."""
+
+    def __init__(self) -> None:
+        self.counts: dict[object, int] = {}
+
+    def obs_source_inc_showing(self, pointer) -> None:
+        self.counts[pointer] = self.counts.get(pointer, 0) + 1
+
+    def obs_source_dec_showing(self, pointer) -> None:
+        self.counts[pointer] = self.counts.get(pointer, 0) - 1
+
+
+def _thumbnail_egress_with_show_refs(monkeypatch):
+    from solin.core.scenes import libobs_thumbnail_egress as module
+    from solin.core.scenes.content_frame_channel import SharedFrameChannelReader
+
+    lib = _ShowRefLib()
+    monkeypatch.setattr("pylibobs._ffi.get_lib", lambda: lib, raising=False)
+    sources = {sid: types.SimpleNamespace(_ptr=f"ptr-{sid}") for sid in ("a", "b")}
+    egress = module.LibobsThumbnailEgress(
+        _CompositingRuntime(), lambda sid: sources.get(sid)
+    )
+    # The app owns the block; the egress only attaches to it.
+    block = SharedFrameChannelReader(None, 64, 72, create=True)
+    egress.configure(
+        {"transport": "shared_memory_bgra", "handle_token": block.name,
+         "width": 64, "height": 72},
+        ("a", "b"), 64, 36,
+    )
+    return egress, lib, block
+
+
+def test_thumbnailed_scenes_are_show_reffed_so_every_card_is_live(monkeypatch):
+    # Same mechanism OBS studio mode uses: show refs start the scene's sources
+    # without making them active, so no projection audio reaches the program mix.
+    egress, lib, block = _thumbnail_egress_with_show_refs(monkeypatch)
+    assert lib.counts == {"ptr-a": 1, "ptr-b": 1}
+
+    egress.shutdown()
+    assert all(count == 0 for count in lib.counts.values())  # balanced
+    block.close()
+    block.unlink()
+
+
+def test_thumbnail_show_refs_are_dropped_across_a_graph_rebuild(monkeypatch):
+    # Scene sources are borrowed, so a rebuild destroys them: decrementing a show
+    # ref afterwards would hit freed memory.
+    egress, lib, block = _thumbnail_egress_with_show_refs(monkeypatch)
+
+    egress.suspend()
+    assert all(count == 0 for count in lib.counts.values())
+
+    egress.resume()
+    assert lib.counts == {"ptr-a": 1, "ptr-b": 1}
+
+    egress.shutdown()
+    assert all(count == 0 for count in lib.counts.values())
+    block.close()
+    block.unlink()

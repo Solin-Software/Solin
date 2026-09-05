@@ -12,9 +12,16 @@ low rate — these are thumbnails, and the program's own render must stay first 
 line. Scene sources are **borrowed** from the scene graph, so a render and a graph
 rebuild are mutually excluded by ``_lock``.
 
-Sources that are not showing anywhere render as they last were (or black): giving
-every thumbnailed scene show refs would start every camera in every scene, which
-is exactly what we do not want to do to a meeting.
+Thumbnailed scenes are show-ref'd so their cameras and media actually run and every
+card is live, not a frozen last frame. Show refs are not activate refs, so none of
+this reaches the program audio mix. Cameras are shared per device by the runtime,
+so several scenes using one camera still open the device once.
+
+The refs are the delicate part: ``scene_source`` hands back a BORROWED source, so a
+graph rebuild destroys it. Every ref is therefore dropped before a rebuild and
+retaken afterwards (:meth:`suspend` / :meth:`resume`, called by the sidecar around
+``graph.hydrate``) — decrementing a show ref on a freed source would crash the
+engine mid-meeting.
 """
 
 from __future__ import annotations
@@ -44,6 +51,8 @@ class LibobsThumbnailEgress:
         self._cell = (0, 0)
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
+        self._suspended = False
+        self._show_refs: list[Any] = []  # raw pointers we have inc_showing'd
 
     @property
     def scene_ids(self) -> tuple[str, ...]:
@@ -95,7 +104,67 @@ class LibobsThumbnailEgress:
             self._handle_token = token
             self._scene_ids = tuple(scene_ids)
             self._cell = (cell_width, cell_height)
+            if not self._suspended:
+                self._acquire_show_refs()
         self._ensure_thread()
+
+    # ── show refs ──────────────────────────────────────────────────────────
+
+    def _acquire_show_refs(self) -> None:
+        """Show-ref every thumbnailed scene so its sources actually run."""
+        if self._show_refs:
+            return
+        try:
+            from pylibobs._ffi import get_lib
+
+            lib = get_lib()
+        except Exception:  # noqa: BLE001 - unwrapped libobs symbols
+            log.warning("could not reach obs_source_inc_showing", exc_info=True)
+            return
+        for scene_id in self._scene_ids:
+            source = self._scene_resolver(scene_id)
+            pointer = getattr(source, "_ptr", None) if source is not None else None
+            if pointer is None:
+                continue
+            try:
+                lib.obs_source_inc_showing(pointer)
+            except Exception:  # noqa: BLE001 - libobs boundary
+                log.debug("thumbnail show-ref failed for %r", scene_id, exc_info=True)
+                continue
+            self._show_refs.append(pointer)
+
+    def _release_show_refs(self) -> None:
+        pointers, self._show_refs = self._show_refs, []
+        if not pointers:
+            return
+        try:
+            from pylibobs._ffi import get_lib
+
+            lib = get_lib()
+        except Exception:  # noqa: BLE001 - unwrapped libobs symbols
+            return
+        for pointer in pointers:
+            try:
+                lib.obs_source_dec_showing(pointer)
+            except Exception:  # noqa: BLE001 - libobs boundary
+                log.debug("thumbnail show-unref failed", exc_info=True)
+
+    def suspend(self) -> None:
+        """Stop rendering and drop show refs before the scene graph is rebuilt.
+
+        The sources are borrowed, so they cease to exist across the rebuild; a ref
+        held over it would be decremented against freed memory.
+        """
+        with self._lock:
+            self._suspended = True
+            self._release_show_refs()
+
+    def resume(self) -> None:
+        """Re-resolve the rebuilt scenes and take fresh show refs."""
+        with self._lock:
+            self._suspended = False
+            if self._writer is not None:
+                self._acquire_show_refs()
 
     def _ensure_thread(self) -> None:
         if self._thread is not None and self._thread.is_alive():
@@ -115,7 +184,7 @@ class LibobsThumbnailEgress:
                 writer = self._writer
                 scene_ids = self._scene_ids
                 cell_width, cell_height = self._cell
-                if writer is None or not scene_ids or cell_width <= 0:
+                if self._suspended or writer is None or not scene_ids or cell_width <= 0:
                     continue
                 row_bytes = cell_width * 4
                 atlas = bytearray(row_bytes * cell_height * len(scene_ids))
@@ -146,6 +215,7 @@ class LibobsThumbnailEgress:
 
     def _detach(self) -> None:
         with self._lock:
+            self._release_show_refs()
             writer, self._writer = self._writer, None
             self._handle_token = ""
             self._scene_ids = ()

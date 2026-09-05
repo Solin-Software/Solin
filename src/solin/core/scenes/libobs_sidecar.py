@@ -764,6 +764,11 @@ class LibobsSidecarEngine:
             # before rebuilding — the egress renders a borrowed scene source.
             if self._preview_egress is not None:
                 self._preview_egress.set_scene_source(None)
+            # Thumbnail show refs point at borrowed scene sources that this rebuild
+            # is about to destroy; drop them first and retake them afterwards.
+            thumbnails = self._thumbnail_egress
+            if thumbnails is not None:
+                thumbnails.suspend()  # type: ignore[attr-defined]
             active_scenes = payload.get("active_scenes") or {}
             # An open media source owns the content slot; otherwise the BGRA
             # frame-ingress source does (both may be absent → placeholder).
@@ -779,6 +784,8 @@ class LibobsSidecarEngine:
                     active_scenes,
                     self._effective_content_source(),
                 )
+            if thumbnails is not None:
+                thumbnails.resume()  # type: ignore[attr-defined]
             self._reconcile_projection(active_scenes)
             self._reconcile_preview_egress(
                 payload.get("preview_egress"),
@@ -816,6 +823,14 @@ class LibobsSidecarEngine:
                     log.warning("libobs hydrate virtual-camera restore failed", exc_info=True)
         except Exception:  # noqa: BLE001 - a bad document must not crash the engine
             log.warning("libobs hydrate failed", exc_info=True)
+            # Never leave the thumbnails suspended: a failed rebuild would freeze
+            # every card until the next successful hydrate.
+            thumbnails = self._thumbnail_egress
+            if thumbnails is not None:
+                try:
+                    thumbnails.resume()  # type: ignore[attr-defined]
+                except Exception:  # noqa: BLE001 - best-effort recovery
+                    log.debug("thumbnail resume after failed hydrate errored", exc_info=True)
             return _ack(request, applied=False, error_code="hydrate_failed",
                         error_message="could not build the libobs scene graph")
         return _ack(request, applied=True)
