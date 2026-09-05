@@ -836,3 +836,68 @@ def test_thumbnail_request_is_retried_until_the_engine_hears_it(tmp_path: Path) 
     popup.deleteLater()
     QCoreApplication.processEvents()
     controller.close()
+
+
+def test_card_buttons_route_each_output_independently(tmp_path: Path) -> None:
+    # Regression: the card handler was left calling take_program_scene, the old
+    # lockstep take, so routing the projection dragged the virtual camera with it
+    # (and the reverse). The outputs are independent.
+    controller = _controller(tmp_path)
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
+    popup = SceneControlPopup(controller)
+    QCoreApplication.processEvents()
+    scene_ids = [scene.id for scene in controller.document.scenes]
+    projection_card = popup._scene_cards[scene_ids[1]]
+    program_card = popup._scene_cards[scene_ids[2]]
+
+    projection_card._projection.click()
+    QCoreApplication.processEvents()
+    # routing the projection must leave the program exactly where it was
+    assert controller.desired_scene(BusId.MEDIA_WINDOWS) == scene_ids[1]
+    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) != scene_ids[1]
+
+    program_card._program.click()
+    QCoreApplication.processEvents()
+
+    assert controller.desired_scene(BusId.MEDIA_WINDOWS) == scene_ids[1]
+    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == scene_ids[2]
+    assert projection_card._projection.isChecked()
+    assert not projection_card._program.isChecked()
+    assert program_card._program.isChecked()
+    assert not program_card._projection.isChecked()
+
+    popup.deleteLater()
+    QCoreApplication.processEvents()
+    controller.close()
+
+
+def test_live_thumbnail_is_clipped_to_the_card_corners(tmp_path: Path) -> None:
+    from PySide6.QtGui import QImage
+
+    controller = _controller(tmp_path)
+    popup = SceneControlPopup(controller)
+    popup.show()
+    QCoreApplication.processEvents()
+    scene_id = next(iter(popup._scene_cards))
+    card = popup._scene_cards[scene_id]
+
+    image = QImage(card._preview.width(), card._preview.height(), QImage.Format.Format_ARGB32)
+    image.fill(0xFFFF00FF)  # magenta
+    popup._on_thumbnail(scene_id, image)
+
+    painted = card.grab().toImage()
+    magenta = (255, 0, 255)
+
+    def pixel(x: int, y: int) -> tuple:
+        colour = painted.pixelColor(x, y)
+        return (colour.red(), colour.green(), colour.blue())
+
+    # the feed fills the preview but must not square off the card's rounded top
+    assert pixel(painted.width() // 2, 30) == magenta
+    assert pixel(1, 1) != magenta
+    assert pixel(painted.width() - 2, 1) != magenta
+
+    popup.close()
+    popup.deleteLater()
+    QCoreApplication.processEvents()
+    controller.close()

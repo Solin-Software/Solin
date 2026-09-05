@@ -34,8 +34,8 @@ from solin.core.scenes.content_frame_consumer import SHARED_MEMORY_BGRA
 
 log = logging.getLogger(__name__)
 
-# Thumbnails refresh slowly on purpose: the program render comes first.
-_RENDER_INTERVAL_S = 1.0 / 8.0
+# Fast enough to read as live, still well under the program's own render.
+_RENDER_INTERVAL_S = 1.0 / 20.0
 
 
 class LibobsThumbnailEgress:

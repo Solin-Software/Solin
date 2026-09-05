@@ -31,7 +31,8 @@ from solin.core.scenes.model import (
 
 log = logging.getLogger(__name__)
 
-_POLL_INTERVAL_S = 1.0 / 12.0
+# Poll faster than the sidecar renders so no produced frame waits a full tick.
+_POLL_INTERVAL_S = 1.0 / 30.0
 
 
 class SceneThumbnailEgressController(QObject):

@@ -9,13 +9,14 @@ from PySide6.QtCore import (
     QEvent,
     QPropertyAnimation,
     QRect,
+    QRectF,
     QSize,
     Qt,
     QTimer,
     QVariantAnimation,
     Signal,
 )
-from PySide6.QtGui import QGuiApplication, QImage, QPainter
+from PySide6.QtGui import QGuiApplication, QImage, QPainter, QPainterPath
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -53,6 +54,13 @@ log = logging.getLogger(__name__)
 
 # Qt's QWIDGETSIZE_MAX — clears a fixed size set with setFixedWidth/Height.
 _MAX_WIDGET_SIZE = 16_777_215
+
+# A card button routes its scene to exactly one output. Projection and program are
+# independent: routing one must never move the other.
+_ROUTING_BUSES = {
+    "projection": BusId.MEDIA_WINDOWS,
+    "program": BusId.VIRTUAL_CAMERA,
+}
 
 
 class _PulseEffect:
@@ -123,6 +131,8 @@ class _PulseEffect:
 class _ScenePreview(QFrame):
     """The card's thumbnail area: paints the scene's live frame when there is one."""
 
+    _CORNER_RADIUS = 9  # matches the card's radius minus its 1px border
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._image: QImage | None = None
@@ -138,7 +148,22 @@ class _ScenePreview(QFrame):
             return
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
-        painter.drawImage(self.rect(), image)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        # Clip to the card's own rounded top corners: a plain rectangular draw
+        # squares them off and the feed looks pasted on top of the card rather
+        # than set into it.
+        path = QPainterPath()
+        rect = QRectF(self.rect())
+        radius = float(self._CORNER_RADIUS)
+        path.moveTo(rect.left(), rect.bottom())
+        path.lineTo(rect.left(), rect.top() + radius)
+        path.quadTo(rect.left(), rect.top(), rect.left() + radius, rect.top())
+        path.lineTo(rect.right() - radius, rect.top())
+        path.quadTo(rect.right(), rect.top(), rect.right(), rect.top() + radius)
+        path.lineTo(rect.right(), rect.bottom())
+        path.closeSubpath()
+        painter.setClipPath(path)
+        painter.drawImage(rect, image)
         painter.end()
 
 
@@ -518,10 +543,12 @@ class SceneControlPopup(QWidget):
         self._sync_thumbnail_feed()
 
     def _on_card_routing_requested(self, scene_id: str, role: str) -> None:
-        """Put a scene on an output from its card."""
-        del role  # per-output routing arrives with the next change
+        """Route a scene to one output, leaving the other where it is."""
+        bus_id = _ROUTING_BUSES.get(role)
+        if bus_id is None:
+            return
         try:
-            self._controller.take_program_scene(scene_id)
+            self._controller.take_scene(bus_id, scene_id)
         except Exception:  # noqa: BLE001 - UI operation boundary
             log.exception("Could not route the scene from its card")
         self._render()
