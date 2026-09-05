@@ -156,6 +156,8 @@ def test_scene_toolbar_popup_uses_the_shared_program_recording_state(
 ) -> None:
     controller = _controller(tmp_path)
     controller._set_engine_ready(True)
+    # Recording captures the virtual camera, so the control needs that output on.
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
     recording = _Recording(tmp_path / "Videos" / "Solin")
     popup = SceneControlPopup(controller, recording=recording)
 
@@ -389,6 +391,7 @@ def test_record_button_is_icon_only_and_pulses_red_while_recording(
 ) -> None:
     controller = _controller(tmp_path)
     controller._set_engine_ready(True)
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
     recording = _Recording(tmp_path / "Videos" / "Solin")
     popup = SceneControlPopup(controller, recording=recording)
 
@@ -968,6 +971,29 @@ def test_idle_media_slot_shows_a_faded_glyph_instead_of_pure_black(
     assert not popup._scene_cards[content_scene]._preview._placeholder
 
     popup.close()
+    popup.deleteLater()
+    QCoreApplication.processEvents()
+    controller.close()
+
+
+def test_the_record_button_only_exists_while_the_virtual_camera_does(
+    tmp_path: Path,
+) -> None:
+    """Recording captures Program, so there is nothing to record with the output off."""
+    controller = _controller(tmp_path)
+    controller._set_engine_ready(True)
+    recording = _Recording(tmp_path / "Videos" / "Solin")
+    popup = SceneControlPopup(controller, recording=recording)
+
+    assert not popup._recording_button.isVisibleTo(popup)
+
+    popup._set_output_enabled(True)
+    assert popup._recording_button.isVisibleTo(popup)
+
+    popup._set_output_enabled(False)
+    assert not popup._recording_button.isVisibleTo(popup)
+    assert not popup._recording_clock.isActive()
+
     popup.deleteLater()
     QCoreApplication.processEvents()
     controller.close()

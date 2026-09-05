@@ -307,6 +307,9 @@ def test_recording_bridge_projects_one_controller_and_applies_live_settings(
         recording_directory_opener=lambda path: opened.append(path) is None,
     )
 
+    # Recording captures the virtual camera, so the control follows that output.
+    assert not bridge.recordingAvailable
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
     assert bridge.recordingAvailable
     assert bridge.recordingStatus == "idle"
     assert not bridge.recordingCanToggle

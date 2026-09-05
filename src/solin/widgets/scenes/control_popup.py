@@ -603,7 +603,10 @@ class SceneControlPopup(QWidget):
         self._render()
 
     def _render_recording(self) -> None:
-        if self._recording is None:
+        # Recording captures the virtual camera's mix, so the control only exists
+        # while that output does. The controller stops a live recording when the
+        # output goes off, so hiding the button never strands one running.
+        if self._recording is None or not self._controller.program_output_enabled:
             self._recording_clock.stop()
             self._sync_recording_blink(False)
             self._recording_button.hide()

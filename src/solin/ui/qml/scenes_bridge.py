@@ -137,6 +137,7 @@ class ScenesBridge(QObject):
     previewChanged = Signal()
     documentGenerationChanged = Signal()
     framingChanged = Signal()
+    contentIdleChanged = Signal()
     pointerCursorEntered = Signal(str, int)
     pointerCursorChanged = Signal(str, int)
     pointerCursorExited = Signal(str)
@@ -200,6 +201,7 @@ class ScenesBridge(QObject):
             (controller.preview_egress_changed, self._runtime_changed),
             (controller.local_cameras_changed, self._runtime_changed),
             (controller.source_health_changed, self._runtime_changed),
+            (controller.content_playing_changed, self._on_content_playing_changed),
         )
         for signal, handler in self._controller_connections:
             signal.connect(handler)
@@ -268,6 +270,16 @@ class ScenesBridge(QObject):
     @Property(bool, notify=previewChanged)
     def previewAvailable(self) -> bool:
         return self._preview_available
+
+    @Property(bool, notify=contentIdleChanged)
+    def contentIdle(self) -> bool:
+        """Whether the content source has nothing to show right now.
+
+        Idle publishes a transparent frame, so a content layer draws nothing. The
+        canvas marks it with a media glyph rather than leaving an empty rectangle
+        the operator cannot tell from a broken source.
+        """
+        return not self._controller.content_is_playing
 
     @Property(int, notify=documentGenerationChanged)
     def documentGeneration(self) -> int:
@@ -399,7 +411,9 @@ class ScenesBridge(QObject):
 
     @Property(bool, notify=changed)
     def recordingAvailable(self) -> bool:
-        return self._recording is not None
+        # Recording captures Program — the virtual camera's mix. With that output
+        # off there is nothing to capture, so the control goes away with it.
+        return self._recording is not None and self._controller.program_output_enabled
 
     @Property(str, notify=changed)
     def recordingStatus(self) -> str:
@@ -1773,6 +1787,11 @@ class ScenesBridge(QObject):
 
     def _runtime_changed(self, _value: object = None) -> None:
         self._refresh_models()
+
+    def _on_content_playing_changed(self, _playing: bool = False) -> None:
+        if self._closed:
+            return
+        self.contentIdleChanged.emit()
 
     def _on_preview_frame(self, scene_id: str, image: object) -> None:
         if (

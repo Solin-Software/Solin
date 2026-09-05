@@ -2688,3 +2688,23 @@ def test_each_output_keeps_its_own_default_scene_across_a_save() -> None:
 
     assert restored.output(BusId.MEDIA_WINDOWS).default_scene_id == CONTENT_SCENE_ID
     assert restored.output(BusId.VIRTUAL_CAMERA).default_scene_id == CAMERA_SCENE_ID
+
+
+def test_content_is_playing_tracks_what_the_content_channel_carries() -> None:
+    """Idle blanks the content source — unless an idle video/image feeds it."""
+    projection = _Projection()
+    _, _, controller = _runtime_controller(
+        _Engine(), projection, request_ids=("r1",)
+    )
+
+    assert controller.content_is_playing is False
+
+    projection.set_type("video")
+    assert controller.content_is_playing is True
+
+    projection.set_type("idle")
+    assert controller.content_is_playing is False
+
+    # A configured idle video keeps the channel fed while the state stays idle.
+    projection.idle_media_path = "loop.mp4"
+    assert controller.content_is_playing is True

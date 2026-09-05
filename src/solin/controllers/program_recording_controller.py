@@ -61,6 +61,9 @@ class _RecordingRenderDemand(Protocol):
     def engine_ready(self) -> bool: ...
 
     @property
+    def program_output_enabled(self) -> bool: ...
+
+    @property
     def native_window_routing_ready(self) -> bool: ...
 
     @property
@@ -127,6 +130,7 @@ class ProgramRecordingController(QObject):
             engine.subscribe(self._on_engine_event) if engine is not None else None
         )
         runtime.engine_capabilities_changed.connect(self._on_capabilities_changed)
+        runtime.runtime_changed.connect(self._on_runtime_changed)
         self._restore_interrupted_recording()
 
     @property
@@ -398,6 +402,24 @@ class ProgramRecordingController(QObject):
             SceneWorkspaceChangeKind.ACTIVATED,
         }:
             self.configuration_changed.emit(change.catalog.active.recording)
+
+    def _on_runtime_changed(self, _state: object = None) -> None:
+        """Finish the recording when the output it captures is switched off.
+
+        Recording captures Program — the virtual camera's mix. Turning that output
+        off leaves nothing to record, so stop and let the file finalise rather than
+        writing a stalled tail the operator only discovers afterwards.
+        """
+        if self._closed or self._program_output_enabled():
+            return
+        if self._state.status in {
+            ProgramRecordingStatus.STARTING,
+            ProgramRecordingStatus.RECORDING,
+        }:
+            self.stop()
+
+    def _program_output_enabled(self) -> bool:
+        return bool(getattr(self._runtime, "program_output_enabled", True))
 
     def _on_capabilities_changed(self, capabilities: object) -> None:
         if self._closed or not isinstance(capabilities, SceneEngineCapabilities):

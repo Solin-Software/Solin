@@ -194,6 +194,7 @@ class SceneRuntimeController(QObject):
     source_health_changed = Signal(str)
     preview_scene_changed = Signal(object)
     preview_frame_changed = Signal(str, object)
+    content_playing_changed = Signal(bool)
     preview_egress_changed = Signal(object)
     scene_profiles_changed = Signal(object)
     runtime_changed = Signal(object)
@@ -253,6 +254,7 @@ class SceneRuntimeController(QObject):
         self._suspended_media_session_id: int | None = None
         self._automatic_media_scene_selection: _AutomaticMediaSceneSelection | None = None
         self._last_projection_session_id = self._projection_session_id()
+        self._last_content_playing = self.content_is_playing
         self._desired_scenes = self._resolve_desired_scenes()
         self._applied_scenes: tuple[tuple[BusId, str], ...] = ()
         self._pending: dict[BusId, _PendingTake] = {}
@@ -364,12 +366,24 @@ class SceneRuntimeController(QObject):
         )
 
     @property
+    def program_output_enabled(self) -> bool:
+        """Whether the virtual camera — the output recording captures — is on."""
+        return self._runtime.state.output(BusId.VIRTUAL_CAMERA).enabled
+
+    @property
     def content_is_playing(self) -> bool:
-        """Whether Solin is currently projecting media/content, not sitting idle."""
-        return (
+        """Whether the content source carries anything, or is blank because idle.
+
+        Idle publishes a transparent frame, so a scene built on the content source
+        shows nothing — except when an idle video/image is configured, which keeps
+        the channel fed and still counts as content on screen.
+        """
+        if (
             content_category_for_projection(self._projection.state)
             in AUTOMATIC_MEDIA_CATEGORIES
-        )
+        ):
+            return True
+        return bool(getattr(self._projection, "idle_media_path", ""))
 
     def select_scene(self, bus_id: BusId, scene_id: str) -> SceneRuntimeState:
         """Set one output's base scene, keeping automation live for it.
@@ -1118,7 +1132,15 @@ class SceneRuntimeController(QObject):
                 and runtime.manual_scene_id != default_scene_id
             ):
                 self._runtime.select_program_scene(default_scene_id)
+        self._notify_content_playing()
         self._reconcile_desired(prepare=True)
+
+    def _notify_content_playing(self) -> None:
+        playing = self.content_is_playing
+        if playing == self._last_content_playing:
+            return
+        self._last_content_playing = playing
+        self.content_playing_changed.emit(playing)
 
     def _on_engine_event(self, event: SceneEngineEvent) -> None:
         self._async_engine_event.emit(event)

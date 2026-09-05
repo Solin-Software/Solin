@@ -81,6 +81,7 @@ class ProgramContentController(QObject):
         self._cached_idle_media_path = ""
         self._cached_idle_frame_revision = 0
         self._published_idle_frame_key: tuple[int, str, int] | None = None
+        self._blanked_media_epoch = -1
         self._yearly_widget = YearlyTextWidget(font_manager)
         self._timer_widget = CircularTimerWidget()
         for widget in (self._yearly_widget, self._timer_widget):
@@ -102,6 +103,8 @@ class ProgramContentController(QObject):
         media_epoch = self._session.presentation_session_id
         self._publish_projection_identity(media_epoch)
         self._publish_image_transform(media_epoch, animate=False)
+        # Real content on the channel retires the blank; the next idle re-blanks.
+        self._blanked_media_epoch = -1
         self._frame_sink(frame)
 
     @Slot(object)
@@ -122,11 +125,6 @@ class ProgramContentController(QObject):
         # and ask the engine to re-read it in place, so the change shows live.
         self.render_yeartext_source_image()
         self._yeartext_reloaded()
-        if (
-            projection_presentation_type(self._session.state) == "idle"
-            and not self._session.idle_media_path
-        ):
-            self._render_yearly()
 
     @Slot(bool)
     def set_timer_blink(self, enabled: bool) -> None:
@@ -157,7 +155,7 @@ class ProgramContentController(QObject):
             if self._session.idle_media_path:
                 self._publish_cached_idle_frame()
             else:
-                self._render_yearly()
+                self._blank_content()
             return
         if state_type == "timer":
             self._render_timer(state)
@@ -242,15 +240,21 @@ class ProgramContentController(QObject):
         )
         self._published_image_transform_key = key
 
-    def _render_yearly(self) -> None:
-        try:
-            quote, reference, api_code = self._yearly_text()
-        except Exception:  # noqa: BLE001 - settings may still be loading
-            log.debug("Yearly text is not ready for program rendering", exc_info=True)
+    def _blank_content(self) -> None:
+        """Publish an empty frame: idle means the content source has nothing to show.
+
+        The content source carries what Solin is *presenting* — media, images,
+        timers, the browser. Idle is not content: the year text is its own scene
+        source, so drawing it here too would make every content-bearing scene show
+        the year text and leave no way to tell "waiting for media" from "playing".
+        Transparent rather than black so the source composites away entirely.
+        """
+        if self._blanked_media_epoch == self._session.presentation_session_id:
             return
-        self._yearly_widget.clear_countdown()
-        self._yearly_widget.set_text(quote, reference, api_code)
-        self._render_widget(self._yearly_widget)
+        image = QImage(self._width, self._height, QImage.Format.Format_ARGB32)
+        image.fill(Qt.GlobalColor.transparent)
+        self.submit_frame(image)
+        self._blanked_media_epoch = self._session.presentation_session_id
 
     def render_yeartext_source_image(self) -> None:
         """Render the styled year text to the "Year text" scene source's PNG.
