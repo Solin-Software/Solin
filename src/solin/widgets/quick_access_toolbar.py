@@ -258,6 +258,7 @@ class QuickAccessToolbar(QQuickWidget):
         self._bridge.tooltipRequested.connect(self._show_native_tooltip)
         self._bridge.tooltipHidden.connect(hide_themed_tooltip)
 
+        self._app_settings = app_settings
         self._popup_hover = PopupHoverController(self, app_settings, self._active_surface)
         self._popup_hover.register(
             "obs",
@@ -508,8 +509,27 @@ class QuickAccessToolbar(QQuickWidget):
             recording=self._program_recording,
         )
         self._popup_hover.bind_button("scenes", popup.hover_button)
+        popup.dock_button.toggled.connect(self._on_scene_panel_dock_toggled)
         self._solin_scene_popup = popup
         return popup
+
+    def _on_scene_panel_dock_toggled(self, docked: bool) -> None:
+        # Persist the attach preference so the panel comes back attached. The
+        # button reverts itself when no host can take it, so this records the
+        # state that actually took effect.
+        self._app_settings.set_scenes_panel_docked(bool(docked))
+
+    def restore_docked_scene_panel(self) -> None:
+        """Re-attach the scenes panel if it was docked when Solin last closed.
+
+        Called once the main window's content is installed, so the dock strip can
+        be created without tripping the window's "content installed once" guard.
+        """
+        if not self._app_settings.scenes_panel_docked():
+            return
+        popup = self._ensure_solin_scene_popup()
+        if popup is not None:
+            popup.dock_button.setChecked(True)
 
     def _ensure_remote_sessions_popup(self):
         if self._remote_sessions_popup is not None:
@@ -1167,11 +1187,24 @@ class QuickAccessToolbar(QQuickWidget):
         if not scenes:
             self._obs.request_scenes_refresh()
 
+    # A popup closes on the click that lands outside it, so when Qt dismisses it
+    # first the click reaches this button a hair later — within the same event
+    # cycle, a couple of milliseconds. Only that gap may suppress the reopen: a
+    # wider window also swallows the user's *next* deliberate click, which made
+    # the panel refuse to reappear when clicking at any normal pace.
+    _SCENE_PANEL_TOGGLE_GUARD_MS = 40
+
     def _on_solin_scenes_clicked(self) -> None:
         hide_themed_tooltip()
         popup = self._ensure_solin_scene_popup()
-        if popup is not None and not popup.isVisible():
-            popup.show_above(self._active_surface())
+        if popup is None or popup.docked:
+            return  # attached to the window: already on screen, nothing to toggle
+        if popup.isVisible():
+            popup.hide()
+            return
+        if popup.dismissed_within(self._SCENE_PANEL_TOGGLE_GUARD_MS):
+            return
+        popup.show_above(self._active_surface())
 
     def _on_camera_clicked(self) -> None:
         hide_themed_tooltip()

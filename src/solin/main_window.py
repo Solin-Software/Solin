@@ -283,6 +283,7 @@ class MainWindow(QWidget):
         self._content_layout = QVBoxLayout(self)
         self._content_layout.setContentsMargins(0, 0, 0, 0)
         self._content_layout.setSpacing(0)
+        self._scenes_dock: QWidget | None = None
         self._construction_cleanup = ExitStack()
         self._construction_cleanup.callback(self._abort_partial_resources)
         self._construction_finalized = False
@@ -1649,6 +1650,25 @@ class MainWindow(QWidget):
             raise RuntimeError("Main window content can only be installed once.")
         self._content_layout.addWidget(widget)
 
+    def scenes_dock_container(self) -> QWidget:
+        """The strip below the page content that hosts attached panels.
+
+        Created on demand (so the content-install guard above still sees an empty
+        layout) and appended last, which puts it at the bottom of the window. A
+        panel finds this by walking up its parent chain, so nothing needs to be
+        threaded through the toolbar. Stays hidden while empty.
+        """
+        if self._scenes_dock is None:
+            container = QWidget(self)
+            container.setObjectName("MainWindowBottomDock")
+            dock_layout = QVBoxLayout(container)
+            dock_layout.setContentsMargins(0, 0, 0, 0)
+            dock_layout.setSpacing(0)
+            container.hide()
+            self._content_layout.addWidget(container)
+            self._scenes_dock = container
+        return self._scenes_dock
+
     def _install_ui_resources(self, resources: MainWindowUiResources) -> None:
         self.stack = resources.stack
         self._lazy_pages = resources.lazy_pages
@@ -1687,6 +1707,9 @@ class MainWindow(QWidget):
         self._nav_buttons_by_name = resources.nav_buttons_by_name
         for attr_name, button in resources.nav_buttons_by_name.items():
             setattr(self, attr_name, button)
+        # The content widget is installed by now, so the scenes panel can claim
+        # the bottom dock strip without tripping the install-once guard.
+        self._quick_toolbar.restore_docked_scene_panel()
 
     def _apply_global_stylesheet(self, stylesheet: str) -> None:
         app = QApplication.instance()

@@ -5588,6 +5588,14 @@ Esta ação não pode ser desfeita.</translation>
         <translation>Câmera virtual</translation>
     </message>
     <message>
+        <source>Virtual camera enabled</source>
+        <translation>Câmera virtual habilitada</translation>
+    </message>
+    <message>
+        <source>Virtual camera disabled</source>
+        <translation>Câmera virtual desabilitada</translation>
+    </message>
+    <message>
         <location line="-250"/>
         <location line="+616"/>
         <source>Auto-switch media</source>
