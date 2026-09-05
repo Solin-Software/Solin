@@ -8,6 +8,7 @@ from typing import Any, Protocol
 from solin.core.scenes.application import SceneDocumentChange, SceneDocumentService
 from solin.core.scenes.model import (
     AUTOMATIC_MEDIA_CATEGORIES,
+    DELIVERY_BUSES,
     BusId,
     ContentCategory,
     OutputMode,
@@ -83,7 +84,7 @@ class SceneRuntimeState:
     document_id: str
     revision: int
     outputs: tuple[OutputRuntimeState, ...]
-    schema_version: int = 2
+    schema_version: int = 3
 
     def __post_init__(self) -> None:
         if not isinstance(self.document_id, str) or not self.document_id:
@@ -94,18 +95,17 @@ class SceneRuntimeState:
             or self.revision < 0
         ):
             raise SceneValidationError("Invalid runtime revision")
-        if self.schema_version != 2:
+        if self.schema_version != 3:
             raise SceneValidationError("Unsupported runtime schema version")
         if not isinstance(self.outputs, tuple) or not all(
             isinstance(output, OutputRuntimeState) for output in self.outputs
         ):
             raise SceneValidationError("Runtime outputs must be an immutable tuple")
         buses = tuple(output.bus_id for output in self.outputs)
-        if len(buses) != len(BusId) or set(buses) != set(BusId):
+        if len(buses) != len(DELIVERY_BUSES) or set(buses) != set(DELIVERY_BUSES):
             raise SceneValidationError("Runtime state must define every output bus once")
-        program_selections = {(output.mode, output.manual_scene_id) for output in self.outputs}
-        if len(program_selections) != 1:
-            raise SceneValidationError("Runtime destinations must share one Program selection")
+        # Each delivery output keeps its own selection, so the projection and the
+        # program can sit on different scenes.
 
     def output(self, bus_id: BusId) -> OutputRuntimeState:
         return next(output for output in self.outputs if output.bus_id is bus_id)
@@ -156,7 +156,7 @@ class SceneRuntimeState:
         revision = data.get("revision")
         document_id = data.get("document_id")
         outputs = data.get("outputs")
-        if schema_version not in {1, 2}:
+        if schema_version not in {1, 2, 3}:
             raise SceneValidationError("Unsupported runtime schema version")
         if (
             not isinstance(document_id, str)
@@ -189,7 +189,7 @@ class SceneRuntimeState:
             document_id=document_id,
             revision=revision,
             outputs=restored_outputs,
-            schema_version=2,
+            schema_version=3,
         )
 
 
@@ -239,7 +239,22 @@ class SceneRuntimeService:
 
         return unsubscribe
 
+    def take_scene(self, bus_id: BusId, scene_id: str) -> SceneRuntimeState:
+        """Route ONE output to ``scene_id``, leaving the others where they are."""
+        self._documents.document.scene(scene_id)
+        current = self._state.output(bus_id)
+        return self._commit(
+            self._with_output(
+                replace(current, mode=OutputMode.MANUAL, manual_scene_id=scene_id)
+            )
+        )
+
     def take_program_scene(self, scene_id: str) -> SceneRuntimeState:
+        """Route every delivery output to ``scene_id`` (the old lockstep take).
+
+        Still used where a single scene really is meant for everything — deleting
+        the live scene, for instance.
+        """
         self._documents.document.scene(scene_id)
         return self._commit(
             replace(

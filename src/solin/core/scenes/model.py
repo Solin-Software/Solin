@@ -12,7 +12,7 @@ from typing import Any, TypeAlias, TypeVar
 from urllib.parse import SplitResult, parse_qsl, urlsplit
 
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 MAXIMUM_CAMERA_SOURCE_DIMENSION = 3_840
 MAXIMUM_CAMERA_SOURCE_SHORT_EDGE = 2_160
 MAXIMUM_CAMERA_SOURCE_PIXELS = 3_840 * 2_160
@@ -99,8 +99,18 @@ class ViscaTransport(StrEnum):
 
 
 class BusId(StrEnum):
+    # MEDIA_WINDOWS is the projection output; VIRTUAL_CAMERA is the program mix
+    # (virtual camera + recording). EDITOR is the scenes-editor canvas: a routable
+    # channel so the editor never borrows a delivery output's slot, but NOT a
+    # delivery route — it is never persisted in a document or runtime row.
     MEDIA_WINDOWS = "media_windows"
     VIRTUAL_CAMERA = "virtual_camera"
+    EDITOR = "editor"
+
+
+# The outputs that actually deliver to an audience, and the only buses a saved
+# document or runtime state may describe.
+DELIVERY_BUSES: Final = (BusId.MEDIA_WINDOWS, BusId.VIRTUAL_CAMERA)
 
 
 class OutputMode(StrEnum):
@@ -1957,16 +1967,14 @@ class SceneDocument:
             if configuration.ptz_binding is None:
                 raise SceneValidationError(f"Preset {preset.id!r} camera has no PTZ binding")
 
-        expected_buses = set(BusId)
+        expected_buses = set(DELIVERY_BUSES)
         if {route.bus_id for route in self.outputs} != expected_buses:
             raise SceneValidationError("Document must define every output bus exactly once")
         if {mapping.bus_id for mapping in self.automation} != expected_buses:
             raise SceneValidationError("Document must define automation for every bus")
 
-        if len({route.default_scene_id for route in self.outputs}) != 1:
-            raise SceneValidationError(
-                "Every destination must share the Program default scene"
-            )
+        # Each delivery output carries its OWN default scene: the projection can
+        # idle on the year text while the program idles on a camera.
         automatic_categories = set(AUTOMATIC_MEDIA_CATEGORIES)
         program_assignments: dict[ContentCategory, str] | None = None
         for mapping in self.automation:
@@ -2427,6 +2435,14 @@ def _migrate_scene_document_record(
         if current_version == 8:
             _migrate_program_transition_record(migrated)
             current_version = 9
+            migrated["schema_version"] = current_version
+            continue
+        if current_version == 9:
+            # Outputs may now hold different default scenes. A v9 record has them
+            # equal, which is a perfectly valid v10 record, so there is nothing to
+            # transform — the bump exists so an older build rejects a diverged
+            # document outright instead of failing its own validation.
+            current_version = 10
             migrated["schema_version"] = current_version
             continue
         raise UnsupportedSceneSchemaError(current_version)

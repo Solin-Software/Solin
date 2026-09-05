@@ -21,7 +21,7 @@ namespace {
 
 using Json = nlohmann::json;
 
-constexpr std::uint64_t kSceneSchemaVersion = 9U;
+constexpr std::uint64_t kSceneSchemaVersion = 10U;
 constexpr std::size_t kMaximumSources = 256U;
 constexpr std::size_t kMaximumScenes = 256U;
 constexpr std::size_t kMaximumLayersPerScene = 128U;

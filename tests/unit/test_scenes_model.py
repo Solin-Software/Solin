@@ -20,6 +20,7 @@ from solin.core.scenes.engine import (
 )
 from solin.core.scenes.model import (
     CONTENT_SOURCE_ID,
+    DELIVERY_BUSES,
     DEFAULT_CAMERA_SOURCE_ID,
     BusId,
     CameraPreset,
@@ -99,7 +100,7 @@ def test_default_document_has_stable_sources_scenes_and_two_output_buses() -> No
         CONTENT_CAMERA_PIP_SCENE_ID,
         NO_SIGNAL_SCENE_ID,
     ]
-    assert {route.bus_id for route in first.outputs} == set(BusId)
+    assert {route.bus_id for route in first.outputs} == set(DELIVERY_BUSES)
     assert first.transition_policy.default == TransitionSpec(
         TransitionKind.DISSOLVE,
         350,
@@ -627,44 +628,25 @@ def test_schema_version_five_normalizes_legacy_destinations_to_one_program() -> 
     } == {CONTENT_SCENE_ID}
 
 
-def test_scene_document_rejects_divergent_program_destinations() -> None:
+def test_scene_document_allows_each_output_its_own_default_scene() -> None:
+    # Two independent outputs: the projection can idle on one scene while the
+    # program (virtual camera + recording) idles on another.
     document = _document()
-    media_route = document.output(BusId.MEDIA_WINDOWS)
 
-    with pytest.raises(SceneValidationError, match="Program default"):
-        replace(
-            document,
-            outputs=tuple(
-                replace(route, default_scene_id=CONTENT_SCENE_ID)
-                if route.bus_id is BusId.MEDIA_WINDOWS
-                else route
-                for route in document.outputs
-            ),
-        )
+    diverged = replace(
+        document,
+        outputs=tuple(
+            replace(route, default_scene_id=CONTENT_SCENE_ID)
+            if route.bus_id is BusId.MEDIA_WINDOWS
+            else replace(route, default_scene_id=CAMERA_SCENE_ID)
+            for route in document.outputs
+        ),
+    )
 
-    with pytest.raises(SceneValidationError, match="Program media scene"):
-        replace(
-            document,
-            automation=tuple(
-                replace(
-                    mapping,
-                    assignments=tuple(
-                        (category, CONTENT_CAMERA_PIP_SCENE_ID)
-                        for category in (
-                            ContentCategory.IMAGE,
-                            ContentCategory.VIDEO,
-                            ContentCategory.TIMER,
-                            ContentCategory.BROWSER,
-                            ContentCategory.EXTERNAL_STREAM,
-                        )
-                    ),
-                )
-                if mapping.bus_id is media_route.bus_id
-                else mapping
-                for mapping in document.automation
-            ),
-        )
-
+    assert diverged.output(BusId.MEDIA_WINDOWS).default_scene_id == CONTENT_SCENE_ID
+    assert diverged.output(BusId.VIRTUAL_CAMERA).default_scene_id == CAMERA_SCENE_ID
+    # and it survives a save/load round trip
+    assert SceneDocument.from_record(diverged.to_record()) == diverged
 
 def test_future_scene_schema_is_rejected_explicitly() -> None:
     record = _document().to_record()
@@ -911,14 +893,17 @@ def test_engine_snapshot_requires_each_bus_once_and_known_scenes() -> None:
         active_scenes=(
             (BusId.MEDIA_WINDOWS, CONTENT_SCENE_ID),
             (BusId.VIRTUAL_CAMERA, CAMERA_SCENE_ID),
+            (BusId.EDITOR, CONTENT_SCENE_ID),
         ),
         render_enabled=(
             (BusId.MEDIA_WINDOWS, False),
             (BusId.VIRTUAL_CAMERA, False),
+            (BusId.EDITOR, False),
         ),
         output_enabled=(
             (BusId.MEDIA_WINDOWS, False),
             (BusId.VIRTUAL_CAMERA, False),
+            (BusId.EDITOR, False),
         ),
     )
     assert valid.document is document
@@ -932,10 +917,12 @@ def test_engine_snapshot_requires_each_bus_once_and_known_scenes() -> None:
             render_enabled=(
                 (BusId.MEDIA_WINDOWS, False),
                 (BusId.VIRTUAL_CAMERA, False),
+                (BusId.EDITOR, False),
             ),
             output_enabled=(
                 (BusId.MEDIA_WINDOWS, False),
                 (BusId.VIRTUAL_CAMERA, False),
+                (BusId.EDITOR, False),
             ),
         )
 
@@ -978,14 +965,17 @@ def test_engine_snapshot_requires_each_bus_once_and_known_scenes() -> None:
             active_scenes=(
                 (BusId.MEDIA_WINDOWS, CONTENT_SCENE_ID),
                 (BusId.VIRTUAL_CAMERA, "missing-scene"),
+                (BusId.EDITOR, CONTENT_SCENE_ID),
             ),
             render_enabled=(
                 (BusId.MEDIA_WINDOWS, False),
                 (BusId.VIRTUAL_CAMERA, False),
+                (BusId.EDITOR, False),
             ),
             output_enabled=(
                 (BusId.MEDIA_WINDOWS, False),
                 (BusId.VIRTUAL_CAMERA, False),
+                (BusId.EDITOR, False),
             ),
         )
 
@@ -1002,10 +992,12 @@ def test_engine_snapshot_requires_each_bus_once_and_known_scenes() -> None:
             render_enabled=(
                 (BusId.MEDIA_WINDOWS, False),
                 (BusId.VIRTUAL_CAMERA, False),
+                (BusId.EDITOR, False),
             ),
             output_enabled=(
                 (BusId.MEDIA_WINDOWS, False),
                 (BusId.VIRTUAL_CAMERA, False),
+                (BusId.EDITOR, False),
             ),
         )
 

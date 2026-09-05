@@ -182,6 +182,7 @@ class LibobsSidecarEngine:
         self._runtime_started = False
         self._scene_graph: object | None = None
         self._window_output: object | None = None
+        self._projection_route: object | None = None
         self._content_consumer: Any | None = None
         self._preview_egress: Any | None = None
         self._program_egress: Any | None = None
@@ -239,8 +240,17 @@ class LibobsSidecarEngine:
         from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
         from solin.core.scenes.libobs_window_output import LibobsWindowOutput
 
+        from solin.core.scenes.libobs_projection_route import LibobsProjectionRoute
+
         self._scene_graph = LibobsSceneGraph(runtime)
         self._window_output = LibobsWindowOutput(runtime)
+        # The projection output owns its own transition, outside the scene graph so
+        # a structural-edit rebuild cannot black the room's screen out.
+        self._projection_route = LibobsProjectionRoute(runtime)
+        self._window_output.set_projection_resolver(
+            lambda: self._projection_route.source_ptr
+            if self._projection_route is not None else None
+        )
         # Let a window target render a specific scene directly (editor preview);
         # re-resolved every frame against the current graph.
         self._window_output.set_scene_resolver(
@@ -759,6 +769,7 @@ class LibobsSidecarEngine:
                     active_scenes,
                     self._effective_content_source(),
                 )
+            self._reconcile_projection(active_scenes)
             self._reconcile_preview_egress(
                 payload.get("preview_egress"),
                 active_scenes,
@@ -799,6 +810,20 @@ class LibobsSidecarEngine:
                         error_message="could not build the libobs scene graph")
         return _ack(request, applied=True)
 
+    def _reconcile_projection(self, active_scenes: dict) -> None:
+        """Point the projection output at its bus's scene (a cut, on hydrate)."""
+        route = self._projection_route
+        graph = self._scene_graph
+        if route is None or graph is None:
+            return
+        scene_id = str(
+            active_scenes.get("media_windows")
+            or active_scenes.get("virtual_camera")
+            or ""
+        )
+        source = graph.scene_source(scene_id) if scene_id else None  # type: ignore[attr-defined]
+        route.set_scene(scene_id, source)
+
     def _reconcile_preview_egress(
         self,
         descriptor: object,
@@ -811,7 +836,11 @@ class LibobsSidecarEngine:
             return
         egress.configure(descriptor)  # attach/detach the writer to the app's block
         # The editor previews the MEDIA_WINDOWS (edit) bus scene.
-        preview_scene_id = active_scenes.get("media_windows") or active_scenes.get("virtual_camera")
+        preview_scene_id = (
+            active_scenes.get("editor")
+            or active_scenes.get("media_windows")
+            or active_scenes.get("virtual_camera")
+        )
         source = graph.scene_source(preview_scene_id) if preview_scene_id else None  # type: ignore[attr-defined]
         egress.set_scene_source(source)
         # Hydrate is the full-state sync: after a restart the sidecar is fresh and
@@ -819,14 +848,16 @@ class LibobsSidecarEngine:
         # cache still reads "enabled" and so never re-sends set_render_enabled.
         # Apply the snapshot's render demand here so one hydrate fully restores the
         # editor preview (source *and* enable) — the canvas updates after a restart.
-        if render_enabled is not None and "media_windows" in render_enabled:
-            egress.set_enabled(bool(render_enabled["media_windows"]))
+        for key in ("editor", "media_windows"):
+            if render_enabled and key in render_enabled:
+                egress.set_enabled(bool(render_enabled[key]))
+                break
 
     def _handle_set_render_enabled(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope:
         # The MEDIA_WINDOWS bus render demand gates the editor preview egress;
         # the program bus always composites, so just ack it.
         payload = request.payload
-        if payload.get("bus_id") == "media_windows" and self._preview_egress is not None:
+        if payload.get("bus_id") == "editor" and self._preview_egress is not None:
             self._preview_egress.set_enabled(bool(payload.get("enabled")))
         return _ack(request, applied=True)
 
@@ -869,7 +900,7 @@ class LibobsSidecarEngine:
         transition = payload.get("transition") or {}
         kind = str(transition.get("kind", "cut"))
         duration_ms = int(transition.get("duration_ms", 0) or 0)
-        result = graph.prepare(scene_id, kind, duration_ms)  # type: ignore[attr-defined]
+        result = graph.prepare(scene_id, kind, duration_ms, str(bus_id or ""))  # type: ignore[attr-defined]
         if result is None:
             return _reply(request, "error", {
                 "error_code": "unknown_scene",
@@ -891,14 +922,21 @@ class LibobsSidecarEngine:
                         error_message="the libobs runtime is not running")
         payload = request.payload
         token = str(payload.get("preparation_token") or "")
-        if payload.get("bus_id") == "media_windows":
-            # The editor-preview bus does not drive the single program channel:
-            # taking one of its scenes only re-points the off-screen preview
-            # egress to that scene (the scene-source half of
-            # _reconcile_preview_egress). Dropping — not taking — the prepared
-            # token keeps an edit-bus selection from moving the virtual-camera
-            # program output. This is what makes the editor canvas follow the
-            # selected scene on the prepare/take hot path (not just on hydrate).
+        bus_id = str(payload.get("bus_id") or "")
+        # The token remembers the output it was prepared for. Honour that over the
+        # payload so a duplicated or reordered take can never move a different
+        # output than the one it was staged against.
+        route = graph.pending_route(token)  # type: ignore[attr-defined]
+        if route is None:
+            return _ack(request, applied=False, error_code="unknown_preparation",
+                        error_message="no such prepared scene")
+        if route != bus_id:
+            return _ack(request, applied=False, error_code="bus_mismatch",
+                        error_message="the prepared scene belongs to another output")
+        if bus_id == "editor":
+            # The editor channel drives no output: taking one of its scenes only
+            # re-points the off-screen preview egress, so the token is dropped
+            # rather than executed.
             if not graph.discard(token):  # type: ignore[attr-defined]
                 return _ack(request, applied=False, error_code="unknown_preparation",
                             error_message="no such prepared scene")
@@ -908,6 +946,12 @@ class LibobsSidecarEngine:
                 source = graph.scene_source(scene_id) if scene_id else None  # type: ignore[attr-defined]
                 egress.set_scene_source(source)
             return _ack(request, applied=True)
+        if bus_id == "media_windows":
+            # Projection animates on its OWN transition, independent of the program.
+            if graph.take_projection(token, self._projection_route):  # type: ignore[attr-defined]
+                return _ack(request, applied=True)
+            return _ack(request, applied=False, error_code="unknown_preparation",
+                        error_message="no such prepared scene")
         if graph.take(token):  # type: ignore[attr-defined]
             return _ack(request, applied=True)
         return _ack(request, applied=False, error_code="unknown_preparation",
@@ -977,6 +1021,12 @@ class LibobsSidecarEngine:
                 program_egress.shutdown()
             except Exception:  # noqa: BLE001 - shutdown must not raise out of the sidecar
                 log.warning("program egress shutdown errored", exc_info=True)
+        route, self._projection_route = self._projection_route, None
+        if route is not None:
+            try:
+                route.shutdown()
+            except Exception:  # noqa: BLE001 - shutdown must not raise out of the sidecar
+                log.warning("projection route shutdown errored", exc_info=True)
         graph, self._scene_graph = self._scene_graph, None
         if graph is not None:
             try:

@@ -118,6 +118,7 @@ from .core.projection.application import (
     projection_presentation_type,
 )
 from .core.scenes.engine import MAXIMUM_OUTPUT_WINDOW_TARGETS, OutputWindowTarget
+from .core.scenes.model import DELIVERY_BUSES
 from .core.scenes.model import BusId, CONTENT_SOURCE_ID, SceneDocument
 from .core.scenes.recording import ProgramRecordingState, ProgramRecordingStatus
 from .core.scenes.workspace import SceneWorkspaceService
@@ -1403,7 +1404,7 @@ class MainWindow(QWidget):
 
     def _program_content_requested(self) -> bool:
         state = self.scene_live.state
-        return any(state.output(bus_id).enabled for bus_id in BusId)
+        return any(state.output(bus_id).enabled for bus_id in DELIVERY_BUSES)
 
     def _on_content_ingress_demand_changed(self, required: bool) -> None:
         self._content_frame_ingress.set_enabled(required)

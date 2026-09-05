@@ -406,10 +406,13 @@ class _FakeProperties:
 
 
 class _FakeEncoder:
-    def __init__(self, kind: str, name: str, settings: dict) -> None:
+    def __init__(self, kind: str, name: str, settings: dict, attach_global: bool = True) -> None:
         self.kind = kind
         self.name = name
         self.settings = dict(settings)
+        # True means the encoder binds libobs' global mix — the same composite the
+        # virtual camera outputs.
+        self.attach_global = attach_global
         self.released = 0
 
     def release(self) -> None:
@@ -574,7 +577,7 @@ class _CompositingRuntime:
             def create(kind: str, name: str, settings: dict, *, attach_global: bool = True):
                 if kind in runtime.fail_encoder_kinds:
                     raise RuntimeError(f"cannot create {kind}")  # HW encoder absent
-                encoder = _FakeEncoder(kind, name, settings)
+                encoder = _FakeEncoder(kind, name, settings, attach_global)
                 runtime.encoders.append(encoder)
                 return encoder
 
@@ -582,7 +585,7 @@ class _CompositingRuntime:
             @staticmethod
             def create(kind: str, name: str, settings: dict, mixer_idx: int = 0,
                        *, attach_global: bool = True):
-                encoder = _FakeEncoder(kind, name, settings)
+                encoder = _FakeEncoder(kind, name, settings, attach_global)
                 runtime.encoders.append(encoder)
                 return encoder
 
@@ -795,9 +798,10 @@ class _FakeDisplay:
         self.released += 1
 
 
-def _window_target(handle: int, *, width=1280, height=720, dpr=1.0, visible=True) -> dict:
+def _window_target(handle: int, *, width=1280, height=720, dpr=1.0, visible=True,
+                   bus_id="virtual_camera") -> dict:
     return {
-        "bus_id": "media_windows",
+        "bus_id": bus_id,
         "target_id": f"t{handle}",
         "screen_id": f"s{handle}",
         "native_handle": handle,
@@ -870,14 +874,29 @@ def test_window_output_shutdown_releases_all():
     assert output.handles == ()
 
 
-def test_window_output_draws_main_texture_without_scene_id(monkeypatch):
+def test_window_output_draws_main_texture_for_a_program_window(monkeypatch):
     calls: list = []
     monkeypatch.setattr("pylibobs.display.render_main_texture_letterboxed",
                         lambda cw, ch, ww, wh: calls.append("main"), raising=False)
     output, created = _window_output_with_recorder()
-    output.set_targets([_window_target(1)])  # no scene_id → composited main mix
+    output.set_targets([_window_target(1)])  # program bus, no scene → main mix
     created[0].draw_callbacks[0](640, 360)
     assert calls == ["main"]
+
+
+def test_window_output_draws_the_projection_route_not_the_program(monkeypatch):
+    # A projection window shows the projection transition, which is independent of
+    # the program that feeds the virtual camera and the recording.
+    calls: list = []
+    monkeypatch.setattr("pylibobs.display.render_source_letterboxed",
+                        lambda ptr, cw, ch, ww, wh: calls.append(("source", ptr)), raising=False)
+    monkeypatch.setattr("pylibobs.display.render_main_texture_letterboxed",
+                        lambda cw, ch, ww, wh: calls.append("main"), raising=False)
+    output, created = _window_output_with_recorder()
+    output.set_projection_resolver(lambda: "PROJECTION-PTR")
+    output.set_targets([_window_target(1, bus_id="media_windows")])
+    created[0].draw_callbacks[0](640, 360)
+    assert calls == [("source", "PROJECTION-PTR")]
 
 
 def test_window_output_draws_a_specific_scene_when_scene_id_is_set(monkeypatch):
@@ -949,11 +968,12 @@ def test_window_output_draw_never_blocks_on_the_reconcile_lock(monkeypatch):
     assert held.wait(2.0)
 
     # Draw while another thread holds the lock: must return promptly (no deadlock)
-    # and must render the main texture, never the borrowed source.
+    # and must render NOTHING. Falling back to the main texture here would flash
+    # the program — camera and all — onto a screen showing something else.
     finished = threading.Event()
     threading.Thread(target=lambda: (draw(640, 360), finished.set())).start()
     assert finished.wait(2.0), "draw callback blocked on the held lock (deadlock)"
-    assert calls == ["main"]
+    assert calls == []
 
     release.set()
     holder.join(2.0)
@@ -1346,20 +1366,21 @@ def _engine_hydrated_on_a_with_fake_preview():
     return runtime, engine, fake
 
 
-def test_engine_media_windows_take_repoints_preview_without_moving_program():
-    # Selecting a scene in the editor takes the MEDIA_WINDOWS bus. That must move
-    # the editor preview to the new scene while leaving the program (and thus the
-    # virtual camera) on its own scene — the editor-preview regression fix.
+def test_engine_editor_take_repoints_preview_without_moving_program():
+    # Selecting a scene in the editor takes the EDITOR channel. That must move the
+    # editor preview to the new scene while leaving the program (and thus the
+    # virtual camera) on its own scene. The editor has its own channel precisely so
+    # it can never move a delivery output.
     runtime, engine, fake = _engine_hydrated_on_a_with_fake_preview()
     assert engine._scene_graph._active_scene_id == "a"
 
     prepared = engine.handle(_request("prepare_scene", {
-        "bus_id": "media_windows", "scene_id": "b",
+        "bus_id": "editor", "scene_id": "b",
         "transition": {"kind": "cut", "duration_ms": 0},
     }))
     token = prepared.payload["preparation_token"]
     taken = engine.handle(_request("take_prepared", {
-        "bus_id": "media_windows", "scene_id": "b", "preparation_token": token,
+        "bus_id": "editor", "scene_id": "b", "preparation_token": token,
     }))
     assert _ack_from_envelope(taken).applied is True
     # the editor preview now renders scene b …
@@ -1394,7 +1415,7 @@ def test_engine_media_windows_take_unknown_token_errors_and_keeps_preview():
     _runtime, engine, fake = _engine_hydrated_on_a_with_fake_preview()
     fake.sources.clear()
     ack = _ack_from_envelope(engine.handle(_request("take_prepared", {
-        "bus_id": "media_windows", "scene_id": "b", "preparation_token": "prep-999",
+        "bus_id": "editor", "scene_id": "b", "preparation_token": "prep-999",
     })))
     assert ack.applied is False and ack.error_code == "unknown_preparation"
     assert fake.sources == []  # nothing re-pointed on an unknown token
@@ -2472,17 +2493,17 @@ def test_engine_hydrate_restores_preview_enable_from_render_enabled():
 
     engine.handle(_request("hydrate", {
         "document": _MEDIA_DOC,
-        "active_scenes": {"media_windows": "s1", "virtual_camera": "s1"},
+        "active_scenes": {"media_windows": "s1", "virtual_camera": "s1", "editor": "s1"},
         "preview_egress": {"transport": "shared_memory_bgra", "handle_token": "tok",
                            "width": 1920, "height": 1080},
-        "render_enabled": {"media_windows": True, "virtual_camera": True},
+        "render_enabled": {"media_windows": True, "virtual_camera": True, "editor": True},
     }))
     assert fake.enabled[-1] is True  # preview re-enabled by the hydrate alone
 
     engine.handle(_request("hydrate", {
         "document": _MEDIA_DOC,
-        "active_scenes": {"media_windows": "s1", "virtual_camera": "s1"},
-        "render_enabled": {"media_windows": False, "virtual_camera": True},
+        "active_scenes": {"media_windows": "s1", "virtual_camera": "s1", "editor": "s1"},
+        "render_enabled": {"media_windows": True, "virtual_camera": True, "editor": False},
     }))
     assert fake.enabled[-1] is False
 
@@ -2514,11 +2535,11 @@ def test_engine_set_render_enabled_toggles_preview_and_acks():
     fake = _FakePreviewEgress()
     engine._preview_egress = fake
 
-    on = engine.handle(_request("set_render_enabled", {"bus_id": "media_windows", "enabled": True}))
+    on = engine.handle(_request("set_render_enabled", {"bus_id": "editor", "enabled": True}))
     assert _ack_from_envelope(on).applied is True
     assert fake.enabled[-1] is True
 
-    off = engine.handle(_request("set_render_enabled", {"bus_id": "media_windows", "enabled": False}))
+    off = engine.handle(_request("set_render_enabled", {"bus_id": "editor", "enabled": False}))
     assert _ack_from_envelope(off).applied is True
     assert fake.enabled[-1] is False
 
@@ -2827,3 +2848,129 @@ def test_handshake_end_to_end_over_subprocess(monkeypatch):
         assert engine.health.status == SceneEngineStatus.READY
     finally:
         engine.stop()
+
+
+def test_recording_captures_the_same_main_mix_the_virtual_camera_outputs():
+    # The recording must always be the virtual-camera output, not some other view.
+    # Both ride libobs' global mix: the vcam output binds context.get_video()/
+    # get_audio(), and the recorder's encoders attach to that same global mix
+    # (pylibobs' attach_global). Nothing here may bind a separate view.
+    from solin.core.scenes.libobs_recorder import LibobsRecorder
+
+    runtime = _CompositingRuntime()
+    recorder = LibobsRecorder(runtime)
+    assert recorder.start("/tmp/solin-mix.mp4") is True
+
+    video, audio = runtime.encoders[-2], runtime.encoders[-1]
+    assert video.attach_global is True  # the program composite, not a private view
+    assert audio.attach_global is True
+    output = runtime.outputs[-1]
+    assert output.video_encoder is video and output.audio_encoder is audio
+    # the recording output is fed only through those encoders — no separate media
+    assert output.media is None
+    recorder.stop()
+
+
+class _FakeProjectionRoute:
+    def __init__(self) -> None:
+        self.scenes: list[tuple[str, object]] = []
+        self.shutdowns = 0
+        self.source_ptr = "PROJ"
+
+    def set_scene(self, scene_id: str, source: object) -> bool:
+        self.scenes.append((scene_id, source))
+        return True
+
+    def shutdown(self) -> None:
+        self.shutdowns += 1
+
+
+def test_engine_hydrate_points_the_projection_at_its_own_bus_scene():
+    # Projection is its own output: hydrate must aim it at the projection bus's
+    # scene rather than leaving it on whatever the program shows.
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+    route = _FakeProjectionRoute()
+    engine._projection_route = route
+
+    engine.handle(_request("hydrate", {
+        "document": _TWO_SCENE_DOC,
+        "active_scenes": {"media_windows": "b", "virtual_camera": "a", "editor": "a"},
+    }))
+
+    assert route.scenes[-1][0] == "b"
+    assert route.scenes[-1][1] == "scene-source:solin-scene-b"
+    # the program is untouched by the projection routing
+    assert engine._scene_graph._active_scene_id == "a"
+
+
+def test_engine_shutdown_releases_the_projection_route():
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+    route = _FakeProjectionRoute()
+    engine._projection_route = route
+    engine.shutdown()
+    assert route.shutdowns == 1
+
+
+def _engine_with_projection_route():
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+    route = _FakeProjectionRoute()
+    route.starts: list = []  # type: ignore[attr-defined]
+
+    def _start(scene_id, source, kind, duration_ms):
+        route.starts.append((scene_id, source, kind, duration_ms))
+        return True
+
+    route.start = _start  # type: ignore[assignment]
+    engine._projection_route = route
+    engine.handle(_request("hydrate", {
+        "document": _TWO_SCENE_DOC,
+        "active_scenes": {"media_windows": "a", "virtual_camera": "a", "editor": "a"},
+    }))
+    return runtime, engine, route
+
+
+def test_projection_take_animates_its_own_transition_not_the_program():
+    runtime, engine, route = _engine_with_projection_route()
+    assert engine._scene_graph._active_scene_id == "a"
+
+    prepared = engine.handle(_request("prepare_scene", {
+        "bus_id": "media_windows", "scene_id": "b",
+        "transition": {"kind": "dissolve", "duration_ms": 300},
+    }))
+    token = prepared.payload["preparation_token"]
+    taken = engine.handle(_request("take_prepared", {
+        "bus_id": "media_windows", "scene_id": "b", "preparation_token": token,
+    }))
+
+    assert _ack_from_envelope(taken).applied is True
+    # the projection animated on its own transition …
+    assert route.starts[-1][0] == "b"
+    assert route.starts[-1][2] == "dissolve" and route.starts[-1][3] == 300
+    # … and the program channel never moved
+    assert engine._scene_graph._active_scene_id == "a"
+    assert runtime.channels[0].current_source == "scene-source:solin-scene-a"
+
+
+def test_a_take_cannot_move_an_output_its_token_was_not_prepared_for():
+    # The token remembers its output, so a reordered or duplicated take cannot
+    # swap the program using a token staged for the projection.
+    _runtime, engine, route = _engine_with_projection_route()
+    prepared = engine.handle(_request("prepare_scene", {
+        "bus_id": "media_windows", "scene_id": "b",
+        "transition": {"kind": "cut", "duration_ms": 0},
+    }))
+    token = prepared.payload["preparation_token"]
+
+    ack = _ack_from_envelope(engine.handle(_request("take_prepared", {
+        "bus_id": "virtual_camera", "scene_id": "b", "preparation_token": token,
+    })))
+
+    assert ack.applied is False and ack.error_code == "bus_mismatch"
+    assert engine._scene_graph._active_scene_id == "a"  # program untouched
+    assert route.starts == []  # and the projection did not move either

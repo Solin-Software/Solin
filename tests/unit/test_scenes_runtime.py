@@ -248,7 +248,7 @@ def test_runtime_schema_one_migrates_divergent_destinations_to_one_auto_program(
         SceneRuntimeState.from_record(state),
     ).state
 
-    assert restored.schema_version == 2
+    assert restored.schema_version == 3
     assert all(output.mode is OutputMode.AUTO for output in restored.outputs)
     assert {
         output.manual_scene_id for output in restored.outputs

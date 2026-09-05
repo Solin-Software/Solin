@@ -392,16 +392,26 @@ class LibobsSceneGraph:
             log.debug("transition set_size errored", exc_info=True)
         return transition
 
-    def prepare(self, scene_id: str, model_kind: str, duration_ms: int) -> dict | None:
+    def prepare(
+        self,
+        scene_id: str,
+        model_kind: str,
+        duration_ms: int,
+        bus_id: str = _PROGRAM_BUS,
+    ) -> dict | None:
         """Stage a switch to ``scene_id``. Returns a token + resolved transition,
-        or None if the scene is unknown."""
+        or None if the scene is unknown.
+
+        The token remembers which output it was prepared for, so a take can only
+        move the output it was staged against — a duplicated or reordered take
+        can never swap the program using a token meant for the projection."""
         if scene_id not in self._scenes:
             return None
         fallback_applied = model_kind not in _TRANSITION_IDS
         effective_kind = _FALLBACK_KIND if fallback_applied else model_kind
         self._token_seq += 1
         token = f"prep-{self._token_seq}"
-        self._pending[token] = (scene_id, effective_kind, int(duration_ms))
+        self._pending[token] = (scene_id, effective_kind, int(duration_ms), bus_id)
         return {
             "token": token,
             "kind": effective_kind,
@@ -409,12 +419,28 @@ class LibobsSceneGraph:
             "fallback_reason": "unsupported transition kind" if fallback_applied else "",
         }
 
+    def pending_route(self, token: str) -> str | None:
+        """Which output ``token`` was prepared for, or None if unknown."""
+        pending = self._pending.get(token)
+        return pending[3] if pending is not None else None
+
+    def take_projection(self, token: str, route: Any) -> bool:
+        """Execute a prepared switch on the projection output's own transition."""
+        pending = self._pending.pop(token, None)
+        if pending is None or route is None:
+            return False
+        scene_id, model_kind, duration_ms, _bus = pending
+        scene = self._scenes.get(scene_id)
+        if scene is None:
+            return False
+        return bool(route.start(scene_id, scene.as_source(), model_kind, duration_ms))
+
     def take(self, token: str) -> bool:
         """Execute a prepared switch, animating the program transition."""
         pending = self._pending.pop(token, None)
         if pending is None:
             return False
-        scene_id, model_kind, duration_ms = pending
+        scene_id, model_kind, duration_ms, _bus = pending
         scene = self._scenes.get(scene_id)
         if scene is None or self._transition is None:
             return False
@@ -427,12 +453,11 @@ class LibobsSceneGraph:
     def discard(self, token: str) -> bool:
         """Consume a prepared switch without executing it on the program channel.
 
-        The editor-preview (MEDIA_WINDOWS) bus never drives the single program
-        channel — taking one of its scenes re-points the off-screen preview
-        egress instead of animating the program transition. Its prepared token is
-        dropped here rather than through :meth:`take`, so an edit-bus selection
-        cannot move the virtual-camera program output. Returns ``False`` for an
-        unknown token, matching :meth:`take`."""
+        The editor channel never drives an output: taking one of its scenes
+        re-points the off-screen preview egress instead of animating a
+        transition, so its prepared token is dropped here rather than through
+        :meth:`take`. Returns ``False`` for an unknown token, matching
+        :meth:`take`."""
         return self._pending.pop(token, None) is not None
 
     def _swap_transition(self, model_kind: str) -> None:
