@@ -250,15 +250,25 @@ class SceneRuntimeService:
         )
 
     def select_scene(self, bus_id: BusId, scene_id: str) -> SceneRuntimeState:
-        """Choose ONE output's base scene, leaving its automation mode alone.
+        """Choose ONE output's base scene, with automation live on top of it.
 
         This is what picking a scene for an output means day to day: it is the
         scene that output rests on, and media still takes it over while playing.
         Use :meth:`take_scene` to pin an output and ignore automation entirely.
+
+        Selecting therefore *restores* AUTO. Leaving the mode alone made this a
+        no-op on an output that was already pinned — ``resolve_scene`` short-circuits
+        on MANUAL and never reads the automation map — so picking a scene silently
+        re-pinned the output and media stopped taking it over. Pinning is what
+        :meth:`take_scene` is for; there is no third state to preserve here.
         """
         self._documents.document.scene(scene_id)
         current = self._state.output(bus_id)
-        return self._commit(self._with_output(replace(current, manual_scene_id=scene_id)))
+        return self._commit(
+            self._with_output(
+                replace(current, mode=OutputMode.AUTO, manual_scene_id=scene_id)
+            )
+        )
 
     def take_program_scene(self, scene_id: str) -> SceneRuntimeState:
         """Route every delivery output to ``scene_id`` (the old lockstep take).
@@ -340,7 +350,29 @@ class SceneRuntimeService:
                     ),
                 )
             )
-        return self.take_program_scene(current_scene_id)
+        # Pin each output to *its own* scene. Routing this through
+        # take_program_scene pinned every output to Program's scene, silently
+        # discarding the projection output's independent selection — the lockstep
+        # behaviour from before the two outputs were split apart.
+        self._documents.document.scene(current_scene_id)
+        scene_ids = {scene.id for scene in self._documents.document.scenes}
+        return self._commit(
+            replace(
+                self._state,
+                outputs=tuple(
+                    replace(
+                        output,
+                        mode=OutputMode.MANUAL,
+                        manual_scene_id=(
+                            output.manual_scene_id
+                            if output.manual_scene_id in scene_ids
+                            else current_scene_id
+                        ),
+                    )
+                    for output in self._state.outputs
+                ),
+            )
+        )
 
     def set_output_enabled(self, bus_id: BusId, enabled: bool) -> SceneRuntimeState:
         if not isinstance(enabled, bool):
