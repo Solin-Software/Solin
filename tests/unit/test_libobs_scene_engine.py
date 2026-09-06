@@ -11,6 +11,7 @@ from __future__ import annotations
 import io
 import os
 import sys
+import tempfile
 import time
 import types
 from pathlib import Path
@@ -55,6 +56,18 @@ from solin.core.scenes.process_engine import (
 )
 
 _SIDECAR_MODULE = "solin.core.scenes.libobs_sidecar"
+
+
+# The engine only accepts an absolute .mp4 recording path (see recording.py's
+# ProgramRecordingNativeState). A POSIX literal is not absolute on Windows —
+# Path("/tmp/x.mp4").is_absolute() is False there — so build the fixtures from the
+# platform's temp directory instead, which is absolute on every host.
+_RECORDING_DIR = Path(tempfile.gettempdir())
+
+
+def _recording_path(name: str) -> str:
+    """An absolute, platform-valid .mp4 path for recording fixtures."""
+    return str(_RECORDING_DIR / name)
 
 
 def _request(
@@ -1447,7 +1460,11 @@ def test_engine_cancel_preparation_is_a_silent_notification():
 # ── virtual camera (virtual_camera bus output) ───────────────────────────────
 
 
-def test_virtual_camera_starts_and_stops_the_output():
+def test_virtual_camera_starts_and_stops_the_output(monkeypatch):
+    # These assertions describe the v4l2 backend (an obs "virtualcam_output"). On
+    # Windows start() dispatches to the DirectShow broker instead and creates no obs
+    # output, so pin the platform to keep this covering one backend on every host.
+    monkeypatch.setattr(sys, "platform", "linux")
     from solin.core.scenes.libobs_virtual_camera import LibobsVirtualCamera
 
     runtime = _CompositingRuntime()
@@ -1481,7 +1498,11 @@ def test_virtual_camera_unavailable_when_output_kind_missing():
     assert runtime.outputs == []
 
 
-def test_engine_set_output_enabled_toggles_the_virtual_camera():
+def test_engine_set_output_enabled_toggles_the_virtual_camera(monkeypatch):
+    # These assertions describe the v4l2 backend (an obs "virtualcam_output"). On
+    # Windows start() dispatches to the DirectShow broker instead and creates no obs
+    # output, so pin the platform to keep this covering one backend on every host.
+    monkeypatch.setattr(sys, "platform", "linux")
     runtime = _CompositingRuntime()
     engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
     engine.handle(_request("hello"))
@@ -1495,7 +1516,11 @@ def test_engine_set_output_enabled_toggles_the_virtual_camera():
     assert runtime.outputs[-1].stopped == 1
 
 
-def test_engine_hydrate_restores_the_virtual_camera_output():
+def test_engine_hydrate_restores_the_virtual_camera_output(monkeypatch):
+    # These assertions describe the v4l2 backend (an obs "virtualcam_output"). On
+    # Windows start() dispatches to the DirectShow broker instead and creates no obs
+    # output, so pin the platform to keep this covering one backend on every host.
+    monkeypatch.setattr(sys, "platform", "linux")
     # A restart brings up a fresh sidecar with the vcam stopped, while the app's
     # output cache still reads "enabled" so it never re-sends set_output_enabled.
     # Hydrate carries output_enabled, so it must restart the vcam itself — the
@@ -1552,11 +1577,11 @@ def test_recorder_start_creates_muxer_and_encoders_then_stops():
     runtime = _CompositingRuntime()
     recorder = LibobsRecorder(runtime)
 
-    assert recorder.start("/tmp/solin-test.mp4") is True
-    assert recorder.active is True and recorder.path == "/tmp/solin-test.mp4"
+    assert recorder.start(_recording_path("solin-test.mp4")) is True
+    assert recorder.active is True and recorder.path == _recording_path("solin-test.mp4")
     output = runtime.outputs[-1]
     assert output.kind == "mp4_output"  # the in-process muxer is preferred
-    assert output.settings["path"] == "/tmp/solin-test.mp4"
+    assert output.settings["path"] == _recording_path("solin-test.mp4")
     assert output.video_encoder is not None and output.audio_encoder is not None
     assert output.started == 1
     # a video + an audio encoder were attached to the global mix
@@ -1573,8 +1598,8 @@ def test_recorder_double_start_is_rejected():
 
     runtime = _CompositingRuntime()
     recorder = LibobsRecorder(runtime)
-    assert recorder.start("/tmp/a.mp4") is True
-    assert recorder.start("/tmp/b.mp4") is False  # already recording
+    assert recorder.start(_recording_path("a.mp4")) is True
+    assert recorder.start(_recording_path("b.mp4")) is False  # already recording
     assert len(runtime.outputs) == 1  # no second output created
 
 
@@ -1585,7 +1610,7 @@ def test_recorder_start_failure_releases_everything():
     runtime.output_start_ok = False  # output.start() returns False
     recorder = LibobsRecorder(runtime)
 
-    assert recorder.start("/tmp/nope.mp4") is False
+    assert recorder.start(_recording_path("nope.mp4")) is False
     assert recorder.active is False
     # the output and both encoders were released on the failed path
     assert runtime.outputs[-1].released == 1
@@ -1599,7 +1624,7 @@ def test_recorder_unavailable_when_muxer_missing():
     runtime.output_types = ["virtualcam_output"]  # no ffmpeg_muxer
     recorder = LibobsRecorder(runtime)
 
-    assert recorder.start("/tmp/x.mp4") is False
+    assert recorder.start(_recording_path("x.mp4")) is False
     assert runtime.outputs == [] and runtime.encoders == []
 
 
@@ -1610,7 +1635,7 @@ def test_recorder_prefers_a_hardware_encoder_when_available():
     runtime.encoder_types = ["obs_x264", "obs_qsv11", "obs_nvenc_h264_tex"]
     recorder = LibobsRecorder(runtime)
 
-    assert recorder.start("/tmp/hw.mp4") is True
+    assert recorder.start(_recording_path("hw.mp4")) is True
     # NVENC outranks QSV outranks x264, so the NVENC encoder is chosen.
     assert runtime.outputs[-1].video_encoder.kind == "obs_nvenc_h264_tex"
 
@@ -1623,7 +1648,7 @@ def test_recorder_falls_back_to_software_when_hardware_fails_to_start():
     runtime.failing_video_encoders = {"obs_nvenc_h264_tex"}  # creates, won't start
     recorder = LibobsRecorder(runtime)
 
-    assert recorder.start("/tmp/fallback.mp4") is True
+    assert recorder.start(_recording_path("fallback.mp4")) is True
     assert recorder.active is True
     # Two outputs were attempted: the NVENC one failed+released, x264 records.
     assert len(runtime.outputs) == 2
@@ -1641,7 +1666,7 @@ def test_recorder_falls_back_when_hardware_encoder_cannot_be_created():
     runtime.fail_encoder_kinds = {"obs_nvenc_h264_tex"}  # create() raises
     recorder = LibobsRecorder(runtime)
 
-    assert recorder.start("/tmp/fallback2.mp4") is True
+    assert recorder.start(_recording_path("fallback2.mp4")) is True
     assert recorder._video_encoder.kind == "obs_x264"
 
 
@@ -1653,7 +1678,7 @@ def test_recorder_hardware_encode_can_be_disabled_by_env(monkeypatch):
     runtime.encoder_types = ["obs_x264", "obs_nvenc_h264_tex"]
     recorder = LibobsRecorder(runtime)
 
-    assert recorder.start("/tmp/sw.mp4") is True
+    assert recorder.start(_recording_path("sw.mp4")) is True
     assert recorder._video_encoder.kind == "obs_x264"
     # the hardware encoder was never even created
     assert all(enc.kind != "obs_nvenc_h264_tex" for enc in runtime.encoders)
@@ -1667,7 +1692,7 @@ def test_engine_start_and_stop_recording_acks_and_emits_state():
     engine.handle(_request("hello"))
 
     start = engine.handle(_request("start_program_recording", {
-        "path": "/tmp/rec.mp4", "width": 1920, "height": 1080,
+        "path": _recording_path("rec.mp4"), "width": 1920, "height": 1080,
         "fps_numerator": 30, "fps_denominator": 1,
         "microphone": {}, "system_audio": {},
     }))
@@ -1677,7 +1702,7 @@ def test_engine_start_and_stop_recording_acks_and_emits_state():
     # the sidecar emitted a "recording" state the client can parse
     recording_event = _program_recording_event_from_envelope(events[-1])
     assert recording_event.state.status is ProgramRecordingStatus.RECORDING
-    assert recording_event.state.path == "/tmp/rec.mp4"
+    assert recording_event.state.path == _recording_path("rec.mp4")
 
     stop = engine.handle(_request("stop_program_recording", {}))
     assert _ack_from_envelope(stop).applied is True
@@ -1705,7 +1730,7 @@ def test_engine_start_recording_failure_emits_failed_state():
     engine.set_event_sink(events.append)
     engine.handle(_request("hello"))
 
-    response = engine.handle(_request("start_program_recording", {"path": "/tmp/r.mp4"}))
+    response = engine.handle(_request("start_program_recording", {"path": _recording_path("r.mp4")}))
     assert _ack_from_envelope(response).applied is False
     failed = _program_recording_event_from_envelope(events[-1])
     assert failed.state.status is ProgramRecordingStatus.FAILED
@@ -1715,7 +1740,7 @@ def test_engine_start_recording_failure_emits_failed_state():
 def test_engine_start_recording_without_runtime_fails():
     engine = LibobsSidecarEngine()  # protocol-only, no runtime
     engine.handle(_request("hello"))
-    response = engine.handle(_request("start_program_recording", {"path": "/tmp/r.mp4"}))
+    response = engine.handle(_request("start_program_recording", {"path": _recording_path("r.mp4")}))
     ack = _ack_from_envelope(response)
     assert ack.applied is False and ack.error_code == "runtime_unavailable"
 
@@ -1791,7 +1816,7 @@ def test_shutdown_stops_an_active_recording():
     runtime = _CompositingRuntime()
     engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
     engine.handle(_request("hello"))
-    engine.handle(_request("start_program_recording", {"path": "/tmp/r.mp4"}))
+    engine.handle(_request("start_program_recording", {"path": _recording_path("r.mp4")}))
     output = runtime.outputs[-1]
 
     engine.shutdown()
@@ -1962,7 +1987,7 @@ def test_engine_start_recording_applies_audio_before_start():
     engine.handle(_request("hello"))
 
     start = engine.handle(_request("start_program_recording", {
-        "path": "/tmp/rec.mp4",
+        "path": _recording_path("rec.mp4"),
         "microphone": {"mode": "device", "device_id": "usb-mic-1"},
         "system_audio": {"mode": "none"},
     }))
@@ -1978,7 +2003,7 @@ def test_engine_stop_recording_clears_audio_sources():
     engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
     engine.handle(_request("hello"))
     engine.handle(_request("start_program_recording", {
-        "path": "/tmp/rec.mp4",
+        "path": _recording_path("rec.mp4"),
         "microphone": {"mode": "device", "device_id": "usb-mic-1"},
         "system_audio": {"mode": "system_default"},
     }))
@@ -1996,7 +2021,7 @@ def test_engine_failed_recording_start_clears_audio_sources():
     engine.handle(_request("hello"))
 
     response = engine.handle(_request("start_program_recording", {
-        "path": "/tmp/rec.mp4",
+        "path": _recording_path("rec.mp4"),
         "microphone": {"mode": "device", "device_id": "usb-mic-1"},
         "system_audio": {"mode": "none"},
     }))
@@ -2108,7 +2133,7 @@ def test_engine_start_recording_with_missing_device_warns_but_records():
     engine.handle(_request("hello"))
 
     start = engine.handle(_request("start_program_recording", {
-        "path": "/tmp/rec.mp4",
+        "path": _recording_path("rec.mp4"),
         "microphone": {"mode": "device", "device_id": "ghost-mic"},
         "system_audio": {"mode": "none"},
     }))
@@ -2126,7 +2151,7 @@ def test_engine_live_device_switch_replaces_source_and_emits_state():
     engine.set_event_sink(events.append)
     engine.handle(_request("hello"))
     engine.handle(_request("start_program_recording", {
-        "path": "/tmp/rec.mp4",
+        "path": _recording_path("rec.mp4"),
         "microphone": {"mode": "device", "device_id": "usb-mic-1"},
         "system_audio": {"mode": "none"},
     }))
@@ -2153,7 +2178,7 @@ def test_engine_set_recording_audio_missing_device_emits_warning():
     engine.set_event_sink(events.append)
     engine.handle(_request("hello"))
     engine.handle(_request("start_program_recording", {
-        "path": "/tmp/rec.mp4",
+        "path": _recording_path("rec.mp4"),
         "microphone": {"mode": "system_default"},
         "system_audio": {"mode": "none"},
     }))
@@ -2859,7 +2884,7 @@ def test_recording_captures_the_same_main_mix_the_virtual_camera_outputs():
 
     runtime = _CompositingRuntime()
     recorder = LibobsRecorder(runtime)
-    assert recorder.start("/tmp/solin-mix.mp4") is True
+    assert recorder.start(_recording_path("solin-mix.mp4")) is True
 
     video, audio = runtime.encoders[-2], runtime.encoders[-1]
     assert video.attach_global is True  # the program composite, not a private view
