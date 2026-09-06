@@ -100,7 +100,9 @@ class LibobsPreviewEgress:
         self._thread.start()
 
     def _loop(self) -> None:
-        import pylibobs as ob
+        from solin.core.media.obs_source_render import resolve_render_source_to_bgra
+
+        render_to_bgra = resolve_render_source_to_bgra()
 
         canvas = self._runtime.video
         while not self._stop.wait(_RENDER_INTERVAL_S):
@@ -113,7 +115,7 @@ class LibobsPreviewEgress:
                 if writer is None or source is None or not enabled:
                     continue
                 try:
-                    result = ob.render_source_to_bgra(
+                    result = render_to_bgra(
                         source, width, height,
                         canvas_width=canvas.width, canvas_height=canvas.height,
                     )
