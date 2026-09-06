@@ -27,6 +27,8 @@ from cffi import FFI
 log = logging.getLogger(__name__)
 
 _VIDEO_FORMAT_BGRA = 7  # enum video_format (matches pylibobs VideoFormat.BGRA)
+_OBS_SOURCE_VIDEO = 1 << 0  # obs_source_info.output_flags bit
+_FRAME_SOURCE_ID = "solin_frame_source"
 
 # pylibobs declares ``struct obs_source_frame`` as opaque (forward-declared), so
 # it cannot allocate/fill one. Redeclare the exact libobs layout (obs.h /
@@ -58,11 +60,44 @@ _frame_ffi.cdef(
 )
 
 
+def _ensure_frame_source_registered(runtime) -> None:
+    """Make sure ``solin_frame_source`` exists, registering it in-process if needed.
+
+    pylibobs can register an OBS async video source from Python, which removes the need for
+    the solin-framesrc C plugin (no compiler, and it works the same on every platform). A
+    plugin that already provides the id wins — the call is then a no-op.
+    """
+    register = getattr(runtime.ob, "register_frame_source", None)
+    if register is None:
+        return
+    try:
+        register(_FRAME_SOURCE_ID, "Solin Frame Source")
+    except Exception:  # noqa: BLE001 - registration boundary; the guard below reports it
+        log.debug("could not register the frame source in-process", exc_info=True)
+
+
+def _is_real_frame_source(source) -> bool:
+    """True when libobs actually registered ``solin_frame_source``.
+
+    An unregistered id yields a placeholder with ``output_flags == 0``; every real video
+    source carries ``OBS_SOURCE_VIDEO`` (image_source 0x8001, ffmpeg_source 0x2087).
+    """
+    try:
+        from pylibobs._ffi import get_lib  # type: ignore[import-not-found]
+
+        flags = int(get_lib().obs_source_get_output_flags(source._ptr))
+    except Exception:  # noqa: BLE001 - libobs boundary; assume usable rather than break
+        log.debug("could not read frame source output flags", exc_info=True)
+        return True
+    return bool(flags & _OBS_SOURCE_VIDEO)
+
+
 def create_frame_source(runtime, name: str = "solin-frame-source"):
     """Create a ``solin_frame_source`` and wrap it. Returns None if the plugin
     is not registered (e.g. the module failed to load)."""
+    _ensure_frame_source_registered(runtime)
     try:
-        source = runtime.ob.Source.create("solin_frame_source", name, {})
+        source = runtime.ob.Source.create(_FRAME_SOURCE_ID, name, {})
     except Exception:  # noqa: BLE001 - source-creation / plugin boundary
         builder = "build.bat" if sys.platform == "win32" else "build.sh"
         log.warning(
@@ -73,6 +108,21 @@ def create_frame_source(runtime, name: str = "solin-frame-source"):
         )
         return None
     if source is None:
+        return None
+    if not _is_real_frame_source(source):
+        # libobs does not fail an unknown source id: it returns a placeholder whose
+        # output_flags are 0, so the except above never fires and every pushed frame is
+        # silently discarded. Detect that here — otherwise images, timers and the live
+        # tab all render nothing with no error anywhere.
+        log.error(
+            "The solin-framesrc libobs plugin is not installed, so Solin cannot display "
+            "images, timers or the live tab. libobs returned a disabled placeholder for "
+            "source id 'solin_frame_source'."
+        )
+        try:
+            source.release()
+        except Exception:  # noqa: BLE001 - best-effort cleanup
+            log.debug("could not release the placeholder frame source", exc_info=True)
         return None
     from pylibobs._ffi import get_lib  # type: ignore[import-not-found]
 
