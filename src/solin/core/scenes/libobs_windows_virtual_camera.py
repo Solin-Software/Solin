@@ -24,9 +24,11 @@ from __future__ import annotations
 import logging
 import os
 import sys
+import tempfile
 import threading
 import time
 import uuid
+from pathlib import Path
 from typing import Any, Optional
 
 from solin.core.scenes.windows_vcam_broker import VcamBrokerEndpoint, WindowsVcamBroker
@@ -194,6 +196,35 @@ class LibobsWindowsVirtualCamera:
             ring_file.close()
 
 
+def _sweep_orphaned_rings() -> int:
+    """Delete ring files no process still holds; returns how many went.
+
+    The producer unlinks its ring on close, but a killed or crashed sidecar never gets
+    there — and each ring is the full mapping size (~8.9 MB at 1080p), so a restart loop
+    can leave hundreds behind. Exclusive-open is the liveness test: if the file opens with
+    no sharing, nothing has it mapped and it is safe to remove.
+    """
+    removed = 0
+    directory = Path(tempfile.gettempdir())
+    try:
+        candidates = list(directory.glob("Solin.VirtualCamera.*.frames"))
+    except OSError:  # pragma: no cover - directory listing boundary
+        return 0
+    for candidate in candidates:
+        try:
+            # The unlink IS the liveness test: Windows refuses to delete a file that
+            # still has an active memory-mapped section, so a running producer's ring
+            # survives while an abandoned one goes. (Opening the file is no use here —
+            # the hardened DACL grants read and delete but not write.)
+            candidate.unlink()
+            removed += 1
+        except OSError:
+            continue  # still mapped by a live producer, or not ours to delete
+    if removed:
+        log.info("removed %d orphaned virtual camera ring file(s)", removed)
+    return removed
+
+
 class _WindowsSharedRingFile:
     """The memory-mapped ``.frames`` file backing the ring (Windows only).
 
@@ -201,8 +232,9 @@ class _WindowsSharedRingFile:
     handle so the filter can map it read-only while this process writes, sizes it
     to the mapping size, and exposes a writable ``mmap`` for the ring writer.
     Follows the native channel's DACL lifecycle: created ``D:P(A;;GA;;;SY)(A;;GA;;;SID)``
-    then tightened to ``…(A;;GR;;;SID)`` once our writable mapping exists, so no
-    later same-user opener can write the ring the filter trusts.
+    then tightened to ``…(A;;GRSD;;;SID)`` once our writable mapping exists, so no
+    later same-user opener can write the ring the filter trusts. DELETE stays granted
+    so the producer can still unlink the ring on close.
     """
 
     def __init__(self, mapping_size: int, sid: str) -> None:
@@ -215,6 +247,10 @@ class _WindowsSharedRingFile:
         self._path = ""
         self._fd = -1
         self._buffer: Any = None
+
+        # A killed or crashed producer cannot unlink its own ring, so clear any
+        # abandoned ones before adding another.
+        _sweep_orphaned_rings()
 
         k32 = ctypes.WinDLL("kernel32", use_last_error=True)
         a32 = ctypes.WinDLL("advapi32", use_last_error=True)
@@ -325,7 +361,12 @@ class _WindowsSharedRingFile:
 
     def _tighten_dacl_to_read_only(self, k32, a32, ctypes, wintypes, sid, dacl_info) -> None:
         read_only = wintypes.LPVOID()
-        sddl = f"D:P(A;;GA;;;SY)(A;;GR;;;{sid})"
+        # GR grants read; SD grants DELETE. Without SD the tightening below also
+        # locks out _cleanup_partial()'s os.remove(), so every ring file survives
+        # its producer and %TEMP% grows by the mapping size on each run. DELETE is
+        # safe to grant: the point of the hardening is that a same-user process
+        # cannot WRITE frames the filter trusts, and withholding GW still ensures that.
+        sddl = f"D:P(A;;GA;;;SY)(A;;GRSD;;;{sid})"
         if not a32.ConvertStringSecurityDescriptorToSecurityDescriptorW(
             sddl, 1, ctypes.byref(read_only), None
         ):
@@ -368,7 +409,9 @@ class _WindowsSharedRingFile:
             try:
                 os.remove(self._path)
             except OSError:
-                pass
+                # Leaves an 8-9 MB ring behind, so make it visible rather than silent.
+                log.warning("could not remove the virtual camera ring %s",
+                            self._path, exc_info=True)
 
     def close(self) -> None:
         self._cleanup_partial()
