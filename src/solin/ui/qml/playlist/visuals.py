@@ -6,6 +6,7 @@ from PySide6.QtQuick import QQuickImageProvider
 
 from solin.styles.icons import (
     ICON_ARROW_LEFT,
+    ICON_ADD_TO_PLAYLIST,
     ICON_CHEVRON_DOWN,
     ICON_CHEVRON_UP,
     ICON_CLOSE,
@@ -28,6 +29,7 @@ from solin.styles.icons import (
     ICON_REFRESH,
     ICON_SAVE_PLAYLIST,
     ICON_SECTION,
+    ICON_SET_AS_IDLE,
     ICON_TRASH,
     ICON_VIDEO,
 )
@@ -141,6 +143,8 @@ PLAYLIST_ICON_SVGS = {
     "cloud":          ICON_CLOUD_DOWNLOAD,
     "section":        ICON_SECTION,
     "marker":         ICON_MARKER,
+    "add_to_playlist": ICON_ADD_TO_PLAYLIST,
+    "set_as_idle":    ICON_SET_AS_IDLE,
     "media_trim":     ICON_MEDIA_TRIM,
     "chevron_down":   ICON_CHEVRON_DOWN,
     "chevron_up":     ICON_CHEVRON_UP,

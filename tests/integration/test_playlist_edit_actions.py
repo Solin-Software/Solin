@@ -4,6 +4,8 @@ from types import SimpleNamespace
 
 from solin.core.foundation.resource_lanes import ResourceLaneRegistry
 from solin.core.ingest.watched_folder_files import WatchedFolderFileStore
+from solin.core.media.destinations import MediaDestinationRequest
+from solin.core.projection.idle_media import IdleMediaRequest
 from solin.ui.qml.media_tree.state import MediaAvailability, MediaPresentationState
 from solin.widgets.playlist import widget as playlist_widget
 from solin.widgets.playlist.edit_actions import PlaylistEditActionsMixin
@@ -53,6 +55,149 @@ def test_playlist_edit_view_uses_actions_mixin():
     assert playlist_widget.PlaylistEditView.load_temp_playlist is (
         PlaylistEditActionsMixin.load_temp_playlist
     )
+
+
+def test_add_to_destination_emits_the_selected_playlist_item():
+    requests = []
+    source = {
+        "id": "media-1",
+        "title": "Talk",
+        "url": "C:/media/talk.mp4",
+        "type": "video",
+        "section_id": "section-1",
+        "start_trim_ticks": 10_000,
+    }
+    view = SimpleNamespace(
+        _pl={"items": [source]},
+        _flush_image_framing_save=lambda: None,
+        _tree_session=SimpleNamespace(owner_id="playlist:saved"),
+        _media_tree_runtime=SimpleNamespace(
+            registry=SimpleNamespace(
+                state=lambda _owner, _node: MediaPresentationState(
+                    availability=MediaAvailability.AVAILABLE,
+                )
+            )
+        ),
+        media_destination_requested=SimpleNamespace(emit=requests.append),
+    )
+
+    PlaylistEditActionsMixin._add_to_destination(view, "media-1")
+
+    assert len(requests) == 1
+    request = requests[0]
+    assert isinstance(request, MediaDestinationRequest)
+    assert request.title == "Talk"
+    assert request.can_play is False
+    assert len(request.assets) == 1
+    assert request.assets[0].source_id == "C:/media/talk.mp4"
+    assert request.assets[0].item["id"] != "media-1"
+    assert request.assets[0].item["start_trim_ticks"] == 10_000
+    assert "section_id" not in request.assets[0].item
+
+
+def test_add_to_destination_ignores_unavailable_playlist_item():
+    requests = []
+    view = SimpleNamespace(
+        _pl={
+            "items": [
+                {
+                    "id": "media-1",
+                    "title": "Missing",
+                    "url": "C:/media/missing.mp4",
+                    "type": "video",
+                }
+            ]
+        },
+        _flush_image_framing_save=lambda: None,
+        _tree_session=SimpleNamespace(owner_id="playlist:saved"),
+        _media_tree_runtime=SimpleNamespace(
+            registry=SimpleNamespace(
+                state=lambda _owner, _node: MediaPresentationState(
+                    availability=MediaAvailability.MISSING,
+                )
+            )
+        ),
+        media_destination_requested=SimpleNamespace(emit=requests.append),
+    )
+
+    PlaylistEditActionsMixin._add_to_destination(view, "media-1")
+
+    assert requests == []
+
+
+def test_set_as_idle_emits_an_existing_local_playlist_item(tmp_path):
+    path = tmp_path / "idle.mp4"
+    thumbnail = tmp_path / "idle.jpg"
+    path.write_bytes(b"video")
+    thumbnail.write_bytes(b"thumbnail")
+    requests = []
+    view = SimpleNamespace(
+        _pl={
+            "items": [
+                {
+                    "id": "media-1",
+                    "title": "Idle video",
+                    "url": str(path),
+                    "type": "video",
+                }
+            ]
+        },
+        _flush_image_framing_save=lambda: None,
+        _playlist_thumbnail_store=SimpleNamespace(
+            path=lambda _storage_id: thumbnail,
+        ),
+        _tree_session=SimpleNamespace(owner_id="playlist:saved"),
+        _media_tree_runtime=SimpleNamespace(
+            registry=SimpleNamespace(
+                state=lambda _owner, _node: MediaPresentationState(
+                    availability=MediaAvailability.AVAILABLE,
+                    local_path=str(path),
+                )
+            )
+        ),
+        set_as_idle_requested=SimpleNamespace(emit=requests.append),
+    )
+
+    PlaylistEditActionsMixin._set_as_idle(view, "media-1")
+
+    assert requests == [
+        IdleMediaRequest(
+            title="Idle video",
+            path=str(path),
+            media_type="video",
+            thumbnail_path=str(thumbnail),
+        )
+    ]
+
+
+def test_set_as_idle_ignores_remote_playlist_item():
+    requests = []
+    view = SimpleNamespace(
+        _pl={
+            "items": [
+                {
+                    "id": "media-1",
+                    "title": "Remote",
+                    "url": "https://example.test/video.mp4",
+                    "type": "video",
+                }
+            ]
+        },
+        _flush_image_framing_save=lambda: None,
+        _tree_session=SimpleNamespace(owner_id="playlist:saved"),
+        _media_tree_runtime=SimpleNamespace(
+            registry=SimpleNamespace(
+                state=lambda _owner, _node: MediaPresentationState(
+                    availability=MediaAvailability.AVAILABLE,
+                )
+            )
+        ),
+        set_as_idle_requested=SimpleNamespace(emit=requests.append),
+    )
+
+    PlaylistEditActionsMixin._set_as_idle(view, "media-1")
+
+    assert requests == []
 
 
 def test_existing_thumbnail_does_not_skip_missing_duration_hydration():

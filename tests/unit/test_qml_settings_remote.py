@@ -5,8 +5,10 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
+import shiboken6
 from PySide6.QtCore import QMetaObject, QObject, Qt, QUrl, Signal
-from PySide6.QtQml import QQmlApplicationEngine
+from PySide6.QtQml import QQmlComponent
+from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 
@@ -372,20 +374,31 @@ def test_certificate_picker_return_after_profile_cleanup_does_not_export_stale_c
 def test_remote_setup_qml_fits_windows_and_preserves_dismissal_semantics(remote_settings, theme_id):
     domain, settings, _, _, _ = remote_settings
     configure_qml_controls_style()
-    engine = QQmlApplicationEngine()
+    widget = QQuickWidget()
+    widget.setResizeMode(QQuickWidget.ResizeMode.SizeRootObjectToView)
+    widget.resize(360, 640)
     warnings = []
-    engine.warnings.connect(lambda items: warnings.extend(item.toString() for item in items))
-    engine.rootContext().setContextProperty("appTheme", get_theme(theme_id).qml_palette())
-    engine.rootContext().setContextProperty("settingsRemote", domain)
+    widget.engine().warnings.connect(
+        lambda items: warnings.extend(item.toString() for item in items)
+    )
+    widget.rootContext().setContextProperty(
+        "appTheme",
+        get_theme(theme_id).qml_palette(),
+    )
+    widget.rootContext().setContextProperty("settingsRemote", domain)
     source_url = QUrl.fromLocalFile(str(Path("src/solin/qml/remote-test.qml").resolve()))
-    engine.loadData(
-        b"import QtQuick; import QtQuick.Controls; ApplicationWindow { "
-        b"visible: true; width: 360; height: 640; SettingsRemoteSetup {} }",
+    component = QQmlComponent(widget.engine())
+    component.setData(
+        b"import QtQuick; import QtQuick.Controls; Item { "
+        b"width: 360; height: 640; SettingsRemoteSetup {} }",
         source_url,
     )
-    assert engine.rootObjects(), warnings
-    window = engine.rootObjects()[0]
-    dialog = window.findChild(QObject, "settingsRemoteSetup")
+    root = component.create(widget.rootContext())
+    assert root is not None, [error.toString() for error in component.errors()]
+    widget.setContent(source_url, component, root)
+    widget.show()
+    QApplication.processEvents()
+    dialog = root.findChild(QObject, "settingsRemoteSetup")
     assert dialog is not None
     try:
         _enable(remote_settings)
@@ -398,8 +411,7 @@ def test_remote_setup_qml_fits_windows_and_preserves_dismissal_semantics(remote_
             (1280, 800),
             (480, 360),
         ]:
-            window.setWidth(width)
-            window.setHeight(height)
+            widget.resize(width, height)
             QTest.qWait(20)
             assert dialog.property("visible")
             assert 0 < dialog.property("width") <= width
@@ -428,6 +440,5 @@ def test_remote_setup_qml_fits_windows_and_preserves_dismissal_semantics(remote_
         assert warnings == []
     finally:
         domain.invoke("closeSetup")
-        window.close()
-        engine.deleteLater()
-        QApplication.sendPostedEvents(None, 0)
+        widget.setSource(QUrl())
+        shiboken6.delete(widget)

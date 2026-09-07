@@ -124,6 +124,7 @@ def test_pending_media_keeps_identity_and_disables_conflicting_actions() -> None
     assert roles["operationProgress"] == 0.25
     assert roles["canDrag"] is False
     assert roles["canProject"] is False
+    assert roles["canSetAsIdle"] is False
 
 
 def test_presenter_uses_resolved_runtime_state_for_local_media() -> None:
@@ -146,6 +147,10 @@ def test_presenter_uses_resolved_runtime_state_for_local_media() -> None:
     assert roles["duration"] == "1:30"
     assert roles["trimAvailable"] is True
     assert roles["isMissing"] is False
+    assert roles["canSetAsIdle"] is True
+
+    remote_roles = _roles(snapshot.roots[0].children[1])
+    assert remote_roles["canSetAsIdle"] is False
 
 
 def test_presenter_structurally_shares_unchanged_immutable_nodes() -> None:

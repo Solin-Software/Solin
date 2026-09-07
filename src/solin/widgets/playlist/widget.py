@@ -168,6 +168,8 @@ class PlaylistEditView(
 ):
     back_requested = Signal()
     project_items = Signal(list, int, str)
+    media_destination_requested = Signal(object)
+    set_as_idle_requested = Signal(object)
     save_temp_as_permanent = Signal(str, dict)  # name, playlist data
     export_requested = Signal(str)
     import_jwl_requested = Signal(object, int, str)
@@ -686,6 +688,8 @@ class PlaylistEditView(
         self.bridge.newMarkerRequested.connect(self._create_marker)
 
         self.bridge.projectItemSignal.connect(self._project_by_id)
+        self.bridge.addToDestinationSignal.connect(self._add_to_destination)
+        self.bridge.setAsIdleSignal.connect(self._set_as_idle)
         self.bridge.removeItemSignal.connect(self._remove_item)
         self.bridge.renameItemSignal.connect(self._rename_item)
         self.bridge.downloadItemSignal.connect(self._download_item)
@@ -2101,6 +2105,8 @@ class PlaylistEditView(
 class PlaylistWidget(QWidget):
     project_video_signal = Signal(str, str, object, str)
     project_image_signal = Signal(bytes)
+    media_destination_requested = Signal(object)
+    set_as_idle_requested = Signal(object)
 
     def __init__(
         self,
@@ -2270,6 +2276,8 @@ class PlaylistWidget(QWidget):
         self._edit_placeholder.deleteLater()
         edit_view.back_requested.connect(self._go_back)
         edit_view.project_items.connect(self._on_project_items)
+        edit_view.media_destination_requested.connect(self.media_destination_requested)
+        edit_view.set_as_idle_requested.connect(self.set_as_idle_requested)
         edit_view.save_temp_as_permanent.connect(self._on_save_temp_playlist)
         edit_view.export_requested.connect(self._on_edit_export_requested)
         edit_view.import_jwl_requested.connect(self._on_edit_jwl_import_requested)
@@ -2611,10 +2619,10 @@ class PlaylistWidget(QWidget):
         self._persist_playlists()
         edit_view = self._edit_view
         if (
-            self._stack.currentIndex() == 1
-            and edit_view is not None
+            edit_view is not None
             and edit_view._pl
             and edit_view._pl["id"] == pl_id
+            and self._stack.currentIndex() == 1
         ):
             edit_view._reconcile_playlist()
         return MediaInsertResult(

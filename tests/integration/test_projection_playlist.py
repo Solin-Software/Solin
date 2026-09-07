@@ -80,3 +80,23 @@ def test_source_duration_ignores_missing_items_and_invalid_values():
     projection_bar.ProjectionBar._on_source_duration_changed(host, 0)
 
     assert signal.emissions == []
+
+
+def test_preview_idle_path_accepts_only_existing_local_visual_media(tmp_path):
+    video = tmp_path / "idle.mp4"
+    video.write_bytes(b"video")
+    host = type("ProjectionHost", (), {})()
+    host._is_audio = False
+    host._is_live_tab = False
+    host._mode = "video"
+    host._playlist_index = 0
+    host._playlist = [{"url": str(video)}]
+
+    assert ProjectionPlaylistMixin._resolve_idle_path(host) == str(video)
+
+    host._playlist = [{"url": "https://example.test/idle.mp4"}]
+    assert ProjectionPlaylistMixin._resolve_idle_path(host) == ""
+
+    host._playlist = [{"url": str(video)}]
+    host._is_audio = True
+    assert ProjectionPlaylistMixin._resolve_idle_path(host) == ""

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import copy
 import uuid
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, NotRequired, TypedDict, cast
 
@@ -87,6 +89,22 @@ def create_playlist_item(
                 item["auto_title"] = True
 
     return cast(PlaylistMediaItem, item)
+
+
+def copy_playlist_item_for_destination(
+    item: Mapping[str, Any],
+) -> PlaylistMediaItem:
+    """Copy media into another collection without leaking source-tree identity."""
+
+    attributes = copy.deepcopy(dict(item))
+    title = str(attributes.pop("title", "") or "")
+    url = str(attributes.pop("url", "") or "")
+    attributes.pop("id", None)
+    attributes.pop("section_id", None)
+    attributes.pop("origin_kind", None)
+    attributes.pop("origin_container_id", None)
+    attributes.pop("origin_item_id", None)
+    return create_playlist_item(title, url, **attributes)
 
 
 def playlist_items_from_jwpub(

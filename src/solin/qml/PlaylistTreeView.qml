@@ -1997,9 +1997,39 @@ Item {
                             Menu {
                                 id: itemMenu
                                 objectName: "mediaItemMenu"
-                                width: 150
+                                width: 180
                                 background: MenuPanel {}
 
+                                MenuItem {
+                                    objectName: "mediaItemAddToDestinationAction"
+                                    enabled: node && node.canProject === true
+                                    text: qsTranslate("MediaDestinationDialog", "Add to…")
+                                    icon.source: root.picon("add_to_playlist", 13, root.iconHex(root.textMuted))
+                                    onTriggered: if (root.hasController)
+                                        root.playlistController.addToDestination(mediaRoot.nodeId)
+                                    contentItem: MenuLabel { label: parent.text; iconSrc: parent.icon.source }
+                                    background: MenuBg { hovered: parent.hovered }
+                                }
+                                Instantiator {
+                                    id: idleActionInstantiator
+                                    active: node && node.canSetAsIdle === true
+                                    delegate: MenuItem {
+                                        objectName: "mediaItemSetAsIdleAction"
+                                        text: qsTranslate("ProjectionBar", "Set as idle screen")
+                                        icon.source: root.picon("set_as_idle", 13, root.iconHex(root.textMuted))
+                                        onTriggered: if (root.hasController)
+                                            root.playlistController.setAsIdle(mediaRoot.nodeId)
+                                        contentItem: MenuLabel { label: parent.text; iconSrc: parent.icon.source }
+                                        background: MenuBg { hovered: parent.hovered }
+                                    }
+                                    onObjectAdded: function(index, object) {
+                                        itemMenu.insertItem(Math.min(1, itemMenu.count), object)
+                                    }
+                                    onObjectRemoved: function(index, object) {
+                                        itemMenu.removeItem(object)
+                                    }
+                                }
+                                MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: root.borderStrong } }
                                 Instantiator {
                                     active: mediaRoot.mediaType === "audio"
                                             || mediaRoot.mediaType === "video"
@@ -2014,7 +2044,13 @@ Item {
                                         background: MenuBg { hovered: parent.hovered }
                                     }
                                     onObjectAdded: function(index, object) {
-                                        itemMenu.insertItem(0, object)
+                                        itemMenu.insertItem(
+                                            Math.min(
+                                                idleActionInstantiator.active ? 3 : 2,
+                                                itemMenu.count
+                                            ),
+                                            object
+                                        )
                                     }
                                     onObjectRemoved: function(index, object) {
                                         itemMenu.removeItem(object)

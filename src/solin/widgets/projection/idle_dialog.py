@@ -190,3 +190,16 @@ class SetAsIdleConfirmDialog(QDialog):
             self.reject()
         else:
             super().keyPressEvent(event)
+
+
+def confirm_set_as_idle(
+    title: str,
+    *,
+    pixmap: QPixmap | None = None,
+    parent=None,
+) -> bool:
+    """Show the shared idle-screen confirmation and return its explicit choice."""
+
+    dialog = SetAsIdleConfirmDialog(title, pixmap=pixmap, parent=parent)
+    dialog.exec()
+    return dialog.confirmed()

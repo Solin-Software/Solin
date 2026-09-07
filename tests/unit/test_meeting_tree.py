@@ -1297,6 +1297,109 @@ class MeetingTreeControllerEditingTests(unittest.TestCase):
             },
         )
 
+    def test_add_to_destination_emits_a_playlist_shaped_copy(self):
+        node = {
+            "id": "meeting-media",
+            "type": "media",
+            "title": "Meeting video",
+            "media_type": "video",
+            "start_trim_ticks": 20_000,
+            "image_framing": {"zoom": 1.1, "norm_x": 0.0, "norm_y": 0.0},
+            "thumbnail_url": "https://cdn.example/thumb.jpg",
+            "media_ref": {
+                "file_path": "C:/meeting/video.mp4",
+                "mime_type": "video/mp4",
+                "key_symbol": "mwbv",
+                "track": 4,
+                "issue_tag": 20260900,
+                "meps_doc_id": 1234,
+                "meps_language": 5,
+                "language": "T",
+                "jw_media_id": "jw-media-1",
+            },
+            "children": [],
+        }
+        controller = self.controller([node])
+        controller._tree_session.owner_id = "meeting:2026-09-07:mwb"
+        controller._media_tree_runtime = SimpleNamespace(
+            registry=SimpleNamespace(
+                state=lambda _owner, _node: MediaPresentationState(
+                    availability=MediaAvailability.AVAILABLE,
+                )
+            )
+        )
+        controller._resolved_urls = {}
+        controller._find_node = lambda item_id: node if item_id == node["id"] else None
+        controller._url_for_node = lambda current: MeetingTreeController._url_for_node(
+            controller, current
+        )
+        controller._flush_image_framing_save = lambda: True
+        controller.addToDestinationRequested = self._Signal()
+
+        MeetingTreeController.addToDestination(controller, "meeting-media")
+
+        [(request,)] = controller.addToDestinationRequested.calls
+        self.assertEqual(request.title, "Meeting video")
+        self.assertFalse(request.can_play)
+        [asset] = request.assets
+        self.assertEqual(asset.source_id, "C:/meeting/video.mp4")
+        self.assertNotEqual(asset.item["id"], "meeting-media")
+        self.assertEqual(asset.item["doc_id"], 1234)
+        self.assertEqual(asset.item["start_trim_ticks"], 20_000)
+        self.assertEqual(asset.item["image_framing"], node["image_framing"])
+        self.assertEqual(asset.item["thumbnail_url"], node["thumbnail_url"])
+
+    def test_set_as_idle_emits_an_existing_local_meeting_item(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "idle.mp4"
+            thumbnail = Path(tmp) / "idle.jpg"
+            path.write_bytes(b"video")
+            thumbnail.write_bytes(b"thumbnail")
+            node = {
+                "id": "meeting-media",
+                "type": "media",
+                "title": "Idle video",
+                "media_type": "video",
+                "media_ref": {
+                    "file_path": str(path),
+                    "mime_type": "video/mp4",
+                },
+                "children": [],
+            }
+            controller = self.controller([node])
+            controller._tree_session.owner_id = "meeting:2026-09-07:mwb"
+            controller._media_tree_runtime = SimpleNamespace(
+                registry=SimpleNamespace(
+                    state=lambda _owner, _node: MediaPresentationState(
+                        availability=MediaAvailability.AVAILABLE,
+                        local_path=str(path),
+                    )
+                )
+            )
+            controller._resolved_urls = {}
+            controller._find_node = (
+                lambda item_id: node if item_id == node["id"] else None
+            )
+            controller._url_for_node = (
+                lambda current: MeetingTreeController._url_for_node(
+                    controller,
+                    current,
+                )
+            )
+            controller._flush_image_framing_save = lambda: True
+            controller._thumbnail_local_path = (
+                lambda _node, _item_id, _source: str(thumbnail)
+            )
+            controller.setAsIdleRequested = self._Signal()
+
+            MeetingTreeController.setAsIdle(controller, "meeting-media")
+
+            [(request,)] = controller.setAsIdleRequested.calls
+            self.assertEqual(request.title, "Idle video")
+            self.assertEqual(request.path, str(path))
+            self.assertEqual(request.media_type, "video")
+            self.assertEqual(request.thumbnail_path, str(thumbnail))
+
     def test_placement_playlist_ref_uses_localized_section_titles(self):
         controller = self.controller(
             [

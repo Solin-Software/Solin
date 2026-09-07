@@ -42,6 +42,8 @@ class PlaylistEditBridge(QObject):
     newMarkerRequested     = Signal(str)      # subsection_id
 
     projectItemSignal    = Signal(str)          # item_id
+    addToDestinationSignal = Signal(str)        # item_id
+    setAsIdleSignal     = Signal(str)          # item_id
     removeItemSignal     = Signal(str)          # item_id
     renameItemSignal     = Signal(str)          # item_id
     downloadItemSignal   = Signal(str)          # item_id
@@ -181,6 +183,14 @@ class PlaylistEditBridge(QObject):
     @Slot(str)
     def projectItem(self, item_id: str):
         self.projectItemSignal.emit(item_id)
+
+    @Slot(str)
+    def addToDestination(self, item_id: str):  # noqa: N802 - QML API
+        self.addToDestinationSignal.emit(item_id)
+
+    @Slot(str)
+    def setAsIdle(self, item_id: str):  # noqa: N802 - QML API
+        self.setAsIdleSignal.emit(item_id)
 
     @Slot(str)
     def removeItem(self, item_id: str):

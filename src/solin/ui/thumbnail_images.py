@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 from PySide6.QtCore import QBuffer, QIODevice
 from PySide6.QtGui import QImage, QImageReader, QPixmap
 
@@ -12,7 +14,16 @@ from solin.core.media.thumbnail_store import ThumbnailStore
 def load_thumbnail(store: ThumbnailStore, item_id: str) -> QPixmap | None:
     if not store.exists(item_id):
         return None
-    pixmap = QPixmap(str(store.path(item_id)))
+    return load_thumbnail_path(os.fspath(store.path(item_id)))
+
+
+def load_thumbnail_path(path: str) -> QPixmap | None:
+    """Load one existing local thumbnail at the Qt presentation boundary."""
+
+    normalized_path = str(path or "").strip()
+    if not normalized_path or not os.path.isfile(normalized_path):
+        return None
+    pixmap = QPixmap(normalized_path)
     return pixmap if not pixmap.isNull() else None
 
 

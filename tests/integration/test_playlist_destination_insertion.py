@@ -62,6 +62,35 @@ def test_playlist_destination_inserts_into_section_and_saves_once(tmp_path):
     assert len(saves) == 1
 
 
+def test_playlist_destination_inserts_before_deferred_ui_is_built(tmp_path):
+    playlist = _playlist()
+    saves = []
+    widget = SimpleNamespace(
+        _playlists=[playlist],
+        _edit_view=None,
+        _persist_playlists=lambda: saves.append(playlist),
+    )
+
+    result = PlaylistWidget.add_items_to_playlist(
+        widget,
+        "saved",
+        [
+            {
+                "id": "new",
+                "title": "New",
+                "url": "new.mp4",
+                "type": "video",
+            }
+        ],
+        list_id="root",
+        insert_index=0,
+    )
+
+    assert result.target_valid is True
+    assert [item["id"] for item in playlist["items"]] == ["new", "existing"]
+    assert len(saves) == 1
+
+
 def test_playlist_destination_rejects_stale_section_and_does_not_save(tmp_path):
     playlist = _playlist()
     widget, saves = _widget(tmp_path, playlist)

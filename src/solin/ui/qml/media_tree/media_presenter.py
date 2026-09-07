@@ -15,6 +15,7 @@ from solin.core.i18n.strings import (
 )
 from solin.core.media.duration import format_effective_duration_ticks
 from solin.core.media.operations import MediaOperationRecord, MediaOperationState
+from solin.core.projection.idle_media import supports_idle_media_source
 from solin.core.projection.image_framing import (
     image_transform_from_record,
     image_transform_to_record,
@@ -126,4 +127,9 @@ def media_roles(
         "canProject": not active and state.availability == MediaAvailability.AVAILABLE,
         "canRemove": not active or operation_state == MediaOperationState.FAILED.value,
         "canDownload": cloud_visible and not active,
+        "canSetAsIdle": bool(
+            not active
+            and local_available
+            and supports_idle_media_source(media.media_type, media.url)
+        ),
     }

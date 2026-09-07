@@ -49,6 +49,7 @@ def test_meeting_presenter_uses_the_shared_snapshot_contract() -> None:
     assert media.thawed_roles()["badge"] == "Video"
     assert media.thawed_roles()["thumbSource"] == "image://playlistthumbs/media-1/2"
     assert media.thawed_roles()["trimAvailable"] is True
+    assert media.thawed_roles()["canSetAsIdle"] is True
 
 
 def test_meeting_presenter_counts_offline_virtual_media() -> None:
@@ -71,3 +72,4 @@ def test_meeting_presenter_counts_offline_virtual_media() -> None:
     virtual = snapshot.roots[0].children[1]
     assert virtual.thawed_roles()["cloudVisible"] is True
     assert virtual.thawed_roles()["isMissing"] is False
+    assert virtual.thawed_roles()["canSetAsIdle"] is False

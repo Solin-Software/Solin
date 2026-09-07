@@ -75,6 +75,12 @@ class SignalConnectionController:
         sources.library_widget.project_media_signal.connect(self._project_library_media)
         sources.library_widget.play_cached_media_signal.connect(media_projection.on_cache_play)
         sources.meetings_widget.project_media.connect(media_projection.on_meeting_media_project)
+        sources.meetings_widget.media_destination_requested.connect(
+            handlers.media_destinations.route
+        )
+        sources.meetings_widget.set_as_idle_requested.connect(
+            handlers.projection_targets.request_idle_media
+        )
         sources.timer_widget.project_timer_signal.connect(timer_projection.start_timer)
         sources.timer_widget.meeting_schedule_requested.connect(
             handlers.open_meeting_schedule_settings
@@ -88,6 +94,12 @@ class SignalConnectionController:
         sources.talk_theme_widget.set_projection_handler(media_projection.project_generated_image)
 
         sources.playlist_widget.project_video_signal.connect(media_projection.on_playlist_project)
+        sources.playlist_widget.media_destination_requested.connect(
+            handlers.media_destinations.route
+        )
+        sources.playlist_widget.set_as_idle_requested.connect(
+            handlers.projection_targets.request_idle_media
+        )
 
         sources.playlist_widget.project_image_signal.connect(media_projection.project_image_bytes)
         projection_bar.source_duration_discovered.connect(
