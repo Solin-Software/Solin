@@ -5,13 +5,18 @@ import tomllib
 from importlib.metadata import version
 from pathlib import Path
 
+import pylibobs
 import sideview
 from packaging.requirements import Requirement
 from packaging.utils import canonicalize_name
+from packaging.version import Version
 
 from tests._paths import REPO_ROOT
 
 SIDEVIEW_REQUIREMENT = "sideview==0.4.1"
+# The release carrying every entry point the libobs engine calls, plus the NV12
+# chroma-plane over-read fix the Windows virtual camera trips over.
+PYLIBOBS_VERSION = Version("0.1.2")
 
 
 def _project_metadata() -> dict:
@@ -72,3 +77,37 @@ def test_installed_sideview_distribution_provides_the_native_backend():
     assert sideview.__version__ == "0.4.1"
     assert version("sideview") == "0.4.1"
     assert (package_dir / native_name).is_file()
+
+
+def test_pylibobs_is_a_pinned_runtime_dependency():
+    """libobs is the only media engine on this branch, so pin its binding.
+
+    Compared as a parsed requirement rather than a literal: the two manifests
+    quote the environment marker differently.
+    """
+    pinned = _locked_requirements().get(canonicalize_name("pylibobs"))
+
+    assert pinned is not None, "pylibobs is missing from requirements.txt"
+    assert str(pinned.specifier) == f"=={PYLIBOBS_VERSION}"
+
+
+def test_installed_pylibobs_provides_the_scene_engine_entry_points():
+    """A pylibobs too old for this branch must fail here, not inside the sidecar.
+
+    An older build has no projection renderer and over-reads NV12 chroma planes in
+    the raw video callback; the second takes the sidecar down with no Python
+    traceback, which is expensive to diagnose from a user's log.
+
+    Checked against ``pylibobs.__version__`` rather than the installed distribution
+    metadata: an editable dev checkout keeps whatever version it was installed with,
+    so the metadata goes stale while the code is current.
+    """
+    assert Version(pylibobs.__version__) >= PYLIBOBS_VERSION
+
+    from pylibobs.display import (  # the projection route's per-source renderer
+        render_main_texture_letterboxed,
+        render_source_letterboxed,
+    )
+
+    assert callable(render_main_texture_letterboxed)
+    assert callable(render_source_letterboxed)
