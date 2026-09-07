@@ -568,7 +568,23 @@ class ScenesBridge(QObject):
 
     @Property("QVariantList", notify=changed)  # type: ignore[arg-type]
     def configuredCameras(self) -> list[dict[str, object]]:
-        return [self._camera_choice(camera) for camera in self._controller.workspace.configured_cameras]
+        """Cameras the operator can drop into the selected scene.
+
+        A camera already used by another scene stays on the list: one source shown
+        by several scenes is exactly the point, and a capture device can only be
+        opened once, so making the operator create a second source for the same
+        device just fails to open. Only cameras already in *this* scene are hidden,
+        where a second layer would be a duplicate of itself.
+        """
+        try:
+            in_this_scene = {layer.source_id for layer in self._selected_scene().layers}
+        except Exception:  # noqa: BLE001 - a stale selection must not empty the menu
+            in_this_scene = set()
+        return [
+            self._camera_choice(camera)
+            for camera in self._controller.workspace.configured_cameras
+            if camera.id not in in_this_scene
+        ]
 
     @Property("QVariantList", notify=changed)  # type: ignore[arg-type]
     def referencedScenes(self) -> list[dict[str, object]]:

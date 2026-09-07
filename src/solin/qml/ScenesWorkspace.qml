@@ -966,13 +966,25 @@ Item {
             border.width: 1
             border.color: root.borderColor
         }
-        // The picker only creates NEW sources: the year text, a camera, or the
-        // Solin media slot. Already-added sources, other scenes, and duplicates
-        // are intentionally not listed.
+        // The picker creates new sources — the year text, a camera, the Solin media
+        // slot — and re-uses cameras that already exist. Other scenes and sources
+        // already in THIS scene stay out of it.
         ScenesMenuItem {
             theme: root.theme
             text: qsTr("Year text")
             onTriggered: root.bridge.addYearText()
+        }
+        // A camera already used by another scene belongs here: the device can only
+        // be opened once, so the operator has to re-use the source rather than
+        // create a second one for the same camera.
+        Repeater {
+            model: root.bridge ? root.bridge.configuredCameras : []
+            ScenesMenuItem {
+                required property var modelData
+                theme: root.theme
+                text: modelData.name
+                onTriggered: root.bridge.addConfiguredCamera(modelData.id)
+            }
         }
         ScenesMenuItem {
             theme: root.theme

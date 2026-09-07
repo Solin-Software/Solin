@@ -1407,3 +1407,47 @@ def test_bridge_disconnects_runtime_callbacks_before_qml_teardown(tmp_path: Path
 
     assert changed.count() == 0
     controller.close()
+
+
+def test_a_camera_used_by_another_scene_can_still_be_added(tmp_path: Path) -> None:
+    """One camera, many scenes: a capture device can only be opened once.
+
+    Hiding cameras that are already on air elsewhere left no way to build a second
+    scene around the same camera — creating a duplicate source for the device just
+    fails to open it.
+    """
+    workspace, controller, bridge, _preview_store = _bridge(tmp_path)
+    camera_id = workspace.configured_cameras[0].id
+
+    bridge.createScene("Stage")
+    bridge.addConfiguredCamera(camera_id)
+    stage_id = bridge.selectedSceneId
+
+    bridge.createScene("Wide")
+    offered = {camera["id"] for camera in bridge.configuredCameras}
+    assert camera_id in offered, "a camera live in another scene must stay offerable"
+
+    bridge.addConfiguredCamera(camera_id)
+
+    wide = controller.document.scene(bridge.selectedSceneId)
+    stage = controller.document.scene(stage_id)
+    assert [layer.source_id for layer in wide.layers] == [camera_id]
+    # The other scene keeps it too — one source shown by both, not a copy.
+    assert [layer.source_id for layer in stage.layers] == [camera_id]
+    assert sum(1 for s in controller.document.sources if s.id == camera_id) == 1
+    bridge.close()
+    controller.close()
+
+
+def test_a_camera_already_in_this_scene_is_not_offered_again(tmp_path: Path) -> None:
+    workspace, controller, bridge, _preview_store = _bridge(tmp_path)
+    camera_id = workspace.configured_cameras[0].id
+
+    bridge.createScene("Stage")
+    assert camera_id in {camera["id"] for camera in bridge.configuredCameras}
+
+    bridge.addConfiguredCamera(camera_id)
+
+    assert camera_id not in {camera["id"] for camera in bridge.configuredCameras}
+    bridge.close()
+    controller.close()
