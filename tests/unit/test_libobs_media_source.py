@@ -16,6 +16,7 @@ class _FakeMediaSource:
         self.kind = kind
         self.name = name
         self.settings = dict(settings)
+        self._ptr = object()  # stands in for the raw obs_source_t*
         self.play_pause: list[bool] = []
         self.stops = 0
         self.restarts = 0
@@ -171,3 +172,78 @@ def test_decoding_does_not_wait_for_libobs_to_activate_the_source(monkeypatch):
     LibobsMediaSource(runtime).open("/tmp/clip.mp4")
 
     assert runtime.created[-1].settings["restart_on_activate"] is False
+
+
+class _ActivationRecorder:
+    """Stands in for the unwrapped libobs activation symbols."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, object]] = []
+
+    def obs_source_inc_active(self, pointer) -> None:
+        self.calls.append(("inc", pointer))
+
+    def obs_source_dec_active(self, pointer) -> None:
+        self.calls.append(("dec", pointer))
+
+
+def _with_activation(monkeypatch):
+    import pylibobs._ffi as ffi_module
+
+    recorder = _ActivationRecorder()
+    monkeypatch.setattr(ffi_module, "get_lib", lambda: recorder)
+    return recorder
+
+
+def test_open_media_holds_an_activate_ref_so_it_can_be_heard(monkeypatch):
+    """Monitored audio is dropped while activate_refs is zero.
+
+    libobs' monitoring backends bail out when the source is not active, and only the
+    MAIN view raises that counter — projection, the editor preview and the scene
+    cards all take show refs instead. Without an explicit activate ref a song routed
+    anywhere but the virtual camera decoded silently.
+    """
+    monkeypatch.delenv("SOLIN_MEDIA_HW_DECODE", raising=False)
+    recorder = _with_activation(monkeypatch)
+    runtime = _Runtime()
+    media = LibobsMediaSource(runtime)
+
+    assert media.open("/tmp/song.mp3") is True
+
+    source = runtime.created[-1]
+    assert recorder.calls == [("inc", source._ptr)]
+
+    media.close()
+
+    assert recorder.calls == [("inc", source._ptr), ("dec", source._ptr)]
+
+
+def test_the_activate_ref_is_taken_once_and_released_once(monkeypatch):
+    """A leaked or doubled ref would strand the source active for the session."""
+    monkeypatch.delenv("SOLIN_MEDIA_HW_DECODE", raising=False)
+    recorder = _with_activation(monkeypatch)
+    media = LibobsMediaSource(_Runtime())
+
+    media.open("/tmp/song.mp3")
+    media.close()
+    media.close()  # idempotent: no second dec
+
+    assert [kind for kind, _ in recorder.calls] == ["inc", "dec"]
+
+
+def test_a_wrapper_without_a_raw_pointer_does_not_break_playback(monkeypatch):
+    """The activation call is best-effort; media must still open without it."""
+    monkeypatch.delenv("SOLIN_MEDIA_HW_DECODE", raising=False)
+    _with_activation(monkeypatch)
+    runtime = _Runtime()
+    original = _FakeMediaSource.__init__
+
+    def without_pointer(self, kind, name, settings):
+        original(self, kind, name, settings)
+        del self._ptr
+
+    monkeypatch.setattr(_FakeMediaSource, "__init__", without_pointer)
+    media = LibobsMediaSource(runtime)
+
+    assert media.open("/tmp/song.mp3") is True
+    media.close()

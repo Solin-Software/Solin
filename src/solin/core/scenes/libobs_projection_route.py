@@ -8,9 +8,15 @@ of the program inside the virtual camera and the recording.
 
 A transition is just a source, so the projection displays render it directly with
 ``render_source_letterboxed``. ``obs_source_inc_showing`` gives the transition (and
-through it every scene later set on it) the show refs that make cameras and media
-actually run; show refs are *not* activate refs, so projection audio never enters
-the program mix.
+through it every scene later set on it) the show refs that make cameras actually run.
+
+Show refs are *not* activate refs: they raise ``show_refs`` only, never
+``activate_refs``. What keeps projection out of the program mix is that this
+transition is not a root source of a main-view output channel — that is the mix.
+The activate counter matters for something else: libobs' audio monitoring discards
+every buffer while it is zero, which is why an audible media source takes its own
+activate ref (see :meth:`LibobsMediaSource._set_active`) instead of relying on
+whichever bus happens to be showing it.
 
 Owned by the sidecar rather than the scene graph, so a structural-edit rebuild
 (``LibobsSceneGraph.clear``) cannot black the projection out: the transition keeps

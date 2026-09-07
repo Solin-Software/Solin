@@ -59,6 +59,8 @@ class LibobsMediaSource:
         self._runtime = runtime
         self._source: Any = None
         self._path = ""
+        # True while this source holds an activate ref (see _set_active).
+        self._active = False
 
     @property
     def source(self) -> Any:
@@ -122,8 +124,39 @@ class LibobsMediaSource:
             self._runtime.set_source_monitoring(source, MONITORING_MONITOR_ONLY)
         except Exception:  # noqa: BLE001 - monitoring is best-effort
             log.warning("Could not set media source monitoring", exc_info=True)
+        self._set_active(source, True)
         source.media_play_pause(not autoplay)
         return True
+
+    def _set_active(self, source: Any, active: bool) -> None:
+        """Hold an activate ref while the media is open, so it can be heard.
+
+        libobs' audio monitoring drops every buffer while ``activate_refs`` is zero
+        (``pulseaudio-output.c`` and ``wasapi-output.c`` both bail out on it), and
+        only the MAIN view raises that counter. Solin shows media on outputs that
+        deliberately take *show* refs instead — projection, the editor preview, the
+        scene-card thumbnails — so a song routed anywhere but the virtual camera was
+        decoded and then silently discarded on its way to the speakers.
+
+        This is an activate ref, not an output channel: the source is not composited
+        into the program canvas, and monitor-only routing still keeps it out of the
+        program mix.
+        """
+        pointer = getattr(source, "_ptr", None)
+        if pointer is None or active == self._active:
+            return
+        try:
+            from pylibobs._ffi import get_lib
+
+            lib = get_lib()
+            if active:
+                lib.obs_source_inc_active(pointer)
+            else:
+                lib.obs_source_dec_active(pointer)
+        except Exception:  # noqa: BLE001 - unwrapped libobs symbol
+            log.warning("Could not change the media source activation", exc_info=True)
+            return
+        self._active = active
 
     def set_volume(self, volume_percent: int) -> None:
         """Set the source volume (100 = unity gain)."""
@@ -196,6 +229,7 @@ class LibobsMediaSource:
         self._path = ""
         if source is None:
             return
+        self._set_active(source, False)  # symmetrical: never leak an activate ref
         try:
             source.media_stop()
         except Exception:  # noqa: BLE001 - libobs boundary
