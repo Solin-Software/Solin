@@ -87,6 +87,9 @@ def test_open_remote_url_uses_the_input_setting_and_can_start_paused(monkeypatch
     assert source.settings == {
         "is_local_file": False, "input": "https://cdn.example/v.mp4", "hw_decode": True,
         "restart_on_activate": False,
+        # http(s) origins serve byte ranges, so the stream is seekable
+        "seekable": True,
+        "ffmpeg_options": "buffer_size=2097152 rw_timeout=15000000",
     }
     assert source.play_pause == [True]  # paused
 
@@ -247,3 +250,48 @@ def test_a_wrapper_without_a_raw_pointer_does_not_break_playback(monkeypatch):
 
     assert media.open("/tmp/song.mp3") is True
     media.close()
+
+
+def test_progressive_http_media_is_marked_seekable(monkeypatch):
+    """Without this the seek is accepted, queued, and silently dropped.
+
+    ffmpeg_source composes media-playback's is_local_file as
+    ``is_local_file || seekable``, and media-playback wraps av_seek_frame in
+    ``if (m->is_local_file)``. A streamed URL with neither flag therefore ignores
+    every seek while the position keeps running, so the slider snaps back.
+    """
+    monkeypatch.delenv("SOLIN_MEDIA_HW_DECODE", raising=False)
+    runtime = _Runtime()
+
+    LibobsMediaSource(runtime).open("https://cdn.example/song.mp3")
+
+    settings = runtime.created[-1].settings
+    assert settings["seekable"] is True
+    # Marking it seekable drops the readahead buffer and the socket interrupt
+    # callback ffmpeg_source installs for network input; ask for both back.
+    assert "buffer_size=" in settings["ffmpeg_options"]
+    assert "rw_timeout=" in settings["ffmpeg_options"]
+
+
+def test_live_transports_are_not_marked_seekable(monkeypatch):
+    """rtsp/rtmp/srt cannot seek and do need the network interrupt handling."""
+    monkeypatch.delenv("SOLIN_MEDIA_HW_DECODE", raising=False)
+
+    for url in ("rtsp://cam.local/stream", "rtmp://server/live", "srt://host:9000"):
+        runtime = _Runtime()
+        LibobsMediaSource(runtime).open(url)
+        settings = runtime.created[-1].settings
+        assert "seekable" not in settings, url
+        assert "ffmpeg_options" not in settings, url
+
+
+def test_local_files_are_left_alone(monkeypatch):
+    """A local file is already seekable; it must not take the network options."""
+    monkeypatch.delenv("SOLIN_MEDIA_HW_DECODE", raising=False)
+    runtime = _Runtime()
+
+    LibobsMediaSource(runtime).open("/tmp/clip.mp4")
+
+    settings = runtime.created[-1].settings
+    assert "seekable" not in settings
+    assert "ffmpeg_options" not in settings

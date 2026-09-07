@@ -46,10 +46,21 @@ STATE_ENDED = 6
 STATE_ERROR = 7
 
 _REMOTE_SCHEMES = ("http://", "https://", "rtsp://", "rtmp://", "srt://")
+# Progressive downloads can be seeked with byte ranges; live transports cannot.
+_SEEKABLE_REMOTE_SCHEMES = ("http://", "https://")
+# ffmpeg_source only applies these to a network input. Marking a stream seekable
+# puts media-playback into its local-file mode, which skips the readahead buffer
+# and the socket interrupt callback it would otherwise install; ffmpeg_options is
+# merged into the same avformat_open_input dict, so ask for both back explicitly.
+_PROGRESSIVE_FFMPEG_OPTIONS = "buffer_size=2097152 rw_timeout=15000000"
 
 
 def _is_remote(path: str) -> bool:
     return path.startswith(_REMOTE_SCHEMES)
+
+
+def _is_seekable_remote(path: str) -> bool:
+    return path.startswith(_SEEKABLE_REMOTE_SCHEMES)
 
 
 class LibobsMediaSource:
@@ -94,6 +105,17 @@ class LibobsMediaSource:
             if local
             else {"is_local_file": False, "input": path}
         )
+        if not local and _is_seekable_remote(path):
+            # media-playback wraps av_seek_frame in `if (m->is_local_file)`, and
+            # ffmpeg_source composes that flag as `is_local_file || seekable`. With
+            # neither set, a seek is accepted, queued, and then silently dropped —
+            # the position keeps running and the slider snaps back. HTTP origins
+            # serve byte ranges, so mark them seekable and pay the network options
+            # back through ffmpeg_options. A origin that refuses ranges just logs
+            # "MP: Failed to seek" and behaves as before. Live transports are left
+            # alone: they cannot seek and do need the interrupt callback.
+            settings["seekable"] = True
+            settings["ffmpeg_options"] = _PROGRESSIVE_FFMPEG_OPTIONS
         # Ask libobs to decode on the GPU when hardware is available; it falls
         # back to software per stream (see _hw_decode_enabled).
         settings["hw_decode"] = _hw_decode_enabled()
