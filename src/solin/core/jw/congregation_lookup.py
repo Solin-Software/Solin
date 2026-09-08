@@ -25,6 +25,9 @@ UNAVAILABLE = "unavailable"
 _TOO_MANY_REQUESTS = 429
 # Shortest query worth a request; below it every congregation matches.
 MINIMUM_QUERY_LENGTH = 4
+# jw.org allows about ten searches per half minute, so a request only goes
+# out once typing actually stops.
+SEARCH_DEBOUNCE_MS = 900
 
 
 def classify_failure(error: Exception) -> str:
@@ -147,6 +150,7 @@ __all__ = [
     "MEETING_SEARCH_URL",
     "MINIMUM_QUERY_LENGTH",
     "RATE_LIMITED",
+    "SEARCH_DEBOUNCE_MS",
     "UNAVAILABLE",
     "CongregationMatch",
     "classify_failure",

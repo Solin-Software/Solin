@@ -9,6 +9,7 @@ from typing import Any
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal
 
 from solin.core.jw.congregation_lookup import (
+    MINIMUM_QUERY_LENGTH,
     CongregationMatch,
     classify_failure,
     fetch_meeting_schedule,
@@ -72,7 +73,7 @@ class CongregationLookupService(QObject):
     def search(self, name: str) -> None:
         revision = self._next_revision()
         query = name.strip()
-        if not query:
+        if len(query) < MINIMUM_QUERY_LENGTH:
             self.suggestions_ready.emit([])
             return
         cached = self._cache.get(query.casefold())

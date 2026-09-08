@@ -1485,7 +1485,7 @@ Rectangle {
 
         Timer {
             id: congDebounce
-            interval: 350
+            interval: onboardingBridge.searchDebounceMs
             onTriggered: onboardingBridge.searchCongregation(congSearch.text)
         }
 

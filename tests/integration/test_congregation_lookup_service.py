@@ -179,3 +179,28 @@ def test_any_other_transport_failure_stays_unavailable(monkeypatch):
 
     assert failures == [congregation_lookup.UNAVAILABLE]
     service.shutdown()
+
+
+def test_a_query_below_the_minimum_length_spends_no_request(monkeypatch):
+    attempts: list[str] = []
+
+    def search_congregations(name: str) -> list[CongregationMatch]:
+        attempts.append(name)
+        return []
+
+    monkeypatch.setattr(
+        congregation_lookup_service,
+        "search_congregations",
+        search_congregations,
+    )
+
+    service = CongregationLookupService()
+    suggestions: list[list[CongregationMatch]] = []
+    service.suggestions_ready.connect(suggestions.append)
+
+    service.search("pla")
+    _drain(service)
+
+    assert attempts == []
+    assert suggestions == [[]]
+    service.shutdown()

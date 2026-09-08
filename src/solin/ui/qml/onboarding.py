@@ -27,7 +27,11 @@ from solin.core.integrations.automation.obs import OBSConnectionState
 from solin.core.integrations.automation.screen_share import (
     macos_accessibility_trusted,
 )
-from solin.core.jw.congregation_lookup import RATE_LIMITED
+from solin.core.jw.congregation_lookup import (
+    MINIMUM_QUERY_LENGTH,
+    RATE_LIMITED,
+    SEARCH_DEBOUNCE_MS,
+)
 from solin.core.meetings.schedule import MeetingSchedule
 from solin.core.onboarding.application import (
     OBSOnboardingConfiguration,
@@ -145,6 +149,10 @@ class OnboardingBridge(QObject):
             media_service = self._language_manager.jw_lang_service
             media_service.languages_ready.connect(self._on_media_languages_ready)
             media_service.fetch_if_needed()
+
+    @Property(int, constant=True)
+    def searchDebounceMs(self) -> int:  # noqa: N802 - QML API
+        return SEARCH_DEBOUNCE_MS
 
     @Property("QVariantMap", notify=stateChanged)
     def state(self) -> dict[str, Any]:
@@ -419,7 +427,8 @@ class OnboardingBridge(QObject):
     @Slot(str)
     def searchCongregation(self, text: str) -> None:  # noqa: N802 - QML API
         self._state["congregationQuery"] = text
-        self._congregation_status_kind = "searching" if text.strip() else "idle"
+        searching = len(text.strip()) >= MINIMUM_QUERY_LENGTH
+        self._congregation_status_kind = "searching" if searching else "idle"
         self._publish_congregation_state()
         self._congregation_lookup.search(text)
 

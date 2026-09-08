@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 from ...core.jw.congregation_lookup import (
     MINIMUM_QUERY_LENGTH,
     RATE_LIMITED,
+    SEARCH_DEBOUNCE_MS,
 )
 from ...core.meetings.schedule import (
     DEFAULT_MIDWEEK_TIME,
@@ -59,9 +60,6 @@ from .shared import (
 )
 
 _DAY_DATA = tuple(range(7))
-# jw.org allows about ten searches per half minute, so a request only goes
-# out once typing actually stops.
-_SEARCH_DEBOUNCE_MS = 900
 # Lines the field up with the day and time controls below it.
 _CONGREGATION_FIELD_WIDTH = 248
 
@@ -615,7 +613,7 @@ class MeetingScheduleSectionMixin:
 
         self._congregation_debounce = QTimer(self._congregation_field)
         self._congregation_debounce.setSingleShot(True)
-        self._congregation_debounce.setInterval(_SEARCH_DEBOUNCE_MS)
+        self._congregation_debounce.setInterval(SEARCH_DEBOUNCE_MS)
         self._congregation_debounce.timeout.connect(self._start_congregation_search)
         self._congregation_field.textEdited.connect(
             lambda _text: self._congregation_debounce.start()
