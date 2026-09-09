@@ -711,7 +711,7 @@
 <context>
     <name>BrowserWidget</name>
     <message>
-        <location filename="../../widgets/browser/widget.py" line="+1468"/>
+        <location filename="../../widgets/browser/widget.py" line="+1441"/>
         <source>Back (Alt+←)</source>
         <translation>Voltar (Alt+←)</translation>
     </message>
@@ -1589,19 +1589,19 @@
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../../main_window.py" line="+1244"/>
+        <location filename="../../main_window.py" line="+1245"/>
         <location filename="../../controllers/main_window_nav.py" line="+38"/>
         <source>Scenes</source>
         <translation>Cenas</translation>
     </message>
     <message>
-        <location line="-693"/>
+        <location line="-694"/>
         <location filename="../../controllers/main_window_nav.py" line="-27"/>
         <source>Solin</source>
         <translation>Solin</translation>
     </message>
     <message>
-        <location line="+715"/>
+        <location line="+716"/>
         <source>Recording failed.</source>
         <translation>Falha na gravação.</translation>
     </message>
@@ -2710,18 +2710,65 @@ O conteúdo adicionado manualmente, os cortes, o enquadramento e o estado de exp
 <context>
     <name>MeetingScheduleSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/meeting_schedule_section.py" line="+468"/>
-        <location line="+149"/>
+        <location filename="../../widgets/settings/meeting_schedule_section.py" line="+528"/>
+        <location line="+334"/>
         <source>Used by automatic features that depend on the meeting start time.</source>
         <translation>Usado por recursos automáticos que dependem do horário de início da reunião.</translation>
+    </message>
+    <message>
+        <location line="-275"/>
+        <location line="+285"/>
+        <source>Fill in from jw.org</source>
+        <translation>Preencher pelo jw.org</translation>
+    </message>
+    <message>
+        <location line="-270"/>
+        <location line="+271"/>
+        <source>Congregation name</source>
+        <translation>Nome da congregação</translation>
+    </message>
+    <message>
+        <location line="-174"/>
+        <source>Searching jw.org…</source>
+        <translation>Buscando no jw.org…</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>No congregation found with that name.</source>
+        <translation>Nenhuma congregação encontrada com esse nome.</translation>
+    </message>
+    <message>
+        <location line="-6"/>
+        <source>Reading the meeting times…</source>
+        <translation>Lendo os horários das reuniões…</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>jw.org does not publish meeting times for this congregation.</source>
+        <translation>O jw.org não publica os horários das reuniões desta congregação.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Too many searches in a row. Wait a moment and type again.</source>
+        <translation>Muitas buscas em sequência. Aguarde um instante e digite de novo.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Could not reach jw.org. Check the connection and try again.</source>
+        <translation>Não foi possível acessar o jw.org. Verifique a conexão e tente de novo.</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Search your congregation to fill the days and times below.</source>
+        <translation>Busque sua congregação para preencher os dias e horários abaixo.</translation>
     </message>
     <message>
         <source>Midweek meeting</source>
         <translation type="vanished">Reunião do meio de semana</translation>
     </message>
     <message>
-        <location line="-133"/>
-        <location line="+137"/>
+        <location line="-193"/>
+        <location line="+320"/>
         <source>Day and time for the midweek meeting.</source>
         <translation>Dia e horário da reunião do meio de semana.</translation>
     </message>
@@ -2730,8 +2777,8 @@ O conteúdo adicionado manualmente, os cortes, o enquadramento e o estado de exp
         <translation type="vanished">Reunião do fim de semana</translation>
     </message>
     <message>
-        <location line="-130"/>
-        <location line="+134"/>
+        <location line="-313"/>
+        <location line="+317"/>
         <source>Day and time for the weekend meeting.</source>
         <translation>Dia e horário da reunião do fim de semana.</translation>
     </message>
@@ -2986,8 +3033,8 @@ O conteúdo adicionado manualmente, os cortes, o enquadramento e o estado de exp
 <context>
     <name>OBSScenePopup</name>
     <message>
-        <location filename="../../widgets/obs_scene_popup.py" line="+110"/>
-        <location line="+541"/>
+        <location filename="../../widgets/obs_scene_popup.py" line="+111"/>
+        <location line="+544"/>
         <source>OBS Scenes</source>
         <translation>Cenas do OBS</translation>
     </message>
@@ -3239,7 +3286,7 @@ O conteúdo adicionado manualmente, os cortes, o enquadramento e o estado de exp
         <translation>Continuar</translation>
     </message>
     <message>
-        <location line="+47"/>
+        <location line="+52"/>
         <source>Welcome to Solin</source>
         <translation>Bem-vindo ao Solin</translation>
     </message>
@@ -3287,6 +3334,27 @@ O conteúdo adicionado manualmente, os cortes, o enquadramento e o estado de exp
     </message>
     <message>
         <location line="+5"/>
+        <location line="+406"/>
+        <source>Meeting schedule</source>
+        <translation>Horários das reuniões</translation>
+    </message>
+    <message>
+        <location line="-400"/>
+        <location line="+1161"/>
+        <source>Congregation</source>
+        <translation>Congregação</translation>
+    </message>
+    <message>
+        <source>Optional</source>
+        <translation type="vanished">Opcional</translation>
+    </message>
+    <message>
+        <location line="-1150"/>
+        <source>Find your congregation to fill the meeting days and times from jw.org.</source>
+        <translation>Busque sua congregação para preencher os dias e horários das reuniões pelo jw.org.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
         <location line="+375"/>
         <source>Meeting media</source>
         <translation>Mídias da reunião</translation>
@@ -3488,6 +3556,8 @@ O conteúdo adicionado manualmente, os cortes, o enquadramento e o estado de exp
         <translation>Esta semana e a próxima</translation>
     </message>
     <message>
+        <location line="-393"/>
+        <location line="+400"/>
         <location line="+5"/>
         <location line="+9"/>
         <source>Not configured</source>
@@ -3519,17 +3589,37 @@ O conteúdo adicionado manualmente, os cortes, o enquadramento e o estado de exp
         <translation>Escolha uma cena</translation>
     </message>
     <message>
-        <location line="+316"/>
+        <location line="+303"/>
+        <location line="+167"/>
         <source>Close</source>
         <translation>Fechar</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="-159"/>
+        <source>Search by congregation name</source>
+        <translation>Buscar pelo nome da congregação</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/onboarding.py" line="+69"/>
+        <source>Searching jw.org…</source>
+        <translation>Buscando no jw.org…</translation>
+    </message>
+    <message>
+        <source>Meeting days and times come from jw.org.</source>
+        <translation type="vanished">Os dias e horários das reuniões vêm do jw.org.</translation>
+    </message>
+    <message>
+        <location filename="../../qml/OnboardingView.qml" line="+88"/>
+        <source>Remove congregation</source>
+        <translation>Remover congregação</translation>
+    </message>
+    <message>
+        <location line="+78"/>
         <source>Search languages</source>
         <translation>Buscar idiomas</translation>
     </message>
     <message>
-        <location filename="../../ui/qml/onboarding.py" line="+275"/>
+        <location filename="../../ui/qml/onboarding.py" line="+255"/>
         <source>Enter a port between 1 and 65535.</source>
         <translation>Digite uma porta entre 1 e 65535.</translation>
     </message>
@@ -3539,7 +3629,7 @@ O conteúdo adicionado manualmente, os cortes, o enquadramento e o estado de exp
         <translation>O seletor de alvo de compartilhamento está indisponível.</translation>
     </message>
     <message>
-        <location line="+96"/>
+        <location line="+139"/>
         <source>Enter a profile name.</source>
         <translation>Digite um nome de perfil.</translation>
     </message>
@@ -3569,12 +3659,37 @@ O conteúdo adicionado manualmente, os cortes, o enquadramento e o estado de exp
         <translation>Escolha o alvo na janela de compartilhamento do Zoom.</translation>
     </message>
     <message>
-        <location line="+80"/>
+        <location line="+81"/>
         <source>Could not create the profile.</source>
         <translation>Não foi possível criar o perfil.</translation>
     </message>
     <message>
-        <location line="+99"/>
+        <location line="-542"/>
+        <source>jw.org does not publish meeting times for this congregation.</source>
+        <translation>O jw.org não publica os horários das reuniões desta congregação.</translation>
+    </message>
+    <message>
+        <location line="-8"/>
+        <source>Reading the meeting times…</source>
+        <translation>Lendo os horários das reuniões…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>No congregation found with that name.</source>
+        <translation>Nenhuma congregação encontrada com esse nome.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Too many searches in a row. Wait a moment and type again.</source>
+        <translation>Muitas buscas em sequência. Aguarde um instante e digite de novo.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Could not reach jw.org. Check the connection and try again.</source>
+        <translation>Não foi possível acessar o jw.org. Verifique a conexão e tente de novo.</translation>
+    </message>
+    <message>
+        <location line="+685"/>
         <source>Allow Solin in macOS Accessibility settings.</source>
         <translation>Permita o Solin nos ajustes de Acessibilidade do macOS.</translation>
     </message>
@@ -4562,17 +4677,17 @@ Esta ação não pode ser desfeita.</translation>
 <context>
     <name>PopupHoverButton</name>
     <message>
-        <location filename="../../widgets/common/popup_hover_button.py" line="28"/>
+        <location filename="../../widgets/common/popup_hover_button.py" line="+28"/>
         <source>Open on hover</source>
         <translation>Abrir ao passar o mouse</translation>
     </message>
     <message>
-        <location filename="../../widgets/common/popup_hover_button.py" line="30"/>
+        <location line="+2"/>
         <source>Opens when you hover over its toolbar icon. Click to disable.</source>
         <translation>Abre ao passar o mouse sobre o ícone dele na barra de ferramentas. Clique para desativar.</translation>
     </message>
     <message>
-        <location filename="../../widgets/common/popup_hover_button.py" line="32"/>
+        <location line="+2"/>
         <source>Open this panel by hovering over its toolbar icon. Click to enable.</source>
         <translation>Abra este painel ao passar o mouse sobre o ícone dele na barra de ferramentas. Clique para ativar.</translation>
     </message>
@@ -4620,7 +4735,7 @@ Esta ação não pode ser desfeita.</translation>
 <context>
     <name>ProfileScreen</name>
     <message>
-        <location filename="../../ui/profile_screen.py" line="+145"/>
+        <location filename="../../ui/profile_screen.py" line="+147"/>
         <source>Who is using Solin?</source>
         <translation>Quem está usando o Solin?</translation>
     </message>
@@ -5117,7 +5232,7 @@ Esta ação não pode ser desfeita.</translation>
 <context>
     <name>QuickAccessToolbar</name>
     <message>
-        <location filename="../../widgets/quick_access_toolbar.py" line="+683"/>
+        <location filename="../../widgets/quick_access_toolbar.py" line="+649"/>
         <location line="+8"/>
         <source>Background Song</source>
         <translation>Cântico de fundo</translation>
@@ -5167,7 +5282,7 @@ Esta ação não pode ser desfeita.</translation>
 <context>
     <name>QuickToolbarBridge</name>
     <message>
-        <location filename="../../ui/qml/quick_toolbar.py" line="+437"/>
+        <location filename="../../ui/qml/quick_toolbar.py" line="+450"/>
         <source>Manage monitors</source>
         <translation>Gerenciar telas</translation>
     </message>
@@ -5576,49 +5691,49 @@ Esta ação não pode ser desfeita.</translation>
 <context>
     <name>SceneControlPopup</name>
     <message>
-        <location filename="../../widgets/scenes/control_popup.py" line="+274"/>
-        <location line="+689"/>
+        <location filename="../../widgets/scenes/control_popup.py" line="+275"/>
+        <location line="+692"/>
         <source>Solin scenes</source>
         <translation>Cenas do Solin</translation>
     </message>
     <message>
-        <location line="-364"/>
+        <location line="-365"/>
         <location line="+2"/>
         <source>Virtual camera</source>
         <translation>Câmera virtual</translation>
     </message>
     <message>
         <location line="-250"/>
-        <location line="+616"/>
+        <location line="+617"/>
         <source>Auto-switch media</source>
         <translation>Troca automática</translation>
     </message>
     <message>
-        <location line="-611"/>
-        <location line="+612"/>
+        <location line="-612"/>
+        <location line="+613"/>
         <source>Media windows</source>
         <translation>Janelas de mídia</translation>
     </message>
     <message>
-        <location line="-673"/>
-        <location line="+669"/>
+        <location line="-674"/>
+        <location line="+670"/>
         <source>Configured</source>
         <translation>Configuradas</translation>
     </message>
     <message>
-        <location line="-651"/>
-        <location line="+653"/>
+        <location line="-652"/>
+        <location line="+654"/>
         <source>Other scenes</source>
         <translation>Outras cenas</translation>
     </message>
     <message>
-        <location line="-606"/>
-        <location line="+609"/>
+        <location line="-607"/>
+        <location line="+610"/>
         <source>Show in media windows</source>
         <translation>Exibir nas janelas de mídia</translation>
     </message>
     <message>
-        <location line="-501"/>
+        <location line="-502"/>
         <source>The scene could not be selected.</source>
         <translation>Não foi possível selecionar a cena.</translation>
     </message>
@@ -5683,12 +5798,12 @@ Esta ação não pode ser desfeita.</translation>
     </message>
     <message>
         <location line="-271"/>
-        <location line="+661"/>
+        <location line="+662"/>
         <source>Camera PiP</source>
         <translation>Câmera PiP</translation>
     </message>
     <message>
-        <location line="-592"/>
+        <location line="-593"/>
         <source>The recording state could not be changed.</source>
         <translation>Não foi possível alterar o estado da gravação.</translation>
     </message>
@@ -5864,7 +5979,7 @@ Esta ação não pode ser desfeita.</translation>
 <context>
     <name>SceneRuntimeController</name>
     <message>
-        <location filename="../../controllers/scene_runtime_controller.py" line="+1646"/>
+        <location filename="../../controllers/scene_runtime_controller.py" line="+1651"/>
         <source>The selected transition is unavailable. The scene was cut instead.</source>
         <translation>A transição selecionada não está disponível. A cena foi trocada com Corte.</translation>
     </message>
@@ -7277,7 +7392,7 @@ Adicione conteúdo, uma câmera ou outra cena.</translation>
 <context>
     <name>SettingsWidget</name>
     <message>
-        <location filename="../../widgets/settings_widget.py" line="+271"/>
+        <location filename="../../widgets/settings_widget.py" line="+277"/>
         <location line="+265"/>
         <source>Settings</source>
         <translation>Configurações</translation>
@@ -8692,7 +8807,7 @@ Adicione uma quando quiser.</translation>
 <context>
     <name>UpdateDialog</name>
     <message>
-        <location filename="../../ui/dialogs/update.py" line="+226"/>
+        <location filename="../../ui/dialogs/update.py" line="+227"/>
         <source>Update available</source>
         <translation>Atualização disponível</translation>
     </message>
@@ -10937,7 +11052,7 @@ Use o botão de reprodução para projetar · Arraste a alça ⠿ para reordenar
 <context>
     <name>_TimePickerPopup</name>
     <message>
-        <location filename="../../widgets/settings/meeting_schedule_section.py" line="-292"/>
+        <location filename="../../widgets/settings/meeting_schedule_section.py" line="-477"/>
         <source>Hour</source>
         <translation>Hora</translation>
     </message>

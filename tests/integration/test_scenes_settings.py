@@ -11,6 +11,7 @@ from solin.core.foundation.settings_store import (
     SettingsNamespace,
     SettingsStore,
 )
+from solin.core.jw.congregation_lookup_service import CongregationLookupService
 from solin.ui.incremental_load import IncrementalLoadState
 from solin.widgets import settings_widget as settings_module
 from solin.widgets.settings_widget import SettingsWidget
@@ -85,6 +86,7 @@ def create_settings(tmp_path, monkeypatch):
             remote_control_credentials=None,
             qr_generation_session_factory=None,
             yeartext_service_factory=None,
+            congregation_lookup_factory=CongregationLookupService,
             auto_share_accessibility_trusted=lambda: False,
             defer_build=True,
         )

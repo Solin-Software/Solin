@@ -12,6 +12,7 @@ from solin.core.integrations.automation.settings import (
 )
 from solin.core.jw.language_settings import JWLanguageSettingsStore
 from solin.core.media.settings import MediaSettingsStore
+from solin.core.meetings.schedule_settings import MeetingScheduleSettingsStore
 from solin.core.onboarding.application import ProfileOnboardingCommand
 
 
@@ -20,6 +21,7 @@ class OnboardingSettingsStores:
     app_settings: ProfileAppSettingsStore
     media_language_settings: JWLanguageSettingsStore
     media_settings: MediaSettingsStore
+    meeting_schedule_settings: MeetingScheduleSettingsStore
     obs_settings: OBSSettingsStore
     auto_share_settings: AutoShareSettingsStore
 
@@ -45,6 +47,13 @@ class QSettingsOnboardingSettings:
         stores.media_settings.set_meetings_auto_download(
             command.download_meeting_media
         )
+        if command.meeting_schedule is not None:
+            for slot in command.meeting_schedule.slots:
+                stores.meeting_schedule_settings.set_slot(
+                    slot.kind,
+                    slot.weekday,
+                    slot.time_text,
+                )
 
         obs_settings = stores.obs_settings
         obs_settings.set_enabled(command.obs.enabled)

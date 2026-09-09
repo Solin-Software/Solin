@@ -711,7 +711,7 @@
 <context>
     <name>BrowserWidget</name>
     <message>
-        <location filename="../../widgets/browser/widget.py" line="+1468"/>
+        <location filename="../../widgets/browser/widget.py" line="+1441"/>
         <source>Back (Alt+←)</source>
         <translation>Kembali (Alt+←)</translation>
     </message>
@@ -1582,7 +1582,7 @@
         <translation>Solin</translation>
     </message>
     <message>
-        <location line="+693"/>
+        <location line="+694"/>
         <location filename="../../controllers/main_window_nav.py" line="+27"/>
         <source>Scenes</source>
         <translation>Adegan</translation>
@@ -2694,18 +2694,65 @@ Konten yang ditambahkan secara manual, pemangkasan, pembingkaian, dan status ter
 <context>
     <name>MeetingScheduleSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/meeting_schedule_section.py" line="+468"/>
-        <location line="+149"/>
+        <location filename="../../widgets/settings/meeting_schedule_section.py" line="+528"/>
+        <location line="+334"/>
         <source>Used by automatic features that depend on the meeting start time.</source>
         <translation>Digunakan oleh fitur otomatis yang bergantung pada waktu mulai perhimpunan.</translation>
+    </message>
+    <message>
+        <location line="-275"/>
+        <location line="+285"/>
+        <source>Fill in from jw.org</source>
+        <translation>Isi dari jw.org</translation>
+    </message>
+    <message>
+        <location line="-270"/>
+        <location line="+271"/>
+        <source>Congregation name</source>
+        <translation>Nama sidang</translation>
+    </message>
+    <message>
+        <location line="-174"/>
+        <source>Searching jw.org…</source>
+        <translation>Mencari di jw.org…</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>No congregation found with that name.</source>
+        <translation>Tidak ada sidang dengan nama itu.</translation>
+    </message>
+    <message>
+        <location line="-6"/>
+        <source>Reading the meeting times…</source>
+        <translation>Membaca waktu perhimpunan…</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>jw.org does not publish meeting times for this congregation.</source>
+        <translation>jw.org tidak menerbitkan waktu perhimpunan untuk sidang ini.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Too many searches in a row. Wait a moment and type again.</source>
+        <translation>Terlalu banyak pencarian berturut-turut. Tunggu sebentar dan ketik lagi.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Could not reach jw.org. Check the connection and try again.</source>
+        <translation>Tidak dapat menghubungi jw.org. Periksa koneksi dan coba lagi.</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Search your congregation to fill the days and times below.</source>
+        <translation>Cari sidang Anda untuk mengisi hari dan waktu di bawah.</translation>
     </message>
     <message>
         <source>Midweek meeting</source>
         <translation type="vanished">Perhimpunan tengah pekan</translation>
     </message>
     <message>
-        <location line="-133"/>
-        <location line="+137"/>
+        <location line="-193"/>
+        <location line="+320"/>
         <source>Day and time for the midweek meeting.</source>
         <translation>Hari dan waktu perhimpunan tengah pekan.</translation>
     </message>
@@ -2714,8 +2761,8 @@ Konten yang ditambahkan secara manual, pemangkasan, pembingkaian, dan status ter
         <translation type="vanished">Perhimpunan akhir pekan</translation>
     </message>
     <message>
-        <location line="-130"/>
-        <location line="+134"/>
+        <location line="-313"/>
+        <location line="+317"/>
         <source>Day and time for the weekend meeting.</source>
         <translation>Hari dan waktu perhimpunan akhir pekan.</translation>
     </message>
@@ -2970,8 +3017,8 @@ Konten yang ditambahkan secara manual, pemangkasan, pembingkaian, dan status ter
 <context>
     <name>OBSScenePopup</name>
     <message>
-        <location filename="../../widgets/obs_scene_popup.py" line="+110"/>
-        <location line="+541"/>
+        <location filename="../../widgets/obs_scene_popup.py" line="+111"/>
+        <location line="+544"/>
         <source>OBS Scenes</source>
         <translation>Adegan OBS</translation>
     </message>
@@ -3222,7 +3269,7 @@ Konten yang ditambahkan secara manual, pemangkasan, pembingkaian, dan status ter
         <translation>Lanjutkan</translation>
     </message>
     <message>
-        <location line="+47"/>
+        <location line="+52"/>
         <source>Welcome to Solin</source>
         <translation>Selamat datang di Solin</translation>
     </message>
@@ -3270,6 +3317,27 @@ Konten yang ditambahkan secara manual, pemangkasan, pembingkaian, dan status ter
     </message>
     <message>
         <location line="+5"/>
+        <location line="+406"/>
+        <source>Meeting schedule</source>
+        <translation>Jadwal perhimpunan</translation>
+    </message>
+    <message>
+        <location line="-400"/>
+        <location line="+1161"/>
+        <source>Congregation</source>
+        <translation>Sidang</translation>
+    </message>
+    <message>
+        <source>Optional</source>
+        <translation type="vanished">Opsional</translation>
+    </message>
+    <message>
+        <location line="-1150"/>
+        <source>Find your congregation to fill the meeting days and times from jw.org.</source>
+        <translation>Cari sidang Anda untuk mengisi hari dan waktu perhimpunan dari jw.org.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
         <location line="+375"/>
         <source>Meeting media</source>
         <translation>Media perhimpunan</translation>
@@ -3471,6 +3539,8 @@ Konten yang ditambahkan secara manual, pemangkasan, pembingkaian, dan status ter
         <translation>Minggu ini dan minggu depan</translation>
     </message>
     <message>
+        <location line="-393"/>
+        <location line="+400"/>
         <location line="+5"/>
         <location line="+9"/>
         <source>Not configured</source>
@@ -3502,17 +3572,37 @@ Konten yang ditambahkan secara manual, pemangkasan, pembingkaian, dan status ter
         <translation>Pilih adegan</translation>
     </message>
     <message>
-        <location line="+316"/>
+        <location line="+303"/>
+        <location line="+167"/>
         <source>Close</source>
         <translation>Tutup</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="-159"/>
+        <source>Search by congregation name</source>
+        <translation>Cari berdasarkan nama sidang</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/onboarding.py" line="+69"/>
+        <source>Searching jw.org…</source>
+        <translation>Mencari di jw.org…</translation>
+    </message>
+    <message>
+        <source>Meeting days and times come from jw.org.</source>
+        <translation type="vanished">Hari dan waktu perhimpunan berasal dari jw.org.</translation>
+    </message>
+    <message>
+        <location filename="../../qml/OnboardingView.qml" line="+88"/>
+        <source>Remove congregation</source>
+        <translation>Hapus sidang</translation>
+    </message>
+    <message>
+        <location line="+78"/>
         <source>Search languages</source>
         <translation>Cari bahasa</translation>
     </message>
     <message>
-        <location filename="../../ui/qml/onboarding.py" line="+275"/>
+        <location filename="../../ui/qml/onboarding.py" line="+255"/>
         <source>Enter a port between 1 and 65535.</source>
         <translation>Masukkan port antara 1 dan 65535.</translation>
     </message>
@@ -3522,7 +3612,7 @@ Konten yang ditambahkan secara manual, pemangkasan, pembingkaian, dan status ter
         <translation>Pemilih target berbagi tidak tersedia.</translation>
     </message>
     <message>
-        <location line="+96"/>
+        <location line="+139"/>
         <source>Enter a profile name.</source>
         <translation>Masukkan nama profil.</translation>
     </message>
@@ -3552,12 +3642,37 @@ Konten yang ditambahkan secara manual, pemangkasan, pembingkaian, dan status ter
         <translation>Pilih target di dialog berbagi Zoom.</translation>
     </message>
     <message>
-        <location line="+80"/>
+        <location line="+81"/>
         <source>Could not create the profile.</source>
         <translation>Tidak dapat membuat profil.</translation>
     </message>
     <message>
-        <location line="+99"/>
+        <location line="-542"/>
+        <source>jw.org does not publish meeting times for this congregation.</source>
+        <translation>jw.org tidak menerbitkan waktu perhimpunan untuk sidang ini.</translation>
+    </message>
+    <message>
+        <location line="-8"/>
+        <source>Reading the meeting times…</source>
+        <translation>Membaca waktu perhimpunan…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>No congregation found with that name.</source>
+        <translation>Tidak ada sidang dengan nama itu.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Too many searches in a row. Wait a moment and type again.</source>
+        <translation>Terlalu banyak pencarian berturut-turut. Tunggu sebentar dan ketik lagi.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Could not reach jw.org. Check the connection and try again.</source>
+        <translation>Tidak dapat menghubungi jw.org. Periksa koneksi dan coba lagi.</translation>
+    </message>
+    <message>
+        <location line="+685"/>
         <source>Allow Solin in macOS Accessibility settings.</source>
         <translation>Izinkan Solin di pengaturan Aksesibilitas macOS.</translation>
     </message>
@@ -4528,17 +4643,17 @@ Tindakan ini tidak dapat dibatalkan.</translation>
 <context>
     <name>PopupHoverButton</name>
     <message>
-        <location filename="../../widgets/common/popup_hover_button.py" line="28"/>
+        <location filename="../../widgets/common/popup_hover_button.py" line="+28"/>
         <source>Open on hover</source>
         <translation>Buka saat kursor diarahkan</translation>
     </message>
     <message>
-        <location filename="../../widgets/common/popup_hover_button.py" line="30"/>
+        <location line="+2"/>
         <source>Opens when you hover over its toolbar icon. Click to disable.</source>
         <translation>Terbuka saat kursor diarahkan ke ikonnya di bilah alat. Klik untuk menonaktifkan.</translation>
     </message>
     <message>
-        <location filename="../../widgets/common/popup_hover_button.py" line="32"/>
+        <location line="+2"/>
         <source>Open this panel by hovering over its toolbar icon. Click to enable.</source>
         <translation>Buka panel ini dengan mengarahkan kursor ke ikonnya di bilah alat. Klik untuk mengaktifkan.</translation>
     </message>
@@ -4586,7 +4701,7 @@ Tindakan ini tidak dapat dibatalkan.</translation>
 <context>
     <name>ProfileScreen</name>
     <message>
-        <location filename="../../ui/profile_screen.py" line="+145"/>
+        <location filename="../../ui/profile_screen.py" line="+147"/>
         <source>Who is using Solin?</source>
         <translation>Siapa yang menggunakan Solin?</translation>
     </message>
@@ -5082,7 +5197,7 @@ Tindakan ini tidak dapat dibatalkan.</translation>
 <context>
     <name>QuickAccessToolbar</name>
     <message>
-        <location filename="../../widgets/quick_access_toolbar.py" line="+666"/>
+        <location filename="../../widgets/quick_access_toolbar.py" line="+632"/>
         <source>Remote control unavailable</source>
         <translation>Remote control tidak tersedia</translation>
     </message>
@@ -5131,7 +5246,7 @@ Tindakan ini tidak dapat dibatalkan.</translation>
 <context>
     <name>QuickToolbarBridge</name>
     <message>
-        <location filename="../../ui/qml/quick_toolbar.py" line="+437"/>
+        <location filename="../../ui/qml/quick_toolbar.py" line="+450"/>
         <source>Manage monitors</source>
         <translation>Kelola monitor</translation>
     </message>
@@ -5528,49 +5643,49 @@ Tindakan ini tidak dapat dibatalkan.</translation>
 <context>
     <name>SceneControlPopup</name>
     <message>
-        <location filename="../../widgets/scenes/control_popup.py" line="+274"/>
-        <location line="+689"/>
+        <location filename="../../widgets/scenes/control_popup.py" line="+275"/>
+        <location line="+692"/>
         <source>Solin scenes</source>
         <translation>Adegan Solin</translation>
     </message>
     <message>
-        <location line="-668"/>
-        <location line="+669"/>
+        <location line="-669"/>
+        <location line="+670"/>
         <source>Configured</source>
         <translation>Telah diatur</translation>
     </message>
     <message>
-        <location line="-660"/>
-        <location line="+661"/>
+        <location line="-661"/>
+        <location line="+662"/>
         <source>Camera PiP</source>
         <translation>Kamera PiP</translation>
     </message>
     <message>
-        <location line="-652"/>
-        <location line="+653"/>
+        <location line="-653"/>
+        <location line="+654"/>
         <source>Other scenes</source>
         <translation>Adegan lain</translation>
     </message>
     <message>
-        <location line="-615"/>
-        <location line="+616"/>
+        <location line="-616"/>
+        <location line="+617"/>
         <source>Auto-switch media</source>
         <translation>Peralihan otomatis</translation>
     </message>
     <message>
-        <location line="-611"/>
-        <location line="+612"/>
+        <location line="-612"/>
+        <location line="+613"/>
         <source>Media windows</source>
         <translation>Jendela media</translation>
     </message>
     <message>
-        <location line="-608"/>
-        <location line="+609"/>
+        <location line="-609"/>
+        <location line="+610"/>
         <source>Show in media windows</source>
         <translation>Tampilkan di jendela media</translation>
     </message>
     <message>
-        <location line="-596"/>
+        <location line="-597"/>
         <source>The recording state could not be changed.</source>
         <translation>Status perekaman tidak dapat diubah.</translation>
     </message>
@@ -5812,7 +5927,7 @@ Tindakan ini tidak dapat dibatalkan.</translation>
 <context>
     <name>SceneRuntimeController</name>
     <message>
-        <location filename="../../controllers/scene_runtime_controller.py" line="+1646"/>
+        <location filename="../../controllers/scene_runtime_controller.py" line="+1651"/>
         <source>The selected transition is unavailable. The scene was cut instead.</source>
         <translation>Transisi yang dipilih tidak tersedia. Adegan dialihkan dengan potong.</translation>
     </message>
@@ -7225,7 +7340,7 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
 <context>
     <name>SettingsWidget</name>
     <message>
-        <location filename="../../widgets/settings_widget.py" line="+271"/>
+        <location filename="../../widgets/settings_widget.py" line="+277"/>
         <location line="+265"/>
         <source>Settings</source>
         <translation>Pengaturan</translation>
@@ -8640,7 +8755,7 @@ Tambahkan saat Anda siap.</translation>
 <context>
     <name>UpdateDialog</name>
     <message>
-        <location filename="../../ui/dialogs/update.py" line="+226"/>
+        <location filename="../../ui/dialogs/update.py" line="+227"/>
         <source>Update available</source>
         <translation>Pembaruan tersedia</translation>
     </message>
@@ -10866,7 +10981,7 @@ Gunakan tombol putar untuk memproyeksikan · Seret pegangan ⠿ untuk mengubah u
 <context>
     <name>_TimePickerPopup</name>
     <message>
-        <location filename="../../widgets/settings/meeting_schedule_section.py" line="-292"/>
+        <location filename="../../widgets/settings/meeting_schedule_section.py" line="-477"/>
         <source>Hour</source>
         <translation>Jam</translation>
     </message>

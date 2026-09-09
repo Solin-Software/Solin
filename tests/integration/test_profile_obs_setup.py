@@ -22,11 +22,18 @@ class _OnboardingProbe:
         self.stops += 1
 
 
+class _CongregationLookup:
+    suggestions_ready = _Signal()
+    schedule_ready = _Signal()
+    failed = _Signal()
+
+
 def _bridge() -> OnboardingBridge:
     return OnboardingBridge(
         language_manager=None,
         onboarding_service=object(),
         obs_probe=_OnboardingProbe(),
+        congregation_lookup=_CongregationLookup(),
     )
 
 
@@ -267,6 +274,7 @@ def test_onboarding_target_picker_receives_current_saved_position():
         language_manager=None,
         onboarding_service=object(),
         obs_probe=_OnboardingProbe(),
+        congregation_lookup=_CongregationLookup(),
         target_picker_factory=_picker_factory,
     )
     bridge._state["zoomAvailable"] = True

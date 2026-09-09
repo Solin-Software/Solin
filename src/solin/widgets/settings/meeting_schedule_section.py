@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from typing import cast
 
-from PySide6.QtCore import QPoint, QSize, Qt, Signal
+from PySide6.QtCore import QPoint, QSize, QStringListModel, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
+    QCompleter,
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QMenu,
     QPushButton,
     QToolButton,
@@ -14,6 +16,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ...core.jw.congregation_lookup import (
+    MINIMUM_QUERY_LENGTH,
+    RATE_LIMITED,
+    SEARCH_DEBOUNCE_MS,
+)
 from ...core.meetings.schedule import (
     DEFAULT_MIDWEEK_TIME,
     DEFAULT_WEEKEND_TIME,
@@ -27,21 +34,34 @@ from ...core.i18n.meeting_schedule import (
     meeting_not_configured_label,
     meeting_weekday_names,
 )
-from ...styles.icons import ICON_CALENDAR, ICON_CHEVRON_DOWN, ICON_CHEVRON_UP, make_icon
+from ...styles.icons import (
+    ICON_CALENDAR,
+    ICON_CHEVRON_DOWN,
+    ICON_CHEVRON_UP,
+    ICON_CLOUD_DONE,
+    ICON_CLOUD_DOWNLOAD,
+    make_icon,
+)
 from .shared import (
     SETTINGS_ACCENT,
     SETTINGS_ACCENT_HOVER,
+    SETTINGS_ACCENT_MUTED,
     SETTINGS_ACCENT_PRESSED,
     SETTINGS_BG,
     SETTINGS_BORDER,
     SETTINGS_BORDER_STRONG,
+    SETTINGS_DANGER,
     SETTINGS_DIM,
     SETTINGS_MUTED,
+    SETTINGS_SUCCESS,
     SETTINGS_SURFACE,
     SETTINGS_TEXT,
+    SETTINGS_WARNING_TEXT,
 )
 
 _DAY_DATA = tuple(range(7))
+# Lines the field up with the day and time controls below it.
+_CONGREGATION_FIELD_WIDTH = 248
 
 
 def _field_button_style() -> str:
@@ -66,6 +86,44 @@ def _field_button_style() -> str:
         f" background: {SETTINGS_BG};"
         f" color: {SETTINGS_DIM};"
         f" border-color: {SETTINGS_BORDER};"
+        "}"
+    )
+
+
+def _search_field_style() -> str:
+    return (
+        f"QLineEdit {{ background: {SETTINGS_SURFACE}; color: {SETTINGS_TEXT};"
+        f" border: 1px solid {SETTINGS_BORDER_STRONG}; border-radius: 8px;"
+        f" padding: 0px 12px; font-size: 12px; }}"
+        f"QLineEdit:focus {{ border-color: {SETTINGS_ACCENT}; }}"
+    )
+
+
+def _congregation_status_style(color) -> str:
+    return (
+        f"font-size: 11px; color: {color};"
+        " background: transparent; border: none;"
+    )
+
+
+def _completer_popup_style() -> str:
+    return (
+        "QListView {"
+        f" background: {SETTINGS_SURFACE};"
+        f" color: {SETTINGS_TEXT};"
+        f" border: 1px solid {SETTINGS_BORDER_STRONG};"
+        " border-radius: 8px;"
+        " font-size: 12px;"
+        " outline: none;"
+        "}"
+        "QListView::item {"
+        " padding: 7px 10px;"
+        " border-radius: 6px;"
+        "}"
+        f"QListView::item:hover {{ background: {SETTINGS_BORDER}; }}"
+        "QListView::item:selected {"
+        f" background: {SETTINGS_ACCENT_MUTED};"
+        f" color: {SETTINGS_TEXT};"
         "}"
     )
 
@@ -478,6 +536,8 @@ class MeetingScheduleSectionMixin:
         )
         lay.addWidget(self._schedule_hint_lbl)
 
+        lay.addWidget(self._congregation_lookup_row())
+        lay.addWidget(self._divider())
         lay.addWidget(self._schedule_row(
             MIDWEEK,
             meeting_kind_label(MIDWEEK),
@@ -492,6 +552,189 @@ class MeetingScheduleSectionMixin:
             DEFAULT_WEEKEND_TIME,
         ))
         return card
+
+    def _init_congregation_lookup(self) -> None:
+        self._congregation_status_kind = "idle"
+        self._congregation_applied_text = ""
+        self._congregation_lookup = self._congregation_lookup_factory(self)
+        self._congregation_lookup.suggestions_ready.connect(
+            self._on_congregation_suggestions
+        )
+        self._congregation_lookup.schedule_ready.connect(
+            self._on_congregation_schedule
+        )
+        self._congregation_lookup.failed.connect(self._on_congregation_failed)
+        self._congregation_guids: dict[str, str] = {}
+
+    def _congregation_lookup_row(self) -> QFrame:
+        row = QFrame()
+        row.setStyleSheet("background: transparent; border: none;")
+        row_layout = QHBoxLayout(row)
+        row_layout.setContentsMargins(14, 10, 14, 10)
+        row_layout.setSpacing(12)
+
+        self._congregation_icon_lbl = QLabel()
+        self._congregation_icon_lbl.setFixedSize(20, 20)
+        self._congregation_icon_lbl.setStyleSheet(
+            "background: transparent; border: none;"
+        )
+        row_layout.addWidget(self._congregation_icon_lbl)
+
+        text_col = QVBoxLayout()
+        text_col.setSpacing(1)
+        self._congregation_title_lbl = QLabel(self.tr("Fill in from jw.org"))
+        self._bind_theme_style(
+            self._congregation_title_lbl,
+            lambda: (
+                f"font-size: 13px; font-weight: 500; color: {SETTINGS_TEXT};"
+                " background: transparent; border: none;"
+            ),
+        )
+        self._congregation_status_lbl = QLabel()
+        self._congregation_status_lbl.setWordWrap(True)
+        text_col.addWidget(self._congregation_title_lbl)
+        text_col.addWidget(self._congregation_status_lbl)
+        row_layout.addLayout(text_col, stretch=1)
+
+        self._congregation_field = QLineEdit()
+        self._congregation_field.setPlaceholderText(self.tr("Congregation name"))
+        self._congregation_field.setMinimumHeight(36)
+        self._congregation_field.setFixedWidth(_CONGREGATION_FIELD_WIDTH)
+        self._bind_theme_style(self._congregation_field, _search_field_style)
+
+        self._congregation_model = QStringListModel(self._congregation_field)
+        completer = QCompleter(self._congregation_model, self._congregation_field)
+        completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        completer.setCompletionMode(QCompleter.CompletionMode.UnfilteredPopupCompletion)
+        completer.activated.connect(self._on_congregation_activated)
+        self._congregation_field.setCompleter(completer)
+
+        self._bind_theme_style(completer.popup(), _completer_popup_style)
+
+        self._congregation_debounce = QTimer(self._congregation_field)
+        self._congregation_debounce.setSingleShot(True)
+        self._congregation_debounce.setInterval(SEARCH_DEBOUNCE_MS)
+        self._congregation_debounce.timeout.connect(self._start_congregation_search)
+        self._congregation_field.textEdited.connect(
+            lambda _text: self._congregation_debounce.start()
+        )
+        row_layout.addWidget(self._congregation_field)
+        self._add_theme_binding(self._sync_congregation_ui)
+        return row
+
+    def _start_congregation_search(self) -> None:
+        query = self._congregation_field.text().strip()
+        if len(query) < MINIMUM_QUERY_LENGTH:
+            self._set_congregation_status("idle")
+            return
+        self._set_congregation_status("searching")
+        self._congregation_lookup.search(query)
+
+    def _on_congregation_suggestions(self, matches: list) -> None:
+        self._congregation_guids = {
+            match.formatted_name: match.guid for match in matches
+        }
+        self._congregation_model.setStringList(list(self._congregation_guids))
+        if not matches:
+            self._set_congregation_status("empty")
+            return
+        self._set_congregation_status("idle")
+        completer = self._congregation_field.completer()
+        if completer is not None and self._congregation_field.hasFocus():
+            completer.complete()
+
+    def _on_congregation_activated(self, text: str) -> None:
+        guid = self._congregation_guids.get(text, "")
+        if not guid:
+            return
+        self._set_congregation_status("resolving")
+        self._congregation_lookup.fetch_schedule(guid)
+
+    def _on_congregation_schedule(self, schedule) -> None:
+        if schedule is None:
+            self._set_congregation_status("unpublished")
+            return
+        weekdays = self._weekday_names()
+        applied: list[str] = []
+        for slot in schedule.slots:
+            if not slot.is_configured:
+                continue
+            day_button, time_button = self._schedule_rows[slot.kind]
+            day_button.set_day(slot.weekday)
+            time_button.set_minutes(slot.start_minutes or 0)
+            self._on_schedule_control_changed(
+                slot.kind,
+                DEFAULT_MIDWEEK_TIME if slot.kind == MIDWEEK else DEFAULT_WEEKEND_TIME,
+            )
+            applied.append(f"{weekdays[slot.weekday]} {slot.time_text}")
+        self._congregation_applied_text = "  ·  ".join(applied)
+        self._set_congregation_status("filled")
+
+    def _on_congregation_failed(self, reason: str) -> None:
+        self._set_congregation_status(
+                "rate_limited" if reason == RATE_LIMITED else "error"
+        )
+
+    def _set_congregation_status(self, kind: str) -> None:
+        self._congregation_status_kind = kind
+        self._sync_congregation_ui()
+
+    def _sync_congregation_ui(self) -> None:
+        label = getattr(self, "_congregation_status_lbl", None)
+        if label is None:
+            return
+        text, tone, icon = self._congregation_status_presentation()
+        label.setText(text)
+        label.setStyleSheet(_congregation_status_style(tone))
+        self._congregation_icon_lbl.setPixmap(
+            make_icon(icon, size=18, color=tone).pixmap(18, 18)
+        )
+
+    def _congregation_status_presentation(self) -> tuple[str, str, str]:
+        kind = self._congregation_status_kind
+        download = cast(str, ICON_CLOUD_DOWNLOAD)
+        if kind == "searching":
+            return (self.tr("Searching jw.org…"), SETTINGS_WARNING_TEXT, download)
+        if kind == "resolving":
+            return (
+                self.tr("Reading the meeting times…"),
+                SETTINGS_WARNING_TEXT,
+                download,
+            )
+        if kind == "empty":
+            return (
+                self.tr("No congregation found with that name."),
+                SETTINGS_WARNING_TEXT,
+                download,
+            )
+        if kind == "unpublished":
+            return (
+                self.tr("jw.org does not publish meeting times for this congregation."),
+                SETTINGS_WARNING_TEXT,
+                download,
+            )
+        if kind == "rate_limited":
+            return (
+                self.tr("Too many searches in a row. Wait a moment and type again."),
+                SETTINGS_WARNING_TEXT,
+                download,
+            )
+        if kind == "error":
+            return (
+                self.tr("Could not reach jw.org. Check the connection and try again."),
+                SETTINGS_DANGER,
+                download,
+            )
+        if kind == "filled":
+            return (
+                self._congregation_applied_text,
+                SETTINGS_SUCCESS,
+                cast(str, ICON_CLOUD_DONE),
+            )
+        return (self._congregation_hint_text(), SETTINGS_DIM, download)
+
+    def _congregation_hint_text(self) -> str:
+        return self.tr("Search your congregation to fill the days and times below.")
 
     def _schedule_row(
         self,
@@ -624,6 +867,9 @@ class MeetingScheduleSectionMixin:
         self._weekend_schedule_desc_lbl.setText(
             self.tr("Day and time for the weekend meeting.")
         )
+        self._congregation_title_lbl.setText(self.tr("Fill in from jw.org"))
+        self._congregation_field.setPlaceholderText(self.tr("Congregation name"))
+        self._sync_congregation_ui()
         for day_button, _time_button in self._schedule_rows.values():
             self._populate_day_button(day_button)
 

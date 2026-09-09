@@ -69,6 +69,7 @@ def initialize_application_container(app, config: AppConfig) -> ApplicationConta
         OBSSettingsStore,
     )
     from solin.core.media.settings import MediaSettingsStore
+    from solin.core.meetings.schedule_settings import MeetingScheduleSettingsStore
     from solin.core.onboarding.infrastructure import (
         OnboardingSettingsStores,
         QSettingsOnboardingSettings,
@@ -109,6 +110,9 @@ def initialize_application_container(app, config: AppConfig) -> ApplicationConta
                 settings
             ),
             media_settings=MediaSettingsStore.for_profile_settings(settings),
+            meeting_schedule_settings=(
+                MeetingScheduleSettingsStore.for_profile_settings(settings)
+            ),
             obs_settings=OBSSettingsStore.for_profile_settings(settings),
             auto_share_settings=AutoShareSettingsStore.for_profile_settings(settings),
         )

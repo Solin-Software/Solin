@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+from solin.core.meetings.schedule import (
+    MIDWEEK,
+    WEEKEND,
+    MeetingSchedule,
+    MeetingSlot,
+)
 from solin.core.onboarding.application import (
     OBSOnboardingConfiguration,
     ProfileOnboardingCommand,
@@ -33,6 +39,14 @@ class _MediaSettings:
 
     def set_meetings_auto_download(self, enabled: bool) -> None:
         self.meetings_auto_download = enabled
+
+
+class _MeetingScheduleSettings:
+    def __init__(self) -> None:
+        self.slots: dict[str, tuple[int, str]] = {}
+
+    def set_slot(self, kind: str, weekday: int, time_text: str) -> None:
+        self.slots[kind] = (weekday, time_text)
 
 
 class _OBSSettings:
@@ -71,6 +85,7 @@ def test_qsettings_onboarding_settings_uses_injected_profile_stores():
     app_settings = _AppSettings()
     media_language_settings = _MediaLanguageSettings()
     media_settings = _MediaSettings()
+    meeting_schedule_settings = _MeetingScheduleSettings()
     obs_settings = _OBSSettings()
     auto_share_settings = _AutoShareSettings()
     requested_profiles = []
@@ -82,6 +97,7 @@ def test_qsettings_onboarding_settings_uses_injected_profile_stores():
                 app_settings=app_settings,
                 media_language_settings=media_language_settings,
                 media_settings=media_settings,
+                meeting_schedule_settings=meeting_schedule_settings,
                 obs_settings=obs_settings,
                 auto_share_settings=auto_share_settings,
             )
@@ -95,6 +111,10 @@ def test_qsettings_onboarding_settings_uses_injected_profile_stores():
             interface_language="pt_BR",
             media_language="T",
             download_meeting_media=True,
+            meeting_schedule=MeetingSchedule(
+                midweek=MeetingSlot.from_values(MIDWEEK, 2, "19:45"),
+                weekend=MeetingSlot.from_values(WEEKEND, 6, "10:00"),
+            ),
             obs=OBSOnboardingConfiguration(
                 enabled=True,
                 port=4456,
@@ -116,6 +136,10 @@ def test_qsettings_onboarding_settings_uses_injected_profile_stores():
     assert app_settings.language == "pt_BR"
     assert media_language_settings.language == "T"
     assert media_settings.meetings_auto_download is True
+    assert meeting_schedule_settings.slots == {
+        MIDWEEK: (2, "19:45"),
+        WEEKEND: (6, "10:00"),
+    }
     assert obs_settings.enabled is True
     assert obs_settings.connection == (4456, "secret")
     assert obs_settings.scenes == ("Default", "Media")
@@ -128,11 +152,13 @@ def test_qsettings_onboarding_settings_keeps_optional_integrations_disabled():
     obs_settings = _OBSSettings()
     auto_share_settings = _AutoShareSettings()
     media_settings = _MediaSettings()
+    meeting_schedule_settings = _MeetingScheduleSettings()
     adapter = QSettingsOnboardingSettings(
         lambda _profile_id: OnboardingSettingsStores(
             app_settings=_AppSettings(),
             media_language_settings=_MediaLanguageSettings(),
             media_settings=media_settings,
+            meeting_schedule_settings=meeting_schedule_settings,
             obs_settings=obs_settings,
             auto_share_settings=auto_share_settings,
         )
@@ -153,6 +179,7 @@ def test_qsettings_onboarding_settings_keeps_optional_integrations_disabled():
     )
 
     assert media_settings.meetings_auto_download is False
+    assert meeting_schedule_settings.slots == {}
     assert obs_settings.enabled is True
     assert obs_settings.scenes == ("", "")
     assert auto_share_settings.enabled is False

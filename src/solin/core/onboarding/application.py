@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Protocol
 
+from solin.core.meetings.schedule import MeetingSchedule
 from solin.core.profiles.models import ProfileInfo, normalize_profile_name
 
 
@@ -54,6 +55,7 @@ class ProfileOnboardingCommand:
     interface_language: str
     media_language: str = ""
     download_meeting_media: bool = False
+    meeting_schedule: MeetingSchedule | None = None
     obs: OBSOnboardingConfiguration = field(
         default_factory=OBSOnboardingConfiguration
     )

@@ -261,6 +261,11 @@ Rectangle {
         anchors.fill: parent
     }
 
+    CongregationSheet {
+        id: congregationSheet
+        anchors.fill: parent
+    }
+
     Component {
         id: profilePage
 
@@ -337,6 +342,31 @@ Rectangle {
                             title: qsTr("Media language")
                             value: root.draft.mediaName
                             onClicked: languageSheet.openSheet("media", qsTr("Media language"))
+                        }
+
+                        FieldLabel {
+                            Layout.topMargin: 18
+                            text: qsTr("Meeting schedule")
+                        }
+
+                        LanguageChoice {
+                            Layout.fillWidth: true
+                            iconName: "calendar"
+                            title: qsTr("Congregation")
+                            value: root.draft.congregationScheduleText !== ""
+                                   ? root.draft.congregationScheduleText
+                                   : qsTr("Not configured")
+                            onClicked: congregationSheet.openSheet()
+                        }
+
+                        Text {
+                            Layout.fillWidth: true
+                            text: root.draft.congregationName !== ""
+                                  ? root.draft.congregationName
+                                  : qsTr("Find your congregation to fill the meeting days and times from jw.org.")
+                            color: root.textMuted
+                            font.pixelSize: 11
+                            wrapMode: Text.Wrap
                         }
 
                         FieldLabel {
@@ -719,6 +749,13 @@ Rectangle {
                         title: qsTr("Meeting media")
                         value: root.draft.downloadMeetingMedia
                                ? qsTr("This week and next week") : qsTr("Manual download")
+                    }
+                    ReviewLine {
+                        iconName: "calendar"
+                        title: qsTr("Meeting schedule")
+                        value: root.draft.congregationScheduleText !== ""
+                               ? root.draft.congregationScheduleText
+                               : qsTr("Not configured")
                     }
                     ReviewLine {
                         iconName: "obs"
@@ -1430,6 +1467,160 @@ Rectangle {
                 font.pixelSize: 11
                 horizontalAlignment: Text.AlignRight
                 elide: Text.ElideRight
+            }
+        }
+    }
+
+    component CongregationSheet: Rectangle {
+        id: congSheet
+        visible: false
+        color: Qt.rgba(0, 0, 0, 0.58)
+        z: 100
+
+        function openSheet() {
+            congSearch.text = root.draft.congregationQuery
+            visible = true
+            congSearch.forceActiveFocus()
+        }
+
+        Timer {
+            id: congDebounce
+            interval: onboardingBridge.searchDebounceMs
+            onTriggered: onboardingBridge.searchCongregation(congSearch.text)
+        }
+
+        MouseArea { anchors.fill: parent; onClicked: congSheet.visible = false }
+
+        Rectangle {
+            anchors.centerIn: parent
+            width: Math.min(parent.width - 72, 520)
+            // Hugs its content so a short result list leaves no dead space.
+            height: Math.min(parent.height - 72, congregationColumn.implicitHeight + 36)
+            radius: 14
+            color: appTheme.surface2
+            border.width: 1
+            border.color: appTheme.borderChrome
+
+            MouseArea { anchors.fill: parent }
+
+            ColumnLayout {
+                id: congregationColumn
+                anchors.fill: parent
+                anchors.margins: 18
+                spacing: 12
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Text {
+                        Layout.fillWidth: true
+                        text: qsTr("Congregation")
+                        color: root.textPrimary
+                        font.pixelSize: 16
+                        font.weight: Font.DemiBold
+                    }
+                    TextButton {
+                        text: qsTr("Close")
+                        onClicked: congSheet.visible = false
+                    }
+                }
+
+                AppTextField {
+                    id: congSearch
+                    Layout.fillWidth: true
+                    placeholderText: qsTr("Search by congregation name")
+                    onTextEdited: congDebounce.restart()
+                    onAccepted: onboardingBridge.searchCongregation(text)
+                }
+
+                Text {
+                    Layout.fillWidth: true
+                    text: root.draft.congregationScheduleText !== ""
+                          ? root.draft.congregationScheduleText
+                          : root.draft.congregationStatusText
+                    visible: text !== ""
+                    color: root.textMuted
+                    font.pixelSize: 11
+                    wrapMode: Text.Wrap
+                }
+
+                ListView {
+                    id: congList
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: Math.min(contentHeight, 372)
+                    visible: count > 0
+                    clip: true
+                    spacing: 4
+                    boundsBehavior: Flickable.StopAtBounds
+                    flickableDirection: Flickable.VerticalFlick
+                    model: root.draft.congregationSuggestions
+                    rightMargin: 14
+                    ScrollBar.vertical: ScrollBar {
+                        id: congScrollBar
+                        policy: ScrollBar.AsNeeded
+                        width: 8
+                        contentItem: Rectangle {
+                            implicitWidth: 4
+                            radius: 2
+                            color: (congScrollBar.active || congScrollBar.hovered)
+                                   ? root.textMuted : root.borderColor
+                            opacity: (congScrollBar.active
+                                      || congScrollBar.hovered
+                                      || congList.moving) ? 1.0 : 0.35
+                            anchors.horizontalCenter: parent.horizontalCenter
+
+                            Behavior on color { ColorAnimation { duration: 150 } }
+                            Behavior on opacity { NumberAnimation { duration: 180 } }
+                        }
+                    }
+
+                    delegate: Rectangle {
+                        id: congItem
+
+                        required property var modelData
+
+                        width: Math.max(0, congList.width - congList.rightMargin)
+                        height: 48
+                        radius: 8
+                        color: congHover.hovered ? appTheme.hover : "transparent"
+
+                        Text {
+                            anchors.fill: parent
+                            anchors.leftMargin: 10
+                            anchors.rightMargin: 18
+                            verticalAlignment: Text.AlignVCenter
+                            text: congItem.modelData.formattedName || congItem.modelData.name
+                            color: root.textPrimary
+                            font.pixelSize: 12
+                            elide: Text.ElideRight
+                        }
+
+                        HoverHandler {
+                            id: congHover
+                            cursorShape: Qt.PointingHandCursor
+                        }
+
+                        TapHandler {
+                            gesturePolicy: TapHandler.ReleaseWithinBounds
+                            onTapped: {
+                                onboardingBridge.chooseCongregation(
+                                    congItem.modelData.guid,
+                                    congItem.modelData.name
+                                )
+                                congSheet.visible = false
+                            }
+                        }
+                    }
+                }
+
+                TextButton {
+                    Layout.alignment: Qt.AlignLeft
+                    visible: root.draft.congregationName !== ""
+                    text: qsTr("Remove congregation")
+                    onClicked: {
+                        onboardingBridge.clearCongregation()
+                        congSearch.text = ""
+                    }
+                }
             }
         }
     }

@@ -629,6 +629,7 @@ class MainWindow(QWidget):
                 remote_control_credentials=self._remote_control_credentials,
                 yeartext_settings=self._yeartext_settings,
                 yeartext_service_factory=service_factories.yeartext,
+                congregation_lookup_factory=service_factories.congregation_lookup,
                 font_manager=self.font_manager,
                 yearly_projection_text=self._current_yearly_projection_text,
                 auto_share_accessibility_trusted=lambda: bool(macos_accessibility_trusted()),

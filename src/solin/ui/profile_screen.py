@@ -57,6 +57,7 @@ class ProfileScreen(QWidget):
         profile_settings_for: Callable[[str], ProfileSettings],
         onboarding_service: OnboardingService,
         obs_probe,
+        congregation_lookup,
         target_picker_factory: Callable[..., object] | None = None,
         parent=None,
     ) -> None:
@@ -83,6 +84,7 @@ class ProfileScreen(QWidget):
             language_manager=lang_manager,
             onboarding_service=onboarding_service,
             obs_probe=obs_probe,
+            congregation_lookup=congregation_lookup,
             target_picker_factory=target_picker_factory,
             parent=self,
         )
