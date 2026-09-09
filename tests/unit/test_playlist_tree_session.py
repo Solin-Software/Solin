@@ -440,3 +440,23 @@ def test_bridge_requests_persistence_after_an_accepted_reorder(tmp_path: Path):
 
     assert [item["id"] for item in playlist["items"]] == ["b", "a"]
     assert persistence_requests == [True]
+
+
+def test_bridge_forwards_add_to_destination_intent():
+    bridge = PlaylistEditBridge()
+    requested = []
+    bridge.addToDestinationSignal.connect(requested.append)
+
+    bridge.addToDestination("media-1")
+
+    assert requested == ["media-1"]
+
+
+def test_bridge_forwards_set_as_idle_intent():
+    bridge = PlaylistEditBridge()
+    requested = []
+    bridge.setAsIdleSignal.connect(requested.append)
+
+    bridge.setAsIdle("media-1")
+
+    assert requested == ["media-1"]

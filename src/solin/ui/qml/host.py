@@ -74,8 +74,15 @@ class _PointerCursorBridge(QObject):
         self._state.exit()
 
     def eventFilter(self, watched, event):  # noqa: N802 - Qt override
-        if watched is self._widget and event.type() == QEvent.Type.Leave:
-            self._state.reset()
+        widget = getattr(self, "_widget", None)
+        state = getattr(self, "_state", None)
+        if (
+            widget is not None
+            and state is not None
+            and watched is widget
+            and event.type() == QEvent.Type.Leave
+        ):
+            state.reset()
         return False
 
 

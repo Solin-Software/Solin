@@ -71,6 +71,7 @@ _BOOL_ROLES = frozenset({
     "operationRetryable",
     "canRemove",
     "canDownload",
+    "canSetAsIdle",
 })
 _NON_NEGATIVE_INT_ROLES = frozenset({
     "startTrimTicks",

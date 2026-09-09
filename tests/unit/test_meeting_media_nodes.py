@@ -9,6 +9,7 @@ from solin.core.meetings.media_nodes import (
     media_ref_title,
     meeting_media_type_from_path,
     mime_for_meeting_media,
+    playlist_item_from_meeting_node,
     playlist_item_media_url,
 )
 
@@ -136,6 +137,35 @@ def test_create_playlist_media_node_uses_fallback_title_and_media_label():
     assert empty_url_node["media_ref"]["label"] == ""
 
 
+def test_create_playlist_media_node_preserves_visual_presentation_metadata():
+    framing = {"zoom": 1.2, "norm_x": 0.1, "norm_y": -0.1}
+
+    node = create_playlist_media_node(
+        {
+            "title": "Framed image",
+            "url": "C:/meeting/image.png",
+            "type": "image",
+            "image_framing": framing,
+            "thumbnail_url": "https://cdn.example/image.jpg",
+            "thumbnail_binding": "jw_artwork",
+        },
+        "Fallback",
+        node_id="node-id",
+        url="C:/meeting/image.png",
+        media_fallback_title="Media",
+    )
+
+    framing["zoom"] = 2.0
+
+    assert node["image_framing"] == {
+        "zoom": 1.2,
+        "norm_x": 0.1,
+        "norm_y": -0.1,
+    }
+    assert node["thumbnail_url"] == "https://cdn.example/image.jpg"
+    assert node["thumbnail_binding"] == "jw_artwork"
+
+
 def test_meeting_media_from_ref_applies_typed_defaults():
     media = meeting_media_from_ref(
         {
@@ -159,3 +189,21 @@ def test_meeting_media_from_ref_applies_typed_defaults():
     assert media.meps_doc_id == 77
     assert media.is_song is True
     assert media.caption == ""
+
+
+def test_destination_item_detects_type_from_mime_or_url() -> None:
+    audio_item = playlist_item_from_meeting_node(
+        {
+            "type": "media",
+            "title": "Audio",
+            "media_ref": {"mime_type": "audio/mpeg"},
+        },
+        url="https://example.test/stream",
+    )
+    image_item = playlist_item_from_meeting_node(
+        {"type": "media", "title": "Image", "media_ref": {}},
+        url="C:/meeting/photo.png",
+    )
+
+    assert audio_item["type"] == "audio"
+    assert image_item["type"] == "image"

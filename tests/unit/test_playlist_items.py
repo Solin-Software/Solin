@@ -1,5 +1,6 @@
 from solin.core.media.formats import media_type_from_path
 from solin.core.playlists.items import (
+    copy_playlist_item_for_destination,
     create_playlist_item,
     looks_like_filename_title,
     playlist_items_from_jwpub,
@@ -31,6 +32,39 @@ def test_create_playlist_item_preserves_extra_persisted_attributes():
 
     assert item["id"] == "stable-id"
     assert item["section_id"] == "section-1"
+
+
+def test_destination_copy_gets_independent_identity_and_keeps_media_metadata():
+    source = create_playlist_item(
+        "Welcome",
+        "https://cdn.example/welcome.mp4",
+        id="source-id",
+        section_id="section-1",
+        origin_kind="playlist",
+        origin_container_id="playlist-1",
+        origin_item_id="source-id",
+        key_symbol="mwbv",
+        track=2,
+        meps_language=5,
+        start_trim_ticks=10_000,
+        image_framing={"zoom": 1.2, "norm_x": 0.1, "norm_y": 0.0},
+    )
+
+    copied = copy_playlist_item_for_destination(source)
+
+    assert copied["id"] != source["id"]
+    assert copied["title"] == source["title"]
+    assert copied["url"] == source["url"]
+    assert copied["key_symbol"] == "mwbv"
+    assert copied["track"] == 2
+    assert copied["meps_language"] == 5
+    assert copied["start_trim_ticks"] == 10_000
+    assert copied["image_framing"] == source["image_framing"]
+    assert copied["image_framing"] is not source["image_framing"]
+    assert "section_id" not in copied
+    assert "origin_kind" not in copied
+    assert "origin_container_id" not in copied
+    assert "origin_item_id" not in copied
 
 
 def test_create_playlist_item_does_not_promote_untrusted_original_filename():

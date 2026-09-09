@@ -3,6 +3,7 @@ from dataclasses import replace
 import pytest
 
 from PySide6.QtCore import QDateTime
+from PySide6.QtGui import QImage
 
 from solin.controllers import projection_window_controller as projection_controller
 from solin.controllers.projection_window_controller import (
@@ -10,6 +11,7 @@ from solin.controllers.projection_window_controller import (
     ProjectionWindowController,
 )
 from solin.core.projection.application import ProjectionSession
+from solin.core.projection.idle_media import IdleMediaRequest
 from solin.core.projection.image_framing import (
     IDENTITY_IMAGE_TRANSFORM,
     ImageTransform,
@@ -248,6 +250,69 @@ def test_all_windows_includes_floating_preview_when_present():
     controller = ProjectionWindowController(_projection_context(window))
 
     assert controller.all_windows() == [secondary, floating]
+
+
+def test_tree_idle_request_uses_shared_confirmation_before_applying(
+    tmp_path,
+    monkeypatch,
+):
+    image = tmp_path / "idle.png"
+    thumbnail = tmp_path / "idle-thumb.jpg"
+    image.write_bytes(b"image")
+    thumbnail_image = QImage(16, 9, QImage.Format.Format_RGB32)
+    thumbnail_image.fill(0xFF224466)
+    assert thumbnail_image.save(str(thumbnail), "JPEG")
+    window = _WindowStub()
+    controller = ProjectionWindowController(_projection_context(window))
+    confirmations = []
+    applied = []
+
+    def confirm(title, *, pixmap, parent):
+        confirmations.append((title, pixmap, parent))
+        return True
+
+    monkeypatch.setattr(projection_controller, "confirm_set_as_idle", confirm)
+    controller.on_idle_media_changed = applied.append
+
+    controller.request_idle_media(
+        IdleMediaRequest(
+            title="Idle image",
+            path=str(image),
+            media_type="image",
+            thumbnail_path=str(thumbnail),
+        )
+    )
+
+    assert len(confirmations) == 1
+    assert confirmations[0][0] == "Idle image"
+    assert confirmations[0][1] is not None
+    assert confirmations[0][1].size() == thumbnail_image.size()
+    assert confirmations[0][2] is window
+    assert applied == [str(image)]
+
+
+def test_tree_idle_request_rejects_a_source_removed_before_confirmation(
+    tmp_path,
+    monkeypatch,
+):
+    confirmations = []
+    window = _WindowStub()
+    controller = ProjectionWindowController(_projection_context(window))
+    monkeypatch.setattr(
+        projection_controller,
+        "confirm_set_as_idle",
+        lambda *_args, **_kwargs: confirmations.append(True),
+    )
+
+    controller.request_idle_media(
+        IdleMediaRequest(
+            title="Missing",
+            path=str(tmp_path / "missing.mp4"),
+            media_type="video",
+        )
+    )
+
+    assert confirmations == []
 
 
 @pytest.mark.parametrize("program_content_enabled", [True, False])

@@ -165,6 +165,8 @@ def _notify_meeting_tree_save_failed(
 class StudyDetailView(QWidget):
     back_requested = Signal()
     play_requested = Signal(object)
+    media_destination_requested = Signal(object)
+    set_as_idle_requested = Signal(object)
     meeting_tree_saved = Signal(str)
 
     def __init__(
@@ -224,6 +226,10 @@ class StudyDetailView(QWidget):
         )
         self.controller.backRequested.connect(self.back_requested.emit)
         self.controller.projectRequested.connect(self.play_requested.emit)
+        self.controller.addToDestinationRequested.connect(
+            self.media_destination_requested.emit
+        )
+        self.controller.setAsIdleRequested.connect(self.set_as_idle_requested.emit)
         self.controller.pointerEntered.connect(self.begin_qml_pointer_cursor)
         self.controller.pointerCursorEntered.connect(self.begin_qml_shaped_pointer_cursor)
         self.controller.pointerCursorChanged.connect(self.update_qml_pointer_cursor)
@@ -505,6 +511,8 @@ class StudyDetailView(QWidget):
 class _MemorialDetailView(QWidget):
     back_requested = Signal()
     play_requested = Signal(object)
+    media_destination_requested = Signal(object)
+    set_as_idle_requested = Signal(object)
 
     def __init__(
         self,
@@ -550,6 +558,10 @@ class _MemorialDetailView(QWidget):
         )
         self.controller.backRequested.connect(self.back_requested.emit)
         self.controller.projectRequested.connect(self.play_requested.emit)
+        self.controller.addToDestinationRequested.connect(
+            self.media_destination_requested.emit
+        )
+        self.controller.setAsIdleRequested.connect(self.set_as_idle_requested.emit)
         self.controller.pointerEntered.connect(self.begin_qml_pointer_cursor)
         self.controller.pointerCursorEntered.connect(self.begin_qml_shaped_pointer_cursor)
         self.controller.pointerCursorChanged.connect(self.update_qml_pointer_cursor)
@@ -761,6 +773,8 @@ class MeetingsWidget(QWidget):
     """
 
     project_media = Signal(object)  # MeetingMedia
+    media_destination_requested = Signal(object)
+    set_as_idle_requested = Signal(object)
     destinationTargetsChanged = Signal(str)
 
     def __init__(
@@ -1235,6 +1249,8 @@ class MeetingsWidget(QWidget):
         )
         d.back_requested.connect(self._on_detail_back)
         d.play_requested.connect(self.project_media)
+        d.media_destination_requested.connect(self.media_destination_requested)
+        d.set_as_idle_requested.connect(self.set_as_idle_requested)
         self._stack.addWidget(d)
         self._details[detail_key] = d
 
@@ -1303,6 +1319,8 @@ class MeetingsWidget(QWidget):
             )
             d.back_requested.connect(self._on_detail_back)
             d.play_requested.connect(self.project_media)
+            d.media_destination_requested.connect(self.media_destination_requested)
+            d.set_as_idle_requested.connect(self.set_as_idle_requested)
             self._stack.addWidget(d)
             self._details[detail_key] = d
 

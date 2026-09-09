@@ -4,6 +4,7 @@ import pytest
 from PySide6.QtCore import QPoint, QRect, QSize
 
 from solin.core.media.destinations import (
+    create_media_destination_request,
     MediaDestinationAsset,
     MediaDestinationKind,
     MediaRouteAction,
@@ -37,6 +38,29 @@ def test_destination_asset_requires_one_explicit_payload_shape() -> None:
             item={"url": "clip.mp4"},
             import_path="document.pdf",
         )
+
+
+def test_single_item_request_owns_an_independent_payload() -> None:
+    source = {
+        "title": "Media",
+        "url": "https://example.test/media.mp4",
+        "image_framing": {"scale": 1.25},
+    }
+
+    request = create_media_destination_request(source)
+    assert request is not None
+    source["image_framing"]["scale"] = 2.0
+
+    asset = request.assets[0]
+    assert request.title == "Media"
+    assert asset.source_id == "https://example.test/media.mp4"
+    assert asset.item is not source
+    assert asset.item is not None
+    assert asset.item["image_framing"] == {"scale": 1.25}
+
+
+def test_single_item_request_rejects_an_empty_media_url() -> None:
+    assert create_media_destination_request({"title": "Missing"}) is None
 
 
 def test_dialog_position_is_centered_on_its_owner() -> None:

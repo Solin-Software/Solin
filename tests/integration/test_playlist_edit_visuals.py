@@ -50,6 +50,8 @@ def test_playlist_icons_stay_embedded_in_python():
         "cloud",
         "section",
         "marker",
+        "add_to_playlist",
+        "set_as_idle",
         "media_trim",
         "chevron_down",
         "chevron_up",
@@ -88,6 +90,22 @@ def test_media_preparation_feedback_stays_local_to_its_tree_row():
     assert "mediaRoot.operationProgress" in source
     assert "root.playlistController.cancelOperation(mediaRoot.operationId)" in source
     assert "root.playlistController.retryOperation(mediaRoot.operationId)" in source
+
+
+def test_media_overflow_menu_exposes_shared_add_to_destination_action():
+    source = Path("src/solin/qml/PlaylistTreeView.qml").read_text(encoding="utf-8")
+
+    assert 'objectName: "mediaItemAddToDestinationAction"' in source
+    assert 'text: qsTranslate("MediaDestinationDialog", "Add to…")' in source
+    assert "root.playlistController.addToDestination(mediaRoot.nodeId)" in source
+
+
+def test_media_overflow_menu_exposes_shared_set_as_idle_action():
+    source = Path("src/solin/qml/PlaylistTreeView.qml").read_text(encoding="utf-8")
+
+    assert 'objectName: "mediaItemSetAsIdleAction"' in source
+    assert 'text: qsTranslate("ProjectionBar", "Set as idle screen")' in source
+    assert "root.playlistController.setAsIdle(mediaRoot.nodeId)" in source
 
 
 def test_shared_tree_keeps_shell_theme_contract_and_native_drag_feedback():

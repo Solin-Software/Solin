@@ -52,6 +52,7 @@ class MediaTreeRole(IntEnum):
     OPERATION_RETRYABLE = Qt.ItemDataRole.UserRole + 37
     CAN_REMOVE = Qt.ItemDataRole.UserRole + 38
     CAN_DOWNLOAD = Qt.ItemDataRole.UserRole + 39
+    CAN_SET_AS_IDLE = Qt.ItemDataRole.UserRole + 40
 
 
 @dataclass(frozen=True, slots=True)
@@ -101,6 +102,7 @@ ROLE_DEFINITIONS: Final[tuple[RoleDefinition, ...]] = (
     RoleDefinition(MediaTreeRole.OPERATION_RETRYABLE, "operationRetryable", False),
     RoleDefinition(MediaTreeRole.CAN_REMOVE, "canRemove", True),
     RoleDefinition(MediaTreeRole.CAN_DOWNLOAD, "canDownload", False),
+    RoleDefinition(MediaTreeRole.CAN_SET_AS_IDLE, "canSetAsIdle", False),
 )
 
 ROLE_NAMES: Final = MappingProxyType(

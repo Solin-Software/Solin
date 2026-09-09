@@ -8,6 +8,7 @@ from typing import Any
 from PySide6.QtCore import QCoreApplication, QDateTime, QTimer, QT_TRANSLATE_NOOP
 
 from ..ui.screens import ScreenManager
+from ..ui.thumbnail_images import load_thumbnail_path
 from ..core.projection.application import (
     ProjectionSession,
     projection_presentation_type,
@@ -16,9 +17,11 @@ from ..core.projection.image_framing import (
     IDENTITY_IMAGE_TRANSFORM,
     image_transform_from_values,
 )
+from ..core.projection.idle_media import IdleMediaRequest, existing_idle_media_path
 from ..core.timer.models import MediaCountdownPresentation
 from ..projection.idle_source import IdleMediaSource
 from ..projection.window import FloatingPreviewWindow, ProjectionWindow
+from ..widgets.projection.idle_dialog import confirm_set_as_idle
 
 _TR_CONTEXT = "ProjectionWindowManagement"
 _THIS_MONITOR_SOURCE = QT_TRANSLATE_NOOP(
@@ -283,6 +286,26 @@ class ProjectionWindowController:
 
     def all_windows(self) -> list:
         return self._session.all_windows()
+
+    def request_idle_media(self, request: object) -> None:
+        """Confirm and apply one tree-originated idle-screen request."""
+
+        if not isinstance(request, IdleMediaRequest):
+            return
+        media_type = str(request.media_type or "").strip().lower()
+        path = existing_idle_media_path(media_type, request.path)
+        if not path:
+            return
+        title = request.title or os.path.basename(path)
+        pixmap = load_thumbnail_path(request.thumbnail_path)
+        if pixmap is None and media_type == "image":
+            pixmap = load_thumbnail_path(path)
+        if confirm_set_as_idle(
+            title,
+            pixmap=pixmap,
+            parent=self._context.dialog_parent,
+        ):
+            self.on_idle_media_changed(path)
 
     def on_idle_media_changed(self, path: str) -> None:
         # Reject a path that no longer exists — treat it as "clear".

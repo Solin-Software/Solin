@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import mimetypes
 from collections.abc import Callable
 from pathlib import Path
@@ -9,8 +10,12 @@ from typing import Any
 
 from ..media.formats import media_type_from_path
 from ..media.insertion import MediaInsertPayload
-from ..playlists.items import looks_like_filename_title
-from .models import MeetingMedia
+from ..playlists.items import (
+    PlaylistMediaItem,
+    create_playlist_item,
+    looks_like_filename_title,
+)
+from .models import MeetingMedia, media_type_for_mime_type
 from .tree_types import Node, new_node_id
 
 
@@ -98,6 +103,50 @@ def meeting_media_from_ref(
 
 def playlist_item_media_url(raw: dict[str, Any]) -> str:
     return str(raw.get("url") or raw.get("jworg_url") or "")
+
+
+def playlist_item_from_meeting_node(node: Node, *, url: str) -> PlaylistMediaItem:
+    """Convert one meeting media node into an independent playlist-shaped item."""
+
+    ref = node.get("media_ref") or {}
+    title = clean_media_title(str(node.get("title") or media_ref_title(ref)))
+    media_type = str(node.get("media_type") or "").lower()
+    if media_type not in {"image", "audio", "video"}:
+        mime_type = str(ref.get("mime_type") or "")
+        media_type = (
+            media_type_for_mime_type(mime_type)
+            if mime_type
+            else meeting_media_type_from_path(url)
+        )
+    attributes: dict[str, Any] = {
+        "type": media_type,
+        "auto_title": bool(node.get("auto_title", False)),
+        "key_symbol": ref.get("key_symbol") or None,
+        "track": int_or_zero(ref.get("track")) or None,
+        "issue_tag": int_or_zero(ref.get("issue_tag")) or None,
+        "doc_id": int_or_zero(ref.get("meps_doc_id")) or None,
+        "meps_language": int_or_zero(ref.get("meps_language")),
+        "language": str(ref.get("language") or ""),
+        "jw_media_id": str(ref.get("jw_media_id") or ""),
+    }
+    if ref.get("jw_identity_authoritative"):
+        attributes["jw_identity_authoritative"] = True
+    for field in (
+        "start_trim_ticks",
+        "end_trim_ticks",
+        "base_duration_ticks",
+    ):
+        value = int_or_zero(
+            node.get(field) if node.get(field) is not None else ref.get(field)
+        )
+        if value:
+            attributes[field] = value
+    if node.get("image_framing") is not None:
+        attributes["image_framing"] = copy.deepcopy(node["image_framing"])
+    for field in ("thumbnail_url", "thumbnail_binding"):
+        if node.get(field):
+            attributes[field] = node[field]
+    return create_playlist_item(title, url, **attributes)
 
 
 def create_manual_media_node(
@@ -235,4 +284,9 @@ def create_playlist_media_node(
     ):
         if raw.get(field) is not None:
             node[field] = int_or_zero(raw.get(field))
+    if raw.get("image_framing") is not None:
+        node["image_framing"] = copy.deepcopy(raw["image_framing"])
+    for field in ("thumbnail_url", "thumbnail_binding"):
+        if raw.get(field):
+            node[field] = raw[field]
     return node

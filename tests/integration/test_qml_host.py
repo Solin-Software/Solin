@@ -8,6 +8,7 @@ import pytest
 from PySide6.QtCore import (
     Q_ARG,
     QCoreApplication,
+    QEvent,
     Property,
     QMetaObject,
     QObject,
@@ -215,12 +216,22 @@ class _PlaylistTreeControllerProbe(QObject):
         super().__init__()
         self._nodes = nodes
         self.projected: list[str] = []
+        self.destination_requests: list[str] = []
+        self.idle_requests: list[str] = []
         self.moves: list[tuple[str, str, int, int]] = []
         self.collapsed: list[str] = []
 
     @Slot(str)
     def projectItem(self, item_id: str) -> None:  # noqa: N802 - QML API
         self.projected.append(item_id)
+
+    @Slot(str)
+    def addToDestination(self, item_id: str) -> None:  # noqa: N802 - QML API
+        self.destination_requests.append(item_id)
+
+    @Slot(str)
+    def setAsIdle(self, item_id: str) -> None:  # noqa: N802 - QML API
+        self.idle_requests.append(item_id)
 
     @Slot(str)
     def toggleCollapse(self, section_id: str) -> None:  # noqa: N802 - QML API
@@ -312,6 +323,7 @@ def _playlist_media_node(item_id: str, title: str) -> dict:
         "canDrag": True,
         "canEdit": True,
         "canProject": True,
+        "canSetAsIdle": True,
         "canRemove": True,
     }
 
@@ -354,6 +366,18 @@ def _playlist_tree_host(
     widget.show()
     QTest.qWait(40)
     return widget, controller, model, protection
+
+
+def _dispose_qml_host(
+    widget: QQuickWidget,
+    popup: QObject | None = None,
+) -> None:
+    if popup is not None:
+        QMetaObject.invokeMethod(popup, "close", Qt.ConnectionType.DirectConnection)
+    widget.close()
+    QCoreApplication.processEvents()
+    widget.deleteLater()
+    QCoreApplication.sendPostedEvents(widget, QEvent.Type.DeferredDelete)
 
 
 def _snapshot_node(node: dict) -> MediaTreeNodeSnapshot:
@@ -1185,6 +1209,72 @@ def test_shared_playlist_tree_requires_explicit_play_when_protection_is_enabled(
         assert controller.projected == ["media-1", "media-1"]
     finally:
         widget.deleteLater()
+
+
+def test_playlist_tree_media_menu_forwards_add_to_destination() -> None:
+    node = _playlist_media_node("media-1", "Destination media")
+    widget, controller, _model, _protection = _playlist_tree_host(
+        [node],
+        height=180,
+    )
+    try:
+        root = widget.rootObject()
+        assert root is not None
+        action = root.findChild(QObject, "mediaItemAddToDestinationAction")
+        assert action is not None
+        assert action.property("enabled") is True
+
+        assert QMetaObject.invokeMethod(action, "triggered")
+        assert controller.destination_requests == ["media-1"]
+    finally:
+        _dispose_qml_host(widget)
+
+
+def test_playlist_tree_media_menu_forwards_set_as_idle() -> None:
+    node = _playlist_media_node("media-1", "Idle media")
+    widget, controller, _model, _protection = _playlist_tree_host(
+        [node],
+        height=180,
+    )
+    menu = None
+    try:
+        root = widget.rootObject()
+        assert root is not None
+        action = root.findChild(QObject, "mediaItemSetAsIdleAction")
+        menu = root.findChild(QObject, "mediaItemMenu")
+        assert action is not None
+        assert menu is not None
+        assert QMetaObject.invokeMethod(menu, "open")
+        QTest.qWait(10)
+        assert action.property("visible") is True
+
+        assert QMetaObject.invokeMethod(action, "triggered")
+        assert controller.idle_requests == ["media-1"]
+    finally:
+        _dispose_qml_host(widget, menu)
+
+
+def test_playlist_tree_media_menu_omits_ineligible_idle_action() -> None:
+    node = {
+        **_playlist_media_node("media-1", "Remote media"),
+        "canSetAsIdle": False,
+    }
+    widget, _controller, _model, _protection = _playlist_tree_host(
+        [node],
+        height=180,
+    )
+    menu = None
+    try:
+        root = widget.rootObject()
+        assert root is not None
+        menu = root.findChild(QObject, "mediaItemMenu")
+        assert menu is not None
+        assert QMetaObject.invokeMethod(menu, "open")
+        QTest.qWait(10)
+
+        assert root.findChild(QObject, "mediaItemSetAsIdleAction") is None
+    finally:
+        _dispose_qml_host(widget, menu)
 
 
 def test_image_thumbnail_cursor_follows_playback_protection() -> None:

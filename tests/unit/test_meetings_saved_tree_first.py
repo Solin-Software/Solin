@@ -295,6 +295,8 @@ def test_show_detail_observes_tree_saved_during_detail_construction(monkeypatch)
         def __init__(self, pub_type, _wd, **kwargs) -> None:
             self.back_requested = _ConnectSignal()
             self.play_requested = _ConnectSignal()
+            self.media_destination_requested = _ConnectSignal()
+            self.set_as_idle_requested = _ConnectSignal()
             handler = kwargs["meeting_tree_saved_handler"]
             assert handler is not None
             handler(_snapshot(pub_type, title="Saved during construction").tree_key)
@@ -331,6 +333,8 @@ def test_show_detail_observes_tree_saved_during_detail_construction(monkeypatch)
         _on_canonical_media_recovery_requested=lambda _tree_key, _source_path: None,
         _on_detail_back=lambda: None,
         project_media=lambda _media: None,
+        media_destination_requested=_ConnectSignal(),
+        set_as_idle_requested=_ConnectSignal(),
         _stack=SimpleNamespace(addWidget=lambda detail: added.append(detail)),
         _details={},
     )

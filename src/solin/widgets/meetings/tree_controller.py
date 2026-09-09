@@ -36,6 +36,7 @@ from PySide6.QtGui import QDesktopServices, QImage, QPixmap
 from PySide6.QtWidgets import QFileDialog, QMessageBox, QDialog
 
 from ...core.media.cache import MediaCacheManager
+from ...core.media.destinations import create_media_destination_request
 from ...core.i18n.strings import tr_document_page_title, tr_item_count
 from ...core.media.profile_store import ProfileMediaStore
 from ...core.media.thumbnail_store import ThumbnailStore
@@ -100,6 +101,8 @@ from ...core.meetings.media_nodes import (
     create_manual_media_node,
     create_playlist_media_node,
     meeting_media_from_ref,
+    media_ref_title,
+    playlist_item_from_meeting_node,
     playlist_item_media_url,
     should_accept_resolved_media_title,
 )
@@ -138,6 +141,10 @@ from ...core.meetings.tree_types import Node, clone_nodes, count_media, iter_nod
 from ...core.projection.aspect_ratio import (
     DEFAULT_PROJECTION_ASPECT_RATIO,
     ProjectionAspectRatio,
+)
+from ...core.projection.idle_media import (
+    create_idle_media_request,
+    existing_idle_media_path,
 )
 from ...core.projection.image_framing import (
     ImageTransform,
@@ -263,6 +270,8 @@ _MOVE_MANUAL_STRUCTURE_SOURCE = QT_TRANSLATE_NOOP(
 class MeetingTreeController(QObject):
     backRequested = Signal()
     projectRequested = Signal(object)
+    addToDestinationRequested = Signal(object)
+    setAsIdleRequested = Signal(object)
     pointerEntered = Signal()
     pointerCursorEntered = Signal(str, int)
     pointerCursorChanged = Signal(str, int)
@@ -2419,6 +2428,61 @@ class MeetingTreeController(QObject):
                 origin_item_id=item_id,
             )
         )
+
+    @Slot(str)
+    def addToDestination(self, item_id: str) -> None:  # noqa: N802 - QML API
+        if not self._flush_image_framing_save():
+            return
+        node = self._find_node(item_id)
+        if not node or node.get("type") != "media":
+            return
+        state = self._media_tree_runtime.registry.state(
+            self._tree_session.owner_id,
+            item_id,
+        )
+        if state.availability != MediaAvailability.AVAILABLE:
+            return
+        url = self._url_for_node(node)
+        if not url:
+            return
+        item = playlist_item_from_meeting_node(node, url=url)
+        request = create_media_destination_request(item)
+        if request is None:
+            return
+        self.addToDestinationRequested.emit(request)
+
+    @Slot(str)
+    def setAsIdle(self, item_id: str) -> None:  # noqa: N802 - QML API
+        if not self._flush_image_framing_save():
+            return
+        node = self._find_node(item_id)
+        if not node or node.get("type") != "media":
+            return
+        state = self._media_tree_runtime.registry.state(
+            self._tree_session.owner_id,
+            item_id,
+        )
+        if state.availability != MediaAvailability.AVAILABLE:
+            return
+        ref = node.get("media_ref") or {}
+        media_type = str(
+            node.get("media_type") or self._media_type_from_ref(ref)
+        ).strip().lower()
+        source = existing_idle_media_path(media_type, self._url_for_node(node))
+        if not source:
+            return
+        thumbnail_path = ""
+        if media_type == "video":
+            thumbnail_path = self._thumbnail_local_path(node, item_id, source)
+        request = create_idle_media_request(
+            title=str(node.get("title") or media_ref_title(ref)),
+            media_type=media_type,
+            source=source,
+            thumbnail_path=thumbnail_path,
+        )
+        if request is None:
+            return
+        self.setAsIdleRequested.emit(request)
 
     @Slot(result=float)
     def imageFramingAspectRatio(self) -> float:  # noqa: N802 - QML API

@@ -16,6 +16,7 @@ from ...core.foundation.constants import (
     PLAYLIST_EXTS,
 )
 from ...core.media.formats import MEDIA_EXTS, media_type_from_path
+from ...core.media.destinations import create_media_destination_request
 from ...core.media.identity import contains_media, partition_media_items
 from ...core.media.insertion import MediaInsertPayload, MediaInsertResult
 from ...core.media.operations import (
@@ -23,6 +24,10 @@ from ...core.media.operations import (
     MediaOperationProgress,
     MediaOperationSpec,
     MediaOperationState,
+)
+from ...core.projection.idle_media import (
+    create_idle_media_request,
+    existing_idle_media_path,
 )
 from ...core.media.thumbnail_identity import (
     thumbnail_source_fingerprint,
@@ -35,6 +40,7 @@ from ...core.ingest.watched_folder_files import (
 )
 from ...core.playlists.tree_editing import insert_playlist_media
 from ...core.playlists.items import (
+    copy_playlist_item_for_destination,
     create_playlist_item,
     create_playlist_item_from_insert,
 )
@@ -410,6 +416,73 @@ class PlaylistEditActionsMixin:
         except StopIteration:
             return
         self.project_items.emit(items[idx:] + items[:idx], 0, "")
+
+    def _add_to_destination(self, item_id: str) -> None:
+        self._flush_image_framing_save()
+        if not self._pl:
+            return
+        item = next(
+            (
+                candidate
+                for candidate in self._pl.get("items", [])
+                if candidate.get("id") == item_id
+            ),
+            None,
+        )
+        if item is None:
+            return
+        state = self._media_tree_runtime.registry.state(
+            self._tree_session.owner_id,
+            item_id,
+        )
+        if state.availability != MediaAvailability.AVAILABLE:
+            return
+        destination_item = copy_playlist_item_for_destination(item)
+        request = create_media_destination_request(destination_item)
+        if request is None:
+            return
+        self.media_destination_requested.emit(request)
+
+    def _set_as_idle(self, item_id: str) -> None:
+        self._flush_image_framing_save()
+        if not self._pl:
+            return
+        item = next(
+            (
+                candidate
+                for candidate in self._pl.get("items", [])
+                if candidate.get("id") == item_id
+            ),
+            None,
+        )
+        if item is None:
+            return
+        state = self._media_tree_runtime.registry.state(
+            self._tree_session.owner_id,
+            item_id,
+        )
+        if state.availability != MediaAvailability.AVAILABLE:
+            return
+        media_type = str(item.get("type") or "video").strip().lower()
+        source = existing_idle_media_path(media_type, str(item.get("url") or ""))
+        if not source:
+            return
+        thumbnail_path = ""
+        if media_type == "video":
+            thumbnail_path = os.fspath(
+                self._playlist_thumbnail_store.path(
+                    thumbnail_storage_id(item_id, source)
+                )
+            )
+        request = create_idle_media_request(
+            title=str(item.get("title") or ""),
+            media_type=media_type,
+            source=source,
+            thumbnail_path=thumbnail_path,
+        )
+        if request is None:
+            return
+        self.set_as_idle_requested.emit(request)
 
     def _is_playable(self, item: dict) -> bool:
         url = item.get("url", "")

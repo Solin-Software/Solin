@@ -38,7 +38,12 @@ class _WindowStub:
             "project_media_signal",
             "play_cached_media_signal",
         )
-        self.meetings_widget = _signal_namespace("meetings", "project_media")
+        self.meetings_widget = _signal_namespace(
+            "meetings",
+            "project_media",
+            "media_destination_requested",
+            "set_as_idle_requested",
+        )
         self.timer_widget = _signal_namespace(
             "timer",
             "project_timer_signal",
@@ -52,6 +57,8 @@ class _WindowStub:
             "playlist",
             "project_video_signal",
             "project_image_signal",
+            "media_destination_requested",
+            "set_as_idle_requested",
         )
         self.playlist_widget.set_watched_folder = _slot("playlist_set_watched_folder")
         self.playlist_widget.record_source_duration = _slot("record_source_duration")
@@ -135,6 +142,7 @@ class _WindowStub:
             send_to_temp_playlist=_slot("send_to_temp_playlist"),
         )
         self._media_destinations = SimpleNamespace(
+            route=_slot("route_media_destination"),
             route_projected_media=_slot("route_projected_media"),
         )
         self._auto_key_projection = SimpleNamespace(on_media_state=_slot("on_media_state"))
@@ -142,6 +150,7 @@ class _WindowStub:
             on_screens_changed=_slot("on_screens_changed"),
             apply_yearly_text=_slot("apply_yearly_text"),
             on_idle_media_changed=_slot("on_idle_media_changed"),
+            request_idle_media=_slot("request_idle_media"),
         )
         self._language_controller = SimpleNamespace(
             change_language=_slot("change_language"),
@@ -244,12 +253,24 @@ def test_connect_signals_wires_expected_signal_graph():
     controller.connect_signals()
 
     total_connections = sum(len(signal.connected) for signal in _Signal.registry)
-    assert total_connections == 49
+    assert total_connections == 53
     assert window.library_widget.project_media_signal.connected == [
         controller._project_library_media
     ]
     assert window.library_widget.play_cached_media_signal.connected == [
         window._media_projection.on_cache_play
+    ]
+    assert window.meetings_widget.media_destination_requested.connected == [
+        window._media_destinations.route
+    ]
+    assert window.playlist_widget.media_destination_requested.connected == [
+        window._media_destinations.route
+    ]
+    assert window.meetings_widget.set_as_idle_requested.connected == [
+        window._projection_targets.request_idle_media
+    ]
+    assert window.playlist_widget.set_as_idle_requested.connected == [
+        window._projection_targets.request_idle_media
     ]
     assert window.settings_widget.general.watched_folder_changed.connected == [
         window.playlist_widget.set_watched_folder,

@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import copy
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import Enum
-from collections.abc import Mapping
 from typing import Any
 
 from solin.core.media.placement import END_OF_LIST_INDEX
@@ -46,6 +47,28 @@ class MediaDestinationRequest:
     @property
     def item_count(self) -> int:
         return len(self.assets) or 1
+
+
+def create_media_destination_request(
+    item: Mapping[str, Any],
+) -> MediaDestinationRequest | None:
+    """Build a single-item request with an isolated destination payload."""
+
+    destination_item = copy.deepcopy(dict(item))
+    source_id = str(destination_item.get("url") or "")
+    if not source_id:
+        return None
+    title = str(destination_item.get("title") or "")
+    return MediaDestinationRequest(
+        title=title,
+        assets=(
+            MediaDestinationAsset(
+                title=title,
+                source_id=source_id,
+                item=destination_item,
+            ),
+        ),
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,6 +113,7 @@ class MediaDestinationOutcome:
 
 
 __all__ = [
+    "create_media_destination_request",
     "MediaDestinationKind",
     "MediaDestinationAsset",
     "MediaDestinationOutcome",

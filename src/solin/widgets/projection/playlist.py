@@ -7,9 +7,10 @@ from PySide6.QtGui import QImage, QPixmap
 
 from solin.core.foundation.constants import ORDER_NEXT, ORDER_OFF, ORDER_RANDOM
 from solin.core.media.download_storage import completed_cached_path
+from solin.core.projection.idle_media import existing_idle_media_path
 from solin.styles.icons import ICON_PANEL_RIGHT, ICON_SKIP_NEXT, ICON_SKIP_PREV, make_icon
 from solin.styles.theme import PALETTE
-from .idle_dialog import SetAsIdleConfirmDialog
+from .idle_dialog import confirm_set_as_idle
 
 
 _ANIM_MS = 220
@@ -266,13 +267,11 @@ class ProjectionPlaylistMixin:
         if self._mode == "video":
             if not self._playlist or self._playlist_index >= len(self._playlist):
                 return ""
-            url = self._playlist[self._playlist_index].get("url", "")
-            if not url or url.startswith(("http://", "https://")):
-                return ""
-            return url if os.path.isfile(url) else ""
+            source = self._playlist[self._playlist_index].get("url", "")
+        else:
+            source = self._image_file_path
 
-        path = self._image_file_path
-        return path if path and os.path.isfile(path) else ""
+        return existing_idle_media_path(self._mode, source)
 
     def _refresh_idle_btn_visibility(self) -> None:
         if (
@@ -306,9 +305,7 @@ class ProjectionPlaylistMixin:
                 pixmap = self._thumb_queue._cache.get(self._playlist_index, (None,))[0]
 
         title = self.ov_title.text() or os.path.basename(path)
-        dlg = SetAsIdleConfirmDialog(title, pixmap=pixmap, parent=self.window())
-        dlg.exec()
-        if dlg.confirmed():
+        if confirm_set_as_idle(title, pixmap=pixmap, parent=self.window()):
             self.set_as_idle_requested.emit(path)
 
     def _request_thumbnail(self, index: int, item: dict):
