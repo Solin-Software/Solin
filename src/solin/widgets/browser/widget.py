@@ -442,7 +442,7 @@ _OVERLAY_JS_RAW = r"""
     function absMediaUrl(url) {
         if (!url) return '';
         try {
-            var abs = new URL(url, location.href).href;
+            var abs = new URL(url, document.baseURI).href;
             return abs.startsWith('http') ? abs : '';
         } catch (e) { return ''; }
     }

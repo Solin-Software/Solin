@@ -63,7 +63,7 @@ def test_browser_overlay_js_resolves_relative_image_urls():
     # src relativo (wol.jw.org) precisa virar absoluto antes do filtro http,
     # senão o menu de mídia não abre e o menu nativo assume.
     assert "function absMediaUrl(url)" in overlay_js
-    assert "var abs = new URL(url, location.href).href;" in overlay_js
+    assert "var abs = new URL(url, document.baseURI).href;" in overlay_js
 
     # Os três pontos que transformam atributo em URL candidata usam o helper.
     assert "return m ? absMediaUrl(m[1]) : '';" in overlay_js
