@@ -210,15 +210,36 @@ def test_video_preview_creates_native_surface_only_when_route_is_enabled():
 
     assert preview.native_output_active is True
     assert preview.native_surface is not None
-    # The sidecar renders and letterboxes internally, so the native surface
-    # fills the whole preview — there is no Qt-side letterboxing.
-    assert preview.native_surface.geometry().getRect() == (0, 0, 1000, 800)
+    # The surface is inset to the canvas aspect rather than filling the preview.
+    # The sidecar's obs_display is only resized when a fresh window target reaches
+    # it, so during a live window drag its size lags; a surface that can only ever
+    # have the canvas aspect turns that stale display into a uniform scale instead
+    # of a distortion. 1000x800 is wider than 16:9, so the fit is width-bound and
+    # centred vertically: 1000 / (16/9) = 562, offset (800 - 562) // 2 = 119.
+    assert preview.native_surface.geometry().getRect() == (0, 119, 1000, 562)
     assert preview.native_surface.cursor().shape() == Qt.CursorShape.ArrowCursor
     assert preview.native_surface.input_overlay is not None
     assert (
         preview.native_surface.input_overlay.cursor().shape()
         == Qt.CursorShape.ArrowCursor
     )
+
+    # Each further case uses a fresh preview sized before the surface is created:
+    # a hidden widget gets no resizeEvent, and show() would build a real native
+    # window (WA_NativeWindow plus layered-window calls), which a bare test cannot do.
+
+    # Narrower than the canvas: the fit is width-bound and centred vertically.
+    narrow = projection_bar._ThemedVideoPreview()
+    narrow.resize(600, 800)
+    narrow.set_native_output_active(True)
+    assert narrow.native_surface.geometry().getRect() == (0, 231, 600, 338)
+
+    # The aspect follows the document's canvas rather than an assumed 16:9.
+    four_by_three = projection_bar._ThemedVideoPreview()
+    four_by_three.set_canvas_aspect(4 / 3)
+    four_by_three.resize(1200, 600)
+    four_by_three.set_native_output_active(True)
+    assert four_by_three.native_surface.geometry().getRect() == (200, 0, 800, 600)
 
 
 def test_fullscreen_replaces_expanded_native_target_instead_of_duplicating_it():

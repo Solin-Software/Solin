@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from contextlib import ExitStack
 import logging
+import weakref
 from typing import Any, TYPE_CHECKING
 
 from PySide6.QtWidgets import QApplication, QVBoxLayout, QWidget
@@ -469,6 +470,8 @@ class MainWindow(QWidget):
         self._media_mirror_was_enabled = self._program_mirror_enabled()
         self._native_fallback_mirror_required = False
         self._native_window_output_suppressed = False
+        # Surfaces whose geometry_changed is already wired to the reconcile.
+        self._geometry_watched_surfaces: list[weakref.ref] = []
         self._unsubscribe_native_projection_state = self.projection_session.subscribe(
             self._on_projection_state_changed_for_native
         )
@@ -1117,6 +1120,7 @@ class MainWindow(QWidget):
             preview_output.video_format.width,
             preview_output.video_format.height,
         )
+        self._apply_canvas_aspect_to_video_hosts(preview_output.video_format)
         program_output = document.output(BusId.VIRTUAL_CAMERA)
         self._scene_program_egress.reconfigure(
             program_output.video_format.width,
@@ -1144,12 +1148,46 @@ class MainWindow(QWidget):
             self._scene_program_egress.descriptor if program_required else None
         )
 
-    @staticmethod
+    def _apply_canvas_aspect_to_video_hosts(self, video_format) -> None:
+        """Tell the operator video host what aspect to inset its native surface to.
+
+        Taken from the document rather than assumed to be 16:9, so a canvas configured
+        to another format still resizes without distorting.
+        """
+        width = int(getattr(video_format, "width", 0) or 0)
+        height = int(getattr(video_format, "height", 0) or 0)
+        if width <= 0 or height <= 0:
+            return
+        projection_bar = getattr(self, "proj_bar", None)
+        video_preview = getattr(projection_bar, "video_preview", None)
+        setter = getattr(video_preview, "set_canvas_aspect", None)
+        if callable(setter):
+            setter(width / height)
+
+    def _watch_surface_geometry(self, surface) -> None:
+        """Re-reconcile window targets when ``surface`` is resized or moved (once)."""
+        signal = getattr(surface, "geometry_changed", None)
+        if signal is None:
+            return
+        watched = self._geometry_watched_surfaces
+        if any(ref() is surface for ref in watched):
+            return
+        signal.connect(self._reconcile_native_scene_surfaces)
+        watched.append(weakref.ref(surface))
+        # Drop refs to surfaces Qt has already destroyed.
+        self._geometry_watched_surfaces = [ref for ref in watched if ref() is not None]
+
     def _native_window_target(
+        self,
         surface,
         target_id: str,
         bus_id: BusId,
     ) -> OutputWindowTarget:
+        # A resized surface keeps its obs_display at the old size until a fresh target
+        # is sent, which stretches the letterboxed image into the new shape. Every
+        # surface that becomes a target watches its own geometry so the reconcile
+        # re-runs; connecting here covers all of them in one place.
+        self._watch_surface_geometry(surface)
         screen = surface.screen() or QApplication.primaryScreen()
         origin = surface.mapToGlobal(QPoint(0, 0))
         return OutputWindowTarget(

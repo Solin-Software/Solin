@@ -105,9 +105,16 @@ _ANIM_MS = 220
 class _ThemedVideoPreview(QWidget):
     """Native-surface host for sidecar-painted video.
 
-    The libobs sidecar renders the operator's video into a shared native window
-    handle and letterboxes it internally, so this widget only hosts the
-    :class:`NativeVideoSurface` and fills it — there is no QtMultimedia presenter.
+    The libobs sidecar renders the operator's video into a shared native window handle
+    and letterboxes it internally, so there is no QtMultimedia presenter here.
+
+    The surface is inset to the canvas aspect rather than filling this widget. The
+    sidecar's ``obs_display`` is only resized when a fresh window target reaches it, so
+    during a live window drag its size lags the surface by a frame or two; if the surface
+    could take any shape, that stale display would be stretched into it and the picture
+    would distort while resizing. Holding the surface at the canvas aspect means a stale
+    display is merely scaled uniformly, never distorted, and this widget's own background
+    supplies the letterbox bars.
     """
 
     def __init__(self, parent: QWidget | None = None) -> None:
@@ -116,6 +123,7 @@ class _ThemedVideoPreview(QWidget):
         self.setStyleSheet(f"background: {PALETTE.bg0};")
         self._native_output_active = False
         self._native_surface: NativeVideoSurface | None = None
+        self._canvas_aspect = 16.0 / 9.0
 
     def set_native_output_active(self, active: bool) -> bool:
         active = bool(active)
@@ -157,10 +165,37 @@ class _ThemedVideoPreview(QWidget):
         super().showEvent(event)
         self._apply_video_geometry()
 
+    def set_canvas_aspect(self, aspect: float) -> None:
+        """Set the scene canvas aspect (width / height) used to inset the surface."""
+        aspect = float(aspect)
+        if aspect <= 0 or aspect == self._canvas_aspect:
+            return
+        self._canvas_aspect = aspect
+        self._apply_video_geometry()
+
     def _apply_video_geometry(self) -> None:
         if self._native_surface is None:
             return
-        self._native_surface.setGeometry(0, 0, max(0, self.width()), max(0, self.height()))
+        width = max(0, self.width())
+        height = max(0, self.height())
+        if width == 0 or height == 0:
+            self._native_surface.setGeometry(0, 0, width, height)
+            return
+        # Largest centered rectangle of the canvas aspect that fits this widget.
+        if width / height > self._canvas_aspect:
+            inner_height = height
+            inner_width = round(inner_height * self._canvas_aspect)
+        else:
+            inner_width = width
+            inner_height = round(inner_width / self._canvas_aspect)
+        inner_width = max(1, min(width, inner_width))
+        inner_height = max(1, min(height, inner_height))
+        self._native_surface.setGeometry(
+            (width - inner_width) // 2,
+            (height - inner_height) // 2,
+            inner_width,
+            inner_height,
+        )
 
 
 # Projection bar (bottom-right projection control)
