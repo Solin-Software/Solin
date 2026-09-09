@@ -176,14 +176,27 @@ class _ProjectionBar(QObject):
         self.volume_percent = value
 
 
-class _SettingsWidget(QObject):
+class _RemoteSettings(QObject):
     remote_control_settings_changed = Signal()
     remote_control_credentials_changed = Signal()
-    remote_control_revoke_requested = Signal()
+
+    def __init__(self, parent: QObject) -> None:
+        super().__init__(parent)
+        self.runtime_status: dict[str, Any] = {}
+
+    def set_remote_control_runtime_status(self, **values: Any) -> None:
+        self.runtime_status = values
+
+
+class _GeneralSettings(QObject):
     watched_folder_changed = Signal(str)
 
-    def set_remote_control_runtime_status(self, **_values: Any) -> None:
-        pass
+
+class _SettingsWidget(QObject):
+    def __init__(self) -> None:
+        super().__init__()
+        self.remote = _RemoteSettings(self)
+        self.general = _GeneralSettings(self)
 
 
 class _PlaybackProtection(QObject):
@@ -289,6 +302,32 @@ def test_disabled_start_does_not_build_catalog_or_create_tls(tmp_path: Path) -> 
     controller.stop()
 
 
+@pytest.mark.parametrize(
+    "signal_name",
+    [
+        "remote_control_settings_changed",
+        "remote_control_credentials_changed",
+    ],
+)
+def test_remote_domain_changes_reconfigure_and_publish_runtime_back_to_domain(
+    tmp_path: Path,
+    signal_name: str,
+) -> None:
+    controller, *_ = _controller(tmp_path, [])
+    remote = controller._dependencies.settings_widget.remote
+    controller._dependencies.settings.enabled = lambda: True
+    try:
+        getattr(remote, signal_name).emit()
+        assert remote.runtime_status["running"] is False
+        assert (
+            remote.runtime_status["message"] == "Save access credentials to start remote control."
+        )
+        assert remote.runtime_status["access_url"] == ""
+        assert remote.runtime_status["certificate_der"] == b""
+    finally:
+        controller.stop()
+
+
 def test_enabled_start_publishes_catalog_before_starting_server(tmp_path: Path) -> None:
     controller, *_ = _controller(tmp_path, [])
     controller._dependencies.settings.enabled = lambda: True
@@ -333,7 +372,7 @@ def test_clearing_watched_folder_marks_catalog_dirty_without_building_while_disa
     controller, *_ = _controller(tmp_path, [])
     initial_generation = controller._catalog_refresh_generation
 
-    controller._dependencies.settings_widget.watched_folder_changed.emit("")
+    controller._dependencies.settings_widget.general.watched_folder_changed.emit("")
 
     assert controller._catalog_refresh_generation == initial_generation + 1
     assert controller._catalog_dirty is True

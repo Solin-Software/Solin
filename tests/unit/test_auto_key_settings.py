@@ -1,6 +1,8 @@
 import json
 import uuid
 
+import pytest
+
 from solin.core.foundation.constants import QSETTINGS_PREFS_APP
 from solin.core.foundation.settings_keys import SettingsKey
 from solin.core.foundation.settings_store import SettingsStore
@@ -14,6 +16,7 @@ from solin.core.integrations.automation.auto_key_actions import (
 from solin.core.integrations.automation.settings import AutoKeySettingsStore
 from solin.core.profiles.settings import ProfileSettings
 from solin.ui.auto_key_labels import auto_key_event_label
+from solin.core.integrations.automation import shortcuts
 
 
 def _store() -> tuple[AutoKeySettingsStore, SettingsStore]:
@@ -101,3 +104,21 @@ def test_auto_key_event_labels_render_at_ui_boundary():
     assert auto_key_event_label(EVENT_MEDIA_PAUSED) == "Video pauses"
     assert auto_key_event_label(EVENT_MEDIA_RESUMED) == "Video resumes"
     assert auto_key_event_label("custom") == "custom"
+
+
+@pytest.mark.parametrize("sequence, expected", [
+    ("Ctrl+,", "Ctrl+,"),
+    (",", ","),
+    ("Ctrl+,, Ctrl+S", "Ctrl+,"),
+    (",, Ctrl+S", ","),
+    ("Ctrl+S, Ctrl+T", "Ctrl+S"),
+    ("Ctrl+S,Ctrl+T", "Ctrl+S"),
+])
+def test_shortcut_model_and_dispatch_keep_comma_key(sequence, expected, monkeypatch):
+    action = AutoKeyAction.from_dict({"event": EVENT_MEDIA_STARTED, "sequence": sequence})
+    assert action is not None
+    assert action.sequence == expected
+    sent = []
+    monkeypatch.setattr(shortcuts, "_send_chord", lambda chord: sent.append(chord) or True)
+    assert shortcuts.send_key_sequence(sequence) is True
+    assert sent == [expected]

@@ -19,6 +19,7 @@ from PySide6.QtCore import (
 from .auto_key_actions import (
     AUTO_KEY_EVENTS,
     AutoKeyAction,
+    first_shortcut_chord,
 )
 
 log = logging.getLogger(__name__)
@@ -74,13 +75,8 @@ class AutoKeyDispatcher(QObject):
 
 def send_key_sequence(sequence: str) -> bool:
     """Send one Qt-style key sequence such as Ctrl+Alt+1."""
-    chords = [part.strip() for part in sequence.split(",", 1) if part.strip()][:1]
-    if not chords:
-        return False
-    ok = True
-    for chord in chords:
-        ok = _send_chord(chord) and ok
-    return ok
+    chord = first_shortcut_chord(sequence)
+    return _send_chord(chord) if chord else False
 
 
 def _send_chord(chord: str) -> bool:

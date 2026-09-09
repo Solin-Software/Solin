@@ -13,76 +13,11 @@ from solin.styles.icons import ICON_REMOTE_CONTROL, make_icon
 from solin.ui.controls import ButtonConfirmationFeedback
 from solin.ui.qml.quick_toolbar import QuickToolbarBridge
 from solin.widgets.quick_access_toolbar import QuickAccessToolbar
-from solin.widgets.remote_control_setup_dialog import (
-    RemoteControlSetupDialog,
-    RemoteControlSetupPresentation,
-    _fingerprint_display_text,
-)
 from solin.widgets.remote_sessions_popup import RemoteSessionsPopup, _RemoteSessionRow
-from solin.widgets.settings.remote_control_section import RemoteControlSectionMixin
 
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 _APP = QApplication.instance() or QApplication([])
-
-
-class _CallbackSignal:
-    def __init__(self) -> None:
-        self.callbacks: list[object] = []
-
-    def connect(self, callback) -> None:
-        self.callbacks.append(callback)
-
-
-class _FakeQrSession:
-    def __init__(self) -> None:
-        self.ready = _CallbackSignal()
-        self.failed = _CallbackSignal()
-        self.started_with = ""
-        self.close_calls = 0
-
-    def start(self, value: str) -> bool:
-        self.started_with = value
-        return True
-
-    def close(self) -> None:
-        self.close_calls += 1
-
-
-class _FakeQrFactory:
-    def __init__(self) -> None:
-        self.session = _FakeQrSession()
-        self.parent = None
-
-    def create(self, *, parent=None) -> _FakeQrSession:
-        self.parent = parent
-        return self.session
-
-
-class _ValueSink:
-    def __init__(self, value: str = "") -> None:
-        self.value = value
-
-    def setText(self, value: str) -> None:
-        self.value = value
-
-    def setEnabled(self, value: bool) -> None:
-        self.value = str(value)
-
-
-class _RemoteStatusHarness(RemoteControlSectionMixin):
-    def tr(self, source: str) -> str:
-        return source
-
-
-def _setup_presentation() -> RemoteControlSetupPresentation:
-    return RemoteControlSetupPresentation(
-        access_url="https://192.168.1.45:8765/remote/",
-        setup_url="https://192.168.1.45:8765/remote/?setup=1",
-        verification_code="ABCD-EFGH",
-        fingerprint_sha256="AA:BB:CC:DD",
-        certificate_der=b"certificate",
-    )
 
 
 def _session(
@@ -176,80 +111,6 @@ def test_remote_toolbar_control_keeps_the_maximum_pill_within_its_fixed_surface(
     assert "bridge.remoteControlBadge" in source
     assert "bridge.remoteControlWarning" in source
     assert "bridge.scenesRecording" in source
-
-
-def test_remote_setup_dialog_scans_the_dedicated_setup_route_and_closes_qr_work() -> None:
-    factory = _FakeQrFactory()
-    dialog = RemoteControlSetupDialog(_setup_presentation(), factory)
-    accepted: list[bool] = []
-    dialog.accepted.connect(lambda: accepted.append(True))
-
-    assert factory.parent is dialog
-    assert factory.session.started_with.endswith("/remote/?setup=1")
-
-    dialog.accept()
-
-    assert accepted == [True]
-    assert factory.session.close_calls == 1
-
-
-def test_remote_setup_copy_address_has_transient_confirmation_feedback() -> None:
-    factory = _FakeQrFactory()
-    dialog = RemoteControlSetupDialog(_setup_presentation(), factory)
-    copy_button = dialog.findChild(QPushButton, "SetupCopyAddress")
-
-    assert copy_button is not None
-    assert copy_button.property("confirmed") is False
-
-    copy_button.click()
-
-    assert QApplication.clipboard().text() == _setup_presentation().setup_url
-    assert copy_button.property("confirmed") is True
-
-
-def test_remote_setup_dialog_dismissal_is_not_reported_as_completed() -> None:
-    factory = _FakeQrFactory()
-    dialog = RemoteControlSetupDialog(_setup_presentation(), factory)
-    accepted: list[bool] = []
-    rejected: list[bool] = []
-    dialog.accepted.connect(lambda: accepted.append(True))
-    dialog.rejected.connect(lambda: rejected.append(True))
-
-    dialog.reject()
-
-    assert accepted == []
-    assert rejected == [True]
-    assert factory.session.close_calls == 1
-
-
-def test_settings_refresh_preserves_the_confirmed_remote_runtime_status() -> None:
-    settings = _RemoteStatusHarness()
-    settings._remote_interface_combo = SimpleNamespace(currentData=lambda: "ethernet")
-    settings._remote_interfaces = {"ethernet": SimpleNamespace(ipv4_address="192.168.0.224")}
-    settings._remote_control_settings = SimpleNamespace(enabled=lambda: True)
-    settings._remote_control_credentials = SimpleNamespace(has_credentials=lambda: True)
-    settings._remote_endpoint_label = _ValueSink()
-    settings._remote_copy_url_btn = _ValueSink()
-    settings._remote_runtime_status_known = True
-    settings._remote_runtime_message = "Secure remote control is running."
-    settings._remote_runtime_status_kind = "running"
-    displayed: list[tuple[str, str]] = []
-    settings._set_remote_status = lambda message, status: displayed.append((message, status))
-
-    settings._refresh_remote_configuration_status()
-
-    assert displayed == [("Secure remote control is running.", "running")]
-    assert settings._remote_endpoint_label.value == "https://192.168.0.224:8765/remote/"
-
-
-def test_remote_setup_fingerprint_adds_safe_wrap_points_without_changing_octets() -> None:
-    fingerprint = ":".join(f"{value:02X}" for value in range(32))
-
-    displayed = _fingerprint_display_text(fingerprint)
-
-    assert "  " in displayed
-    assert displayed.replace("  ", ":") == fingerprint
-    assert max(len(group) for group in displayed.split("  ")) == 11
 
 
 def test_remote_sessions_popup_distinguishes_connected_and_signed_in_sessions() -> None:

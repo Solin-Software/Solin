@@ -351,7 +351,7 @@ class MainWindowUiController:
             int(MainPage.LIBRARY): pages.library_widget.qml_load_handle,
             int(MainPage.TIMER): pages.timer_widget.qml_load_handle,
             int(MainPage.TALK_THEME): pages.talk_theme_widget.preparation_handle,
-            int(MainPage.SETTINGS): pages.settings_widget.preparation_handle,
+            int(MainPage.SETTINGS): pages.settings_widget.qml_load_handle,
             int(MainPage.PLAYLISTS): pages.playlist_widget.preparation_handle,
         }
         if pages.scenes_widget is not None:
@@ -499,7 +499,7 @@ class MainWindowUiController:
             parent=context.parent,
         )
         timeline.mark("page_theme_constructed")
-        watched_folder = settings_widget.get_watched_folder()
+        watched_folder = context.watched_folder_settings.path()
         playlist_widget = PlaylistWidget(
             context.lang_manager,
             media_ctrl=context.media_controller,
@@ -577,7 +577,7 @@ class MainWindowUiController:
         )
         timeline.mark("page_scenes_constructed")
         meetings_widget.set_watched_folder(watched_folder)
-        settings_widget.meetings_auto_download_toggled.connect(
+        settings_widget.general.meetings_auto_download_toggled.connect(
             meetings_widget.set_automatic_download_enabled
         )
 
@@ -738,7 +738,7 @@ class MainWindowUiController:
             toolbar.obs_camera_stream_requested.connect(handlers.project_camera_stream)
             toolbar.camera_stream_requested.connect(handlers.project_camera_stream)
             toolbar.camera_selection_changed.connect(handlers.camera_selection_changed)
-            toolbar.set_camera_enabled(settings_widget.get_camera_enabled())
+            toolbar.set_camera_enabled(bool(settings_widget.integrations.state["cameraEnabled"]))
         toolbar.show()
         toolbar.reposition()
         navigation.update_quick_toolbar_browser_style()

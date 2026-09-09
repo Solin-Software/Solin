@@ -284,6 +284,10 @@ Rectangle {
                     FieldLabel { text: qsTr("Profile name") }
 
                     AppTextField {
+                        restingColor: root.surfaceColor
+                        cornerRadius: 9
+                        focusedBorderWidth: 1
+                        font.pixelSize: 13
                         id: profileName
                         Layout.fillWidth: true
                         text: root.draft.profileName
@@ -486,6 +490,10 @@ Rectangle {
                                 spacing: 7
                                 FieldLabel { text: qsTr("WebSocket port") }
                                 AppTextField {
+                                    restingColor: root.surfaceColor
+                                    cornerRadius: 9
+                                    focusedBorderWidth: 1
+                                    font.pixelSize: 13
                                     Layout.fillWidth: true
                                     text: root.draft.obsPort
                                     inputMethodHints: Qt.ImhDigitsOnly
@@ -498,6 +506,10 @@ Rectangle {
                                 spacing: 7
                                 FieldLabel { text: qsTr("Password (optional)") }
                                 AppTextField {
+                                    restingColor: root.surfaceColor
+                                    cornerRadius: 9
+                                    focusedBorderWidth: 1
+                                    font.pixelSize: 13
                                     Layout.fillWidth: true
                                     text: root.draft.obsPassword
                                     echoMode: TextInput.Password
@@ -806,25 +818,6 @@ Rectangle {
         color: root.textSecondary
         font.pixelSize: 11
         font.weight: Font.DemiBold
-    }
-
-    component AppTextField: TextField {
-        id: field
-        implicitHeight: 44
-        color: root.textPrimary
-        placeholderTextColor: root.textDim
-        selectByMouse: true
-        leftPadding: 13
-        rightPadding: 13
-        font.pixelSize: 13
-
-        background: Rectangle {
-            radius: 9
-            color: field.activeFocus ? appTheme.surfaceInputFocus : root.surfaceColor
-            border.width: 1
-            border.color: field.activeFocus ? root.accent : appTheme.border
-            Behavior on border.color { ColorAnimation { duration: 120 } }
-        }
     }
 
     component TextButton: Item {
@@ -1527,9 +1520,21 @@ Rectangle {
                 AppTextField {
                     id: congSearch
                     Layout.fillWidth: true
+                    restingColor: root.surfaceColor
+                    cornerRadius: 9
+                    focusedBorderWidth: 1
+                    font.pixelSize: 13
+                    searchIcon: true
+                    clearActionVisible: text.length > 0
                     placeholderText: qsTr("Search by congregation name")
                     onTextEdited: congDebounce.restart()
                     onAccepted: onboardingBridge.searchCongregation(text)
+                    onClearRequested: {
+                        text = ""
+                        congDebounce.stop()
+                        onboardingBridge.clearCongregation()
+                        forceActiveFocus()
+                    }
                 }
 
                 Text {
@@ -1543,71 +1548,41 @@ Rectangle {
                     wrapMode: Text.Wrap
                 }
 
-                ListView {
+                AppSelectionList {
                     id: congList
                     Layout.fillWidth: true
                     Layout.preferredHeight: Math.min(contentHeight, 372)
                     visible: count > 0
-                    clip: true
                     spacing: 4
-                    boundsBehavior: Flickable.StopAtBounds
-                    flickableDirection: Flickable.VerticalFlick
                     model: root.draft.congregationSuggestions
-                    rightMargin: 14
-                    ScrollBar.vertical: ScrollBar {
-                        id: congScrollBar
-                        policy: ScrollBar.AsNeeded
-                        width: 8
-                        contentItem: Rectangle {
-                            implicitWidth: 4
-                            radius: 2
-                            color: (congScrollBar.active || congScrollBar.hovered)
-                                   ? root.textMuted : root.borderColor
-                            opacity: (congScrollBar.active
-                                      || congScrollBar.hovered
-                                      || congList.moving) ? 1.0 : 0.35
-                            anchors.horizontalCenter: parent.horizontalCenter
 
-                            Behavior on color { ColorAnimation { duration: 150 } }
-                            Behavior on opacity { NumberAnimation { duration: 180 } }
-                        }
-                    }
-
-                    delegate: Rectangle {
+                    delegate: ItemDelegate {
                         id: congItem
-
                         required property var modelData
-
-                        width: Math.max(0, congList.width - congList.rightMargin)
-                        height: 48
-                        radius: 8
-                        color: congHover.hovered ? appTheme.hover : "transparent"
-
-                        Text {
-                            anchors.fill: parent
-                            anchors.leftMargin: 10
-                            anchors.rightMargin: 18
-                            verticalAlignment: Text.AlignVCenter
+                        width: congList.delegateWidth
+                        implicitHeight: 48
+                        Accessible.name: modelData.formattedName || modelData.name
+                        AppPointerCursor {}
+                        contentItem: Text {
                             text: congItem.modelData.formattedName || congItem.modelData.name
                             color: root.textPrimary
                             font.pixelSize: 12
                             elide: Text.ElideRight
+                            verticalAlignment: Text.AlignVCenter
                         }
-
-                        HoverHandler {
-                            id: congHover
-                            cursorShape: Qt.PointingHandCursor
+                        background: Rectangle {
+                            radius: 8
+                            color: congItem.hovered || congItem.visualFocus
+                                   ? appTheme.hover : "transparent"
+                            border.width: congItem.visualFocus ? 2 : 0
+                            border.color: root.accent
                         }
-
-                        TapHandler {
-                            gesturePolicy: TapHandler.ReleaseWithinBounds
-                            onTapped: {
-                                onboardingBridge.chooseCongregation(
-                                    congItem.modelData.guid,
-                                    congItem.modelData.name
-                                )
-                                congSheet.visible = false
-                            }
+                        onClicked: {
+                            onboardingBridge.chooseCongregation(
+                                congItem.modelData.guid,
+                                congItem.modelData.name
+                            )
+                            congSheet.visible = false
                         }
                     }
                 }
@@ -1691,45 +1666,29 @@ Rectangle {
                     }
                 }
                 AppTextField {
+                    restingColor: root.surfaceColor
+                    cornerRadius: 9
+                    focusedBorderWidth: 1
+                    font.pixelSize: 13
                     id: search
+                    searchIcon: true
                     Layout.fillWidth: true
                     placeholderText: qsTr("Search languages")
                 }
-                ListView {
+                AppSelectionList {
                     id: languageList
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     clip: true
                     spacing: 4
-                    boundsBehavior: Flickable.StopAtBounds
-                    flickableDirection: Flickable.VerticalFlick
                     model: sheet.filteredItems()
-                    rightMargin: 14
-                    ScrollBar.vertical: ScrollBar {
-                        id: languageScrollBar
-                        policy: ScrollBar.AsNeeded
-                        width: 8
-                        contentItem: Rectangle {
-                            implicitWidth: 4
-                            radius: 2
-                            color: (languageScrollBar.active || languageScrollBar.hovered)
-                                   ? root.textMuted : root.borderColor
-                            opacity: (languageScrollBar.active
-                                      || languageScrollBar.hovered
-                                      || languageList.moving) ? 1.0 : 0.35
-                            anchors.horizontalCenter: parent.horizontalCenter
-
-                            Behavior on color { ColorAnimation { duration: 150 } }
-                            Behavior on opacity { NumberAnimation { duration: 180 } }
-                        }
-                    }
 
                     delegate: Rectangle {
                         id: languageItem
 
                         required property var modelData
 
-                        width: Math.max(0, languageList.width - languageList.rightMargin)
+                        width: languageList.delegateWidth
                         height: 58
                         radius: 8
                         color: languageHover.hovered ? appTheme.hover : "transparent"

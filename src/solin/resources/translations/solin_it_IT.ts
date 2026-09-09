@@ -4,24 +4,20 @@
 <context>
     <name>AboutSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/about_section.py" line="+48"/>
         <source>Audio &amp; Video app for Kingdom Hall meetings.</source>
-        <translation>App Audio e Video per le adunanze della Sala del Regno.</translation>
+        <translation type="vanished">App Audio e Video per le adunanze della Sala del Regno.</translation>
     </message>
     <message>
-        <location line="+10"/>
         <source>Official Website</source>
-        <translation>Sito ufficiale</translation>
+        <translation type="vanished">Sito ufficiale</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Changelog</source>
-        <translation>Registro modifiche</translation>
+        <translation type="vanished">Registro modifiche</translation>
     </message>
     <message>
-        <location line="+14"/>
         <source>This app is independent and is not affiliated with or endorsed by the Watch Tower Bible and Tract Society of Pennsylvania or any of its associated organizations.</source>
-        <translation>Questa app è indipendente e non è affiliata né approvata dalla Watch Tower Bible and Tract Society of Pennsylvania o da alcuna delle sue organizzazioni associate.</translation>
+        <translation type="vanished">Questa app è indipendente e non è affiliata né approvata dalla Watch Tower Bible and Tract Society of Pennsylvania o da alcuna delle sue organizzazioni associate.</translation>
     </message>
 </context>
 <context>
@@ -271,60 +267,60 @@
 <context>
     <name>AutoKeyEditorDialog</name>
     <message>
-        <location filename="../../widgets/settings/auto_key_dialog.py" line="+125"/>
+        <location filename="../../qml/SettingsShortcutDialog.qml" line="+53"/>
         <source>Automatic Shortcut</source>
         <translation>Scorciatoia automatica</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+12"/>
         <source>Choose an app event and press the shortcut to send.</source>
         <translation>Scegliere un evento dell&apos;app e premere la scorciatoia da inviare.</translation>
     </message>
     <message>
-        <location line="+45"/>
+        <location line="+9"/>
+        <location line="+15"/>
         <source>Event</source>
         <translation>Evento</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+67"/>
+        <location line="+7"/>
         <source>Shortcut</source>
         <translation>Scorciatoia</translation>
     </message>
     <message>
-        <location line="+12"/>
-        <location line="+95"/>
+        <location line="+35"/>
         <source>Click the field, then press one shortcut.</source>
         <translation>Fare clic sul campo, quindi premere una scorciatoia.</translation>
     </message>
     <message>
-        <location line="-86"/>
+        <location line="+12"/>
         <source>Enabled</source>
         <translation>Abilitato</translation>
     </message>
     <message>
-        <location line="+18"/>
+        <location line="+53"/>
         <source>Cancel</source>
         <translation>Annulla</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+7"/>
         <source>Save</source>
         <translation>Salva</translation>
     </message>
     <message>
-        <location line="+54"/>
         <source>Press a shortcut before saving.</source>
-        <translation>Premere una scorciatoia prima di salvare.</translation>
+        <translation type="vanished">Premere una scorciatoia prima di salvare.</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="-109"/>
+        <location line="+36"/>
         <source>Listening... press one shortcut.</source>
         <translation>In ascolto... premere una scorciatoia.</translation>
     </message>
     <message>
-        <location line="+13"/>
         <source>Shortcut captured.</source>
-        <translation>Scorciatoia acquisita.</translation>
+        <translation type="vanished">Scorciatoia acquisita.</translation>
     </message>
 </context>
 <context>
@@ -353,109 +349,87 @@
 <context>
     <name>AutoKeysSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/auto_keys_section.py" line="+59"/>
         <source>Automatic Shortcuts</source>
-        <translation>Scorciatoie automatiche</translation>
+        <translation type="vanished">Scorciatoie automatiche</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Sends keyboard shortcuts when visual media changes state.</source>
-        <translation>Invia scorciatoie da tastiera quando cambia lo stato dei contenuti multimediali.</translation>
+        <translation type="vanished">Invia scorciatoie da tastiera quando cambia lo stato dei contenuti multimediali.</translation>
     </message>
     <message>
-        <location line="+24"/>
         <source>Create one or more shortcuts for start, end, pause and resume events.</source>
-        <translation>Creare una o più scorciatoie per gli eventi di avvio, fine, pausa e ripresa.</translation>
+        <translation type="vanished">Creare una o più scorciatoie per gli eventi di avvio, fine, pausa e ripresa.</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>No shortcuts configured.</source>
-        <translation>Nessuna scorciatoia configurata.</translation>
+        <translation type="vanished">Nessuna scorciatoia configurata.</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>Add shortcut</source>
-        <translation>Aggiungi scorciatoia</translation>
+        <translation type="vanished">Aggiungi scorciatoia</translation>
     </message>
     <message>
-        <location line="+131"/>
         <source>Enabled</source>
-        <translation>Abilitato</translation>
+        <translation type="vanished">Abilitato</translation>
     </message>
     <message>
-        <location line="+0"/>
         <source>Disabled</source>
-        <translation>Disabilitato</translation>
+        <translation type="vanished">Disabilitato</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Edit</source>
-        <translation>Modifica</translation>
+        <translation type="vanished">Modifica</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Delete</source>
-        <translation>Elimina</translation>
+        <translation type="vanished">Elimina</translation>
     </message>
 </context>
 <context>
     <name>AutoShareSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/auto_share_section.py" line="+55"/>
         <source>Auto Screen Share</source>
-        <translation>Condivisione automatica dello schermo</translation>
+        <translation type="vanished">Condivisione automatica dello schermo</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Automatically shares screen via hotkeys when projecting media.</source>
-        <translation>Condivide automaticamente lo schermo tramite scorciatoie da tastiera durante la proiezione di contenuti multimediali.</translation>
+        <translation type="vanished">Condivide automaticamente lo schermo tramite scorciatoie da tastiera durante la proiezione di contenuti multimediali.</translation>
     </message>
     <message>
-        <location line="+30"/>
         <source>Share hotkey</source>
-        <translation>Scorciatoia di condivisione</translation>
+        <translation type="vanished">Scorciatoia di condivisione</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Uses Zoom&apos;s single start/stop screen-share shortcut.</source>
-        <translation>Usa l&apos;unica scorciatoia di Zoom per avviare e interrompere la condivisione dello schermo.</translation>
+        <translation type="vanished">Usa l&apos;unica scorciatoia di Zoom per avviare e interrompere la condivisione dello schermo.</translation>
     </message>
     <message>
-        <location line="+10"/>
-        <location line="+241"/>
-        <location line="+9"/>
         <source>Not configured</source>
-        <translation>Non configurato</translation>
+        <translation type="vanished">Non configurato</translation>
     </message>
     <message>
-        <location line="-243"/>
         <source>Edit</source>
-        <translation>Modifica</translation>
+        <translation type="vanished">Modifica</translation>
     </message>
     <message>
-        <location line="+20"/>
         <source>Accessibility permission</source>
-        <translation>Autorizzazione Accessibilità</translation>
+        <translation type="vanished">Autorizzazione Accessibilità</translation>
     </message>
     <message>
-        <location line="+14"/>
         <source>Open Settings</source>
-        <translation>Apri Impostazioni</translation>
+        <translation type="vanished">Apri Impostazioni</translation>
     </message>
     <message>
-        <location line="+35"/>
         <source>Share target</source>
-        <translation>Destinazione condivisione</translation>
+        <translation type="vanished">Destinazione condivisione</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Where Solin should click after Zoom&apos;s share shortcut opens the dialog.</source>
-        <translation>Dove Solin deve fare clic dopo che la scorciatoia di condivisione di Zoom ha aperto la finestra di dialogo.</translation>
+        <translation type="vanished">Dove Solin deve fare clic dopo che la scorciatoia di condivisione di Zoom ha aperto la finestra di dialogo.</translation>
     </message>
     <message>
-        <location line="+167"/>
         <source>Configured</source>
-        <translation>Configurato</translation>
+        <translation type="vanished">Configurato</translation>
     </message>
     <message>
         <source>Click Position</source>
@@ -466,33 +440,28 @@
         <translation type="vanished">Posizione su cui fare clic dopo l&apos;apertura della finestra di dialogo di condivisione per selezionare la destinazione.</translation>
     </message>
     <message>
-        <location line="-141"/>
         <source>Configure</source>
-        <translation>Configura</translation>
+        <translation type="vanished">Configura</translation>
     </message>
     <message>
-        <location line="+122"/>
         <source>Share Hotkey</source>
-        <translation>Scorciatoia di condivisione</translation>
+        <translation type="vanished">Scorciatoia di condivisione</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Press the Zoom shortcut that starts and stops screen sharing.</source>
-        <translation>Premi la scorciatoia di Zoom che avvia e interrompe la condivisione dello schermo.</translation>
+        <translation type="vanished">Premi la scorciatoia di Zoom che avvia e interrompe la condivisione dello schermo.</translation>
     </message>
     <message>
         <source>Position: {x}, {y}</source>
         <translation type="vanished">Posizione: {x}, {y}</translation>
     </message>
     <message>
-        <location line="+35"/>
         <source>Solin can send the automatic click.</source>
-        <translation>Solin può inviare il clic automatico.</translation>
+        <translation type="vanished">Solin può inviare il clic automatico.</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>Allow Solin in macOS Accessibility so automatic clicks can work.</source>
-        <translation>Consenti Solin in Accessibilità di macOS affinché i clic automatici possano funzionare.</translation>
+        <translation type="vanished">Consenti Solin in Accessibilità di macOS affinché i clic automatici possano funzionare.</translation>
     </message>
 </context>
 <context>
@@ -907,14 +876,12 @@
 <context>
     <name>CameraSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/camera_section.py" line="+13"/>
         <source>Camera</source>
-        <translation>Videocamera</translation>
+        <translation type="vanished">Videocamera</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Shows a camera button in the live tools toolbar.</source>
-        <translation>Mostra un pulsante videocamera nella barra degli strumenti dal vivo.</translation>
+        <translation type="vanished">Mostra un pulsante videocamera nella barra degli strumenti dal vivo.</translation>
     </message>
 </context>
 <context>
@@ -1032,6 +999,17 @@
         <location line="+16"/>
         <source>Enable projection aspect first</source>
         <translation>Prima abilita le proporzioni della proiezione</translation>
+    </message>
+</context>
+<context>
+    <name>IntegrationSettings</name>
+    <message numerus="yes">
+        <location filename="../../ui/qml/settings/integrations.py" line="+330"/>
+        <source>%n NDI source found.</source>
+        <translation>
+            <numerusform>%n sorgente NDI trovata.</numerusform>
+            <numerusform>%n sorgenti NDI trovate.</numerusform>
+        </translation>
     </message>
 </context>
 <context>
@@ -1178,19 +1156,16 @@
 <context>
     <name>LanguageSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/language_section.py" line="+22"/>
         <source>Interface</source>
-        <translation>Interfaccia</translation>
+        <translation type="vanished">Interfaccia</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>JW Media</source>
-        <translation>JW Media</translation>
+        <translation type="vanished">JW Media</translation>
     </message>
     <message>
-        <location line="+36"/>
         <source>(same as interface)</source>
-        <translation>(uguale all’interfaccia)</translation>
+        <translation type="vanished">(uguale all’interfaccia)</translation>
     </message>
 </context>
 <context>
@@ -1589,13 +1564,13 @@
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../../main_window.py" line="+551"/>
+        <location filename="../../main_window.py" line="+565"/>
         <location filename="../../controllers/main_window_nav.py" line="+11"/>
         <source>Solin</source>
         <translation>Solin</translation>
     </message>
     <message>
-        <location line="+694"/>
+        <location line="+717"/>
         <location filename="../../controllers/main_window_nav.py" line="+27"/>
         <source>Scenes</source>
         <translation>Scene</translation>
@@ -1636,7 +1611,7 @@
         <translation>Registrazione in corso</translation>
     </message>
     <message>
-        <location line="+379"/>
+        <location line="+381"/>
         <source>Pause playback before changing the projected content.</source>
         <translation>Metti in pausa la riproduzione prima di cambiare il contenuto proiettato.</translation>
     </message>
@@ -2493,69 +2468,56 @@ Solin continuerà a provare a riconnettersi dalla posizione attuale.
 <context>
     <name>MediaSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/media_section.py" line="+23"/>
         <source>Auto-download on play</source>
-        <translation>Download automatico alla riproduzione</translation>
+        <translation type="vanished">Download automatico alla riproduzione</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Downloads the playing media for offline use.</source>
-        <translation>Scarica il file multimediale in riproduzione per l&apos;uso offline.</translation>
+        <translation type="vanished">Scarica il file multimediale in riproduzione per l&apos;uso offline.</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Auto-download weekly study</source>
-        <translation>Scarica automaticamente lo studio settimanale</translation>
+        <translation type="vanished">Scarica automaticamente lo studio settimanale</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Downloads this week’s and next week’s meeting media.</source>
-        <translation>Scarica i file multimediali per le adunanze di questa settimana e della prossima.</translation>
+        <translation type="vanished">Scarica i file multimediali per le adunanze di questa settimana e della prossima.</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Song Announcement Mode</source>
-        <translation>Modalità annuncio dei cantici</translation>
+        <translation type="vanished">Modalità annuncio dei cantici</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Song starts muted for title display. Press play to start.</source>
-        <translation>Il cantico inizia senza audio per mostrare il titolo. Premere &quot;Play&quot; per iniziare.</translation>
+        <translation type="vanished">Il cantico inizia senza audio per mostrare il titolo. Premere &quot;Play&quot; per iniziare.</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Automatic background song</source>
-        <translation>Cantico di sottofondo automatico</translation>
+        <translation type="vanished">Cantico di sottofondo automatico</translation>
     </message>
     <message>
-        <location line="+13"/>
         <source>Start videos paused</source>
-        <translation>Avvia video in pausa</translation>
+        <translation type="vanished">Avvia video in pausa</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Videos open paused so you can start them manually.</source>
-        <translation>I video si aprono in pausa per poterli avviare manualmente.</translation>
+        <translation type="vanished">I video si aprono in pausa per poterli avviare manualmente.</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Playback protection</source>
-        <translation>Protezione della riproduzione</translation>
+        <translation type="vanished">Protezione della riproduzione</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Prevents media changes and seeking while audio or video is playing. Pause first to make changes.</source>
-        <translation>Impedisce di cambiare contenuto e posizione durante la riproduzione di audio o video. Metti in pausa prima di apportare modifiche.</translation>
+        <translation type="vanished">Impedisce di cambiare contenuto e posizione durante la riproduzione di audio o video. Metti in pausa prima di apportare modifiche.</translation>
     </message>
     <message>
-        <location line="+35"/>
         <source>Configure the meeting day/time before automatic playback can start.</source>
-        <translation>Configura il giorno e l’ora dell’adunanza prima di avviare la riproduzione automatica.</translation>
+        <translation type="vanished">Configura il giorno e l’ora dell’adunanza prima di avviare la riproduzione automatica.</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Plays audio songs before configured meetings and fades out before start.</source>
-        <translation>Riproduce cantici audio prima delle adunanze configurate e riduce gradualmente il volume prima dell’inizio.</translation>
+        <translation type="vanished">Riproduce cantici audio prima delle adunanze configurate e riduce gradualmente il volume prima dell’inizio.</translation>
     </message>
 </context>
 <context>
@@ -2710,77 +2672,60 @@ Il contenuto aggiunto manualmente, i tagli, l’inquadratura e lo stato espanso 
 <context>
     <name>MeetingScheduleSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/meeting_schedule_section.py" line="+528"/>
-        <location line="+334"/>
         <source>Used by automatic features that depend on the meeting start time.</source>
-        <translation>Utilizzato dalle funzioni automatiche che dipendono dall’orario di inizio dell’adunanza.</translation>
+        <translation type="vanished">Utilizzato dalle funzioni automatiche che dipendono dall’orario di inizio dell’adunanza.</translation>
     </message>
     <message>
-        <location line="-275"/>
-        <location line="+285"/>
         <source>Fill in from jw.org</source>
-        <translation>Compila da jw.org</translation>
+        <translation type="vanished">Compila da jw.org</translation>
     </message>
     <message>
-        <location line="-270"/>
-        <location line="+271"/>
         <source>Congregation name</source>
-        <translation>Nome della congregazione</translation>
+        <translation type="vanished">Nome della congregazione</translation>
     </message>
     <message>
-        <location line="-174"/>
         <source>Searching jw.org…</source>
-        <translation>Ricerca su jw.org…</translation>
+        <translation type="vanished">Ricerca su jw.org…</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>No congregation found with that name.</source>
-        <translation>Nessuna congregazione trovata con questo nome.</translation>
+        <translation type="vanished">Nessuna congregazione trovata con questo nome.</translation>
     </message>
     <message>
-        <location line="-6"/>
         <source>Reading the meeting times…</source>
-        <translation>Lettura degli orari delle adunanze…</translation>
+        <translation type="vanished">Lettura degli orari delle adunanze…</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>jw.org does not publish meeting times for this congregation.</source>
-        <translation>jw.org non pubblica gli orari delle adunanze di questa congregazione.</translation>
+        <translation type="vanished">jw.org non pubblica gli orari delle adunanze di questa congregazione.</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Too many searches in a row. Wait a moment and type again.</source>
-        <translation>Troppe ricerche di seguito. Aspetta un attimo e digita di nuovo.</translation>
+        <translation type="vanished">Troppe ricerche di seguito. Aspetta un attimo e digita di nuovo.</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Could not reach jw.org. Check the connection and try again.</source>
-        <translation>Impossibile raggiungere jw.org. Controlla la connessione e riprova.</translation>
+        <translation type="vanished">Impossibile raggiungere jw.org. Controlla la connessione e riprova.</translation>
     </message>
     <message>
-        <location line="+13"/>
         <source>Search your congregation to fill the days and times below.</source>
-        <translation>Cerca la tua congregazione per compilare i giorni e gli orari qui sotto.</translation>
+        <translation type="vanished">Cerca la tua congregazione per compilare i giorni e gli orari qui sotto.</translation>
     </message>
     <message>
         <source>Midweek meeting</source>
         <translation type="vanished">Adunanza infrasettimanale</translation>
     </message>
     <message>
-        <location line="-193"/>
-        <location line="+320"/>
         <source>Day and time for the midweek meeting.</source>
-        <translation>Giorno e ora dell’adunanza infrasettimanale.</translation>
+        <translation type="vanished">Giorno e ora dell’adunanza infrasettimanale.</translation>
     </message>
     <message>
         <source>Weekend meeting</source>
         <translation type="vanished">Adunanza del fine settimana</translation>
     </message>
     <message>
-        <location line="-313"/>
-        <location line="+317"/>
         <source>Day and time for the weekend meeting.</source>
-        <translation>Giorno e ora dell’adunanza del fine settimana.</translation>
+        <translation type="vanished">Giorno e ora dell’adunanza del fine settimana.</translation>
     </message>
     <message>
         <source>Not configured</source>
@@ -3111,130 +3056,103 @@ Il contenuto aggiunto manualmente, i tagli, l’inquadratura e lo stato espanso 
 <context>
     <name>ObsSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/obs_section.py" line="+50"/>
         <source>OBS Studio</source>
-        <translation>OBS Studio</translation>
+        <translation type="vanished">OBS Studio</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Automatically switches scenes during projection</source>
-        <translation>Cambia automaticamente scena durante la proiezione</translation>
+        <translation type="vanished">Cambia automaticamente scena durante la proiezione</translation>
     </message>
     <message>
-        <location line="+29"/>
         <source>Disconnected</source>
-        <translation>Disconnesso</translation>
+        <translation type="vanished">Disconnesso</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>WebSocket Port</source>
-        <translation>Porta WebSocket</translation>
+        <translation type="vanished">Porta WebSocket</translation>
     </message>
     <message>
-        <location line="+14"/>
         <source>Password (optional)</source>
-        <translation>Password (facoltativa)</translation>
+        <translation type="vanished">Password (facoltativa)</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>Leave blank if no password is set</source>
-        <translation>Lasciare vuoto se non è impostata alcuna password</translation>
+        <translation type="vanished">Lasciare vuoto se non è impostata alcuna password</translation>
     </message>
     <message>
-        <location line="+9"/>
-        <location line="+363"/>
         <source>● Changes saved automatically</source>
-        <translation>● Le modifiche vengono salvate automaticamente</translation>
+        <translation type="vanished">● Le modifiche vengono salvate automaticamente</translation>
     </message>
     <message>
-        <location line="-327"/>
         <source>Program stream (NDI)</source>
-        <translation>Streaming programma (NDI)</translation>
+        <translation type="vanished">Streaming programma (NDI)</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Receive the DistroAV/NDI output from OBS as a live projection.</source>
-        <translation>Ricevi l&apos;output DistroAV/NDI da OBS come proiezione dal vivo.</translation>
+        <translation type="vanished">Ricevi l&apos;output DistroAV/NDI da OBS come proiezione dal vivo.</translation>
     </message>
     <message>
-        <location line="+21"/>
         <source>Enable Main Output in DistroAV, then select the NDI source shown by OBS.</source>
-        <translation>Abilita l&apos;output principale in DistroAV, quindi seleziona la sorgente NDI mostrata da OBS.</translation>
+        <translation type="vanished">Abilita l&apos;output principale in DistroAV, quindi seleziona la sorgente NDI mostrata da OBS.</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>Available NDI sources</source>
-        <translation>Sorgenti NDI disponibili</translation>
+        <translation type="vanished">Sorgenti NDI disponibili</translation>
     </message>
     <message>
-        <location line="+15"/>
         <source>No sources loaded</source>
-        <translation>Nessuna sorgente caricata</translation>
+        <translation type="vanished">Nessuna sorgente caricata</translation>
     </message>
     <message>
-        <location line="+6"/>
-        <location line="+335"/>
-        <location line="+35"/>
         <source>Find sources</source>
-        <translation>Trova sorgenti</translation>
+        <translation type="vanished">Trova sorgenti</translation>
     </message>
     <message>
-        <location line="-338"/>
         <source>Default scene (idle)</source>
-        <translation>Scena predefinita (inattiva)</translation>
+        <translation type="vanished">Scena predefinita (inattiva)</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Scene shown when nothing is being projected.</source>
-        <translation>Scena mostrata quando non viene proiettato nulla.</translation>
+        <translation type="vanished">Scena mostrata quando non viene proiettato nulla.</translation>
     </message>
     <message>
-        <location line="+13"/>
         <source>Media window scene</source>
-        <translation>Scena finestra multimediale</translation>
+        <translation type="vanished">Scena finestra multimediale</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Scene that captures the projection monitor. Activated when content is displayed.</source>
-        <translation>Scena che cattura il monitor di proiezione. Si attiva quando viene visualizzato un contenuto.</translation>
+        <translation type="vanished">Scena che cattura il monitor di proiezione. Si attiva quando viene visualizzato un contenuto.</translation>
     </message>
     <message>
-        <location line="+206"/>
         <source>✓ Configuration saved — reconnecting…</source>
-        <translation>✓ Configurazione salvata — riconnessione...</translation>
+        <translation type="vanished">✓ Configurazione salvata — riconnessione...</translation>
     </message>
     <message>
-        <location line="+57"/>
         <source>NDI receiver is not available.</source>
-        <translation>Il ricevitore NDI non è disponibile.</translation>
+        <translation type="vanished">Il ricevitore NDI non è disponibile.</translation>
     </message>
     <message>
-        <location line="+5"/>
         <source>Searching…</source>
-        <translation>Ricerca in corso…</translation>
+        <translation type="vanished">Ricerca in corso…</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Looking for NDI sources on this network.</source>
-        <translation>Ricerca di sorgenti NDI nella rete in corso.</translation>
+        <translation type="vanished">Ricerca di sorgenti NDI nella rete in corso.</translation>
     </message>
     <message numerus="yes">
-        <location line="+25"/>
         <source>%n NDI source found.</source>
-        <translation>
+        <translation type="vanished">
             <numerusform>%n sorgente NDI trovata.</numerusform>
             <numerusform>%n sorgenti NDI trovate.</numerusform>
         </translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>No NDI sources found</source>
-        <translation>Nessuna sorgente NDI trovata</translation>
+        <translation type="vanished">Nessuna sorgente NDI trovata</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>No NDI sources found. Check that DistroAV Main Output is enabled in OBS.</source>
-        <translation>Nessuna sorgente NDI trovata. Verificare che l&apos;output principale di DistroAV sia abilitato in OBS.</translation>
+        <translation type="vanished">Nessuna sorgente NDI trovata. Verificare che l&apos;output principale di DistroAV sia abilitato in OBS.</translation>
     </message>
     <message>
         <source>Connecting…</source>
@@ -3253,9 +3171,8 @@ Il contenuto aggiunto manualmente, i tagli, l’inquadratura e lo stato espanso 
         <translation type="vanished">Errore di connessione</translation>
     </message>
     <message>
-        <location line="+72"/>
         <source>— Select scene —</source>
-        <translation>— Selezionare scena —</translation>
+        <translation type="vanished">— Selezionare scena —</translation>
     </message>
 </context>
 <context>
@@ -3301,7 +3218,7 @@ Il contenuto aggiunto manualmente, i tagli, l’inquadratura e lo stato espanso 
         <translation>Nome profilo</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+10"/>
         <source>Example: Main Hall</source>
         <translation>Esempio: sala principale</translation>
     </message>
@@ -3334,13 +3251,13 @@ Il contenuto aggiunto manualmente, i tagli, l’inquadratura e lo stato espanso 
     </message>
     <message>
         <location line="+5"/>
-        <location line="+406"/>
+        <location line="+414"/>
         <source>Meeting schedule</source>
         <translation>Orari delle adunanze</translation>
     </message>
     <message>
-        <location line="-400"/>
-        <location line="+1161"/>
+        <location line="-408"/>
+        <location line="+1150"/>
         <source>Congregation</source>
         <translation>Congregazione</translation>
     </message>
@@ -3349,18 +3266,18 @@ Il contenuto aggiunto manualmente, i tagli, l’inquadratura e lo stato espanso 
         <translation type="vanished">Facoltativo</translation>
     </message>
     <message>
-        <location line="-1150"/>
+        <location line="-1139"/>
         <source>Find your congregation to fill the meeting days and times from jw.org.</source>
         <translation>Cerca la tua congregazione per compilare i giorni e gli orari delle adunanze da jw.org.</translation>
     </message>
     <message>
         <location line="+8"/>
-        <location line="+375"/>
+        <location line="+383"/>
         <source>Meeting media</source>
         <translation>Contenuti multimediali dell’adunanza</translation>
     </message>
     <message>
-        <location line="-364"/>
+        <location line="-372"/>
         <source>Download automatically</source>
         <translation>Scarica automaticamente</translation>
     </message>
@@ -3371,12 +3288,12 @@ Il contenuto aggiunto manualmente, i tagli, l’inquadratura e lo stato espanso 
     </message>
     <message>
         <location line="+8"/>
-        <location line="+357"/>
+        <location line="+365"/>
         <source>Manual download</source>
         <translation>Download manuale</translation>
     </message>
     <message>
-        <location line="-356"/>
+        <location line="-364"/>
         <source>Only download media when you click the cloud button.</source>
         <translation>Scarica i contenuti solo quando fai clic sul pulsante con la nuvola.</translation>
     </message>
@@ -3421,12 +3338,12 @@ Il contenuto aggiunto manualmente, i tagli, l’inquadratura e lo stato espanso 
         <translation>Porta WebSocket</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+16"/>
         <source>Password (optional)</source>
         <translation>Password (facoltativa)</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+16"/>
         <source>Connecting…</source>
         <translation>Connessione…</translation>
     </message>
@@ -3556,8 +3473,8 @@ Il contenuto aggiunto manualmente, i tagli, l’inquadratura e lo stato espanso 
         <translation>Questa settimana e la prossima</translation>
     </message>
     <message>
-        <location line="-393"/>
-        <location line="+400"/>
+        <location line="-401"/>
+        <location line="+408"/>
         <location line="+5"/>
         <location line="+9"/>
         <source>Not configured</source>
@@ -3579,7 +3496,7 @@ Il contenuto aggiunto manualmente, i tagli, l’inquadratura e lo stato espanso 
         <translation>Condivisione automatica pronta</translation>
     </message>
     <message>
-        <location line="+120"/>
+        <location line="+101"/>
         <source>Finishing…</source>
         <translation>Completamento…</translation>
     </message>
@@ -3590,17 +3507,17 @@ Il contenuto aggiunto manualmente, i tagli, l’inquadratura e lo stato espanso 
     </message>
     <message>
         <location line="+303"/>
-        <location line="+167"/>
+        <location line="+149"/>
         <source>Close</source>
         <translation>Chiudi</translation>
     </message>
     <message>
-        <location line="-159"/>
+        <location line="-135"/>
         <source>Search by congregation name</source>
         <translation>Cerca per nome della congregazione</translation>
     </message>
     <message>
-        <location filename="../../ui/qml/onboarding.py" line="+69"/>
+        <location filename="../../ui/qml/onboarding.py" line="+73"/>
         <source>Searching jw.org…</source>
         <translation>Ricerca su jw.org…</translation>
     </message>
@@ -3609,17 +3526,17 @@ Il contenuto aggiunto manualmente, i tagli, l’inquadratura e lo stato espanso 
         <translation type="vanished">I giorni e gli orari delle adunanze provengono da jw.org.</translation>
     </message>
     <message>
-        <location filename="../../qml/OnboardingView.qml" line="+88"/>
+        <location filename="../../qml/OnboardingView.qml" line="+64"/>
         <source>Remove congregation</source>
         <translation>Rimuovi congregazione</translation>
     </message>
     <message>
-        <location line="+78"/>
+        <location line="+83"/>
         <source>Search languages</source>
         <translation>Cerca lingue</translation>
     </message>
     <message>
-        <location filename="../../ui/qml/onboarding.py" line="+255"/>
+        <location filename="../../ui/qml/onboarding.py" line="+259"/>
         <source>Enter a port between 1 and 65535.</source>
         <translation>Inserisci una porta tra 1 e 65535.</translation>
     </message>
@@ -3629,7 +3546,7 @@ Il contenuto aggiunto manualmente, i tagli, l’inquadratura e lo stato espanso 
         <translation>Il selettore della destinazione di condivisione non è disponibile.</translation>
     </message>
     <message>
-        <location line="+139"/>
+        <location line="+140"/>
         <source>Enter a profile name.</source>
         <translation>Inserisci un nome profilo.</translation>
     </message>
@@ -3664,7 +3581,7 @@ Il contenuto aggiunto manualmente, i tagli, l’inquadratura e lo stato espanso 
         <translation>Non è stato possibile creare il profilo.</translation>
     </message>
     <message>
-        <location line="-542"/>
+        <location line="-547"/>
         <source>jw.org does not publish meeting times for this congregation.</source>
         <translation>jw.org non pubblica gli orari delle adunanze di questa congregazione.</translation>
     </message>
@@ -3689,7 +3606,7 @@ Il contenuto aggiunto manualmente, i tagli, l’inquadratura e lo stato espanso 
         <translation>Impossibile raggiungere jw.org. Controlla la connessione e riprova.</translation>
     </message>
     <message>
-        <location line="+685"/>
+        <location line="+690"/>
         <source>Allow Solin in macOS Accessibility settings.</source>
         <translation>Consenti Solin nelle impostazioni Accessibilità di macOS.</translation>
     </message>
@@ -5374,211 +5291,180 @@ L&apos;azione è irreversibile.</translation>
 <context>
     <name>RemoteControlSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/remote_control_section.py" line="+54"/>
-        <location line="+403"/>
         <source>Remote control</source>
-        <translation>Controllo remoto</translation>
+        <translation type="vanished">Controllo remoto</translation>
     </message>
     <message>
-        <location line="-402"/>
-        <location line="+404"/>
         <source>Control Solin securely from another device on this local network.</source>
-        <translation>Controllare Solin in modo sicuro da un altro dispositivo su questa rete locale.</translation>
+        <translation type="vanished">Controllare Solin in modo sicuro da un altro dispositivo su questa rete locale.</translation>
     </message>
     <message>
-        <location line="-388"/>
-        <location line="+390"/>
         <source>Network interface</source>
-        <translation>Interfaccia di rete</translation>
+        <translation type="vanished">Interfaccia di rete</translation>
     </message>
     <message>
-        <location line="-376"/>
-        <location line="+377"/>
         <source>Access credentials</source>
-        <translation>Credenziali di accesso</translation>
+        <translation type="vanished">Credenziali di accesso</translation>
     </message>
     <message>
-        <location line="-349"/>
-        <location line="+350"/>
         <source>Username</source>
-        <translation>Nome utente</translation>
+        <translation type="vanished">Nome utente</translation>
     </message>
     <message>
-        <location line="-345"/>
-        <location line="+346"/>
         <source>New password</source>
-        <translation>Nuova password</translation>
+        <translation type="vanished">Nuova password</translation>
     </message>
     <message>
-        <location line="-341"/>
-        <location line="+342"/>
         <source>Confirm password</source>
-        <translation>Conferma password</translation>
+        <translation type="vanished">Conferma password</translation>
     </message>
     <message>
-        <location line="-328"/>
-        <location line="+330"/>
         <source>Use at least %1 characters. Credentials belong only to this profile.</source>
-        <translation>Utilizzare almeno %1 caratteri. Le credenziali appartengono solo a questo profilo.</translation>
+        <translation type="vanished">Utilizzare almeno %1 caratteri. Le credenziali appartengono solo a questo profilo.</translation>
     </message>
     <message>
-        <location line="-323"/>
-        <location line="+327"/>
         <source>Save credentials</source>
-        <translation>Salva credenziali</translation>
+        <translation type="vanished">Salva credenziali</translation>
     </message>
     <message>
-        <location line="-298"/>
-        <location line="+300"/>
         <source>Copy address</source>
-        <translation>Copia indirizzo</translation>
+        <translation type="vanished">Copia indirizzo</translation>
     </message>
     <message>
-        <location line="-285"/>
-        <location line="+286"/>
         <source>Set up a device</source>
-        <translation>Configura un dispositivo</translation>
+        <translation type="vanished">Configura un dispositivo</translation>
     </message>
     <message>
-        <location line="-265"/>
         <source>Select a private network…</source>
-        <translation>Selezionare una rete privata…</translation>
+        <translation type="vanished">Selezionare una rete privata…</translation>
     </message>
     <message>
-        <location line="+30"/>
         <source>Choose a network and save credentials before enabling remote control.</source>
-        <translation>Scegliere una rete e salvare le credenziali prima di abilitare il controllo remoto.</translation>
+        <translation type="vanished">Scegliere una rete e salvare le credenziali prima di abilitare il controllo remoto.</translation>
     </message>
     <message>
-        <location line="+17"/>
         <source>The passwords do not match.</source>
-        <translation>Le password non corrispondono.</translation>
+        <translation type="vanished">Le password non corrispondono.</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Enter a new password to save.</source>
-        <translation>Inserire una nuova password da salvare.</translation>
+        <translation type="vanished">Inserire una nuova password da salvare.</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Check the username and use a password with at least %1 characters.</source>
-        <translation>Controllare il nome utente e utilizzare una password di almeno %1 caratteri.</translation>
+        <translation type="vanished">Controllare il nome utente e utilizzare una password di almeno %1 caratteri.</translation>
     </message>
     <message>
-        <location line="+31"/>
         <source>Configured as %1</source>
-        <translation>Configurato come %1</translation>
+        <translation type="vanished">Configurato come %1</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Not configured</source>
-        <translation>Non configurato</translation>
+        <translation type="vanished">Non configurato</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>Cancel</source>
-        <translation>Annulla</translation>
+        <translation type="vanished">Annulla</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Change</source>
-        <translation>Modifica</translation>
+        <translation type="vanished">Modifica</translation>
     </message>
     <message>
-        <location line="+20"/>
         <source>No network selected</source>
-        <translation>Nessuna rete selezionata</translation>
+        <translation type="vanished">Nessuna rete selezionata</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>Starting secure remote control…</source>
-        <translation>Avvio del controllo remoto sicuro…</translation>
+        <translation type="vanished">Avvio del controllo remoto sicuro…</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Ready to enable.</source>
-        <translation>Pronto per l&apos;abilitazione.</translation>
+        <translation type="vanished">Pronto per l&apos;abilitazione.</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Configuration required.</source>
-        <translation>Configurazione richiesta.</translation>
+        <translation type="vanished">Configurazione richiesta.</translation>
     </message>
 </context>
 <context>
     <name>RemoteControlSetupDialog</name>
     <message>
-        <location filename="../../widgets/remote_control_setup_dialog.py" line="+81"/>
         <source>Set up a device</source>
-        <translation>Configura un dispositivo</translation>
+        <translation type="vanished">Configura un dispositivo</translation>
     </message>
     <message>
-        <location line="+29"/>
+        <location filename="../../qml/SettingsRemoteSetup.qml" line="+43"/>
         <source>Set up Solin Remote</source>
         <translation>Configura Solin Remote</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+47"/>
         <source>Scan once to open the secure setup on your phone or tablet.</source>
         <translation>Eseguire una scansione per aprire la configurazione sicura sul telefono o sul tablet.</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+29"/>
         <source>Generating QR code…</source>
         <translation>Generazione codice QR…</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="-5"/>
+        <location line="+21"/>
         <source>1  Scan the QR code</source>
         <translation>1  Scansionare il codice QR</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+8"/>
         <source>Keep Solin open and connect both devices to the same local network. The guide explains the certificate and app installation.</source>
         <translation>Tenere aperto Solin e collegare entrambi i dispositivi alla stessa rete locale. La guida spiega come installare il certificato e l&apos;app.</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+9"/>
+        <location line="+6"/>
         <source>Copy setup address</source>
         <translation>Copia indirizzo di configurazione</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+7"/>
         <source>On the first opening, the browser may show a privacy warning. Confirm that the local address matches, choose Advanced or Show Details, and continue only to this address. The warning disappears after the certificate is trusted.</source>
         <translation>Al primo avvio, il browser potrebbe mostrare un avviso di privacy. Verificare che l&apos;indirizzo locale corrisponda, selezionare Avanzate o Mostra dettagli e procedere solo verso questo indirizzo. L&apos;avviso scomparirà una volta considerato attendibile il certificato.</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+15"/>
+        <location line="+12"/>
         <source>VERIFICATION CODE</source>
         <translation>CODICE DI VERIFICA</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+4"/>
         <source>Compare this code on the device before installing the certificate.</source>
         <translation>Confrontare questo codice sul dispositivo prima di installare il certificato.</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+10"/>
+        <location line="+15"/>
         <source>Show full SHA-256 fingerprint</source>
         <translation>Mostra impronta digitale SHA-256 completa</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+27"/>
         <source>Save certificate…</source>
         <translation>Salva certificato…</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+10"/>
         <source>Done</source>
         <translation>Fatto</translation>
     </message>
     <message>
-        <location line="+93"/>
+        <location filename="../../ui/qml/settings/remote.py" line="+182"/>
+        <location line="+179"/>
         <source>Could not generate the QR code. Copy the address instead.</source>
         <translation>Impossibile generare il codice QR. Copiare invece l&apos;indirizzo.</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+40"/>
         <source>Save Solin certificate</source>
         <translation>Salva certificato di Solin</translation>
     </message>
@@ -5588,12 +5474,11 @@ L&apos;azione è irreversibile.</translation>
         <translation>File di certificato (*.cer)</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>Could not save certificate</source>
-        <translation>Impossibile salvare il certificato</translation>
+        <translation type="vanished">Impossibile salvare il certificato</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+8"/>
         <source>Choose another location and try again.</source>
         <translation>Scegliere un&apos;altra posizione e riprovare.</translation>
     </message>
@@ -7325,24 +7210,20 @@ Aggiungere contenuto, una videocamera o un’altra scena.</translation>
 <context>
     <name>ScreensSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/screens_section.py" line="+54"/>
         <source>Primary Screen (control)</source>
-        <translation>Schermo principale (controllo)</translation>
+        <translation type="vanished">Schermo principale (controllo)</translation>
     </message>
     <message>
-        <location line="+20"/>
         <source>No secondary screen detected. Connect an external monitor.</source>
-        <translation>Nessuno schermo secondario rilevato. Collegare un monitor esterno.</translation>
+        <translation type="vanished">Nessuno schermo secondario rilevato. Collegare un monitor esterno.</translation>
     </message>
     <message>
-        <location line="+27"/>
         <source>Secondary {n} (projection)</source>
-        <translation>Secondario {n} (proiezione)</translation>
+        <translation type="vanished">Secondario {n} (proiezione)</translation>
     </message>
     <message>
-        <location line="+18"/>
         <source>PROJECTION</source>
-        <translation>PROIEZIONE</translation>
+        <translation type="vanished">PROIEZIONE</translation>
     </message>
 </context>
 <context>
@@ -7371,84 +7252,74 @@ Aggiungere contenuto, una videocamera o un’altra scena.</translation>
 <context>
     <name>SettingsWidget</name>
     <message>
-        <location filename="../../widgets/settings_widget.py" line="+277"/>
-        <location line="+265"/>
+        <location filename="../../qml/SettingsView.qml" line="+115"/>
         <source>Settings</source>
         <translation>Impostazioni</translation>
     </message>
     <message>
-        <location line="-145"/>
-        <location line="+153"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+113"/>
         <source>Annual Text</source>
         <translation>Testo annuale</translation>
     </message>
     <message>
-        <location line="+108"/>
+        <location line="+2"/>
         <source>Scripture:</source>
         <translation>Passo biblico:</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>E.g.: Happy are those conscious of their spiritual need.</source>
-        <translation>Es.: Felici quelli che sono consapevoli del loro bisogno spirituale.</translation>
+        <translation type="vanished">Es.: Felici quelli che sono consapevoli del loro bisogno spirituale.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Bible reference:</source>
         <translation>Riferimento biblico:</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>E.g.: Matthew 5:3.</source>
-        <translation>Es.: Matteo 5:3.</translation>
+        <translation type="vanished">Es.: Matteo 5:3.</translation>
     </message>
     <message>
-        <location line="-106"/>
+        <location line="-47"/>
         <source>Auto-download on play</source>
         <translation>Download automatico alla riproduzione</translation>
     </message>
     <message>
-        <location line="-214"/>
-        <location line="+203"/>
+        <location line="+6"/>
         <source>Meetings</source>
         <translation>Adunanze</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+29"/>
         <source>Auto-download weekly study</source>
         <translation>Scarica automaticamente lo studio settimanale</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="-38"/>
         <source>Song Announcement Mode</source>
         <translation>Modalità annuncio dei cantici</translation>
     </message>
     <message>
-        <location line="-236"/>
-        <location line="+217"/>
+        <location line="-11"/>
         <source>Language</source>
         <translation>Lingua</translation>
     </message>
     <message>
-        <location line="-209"/>
-        <location line="+210"/>
         <source>Media</source>
-        <translation>Media</translation>
+        <translation type="vanished">Media</translation>
     </message>
     <message>
-        <location line="-194"/>
-        <location line="+196"/>
+        <location line="+16"/>
         <source>Folders</source>
         <translation>Cartelle</translation>
     </message>
     <message>
-        <location line="-179"/>
-        <location line="+181"/>
+        <location line="+52"/>
         <source>Integrations</source>
         <translation>Integrazioni</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="-67"/>
         <source>Interface</source>
         <translation>Interfaccia</translation>
     </message>
@@ -7458,55 +7329,53 @@ Aggiungere contenuto, una videocamera o un’altra scena.</translation>
         <translation>JW Media</translation>
     </message>
     <message>
-        <location line="-147"/>
-        <location line="+144"/>
+        <location line="+53"/>
+        <location line="+1"/>
         <source>Screens</source>
         <translation>Schermi</translation>
     </message>
     <message>
-        <location line="+81"/>
+        <location line="+28"/>
         <source>Audio controls and attendance count during meetings.</source>
         <translation>Controlli audio e conteggio dei presenti durante le riunioni.</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+8"/>
+        <location line="+1"/>
         <source>Auto Screen Share</source>
         <translation>Condivisione automatica dello schermo</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Automatically shares screen via hotkeys when projecting media.</source>
         <translation>Condivide automaticamente lo schermo tramite scorciatoie da tastiera durante la proiezione di contenuti multimediali.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Share hotkey</source>
         <translation>Scorciatoia di condivisione</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Uses Zoom&apos;s single start/stop screen-share shortcut.</source>
-        <translation>Usa l&apos;unica scorciatoia di Zoom per avviare e interrompere la condivisione dello schermo.</translation>
+        <translation type="vanished">Usa l&apos;unica scorciatoia di Zoom per avviare e interrompere la condivisione dello schermo.</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+1"/>
         <source>Share target</source>
         <translation>Destinazione condivisione</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>The Solin Media Preview tile inside Zoom&apos;s share dialog.</source>
-        <translation>Il riquadro “Solin Media Preview” nella finestra di dialogo di condivisione di Zoom.</translation>
+        <translation type="vanished">Il riquadro “Solin Media Preview” nella finestra di dialogo di condivisione di Zoom.</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+1"/>
         <source>Accessibility permission</source>
         <translation>Autorizzazione Accessibilità</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Open Settings</source>
-        <translation>Apri Impostazioni</translation>
+        <translation type="vanished">Apri Impostazioni</translation>
     </message>
     <message>
         <source>Click Position</source>
@@ -7517,17 +7386,17 @@ Aggiungere contenuto, una videocamera o un’altra scena.</translation>
         <translation type="vanished">Posizione su cui fare clic dopo l&apos;apertura della finestra di dialogo di condivisione per selezionare la destinazione.</translation>
     </message>
     <message>
-        <location line="-3"/>
         <source>Configure</source>
-        <translation>Configura</translation>
+        <translation type="vanished">Configura</translation>
     </message>
     <message>
-        <location line="-61"/>
+        <location line="-26"/>
+        <location line="+1"/>
         <source>OBS Studio</source>
         <translation>OBS Studio</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+0"/>
         <source>Automatically switches scenes during projection</source>
         <translation>Cambia automaticamente scena durante la proiezione</translation>
     </message>
@@ -7542,9 +7411,8 @@ Aggiungere contenuto, una videocamera o un’altra scena.</translation>
         <translation>Password (facoltativa)</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Leave blank if no password is set</source>
-        <translation>Lasciare vuoto se non è impostata alcuna password</translation>
+        <translation type="vanished">Lasciare vuoto se non è impostata alcuna password</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -7552,9 +7420,8 @@ Aggiungere contenuto, una videocamera o un’altra scena.</translation>
         <translation>Scena predefinita (inattiva)</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Scene shown when nothing is being projected.</source>
-        <translation>Scena mostrata quando non viene proiettato nulla.</translation>
+        <translation type="vanished">Scena mostrata quando non viene proiettato nulla.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -7562,55 +7429,51 @@ Aggiungere contenuto, una videocamera o un’altra scena.</translation>
         <translation>Scena finestra multimediale</translation>
     </message>
     <message>
-        <location line="-179"/>
-        <location line="+137"/>
+        <location line="+45"/>
         <source>About</source>
         <translation>Informazioni</translation>
     </message>
     <message>
-        <location line="+113"/>
+        <location filename="../../qml/SettingsPage.qml" line="+184"/>
         <source>Audio &amp; Video app for Kingdom Hall meetings.</source>
         <translation>App Audio e Video per le adunanze della Sala del Regno.</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+9"/>
         <source>Official Website</source>
         <translation>Sito ufficiale</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+4"/>
         <source>Changelog</source>
         <translation>Registro modifiche</translation>
     </message>
     <message>
-        <location line="-6"/>
+        <location line="+6"/>
         <source>This app is independent and is not affiliated with or endorsed by the Watch Tower Bible and Tract Society of Pennsylvania or any of its associated organizations.</source>
         <translation>Questa app è indipendente e non è affiliata né approvata dalla Watch Tower Bible and Tract Society of Pennsylvania o da alcuna delle sue organizzazioni associate.</translation>
     </message>
     <message>
-        <location line="-12"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-61"/>
         <source>Update</source>
         <translation>Aggiorna</translation>
     </message>
     <message>
-        <location line="-98"/>
+        <location line="-45"/>
         <source>Downloads the playing media for offline use.</source>
         <translation>Scarica il file multimediale in riproduzione per l&apos;uso offline.</translation>
     </message>
     <message>
-        <location line="-312"/>
-        <location line="+289"/>
         <source>Loading…</source>
-        <translation>Caricamento in corso…</translation>
+        <translation type="vanished">Caricamento in corso…</translation>
     </message>
     <message>
-        <location line="-176"/>
-        <location line="+189"/>
+        <location line="+89"/>
         <source>Remote access</source>
         <translation>Accesso remoto</translation>
     </message>
     <message>
-        <location line="-34"/>
+        <location filename="../../ui/qml/settings/general.py" line="+158"/>
         <source>Dark</source>
         <translation>Scuro</translation>
     </message>
@@ -7620,72 +7483,72 @@ Aggiungere contenuto, una videocamera o un’altra scena.</translation>
         <translation>Chiaro</translation>
     </message>
     <message>
-        <location line="+45"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-54"/>
         <source>Downloads this week’s and next week’s meeting media.</source>
         <translation>Scarica i file multimediali per le adunanze di questa settimana e della prossima.</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="-38"/>
         <source>Song starts muted for title display. Press play to start.</source>
         <translation>Il cantico inizia senza audio per mostrare il titolo. Premere &quot;Play&quot; per iniziare.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+39"/>
         <source>Automatic background song</source>
         <translation>Cantico di sottofondo automatico</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-41"/>
         <source>Start videos paused</source>
         <translation>Avvia video in pausa</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Videos open paused so you can start them manually.</source>
         <translation>I video si aprono in pausa per poterli avviare manualmente.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Playback protection</source>
         <translation>Protezione della riproduzione</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+0"/>
         <source>Prevents media changes and seeking while audio or video is playing. Pause first to make changes.</source>
         <translation>Impedisce di cambiare contenuto e posizione durante la riproduzione di audio o video. Metti in pausa prima di apportare modifiche.</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+7"/>
         <source>Link Folder</source>
         <translation>Collega cartella</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Sync folder (Dropbox, OneDrive, etc.) shown as playlists.</source>
         <translation>Cartella sincronizzata (Dropbox, OneDrive, ecc.) visualizzata come playlist.</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location filename="../../qml/SettingsRow.qml" line="+264"/>
         <source>Choose…</source>
         <translation>Scegli...</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+60"/>
+        <location line="+1"/>
         <source>Program stream (NDI)</source>
         <translation>Streaming programma (NDI)</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Receive the DistroAV/NDI output from OBS as a live projection.</source>
         <translation>Ricevi l&apos;output DistroAV/NDI da OBS come proiezione dal vivo.</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Enable Main Output in DistroAV, then select the NDI source shown by OBS.</source>
-        <translation>Abilita l&apos;output principale in DistroAV, quindi seleziona la sorgente NDI mostrata da OBS.</translation>
+        <translation type="vanished">Abilita l&apos;output principale in DistroAV, quindi seleziona la sorgente NDI mostrata da OBS.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Available NDI sources</source>
         <translation>Sorgenti NDI disponibili</translation>
     </message>
@@ -7695,64 +7558,576 @@ Aggiungere contenuto, una videocamera o un’altra scena.</translation>
         <translation>Trova sorgenti</translation>
     </message>
     <message>
-        <location line="-11"/>
         <source>Scene that captures the projection monitor. Activated when content is displayed.</source>
-        <translation>Scena che cattura il monitor di proiezione. Si attiva quando viene visualizzato un contenuto.</translation>
+        <translation type="vanished">Scena che cattura il monitor di proiezione. Si attiva quando viene visualizzato un contenuto.</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+6"/>
+        <location line="+1"/>
         <source>Camera</source>
         <translation>Videocamera</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Shows a camera button in the live tools toolbar.</source>
         <translation>Mostra un pulsante per la videocamera nella barra degli strumenti per le funzioni dal vivo.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+11"/>
+        <location line="+1"/>
         <source>Automatic Shortcuts</source>
         <translation>Scorciatoie automatiche</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Sends keyboard shortcuts when visual media changes state.</source>
         <translation>Invia scorciatoie da tastiera quando cambia lo stato dei contenuti multimediali.</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Create one or more shortcuts for start, end, pause and resume events.</source>
-        <translation>Creare una o più scorciatoie per gli eventi di avvio, fine, pausa e ripresa.</translation>
+        <translation type="vanished">Creare una o più scorciatoie per gli eventi di avvio, fine, pausa e ripresa.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location filename="../../qml/SettingsRow.qml" line="+68"/>
         <source>No shortcuts configured.</source>
         <translation>Nessuna scorciatoia configurata.</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+1"/>
         <source>Add shortcut</source>
         <translation>Aggiungi scorciatoia</translation>
     </message>
     <message>
-        <location line="+19"/>
+        <location filename="../../qml/SettingsRow.qml" line="-7"/>
         <source>Edit</source>
         <translation>Modifica</translation>
     </message>
     <message>
-        <location line="-13"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-17"/>
+        <location line="+1"/>
         <source>Zoom Meetings</source>
         <translation>Riunioni Zoom</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="-25"/>
         <source>Text shown on the projection screen when idle.</source>
         <translation>Testo mostrato sullo schermo di proiezione quando non ci sono contenuti in riproduzione.</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+3"/>
         <source>Save changes</source>
         <translation>Salva modifiche</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsSectionHeader.qml" line="+28"/>
+        <location line="+35"/>
+        <source>Back to sections</source>
+        <translation>Torna alle sezioni</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsView.qml" line="+15"/>
+        <source>Search settings</source>
+        <translation>Impostazioni di ricerca</translation>
+    </message>
+    <message>
+        <location line="+173"/>
+        <source>Search results</source>
+        <translation>Risultati della ricerca</translation>
+    </message>
+    <message>
+        <location line="+77"/>
+        <source>No settings found. Try another word.</source>
+        <translation>Nessuna impostazione trovata. Prova un&apos;altra parola.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-67"/>
+        <source>Appearance and languages</source>
+        <translation>Aspetto e lingue</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Theme and languages</source>
+        <translation>Temi e linguaggi</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Appearance</source>
+        <translation>Aspetto</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Theme</source>
+        <translation>Tema</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Update languages</source>
+        <translation>Aggiorna le lingue</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Media and files</source>
+        <translation>Supporti e file</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Playback, downloads and folders</source>
+        <translation>Riproduzione, download e cartelle</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Playback</source>
+        <translation>Riproduzione</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Downloads</source>
+        <translation>Download</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Schedule and preparation</source>
+        <translation>Programma e preparazione</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Meeting schedule</source>
+        <translation>Programma dell&apos;incontro</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Midweek meeting</source>
+        <translation>Adunanza infrasettimanale</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <location line="+7"/>
+        <source>Time</source>
+        <translation>Orario</translation>
+    </message>
+    <message>
+        <location line="-3"/>
+        <source>Weekend meeting</source>
+        <translation>Adunanza del fine settimana</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Preparation</source>
+        <translation>Preparazione</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Projection</source>
+        <translation>Proiezione</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Screens and annual text</source>
+        <translation>Schermi e testo annuale</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Scenes</source>
+        <translation>Scene</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Native scenes engine</source>
+        <translation>Motore di scene native</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Restart Solin to apply this change.</source>
+        <translation>Riavvia Solin per applicare questa modifica.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>OBS, Zoom and camera</source>
+        <translation>OBS, Zoom e fotocamera</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>Automations</source>
+        <translation>Automazioni</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Sharing and shortcuts</source>
+        <translation>Condivisione e scorciatoie</translation>
+    </message>
+    <message>
+        <location line="+30"/>
+        <source>Version and information</source>
+        <translation>Versione e informazioni</translation>
+    </message>
+    <message>
+        <location line="-17"/>
+        <source>Control over your local network</source>
+        <translation>Controllo sulla tua rete locale</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+1"/>
+        <source>Remote control</source>
+        <translation>Controllo remoto</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Control Solin securely from another device on this local network.</source>
+        <translation>Controllare Solin in modo sicuro da un altro dispositivo su questa rete locale.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Network interface</source>
+        <translation>Interfaccia di rete</translation>
+    </message>
+    <message>
+        <source>Refresh</source>
+        <translation type="vanished">Aggiorna</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Copy address</source>
+        <translation>Copia indirizzo</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Access credentials</source>
+        <translation>Credenziali di accesso</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Username</source>
+        <translation>Nome utente</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>New password</source>
+        <translation>Nuova password</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Confirm password</source>
+        <translation>Conferma password</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Save credentials</source>
+        <translation>Salva credenziali</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Devices</source>
+        <translation>Dispositivi</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Set up a device</source>
+        <translation>Configura un dispositivo</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/general.py" line="-125"/>
+        <source>Searching jw.org…</source>
+        <translation>Ricerca su jw.org…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Reading the meeting times…</source>
+        <translation>Lettura degli orari delle adunanze…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>No congregation found with that name.</source>
+        <translation>Nessuna congregazione trovata con questo nome.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>jw.org does not publish meeting times for this congregation.</source>
+        <translation>jw.org non pubblica gli orari delle adunanze di questa congregazione.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Too many searches in a row. Wait a moment and type again.</source>
+        <translation>Troppe ricerche di seguito. Aspetta un attimo e digita di nuovo.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Could not reach jw.org. Check the connection and try again.</source>
+        <translation>Impossibile raggiungere jw.org. Controlla la connessione e riprova.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-90"/>
+        <location filename="../../ui/qml/settings/general.py" line="+5"/>
+        <source>Search your congregation to fill the days and times below.</source>
+        <translation>Cerca la tua congregazione per compilare i giorni e gli orari qui sotto.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/general.py" line="+94"/>
+        <source>(same as interface)</source>
+        <translation>(uguale all’interfaccia)</translation>
+    </message>
+    <message>
+        <location line="+54"/>
+        <source>Primary Screen (control)</source>
+        <translation>Schermo principale (controllo)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Secondary {n} (projection)</source>
+        <translation>Secondario {n} (proiezione)</translation>
+    </message>
+    <message>
+        <location line="+210"/>
+        <source>Configure the meeting day/time before automatic playback can start.</source>
+        <translation>Configura il giorno e l’ora dell’adunanza prima di avviare la riproduzione automatica.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Plays audio songs before configured meetings and fades out before start.</source>
+        <translation>Riproduce cantici audio prima delle adunanze configurate e riduce gradualmente il volume prima dell’inizio.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Select folder to link</source>
+        <translation>Seleziona la cartella da collegare</translation>
+    </message>
+    <message>
+        <location line="+117"/>
+        <source>Fetching annual text…</source>
+        <translation>Recupero del testo annuale…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Could not fetch annual text</source>
+        <translation>Impossibile recuperare il testo annuale</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Annual text updated for {year}</source>
+        <translation>Testo annuale aggiornato per {year}</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsRow.qml" line="-134"/>
+        <source>Select…</source>
+        <translation>Seleziona...</translation>
+    </message>
+    <message>
+        <location line="+61"/>
+        <source>No folder selected</source>
+        <translation>Nessuna cartella selezionata</translation>
+    </message>
+    <message>
+        <location line="+48"/>
+        <source>No secondary screen detected. Connect an external monitor.</source>
+        <translation>Nessuno schermo secondario rilevato. Collegare un monitor esterno.</translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <source>Delete</source>
+        <translation>Elimina</translation>
+    </message>
+    <message>
+        <location filename="../../qml/AppTextField.qml" line="+67"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-10"/>
+        <source>Clear</source>
+        <translation>Cancella</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsClockPicker.qml" line="+45"/>
+        <source>Choose hour</source>
+        <translation>Scegli l&apos;ora</translation>
+    </message>
+    <message>
+        <location line="+30"/>
+        <source>Choose minute</source>
+        <translation>Scegli minuto</translation>
+    </message>
+    <message>
+        <location line="+101"/>
+        <source>Hour %1</source>
+        <translation>Ora %1</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Minute %1</source>
+        <translation>Minuto %1</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsCongregationDialog.qml" line="+31"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+8"/>
+        <source>Fill in from jw.org</source>
+        <translation>Compila da jw.org</translation>
+    </message>
+    <message>
+        <location line="+23"/>
+        <source>Search by congregation name</source>
+        <translation>Cerca per nome della congregazione</translation>
+    </message>
+    <message>
+        <location line="+86"/>
+        <location filename="../../qml/SettingsRemoteSetup.qml" line="-201"/>
+        <source>Close</source>
+        <translation>Chiudi</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsRow.qml" line="-88"/>
+        <location filename="../../qml/SettingsSelectionDialog.qml" line="+30"/>
+        <source>Search…</source>
+        <translation>Cerca…</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsSelectionDialog.qml" line="+8"/>
+        <source>HH:mm</source>
+        <translation>OO:mm</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>No results found.</source>
+        <translation>Nessun risultato trovato</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <location filename="../../qml/SettingsTimeDialog.qml" line="+58"/>
+        <source>Apply</source>
+        <translation>Applica</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <location filename="../../qml/SettingsTimeDialog.qml" line="-2"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+37"/>
+        <location line="+52"/>
+        <source>Cancel</source>
+        <translation>Annulla</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsShortcutDialog.qml" line="-144"/>
+        <source>Share Hotkey</source>
+        <translation>Scorciatoia di condivisione</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Press the Zoom shortcut that starts and stops screen sharing.</source>
+        <translation>Premi la scorciatoia di Zoom che avvia e interrompe la condivisione dello schermo.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="-309"/>
+        <location line="+63"/>
+        <source>Select a private network…</source>
+        <translation>Selezionare una rete privata…</translation>
+    </message>
+    <message>
+        <location line="-50"/>
+        <source>Choose a network and save credentials before enabling remote control.</source>
+        <translation>Scegliere una rete e salvare le credenziali prima di abilitare il controllo remoto.</translation>
+    </message>
+    <message>
+        <location line="+83"/>
+        <source>Starting secure remote control…</source>
+        <translation>Avvio del controllo remoto sicuro…</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Ready to enable.</source>
+        <translation>Pronto per l&apos;abilitazione.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Configuration required.</source>
+        <translation>Configurazione richiesta.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Configured as %1</source>
+        <translation>Configurato come %1</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/integrations.py" line="-106"/>
+        <source>Enter a valid port (1–65535).</source>
+        <translation>Inserisci una porta valida (1–65535).</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>✓ Configuration saved — reconnecting…</source>
+        <translation>✓ Configurazione salvata — riconnessione...</translation>
+    </message>
+    <message>
+        <location line="+31"/>
+        <source>— Select scene —</source>
+        <translation>— Selezionare scena —</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>NDI receiver is not available.</source>
+        <translation>Il ricevitore NDI non è disponibile.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <location line="+34"/>
+        <source>Looking for NDI sources on this network.</source>
+        <translation>Ricerca di sorgenti NDI nella rete in corso.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>No NDI sources found. Check that DistroAV Main Output is enabled in OBS.</source>
+        <translation>Nessuna sorgente NDI trovata. Verificare che l&apos;output principale di DistroAV sia abilitato in OBS.</translation>
+    </message>
+    <message>
+        <location line="+48"/>
+        <source>Press a shortcut before saving.</source>
+        <translation>Premere una scorciatoia prima di salvare.</translation>
+    </message>
+    <message>
+        <location line="+78"/>
+        <source>Configured</source>
+        <translation>Configurato</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <location filename="../../ui/qml/settings/remote.py" line="+4"/>
+        <source>Not configured</source>
+        <translation>Non configurato</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Solin can send the automatic click.</source>
+        <translation>Solin può inviare il clic automatico.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Allow Solin in macOS Accessibility so automatic clicks can work.</source>
+        <translation>Consenti Solin in Accessibilità di macOS affinché i clic automatici possano funzionare.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="+2"/>
+        <source>Use at least %1 characters. Credentials belong only to this profile.</source>
+        <translation>Utilizzare almeno %1 caratteri. Le credenziali appartengono solo a questo profilo.</translation>
+    </message>
+    <message>
+        <location line="+33"/>
+        <source>The passwords do not match.</source>
+        <translation>Le password non corrispondono.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Enter a new password to save.</source>
+        <translation>Inserire una nuova password da salvare.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Check the username and use a password with at least %1 characters.</source>
+        <translation>Controllare il nome utente e utilizzare una password di almeno %1 caratteri.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/general.py" line="+18"/>
+        <location filename="../../ui/qml/settings/remote.py" line="+10"/>
+        <location line="+142"/>
+        <source>Saved</source>
+        <translation>Salvato</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="-23"/>
+        <source>Copied</source>
+        <translation>Copiato</translation>
     </message>
 </context>
 <context>
@@ -8903,34 +9278,28 @@ Fai clic su &quot;Scarica&quot; per aprire la pagina di download.</translation>
 <context>
     <name>WatchedFolderSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/watched_folder_section.py" line="+48"/>
         <source>Link Folder</source>
-        <translation>Collega cartella</translation>
+        <translation type="vanished">Collega cartella</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Sync folder (Dropbox, OneDrive, etc.) shown as playlists.</source>
-        <translation>Cartella sincronizzata (Dropbox, OneDrive, ecc.) visualizzata come playlist.</translation>
+        <translation type="vanished">Cartella sincronizzata (Dropbox, OneDrive, ecc.) visualizzata come playlist.</translation>
     </message>
     <message>
-        <location line="+19"/>
         <source>Choose…</source>
-        <translation>Scegli...</translation>
+        <translation type="vanished">Scegli...</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>Clear</source>
-        <translation>Cancella</translation>
+        <translation type="vanished">Cancella</translation>
     </message>
     <message>
-        <location line="+48"/>
         <source>No folder selected</source>
-        <translation>Nessuna cartella selezionata</translation>
+        <translation type="vanished">Nessuna cartella selezionata</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Select folder to link</source>
-        <translation>Seleziona la cartella da collegare</translation>
+        <translation type="vanished">Seleziona la cartella da collegare</translation>
     </message>
 </context>
 <context>
@@ -9179,76 +9548,60 @@ Entrambi i dispositivi devono essere sulla stessa rete Wi-Fi.</translation>
 <context>
     <name>YearlyTextSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/yearly_text_section.py" line="+62"/>
         <source>Text shown on the projection screen when idle.</source>
-        <translation>Testo mostrato sullo schermo di proiezione quando non ci sono contenuti in riproduzione.</translation>
+        <translation type="vanished">Testo mostrato sullo schermo di proiezione quando non ci sono contenuti in riproduzione.</translation>
     </message>
     <message>
-        <location line="+18"/>
-        <location line="+309"/>
         <source>Fetching annual text…</source>
-        <translation>Recupero del testo annuale…</translation>
+        <translation type="vanished">Recupero del testo annuale…</translation>
     </message>
     <message>
-        <location line="-295"/>
-        <location line="+276"/>
         <source>Update</source>
-        <translation>Aggiorna</translation>
+        <translation type="vanished">Aggiorna</translation>
     </message>
     <message>
-        <location line="-241"/>
         <source>Scripture:</source>
-        <translation>Passo biblico:</translation>
+        <translation type="vanished">Passo biblico:</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>E.g.: Happy are those conscious of their spiritual need.</source>
-        <translation>Es.: Felici quelli che sono consapevoli del loro bisogno spirituale.</translation>
+        <translation type="vanished">Es.: Felici quelli che sono consapevoli del loro bisogno spirituale.</translation>
     </message>
     <message>
-        <location line="+11"/>
         <source>Bible reference:</source>
-        <translation>Riferimento biblico:</translation>
+        <translation type="vanished">Riferimento biblico:</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>E.g.: Matthew 5:3.</source>
-        <translation>Es.: Matteo 5:3.</translation>
+        <translation type="vanished">Es.: Matteo 5:3.</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>Save changes</source>
-        <translation>Salva modifiche</translation>
+        <translation type="vanished">Salva modifiche</translation>
     </message>
     <message>
-        <location line="+196"/>
         <source>Annual text updated for {year}</source>
-        <translation>Testo annuale aggiornato per {year}</translation>
+        <translation type="vanished">Testo annuale aggiornato per {year}</translation>
     </message>
     <message>
-        <location line="+33"/>
         <source>Loading…</source>
-        <translation>Caricamento in corso…</translation>
+        <translation type="vanished">Caricamento in corso…</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Could not fetch annual text</source>
-        <translation>Impossibile recuperare il testo annuale</translation>
+        <translation type="vanished">Impossibile recuperare il testo annuale</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Retry</source>
-        <translation>Riprova</translation>
+        <translation type="vanished">Riprova</translation>
     </message>
     <message>
-        <location line="+23"/>
         <source>▲  Edit text manually</source>
-        <translation>▲  Modifica testo manualmente</translation>
+        <translation type="vanished">▲  Modifica testo manualmente</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>▼  Edit text manually</source>
-        <translation>▼  Modifica testo manualmente</translation>
+        <translation type="vanished">▼  Modifica testo manualmente</translation>
     </message>
 </context>
 <context>
@@ -9476,14 +9829,12 @@ Il numero alla fine ha la priorità.</translation>
 <context>
     <name>ZoomSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/zoom_section.py" line="+32"/>
         <source>Zoom Meetings</source>
-        <translation>Riunioni Zoom</translation>
+        <translation type="vanished">Riunioni Zoom</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Audio controls and attendance count during meetings.</source>
-        <translation>Controlli audio e conteggio dei presenti durante le riunioni.</translation>
+        <translation type="vanished">Controlli audio e conteggio dei presenti durante le riunioni.</translation>
     </message>
 </context>
 <context>
@@ -11014,8 +11365,7 @@ Usa il pulsante di riproduzione per proiettare · Trascina la maniglia ⠿ per r
 <context>
     <name>_ShortcutSequenceEdit</name>
     <message>
-        <location filename="../../widgets/settings/auto_key_dialog.py" line="-257"/>
-        <location line="+52"/>
+        <location filename="../../qml/SettingsShortcutDialog.qml" line="+98"/>
         <source>Click to record</source>
         <translation>Fare clic per registrare</translation>
     </message>
@@ -11023,37 +11373,31 @@ Usa il pulsante di riproduzione per proiettare · Trascina la maniglia ⠿ per r
 <context>
     <name>_TimePickerPopup</name>
     <message>
-        <location filename="../../widgets/settings/meeting_schedule_section.py" line="-477"/>
         <source>Hour</source>
-        <translation>Ora</translation>
+        <translation type="vanished">Ora</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Minute</source>
-        <translation>Minuto</translation>
+        <translation type="vanished">Minuto</translation>
     </message>
     <message>
-        <location line="+15"/>
         <source>Cancel</source>
-        <translation>Annulla</translation>
+        <translation type="vanished">Annulla</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Apply</source>
-        <translation>Applica</translation>
+        <translation type="vanished">Applica</translation>
     </message>
 </context>
 <context>
     <name>_TimeStepper</name>
     <message>
-        <location line="-108"/>
         <source>Increase</source>
-        <translation>Aumenta</translation>
+        <translation type="vanished">Aumenta</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Decrease</source>
-        <translation>Diminuisci</translation>
+        <translation type="vanished">Diminuisci</translation>
     </message>
 </context>
 <context>

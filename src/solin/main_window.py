@@ -832,8 +832,8 @@ class MainWindow(QWidget):
                 ),
                 meeting_service=lambda: self.meetings_widget.get_service(),
                 dialog_parent=self,
-                sjjm_announce_mode=self.settings_widget.get_sjjm_announce_mode,
-                start_videos_paused=self.settings_widget.get_start_videos_paused,
+                sjjm_announce_mode=self._media_settings.sjjm_announce_mode,
+                start_videos_paused=self._media_settings.start_videos_paused,
                 playback_protection=self.playback_protection,
                 content_frame_sink=(
                     self._program_content.submit_frame
@@ -976,10 +976,10 @@ class MainWindow(QWidget):
         startup.mark("projection_controllers_ready")
         self._signal_connections.connect_signals()
         if self._program_content is not None:
-            self.settings_widget.yearly_text_changed.connect(
+            self.settings_widget.general.yearly_text_changed.connect(
                 self._program_content.update_yearly_text
             )
-        self.settings_widget.remote_control_settings_changed.connect(
+        self.settings_widget.remote.remote_control_settings_changed.connect(
             self._ensure_remote_control_started
         )
         startup.mark("main_window_signals_connected")
@@ -1413,7 +1413,7 @@ class MainWindow(QWidget):
         resources = self._bootstrap_controller.start_after_first_frame()
         self._remote_services = resources.remote_services
         self._application_maintenance()
-        self.settings_widget.start_deferred_services()
+        self.settings_widget.general.start_deferred_services()
         self._ui_preparation.start()
         if self.scene_runtime is not None and self.scene_runtime.engine_configured:
             self.scene_runtime.start_engine()
@@ -1566,7 +1566,7 @@ class MainWindow(QWidget):
 
     def _open_meeting_schedule_settings(self) -> None:
         self._navigation.switch_page(int(MainPage.SETTINGS))
-        self.settings_widget.focus_meeting_schedule()
+        self.settings_widget.navigation.openSection("meetings", "schedule", "midweekDay")
 
     @staticmethod
     def _browser_destination_request(
@@ -1707,8 +1707,8 @@ class MainWindow(QWidget):
     # ── Projection ────────────────────────────────────────────────────────
 
     def _current_yearly_projection_text(self) -> tuple[str, str, str]:
-        quote, reference = self.settings_widget.get_yearly_text()
-        return quote, reference, self.settings_widget._current_api_code()
+        quote, reference = self.settings_widget.general.get_yearly_text()
+        return quote, reference, self.settings_widget.general.media_api_code
 
     def _notify_playback_protection_blocked(self) -> None:
         self.notifications.warning(

@@ -4,24 +4,20 @@
 <context>
     <name>AboutSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/about_section.py" line="+48"/>
         <source>Audio &amp; Video app for Kingdom Hall meetings.</source>
-        <translation>Programu ya Sauti na Video kwa ajili ya mikutano ya Jumba la Ufalme.</translation>
+        <translation type="vanished">Programu ya Sauti na Video kwa ajili ya mikutano ya Jumba la Ufalme.</translation>
     </message>
     <message>
-        <location line="+10"/>
         <source>Official Website</source>
-        <translation>Tovuti Rasmi</translation>
+        <translation type="vanished">Tovuti Rasmi</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Changelog</source>
-        <translation>Changelog</translation>
+        <translation type="vanished">Changelog</translation>
     </message>
     <message>
-        <location line="+14"/>
         <source>This app is independent and is not affiliated with or endorsed by the Watch Tower Bible and Tract Society of Pennsylvania or any of its associated organizations.</source>
-        <translation>Programu hii inajitegemea na haishirikiani na wala kuidhinishwa na Watch Tower Bible and Tract Society of Pennsylvania au mashirika yake yoyote yanayohusiana.</translation>
+        <translation type="vanished">Programu hii inajitegemea na haishirikiani na wala kuidhinishwa na Watch Tower Bible and Tract Society of Pennsylvania au mashirika yake yoyote yanayohusiana.</translation>
     </message>
 </context>
 <context>
@@ -271,60 +267,60 @@
 <context>
     <name>AutoKeyEditorDialog</name>
     <message>
-        <location filename="../../widgets/settings/auto_key_dialog.py" line="+125"/>
+        <location filename="../../qml/SettingsShortcutDialog.qml" line="+53"/>
         <source>Automatic Shortcut</source>
         <translation>Njia ya Mkato ya Kiotomatiki</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+12"/>
         <source>Choose an app event and press the shortcut to send.</source>
         <translation>Chagua tukio la programu na ubonyeze njia ya mkato ili kutuma.</translation>
     </message>
     <message>
-        <location line="+45"/>
+        <location line="+9"/>
+        <location line="+15"/>
         <source>Event</source>
         <translation>Tukio</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+67"/>
+        <location line="+7"/>
         <source>Shortcut</source>
         <translation>Njia ya mkato</translation>
     </message>
     <message>
-        <location line="+12"/>
-        <location line="+95"/>
+        <location line="+35"/>
         <source>Click the field, then press one shortcut.</source>
         <translation>Bofya sehemu hiyo, kisha ubonyeze njia moja ya mkato.</translation>
     </message>
     <message>
-        <location line="-86"/>
+        <location line="+12"/>
         <source>Enabled</source>
         <translation>Imewezeshwa</translation>
     </message>
     <message>
-        <location line="+18"/>
+        <location line="+53"/>
         <source>Cancel</source>
         <translation>Ghairi</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+7"/>
         <source>Save</source>
         <translation>Hifadhi</translation>
     </message>
     <message>
-        <location line="+54"/>
         <source>Press a shortcut before saving.</source>
-        <translation>Bonyeza njia ya mkato kabla ya kuhifadhi.</translation>
+        <translation type="vanished">Bonyeza njia ya mkato kabla ya kuhifadhi.</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="-109"/>
+        <location line="+36"/>
         <source>Listening... press one shortcut.</source>
         <translation>Inasikiliza... bonyeza njia moja ya mkato.</translation>
     </message>
     <message>
-        <location line="+13"/>
         <source>Shortcut captured.</source>
-        <translation>Njia ya mkato imenaswa.</translation>
+        <translation type="vanished">Njia ya mkato imenaswa.</translation>
     </message>
 </context>
 <context>
@@ -353,109 +349,87 @@
 <context>
     <name>AutoKeysSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/auto_keys_section.py" line="+59"/>
         <source>Automatic Shortcuts</source>
-        <translation>Njia za Mkato za Kiotomatiki</translation>
+        <translation type="vanished">Njia za Mkato za Kiotomatiki</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Sends keyboard shortcuts when visual media changes state.</source>
-        <translation>Hutuma njia za mkato za kibodi wakati hali ya midia ya kuona inapobadilika.</translation>
+        <translation type="vanished">Hutuma njia za mkato za kibodi wakati hali ya midia ya kuona inapobadilika.</translation>
     </message>
     <message>
-        <location line="+24"/>
         <source>Create one or more shortcuts for start, end, pause and resume events.</source>
-        <translation>Unda njia moja au zaidi za mkato kwa ajili ya matukio ya kuanza, kumaliza, kusitisha, na kuendeleza.</translation>
+        <translation type="vanished">Unda njia moja au zaidi za mkato kwa ajili ya matukio ya kuanza, kumaliza, kusitisha, na kuendeleza.</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>No shortcuts configured.</source>
-        <translation>Hakuna njia za mkato zilizosanidiwa.</translation>
+        <translation type="vanished">Hakuna njia za mkato zilizosanidiwa.</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>Add shortcut</source>
-        <translation>Ongeza njia ya mkato</translation>
+        <translation type="vanished">Ongeza njia ya mkato</translation>
     </message>
     <message>
-        <location line="+131"/>
         <source>Enabled</source>
-        <translation>Imewezeshwa</translation>
+        <translation type="vanished">Imewezeshwa</translation>
     </message>
     <message>
-        <location line="+0"/>
         <source>Disabled</source>
-        <translation>Imezimwa</translation>
+        <translation type="vanished">Imezimwa</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Edit</source>
-        <translation>Hariri</translation>
+        <translation type="vanished">Hariri</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Delete</source>
-        <translation>Futa</translation>
+        <translation type="vanished">Futa</translation>
     </message>
 </context>
 <context>
     <name>AutoShareSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/auto_share_section.py" line="+55"/>
         <source>Auto Screen Share</source>
-        <translation>Kushiriki Skrini Kiotomatiki</translation>
+        <translation type="vanished">Kushiriki Skrini Kiotomatiki</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Automatically shares screen via hotkeys when projecting media.</source>
-        <translation>Hushiriki skrini kiotomatiki kupitia mikato ya kibodi wakati wa kuonyesha midia.</translation>
+        <translation type="vanished">Hushiriki skrini kiotomatiki kupitia mikato ya kibodi wakati wa kuonyesha midia.</translation>
     </message>
     <message>
-        <location line="+30"/>
         <source>Share hotkey</source>
-        <translation>Mkato wa kushiriki</translation>
+        <translation type="vanished">Mkato wa kushiriki</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Uses Zoom&apos;s single start/stop screen-share shortcut.</source>
-        <translation>Hutumia mkato mmoja wa Zoom wa kuanza/kusimamisha kushiriki skrini.</translation>
+        <translation type="vanished">Hutumia mkato mmoja wa Zoom wa kuanza/kusimamisha kushiriki skrini.</translation>
     </message>
     <message>
-        <location line="+10"/>
-        <location line="+241"/>
-        <location line="+9"/>
         <source>Not configured</source>
-        <translation>Haijasanidiwa</translation>
+        <translation type="vanished">Haijasanidiwa</translation>
     </message>
     <message>
-        <location line="-243"/>
         <source>Edit</source>
-        <translation>Hariri</translation>
+        <translation type="vanished">Hariri</translation>
     </message>
     <message>
-        <location line="+20"/>
         <source>Accessibility permission</source>
-        <translation>Ruhusa ya Ufikivu</translation>
+        <translation type="vanished">Ruhusa ya Ufikivu</translation>
     </message>
     <message>
-        <location line="+14"/>
         <source>Open Settings</source>
-        <translation>Fungua Mipangilio</translation>
+        <translation type="vanished">Fungua Mipangilio</translation>
     </message>
     <message>
-        <location line="+35"/>
         <source>Share target</source>
-        <translation>Lengo la kushiriki</translation>
+        <translation type="vanished">Lengo la kushiriki</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Where Solin should click after Zoom&apos;s share shortcut opens the dialog.</source>
-        <translation>Mahali Solin inapaswa kubofya baada ya njia ya mkato ya kushiriki ya Zoom kufungua kidirisha.</translation>
+        <translation type="vanished">Mahali Solin inapaswa kubofya baada ya njia ya mkato ya kushiriki ya Zoom kufungua kidirisha.</translation>
     </message>
     <message>
-        <location line="+167"/>
         <source>Configured</source>
-        <translation>Imesanidiwa</translation>
+        <translation type="vanished">Imesanidiwa</translation>
     </message>
     <message>
         <source>Click Position</source>
@@ -466,33 +440,28 @@
         <translation type="vanished">Mahali pa kubofya baada ya kidirisha cha kushiriki kufunguka ili kuchagua lengwa.</translation>
     </message>
     <message>
-        <location line="-141"/>
         <source>Configure</source>
-        <translation>Sanidi</translation>
+        <translation type="vanished">Sanidi</translation>
     </message>
     <message>
-        <location line="+122"/>
         <source>Share Hotkey</source>
-        <translation>Mkato wa Kushiriki</translation>
+        <translation type="vanished">Mkato wa Kushiriki</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Press the Zoom shortcut that starts and stops screen sharing.</source>
-        <translation>Bonyeza mkato wa Zoom unaoanza na kusimamisha kushiriki skrini.</translation>
+        <translation type="vanished">Bonyeza mkato wa Zoom unaoanza na kusimamisha kushiriki skrini.</translation>
     </message>
     <message>
         <source>Position: {x}, {y}</source>
         <translation type="vanished">Mahali: {x}, {y}</translation>
     </message>
     <message>
-        <location line="+35"/>
         <source>Solin can send the automatic click.</source>
-        <translation>Solin inaweza kutuma mbofyo wa kiotomatiki.</translation>
+        <translation type="vanished">Solin inaweza kutuma mbofyo wa kiotomatiki.</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>Allow Solin in macOS Accessibility so automatic clicks can work.</source>
-        <translation>Ruhusu Solin katika Ufikivu wa macOS ili mibofyo ya kiotomatiki iweze kufanya kazi.</translation>
+        <translation type="vanished">Ruhusu Solin katika Ufikivu wa macOS ili mibofyo ya kiotomatiki iweze kufanya kazi.</translation>
     </message>
 </context>
 <context>
@@ -907,14 +876,12 @@
 <context>
     <name>CameraSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/camera_section.py" line="+13"/>
         <source>Camera</source>
-        <translation>Kamera</translation>
+        <translation type="vanished">Kamera</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Shows a camera button in the live tools toolbar.</source>
-        <translation>Huonyesha kitufe cha kamera kwenye upau wa zana za moja kwa moja.</translation>
+        <translation type="vanished">Huonyesha kitufe cha kamera kwenye upau wa zana za moja kwa moja.</translation>
     </message>
 </context>
 <context>
@@ -1032,6 +999,17 @@
         <location line="+16"/>
         <source>Enable projection aspect first</source>
         <translation>Washa kwanza uwiano wa onyesho</translation>
+    </message>
+</context>
+<context>
+    <name>IntegrationSettings</name>
+    <message numerus="yes">
+        <location filename="../../ui/qml/settings/integrations.py" line="+330"/>
+        <source>%n NDI source found.</source>
+        <translation>
+            <numerusform>Chanzo %n cha NDI kimepatikana.</numerusform>
+            <numerusform>Vyanzo %n vya NDI vimepatikana.</numerusform>
+        </translation>
     </message>
 </context>
 <context>
@@ -1178,19 +1156,16 @@
 <context>
     <name>LanguageSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/language_section.py" line="+22"/>
         <source>Interface</source>
-        <translation>Kiolesura</translation>
+        <translation type="vanished">Kiolesura</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>JW Media</source>
-        <translation>Media ya JW</translation>
+        <translation type="vanished">Media ya JW</translation>
     </message>
     <message>
-        <location line="+36"/>
         <source>(same as interface)</source>
-        <translation>(sawa na kiolesura)</translation>
+        <translation type="vanished">(sawa na kiolesura)</translation>
     </message>
 </context>
 <context>
@@ -1589,13 +1564,13 @@
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../../main_window.py" line="+551"/>
+        <location filename="../../main_window.py" line="+565"/>
         <location filename="../../controllers/main_window_nav.py" line="+11"/>
         <source>Solin</source>
         <translation>Solin</translation>
     </message>
     <message>
-        <location line="+694"/>
+        <location line="+717"/>
         <location filename="../../controllers/main_window_nav.py" line="+27"/>
         <source>Scenes</source>
         <translation>Mandhari</translation>
@@ -1636,7 +1611,7 @@
         <translation>Kurekodi kunaendelea</translation>
     </message>
     <message>
-        <location line="+379"/>
+        <location line="+381"/>
         <source>Pause playback before changing the projected content.</source>
         <translation>Sitisha uchezaji kabla ya kubadilisha maudhui yanayoonyeshwa.</translation>
     </message>
@@ -2493,69 +2468,56 @@ Solin itaendelea kujaribu kuunganisha tena kutoka mahali ilipoishia.
 <context>
     <name>MediaSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/media_section.py" line="+23"/>
         <source>Auto-download on play</source>
-        <translation>Pakua kiotomatiki wakati wa kucheza</translation>
+        <translation type="vanished">Pakua kiotomatiki wakati wa kucheza</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Downloads the playing media for offline use.</source>
-        <translation>Inapakua media inayochezwa ili itumike nje ya mtandao.</translation>
+        <translation type="vanished">Inapakua media inayochezwa ili itumike nje ya mtandao.</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Auto-download weekly study</source>
-        <translation>Pakua kiotomatiki funzo la kila juma</translation>
+        <translation type="vanished">Pakua kiotomatiki funzo la kila juma</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Downloads this week’s and next week’s meeting media.</source>
-        <translation>Inapakua media za mikutano za juma hili na juma linalofuata.</translation>
+        <translation type="vanished">Inapakua media za mikutano za juma hili na juma linalofuata.</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Song Announcement Mode</source>
-        <translation>Hali ya Kutangaza Wimbo</translation>
+        <translation type="vanished">Hali ya Kutangaza Wimbo</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Song starts muted for title display. Press play to start.</source>
-        <translation>Wimbo unaanza ukiwa umenyamazishwa ili kuonyesha kichwa. Bonyeza cheza ili kuanza.</translation>
+        <translation type="vanished">Wimbo unaanza ukiwa umenyamazishwa ili kuonyesha kichwa. Bonyeza cheza ili kuanza.</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Automatic background song</source>
-        <translation>Wimbo wa mandharinyuma wa kiotomatiki</translation>
+        <translation type="vanished">Wimbo wa mandharinyuma wa kiotomatiki</translation>
     </message>
     <message>
-        <location line="+13"/>
         <source>Start videos paused</source>
-        <translation>Anzisha video zikiwa zimesitishwa</translation>
+        <translation type="vanished">Anzisha video zikiwa zimesitishwa</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Videos open paused so you can start them manually.</source>
-        <translation>Video hufunguka zikiwa zimesitishwa ili uweze kuzianzisha wewe mwenyewe.</translation>
+        <translation type="vanished">Video hufunguka zikiwa zimesitishwa ili uweze kuzianzisha wewe mwenyewe.</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Playback protection</source>
-        <translation>Ulinzi wa uchezaji</translation>
+        <translation type="vanished">Ulinzi wa uchezaji</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Prevents media changes and seeking while audio or video is playing. Pause first to make changes.</source>
-        <translation>Huzuia kubadilisha media na kusogeza nafasi ya uchezaji wakati sauti au video inacheza. Sitisha kwanza ili kufanya mabadiliko.</translation>
+        <translation type="vanished">Huzuia kubadilisha media na kusogeza nafasi ya uchezaji wakati sauti au video inacheza. Sitisha kwanza ili kufanya mabadiliko.</translation>
     </message>
     <message>
-        <location line="+35"/>
         <source>Configure the meeting day/time before automatic playback can start.</source>
-        <translation>Weka siku na wakati wa mkutano kabla ya uchezaji wa kiotomatiki kuanza.</translation>
+        <translation type="vanished">Weka siku na wakati wa mkutano kabla ya uchezaji wa kiotomatiki kuanza.</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Plays audio songs before configured meetings and fades out before start.</source>
-        <translation>Hucheza nyimbo za sauti kabla ya mikutano iliyowekwa na kufifisha sauti kabla ya kuanza.</translation>
+        <translation type="vanished">Hucheza nyimbo za sauti kabla ya mikutano iliyowekwa na kufifisha sauti kabla ya kuanza.</translation>
     </message>
 </context>
 <context>
@@ -2710,77 +2672,60 @@ Maudhui yaliyoongezwa kwa mkono, upunguzaji, upangaji wa picha, na hali iliyopan
 <context>
     <name>MeetingScheduleSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/meeting_schedule_section.py" line="+528"/>
-        <location line="+334"/>
         <source>Used by automatic features that depend on the meeting start time.</source>
-        <translation>Hutumiwa na vipengele vya kiotomatiki vinavyotegemea wakati wa kuanza kwa mkutano.</translation>
+        <translation type="vanished">Hutumiwa na vipengele vya kiotomatiki vinavyotegemea wakati wa kuanza kwa mkutano.</translation>
     </message>
     <message>
-        <location line="-275"/>
-        <location line="+285"/>
         <source>Fill in from jw.org</source>
-        <translation>Jaza kutoka jw.org</translation>
+        <translation type="vanished">Jaza kutoka jw.org</translation>
     </message>
     <message>
-        <location line="-270"/>
-        <location line="+271"/>
         <source>Congregation name</source>
-        <translation>Jina la kutaniko</translation>
+        <translation type="vanished">Jina la kutaniko</translation>
     </message>
     <message>
-        <location line="-174"/>
         <source>Searching jw.org…</source>
-        <translation>Inatafuta jw.org…</translation>
+        <translation type="vanished">Inatafuta jw.org…</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>No congregation found with that name.</source>
-        <translation>Hakuna kutaniko lenye jina hilo.</translation>
+        <translation type="vanished">Hakuna kutaniko lenye jina hilo.</translation>
     </message>
     <message>
-        <location line="-6"/>
         <source>Reading the meeting times…</source>
-        <translation>Inasoma saa za mikutano…</translation>
+        <translation type="vanished">Inasoma saa za mikutano…</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>jw.org does not publish meeting times for this congregation.</source>
-        <translation>jw.org haichapishi saa za mikutano za kutaniko hili.</translation>
+        <translation type="vanished">jw.org haichapishi saa za mikutano za kutaniko hili.</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Too many searches in a row. Wait a moment and type again.</source>
-        <translation>Utafutaji mwingi mfululizo. Subiri kidogo na uandike tena.</translation>
+        <translation type="vanished">Utafutaji mwingi mfululizo. Subiri kidogo na uandike tena.</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Could not reach jw.org. Check the connection and try again.</source>
-        <translation>Haikuwezekana kufikia jw.org. Angalia muunganisho na ujaribu tena.</translation>
+        <translation type="vanished">Haikuwezekana kufikia jw.org. Angalia muunganisho na ujaribu tena.</translation>
     </message>
     <message>
-        <location line="+13"/>
         <source>Search your congregation to fill the days and times below.</source>
-        <translation>Tafuta kutaniko lako ili kujaza siku na saa zilizo hapa chini.</translation>
+        <translation type="vanished">Tafuta kutaniko lako ili kujaza siku na saa zilizo hapa chini.</translation>
     </message>
     <message>
         <source>Midweek meeting</source>
         <translation type="vanished">Mkutano wa katikati ya juma</translation>
     </message>
     <message>
-        <location line="-193"/>
-        <location line="+320"/>
         <source>Day and time for the midweek meeting.</source>
-        <translation>Siku na wakati wa mkutano wa katikati ya juma.</translation>
+        <translation type="vanished">Siku na wakati wa mkutano wa katikati ya juma.</translation>
     </message>
     <message>
         <source>Weekend meeting</source>
         <translation type="vanished">Mkutano wa mwisho wa juma</translation>
     </message>
     <message>
-        <location line="-313"/>
-        <location line="+317"/>
         <source>Day and time for the weekend meeting.</source>
-        <translation>Siku na wakati wa mkutano wa mwisho wa juma.</translation>
+        <translation type="vanished">Siku na wakati wa mkutano wa mwisho wa juma.</translation>
     </message>
     <message>
         <source>Not configured</source>
@@ -3111,130 +3056,103 @@ Maudhui yaliyoongezwa kwa mkono, upunguzaji, upangaji wa picha, na hali iliyopan
 <context>
     <name>ObsSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/obs_section.py" line="+50"/>
         <source>OBS Studio</source>
-        <translation>OBS Studio</translation>
+        <translation type="vanished">OBS Studio</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Automatically switches scenes during projection</source>
-        <translation>Inabadilisha maonyesho kiotomatiki wakati wa kuonyesha kwenye skrini</translation>
+        <translation type="vanished">Inabadilisha maonyesho kiotomatiki wakati wa kuonyesha kwenye skrini</translation>
     </message>
     <message>
-        <location line="+29"/>
         <source>Disconnected</source>
-        <translation>Imeondolewa muunganisho</translation>
+        <translation type="vanished">Imeondolewa muunganisho</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>WebSocket Port</source>
-        <translation>Bandari (Port) ya WebSocket</translation>
+        <translation type="vanished">Bandari (Port) ya WebSocket</translation>
     </message>
     <message>
-        <location line="+14"/>
         <source>Password (optional)</source>
-        <translation>Nenosiri (hiari)</translation>
+        <translation type="vanished">Nenosiri (hiari)</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>Leave blank if no password is set</source>
-        <translation>Acha wazi ikiwa hakuna nenosiri lililowekwa</translation>
+        <translation type="vanished">Acha wazi ikiwa hakuna nenosiri lililowekwa</translation>
     </message>
     <message>
-        <location line="+9"/>
-        <location line="+363"/>
         <source>● Changes saved automatically</source>
-        <translation>● Mabadiliko yanahifadhiwa kiotomatiki</translation>
+        <translation type="vanished">● Mabadiliko yanahifadhiwa kiotomatiki</translation>
     </message>
     <message>
-        <location line="-327"/>
         <source>Program stream (NDI)</source>
-        <translation>Utiririshaji wa programu (NDI)</translation>
+        <translation type="vanished">Utiririshaji wa programu (NDI)</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Receive the DistroAV/NDI output from OBS as a live projection.</source>
-        <translation>Pokea matokeo ya DistroAV/NDI kutoka OBS kama onyesho la moja kwa moja.</translation>
+        <translation type="vanished">Pokea matokeo ya DistroAV/NDI kutoka OBS kama onyesho la moja kwa moja.</translation>
     </message>
     <message>
-        <location line="+21"/>
         <source>Enable Main Output in DistroAV, then select the NDI source shown by OBS.</source>
-        <translation>Washa Matokeo Makuu (Main Output) katika DistroAV, kisha uchague chanzo cha NDI kinachoonyeshwa na OBS.</translation>
+        <translation type="vanished">Washa Matokeo Makuu (Main Output) katika DistroAV, kisha uchague chanzo cha NDI kinachoonyeshwa na OBS.</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>Available NDI sources</source>
-        <translation>Vyanzo vya NDI vinavyopatikana</translation>
+        <translation type="vanished">Vyanzo vya NDI vinavyopatikana</translation>
     </message>
     <message>
-        <location line="+15"/>
         <source>No sources loaded</source>
-        <translation>Hakuna vyanzo vilivyopakiwa</translation>
+        <translation type="vanished">Hakuna vyanzo vilivyopakiwa</translation>
     </message>
     <message>
-        <location line="+6"/>
-        <location line="+335"/>
-        <location line="+35"/>
         <source>Find sources</source>
-        <translation>Tafuta vyanzo</translation>
+        <translation type="vanished">Tafuta vyanzo</translation>
     </message>
     <message>
-        <location line="-338"/>
         <source>Default scene (idle)</source>
-        <translation>Mandhari ya kawaida (bila kazi)</translation>
+        <translation type="vanished">Mandhari ya kawaida (bila kazi)</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Scene shown when nothing is being projected.</source>
-        <translation>Mandhari yanayoonyeshwa wakati hakuna kinachokadiriwa.</translation>
+        <translation type="vanished">Mandhari yanayoonyeshwa wakati hakuna kinachokadiriwa.</translation>
     </message>
     <message>
-        <location line="+13"/>
         <source>Media window scene</source>
-        <translation>Mandhari ya dirisha la midia</translation>
+        <translation type="vanished">Mandhari ya dirisha la midia</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Scene that captures the projection monitor. Activated when content is displayed.</source>
-        <translation>Mandhari yanayokamata kifuatiliaji cha makadirio. Huwashwa wakati maudhui yanapoonyeshwa.</translation>
+        <translation type="vanished">Mandhari yanayokamata kifuatiliaji cha makadirio. Huwashwa wakati maudhui yanapoonyeshwa.</translation>
     </message>
     <message>
-        <location line="+206"/>
         <source>✓ Configuration saved — reconnecting…</source>
-        <translation>✓ Usanidi umehifadhiwa — inaunganisha tena…</translation>
+        <translation type="vanished">✓ Usanidi umehifadhiwa — inaunganisha tena…</translation>
     </message>
     <message>
-        <location line="+57"/>
         <source>NDI receiver is not available.</source>
-        <translation>Kipokezi cha NDI hakipatikani.</translation>
+        <translation type="vanished">Kipokezi cha NDI hakipatikani.</translation>
     </message>
     <message>
-        <location line="+5"/>
         <source>Searching…</source>
-        <translation>Inatafuta…</translation>
+        <translation type="vanished">Inatafuta…</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Looking for NDI sources on this network.</source>
-        <translation>Inatafuta vyanzo vya NDI kwenye mtandao huu.</translation>
+        <translation type="vanished">Inatafuta vyanzo vya NDI kwenye mtandao huu.</translation>
     </message>
     <message numerus="yes">
-        <location line="+25"/>
         <source>%n NDI source found.</source>
-        <translation>
+        <translation type="vanished">
             <numerusform>Chanzo %n cha NDI kimepatikana.</numerusform>
             <numerusform>Vyanzo %n vya NDI vimepatikana.</numerusform>
         </translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>No NDI sources found</source>
-        <translation>Hakuna vyanzo vya NDI vilivyopatikana</translation>
+        <translation type="vanished">Hakuna vyanzo vya NDI vilivyopatikana</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>No NDI sources found. Check that DistroAV Main Output is enabled in OBS.</source>
-        <translation>Hakuna vyanzo vya NDI vilivyopatikana. Hakikisha kuwa Matokeo Makuu ya DistroAV yamewashwa katika OBS.</translation>
+        <translation type="vanished">Hakuna vyanzo vya NDI vilivyopatikana. Hakikisha kuwa Matokeo Makuu ya DistroAV yamewashwa katika OBS.</translation>
     </message>
     <message>
         <source>Connecting…</source>
@@ -3253,9 +3171,8 @@ Maudhui yaliyoongezwa kwa mkono, upunguzaji, upangaji wa picha, na hali iliyopan
         <translation type="vanished">Hitilafu ya muunganisho</translation>
     </message>
     <message>
-        <location line="+72"/>
         <source>— Select scene —</source>
-        <translation>— Chagua mandhari —</translation>
+        <translation type="vanished">— Chagua mandhari —</translation>
     </message>
 </context>
 <context>
@@ -3301,7 +3218,7 @@ Maudhui yaliyoongezwa kwa mkono, upunguzaji, upangaji wa picha, na hali iliyopan
         <translation>Jina la wasifu</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+10"/>
         <source>Example: Main Hall</source>
         <translation>Mfano: Jumba Kuu</translation>
     </message>
@@ -3334,13 +3251,13 @@ Maudhui yaliyoongezwa kwa mkono, upunguzaji, upangaji wa picha, na hali iliyopan
     </message>
     <message>
         <location line="+5"/>
-        <location line="+406"/>
+        <location line="+414"/>
         <source>Meeting schedule</source>
         <translation>Ratiba ya mikutano</translation>
     </message>
     <message>
-        <location line="-400"/>
-        <location line="+1161"/>
+        <location line="-408"/>
+        <location line="+1150"/>
         <source>Congregation</source>
         <translation>Kutaniko</translation>
     </message>
@@ -3349,18 +3266,18 @@ Maudhui yaliyoongezwa kwa mkono, upunguzaji, upangaji wa picha, na hali iliyopan
         <translation type="vanished">Si lazima</translation>
     </message>
     <message>
-        <location line="-1150"/>
+        <location line="-1139"/>
         <source>Find your congregation to fill the meeting days and times from jw.org.</source>
         <translation>Tafuta kutaniko lako ili kujaza siku na saa za mikutano kutoka jw.org.</translation>
     </message>
     <message>
         <location line="+8"/>
-        <location line="+375"/>
+        <location line="+383"/>
         <source>Meeting media</source>
         <translation>Midia za mkutano</translation>
     </message>
     <message>
-        <location line="-364"/>
+        <location line="-372"/>
         <source>Download automatically</source>
         <translation>Pakua kiotomatiki</translation>
     </message>
@@ -3371,12 +3288,12 @@ Maudhui yaliyoongezwa kwa mkono, upunguzaji, upangaji wa picha, na hali iliyopan
     </message>
     <message>
         <location line="+8"/>
-        <location line="+357"/>
+        <location line="+365"/>
         <source>Manual download</source>
         <translation>Upakuaji wa mkono</translation>
     </message>
     <message>
-        <location line="-356"/>
+        <location line="-364"/>
         <source>Only download media when you click the cloud button.</source>
         <translation>Pakua midia tu unapobofya kitufe cha wingu.</translation>
     </message>
@@ -3421,12 +3338,12 @@ Maudhui yaliyoongezwa kwa mkono, upunguzaji, upangaji wa picha, na hali iliyopan
         <translation>Mlango wa WebSocket</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+16"/>
         <source>Password (optional)</source>
         <translation>Nenosiri (hiari)</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+16"/>
         <source>Connecting…</source>
         <translation>Inaunganisha…</translation>
     </message>
@@ -3556,8 +3473,8 @@ Maudhui yaliyoongezwa kwa mkono, upunguzaji, upangaji wa picha, na hali iliyopan
         <translation>Wiki hii na wiki ijayo</translation>
     </message>
     <message>
-        <location line="-393"/>
-        <location line="+400"/>
+        <location line="-401"/>
+        <location line="+408"/>
         <location line="+5"/>
         <location line="+9"/>
         <source>Not configured</source>
@@ -3579,7 +3496,7 @@ Maudhui yaliyoongezwa kwa mkono, upunguzaji, upangaji wa picha, na hali iliyopan
         <translation>Kushiriki kiotomatiki kiko tayari</translation>
     </message>
     <message>
-        <location line="+120"/>
+        <location line="+101"/>
         <source>Finishing…</source>
         <translation>Inakamilisha…</translation>
     </message>
@@ -3590,17 +3507,17 @@ Maudhui yaliyoongezwa kwa mkono, upunguzaji, upangaji wa picha, na hali iliyopan
     </message>
     <message>
         <location line="+303"/>
-        <location line="+167"/>
+        <location line="+149"/>
         <source>Close</source>
         <translation>Funga</translation>
     </message>
     <message>
-        <location line="-159"/>
+        <location line="-135"/>
         <source>Search by congregation name</source>
         <translation>Tafuta kwa jina la kutaniko</translation>
     </message>
     <message>
-        <location filename="../../ui/qml/onboarding.py" line="+69"/>
+        <location filename="../../ui/qml/onboarding.py" line="+73"/>
         <source>Searching jw.org…</source>
         <translation>Inatafuta jw.org…</translation>
     </message>
@@ -3609,17 +3526,17 @@ Maudhui yaliyoongezwa kwa mkono, upunguzaji, upangaji wa picha, na hali iliyopan
         <translation type="vanished">Siku na saa za mikutano zinatoka jw.org.</translation>
     </message>
     <message>
-        <location filename="../../qml/OnboardingView.qml" line="+88"/>
+        <location filename="../../qml/OnboardingView.qml" line="+64"/>
         <source>Remove congregation</source>
         <translation>Ondoa kutaniko</translation>
     </message>
     <message>
-        <location line="+78"/>
+        <location line="+83"/>
         <source>Search languages</source>
         <translation>Tafuta lugha</translation>
     </message>
     <message>
-        <location filename="../../ui/qml/onboarding.py" line="+255"/>
+        <location filename="../../ui/qml/onboarding.py" line="+259"/>
         <source>Enter a port between 1 and 65535.</source>
         <translation>Weka mlango kati ya 1 na 65535.</translation>
     </message>
@@ -3629,7 +3546,7 @@ Maudhui yaliyoongezwa kwa mkono, upunguzaji, upangaji wa picha, na hali iliyopan
         <translation>Kichagua lengo la kushiriki hakipatikani.</translation>
     </message>
     <message>
-        <location line="+139"/>
+        <location line="+140"/>
         <source>Enter a profile name.</source>
         <translation>Weka jina la wasifu.</translation>
     </message>
@@ -3664,7 +3581,7 @@ Maudhui yaliyoongezwa kwa mkono, upunguzaji, upangaji wa picha, na hali iliyopan
         <translation>Haikuwezekana kuunda wasifu.</translation>
     </message>
     <message>
-        <location line="-542"/>
+        <location line="-547"/>
         <source>jw.org does not publish meeting times for this congregation.</source>
         <translation>jw.org haichapishi saa za mikutano za kutaniko hili.</translation>
     </message>
@@ -3689,7 +3606,7 @@ Maudhui yaliyoongezwa kwa mkono, upunguzaji, upangaji wa picha, na hali iliyopan
         <translation>Haikuwezekana kufikia jw.org. Angalia muunganisho na ujaribu tena.</translation>
     </message>
     <message>
-        <location line="+685"/>
+        <location line="+690"/>
         <source>Allow Solin in macOS Accessibility settings.</source>
         <translation>Ruhusu Solin katika mipangilio ya Ufikiaji ya macOS.</translation>
     </message>
@@ -5374,211 +5291,180 @@ Hutaweza kurudisha hatua hii.</translation>
 <context>
     <name>RemoteControlSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/remote_control_section.py" line="+54"/>
-        <location line="+403"/>
         <source>Remote control</source>
-        <translation>Udhibiti wa mbali</translation>
+        <translation type="vanished">Udhibiti wa mbali</translation>
     </message>
     <message>
-        <location line="-402"/>
-        <location line="+404"/>
         <source>Control Solin securely from another device on this local network.</source>
-        <translation>Dhibiti Solin kwa usalama kutoka kwa kifaa kingine kwenye mtandao huu wa ndani.</translation>
+        <translation type="vanished">Dhibiti Solin kwa usalama kutoka kwa kifaa kingine kwenye mtandao huu wa ndani.</translation>
     </message>
     <message>
-        <location line="-388"/>
-        <location line="+390"/>
         <source>Network interface</source>
-        <translation>Kiolesura cha mtandao</translation>
+        <translation type="vanished">Kiolesura cha mtandao</translation>
     </message>
     <message>
-        <location line="-376"/>
-        <location line="+377"/>
         <source>Access credentials</source>
-        <translation>Vitambulisho vya kufikia</translation>
+        <translation type="vanished">Vitambulisho vya kufikia</translation>
     </message>
     <message>
-        <location line="-349"/>
-        <location line="+350"/>
         <source>Username</source>
-        <translation>Jina la mtumiaji</translation>
+        <translation type="vanished">Jina la mtumiaji</translation>
     </message>
     <message>
-        <location line="-345"/>
-        <location line="+346"/>
         <source>New password</source>
-        <translation>Nenosiri jipya</translation>
+        <translation type="vanished">Nenosiri jipya</translation>
     </message>
     <message>
-        <location line="-341"/>
-        <location line="+342"/>
         <source>Confirm password</source>
-        <translation>Thibitisha nenosiri</translation>
+        <translation type="vanished">Thibitisha nenosiri</translation>
     </message>
     <message>
-        <location line="-328"/>
-        <location line="+330"/>
         <source>Use at least %1 characters. Credentials belong only to this profile.</source>
-        <translation>Tumia angalau vibambo %1. Vitambulisho ni vya wasifu huu pekee.</translation>
+        <translation type="vanished">Tumia angalau vibambo %1. Vitambulisho ni vya wasifu huu pekee.</translation>
     </message>
     <message>
-        <location line="-323"/>
-        <location line="+327"/>
         <source>Save credentials</source>
-        <translation>Hifadhi vitambulisho</translation>
+        <translation type="vanished">Hifadhi vitambulisho</translation>
     </message>
     <message>
-        <location line="-298"/>
-        <location line="+300"/>
         <source>Copy address</source>
-        <translation>Nakili anwani</translation>
+        <translation type="vanished">Nakili anwani</translation>
     </message>
     <message>
-        <location line="-285"/>
-        <location line="+286"/>
         <source>Set up a device</source>
-        <translation>Sanidi kifaa</translation>
+        <translation type="vanished">Sanidi kifaa</translation>
     </message>
     <message>
-        <location line="-265"/>
         <source>Select a private network…</source>
-        <translation>Chagua mtandao wa kibinafsi…</translation>
+        <translation type="vanished">Chagua mtandao wa kibinafsi…</translation>
     </message>
     <message>
-        <location line="+30"/>
         <source>Choose a network and save credentials before enabling remote control.</source>
-        <translation>Chagua mtandao na uhifadhi vitambulisho kabla ya kuwezesha udhibiti wa mbali.</translation>
+        <translation type="vanished">Chagua mtandao na uhifadhi vitambulisho kabla ya kuwezesha udhibiti wa mbali.</translation>
     </message>
     <message>
-        <location line="+17"/>
         <source>The passwords do not match.</source>
-        <translation>Nenosiri halilingani.</translation>
+        <translation type="vanished">Nenosiri halilingani.</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Enter a new password to save.</source>
-        <translation>Ingiza nenosiri jipya ili kuhifadhi.</translation>
+        <translation type="vanished">Ingiza nenosiri jipya ili kuhifadhi.</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Check the username and use a password with at least %1 characters.</source>
-        <translation>Angalia jina la mtumiaji na utumie nenosiri lenye angalau vibambo %1.</translation>
+        <translation type="vanished">Angalia jina la mtumiaji na utumie nenosiri lenye angalau vibambo %1.</translation>
     </message>
     <message>
-        <location line="+31"/>
         <source>Configured as %1</source>
-        <translation>Imesanidiwa kama %1</translation>
+        <translation type="vanished">Imesanidiwa kama %1</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Not configured</source>
-        <translation>Haijasanidiwa</translation>
+        <translation type="vanished">Haijasanidiwa</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>Cancel</source>
-        <translation>Ghairi</translation>
+        <translation type="vanished">Ghairi</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Change</source>
-        <translation>Badilisha</translation>
+        <translation type="vanished">Badilisha</translation>
     </message>
     <message>
-        <location line="+20"/>
         <source>No network selected</source>
-        <translation>Hakuna mtandao ulioteuliwa</translation>
+        <translation type="vanished">Hakuna mtandao ulioteuliwa</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>Starting secure remote control…</source>
-        <translation>Inaanza udhibiti wa mbali salama…</translation>
+        <translation type="vanished">Inaanza udhibiti wa mbali salama…</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Ready to enable.</source>
-        <translation>Tayari kuwezeshwa.</translation>
+        <translation type="vanished">Tayari kuwezeshwa.</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Configuration required.</source>
-        <translation>Usanidi unahitajika.</translation>
+        <translation type="vanished">Usanidi unahitajika.</translation>
     </message>
 </context>
 <context>
     <name>RemoteControlSetupDialog</name>
     <message>
-        <location filename="../../widgets/remote_control_setup_dialog.py" line="+81"/>
         <source>Set up a device</source>
-        <translation>Sanidi kifaa</translation>
+        <translation type="vanished">Sanidi kifaa</translation>
     </message>
     <message>
-        <location line="+29"/>
+        <location filename="../../qml/SettingsRemoteSetup.qml" line="+43"/>
         <source>Set up Solin Remote</source>
         <translation>Sanidi Solin Remote</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+47"/>
         <source>Scan once to open the secure setup on your phone or tablet.</source>
         <translation>Changanua mara moja ili kufungua usanidi salama kwenye simu au kompyuta yako kibao.</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+29"/>
         <source>Generating QR code…</source>
         <translation>Inatengeneza msimbo wa QR…</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="-5"/>
+        <location line="+21"/>
         <source>1  Scan the QR code</source>
         <translation>1  Changanua msimbo wa QR</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+8"/>
         <source>Keep Solin open and connect both devices to the same local network. The guide explains the certificate and app installation.</source>
         <translation>Weka Solin ikiwa wazi na uunganishe vifaa vyote viwili kwenye mtandao uleule wa ndani. Mwongozo unaeleza kuhusu usakinishaji wa cheti na programu.</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+9"/>
+        <location line="+6"/>
         <source>Copy setup address</source>
         <translation>Nakili anwani ya usanidi</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+7"/>
         <source>On the first opening, the browser may show a privacy warning. Confirm that the local address matches, choose Advanced or Show Details, and continue only to this address. The warning disappears after the certificate is trusted.</source>
         <translation>Unapofungua kwa mara ya kwanza, kivinjari kinaweza kuonyesha onyo la faragha. Hakikisha kwamba anwani ya ndani inalingana, chagua Advanced au Show Details, na uendelee kwenye anwani hiyo pekee. Onyo hilo hupotea baada ya cheti kuaminiwa.</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+15"/>
+        <location line="+12"/>
         <source>VERIFICATION CODE</source>
         <translation>MSIMBO WA UTHIBITISHO</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+4"/>
         <source>Compare this code on the device before installing the certificate.</source>
         <translation>Linganisha msimbo huu kwenye kifaa kabla ya kusakinisha cheti.</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+10"/>
+        <location line="+15"/>
         <source>Show full SHA-256 fingerprint</source>
         <translation>Onyesha alama kamili ya SHA-256</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+27"/>
         <source>Save certificate…</source>
         <translation>Hifadhi cheti…</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+10"/>
         <source>Done</source>
         <translation>Imekamilika</translation>
     </message>
     <message>
-        <location line="+93"/>
+        <location filename="../../ui/qml/settings/remote.py" line="+182"/>
+        <location line="+179"/>
         <source>Could not generate the QR code. Copy the address instead.</source>
         <translation>Imeshindwa kutengeneza msimbo wa QR. Nakili anwani badala yake.</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+40"/>
         <source>Save Solin certificate</source>
         <translation>Hifadhi cheti cha Solin</translation>
     </message>
@@ -5588,12 +5474,11 @@ Hutaweza kurudisha hatua hii.</translation>
         <translation>Faili za cheti (*.cer)</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>Could not save certificate</source>
-        <translation>Imeshindwa kuhifadhi cheti</translation>
+        <translation type="vanished">Imeshindwa kuhifadhi cheti</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+8"/>
         <source>Choose another location and try again.</source>
         <translation>Chagua eneo lingine na ujaribu tena.</translation>
     </message>
@@ -7325,24 +7210,20 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
 <context>
     <name>ScreensSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/screens_section.py" line="+54"/>
         <source>Primary Screen (control)</source>
-        <translation>Skrini Kuu (kudhibiti)</translation>
+        <translation type="vanished">Skrini Kuu (kudhibiti)</translation>
     </message>
     <message>
-        <location line="+20"/>
         <source>No secondary screen detected. Connect an external monitor.</source>
-        <translation>Hakuna skrini ya pili iliyotambuliwa. Unganisha skrini ya nje.</translation>
+        <translation type="vanished">Hakuna skrini ya pili iliyotambuliwa. Unganisha skrini ya nje.</translation>
     </message>
     <message>
-        <location line="+27"/>
         <source>Secondary {n} (projection)</source>
-        <translation>Ya pili {n} (ya projekta)</translation>
+        <translation type="vanished">Ya pili {n} (ya projekta)</translation>
     </message>
     <message>
-        <location line="+18"/>
         <source>PROJECTION</source>
-        <translation>PROJEKTA</translation>
+        <translation type="vanished">PROJEKTA</translation>
     </message>
 </context>
 <context>
@@ -7371,67 +7252,57 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
 <context>
     <name>SettingsWidget</name>
     <message>
-        <location filename="../../widgets/settings_widget.py" line="+277"/>
-        <location line="+265"/>
+        <location filename="../../qml/SettingsView.qml" line="+115"/>
         <source>Settings</source>
         <translation>Mipangilio</translation>
     </message>
     <message>
-        <location line="-215"/>
-        <location line="+217"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+55"/>
         <source>Language</source>
         <translation>Lugha</translation>
     </message>
     <message>
-        <location line="-209"/>
-        <location line="+210"/>
         <source>Media</source>
-        <translation>Media</translation>
+        <translation type="vanished">Media</translation>
     </message>
     <message>
-        <location line="-202"/>
-        <location line="+203"/>
+        <location line="+20"/>
         <source>Meetings</source>
         <translation>Mikutano</translation>
     </message>
     <message>
-        <location line="-195"/>
-        <location line="+196"/>
+        <location line="-4"/>
         <source>Folders</source>
         <translation>Folda</translation>
     </message>
     <message>
-        <location line="-188"/>
-        <location line="+189"/>
+        <location line="+87"/>
         <source>Remote access</source>
         <translation>Ufikiaji wa mbali</translation>
     </message>
     <message>
-        <location line="-180"/>
-        <location line="+181"/>
+        <location line="-35"/>
         <source>Integrations</source>
         <translation>Miunganisho</translation>
     </message>
     <message>
-        <location line="-152"/>
-        <location line="+153"/>
+        <location line="-10"/>
         <source>Annual Text</source>
         <translation>Andiko la Mwaka</translation>
     </message>
     <message>
-        <location line="-143"/>
-        <location line="+144"/>
+        <location line="-3"/>
+        <location line="+1"/>
         <source>Screens</source>
         <translation>Skrini</translation>
     </message>
     <message>
-        <location line="-136"/>
-        <location line="+137"/>
+        <location line="+64"/>
         <source>About</source>
         <translation>Kuhusu</translation>
     </message>
     <message>
-        <location line="-38"/>
+        <location filename="../../ui/qml/settings/general.py" line="+158"/>
         <source>Dark</source>
         <translation>Giza</translation>
     </message>
@@ -7441,7 +7312,7 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
         <translation>Mwanga</translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-119"/>
         <source>Interface</source>
         <translation>Kiolesura</translation>
     </message>
@@ -7451,82 +7322,83 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
         <translation>Media ya JW</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+12"/>
         <source>Auto-download on play</source>
         <translation>Pakua kiotomatiki wakati wa kucheza</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+0"/>
         <source>Downloads the playing media for offline use.</source>
         <translation>Inapakua media inayochezwa ili itumike nje ya mtandao.</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+35"/>
         <source>Auto-download weekly study</source>
         <translation>Pakua kiotomatiki funzo la kila juma</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Downloads this week’s and next week’s meeting media.</source>
         <translation>Inapakua media za mikutano za juma hili na juma linalofuata.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-38"/>
         <source>Song Announcement Mode</source>
         <translation>Hali ya Kutangaza Wimbo</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Song starts muted for title display. Press play to start.</source>
         <translation>Wimbo unaanza ukiwa umenyamazishwa ili kuonyesha kichwa. Bonyeza cheza ili kuanza.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+39"/>
         <source>Automatic background song</source>
         <translation>Wimbo wa mandharinyuma wa kiotomatiki</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-41"/>
         <source>Start videos paused</source>
         <translation>Anzisha video zikiwa zimesitishwa</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Videos open paused so you can start them manually.</source>
         <translation>Video hufunguka zikiwa zimesitishwa ili uweze kuzianzisha wewe mwenyewe.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Playback protection</source>
         <translation>Ulinzi wa uchezaji</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+0"/>
         <source>Prevents media changes and seeking while audio or video is playing. Pause first to make changes.</source>
         <translation>Huzuia kubadilisha media na kusogeza nafasi ya uchezaji wakati sauti au video inacheza. Sitisha kwanza ili kufanya mabadiliko.</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+7"/>
         <source>Link Folder</source>
         <translation>Unganisha Folda</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Sync folder (Dropbox, OneDrive, etc.) shown as playlists.</source>
         <translation>Folda ya usawazishaji (Dropbox, OneDrive, n.k.) inayoonyeshwa kama orodha za kucheza.</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location filename="../../qml/SettingsRow.qml" line="+264"/>
         <source>Choose…</source>
         <translation>Chagua…</translation>
     </message>
     <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+53"/>
         <location line="+1"/>
         <source>OBS Studio</source>
         <translation>OBS Studio</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+0"/>
         <source>Automatically switches scenes during projection</source>
         <translation>Inabadilisha maonyesho kiotomatiki wakati wa kuonyesha kwenye skrini</translation>
     </message>
@@ -7541,27 +7413,26 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
         <translation>Nenosiri (hiari)</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Leave blank if no password is set</source>
-        <translation>Acha wazi ikiwa hakuna nenosiri lililowekwa</translation>
+        <translation type="vanished">Acha wazi ikiwa hakuna nenosiri lililowekwa</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+4"/>
+        <location line="+1"/>
         <source>Program stream (NDI)</source>
         <translation>Utiririshaji wa programu (NDI)</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Receive the DistroAV/NDI output from OBS as a live projection.</source>
         <translation>Pokea matokeo ya DistroAV/NDI kutoka OBS kama onyesho la moja kwa moja.</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Enable Main Output in DistroAV, then select the NDI source shown by OBS.</source>
-        <translation>Washa Matokeo Makuu (Main Output) katika DistroAV, kisha uchague chanzo cha NDI kinachoonyeshwa na OBS.</translation>
+        <translation type="vanished">Washa Matokeo Makuu (Main Output) katika DistroAV, kisha uchague chanzo cha NDI kinachoonyeshwa na OBS.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Available NDI sources</source>
         <translation>Vyanzo vya NDI vinavyopatikana</translation>
     </message>
@@ -7571,20 +7442,17 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
         <translation>Tafuta vyanzo</translation>
     </message>
     <message>
-        <location line="-16"/>
+        <location line="-6"/>
         <source>Default scene (idle)</source>
         <translation>Mandhari ya kawaida (bila kazi)</translation>
     </message>
     <message>
-        <location line="-346"/>
-        <location line="+289"/>
         <source>Loading…</source>
-        <translation>Inapakia…</translation>
+        <translation type="vanished">Inapakia…</translation>
     </message>
     <message>
-        <location line="+58"/>
         <source>Scene shown when nothing is being projected.</source>
-        <translation>Mandhari yanayoonyeshwa wakati hakuna kinachokadiriwa.</translation>
+        <translation type="vanished">Mandhari yanayoonyeshwa wakati hakuna kinachokadiriwa.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -7592,54 +7460,51 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
         <translation>Mandhari ya dirisha la midia</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Scene that captures the projection monitor. Activated when content is displayed.</source>
-        <translation>Mandhari yanayokamata kifuatiliaji cha makadirio. Huwashwa wakati maudhui yanapoonyeshwa.</translation>
+        <translation type="vanished">Mandhari yanayokamata kifuatiliaji cha makadirio. Huwashwa wakati maudhui yanapoonyeshwa.</translation>
     </message>
     <message>
-        <location line="+35"/>
+        <location line="+9"/>
         <source>Audio controls and attendance count during meetings.</source>
         <translation>Vidhibiti vya sauti na idadi ya waliohudhuria wakati wa mikutano.</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+8"/>
+        <location line="+1"/>
         <source>Auto Screen Share</source>
         <translation>Kushiriki Skrini Kiotomatiki</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Automatically shares screen via hotkeys when projecting media.</source>
         <translation>Hushiriki skrini kiotomatiki kupitia mikato ya kibodi wakati wa kuonyesha midia.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Share hotkey</source>
         <translation>Mkato wa kushiriki</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Uses Zoom&apos;s single start/stop screen-share shortcut.</source>
-        <translation>Hutumia mkato mmoja wa Zoom wa kuanza/kusimamisha kushiriki skrini.</translation>
+        <translation type="vanished">Hutumia mkato mmoja wa Zoom wa kuanza/kusimamisha kushiriki skrini.</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+1"/>
         <source>Share target</source>
         <translation>Lengo la kushiriki</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>The Solin Media Preview tile inside Zoom&apos;s share dialog.</source>
-        <translation>Kigae cha “Solin Media Preview” ndani ya kidirisha cha kushiriki cha Zoom.</translation>
+        <translation type="vanished">Kigae cha “Solin Media Preview” ndani ya kidirisha cha kushiriki cha Zoom.</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+1"/>
         <source>Accessibility permission</source>
         <translation>Ruhusa ya Ufikivu</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Open Settings</source>
-        <translation>Fungua Mipangilio</translation>
+        <translation type="vanished">Fungua Mipangilio</translation>
     </message>
     <message>
         <source>Click Position</source>
@@ -7650,84 +7515,83 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
         <translation type="vanished">Mahali pa kubofya baada ya kidirisha cha kushiriki kufunguka ili kuchagua lengwa.</translation>
     </message>
     <message>
-        <location line="-3"/>
         <source>Configure</source>
-        <translation>Sanidi</translation>
+        <translation type="vanished">Sanidi</translation>
     </message>
     <message>
-        <location line="-36"/>
+        <location line="-10"/>
+        <location line="+1"/>
         <source>Camera</source>
         <translation>Kamera</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Shows a camera button in the live tools toolbar.</source>
         <translation>Inaonyesha kitufe cha kamera kwenye upau wa zana za moja kwa moja.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+11"/>
+        <location line="+1"/>
         <source>Automatic Shortcuts</source>
         <translation>Njia za Mkato za Kiotomatiki</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Sends keyboard shortcuts when visual media changes state.</source>
         <translation>Hutuma njia za mkato za kibodi wakati hali ya midia ya kuona inapobadilika.</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Create one or more shortcuts for start, end, pause and resume events.</source>
-        <translation>Unda njia moja au zaidi za mkato kwa ajili ya matukio ya kuanza, kumaliza, kusitisha, na kuendeleza.</translation>
+        <translation type="vanished">Unda njia moja au zaidi za mkato kwa ajili ya matukio ya kuanza, kumaliza, kusitisha, na kuendeleza.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location filename="../../qml/SettingsRow.qml" line="+68"/>
         <source>No shortcuts configured.</source>
         <translation>Hakuna njia za mkato zilizosanidiwa.</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+1"/>
         <source>Add shortcut</source>
         <translation>Ongeza njia ya mkato</translation>
     </message>
     <message>
-        <location line="+19"/>
+        <location filename="../../qml/SettingsRow.qml" line="-7"/>
         <source>Edit</source>
         <translation>Hariri</translation>
     </message>
     <message>
-        <location line="-13"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-17"/>
+        <location line="+1"/>
         <source>Zoom Meetings</source>
         <translation>Mikutano ya Zoom</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="-25"/>
         <source>Text shown on the projection screen when idle.</source>
         <translation>Maandishi yatakayoonyeshwa kwenye skrini ya projekta wakati haitumiki.</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+0"/>
         <source>Update</source>
         <translation>Sasisha</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Scripture:</source>
         <translation>Andiko:</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>E.g.: Happy are those conscious of their spiritual need.</source>
-        <translation>Mfn.: Wenye furaha ni wale wanaotambua uhitaji wao wa kiroho.</translation>
+        <translation type="vanished">Mfn.: Wenye furaha ni wale wanaotambua uhitaji wao wa kiroho.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Bible reference:</source>
         <translation>Rejeo la Biblia:</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>E.g.: Matthew 5:3.</source>
-        <translation>Mfn.: Mathayo 5:3.</translation>
+        <translation type="vanished">Mfn.: Mathayo 5:3.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -7735,24 +7599,535 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
         <translation>Hifadhi mabadiliko</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location filename="../../qml/SettingsPage.qml" line="+184"/>
         <source>Audio &amp; Video app for Kingdom Hall meetings.</source>
         <translation>Programu ya Sauti na Video kwa ajili ya mikutano ya Jumba la Ufalme.</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+9"/>
         <source>Official Website</source>
         <translation>Tovuti Rasmi</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+4"/>
         <source>Changelog</source>
         <translation>Changelog</translation>
     </message>
     <message>
-        <location line="-6"/>
+        <location line="+6"/>
         <source>This app is independent and is not affiliated with or endorsed by the Watch Tower Bible and Tract Society of Pennsylvania or any of its associated organizations.</source>
         <translation>Programu hii inajitegemea na haishirikiani na wala kuidhinishwa na Watch Tower Bible and Tract Society of Pennsylvania au mashirika yake yoyote yanayohusiana.</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsSectionHeader.qml" line="+28"/>
+        <location line="+35"/>
+        <source>Back to sections</source>
+        <translation>Rudi kwenye sehemu</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsView.qml" line="+15"/>
+        <source>Search settings</source>
+        <translation>Mipangilio ya utafutaji</translation>
+    </message>
+    <message>
+        <location line="+173"/>
+        <source>Search results</source>
+        <translation>Matokeo ya utafutaji</translation>
+    </message>
+    <message>
+        <location line="+77"/>
+        <source>No settings found. Try another word.</source>
+        <translation>Hakuna mipangilio iliyopatikana. Jaribu neno lingine.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+2"/>
+        <source>Scenes</source>
+        <translation>Mandhari</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Native scenes engine</source>
+        <translation>Injini ya matukio ya asili</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Restart Solin to apply this change.</source>
+        <translation>Anzisha tena Solin ili kutumia mabadiliko haya.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>OBS, Zoom and camera</source>
+        <translation>OBS, Zoom na kamera</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>Automations</source>
+        <translation>Mitambo otomatiki</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Sharing and shortcuts</source>
+        <translation>Kushiriki na njia za mkato</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Control over your local network</source>
+        <translation>Dhibiti mtandao wako wa karibu</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+1"/>
+        <source>Remote control</source>
+        <translation>Udhibiti wa mbali</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Control Solin securely from another device on this local network.</source>
+        <translation>Dhibiti Solin kwa usalama kutoka kwa kifaa kingine kwenye mtandao huu wa ndani.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Network interface</source>
+        <translation>Kiolesura cha mtandao</translation>
+    </message>
+    <message>
+        <source>Refresh</source>
+        <translation type="vanished">Onyesha upya</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Copy address</source>
+        <translation>Nakili anwani</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Access credentials</source>
+        <translation>Vitambulisho vya kufikia</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Username</source>
+        <translation>Jina la mtumiaji</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>New password</source>
+        <translation>Nenosiri jipya</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Confirm password</source>
+        <translation>Thibitisha nenosiri</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Save credentials</source>
+        <translation>Hifadhi vitambulisho</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Devices</source>
+        <translation>Vifaa</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Set up a device</source>
+        <translation>Sanidi kifaa</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Version and information</source>
+        <translation>Toleo na habari</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/general.py" line="-125"/>
+        <source>Searching jw.org…</source>
+        <translation>Inatafuta jw.org…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Reading the meeting times…</source>
+        <translation>Inasoma saa za mikutano…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>No congregation found with that name.</source>
+        <translation>Hakuna kutaniko lenye jina hilo.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>jw.org does not publish meeting times for this congregation.</source>
+        <translation>jw.org haichapishi saa za mikutano za kutaniko hili.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Too many searches in a row. Wait a moment and type again.</source>
+        <translation>Utafutaji mwingi mfululizo. Subiri kidogo na uandike tena.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Could not reach jw.org. Check the connection and try again.</source>
+        <translation>Haikuwezekana kufikia jw.org. Angalia muunganisho na ujaribu tena.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-94"/>
+        <location filename="../../ui/qml/settings/general.py" line="+5"/>
+        <source>Search your congregation to fill the days and times below.</source>
+        <translation>Tafuta kutaniko lako ili kujaza siku na saa zilizo hapa chini.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/general.py" line="+94"/>
+        <source>(same as interface)</source>
+        <translation>(sawa na kiolesura)</translation>
+    </message>
+    <message>
+        <location line="+54"/>
+        <source>Primary Screen (control)</source>
+        <translation>Skrini Kuu (kudhibiti)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Secondary {n} (projection)</source>
+        <translation>Ya pili {n} (ya projekta)</translation>
+    </message>
+    <message>
+        <location line="+210"/>
+        <source>Configure the meeting day/time before automatic playback can start.</source>
+        <translation>Weka siku na wakati wa mkutano kabla ya uchezaji wa kiotomatiki kuanza.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Plays audio songs before configured meetings and fades out before start.</source>
+        <translation>Hucheza nyimbo za sauti kabla ya mikutano iliyowekwa na kufifisha sauti kabla ya kuanza.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Select folder to link</source>
+        <translation>Chagua folda ya kuunganisha</translation>
+    </message>
+    <message>
+        <location line="+117"/>
+        <source>Fetching annual text…</source>
+        <translation>Inachukua andiko la mwaka…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Could not fetch annual text</source>
+        <translation>Haikuweza kuchukua andiko la mwaka</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Annual text updated for {year}</source>
+        <translation>Andiko la mwaka limesasishwa kwa {year}</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-6"/>
+        <source>Schedule and preparation</source>
+        <translation>Ratiba na maandalizi</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Meeting schedule</source>
+        <translation>Ratiba ya mkutano</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Midweek meeting</source>
+        <translation>Mkutano wa katikati ya juma</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <location line="+7"/>
+        <source>Time</source>
+        <translation>Muda</translation>
+    </message>
+    <message>
+        <location line="-3"/>
+        <source>Weekend meeting</source>
+        <translation>Mkutano wa mwisho wa juma</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Preparation</source>
+        <translation>Maandalizi</translation>
+    </message>
+    <message>
+        <location line="-53"/>
+        <source>Appearance and languages</source>
+        <translation>Muonekano na lugha</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Theme and languages</source>
+        <translation>Mandhari na lugha</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Appearance</source>
+        <translation>Muonekano</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Theme</source>
+        <translation>Mandhari</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Update languages</source>
+        <translation>Sasisha lugha</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Media and files</source>
+        <translation>Vyombo vya habari na faili</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Playback, downloads and folders</source>
+        <translation>Uchezaji, vipakuliwa na folda</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Playback</source>
+        <translation>Uchezaji</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Downloads</source>
+        <translation>Vipakuliwa</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsRow.qml" line="-134"/>
+        <source>Select…</source>
+        <translation>Chagua...</translation>
+    </message>
+    <message>
+        <location line="+61"/>
+        <source>No folder selected</source>
+        <translation>Hakuna folda iliyochaguliwa</translation>
+    </message>
+    <message>
+        <location line="+48"/>
+        <source>No secondary screen detected. Connect an external monitor.</source>
+        <translation>Hakuna skrini ya pili iliyotambuliwa. Unganisha skrini ya nje.</translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <source>Delete</source>
+        <translation>Futa</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+40"/>
+        <source>Projection</source>
+        <translation>Makadirio</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Screens and annual text</source>
+        <translation>Skrini na maandishi ya kila mwaka</translation>
+    </message>
+    <message>
+        <location filename="../../qml/AppTextField.qml" line="+67"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-37"/>
+        <source>Clear</source>
+        <translation>Futa</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsClockPicker.qml" line="+45"/>
+        <source>Choose hour</source>
+        <translation>Chagua saa</translation>
+    </message>
+    <message>
+        <location line="+30"/>
+        <source>Choose minute</source>
+        <translation>Chagua dakika</translation>
+    </message>
+    <message>
+        <location line="+101"/>
+        <source>Hour %1</source>
+        <translation>Saa %1</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Minute %1</source>
+        <translation>Dakika %1</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsCongregationDialog.qml" line="+31"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+8"/>
+        <source>Fill in from jw.org</source>
+        <translation>Jaza kutoka jw.org</translation>
+    </message>
+    <message>
+        <location line="+23"/>
+        <source>Search by congregation name</source>
+        <translation>Tafuta kwa jina la kutaniko</translation>
+    </message>
+    <message>
+        <location line="+86"/>
+        <location filename="../../qml/SettingsRemoteSetup.qml" line="-201"/>
+        <source>Close</source>
+        <translation>Funga</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsRow.qml" line="-88"/>
+        <location filename="../../qml/SettingsSelectionDialog.qml" line="+30"/>
+        <source>Search…</source>
+        <translation>Tafuta…</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsSelectionDialog.qml" line="+8"/>
+        <source>HH:mm</source>
+        <translation>HH: mm</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>No results found.</source>
+        <translation>Hakuna matokeo yaliyopatikana.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <location filename="../../qml/SettingsTimeDialog.qml" line="+58"/>
+        <source>Apply</source>
+        <translation>Tumia</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <location filename="../../qml/SettingsTimeDialog.qml" line="-2"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+37"/>
+        <location line="+52"/>
+        <source>Cancel</source>
+        <translation>Ghairi</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsShortcutDialog.qml" line="-144"/>
+        <source>Share Hotkey</source>
+        <translation>Mkato wa Kushiriki</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Press the Zoom shortcut that starts and stops screen sharing.</source>
+        <translation>Bonyeza mkato wa Zoom unaoanza na kusimamisha kushiriki skrini.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="-309"/>
+        <location line="+63"/>
+        <source>Select a private network…</source>
+        <translation>Chagua mtandao wa kibinafsi…</translation>
+    </message>
+    <message>
+        <location line="-50"/>
+        <source>Choose a network and save credentials before enabling remote control.</source>
+        <translation>Chagua mtandao na uhifadhi vitambulisho kabla ya kuwezesha udhibiti wa mbali.</translation>
+    </message>
+    <message>
+        <location line="+83"/>
+        <source>Starting secure remote control…</source>
+        <translation>Inaanza udhibiti wa mbali salama…</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Ready to enable.</source>
+        <translation>Tayari kuwezeshwa.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Configuration required.</source>
+        <translation>Usanidi unahitajika.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Configured as %1</source>
+        <translation>Imesanidiwa kama %1</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/integrations.py" line="-106"/>
+        <source>Enter a valid port (1–65535).</source>
+        <translation>Weka mlango halali (1–65535).</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>✓ Configuration saved — reconnecting…</source>
+        <translation>✓ Usanidi umehifadhiwa — inaunganisha tena…</translation>
+    </message>
+    <message>
+        <location line="+31"/>
+        <source>— Select scene —</source>
+        <translation>— Chagua mandhari —</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>NDI receiver is not available.</source>
+        <translation>Kipokezi cha NDI hakipatikani.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <location line="+34"/>
+        <source>Looking for NDI sources on this network.</source>
+        <translation>Inatafuta vyanzo vya NDI kwenye mtandao huu.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>No NDI sources found. Check that DistroAV Main Output is enabled in OBS.</source>
+        <translation>Hakuna vyanzo vya NDI vilivyopatikana. Hakikisha kuwa Matokeo Makuu ya DistroAV yamewashwa katika OBS.</translation>
+    </message>
+    <message>
+        <location line="+48"/>
+        <source>Press a shortcut before saving.</source>
+        <translation>Bonyeza njia ya mkato kabla ya kuhifadhi.</translation>
+    </message>
+    <message>
+        <location line="+78"/>
+        <source>Configured</source>
+        <translation>Imesanidiwa</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <location filename="../../ui/qml/settings/remote.py" line="+4"/>
+        <source>Not configured</source>
+        <translation>Haijasanidiwa</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Solin can send the automatic click.</source>
+        <translation>Solin inaweza kutuma mbofyo wa kiotomatiki.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Allow Solin in macOS Accessibility so automatic clicks can work.</source>
+        <translation>Ruhusu Solin katika Ufikivu wa macOS ili mibofyo ya kiotomatiki iweze kufanya kazi.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="+2"/>
+        <source>Use at least %1 characters. Credentials belong only to this profile.</source>
+        <translation>Tumia angalau vibambo %1. Vitambulisho ni vya wasifu huu pekee.</translation>
+    </message>
+    <message>
+        <location line="+33"/>
+        <source>The passwords do not match.</source>
+        <translation>Nenosiri halilingani.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Enter a new password to save.</source>
+        <translation>Ingiza nenosiri jipya ili kuhifadhi.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Check the username and use a password with at least %1 characters.</source>
+        <translation>Angalia jina la mtumiaji na utumie nenosiri lenye angalau vibambo %1.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/general.py" line="+18"/>
+        <location filename="../../ui/qml/settings/remote.py" line="+10"/>
+        <location line="+142"/>
+        <source>Saved</source>
+        <translation>Imehifadhiwa</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="-23"/>
+        <source>Copied</source>
+        <translation>Imenakiliwa</translation>
     </message>
 </context>
 <context>
@@ -8903,34 +9278,28 @@ Bofya &apos;Pakua&apos; ili kufungua ukurasa wa kupakua.</translation>
 <context>
     <name>WatchedFolderSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/watched_folder_section.py" line="+48"/>
         <source>Link Folder</source>
-        <translation>Unganisha Folda</translation>
+        <translation type="vanished">Unganisha Folda</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Sync folder (Dropbox, OneDrive, etc.) shown as playlists.</source>
-        <translation>Folda ya usawazishaji (Dropbox, OneDrive, n.k.) inayoonyeshwa kama orodha za kucheza.</translation>
+        <translation type="vanished">Folda ya usawazishaji (Dropbox, OneDrive, n.k.) inayoonyeshwa kama orodha za kucheza.</translation>
     </message>
     <message>
-        <location line="+19"/>
         <source>Choose…</source>
-        <translation>Chagua…</translation>
+        <translation type="vanished">Chagua…</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>Clear</source>
-        <translation>Futa</translation>
+        <translation type="vanished">Futa</translation>
     </message>
     <message>
-        <location line="+48"/>
         <source>No folder selected</source>
-        <translation>Hakuna folda iliyochaguliwa</translation>
+        <translation type="vanished">Hakuna folda iliyochaguliwa</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Select folder to link</source>
-        <translation>Chagua folda ya kuunganisha</translation>
+        <translation type="vanished">Chagua folda ya kuunganisha</translation>
     </message>
 </context>
 <context>
@@ -9179,76 +9548,60 @@ Vifaa vyote viwili lazima viwe kwenye mtandao uleule wa Wi-Fi.</translation>
 <context>
     <name>YearlyTextSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/yearly_text_section.py" line="+62"/>
         <source>Text shown on the projection screen when idle.</source>
-        <translation>Maandishi yatakayoonyeshwa kwenye skrini ya projekta wakati haitumiki.</translation>
+        <translation type="vanished">Maandishi yatakayoonyeshwa kwenye skrini ya projekta wakati haitumiki.</translation>
     </message>
     <message>
-        <location line="+18"/>
-        <location line="+309"/>
         <source>Fetching annual text…</source>
-        <translation>Inachukua andiko la mwaka…</translation>
+        <translation type="vanished">Inachukua andiko la mwaka…</translation>
     </message>
     <message>
-        <location line="-295"/>
-        <location line="+276"/>
         <source>Update</source>
-        <translation>Sasisha</translation>
+        <translation type="vanished">Sasisha</translation>
     </message>
     <message>
-        <location line="-241"/>
         <source>Scripture:</source>
-        <translation>Andiko:</translation>
+        <translation type="vanished">Andiko:</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>E.g.: Happy are those conscious of their spiritual need.</source>
-        <translation>Mfn.: Wenye furaha ni wale wanaotambua uhitaji wao wa kiroho.</translation>
+        <translation type="vanished">Mfn.: Wenye furaha ni wale wanaotambua uhitaji wao wa kiroho.</translation>
     </message>
     <message>
-        <location line="+11"/>
         <source>Bible reference:</source>
-        <translation>Rejeo la Biblia:</translation>
+        <translation type="vanished">Rejeo la Biblia:</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>E.g.: Matthew 5:3.</source>
-        <translation>Mfn.: Mathayo 5:3.</translation>
+        <translation type="vanished">Mfn.: Mathayo 5:3.</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>Save changes</source>
-        <translation>Hifadhi mabadiliko</translation>
+        <translation type="vanished">Hifadhi mabadiliko</translation>
     </message>
     <message>
-        <location line="+196"/>
         <source>Annual text updated for {year}</source>
-        <translation>Andiko la mwaka limesasishwa kwa {year}</translation>
+        <translation type="vanished">Andiko la mwaka limesasishwa kwa {year}</translation>
     </message>
     <message>
-        <location line="+33"/>
         <source>Loading…</source>
-        <translation>Inapakia…</translation>
+        <translation type="vanished">Inapakia…</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Could not fetch annual text</source>
-        <translation>Haikuweza kuchukua andiko la mwaka</translation>
+        <translation type="vanished">Haikuweza kuchukua andiko la mwaka</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Retry</source>
-        <translation>Jaribu tena</translation>
+        <translation type="vanished">Jaribu tena</translation>
     </message>
     <message>
-        <location line="+23"/>
         <source>▲  Edit text manually</source>
-        <translation>▲  Badili maandishi wewe mwenyewe</translation>
+        <translation type="vanished">▲  Badili maandishi wewe mwenyewe</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>▼  Edit text manually</source>
-        <translation>▼  Badili maandishi wewe mwenyewe</translation>
+        <translation type="vanished">▼  Badili maandishi wewe mwenyewe</translation>
     </message>
 </context>
 <context>
@@ -9476,14 +9829,12 @@ Namba iliyo mwishoni ina kipaumbele.</translation>
 <context>
     <name>ZoomSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/zoom_section.py" line="+32"/>
         <source>Zoom Meetings</source>
-        <translation>Mikutano ya Zoom</translation>
+        <translation type="vanished">Mikutano ya Zoom</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Audio controls and attendance count during meetings.</source>
-        <translation>Vidhibiti vya sauti na idadi ya waliohudhuria wakati wa mikutano.</translation>
+        <translation type="vanished">Vidhibiti vya sauti na idadi ya waliohudhuria wakati wa mikutano.</translation>
     </message>
 </context>
 <context>
@@ -11014,8 +11365,7 @@ Tumia kitufe cha kucheza ili kuonyesha · Buruta kishikio ⠿ ili kupanga upya</
 <context>
     <name>_ShortcutSequenceEdit</name>
     <message>
-        <location filename="../../widgets/settings/auto_key_dialog.py" line="-257"/>
-        <location line="+52"/>
+        <location filename="../../qml/SettingsShortcutDialog.qml" line="+98"/>
         <source>Click to record</source>
         <translation>Bofya ili kurekodi</translation>
     </message>
@@ -11023,37 +11373,31 @@ Tumia kitufe cha kucheza ili kuonyesha · Buruta kishikio ⠿ ili kupanga upya</
 <context>
     <name>_TimePickerPopup</name>
     <message>
-        <location filename="../../widgets/settings/meeting_schedule_section.py" line="-477"/>
         <source>Hour</source>
-        <translation>Saa</translation>
+        <translation type="vanished">Saa</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Minute</source>
-        <translation>Dakika</translation>
+        <translation type="vanished">Dakika</translation>
     </message>
     <message>
-        <location line="+15"/>
         <source>Cancel</source>
-        <translation>Ghairi</translation>
+        <translation type="vanished">Ghairi</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Apply</source>
-        <translation>Tumia</translation>
+        <translation type="vanished">Tumia</translation>
     </message>
 </context>
 <context>
     <name>_TimeStepper</name>
     <message>
-        <location line="-108"/>
         <source>Increase</source>
-        <translation>Ongeza</translation>
+        <translation type="vanished">Ongeza</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Decrease</source>
-        <translation>Punguza</translation>
+        <translation type="vanished">Punguza</translation>
     </message>
 </context>
 <context>

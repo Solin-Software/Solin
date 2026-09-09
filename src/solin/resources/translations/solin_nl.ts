@@ -4,24 +4,20 @@
 <context>
     <name>AboutSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/about_section.py" line="+48"/>
         <source>Audio &amp; Video app for Kingdom Hall meetings.</source>
-        <translation>Audio &amp; Video-app voor vergaderingen in de Koninkrijkszaal.</translation>
+        <translation type="vanished">Audio &amp; Video-app voor vergaderingen in de Koninkrijkszaal.</translation>
     </message>
     <message>
-        <location line="+10"/>
         <source>Official Website</source>
-        <translation>Officiële website</translation>
+        <translation type="vanished">Officiële website</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Changelog</source>
-        <translation>Wijzigingsgeschiedenis</translation>
+        <translation type="vanished">Wijzigingsgeschiedenis</translation>
     </message>
     <message>
-        <location line="+14"/>
         <source>This app is independent and is not affiliated with or endorsed by the Watch Tower Bible and Tract Society of Pennsylvania or any of its associated organizations.</source>
-        <translation>Deze app is onafhankelijk en is niet gelieerd aan of goedgekeurd door de Watch Tower Bible and Tract Society of Pennsylvania of daaraan verbonden organisaties.</translation>
+        <translation type="vanished">Deze app is onafhankelijk en is niet gelieerd aan of goedgekeurd door de Watch Tower Bible and Tract Society of Pennsylvania of daaraan verbonden organisaties.</translation>
     </message>
 </context>
 <context>
@@ -271,60 +267,60 @@
 <context>
     <name>AutoKeyEditorDialog</name>
     <message>
-        <location filename="../../widgets/settings/auto_key_dialog.py" line="+125"/>
+        <location filename="../../qml/SettingsShortcutDialog.qml" line="+53"/>
         <source>Automatic Shortcut</source>
         <translation>Automatische sneltoets</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+12"/>
         <source>Choose an app event and press the shortcut to send.</source>
         <translation>Kies een app-gebeurtenis en druk op de sneltoets om deze te verzenden.</translation>
     </message>
     <message>
-        <location line="+45"/>
+        <location line="+9"/>
+        <location line="+15"/>
         <source>Event</source>
         <translation>Gebeurtenis</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+67"/>
+        <location line="+7"/>
         <source>Shortcut</source>
         <translation>Sneltoets</translation>
     </message>
     <message>
-        <location line="+12"/>
-        <location line="+95"/>
+        <location line="+35"/>
         <source>Click the field, then press one shortcut.</source>
         <translation>Klik op het veld en druk vervolgens op een sneltoets.</translation>
     </message>
     <message>
-        <location line="-86"/>
+        <location line="+12"/>
         <source>Enabled</source>
         <translation>Ingeschakeld</translation>
     </message>
     <message>
-        <location line="+18"/>
+        <location line="+53"/>
         <source>Cancel</source>
         <translation>Annuleren</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+7"/>
         <source>Save</source>
         <translation>Opslaan</translation>
     </message>
     <message>
-        <location line="+54"/>
         <source>Press a shortcut before saving.</source>
-        <translation>Druk op een sneltoets voordat u opslaat.</translation>
+        <translation type="vanished">Druk op een sneltoets voordat u opslaat.</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="-109"/>
+        <location line="+36"/>
         <source>Listening... press one shortcut.</source>
         <translation>Luisteren... druk op een sneltoets.</translation>
     </message>
     <message>
-        <location line="+13"/>
         <source>Shortcut captured.</source>
-        <translation>Sneltoets vastgelegd.</translation>
+        <translation type="vanished">Sneltoets vastgelegd.</translation>
     </message>
 </context>
 <context>
@@ -353,109 +349,87 @@
 <context>
     <name>AutoKeysSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/auto_keys_section.py" line="+59"/>
         <source>Automatic Shortcuts</source>
-        <translation>Automatische sneltoetsen</translation>
+        <translation type="vanished">Automatische sneltoetsen</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Sends keyboard shortcuts when visual media changes state.</source>
-        <translation>Verstuurt sneltoetsen wanneer de status van visuele media verandert.</translation>
+        <translation type="vanished">Verstuurt sneltoetsen wanneer de status van visuele media verandert.</translation>
     </message>
     <message>
-        <location line="+24"/>
         <source>Create one or more shortcuts for start, end, pause and resume events.</source>
-        <translation>Maak een of meer sneltoetsen voor start-, eind-, pauze- en hervattingsgebeurtenissen.</translation>
+        <translation type="vanished">Maak een of meer sneltoetsen voor start-, eind-, pauze- en hervattingsgebeurtenissen.</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>No shortcuts configured.</source>
-        <translation>Geen sneltoetsen geconfigureerd.</translation>
+        <translation type="vanished">Geen sneltoetsen geconfigureerd.</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>Add shortcut</source>
-        <translation>Sneltoets toevoegen</translation>
+        <translation type="vanished">Sneltoets toevoegen</translation>
     </message>
     <message>
-        <location line="+131"/>
         <source>Enabled</source>
-        <translation>Ingeschakeld</translation>
+        <translation type="vanished">Ingeschakeld</translation>
     </message>
     <message>
-        <location line="+0"/>
         <source>Disabled</source>
-        <translation>Uitgeschakeld</translation>
+        <translation type="vanished">Uitgeschakeld</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Edit</source>
-        <translation>Bewerken</translation>
+        <translation type="vanished">Bewerken</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Delete</source>
-        <translation>Verwijderen</translation>
+        <translation type="vanished">Verwijderen</translation>
     </message>
 </context>
 <context>
     <name>AutoShareSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/auto_share_section.py" line="+55"/>
         <source>Auto Screen Share</source>
-        <translation>Automatisch scherm delen</translation>
+        <translation type="vanished">Automatisch scherm delen</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Automatically shares screen via hotkeys when projecting media.</source>
-        <translation>Deelt automatisch het scherm via sneltoetsen tijdens het projecteren van media.</translation>
+        <translation type="vanished">Deelt automatisch het scherm via sneltoetsen tijdens het projecteren van media.</translation>
     </message>
     <message>
-        <location line="+30"/>
         <source>Share hotkey</source>
-        <translation>Sneltoets voor delen</translation>
+        <translation type="vanished">Sneltoets voor delen</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Uses Zoom&apos;s single start/stop screen-share shortcut.</source>
-        <translation>Gebruikt de ene Zoom-sneltoets om scherm delen te starten en te stoppen.</translation>
+        <translation type="vanished">Gebruikt de ene Zoom-sneltoets om scherm delen te starten en te stoppen.</translation>
     </message>
     <message>
-        <location line="+10"/>
-        <location line="+241"/>
-        <location line="+9"/>
         <source>Not configured</source>
-        <translation>Niet geconfigureerd</translation>
+        <translation type="vanished">Niet geconfigureerd</translation>
     </message>
     <message>
-        <location line="-243"/>
         <source>Edit</source>
-        <translation>Bewerken</translation>
+        <translation type="vanished">Bewerken</translation>
     </message>
     <message>
-        <location line="+20"/>
         <source>Accessibility permission</source>
-        <translation>Toegankelijkheidsmachtiging</translation>
+        <translation type="vanished">Toegankelijkheidsmachtiging</translation>
     </message>
     <message>
-        <location line="+14"/>
         <source>Open Settings</source>
-        <translation>Instellingen openen</translation>
+        <translation type="vanished">Instellingen openen</translation>
     </message>
     <message>
-        <location line="+35"/>
         <source>Share target</source>
-        <translation>Deeldoel</translation>
+        <translation type="vanished">Deeldoel</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Where Solin should click after Zoom&apos;s share shortcut opens the dialog.</source>
-        <translation>Waar Solin moet klikken nadat de Zoom-sneltoets voor delen het venster heeft geopend.</translation>
+        <translation type="vanished">Waar Solin moet klikken nadat de Zoom-sneltoets voor delen het venster heeft geopend.</translation>
     </message>
     <message>
-        <location line="+167"/>
         <source>Configured</source>
-        <translation>Geconfigureerd</translation>
+        <translation type="vanished">Geconfigureerd</translation>
     </message>
     <message>
         <source>Click Position</source>
@@ -466,33 +440,28 @@
         <translation type="vanished">Positie waarop wordt geklikt nadat het deelvenster is geopend om het doel te selecteren.</translation>
     </message>
     <message>
-        <location line="-141"/>
         <source>Configure</source>
-        <translation>Configureren</translation>
+        <translation type="vanished">Configureren</translation>
     </message>
     <message>
-        <location line="+122"/>
         <source>Share Hotkey</source>
-        <translation>Sneltoets voor delen</translation>
+        <translation type="vanished">Sneltoets voor delen</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Press the Zoom shortcut that starts and stops screen sharing.</source>
-        <translation>Druk op de Zoom-sneltoets die scherm delen start en stopt.</translation>
+        <translation type="vanished">Druk op de Zoom-sneltoets die scherm delen start en stopt.</translation>
     </message>
     <message>
         <source>Position: {x}, {y}</source>
         <translation type="vanished">Positie: {x}, {y}</translation>
     </message>
     <message>
-        <location line="+35"/>
         <source>Solin can send the automatic click.</source>
-        <translation>Solin kan de automatische klik verzenden.</translation>
+        <translation type="vanished">Solin kan de automatische klik verzenden.</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>Allow Solin in macOS Accessibility so automatic clicks can work.</source>
-        <translation>Sta Solin toe bij Toegankelijkheid in macOS zodat automatische klikken kunnen werken.</translation>
+        <translation type="vanished">Sta Solin toe bij Toegankelijkheid in macOS zodat automatische klikken kunnen werken.</translation>
     </message>
 </context>
 <context>
@@ -907,14 +876,12 @@
 <context>
     <name>CameraSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/camera_section.py" line="+13"/>
         <source>Camera</source>
-        <translation>Camera</translation>
+        <translation type="vanished">Camera</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Shows a camera button in the live tools toolbar.</source>
-        <translation>Toont een cameraknop in de werkbalk met livetools.</translation>
+        <translation type="vanished">Toont een cameraknop in de werkbalk met livetools.</translation>
     </message>
 </context>
 <context>
@@ -1032,6 +999,17 @@
         <location line="+16"/>
         <source>Enable projection aspect first</source>
         <translation>Schakel eerst de beeldverhouding van de projectie in</translation>
+    </message>
+</context>
+<context>
+    <name>IntegrationSettings</name>
+    <message numerus="yes">
+        <location filename="../../ui/qml/settings/integrations.py" line="+330"/>
+        <source>%n NDI source found.</source>
+        <translation>
+            <numerusform>%n NDI-bron gevonden.</numerusform>
+            <numerusform>%n NDI-bronnen gevonden.</numerusform>
+        </translation>
     </message>
 </context>
 <context>
@@ -1178,19 +1156,16 @@
 <context>
     <name>LanguageSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/language_section.py" line="+22"/>
         <source>Interface</source>
-        <translation>Interface</translation>
+        <translation type="vanished">Interface</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>JW Media</source>
-        <translation>JW Media</translation>
+        <translation type="vanished">JW Media</translation>
     </message>
     <message>
-        <location line="+36"/>
         <source>(same as interface)</source>
-        <translation>(zelfde als interface)</translation>
+        <translation type="vanished">(zelfde als interface)</translation>
     </message>
 </context>
 <context>
@@ -1589,13 +1564,13 @@
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../../main_window.py" line="+551"/>
+        <location filename="../../main_window.py" line="+565"/>
         <location filename="../../controllers/main_window_nav.py" line="+11"/>
         <source>Solin</source>
         <translation>Solin</translation>
     </message>
     <message>
-        <location line="+694"/>
+        <location line="+717"/>
         <location filename="../../controllers/main_window_nav.py" line="+27"/>
         <source>Scenes</source>
         <translation>Scènes</translation>
@@ -1636,7 +1611,7 @@
         <translation>Opname bezig</translation>
     </message>
     <message>
-        <location line="+379"/>
+        <location line="+381"/>
         <source>Pause playback before changing the projected content.</source>
         <translation>Pauzeer het afspelen voordat u de geprojecteerde inhoud wijzigt.</translation>
     </message>
@@ -2493,69 +2468,56 @@ Solin blijft proberen opnieuw verbinding te maken vanaf de huidige positie.
 <context>
     <name>MediaSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/media_section.py" line="+23"/>
         <source>Auto-download on play</source>
-        <translation>Automatisch downloaden bij afspelen</translation>
+        <translation type="vanished">Automatisch downloaden bij afspelen</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Downloads the playing media for offline use.</source>
-        <translation>Downloadt de afgespeelde media voor offline gebruik.</translation>
+        <translation type="vanished">Downloadt de afgespeelde media voor offline gebruik.</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Auto-download weekly study</source>
-        <translation>Wekelijkse studie automatisch downloaden</translation>
+        <translation type="vanished">Wekelijkse studie automatisch downloaden</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Downloads this week’s and next week’s meeting media.</source>
-        <translation>Downloadt de media van de vergadering van deze en volgende week.</translation>
+        <translation type="vanished">Downloadt de media van de vergadering van deze en volgende week.</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Song Announcement Mode</source>
-        <translation>Liedaankondigingsmodus</translation>
+        <translation type="vanished">Liedaankondigingsmodus</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Song starts muted for title display. Press play to start.</source>
-        <translation>Lied start gedempt om de titel te tonen. Druk op afspelen om te starten.</translation>
+        <translation type="vanished">Lied start gedempt om de titel te tonen. Druk op afspelen om te starten.</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Automatic background song</source>
-        <translation>Automatisch achtergrondlied</translation>
+        <translation type="vanished">Automatisch achtergrondlied</translation>
     </message>
     <message>
-        <location line="+13"/>
         <source>Start videos paused</source>
-        <translation>Video&apos;s gepauzeerd starten</translation>
+        <translation type="vanished">Video&apos;s gepauzeerd starten</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Videos open paused so you can start them manually.</source>
-        <translation>Video&apos;s worden gepauzeerd geopend zodat ze handmatig kunnen worden gestart.</translation>
+        <translation type="vanished">Video&apos;s worden gepauzeerd geopend zodat ze handmatig kunnen worden gestart.</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Playback protection</source>
-        <translation>Afspeelbeveiliging</translation>
+        <translation type="vanished">Afspeelbeveiliging</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Prevents media changes and seeking while audio or video is playing. Pause first to make changes.</source>
-        <translation>Voorkomt het wisselen van media en vooruit- of terugspoelen tijdens het afspelen van audio of video. Pauzeer eerst om wijzigingen aan te brengen.</translation>
+        <translation type="vanished">Voorkomt het wisselen van media en vooruit- of terugspoelen tijdens het afspelen van audio of video. Pauzeer eerst om wijzigingen aan te brengen.</translation>
     </message>
     <message>
-        <location line="+35"/>
         <source>Configure the meeting day/time before automatic playback can start.</source>
-        <translation>Stel de dag en tijd van de vergadering in voordat automatisch afspelen kan starten.</translation>
+        <translation type="vanished">Stel de dag en tijd van de vergadering in voordat automatisch afspelen kan starten.</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Plays audio songs before configured meetings and fades out before start.</source>
-        <translation>Speelt audioliederen af vóór ingestelde vergaderingen en laat het geluid vóór aanvang uitfaden.</translation>
+        <translation type="vanished">Speelt audioliederen af vóór ingestelde vergaderingen en laat het geluid vóór aanvang uitfaden.</translation>
     </message>
 </context>
 <context>
@@ -2710,77 +2672,60 @@ Handmatig toegevoegde inhoud, bijgesneden delen, kadrering en de uitgeklapte sta
 <context>
     <name>MeetingScheduleSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/meeting_schedule_section.py" line="+528"/>
-        <location line="+334"/>
         <source>Used by automatic features that depend on the meeting start time.</source>
-        <translation>Wordt gebruikt door automatische functies die afhankelijk zijn van de begintijd van de vergadering.</translation>
+        <translation type="vanished">Wordt gebruikt door automatische functies die afhankelijk zijn van de begintijd van de vergadering.</translation>
     </message>
     <message>
-        <location line="-275"/>
-        <location line="+285"/>
         <source>Fill in from jw.org</source>
-        <translation>Invullen vanaf jw.org</translation>
+        <translation type="vanished">Invullen vanaf jw.org</translation>
     </message>
     <message>
-        <location line="-270"/>
-        <location line="+271"/>
         <source>Congregation name</source>
-        <translation>Naam van de gemeente</translation>
+        <translation type="vanished">Naam van de gemeente</translation>
     </message>
     <message>
-        <location line="-174"/>
         <source>Searching jw.org…</source>
-        <translation>Zoeken op jw.org…</translation>
+        <translation type="vanished">Zoeken op jw.org…</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>No congregation found with that name.</source>
-        <translation>Geen gemeente met die naam gevonden.</translation>
+        <translation type="vanished">Geen gemeente met die naam gevonden.</translation>
     </message>
     <message>
-        <location line="-6"/>
         <source>Reading the meeting times…</source>
-        <translation>Vergadertijden worden gelezen…</translation>
+        <translation type="vanished">Vergadertijden worden gelezen…</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>jw.org does not publish meeting times for this congregation.</source>
-        <translation>jw.org publiceert geen vergadertijden voor deze gemeente.</translation>
+        <translation type="vanished">jw.org publiceert geen vergadertijden voor deze gemeente.</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Too many searches in a row. Wait a moment and type again.</source>
-        <translation>Te veel zoekopdrachten achter elkaar. Wacht even en typ opnieuw.</translation>
+        <translation type="vanished">Te veel zoekopdrachten achter elkaar. Wacht even en typ opnieuw.</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Could not reach jw.org. Check the connection and try again.</source>
-        <translation>Kon jw.org niet bereiken. Controleer de verbinding en probeer het opnieuw.</translation>
+        <translation type="vanished">Kon jw.org niet bereiken. Controleer de verbinding en probeer het opnieuw.</translation>
     </message>
     <message>
-        <location line="+13"/>
         <source>Search your congregation to fill the days and times below.</source>
-        <translation>Zoek je gemeente om de dagen en tijden hieronder in te vullen.</translation>
+        <translation type="vanished">Zoek je gemeente om de dagen en tijden hieronder in te vullen.</translation>
     </message>
     <message>
         <source>Midweek meeting</source>
         <translation type="vanished">Doordeweekse vergadering</translation>
     </message>
     <message>
-        <location line="-193"/>
-        <location line="+320"/>
         <source>Day and time for the midweek meeting.</source>
-        <translation>Dag en tijd van de doordeweekse vergadering.</translation>
+        <translation type="vanished">Dag en tijd van de doordeweekse vergadering.</translation>
     </message>
     <message>
         <source>Weekend meeting</source>
         <translation type="vanished">Weekendvergadering</translation>
     </message>
     <message>
-        <location line="-313"/>
-        <location line="+317"/>
         <source>Day and time for the weekend meeting.</source>
-        <translation>Dag en tijd van de weekendvergadering.</translation>
+        <translation type="vanished">Dag en tijd van de weekendvergadering.</translation>
     </message>
     <message>
         <source>Not configured</source>
@@ -3111,130 +3056,103 @@ Handmatig toegevoegde inhoud, bijgesneden delen, kadrering en de uitgeklapte sta
 <context>
     <name>ObsSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/obs_section.py" line="+50"/>
         <source>OBS Studio</source>
-        <translation>OBS Studio</translation>
+        <translation type="vanished">OBS Studio</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Automatically switches scenes during projection</source>
-        <translation>Wisselt automatisch van scènes tijdens het projecteren</translation>
+        <translation type="vanished">Wisselt automatisch van scènes tijdens het projecteren</translation>
     </message>
     <message>
-        <location line="+29"/>
         <source>Disconnected</source>
-        <translation>Verbinding verbroken</translation>
+        <translation type="vanished">Verbinding verbroken</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>WebSocket Port</source>
-        <translation>WebSocket-poort</translation>
+        <translation type="vanished">WebSocket-poort</translation>
     </message>
     <message>
-        <location line="+14"/>
         <source>Password (optional)</source>
-        <translation>Wachtwoord (optioneel)</translation>
+        <translation type="vanished">Wachtwoord (optioneel)</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>Leave blank if no password is set</source>
-        <translation>Laat leeg als er geen wachtwoord is ingesteld</translation>
+        <translation type="vanished">Laat leeg als er geen wachtwoord is ingesteld</translation>
     </message>
     <message>
-        <location line="+9"/>
-        <location line="+363"/>
         <source>● Changes saved automatically</source>
-        <translation>● Wijzigingen automatisch opgeslagen</translation>
+        <translation type="vanished">● Wijzigingen automatisch opgeslagen</translation>
     </message>
     <message>
-        <location line="-327"/>
         <source>Program stream (NDI)</source>
-        <translation>Programmastream (NDI)</translation>
+        <translation type="vanished">Programmastream (NDI)</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Receive the DistroAV/NDI output from OBS as a live projection.</source>
-        <translation>Ontvang de DistroAV/NDI-output van OBS als een liveprojectie.</translation>
+        <translation type="vanished">Ontvang de DistroAV/NDI-output van OBS als een liveprojectie.</translation>
     </message>
     <message>
-        <location line="+21"/>
         <source>Enable Main Output in DistroAV, then select the NDI source shown by OBS.</source>
-        <translation>Schakel Main Output in DistroAV in en selecteer vervolgens de NDI-bron die door OBS wordt getoond.</translation>
+        <translation type="vanished">Schakel Main Output in DistroAV in en selecteer vervolgens de NDI-bron die door OBS wordt getoond.</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>Available NDI sources</source>
-        <translation>Beschikbare NDI-bronnen</translation>
+        <translation type="vanished">Beschikbare NDI-bronnen</translation>
     </message>
     <message>
-        <location line="+15"/>
         <source>No sources loaded</source>
-        <translation>Geen bronnen geladen</translation>
+        <translation type="vanished">Geen bronnen geladen</translation>
     </message>
     <message>
-        <location line="+6"/>
-        <location line="+335"/>
-        <location line="+35"/>
         <source>Find sources</source>
-        <translation>Bronnen zoeken</translation>
+        <translation type="vanished">Bronnen zoeken</translation>
     </message>
     <message>
-        <location line="-338"/>
         <source>Default scene (idle)</source>
-        <translation>Standaardscène (inactief)</translation>
+        <translation type="vanished">Standaardscène (inactief)</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Scene shown when nothing is being projected.</source>
-        <translation>Scène die wordt getoond wanneer er niets wordt geprojecteerd.</translation>
+        <translation type="vanished">Scène die wordt getoond wanneer er niets wordt geprojecteerd.</translation>
     </message>
     <message>
-        <location line="+13"/>
         <source>Media window scene</source>
-        <translation>Mediavensterscène</translation>
+        <translation type="vanished">Mediavensterscène</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Scene that captures the projection monitor. Activated when content is displayed.</source>
-        <translation>Scène die de projectiemonitor vastlegt. Wordt geactiveerd wanneer er inhoud wordt weergegeven.</translation>
+        <translation type="vanished">Scène die de projectiemonitor vastlegt. Wordt geactiveerd wanneer er inhoud wordt weergegeven.</translation>
     </message>
     <message>
-        <location line="+206"/>
         <source>✓ Configuration saved — reconnecting…</source>
-        <translation>✓ Configuratie opgeslagen — opnieuw verbinden…</translation>
+        <translation type="vanished">✓ Configuratie opgeslagen — opnieuw verbinden…</translation>
     </message>
     <message>
-        <location line="+57"/>
         <source>NDI receiver is not available.</source>
-        <translation>NDI-ontvanger is niet beschikbaar.</translation>
+        <translation type="vanished">NDI-ontvanger is niet beschikbaar.</translation>
     </message>
     <message>
-        <location line="+5"/>
         <source>Searching…</source>
-        <translation>Zoeken…</translation>
+        <translation type="vanished">Zoeken…</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Looking for NDI sources on this network.</source>
-        <translation>Zoeken naar NDI-bronnen op dit netwerk.</translation>
+        <translation type="vanished">Zoeken naar NDI-bronnen op dit netwerk.</translation>
     </message>
     <message numerus="yes">
-        <location line="+25"/>
         <source>%n NDI source found.</source>
-        <translation>
+        <translation type="vanished">
             <numerusform>%n NDI-bron gevonden.</numerusform>
             <numerusform>%n NDI-bronnen gevonden.</numerusform>
         </translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>No NDI sources found</source>
-        <translation>Geen NDI-bronnen gevonden</translation>
+        <translation type="vanished">Geen NDI-bronnen gevonden</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>No NDI sources found. Check that DistroAV Main Output is enabled in OBS.</source>
-        <translation>Geen NDI-bronnen gevonden. Controleer of DistroAV Main Output is ingeschakeld in OBS.</translation>
+        <translation type="vanished">Geen NDI-bronnen gevonden. Controleer of DistroAV Main Output is ingeschakeld in OBS.</translation>
     </message>
     <message>
         <source>Connecting…</source>
@@ -3253,9 +3171,8 @@ Handmatig toegevoegde inhoud, bijgesneden delen, kadrering en de uitgeklapte sta
         <translation type="vanished">Verbindingsfout</translation>
     </message>
     <message>
-        <location line="+72"/>
         <source>— Select scene —</source>
-        <translation>— Selecteer scène —</translation>
+        <translation type="vanished">— Selecteer scène —</translation>
     </message>
 </context>
 <context>
@@ -3301,7 +3218,7 @@ Handmatig toegevoegde inhoud, bijgesneden delen, kadrering en de uitgeklapte sta
         <translation>Profielnaam</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+10"/>
         <source>Example: Main Hall</source>
         <translation>Voorbeeld: hoofdzaal</translation>
     </message>
@@ -3334,13 +3251,13 @@ Handmatig toegevoegde inhoud, bijgesneden delen, kadrering en de uitgeklapte sta
     </message>
     <message>
         <location line="+5"/>
-        <location line="+406"/>
+        <location line="+414"/>
         <source>Meeting schedule</source>
         <translation>Vergaderschema</translation>
     </message>
     <message>
-        <location line="-400"/>
-        <location line="+1161"/>
+        <location line="-408"/>
+        <location line="+1150"/>
         <source>Congregation</source>
         <translation>Gemeente</translation>
     </message>
@@ -3349,18 +3266,18 @@ Handmatig toegevoegde inhoud, bijgesneden delen, kadrering en de uitgeklapte sta
         <translation type="vanished">Optioneel</translation>
     </message>
     <message>
-        <location line="-1150"/>
+        <location line="-1139"/>
         <source>Find your congregation to fill the meeting days and times from jw.org.</source>
         <translation>Zoek je gemeente om de vergaderdagen en -tijden van jw.org in te vullen.</translation>
     </message>
     <message>
         <location line="+8"/>
-        <location line="+375"/>
+        <location line="+383"/>
         <source>Meeting media</source>
         <translation>Vergadermedia</translation>
     </message>
     <message>
-        <location line="-364"/>
+        <location line="-372"/>
         <source>Download automatically</source>
         <translation>Automatisch downloaden</translation>
     </message>
@@ -3371,12 +3288,12 @@ Handmatig toegevoegde inhoud, bijgesneden delen, kadrering en de uitgeklapte sta
     </message>
     <message>
         <location line="+8"/>
-        <location line="+357"/>
+        <location line="+365"/>
         <source>Manual download</source>
         <translation>Handmatig downloaden</translation>
     </message>
     <message>
-        <location line="-356"/>
+        <location line="-364"/>
         <source>Only download media when you click the cloud button.</source>
         <translation>Download media alleen wanneer u op de cloudknop klikt.</translation>
     </message>
@@ -3421,12 +3338,12 @@ Handmatig toegevoegde inhoud, bijgesneden delen, kadrering en de uitgeklapte sta
         <translation>WebSocket-poort</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+16"/>
         <source>Password (optional)</source>
         <translation>Wachtwoord (optioneel)</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+16"/>
         <source>Connecting…</source>
         <translation>Verbinden…</translation>
     </message>
@@ -3556,8 +3473,8 @@ Handmatig toegevoegde inhoud, bijgesneden delen, kadrering en de uitgeklapte sta
         <translation>Deze week en volgende week</translation>
     </message>
     <message>
-        <location line="-393"/>
-        <location line="+400"/>
+        <location line="-401"/>
+        <location line="+408"/>
         <location line="+5"/>
         <location line="+9"/>
         <source>Not configured</source>
@@ -3579,7 +3496,7 @@ Handmatig toegevoegde inhoud, bijgesneden delen, kadrering en de uitgeklapte sta
         <translation>Automatisch delen klaar</translation>
     </message>
     <message>
-        <location line="+120"/>
+        <location line="+101"/>
         <source>Finishing…</source>
         <translation>Afronden…</translation>
     </message>
@@ -3590,17 +3507,17 @@ Handmatig toegevoegde inhoud, bijgesneden delen, kadrering en de uitgeklapte sta
     </message>
     <message>
         <location line="+303"/>
-        <location line="+167"/>
+        <location line="+149"/>
         <source>Close</source>
         <translation>Sluiten</translation>
     </message>
     <message>
-        <location line="-159"/>
+        <location line="-135"/>
         <source>Search by congregation name</source>
         <translation>Zoeken op naam van de gemeente</translation>
     </message>
     <message>
-        <location filename="../../ui/qml/onboarding.py" line="+69"/>
+        <location filename="../../ui/qml/onboarding.py" line="+73"/>
         <source>Searching jw.org…</source>
         <translation>Zoeken op jw.org…</translation>
     </message>
@@ -3609,17 +3526,17 @@ Handmatig toegevoegde inhoud, bijgesneden delen, kadrering en de uitgeklapte sta
         <translation type="vanished">Vergaderdagen en -tijden komen van jw.org.</translation>
     </message>
     <message>
-        <location filename="../../qml/OnboardingView.qml" line="+88"/>
+        <location filename="../../qml/OnboardingView.qml" line="+64"/>
         <source>Remove congregation</source>
         <translation>Gemeente verwijderen</translation>
     </message>
     <message>
-        <location line="+78"/>
+        <location line="+83"/>
         <source>Search languages</source>
         <translation>Talen zoeken</translation>
     </message>
     <message>
-        <location filename="../../ui/qml/onboarding.py" line="+255"/>
+        <location filename="../../ui/qml/onboarding.py" line="+259"/>
         <source>Enter a port between 1 and 65535.</source>
         <translation>Voer een poort in tussen 1 en 65535.</translation>
     </message>
@@ -3629,7 +3546,7 @@ Handmatig toegevoegde inhoud, bijgesneden delen, kadrering en de uitgeklapte sta
         <translation>De kiezer voor het deeldoel is niet beschikbaar.</translation>
     </message>
     <message>
-        <location line="+139"/>
+        <location line="+140"/>
         <source>Enter a profile name.</source>
         <translation>Voer een profielnaam in.</translation>
     </message>
@@ -3664,7 +3581,7 @@ Handmatig toegevoegde inhoud, bijgesneden delen, kadrering en de uitgeklapte sta
         <translation>Het profiel kon niet worden gemaakt.</translation>
     </message>
     <message>
-        <location line="-542"/>
+        <location line="-547"/>
         <source>jw.org does not publish meeting times for this congregation.</source>
         <translation>jw.org publiceert geen vergadertijden voor deze gemeente.</translation>
     </message>
@@ -3689,7 +3606,7 @@ Handmatig toegevoegde inhoud, bijgesneden delen, kadrering en de uitgeklapte sta
         <translation>Kon jw.org niet bereiken. Controleer de verbinding en probeer het opnieuw.</translation>
     </message>
     <message>
-        <location line="+685"/>
+        <location line="+690"/>
         <source>Allow Solin in macOS Accessibility settings.</source>
         <translation>Sta Solin toe in de toegankelijkheidsinstellingen van macOS.</translation>
     </message>
@@ -5374,211 +5291,180 @@ Deze actie kan niet ongedaan worden gemaakt.</translation>
 <context>
     <name>RemoteControlSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/remote_control_section.py" line="+54"/>
-        <location line="+403"/>
         <source>Remote control</source>
-        <translation>Afstandsbediening</translation>
+        <translation type="vanished">Afstandsbediening</translation>
     </message>
     <message>
-        <location line="-402"/>
-        <location line="+404"/>
         <source>Control Solin securely from another device on this local network.</source>
-        <translation>Bedien Solin veilig vanaf een ander apparaat op dit lokale netwerk.</translation>
+        <translation type="vanished">Bedien Solin veilig vanaf een ander apparaat op dit lokale netwerk.</translation>
     </message>
     <message>
-        <location line="-388"/>
-        <location line="+390"/>
         <source>Network interface</source>
-        <translation>Netwerkinterface</translation>
+        <translation type="vanished">Netwerkinterface</translation>
     </message>
     <message>
-        <location line="-376"/>
-        <location line="+377"/>
         <source>Access credentials</source>
-        <translation>Inloggegevens</translation>
+        <translation type="vanished">Inloggegevens</translation>
     </message>
     <message>
-        <location line="-349"/>
-        <location line="+350"/>
         <source>Username</source>
-        <translation>Gebruikersnaam</translation>
+        <translation type="vanished">Gebruikersnaam</translation>
     </message>
     <message>
-        <location line="-345"/>
-        <location line="+346"/>
         <source>New password</source>
-        <translation>Nieuw wachtwoord</translation>
+        <translation type="vanished">Nieuw wachtwoord</translation>
     </message>
     <message>
-        <location line="-341"/>
-        <location line="+342"/>
         <source>Confirm password</source>
-        <translation>Bevestig wachtwoord</translation>
+        <translation type="vanished">Bevestig wachtwoord</translation>
     </message>
     <message>
-        <location line="-328"/>
-        <location line="+330"/>
         <source>Use at least %1 characters. Credentials belong only to this profile.</source>
-        <translation>Gebruik ten minste %1 tekens. Inloggegevens horen uitsluitend bij dit profiel.</translation>
+        <translation type="vanished">Gebruik ten minste %1 tekens. Inloggegevens horen uitsluitend bij dit profiel.</translation>
     </message>
     <message>
-        <location line="-323"/>
-        <location line="+327"/>
         <source>Save credentials</source>
-        <translation>Inloggegevens opslaan</translation>
+        <translation type="vanished">Inloggegevens opslaan</translation>
     </message>
     <message>
-        <location line="-298"/>
-        <location line="+300"/>
         <source>Copy address</source>
-        <translation>Adres kopiëren</translation>
+        <translation type="vanished">Adres kopiëren</translation>
     </message>
     <message>
-        <location line="-285"/>
-        <location line="+286"/>
         <source>Set up a device</source>
-        <translation>Apparaat instellen</translation>
+        <translation type="vanished">Apparaat instellen</translation>
     </message>
     <message>
-        <location line="-265"/>
         <source>Select a private network…</source>
-        <translation>Selecteer een privénetwerk…</translation>
+        <translation type="vanished">Selecteer een privénetwerk…</translation>
     </message>
     <message>
-        <location line="+30"/>
         <source>Choose a network and save credentials before enabling remote control.</source>
-        <translation>Kies een netwerk en sla inloggegevens op voordat de afstandsbediening wordt ingeschakeld.</translation>
+        <translation type="vanished">Kies een netwerk en sla inloggegevens op voordat de afstandsbediening wordt ingeschakeld.</translation>
     </message>
     <message>
-        <location line="+17"/>
         <source>The passwords do not match.</source>
-        <translation>De wachtwoorden komen niet overeen.</translation>
+        <translation type="vanished">De wachtwoorden komen niet overeen.</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Enter a new password to save.</source>
-        <translation>Voer een nieuw wachtwoord in om op te slaan.</translation>
+        <translation type="vanished">Voer een nieuw wachtwoord in om op te slaan.</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Check the username and use a password with at least %1 characters.</source>
-        <translation>Controleer de gebruikersnaam en gebruik een wachtwoord van ten minste %1 tekens.</translation>
+        <translation type="vanished">Controleer de gebruikersnaam en gebruik een wachtwoord van ten minste %1 tekens.</translation>
     </message>
     <message>
-        <location line="+31"/>
         <source>Configured as %1</source>
-        <translation>Geconfigureerd als %1</translation>
+        <translation type="vanished">Geconfigureerd als %1</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Not configured</source>
-        <translation>Niet geconfigureerd</translation>
+        <translation type="vanished">Niet geconfigureerd</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>Cancel</source>
-        <translation>Annuleren</translation>
+        <translation type="vanished">Annuleren</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Change</source>
-        <translation>Wijzigen</translation>
+        <translation type="vanished">Wijzigen</translation>
     </message>
     <message>
-        <location line="+20"/>
         <source>No network selected</source>
-        <translation>Geen netwerk geselecteerd</translation>
+        <translation type="vanished">Geen netwerk geselecteerd</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>Starting secure remote control…</source>
-        <translation>Beveiligde afstandsbediening starten…</translation>
+        <translation type="vanished">Beveiligde afstandsbediening starten…</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Ready to enable.</source>
-        <translation>Gereed om in te schakelen.</translation>
+        <translation type="vanished">Gereed om in te schakelen.</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Configuration required.</source>
-        <translation>Configuratie vereist.</translation>
+        <translation type="vanished">Configuratie vereist.</translation>
     </message>
 </context>
 <context>
     <name>RemoteControlSetupDialog</name>
     <message>
-        <location filename="../../widgets/remote_control_setup_dialog.py" line="+81"/>
         <source>Set up a device</source>
-        <translation>Apparaat instellen</translation>
+        <translation type="vanished">Apparaat instellen</translation>
     </message>
     <message>
-        <location line="+29"/>
+        <location filename="../../qml/SettingsRemoteSetup.qml" line="+43"/>
         <source>Set up Solin Remote</source>
         <translation>Solin Remote instellen</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+47"/>
         <source>Scan once to open the secure setup on your phone or tablet.</source>
         <translation>Scan eenmaal om de beveiligde configuratie op uw telefoon of tablet te openen.</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+29"/>
         <source>Generating QR code…</source>
         <translation>QR-code genereren…</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="-5"/>
+        <location line="+21"/>
         <source>1  Scan the QR code</source>
         <translation>1  Scan de QR-code</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+8"/>
         <source>Keep Solin open and connect both devices to the same local network. The guide explains the certificate and app installation.</source>
         <translation>Houd Solin geopend en verbind beide apparaten met hetzelfde lokale netwerk. De handleiding legt de installatie van het certificaat en de app uit.</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+9"/>
+        <location line="+6"/>
         <source>Copy setup address</source>
         <translation>Insteladres kopiëren</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+7"/>
         <source>On the first opening, the browser may show a privacy warning. Confirm that the local address matches, choose Advanced or Show Details, and continue only to this address. The warning disappears after the certificate is trusted.</source>
         <translation>Bij de eerste opening kan de browser een privacywaarschuwing tonen. Controleer of het lokale adres overeenkomt, kies voor Geavanceerd of Details weergeven en ga alleen door naar dit adres. De waarschuwing verdwijnt nadat het certificaat is vertrouwd.</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+15"/>
+        <location line="+12"/>
         <source>VERIFICATION CODE</source>
         <translation>VERIFICATIECODE</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+4"/>
         <source>Compare this code on the device before installing the certificate.</source>
         <translation>Vergelijk deze code op het apparaat voordat het certificaat wordt geïnstalleerd.</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+10"/>
+        <location line="+15"/>
         <source>Show full SHA-256 fingerprint</source>
         <translation>Volledige SHA-256-vingerafdruk weergeven</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+27"/>
         <source>Save certificate…</source>
         <translation>Certificaat opslaan…</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+10"/>
         <source>Done</source>
         <translation>Gereed</translation>
     </message>
     <message>
-        <location line="+93"/>
+        <location filename="../../ui/qml/settings/remote.py" line="+182"/>
+        <location line="+179"/>
         <source>Could not generate the QR code. Copy the address instead.</source>
         <translation>De QR-code kon niet worden gegenereerd. Kopieer in plaats daarvan het adres.</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+40"/>
         <source>Save Solin certificate</source>
         <translation>Solin-certificaat opslaan</translation>
     </message>
@@ -5588,12 +5474,11 @@ Deze actie kan niet ongedaan worden gemaakt.</translation>
         <translation>Certificaatbestanden (*.cer)</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>Could not save certificate</source>
-        <translation>Kon het certificaat niet opslaan</translation>
+        <translation type="vanished">Kon het certificaat niet opslaan</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+8"/>
         <source>Choose another location and try again.</source>
         <translation>Kies een andere locatie en probeer het opnieuw.</translation>
     </message>
@@ -7325,24 +7210,20 @@ Voeg inhoud, een camera of een andere scène toe.</translation>
 <context>
     <name>ScreensSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/screens_section.py" line="+54"/>
         <source>Primary Screen (control)</source>
-        <translation>Hoofdscherm (bediening)</translation>
+        <translation type="vanished">Hoofdscherm (bediening)</translation>
     </message>
     <message>
-        <location line="+20"/>
         <source>No secondary screen detected. Connect an external monitor.</source>
-        <translation>Geen extra scherm gedetecteerd. Sluit een externe monitor aan.</translation>
+        <translation type="vanished">Geen extra scherm gedetecteerd. Sluit een externe monitor aan.</translation>
     </message>
     <message>
-        <location line="+27"/>
         <source>Secondary {n} (projection)</source>
-        <translation>Tweede scherm {n} (projectie)</translation>
+        <translation type="vanished">Tweede scherm {n} (projectie)</translation>
     </message>
     <message>
-        <location line="+18"/>
         <source>PROJECTION</source>
-        <translation>PROJECTIE</translation>
+        <translation type="vanished">PROJECTIE</translation>
     </message>
 </context>
 <context>
@@ -7371,67 +7252,57 @@ Voeg inhoud, een camera of een andere scène toe.</translation>
 <context>
     <name>SettingsWidget</name>
     <message>
-        <location filename="../../widgets/settings_widget.py" line="+277"/>
-        <location line="+265"/>
+        <location filename="../../qml/SettingsView.qml" line="+115"/>
         <source>Settings</source>
         <translation>Instellingen</translation>
     </message>
     <message>
-        <location line="-215"/>
-        <location line="+217"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+55"/>
         <source>Language</source>
         <translation>Taal</translation>
     </message>
     <message>
-        <location line="-209"/>
-        <location line="+210"/>
         <source>Media</source>
-        <translation>Media</translation>
+        <translation type="vanished">Media</translation>
     </message>
     <message>
-        <location line="-202"/>
-        <location line="+203"/>
+        <location line="+20"/>
         <source>Meetings</source>
         <translation>Vergaderingen</translation>
     </message>
     <message>
-        <location line="-195"/>
-        <location line="+196"/>
+        <location line="-4"/>
         <source>Folders</source>
         <translation>Mappen</translation>
     </message>
     <message>
-        <location line="-188"/>
-        <location line="+189"/>
+        <location line="+87"/>
         <source>Remote access</source>
         <translation>Toegang op afstand</translation>
     </message>
     <message>
-        <location line="-180"/>
-        <location line="+181"/>
+        <location line="-35"/>
         <source>Integrations</source>
         <translation>Integraties</translation>
     </message>
     <message>
-        <location line="-152"/>
-        <location line="+153"/>
+        <location line="-10"/>
         <source>Annual Text</source>
         <translation>Jaartekst</translation>
     </message>
     <message>
-        <location line="-143"/>
-        <location line="+144"/>
+        <location line="-3"/>
+        <location line="+1"/>
         <source>Screens</source>
         <translation>Schermen</translation>
     </message>
     <message>
-        <location line="-136"/>
-        <location line="+137"/>
+        <location line="+64"/>
         <source>About</source>
         <translation>Over</translation>
     </message>
     <message>
-        <location line="-38"/>
+        <location filename="../../ui/qml/settings/general.py" line="+158"/>
         <source>Dark</source>
         <translation>Donker</translation>
     </message>
@@ -7441,7 +7312,7 @@ Voeg inhoud, een camera of een andere scène toe.</translation>
         <translation>Licht</translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-119"/>
         <source>Interface</source>
         <translation>Interface</translation>
     </message>
@@ -7451,82 +7322,83 @@ Voeg inhoud, een camera of een andere scène toe.</translation>
         <translation>JW Media</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+12"/>
         <source>Auto-download on play</source>
         <translation>Automatisch downloaden bij afspelen</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+0"/>
         <source>Downloads the playing media for offline use.</source>
         <translation>Downloadt de afgespeelde media voor offline gebruik.</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+35"/>
         <source>Auto-download weekly study</source>
         <translation>Wekelijkse studie automatisch downloaden</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Downloads this week’s and next week’s meeting media.</source>
         <translation>Downloadt de media van de vergadering van deze en volgende week.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-38"/>
         <source>Song Announcement Mode</source>
         <translation>Liedaankondigingsmodus</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Song starts muted for title display. Press play to start.</source>
         <translation>Lied start gedempt om de titel te tonen. Druk op afspelen om te starten.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+39"/>
         <source>Automatic background song</source>
         <translation>Automatisch achtergrondlied</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-41"/>
         <source>Start videos paused</source>
         <translation>Video&apos;s gepauzeerd starten</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Videos open paused so you can start them manually.</source>
         <translation>Video&apos;s worden gepauzeerd geopend zodat ze handmatig kunnen worden gestart.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Playback protection</source>
         <translation>Afspeelbeveiliging</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+0"/>
         <source>Prevents media changes and seeking while audio or video is playing. Pause first to make changes.</source>
         <translation>Voorkomt het wisselen van media en zoeken tijdens het afspelen van audio of video. Pauzeer eerst om wijzigingen aan te brengen.</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+7"/>
         <source>Link Folder</source>
         <translation>Map koppelen</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Sync folder (Dropbox, OneDrive, etc.) shown as playlists.</source>
         <translation>Synchronisatiemap (Dropbox, OneDrive, enz.) weergegeven als afspeellijsten.</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location filename="../../qml/SettingsRow.qml" line="+264"/>
         <source>Choose…</source>
         <translation>Kiezen…</translation>
     </message>
     <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+53"/>
         <location line="+1"/>
         <source>OBS Studio</source>
         <translation>OBS Studio</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+0"/>
         <source>Automatically switches scenes during projection</source>
         <translation>Wisselt automatisch van scènes tijdens het projecteren</translation>
     </message>
@@ -7541,27 +7413,26 @@ Voeg inhoud, een camera of een andere scène toe.</translation>
         <translation>Wachtwoord (optioneel)</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Leave blank if no password is set</source>
-        <translation>Laat leeg als er geen wachtwoord is ingesteld</translation>
+        <translation type="vanished">Laat leeg als er geen wachtwoord is ingesteld</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+4"/>
+        <location line="+1"/>
         <source>Program stream (NDI)</source>
         <translation>Programmastream (NDI)</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Receive the DistroAV/NDI output from OBS as a live projection.</source>
         <translation>Ontvang de DistroAV/NDI-output van OBS als een liveprojectie.</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Enable Main Output in DistroAV, then select the NDI source shown by OBS.</source>
-        <translation>Schakel Main Output in DistroAV in en selecteer vervolgens de NDI-bron die door OBS wordt getoond.</translation>
+        <translation type="vanished">Schakel Main Output in DistroAV in en selecteer vervolgens de NDI-bron die door OBS wordt getoond.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Available NDI sources</source>
         <translation>Beschikbare NDI-bronnen</translation>
     </message>
@@ -7571,20 +7442,17 @@ Voeg inhoud, een camera of een andere scène toe.</translation>
         <translation>Bronnen zoeken</translation>
     </message>
     <message>
-        <location line="-16"/>
+        <location line="-6"/>
         <source>Default scene (idle)</source>
         <translation>Standaardscène (inactief)</translation>
     </message>
     <message>
-        <location line="-346"/>
-        <location line="+289"/>
         <source>Loading…</source>
-        <translation>Laden…</translation>
+        <translation type="vanished">Laden…</translation>
     </message>
     <message>
-        <location line="+58"/>
         <source>Scene shown when nothing is being projected.</source>
-        <translation>Scène die wordt getoond wanneer er niets wordt geprojecteerd.</translation>
+        <translation type="vanished">Scène die wordt getoond wanneer er niets wordt geprojecteerd.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -7592,54 +7460,51 @@ Voeg inhoud, een camera of een andere scène toe.</translation>
         <translation>Mediavensterscène</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Scene that captures the projection monitor. Activated when content is displayed.</source>
-        <translation>Scène die de projectiemonitor vastlegt. Wordt geactiveerd wanneer er inhoud wordt weergegeven.</translation>
+        <translation type="vanished">Scène die de projectiemonitor vastlegt. Wordt geactiveerd wanneer er inhoud wordt weergegeven.</translation>
     </message>
     <message>
-        <location line="+35"/>
+        <location line="+9"/>
         <source>Audio controls and attendance count during meetings.</source>
         <translation>Audiobediening en aantal aanwezigen tijdens vergaderingen.</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+8"/>
+        <location line="+1"/>
         <source>Auto Screen Share</source>
         <translation>Automatisch scherm delen</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Automatically shares screen via hotkeys when projecting media.</source>
         <translation>Deelt automatisch het scherm via sneltoetsen tijdens het projecteren van media.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Share hotkey</source>
         <translation>Sneltoets voor delen</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Uses Zoom&apos;s single start/stop screen-share shortcut.</source>
-        <translation>Gebruikt de ene Zoom-sneltoets om scherm delen te starten en te stoppen.</translation>
+        <translation type="vanished">Gebruikt de ene Zoom-sneltoets om scherm delen te starten en te stoppen.</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+1"/>
         <source>Share target</source>
         <translation>Deeldoel</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>The Solin Media Preview tile inside Zoom&apos;s share dialog.</source>
-        <translation>De tegel “Solin Media Preview” in het deelvenster van Zoom.</translation>
+        <translation type="vanished">De tegel “Solin Media Preview” in het deelvenster van Zoom.</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+1"/>
         <source>Accessibility permission</source>
         <translation>Toegankelijkheidsmachtiging</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Open Settings</source>
-        <translation>Instellingen openen</translation>
+        <translation type="vanished">Instellingen openen</translation>
     </message>
     <message>
         <source>Click Position</source>
@@ -7650,84 +7515,83 @@ Voeg inhoud, een camera of een andere scène toe.</translation>
         <translation type="vanished">Positie waarop wordt geklikt nadat het deelvenster is geopend om het doel te selecteren.</translation>
     </message>
     <message>
-        <location line="-3"/>
         <source>Configure</source>
-        <translation>Configureren</translation>
+        <translation type="vanished">Configureren</translation>
     </message>
     <message>
-        <location line="-36"/>
+        <location line="-10"/>
+        <location line="+1"/>
         <source>Camera</source>
         <translation>Camera</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Shows a camera button in the live tools toolbar.</source>
         <translation>Toont een cameraknop in de werkbalk voor live-tools.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+11"/>
+        <location line="+1"/>
         <source>Automatic Shortcuts</source>
         <translation>Automatische sneltoetsen</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Sends keyboard shortcuts when visual media changes state.</source>
         <translation>Verstuurt sneltoetsen wanneer de status van visuele media verandert.</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Create one or more shortcuts for start, end, pause and resume events.</source>
-        <translation>Maak een of meer sneltoetsen voor start-, eind-, pauze- en hervattingsgebeurtenissen.</translation>
+        <translation type="vanished">Maak een of meer sneltoetsen voor start-, eind-, pauze- en hervattingsgebeurtenissen.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location filename="../../qml/SettingsRow.qml" line="+68"/>
         <source>No shortcuts configured.</source>
         <translation>Geen sneltoetsen geconfigureerd.</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+1"/>
         <source>Add shortcut</source>
         <translation>Sneltoets toevoegen</translation>
     </message>
     <message>
-        <location line="+19"/>
+        <location filename="../../qml/SettingsRow.qml" line="-7"/>
         <source>Edit</source>
         <translation>Bewerken</translation>
     </message>
     <message>
-        <location line="-13"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-17"/>
+        <location line="+1"/>
         <source>Zoom Meetings</source>
         <translation>Zoom-vergaderingen</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="-25"/>
         <source>Text shown on the projection screen when idle.</source>
         <translation>Tekst die op het projectiescherm wordt getoond in stand-by.</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+0"/>
         <source>Update</source>
         <translation>Bijwerken</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Scripture:</source>
         <translation>Bijbeltekst:</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>E.g.: Happy are those conscious of their spiritual need.</source>
-        <translation>Bijv.: Gelukkig zijn degenen die zich bewust zijn van hun geestelijke nood.</translation>
+        <translation type="vanished">Bijv.: Gelukkig zijn degenen die zich bewust zijn van hun geestelijke nood.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Bible reference:</source>
         <translation>Bijbelverwijzing:</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>E.g.: Matthew 5:3.</source>
-        <translation>Bijv.: Mattheüs 5:3.</translation>
+        <translation type="vanished">Bijv.: Mattheüs 5:3.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -7735,24 +7599,535 @@ Voeg inhoud, een camera of een andere scène toe.</translation>
         <translation>Wijzigingen opslaan</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location filename="../../qml/SettingsPage.qml" line="+184"/>
         <source>Audio &amp; Video app for Kingdom Hall meetings.</source>
         <translation>Audio &amp; Video-app voor vergaderingen in de Koninkrijkszaal.</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+9"/>
         <source>Official Website</source>
         <translation>Officiële website</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+4"/>
         <source>Changelog</source>
         <translation>Wijzigingsgeschiedenis</translation>
     </message>
     <message>
-        <location line="-6"/>
+        <location line="+6"/>
         <source>This app is independent and is not affiliated with or endorsed by the Watch Tower Bible and Tract Society of Pennsylvania or any of its associated organizations.</source>
         <translation>Deze app is onafhankelijk en is niet gelieerd aan of goedgekeurd door de Watch Tower Bible and Tract Society of Pennsylvania of daaraan verbonden organisaties.</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsSectionHeader.qml" line="+28"/>
+        <location line="+35"/>
+        <source>Back to sections</source>
+        <translation>Terug naar secties</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsView.qml" line="+15"/>
+        <source>Search settings</source>
+        <translation>Zoekinstellingen</translation>
+    </message>
+    <message>
+        <location line="+173"/>
+        <source>Search results</source>
+        <translation>Zoekresultaten</translation>
+    </message>
+    <message>
+        <location line="+77"/>
+        <source>No settings found. Try another word.</source>
+        <translation>Geen instellingen gevonden. Probeer een ander woord.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+2"/>
+        <source>Scenes</source>
+        <translation>Scènes</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Native scenes engine</source>
+        <translation>Motor voor inheemse scènes</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Restart Solin to apply this change.</source>
+        <translation>Start Solin opnieuw op om deze wijziging toe te passen.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>OBS, Zoom and camera</source>
+        <translation>OBS, zoom en camera</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>Automations</source>
+        <translation>Automatiseringen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Sharing and shortcuts</source>
+        <translation>Delen en snelkoppelingen</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Control over your local network</source>
+        <translation>Controle over uw lokale netwerk</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+1"/>
+        <source>Remote control</source>
+        <translation>Afstandsbediening</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Control Solin securely from another device on this local network.</source>
+        <translation>Bedien Solin veilig vanaf een ander apparaat op dit lokale netwerk.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Network interface</source>
+        <translation>Netwerkinterface</translation>
+    </message>
+    <message>
+        <source>Refresh</source>
+        <translation type="vanished">Vernieuwen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Copy address</source>
+        <translation>Adres kopiëren</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Access credentials</source>
+        <translation>Inloggegevens</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Username</source>
+        <translation>Gebruikersnaam</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>New password</source>
+        <translation>Nieuw wachtwoord</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Confirm password</source>
+        <translation>Bevestig wachtwoord</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Save credentials</source>
+        <translation>Inloggegevens opslaan</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Devices</source>
+        <translation>Apparaten</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Set up a device</source>
+        <translation>Apparaat instellen</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Version and information</source>
+        <translation>Versie en informatie</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/general.py" line="-125"/>
+        <source>Searching jw.org…</source>
+        <translation>Zoeken op jw.org…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Reading the meeting times…</source>
+        <translation>Vergadertijden worden gelezen…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>No congregation found with that name.</source>
+        <translation>Geen gemeente met die naam gevonden.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>jw.org does not publish meeting times for this congregation.</source>
+        <translation>jw.org publiceert geen vergadertijden voor deze gemeente.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Too many searches in a row. Wait a moment and type again.</source>
+        <translation>Te veel zoekopdrachten achter elkaar. Wacht even en typ opnieuw.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Could not reach jw.org. Check the connection and try again.</source>
+        <translation>Kon jw.org niet bereiken. Controleer de verbinding en probeer het opnieuw.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-94"/>
+        <location filename="../../ui/qml/settings/general.py" line="+5"/>
+        <source>Search your congregation to fill the days and times below.</source>
+        <translation>Zoek je gemeente om de dagen en tijden hieronder in te vullen.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/general.py" line="+94"/>
+        <source>(same as interface)</source>
+        <translation>(zelfde als interface)</translation>
+    </message>
+    <message>
+        <location line="+54"/>
+        <source>Primary Screen (control)</source>
+        <translation>Hoofdscherm (bediening)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Secondary {n} (projection)</source>
+        <translation>Tweede scherm {n} (projectie)</translation>
+    </message>
+    <message>
+        <location line="+210"/>
+        <source>Configure the meeting day/time before automatic playback can start.</source>
+        <translation>Stel de dag en tijd van de vergadering in voordat automatisch afspelen kan starten.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Plays audio songs before configured meetings and fades out before start.</source>
+        <translation>Speelt audioliederen af vóór ingestelde vergaderingen en laat het geluid vóór aanvang uitfaden.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Select folder to link</source>
+        <translation>Selecteer map om te koppelen</translation>
+    </message>
+    <message>
+        <location line="+117"/>
+        <source>Fetching annual text…</source>
+        <translation>Jaartekst ophalen…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Could not fetch annual text</source>
+        <translation>Kon jaartekst niet ophalen</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Annual text updated for {year}</source>
+        <translation>Jaartekst bijgewerkt voor {year}</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-6"/>
+        <source>Schedule and preparation</source>
+        <translation>Planning en voorbereiding</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Meeting schedule</source>
+        <translation>Vergaderschema</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Midweek meeting</source>
+        <translation>Doordeweekse vergadering</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <location line="+7"/>
+        <source>Time</source>
+        <translation>Tijd</translation>
+    </message>
+    <message>
+        <location line="-3"/>
+        <source>Weekend meeting</source>
+        <translation>Weekendvergadering</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Preparation</source>
+        <translation>Voorbereiding</translation>
+    </message>
+    <message>
+        <location line="-53"/>
+        <source>Appearance and languages</source>
+        <translation>Uiterlijk en talen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Theme and languages</source>
+        <translation>Thema en talen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Appearance</source>
+        <translation>Uiterlijk</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Theme</source>
+        <translation>Thema</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Update languages</source>
+        <translation>Talen bijwerken</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Media and files</source>
+        <translation>Media en bestanden</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Playback, downloads and folders</source>
+        <translation>Afspelen, downloads en mappen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Playback</source>
+        <translation>Afspelen</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Downloads</source>
+        <translation>Downloads</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsRow.qml" line="-134"/>
+        <source>Select…</source>
+        <translation>Selecteer…</translation>
+    </message>
+    <message>
+        <location line="+61"/>
+        <source>No folder selected</source>
+        <translation>Geen map geselecteerd</translation>
+    </message>
+    <message>
+        <location line="+48"/>
+        <source>No secondary screen detected. Connect an external monitor.</source>
+        <translation>Geen extra scherm gedetecteerd. Sluit een externe monitor aan.</translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <source>Delete</source>
+        <translation>Verwijderen</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+40"/>
+        <source>Projection</source>
+        <translation>Projectie</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Screens and annual text</source>
+        <translation>Schermen en jaartekst</translation>
+    </message>
+    <message>
+        <location filename="../../qml/AppTextField.qml" line="+67"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-37"/>
+        <source>Clear</source>
+        <translation>Wissen</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsClockPicker.qml" line="+45"/>
+        <source>Choose hour</source>
+        <translation>Kies uur</translation>
+    </message>
+    <message>
+        <location line="+30"/>
+        <source>Choose minute</source>
+        <translation>Kies minuut</translation>
+    </message>
+    <message>
+        <location line="+101"/>
+        <source>Hour %1</source>
+        <translation>Uur %1</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Minute %1</source>
+        <translation>Minuut %1</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsCongregationDialog.qml" line="+31"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+8"/>
+        <source>Fill in from jw.org</source>
+        <translation>Invullen vanaf jw.org</translation>
+    </message>
+    <message>
+        <location line="+23"/>
+        <source>Search by congregation name</source>
+        <translation>Zoeken op naam van de gemeente</translation>
+    </message>
+    <message>
+        <location line="+86"/>
+        <location filename="../../qml/SettingsRemoteSetup.qml" line="-201"/>
+        <source>Close</source>
+        <translation>Sluiten</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsRow.qml" line="-88"/>
+        <location filename="../../qml/SettingsSelectionDialog.qml" line="+30"/>
+        <source>Search…</source>
+        <translation>Zoeken…</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsSelectionDialog.qml" line="+8"/>
+        <source>HH:mm</source>
+        <translation>UU: mm</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>No results found.</source>
+        <translation>Geen resultaten gevonden.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <location filename="../../qml/SettingsTimeDialog.qml" line="+58"/>
+        <source>Apply</source>
+        <translation>Toepassen</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <location filename="../../qml/SettingsTimeDialog.qml" line="-2"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+37"/>
+        <location line="+52"/>
+        <source>Cancel</source>
+        <translation>Annuleren</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsShortcutDialog.qml" line="-144"/>
+        <source>Share Hotkey</source>
+        <translation>Sneltoets voor delen</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Press the Zoom shortcut that starts and stops screen sharing.</source>
+        <translation>Druk op de Zoom-sneltoets die scherm delen start en stopt.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="-309"/>
+        <location line="+63"/>
+        <source>Select a private network…</source>
+        <translation>Selecteer een privénetwerk…</translation>
+    </message>
+    <message>
+        <location line="-50"/>
+        <source>Choose a network and save credentials before enabling remote control.</source>
+        <translation>Kies een netwerk en sla inloggegevens op voordat de afstandsbediening wordt ingeschakeld.</translation>
+    </message>
+    <message>
+        <location line="+83"/>
+        <source>Starting secure remote control…</source>
+        <translation>Beveiligde afstandsbediening starten…</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Ready to enable.</source>
+        <translation>Gereed om in te schakelen.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Configuration required.</source>
+        <translation>Configuratie vereist.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Configured as %1</source>
+        <translation>Geconfigureerd als %1</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/integrations.py" line="-106"/>
+        <source>Enter a valid port (1–65535).</source>
+        <translation>Voer een geldige poort in (1–65535).</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>✓ Configuration saved — reconnecting…</source>
+        <translation>✓ Configuratie opgeslagen — opnieuw verbinden…</translation>
+    </message>
+    <message>
+        <location line="+31"/>
+        <source>— Select scene —</source>
+        <translation>— Selecteer scène —</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>NDI receiver is not available.</source>
+        <translation>NDI-ontvanger is niet beschikbaar.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <location line="+34"/>
+        <source>Looking for NDI sources on this network.</source>
+        <translation>Zoeken naar NDI-bronnen op dit netwerk.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>No NDI sources found. Check that DistroAV Main Output is enabled in OBS.</source>
+        <translation>Geen NDI-bronnen gevonden. Controleer of DistroAV Main Output is ingeschakeld in OBS.</translation>
+    </message>
+    <message>
+        <location line="+48"/>
+        <source>Press a shortcut before saving.</source>
+        <translation>Druk op een sneltoets voordat u opslaat.</translation>
+    </message>
+    <message>
+        <location line="+78"/>
+        <source>Configured</source>
+        <translation>Geconfigureerd</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <location filename="../../ui/qml/settings/remote.py" line="+4"/>
+        <source>Not configured</source>
+        <translation>Niet geconfigureerd</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Solin can send the automatic click.</source>
+        <translation>Solin kan de automatische klik verzenden.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Allow Solin in macOS Accessibility so automatic clicks can work.</source>
+        <translation>Sta Solin toe bij Toegankelijkheid in macOS zodat automatische klikken kunnen werken.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="+2"/>
+        <source>Use at least %1 characters. Credentials belong only to this profile.</source>
+        <translation>Gebruik ten minste %1 tekens. Inloggegevens horen uitsluitend bij dit profiel.</translation>
+    </message>
+    <message>
+        <location line="+33"/>
+        <source>The passwords do not match.</source>
+        <translation>De wachtwoorden komen niet overeen.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Enter a new password to save.</source>
+        <translation>Voer een nieuw wachtwoord in om op te slaan.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Check the username and use a password with at least %1 characters.</source>
+        <translation>Controleer de gebruikersnaam en gebruik een wachtwoord van ten minste %1 tekens.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/general.py" line="+18"/>
+        <location filename="../../ui/qml/settings/remote.py" line="+10"/>
+        <location line="+142"/>
+        <source>Saved</source>
+        <translation>Opgeslagen</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="-23"/>
+        <source>Copied</source>
+        <translation>Gekopieerd</translation>
     </message>
 </context>
 <context>
@@ -8903,34 +9278,28 @@ Klik op &apos;Downloaden&apos; om de downloadpagina te openen.</translation>
 <context>
     <name>WatchedFolderSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/watched_folder_section.py" line="+48"/>
         <source>Link Folder</source>
-        <translation>Map koppelen</translation>
+        <translation type="vanished">Map koppelen</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Sync folder (Dropbox, OneDrive, etc.) shown as playlists.</source>
-        <translation>Synchronisatiemap (Dropbox, OneDrive, enz.) weergegeven als afspeellijsten.</translation>
+        <translation type="vanished">Synchronisatiemap (Dropbox, OneDrive, enz.) weergegeven als afspeellijsten.</translation>
     </message>
     <message>
-        <location line="+19"/>
         <source>Choose…</source>
-        <translation>Kiezen…</translation>
+        <translation type="vanished">Kiezen…</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>Clear</source>
-        <translation>Wissen</translation>
+        <translation type="vanished">Wissen</translation>
     </message>
     <message>
-        <location line="+48"/>
         <source>No folder selected</source>
-        <translation>Geen map geselecteerd</translation>
+        <translation type="vanished">Geen map geselecteerd</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Select folder to link</source>
-        <translation>Selecteer map om te koppelen</translation>
+        <translation type="vanished">Selecteer map om te koppelen</translation>
     </message>
 </context>
 <context>
@@ -9179,76 +9548,60 @@ Beide apparaten moeten verbonden zijn met hetzelfde wifinetwerk.</translation>
 <context>
     <name>YearlyTextSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/yearly_text_section.py" line="+62"/>
         <source>Text shown on the projection screen when idle.</source>
-        <translation>Tekst die op het projectiescherm wordt getoond in stand-by.</translation>
+        <translation type="vanished">Tekst die op het projectiescherm wordt getoond in stand-by.</translation>
     </message>
     <message>
-        <location line="+18"/>
-        <location line="+309"/>
         <source>Fetching annual text…</source>
-        <translation>Jaartekst ophalen…</translation>
+        <translation type="vanished">Jaartekst ophalen…</translation>
     </message>
     <message>
-        <location line="-295"/>
-        <location line="+276"/>
         <source>Update</source>
-        <translation>Bijwerken</translation>
+        <translation type="vanished">Bijwerken</translation>
     </message>
     <message>
-        <location line="-241"/>
         <source>Scripture:</source>
-        <translation>Bijbeltekst:</translation>
+        <translation type="vanished">Bijbeltekst:</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>E.g.: Happy are those conscious of their spiritual need.</source>
-        <translation>Bijv.: Gelukkig zijn degenen die zich bewust zijn van hun geestelijke nood.</translation>
+        <translation type="vanished">Bijv.: Gelukkig zijn degenen die zich bewust zijn van hun geestelijke nood.</translation>
     </message>
     <message>
-        <location line="+11"/>
         <source>Bible reference:</source>
-        <translation>Bijbelverwijzing:</translation>
+        <translation type="vanished">Bijbelverwijzing:</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>E.g.: Matthew 5:3.</source>
-        <translation>Bijv.: Mattheüs 5:3.</translation>
+        <translation type="vanished">Bijv.: Mattheüs 5:3.</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>Save changes</source>
-        <translation>Wijzigingen opslaan</translation>
+        <translation type="vanished">Wijzigingen opslaan</translation>
     </message>
     <message>
-        <location line="+196"/>
         <source>Annual text updated for {year}</source>
-        <translation>Jaartekst bijgewerkt voor {year}</translation>
+        <translation type="vanished">Jaartekst bijgewerkt voor {year}</translation>
     </message>
     <message>
-        <location line="+33"/>
         <source>Loading…</source>
-        <translation>Laden…</translation>
+        <translation type="vanished">Laden…</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Could not fetch annual text</source>
-        <translation>Kon jaartekst niet ophalen</translation>
+        <translation type="vanished">Kon jaartekst niet ophalen</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Retry</source>
-        <translation>Opnieuw</translation>
+        <translation type="vanished">Opnieuw</translation>
     </message>
     <message>
-        <location line="+23"/>
         <source>▲  Edit text manually</source>
-        <translation>▲  Tekst handmatig bewerken</translation>
+        <translation type="vanished">▲  Tekst handmatig bewerken</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>▼  Edit text manually</source>
-        <translation>▼  Tekst handmatig bewerken</translation>
+        <translation type="vanished">▼  Tekst handmatig bewerken</translation>
     </message>
 </context>
 <context>
@@ -9476,14 +9829,12 @@ Een getal aan het einde heeft voorrang.</translation>
 <context>
     <name>ZoomSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/zoom_section.py" line="+32"/>
         <source>Zoom Meetings</source>
-        <translation>Zoom-vergaderingen</translation>
+        <translation type="vanished">Zoom-vergaderingen</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Audio controls and attendance count during meetings.</source>
-        <translation>Audiobediening en aantal aanwezigen tijdens vergaderingen.</translation>
+        <translation type="vanished">Audiobediening en aantal aanwezigen tijdens vergaderingen.</translation>
     </message>
 </context>
 <context>
@@ -11014,8 +11365,7 @@ Gebruik de afspeelknop om te projecteren · Sleep de greep ⠿ om de volgorde te
 <context>
     <name>_ShortcutSequenceEdit</name>
     <message>
-        <location filename="../../widgets/settings/auto_key_dialog.py" line="-257"/>
-        <location line="+52"/>
+        <location filename="../../qml/SettingsShortcutDialog.qml" line="+98"/>
         <source>Click to record</source>
         <translation>Klik om op te nemen</translation>
     </message>
@@ -11023,37 +11373,31 @@ Gebruik de afspeelknop om te projecteren · Sleep de greep ⠿ om de volgorde te
 <context>
     <name>_TimePickerPopup</name>
     <message>
-        <location filename="../../widgets/settings/meeting_schedule_section.py" line="-477"/>
         <source>Hour</source>
-        <translation>Uur</translation>
+        <translation type="vanished">Uur</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Minute</source>
-        <translation>Minuut</translation>
+        <translation type="vanished">Minuut</translation>
     </message>
     <message>
-        <location line="+15"/>
         <source>Cancel</source>
-        <translation>Annuleren</translation>
+        <translation type="vanished">Annuleren</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Apply</source>
-        <translation>Toepassen</translation>
+        <translation type="vanished">Toepassen</translation>
     </message>
 </context>
 <context>
     <name>_TimeStepper</name>
     <message>
-        <location line="-108"/>
         <source>Increase</source>
-        <translation>Verhogen</translation>
+        <translation type="vanished">Verhogen</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Decrease</source>
-        <translation>Verlagen</translation>
+        <translation type="vanished">Verlagen</translation>
     </message>
 </context>
 <context>

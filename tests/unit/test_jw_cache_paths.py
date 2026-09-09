@@ -4,11 +4,12 @@ import threading
 import time
 from pathlib import Path
 
+import pytest
 from PySide6.QtCore import QCoreApplication
 
 from solin.core.jw.languages import JWLanguageService
 from solin.core.jw.yeartext import YeartextService
-from solin.core.jw.yeartext_content import Yeartext
+from solin.core.jw.yeartext_content import Yeartext, YeartextFetchError
 from solin.core.storage.json_files import read_json_file, write_json_atomic
 
 
@@ -111,3 +112,92 @@ def test_jw_cache_services_do_not_import_mutable_path_globals() -> None:
         assert source is not None
         text = Path(source).read_text(encoding="utf-8")
         assert "core.foundation import paths" not in text
+
+
+@pytest.mark.parametrize("late_error", [False, True])
+def test_manual_yeartext_save_wins_over_pending_fetch(tmp_path, monkeypatch, late_error):
+    application = _application()
+    started = threading.Event()
+    release = threading.Event()
+
+    def blocked_fetch(api_code, year):
+        started.set()
+        assert release.wait(2.0)
+        if late_error:
+            raise YeartextFetchError("Network failed")
+        return Yeartext(api_code, year, "Network text", "Network reference")
+
+    monkeypatch.setattr("solin.core.jw.yeartext.fetch_yeartext", blocked_fetch)
+    path = tmp_path / "yeartext.json"
+    service = YeartextService(cache_file=path)
+    fetched = []
+    failures = []
+    service.fetched.connect(lambda *args: fetched.append(args))
+    service.fetch_failed.connect(lambda *args: failures.append(args))
+    try:
+        service.fetch_async("E", 2026)
+        assert started.wait(1.0)
+        service.override_cache("E", 2026, "Manual text", "Manual reference")
+        release.set()
+        deadline = time.monotonic() + 1.0
+        while service._workers.active_count and time.monotonic() < deadline:
+            application.processEvents()
+            time.sleep(0.005)
+        application.processEvents()
+
+        assert service.get_cached("E", 2026) == ("Manual text", "Manual reference")
+        assert read_json_file(path)["E"]["quote"] == "Manual text"
+        assert fetched == []
+        assert failures == []
+        assert not service.is_fetching("E")
+    finally:
+        release.set()
+        service.shutdown()
+
+
+def test_refresh_after_manual_save_is_not_cleared_by_older_completion(tmp_path, monkeypatch):
+    application = _application()
+    started = [threading.Event(), threading.Event()]
+    release = [threading.Event(), threading.Event()]
+    requests = []
+
+    def blocked_fetch(api_code, year):
+        index = len(requests)
+        requests.append(index)
+        started[index].set()
+        assert release[index].wait(2.0)
+        return Yeartext(api_code, year, f"Network text {index}", "Reference")
+
+    monkeypatch.setattr("solin.core.jw.yeartext.fetch_yeartext", blocked_fetch)
+    service = YeartextService(cache_file=tmp_path / "yeartext.json")
+    fetched = []
+    service.fetched.connect(lambda *args: fetched.append(args))
+    try:
+        service.fetch_async("E", 2026)
+        assert started[0].wait(1.0)
+        service.override_cache("E", 2026, "Manual text", "Reference")
+        service.fetch_async("E", 2026)
+        assert started[1].wait(1.0)
+        release[0].set()
+        deadline = time.monotonic() + 1.0
+        while service._workers.active_count > 1 and time.monotonic() < deadline:
+            application.processEvents()
+            time.sleep(0.005)
+        application.processEvents()
+        assert service.is_fetching("E")
+        assert service.get_cached("E", 2026) == ("Manual text", "Reference")
+        assert fetched == []
+
+        release[1].set()
+        deadline = time.monotonic() + 1.0
+        while service._workers.active_count and time.monotonic() < deadline:
+            application.processEvents()
+            time.sleep(0.005)
+        application.processEvents()
+        assert not service.is_fetching("E")
+        assert service.get_cached("E", 2026) == ("Network text 1", "Reference")
+        assert fetched == [("E", 2026, "Network text 1", "Reference")]
+    finally:
+        for event in release:
+            event.set()
+        service.shutdown()

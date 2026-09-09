@@ -4,24 +4,20 @@
 <context>
     <name>AboutSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/about_section.py" line="+48"/>
         <source>Audio &amp; Video app for Kingdom Hall meetings.</source>
-        <translation>왕국회관 모임을 위한 오디오 및 비디오 애플리케이션.</translation>
+        <translation type="vanished">왕국회관 모임을 위한 오디오 및 비디오 애플리케이션.</translation>
     </message>
     <message>
-        <location line="+10"/>
         <source>Official Website</source>
-        <translation>공식 웹사이트</translation>
+        <translation type="vanished">공식 웹사이트</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Changelog</source>
-        <translation>변경 사항</translation>
+        <translation type="vanished">변경 사항</translation>
     </message>
     <message>
-        <location line="+14"/>
         <source>This app is independent and is not affiliated with or endorsed by the Watch Tower Bible and Tract Society of Pennsylvania or any of its associated organizations.</source>
-        <translation>이 앱은 독립적으로 개발되었으며, 워치 타워 성서 책자 협회(펜실베이니아) 또는 그 관련 단체와 제휴하거나 승인을 받은 것이 아닙니다.</translation>
+        <translation type="vanished">이 앱은 독립적으로 개발되었으며, 워치 타워 성서 책자 협회(펜실베이니아) 또는 그 관련 단체와 제휴하거나 승인을 받은 것이 아닙니다.</translation>
     </message>
 </context>
 <context>
@@ -271,60 +267,60 @@
 <context>
     <name>AutoKeyEditorDialog</name>
     <message>
-        <location filename="../../widgets/settings/auto_key_dialog.py" line="+125"/>
+        <location filename="../../qml/SettingsShortcutDialog.qml" line="+53"/>
         <source>Automatic Shortcut</source>
         <translation>자동 단축키</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+12"/>
         <source>Choose an app event and press the shortcut to send.</source>
         <translation>앱 이벤트를 선택하고 전송할 단축키를 누르십시오.</translation>
     </message>
     <message>
-        <location line="+45"/>
+        <location line="+9"/>
+        <location line="+15"/>
         <source>Event</source>
         <translation>이벤트</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+67"/>
+        <location line="+7"/>
         <source>Shortcut</source>
         <translation>단축키</translation>
     </message>
     <message>
-        <location line="+12"/>
-        <location line="+95"/>
+        <location line="+35"/>
         <source>Click the field, then press one shortcut.</source>
         <translation>필드를 클릭한 다음 단축키를 하나 누르십시오.</translation>
     </message>
     <message>
-        <location line="-86"/>
+        <location line="+12"/>
         <source>Enabled</source>
         <translation>사용</translation>
     </message>
     <message>
-        <location line="+18"/>
+        <location line="+53"/>
         <source>Cancel</source>
         <translation>취소</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+7"/>
         <source>Save</source>
         <translation>저장</translation>
     </message>
     <message>
-        <location line="+54"/>
         <source>Press a shortcut before saving.</source>
-        <translation>저장하기 전에 단축키를 누르십시오.</translation>
+        <translation type="vanished">저장하기 전에 단축키를 누르십시오.</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="-109"/>
+        <location line="+36"/>
         <source>Listening... press one shortcut.</source>
         <translation>입력 대기 중... 단축키를 하나 누르십시오.</translation>
     </message>
     <message>
-        <location line="+13"/>
         <source>Shortcut captured.</source>
-        <translation>단축키가 입력되었습니다.</translation>
+        <translation type="vanished">단축키가 입력되었습니다.</translation>
     </message>
 </context>
 <context>
@@ -353,109 +349,87 @@
 <context>
     <name>AutoKeysSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/auto_keys_section.py" line="+59"/>
         <source>Automatic Shortcuts</source>
-        <translation>자동 바로가기</translation>
+        <translation type="vanished">자동 바로가기</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Sends keyboard shortcuts when visual media changes state.</source>
-        <translation>시각 매체의 상태가 변경될 때 키보드 단축키를 전송합니다.</translation>
+        <translation type="vanished">시각 매체의 상태가 변경될 때 키보드 단축키를 전송합니다.</translation>
     </message>
     <message>
-        <location line="+24"/>
         <source>Create one or more shortcuts for start, end, pause and resume events.</source>
-        <translation>시작, 종료, 일시 정지, 재개 이벤트에 대한 단축키를 하나 이상 만드십시오.</translation>
+        <translation type="vanished">시작, 종료, 일시 정지, 재개 이벤트에 대한 단축키를 하나 이상 만드십시오.</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>No shortcuts configured.</source>
-        <translation>설정된 단축키가 없습니다.</translation>
+        <translation type="vanished">설정된 단축키가 없습니다.</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>Add shortcut</source>
-        <translation>단축키 추가</translation>
+        <translation type="vanished">단축키 추가</translation>
     </message>
     <message>
-        <location line="+131"/>
         <source>Enabled</source>
-        <translation>사용</translation>
+        <translation type="vanished">사용</translation>
     </message>
     <message>
-        <location line="+0"/>
         <source>Disabled</source>
-        <translation>사용 안 함</translation>
+        <translation type="vanished">사용 안 함</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Edit</source>
-        <translation>편집</translation>
+        <translation type="vanished">편집</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Delete</source>
-        <translation>삭제</translation>
+        <translation type="vanished">삭제</translation>
     </message>
 </context>
 <context>
     <name>AutoShareSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/auto_share_section.py" line="+55"/>
         <source>Auto Screen Share</source>
-        <translation>자동 화면 공유</translation>
+        <translation type="vanished">자동 화면 공유</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Automatically shares screen via hotkeys when projecting media.</source>
-        <translation>미디어를 투사할 때 단축키로 화면을 자동 공유합니다.</translation>
+        <translation type="vanished">미디어를 투사할 때 단축키로 화면을 자동 공유합니다.</translation>
     </message>
     <message>
-        <location line="+30"/>
         <source>Share hotkey</source>
-        <translation>공유 단축키</translation>
+        <translation type="vanished">공유 단축키</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Uses Zoom&apos;s single start/stop screen-share shortcut.</source>
-        <translation>Zoom의 화면 공유 시작/중지 단일 단축키를 사용합니다.</translation>
+        <translation type="vanished">Zoom의 화면 공유 시작/중지 단일 단축키를 사용합니다.</translation>
     </message>
     <message>
-        <location line="+10"/>
-        <location line="+241"/>
-        <location line="+9"/>
         <source>Not configured</source>
-        <translation>구성되지 않음</translation>
+        <translation type="vanished">구성되지 않음</translation>
     </message>
     <message>
-        <location line="-243"/>
         <source>Edit</source>
-        <translation>편집</translation>
+        <translation type="vanished">편집</translation>
     </message>
     <message>
-        <location line="+20"/>
         <source>Accessibility permission</source>
-        <translation>손쉬운 사용 권한</translation>
+        <translation type="vanished">손쉬운 사용 권한</translation>
     </message>
     <message>
-        <location line="+14"/>
         <source>Open Settings</source>
-        <translation>설정 열기</translation>
+        <translation type="vanished">설정 열기</translation>
     </message>
     <message>
-        <location line="+35"/>
         <source>Share target</source>
-        <translation>공유 대상</translation>
+        <translation type="vanished">공유 대상</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Where Solin should click after Zoom&apos;s share shortcut opens the dialog.</source>
-        <translation>Zoom 공유 단축키로 대화 상자가 열린 뒤 Solin이 클릭할 위치입니다.</translation>
+        <translation type="vanished">Zoom 공유 단축키로 대화 상자가 열린 뒤 Solin이 클릭할 위치입니다.</translation>
     </message>
     <message>
-        <location line="+167"/>
         <source>Configured</source>
-        <translation>구성됨</translation>
+        <translation type="vanished">구성됨</translation>
     </message>
     <message>
         <source>Click Position</source>
@@ -466,33 +440,28 @@
         <translation type="vanished">공유 대화 상자가 열린 뒤 대상을 선택하기 위해 클릭할 위치입니다.</translation>
     </message>
     <message>
-        <location line="-141"/>
         <source>Configure</source>
-        <translation>구성</translation>
+        <translation type="vanished">구성</translation>
     </message>
     <message>
-        <location line="+122"/>
         <source>Share Hotkey</source>
-        <translation>공유 단축키</translation>
+        <translation type="vanished">공유 단축키</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Press the Zoom shortcut that starts and stops screen sharing.</source>
-        <translation>화면 공유를 시작하고 중지하는 Zoom 단축키를 누르세요.</translation>
+        <translation type="vanished">화면 공유를 시작하고 중지하는 Zoom 단축키를 누르세요.</translation>
     </message>
     <message>
         <source>Position: {x}, {y}</source>
         <translation type="vanished">위치: {x}, {y}</translation>
     </message>
     <message>
-        <location line="+35"/>
         <source>Solin can send the automatic click.</source>
-        <translation>Solin에서 자동 클릭을 보낼 수 있습니다.</translation>
+        <translation type="vanished">Solin에서 자동 클릭을 보낼 수 있습니다.</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>Allow Solin in macOS Accessibility so automatic clicks can work.</source>
-        <translation>자동 클릭이 작동하도록 macOS 손쉬운 사용에서 Solin을 허용하세요.</translation>
+        <translation type="vanished">자동 클릭이 작동하도록 macOS 손쉬운 사용에서 Solin을 허용하세요.</translation>
     </message>
 </context>
 <context>
@@ -906,14 +875,12 @@
 <context>
     <name>CameraSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/camera_section.py" line="+13"/>
         <source>Camera</source>
-        <translation>카메라</translation>
+        <translation type="vanished">카메라</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Shows a camera button in the live tools toolbar.</source>
-        <translation>라이브 도구 모음에 카메라 버튼을 표시합니다.</translation>
+        <translation type="vanished">라이브 도구 모음에 카메라 버튼을 표시합니다.</translation>
     </message>
 </context>
 <context>
@@ -1029,6 +996,16 @@
         <location line="+16"/>
         <source>Enable projection aspect first</source>
         <translation>먼저 프로젝션 화면 비율을 활성화하세요</translation>
+    </message>
+</context>
+<context>
+    <name>IntegrationSettings</name>
+    <message numerus="yes">
+        <location filename="../../ui/qml/settings/integrations.py" line="+330"/>
+        <source>%n NDI source found.</source>
+        <translation>
+            <numerusform>%n개의 NDI 소스를 찾았습니다.</numerusform>
+        </translation>
     </message>
 </context>
 <context>
@@ -1175,19 +1152,16 @@
 <context>
     <name>LanguageSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/language_section.py" line="+22"/>
         <source>Interface</source>
-        <translation>인터페이스</translation>
+        <translation type="vanished">인터페이스</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>JW Media</source>
-        <translation>JW 미디어</translation>
+        <translation type="vanished">JW 미디어</translation>
     </message>
     <message>
-        <location line="+36"/>
         <source>(same as interface)</source>
-        <translation>(인터페이스와 동일)</translation>
+        <translation type="vanished">(인터페이스와 동일)</translation>
     </message>
 </context>
 <context>
@@ -1576,13 +1550,13 @@
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../../main_window.py" line="+551"/>
+        <location filename="../../main_window.py" line="+565"/>
         <location filename="../../controllers/main_window_nav.py" line="+11"/>
         <source>Solin</source>
         <translation>Solin</translation>
     </message>
     <message>
-        <location line="+694"/>
+        <location line="+717"/>
         <location filename="../../controllers/main_window_nav.py" line="+27"/>
         <source>Scenes</source>
         <translation>장면</translation>
@@ -1623,7 +1597,7 @@
         <translation>녹화 진행 중</translation>
     </message>
     <message>
-        <location line="+379"/>
+        <location line="+381"/>
         <source>Pause playback before changing the projected content.</source>
         <translation>프로젝션할 콘텐츠를 변경하기 전에 재생을 일시 중지하세요.</translation>
     </message>
@@ -2477,69 +2451,56 @@ Solin이 현재 위치에서 계속 다시 연결을 시도합니다.
 <context>
     <name>MediaSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/media_section.py" line="+23"/>
         <source>Auto-download on play</source>
-        <translation>재생 시 자동 다운로드</translation>
+        <translation type="vanished">재생 시 자동 다운로드</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Downloads the playing media for offline use.</source>
-        <translation>재생 중인 미디어를 오프라인 사용을 위해 다운로드합니다.</translation>
+        <translation type="vanished">재생 중인 미디어를 오프라인 사용을 위해 다운로드합니다.</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Auto-download weekly study</source>
-        <translation>주간 연구를 자동으로 다운로드</translation>
+        <translation type="vanished">주간 연구를 자동으로 다운로드</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Downloads this week’s and next week’s meeting media.</source>
-        <translation>이번 주와 다음 주 모임의 미디어를 다운로드합니다.</translation>
+        <translation type="vanished">이번 주와 다음 주 모임의 미디어를 다운로드합니다.</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Song Announcement Mode</source>
-        <translation>곡 공지 모드</translation>
+        <translation type="vanished">곡 공지 모드</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Song starts muted for title display. Press play to start.</source>
-        <translation>제목 표시를 위해 노래가 음소거 상태로 시작됩니다. 재생 버튼을 눌러 처음부터 시작하십시오.</translation>
+        <translation type="vanished">제목 표시를 위해 노래가 음소거 상태로 시작됩니다. 재생 버튼을 눌러 처음부터 시작하십시오.</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Automatic background song</source>
-        <translation>자동 배경 노래</translation>
+        <translation type="vanished">자동 배경 노래</translation>
     </message>
     <message>
-        <location line="+13"/>
         <source>Start videos paused</source>
-        <translation>동영상 일시 정지 상태로 시작</translation>
+        <translation type="vanished">동영상 일시 정지 상태로 시작</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Videos open paused so you can start them manually.</source>
-        <translation>동영상이 일시 정지 상태로 열리므로 수동으로 시작할 수 있습니다.</translation>
+        <translation type="vanished">동영상이 일시 정지 상태로 열리므로 수동으로 시작할 수 있습니다.</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Playback protection</source>
-        <translation>재생 보호</translation>
+        <translation type="vanished">재생 보호</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Prevents media changes and seeking while audio or video is playing. Pause first to make changes.</source>
-        <translation>오디오 또는 비디오 재생 중에는 미디어 변경과 재생 위치 이동을 방지합니다. 변경하려면 먼저 일시 중지하세요.</translation>
+        <translation type="vanished">오디오 또는 비디오 재생 중에는 미디어 변경과 재생 위치 이동을 방지합니다. 변경하려면 먼저 일시 중지하세요.</translation>
     </message>
     <message>
-        <location line="+35"/>
         <source>Configure the meeting day/time before automatic playback can start.</source>
-        <translation>자동 재생을 시작하기 전에 집회 요일과 시간을 설정하십시오.</translation>
+        <translation type="vanished">자동 재생을 시작하기 전에 집회 요일과 시간을 설정하십시오.</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Plays audio songs before configured meetings and fades out before start.</source>
-        <translation>설정된 집회 전에 오디오 노래를 재생하고 시작 전에 서서히 음량을 줄입니다.</translation>
+        <translation type="vanished">설정된 집회 전에 오디오 노래를 재생하고 시작 전에 서서히 음량을 줄입니다.</translation>
     </message>
 </context>
 <context>
@@ -2694,77 +2655,60 @@ Manually added content, trims, framing and expanded state will be kept.</source>
 <context>
     <name>MeetingScheduleSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/meeting_schedule_section.py" line="+528"/>
-        <location line="+334"/>
         <source>Used by automatic features that depend on the meeting start time.</source>
-        <translation>집회 시작 시간에 따라 작동하는 자동 기능에서 사용됩니다.</translation>
+        <translation type="vanished">집회 시작 시간에 따라 작동하는 자동 기능에서 사용됩니다.</translation>
     </message>
     <message>
-        <location line="-275"/>
-        <location line="+285"/>
         <source>Fill in from jw.org</source>
-        <translation>jw.org에서 가져오기</translation>
+        <translation type="vanished">jw.org에서 가져오기</translation>
     </message>
     <message>
-        <location line="-270"/>
-        <location line="+271"/>
         <source>Congregation name</source>
-        <translation>회중 이름</translation>
+        <translation type="vanished">회중 이름</translation>
     </message>
     <message>
-        <location line="-174"/>
         <source>Searching jw.org…</source>
-        <translation>jw.org 검색 중…</translation>
+        <translation type="vanished">jw.org 검색 중…</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>No congregation found with that name.</source>
-        <translation>그 이름의 회중을 찾을 수 없습니다.</translation>
+        <translation type="vanished">그 이름의 회중을 찾을 수 없습니다.</translation>
     </message>
     <message>
-        <location line="-6"/>
         <source>Reading the meeting times…</source>
-        <translation>집회 시간을 읽는 중…</translation>
+        <translation type="vanished">집회 시간을 읽는 중…</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>jw.org does not publish meeting times for this congregation.</source>
-        <translation>jw.org에 이 회중의 집회 시간이 게시되어 있지 않습니다.</translation>
+        <translation type="vanished">jw.org에 이 회중의 집회 시간이 게시되어 있지 않습니다.</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Too many searches in a row. Wait a moment and type again.</source>
-        <translation>연속된 검색이 너무 많습니다. 잠시 기다린 후 다시 입력하세요.</translation>
+        <translation type="vanished">연속된 검색이 너무 많습니다. 잠시 기다린 후 다시 입력하세요.</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Could not reach jw.org. Check the connection and try again.</source>
-        <translation>jw.org에 연결할 수 없습니다. 연결을 확인하고 다시 시도하세요.</translation>
+        <translation type="vanished">jw.org에 연결할 수 없습니다. 연결을 확인하고 다시 시도하세요.</translation>
     </message>
     <message>
-        <location line="+13"/>
         <source>Search your congregation to fill the days and times below.</source>
-        <translation>회중을 검색하면 아래의 요일과 시간이 채워집니다.</translation>
+        <translation type="vanished">회중을 검색하면 아래의 요일과 시간이 채워집니다.</translation>
     </message>
     <message>
         <source>Midweek meeting</source>
         <translation type="vanished">주중 집회</translation>
     </message>
     <message>
-        <location line="-193"/>
-        <location line="+320"/>
         <source>Day and time for the midweek meeting.</source>
-        <translation>주중 집회 요일과 시간.</translation>
+        <translation type="vanished">주중 집회 요일과 시간.</translation>
     </message>
     <message>
         <source>Weekend meeting</source>
         <translation type="vanished">주말 집회</translation>
     </message>
     <message>
-        <location line="-313"/>
-        <location line="+317"/>
         <source>Day and time for the weekend meeting.</source>
-        <translation>주말 집회 요일과 시간.</translation>
+        <translation type="vanished">주말 집회 요일과 시간.</translation>
     </message>
     <message>
         <source>Not configured</source>
@@ -3095,129 +3039,102 @@ Manually added content, trims, framing and expanded state will be kept.</source>
 <context>
     <name>ObsSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/obs_section.py" line="+50"/>
         <source>OBS Studio</source>
-        <translation>OBS Studio</translation>
+        <translation type="vanished">OBS Studio</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Automatically switches scenes during projection</source>
-        <translation>프로젝션 중에 자동으로 장면을 전환</translation>
+        <translation type="vanished">프로젝션 중에 자동으로 장면을 전환</translation>
     </message>
     <message>
-        <location line="+29"/>
         <source>Disconnected</source>
-        <translation>연결 끊김</translation>
+        <translation type="vanished">연결 끊김</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>WebSocket Port</source>
-        <translation>WebSocket 포트</translation>
+        <translation type="vanished">WebSocket 포트</translation>
     </message>
     <message>
-        <location line="+14"/>
         <source>Password (optional)</source>
-        <translation>비밀번호(선택 사항)</translation>
+        <translation type="vanished">비밀번호(선택 사항)</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>Leave blank if no password is set</source>
-        <translation>비밀번호가 설정되지 않은 경우 비워 두십시오</translation>
+        <translation type="vanished">비밀번호가 설정되지 않은 경우 비워 두십시오</translation>
     </message>
     <message>
-        <location line="+9"/>
-        <location line="+363"/>
         <source>● Changes saved automatically</source>
-        <translation>● 변경 사항이 자동으로 저장됩니다</translation>
+        <translation type="vanished">● 변경 사항이 자동으로 저장됩니다</translation>
     </message>
     <message>
-        <location line="-327"/>
         <source>Program stream (NDI)</source>
-        <translation>프로그램 스트림(NDI)</translation>
+        <translation type="vanished">프로그램 스트림(NDI)</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Receive the DistroAV/NDI output from OBS as a live projection.</source>
-        <translation>OBS의 DistroAV/NDI 출력을 라이브 투사로 수신합니다.</translation>
+        <translation type="vanished">OBS의 DistroAV/NDI 출력을 라이브 투사로 수신합니다.</translation>
     </message>
     <message>
-        <location line="+21"/>
         <source>Enable Main Output in DistroAV, then select the NDI source shown by OBS.</source>
-        <translation>DistroAV에서 메인 출력을 활성화한 다음, OBS에 표시된 NDI 소스를 선택하십시오.</translation>
+        <translation type="vanished">DistroAV에서 메인 출력을 활성화한 다음, OBS에 표시된 NDI 소스를 선택하십시오.</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>Available NDI sources</source>
-        <translation>사용 가능한 NDI 소스</translation>
+        <translation type="vanished">사용 가능한 NDI 소스</translation>
     </message>
     <message>
-        <location line="+15"/>
         <source>No sources loaded</source>
-        <translation>로드된 소스가 없습니다</translation>
+        <translation type="vanished">로드된 소스가 없습니다</translation>
     </message>
     <message>
-        <location line="+6"/>
-        <location line="+335"/>
-        <location line="+35"/>
         <source>Find sources</source>
-        <translation>소스 찾기</translation>
+        <translation type="vanished">소스 찾기</translation>
     </message>
     <message>
-        <location line="-338"/>
         <source>Default scene (idle)</source>
-        <translation>기본 장면(대기 상태)</translation>
+        <translation type="vanished">기본 장면(대기 상태)</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Scene shown when nothing is being projected.</source>
-        <translation>아무것도 투사되지 않을 때 표시되는 장면입니다.</translation>
+        <translation type="vanished">아무것도 투사되지 않을 때 표시되는 장면입니다.</translation>
     </message>
     <message>
-        <location line="+13"/>
         <source>Media window scene</source>
-        <translation>미디어 창 장면</translation>
+        <translation type="vanished">미디어 창 장면</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Scene that captures the projection monitor. Activated when content is displayed.</source>
-        <translation>투사 모니터를 캡처하는 장면입니다. 콘텐츠가 표시될 때 활성화됩니다.</translation>
+        <translation type="vanished">투사 모니터를 캡처하는 장면입니다. 콘텐츠가 표시될 때 활성화됩니다.</translation>
     </message>
     <message>
-        <location line="+206"/>
         <source>✓ Configuration saved — reconnecting…</source>
-        <translation>✓ 설정 저장됨 — 다시 연결 중...</translation>
+        <translation type="vanished">✓ 설정 저장됨 — 다시 연결 중...</translation>
     </message>
     <message>
-        <location line="+57"/>
         <source>NDI receiver is not available.</source>
-        <translation>NDI 수신기를 사용할 수 없습니다.</translation>
+        <translation type="vanished">NDI 수신기를 사용할 수 없습니다.</translation>
     </message>
     <message>
-        <location line="+5"/>
         <source>Searching…</source>
-        <translation>검색 중…</translation>
+        <translation type="vanished">검색 중…</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Looking for NDI sources on this network.</source>
-        <translation>이 네트워크에서 NDI 소스를 찾는 중입니다.</translation>
+        <translation type="vanished">이 네트워크에서 NDI 소스를 찾는 중입니다.</translation>
     </message>
     <message numerus="yes">
-        <location line="+25"/>
         <source>%n NDI source found.</source>
-        <translation>
+        <translation type="vanished">
             <numerusform>%n개의 NDI 소스를 찾았습니다.</numerusform>
         </translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>No NDI sources found</source>
-        <translation>NDI 소스를 찾을 수 없습니다</translation>
+        <translation type="vanished">NDI 소스를 찾을 수 없습니다</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>No NDI sources found. Check that DistroAV Main Output is enabled in OBS.</source>
-        <translation>NDI 소스를 찾을 수 없습니다. OBS에서 DistroAV 메인 출력이 활성화되어 있는지 확인하십시오.</translation>
+        <translation type="vanished">NDI 소스를 찾을 수 없습니다. OBS에서 DistroAV 메인 출력이 활성화되어 있는지 확인하십시오.</translation>
     </message>
     <message>
         <source>Connecting…</source>
@@ -3236,9 +3153,8 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation type="vanished">연결 오류</translation>
     </message>
     <message>
-        <location line="+72"/>
         <source>— Select scene —</source>
-        <translation>— 장면 선택 —</translation>
+        <translation type="vanished">— 장면 선택 —</translation>
     </message>
 </context>
 <context>
@@ -3284,7 +3200,7 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation>프로필 이름</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+10"/>
         <source>Example: Main Hall</source>
         <translation>예: 메인 홀</translation>
     </message>
@@ -3317,13 +3233,13 @@ Manually added content, trims, framing and expanded state will be kept.</source>
     </message>
     <message>
         <location line="+5"/>
-        <location line="+406"/>
+        <location line="+414"/>
         <source>Meeting schedule</source>
         <translation>집회 일정</translation>
     </message>
     <message>
-        <location line="-400"/>
-        <location line="+1161"/>
+        <location line="-408"/>
+        <location line="+1150"/>
         <source>Congregation</source>
         <translation>회중</translation>
     </message>
@@ -3332,18 +3248,18 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation type="vanished">선택 사항</translation>
     </message>
     <message>
-        <location line="-1150"/>
+        <location line="-1139"/>
         <source>Find your congregation to fill the meeting days and times from jw.org.</source>
         <translation>회중을 검색하면 jw.org에서 집회 요일과 시간을 채울 수 있습니다.</translation>
     </message>
     <message>
         <location line="+8"/>
-        <location line="+375"/>
+        <location line="+383"/>
         <source>Meeting media</source>
         <translation>집회 미디어</translation>
     </message>
     <message>
-        <location line="-364"/>
+        <location line="-372"/>
         <source>Download automatically</source>
         <translation>자동으로 다운로드</translation>
     </message>
@@ -3354,12 +3270,12 @@ Manually added content, trims, framing and expanded state will be kept.</source>
     </message>
     <message>
         <location line="+8"/>
-        <location line="+357"/>
+        <location line="+365"/>
         <source>Manual download</source>
         <translation>수동 다운로드</translation>
     </message>
     <message>
-        <location line="-356"/>
+        <location line="-364"/>
         <source>Only download media when you click the cloud button.</source>
         <translation>구름 버튼을 클릭할 때만 미디어를 다운로드합니다.</translation>
     </message>
@@ -3404,12 +3320,12 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation>WebSocket 포트</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+16"/>
         <source>Password (optional)</source>
         <translation>비밀번호(선택 사항)</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+16"/>
         <source>Connecting…</source>
         <translation>연결 중…</translation>
     </message>
@@ -3539,8 +3455,8 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation>이번 주와 다음 주</translation>
     </message>
     <message>
-        <location line="-393"/>
-        <location line="+400"/>
+        <location line="-401"/>
+        <location line="+408"/>
         <location line="+5"/>
         <location line="+9"/>
         <source>Not configured</source>
@@ -3562,7 +3478,7 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation>자동 공유 준비됨</translation>
     </message>
     <message>
-        <location line="+120"/>
+        <location line="+101"/>
         <source>Finishing…</source>
         <translation>마무리 중…</translation>
     </message>
@@ -3573,17 +3489,17 @@ Manually added content, trims, framing and expanded state will be kept.</source>
     </message>
     <message>
         <location line="+303"/>
-        <location line="+167"/>
+        <location line="+149"/>
         <source>Close</source>
         <translation>닫기</translation>
     </message>
     <message>
-        <location line="-159"/>
+        <location line="-135"/>
         <source>Search by congregation name</source>
         <translation>회중 이름으로 검색</translation>
     </message>
     <message>
-        <location filename="../../ui/qml/onboarding.py" line="+69"/>
+        <location filename="../../ui/qml/onboarding.py" line="+73"/>
         <source>Searching jw.org…</source>
         <translation>jw.org 검색 중…</translation>
     </message>
@@ -3592,17 +3508,17 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation type="vanished">집회 요일과 시간은 jw.org에서 가져옵니다.</translation>
     </message>
     <message>
-        <location filename="../../qml/OnboardingView.qml" line="+88"/>
+        <location filename="../../qml/OnboardingView.qml" line="+64"/>
         <source>Remove congregation</source>
         <translation>회중 삭제</translation>
     </message>
     <message>
-        <location line="+78"/>
+        <location line="+83"/>
         <source>Search languages</source>
         <translation>언어 검색</translation>
     </message>
     <message>
-        <location filename="../../ui/qml/onboarding.py" line="+255"/>
+        <location filename="../../ui/qml/onboarding.py" line="+259"/>
         <source>Enter a port between 1 and 65535.</source>
         <translation>1에서 65535 사이의 포트를 입력하세요.</translation>
     </message>
@@ -3612,7 +3528,7 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation>공유 대상 선택기를 사용할 수 없습니다.</translation>
     </message>
     <message>
-        <location line="+139"/>
+        <location line="+140"/>
         <source>Enter a profile name.</source>
         <translation>프로필 이름을 입력하세요.</translation>
     </message>
@@ -3647,7 +3563,7 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation>프로필을 만들 수 없습니다.</translation>
     </message>
     <message>
-        <location line="-542"/>
+        <location line="-547"/>
         <source>jw.org does not publish meeting times for this congregation.</source>
         <translation>jw.org에 이 회중의 집회 시간이 게시되어 있지 않습니다.</translation>
     </message>
@@ -3672,7 +3588,7 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation>jw.org에 연결할 수 없습니다. 연결을 확인하고 다시 시도하세요.</translation>
     </message>
     <message>
-        <location line="+685"/>
+        <location line="+690"/>
         <source>Allow Solin in macOS Accessibility settings.</source>
         <translation>macOS 손쉬운 사용 설정에서 Solin을 허용하세요.</translation>
     </message>
@@ -5343,211 +5259,180 @@ This action cannot be undone.</source>
 <context>
     <name>RemoteControlSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/remote_control_section.py" line="+54"/>
-        <location line="+403"/>
         <source>Remote control</source>
-        <translation>원격 제어</translation>
+        <translation type="vanished">원격 제어</translation>
     </message>
     <message>
-        <location line="-402"/>
-        <location line="+404"/>
         <source>Control Solin securely from another device on this local network.</source>
-        <translation>이 로컬 네트워크에 있는 다른 기기에서 Solin을 안전하게 제어하십시오.</translation>
+        <translation type="vanished">이 로컬 네트워크에 있는 다른 기기에서 Solin을 안전하게 제어하십시오.</translation>
     </message>
     <message>
-        <location line="-388"/>
-        <location line="+390"/>
         <source>Network interface</source>
-        <translation>네트워크 인터페이스</translation>
+        <translation type="vanished">네트워크 인터페이스</translation>
     </message>
     <message>
-        <location line="-376"/>
-        <location line="+377"/>
         <source>Access credentials</source>
-        <translation>액세스 자격 증명</translation>
+        <translation type="vanished">액세스 자격 증명</translation>
     </message>
     <message>
-        <location line="-349"/>
-        <location line="+350"/>
         <source>Username</source>
-        <translation>사용자 이름</translation>
+        <translation type="vanished">사용자 이름</translation>
     </message>
     <message>
-        <location line="-345"/>
-        <location line="+346"/>
         <source>New password</source>
-        <translation>새 비밀번호</translation>
+        <translation type="vanished">새 비밀번호</translation>
     </message>
     <message>
-        <location line="-341"/>
-        <location line="+342"/>
         <source>Confirm password</source>
-        <translation>비밀번호 확인</translation>
+        <translation type="vanished">비밀번호 확인</translation>
     </message>
     <message>
-        <location line="-328"/>
-        <location line="+330"/>
         <source>Use at least %1 characters. Credentials belong only to this profile.</source>
-        <translation>%1자 이상 사용하십시오. 자격 증명은 이 프로필에만 적용됩니다.</translation>
+        <translation type="vanished">%1자 이상 사용하십시오. 자격 증명은 이 프로필에만 적용됩니다.</translation>
     </message>
     <message>
-        <location line="-323"/>
-        <location line="+327"/>
         <source>Save credentials</source>
-        <translation>자격 증명 저장</translation>
+        <translation type="vanished">자격 증명 저장</translation>
     </message>
     <message>
-        <location line="-298"/>
-        <location line="+300"/>
         <source>Copy address</source>
-        <translation>주소 복사</translation>
+        <translation type="vanished">주소 복사</translation>
     </message>
     <message>
-        <location line="-285"/>
-        <location line="+286"/>
         <source>Set up a device</source>
-        <translation>기기 설정</translation>
+        <translation type="vanished">기기 설정</translation>
     </message>
     <message>
-        <location line="-265"/>
         <source>Select a private network…</source>
-        <translation>개인 네트워크 선택…</translation>
+        <translation type="vanished">개인 네트워크 선택…</translation>
     </message>
     <message>
-        <location line="+30"/>
         <source>Choose a network and save credentials before enabling remote control.</source>
-        <translation>원격 제어를 활성화하기 전에 네트워크를 선택하고 자격 증명을 저장하십시오.</translation>
+        <translation type="vanished">원격 제어를 활성화하기 전에 네트워크를 선택하고 자격 증명을 저장하십시오.</translation>
     </message>
     <message>
-        <location line="+17"/>
         <source>The passwords do not match.</source>
-        <translation>비밀번호가 일치하지 않습니다.</translation>
+        <translation type="vanished">비밀번호가 일치하지 않습니다.</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Enter a new password to save.</source>
-        <translation>저장할 새 비밀번호를 입력하십시오.</translation>
+        <translation type="vanished">저장할 새 비밀번호를 입력하십시오.</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Check the username and use a password with at least %1 characters.</source>
-        <translation>사용자 이름을 확인하고 %1자 이상의 비밀번호를 사용하십시오.</translation>
+        <translation type="vanished">사용자 이름을 확인하고 %1자 이상의 비밀번호를 사용하십시오.</translation>
     </message>
     <message>
-        <location line="+31"/>
         <source>Configured as %1</source>
-        <translation>%1(으)로 구성됨</translation>
+        <translation type="vanished">%1(으)로 구성됨</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Not configured</source>
-        <translation>구성되지 않음</translation>
+        <translation type="vanished">구성되지 않음</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>Cancel</source>
-        <translation>취소</translation>
+        <translation type="vanished">취소</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Change</source>
-        <translation>변경</translation>
+        <translation type="vanished">변경</translation>
     </message>
     <message>
-        <location line="+20"/>
         <source>No network selected</source>
-        <translation>선택된 네트워크 없음</translation>
+        <translation type="vanished">선택된 네트워크 없음</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>Starting secure remote control…</source>
-        <translation>보안 원격 제어를 시작하는 중…</translation>
+        <translation type="vanished">보안 원격 제어를 시작하는 중…</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Ready to enable.</source>
-        <translation>활성화 준비 완료.</translation>
+        <translation type="vanished">활성화 준비 완료.</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Configuration required.</source>
-        <translation>구성이 필요합니다.</translation>
+        <translation type="vanished">구성이 필요합니다.</translation>
     </message>
 </context>
 <context>
     <name>RemoteControlSetupDialog</name>
     <message>
-        <location filename="../../widgets/remote_control_setup_dialog.py" line="+81"/>
         <source>Set up a device</source>
-        <translation>기기 설정</translation>
+        <translation type="vanished">기기 설정</translation>
     </message>
     <message>
-        <location line="+29"/>
+        <location filename="../../qml/SettingsRemoteSetup.qml" line="+43"/>
         <source>Set up Solin Remote</source>
         <translation>Solin Remote 설정</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+47"/>
         <source>Scan once to open the secure setup on your phone or tablet.</source>
         <translation>휴대전화나 태블릿에서 보안 설정을 열려면 한 번 스캔하십시오.</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+29"/>
         <source>Generating QR code…</source>
         <translation>QR 코드 생성 중…</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="-5"/>
+        <location line="+21"/>
         <source>1  Scan the QR code</source>
         <translation>1  QR 코드 스캔</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+8"/>
         <source>Keep Solin open and connect both devices to the same local network. The guide explains the certificate and app installation.</source>
         <translation>Solin을 열어 둔 상태에서 두 기기를 동일한 로컬 네트워크에 연결하십시오. 인증서 및 앱 설치 방법은 안내서를 참조하십시오.</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+9"/>
+        <location line="+6"/>
         <source>Copy setup address</source>
         <translation>설정 주소 복사</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+7"/>
         <source>On the first opening, the browser may show a privacy warning. Confirm that the local address matches, choose Advanced or Show Details, and continue only to this address. The warning disappears after the certificate is trusted.</source>
         <translation>처음 실행 시 브라우저에 개인정보 보호 경고가 나타날 수 있습니다. 로컬 주소가 일치하는지 확인하고, &apos;고급&apos; 또는 &apos;세부 정보 보기&apos;를 선택한 다음 해당 주소로 계속 진행하십시오. 인증서를 신뢰하면 경고가 사라집니다.</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+15"/>
+        <location line="+12"/>
         <source>VERIFICATION CODE</source>
         <translation>인증 코드</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+4"/>
         <source>Compare this code on the device before installing the certificate.</source>
         <translation>인증서를 설치하기 전에 기기에 표시된 이 코드를 비교하십시오.</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+10"/>
+        <location line="+15"/>
         <source>Show full SHA-256 fingerprint</source>
         <translation>전체 SHA-256 지문 표시</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+27"/>
         <source>Save certificate…</source>
         <translation>인증서 저장…</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+10"/>
         <source>Done</source>
         <translation>완료</translation>
     </message>
     <message>
-        <location line="+93"/>
+        <location filename="../../ui/qml/settings/remote.py" line="+182"/>
+        <location line="+179"/>
         <source>Could not generate the QR code. Copy the address instead.</source>
         <translation>QR 코드를 생성할 수 없습니다. 대신 주소를 복사하십시오.</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+40"/>
         <source>Save Solin certificate</source>
         <translation>Solin 인증서 저장</translation>
     </message>
@@ -5557,12 +5442,11 @@ This action cannot be undone.</source>
         <translation>인증서 파일 (*.cer)</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>Could not save certificate</source>
-        <translation>인증서를 저장할 수 없습니다</translation>
+        <translation type="vanished">인증서를 저장할 수 없습니다</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+8"/>
         <source>Choose another location and try again.</source>
         <translation>다른 위치를 선택하고 다시 시도하십시오.</translation>
     </message>
@@ -7294,24 +7178,20 @@ Add content, a camera, or another scene.</source>
 <context>
     <name>ScreensSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/screens_section.py" line="+54"/>
         <source>Primary Screen (control)</source>
-        <translation>주 화면 (제어)</translation>
+        <translation type="vanished">주 화면 (제어)</translation>
     </message>
     <message>
-        <location line="+20"/>
         <source>No secondary screen detected. Connect an external monitor.</source>
-        <translation>보조 화면을 감지할 수 없습니다. 외부 모니터를 연결하세요.</translation>
+        <translation type="vanished">보조 화면을 감지할 수 없습니다. 외부 모니터를 연결하세요.</translation>
     </message>
     <message>
-        <location line="+27"/>
         <source>Secondary {n} (projection)</source>
-        <translation>보조 {n} (프로젝션)</translation>
+        <translation type="vanished">보조 {n} (프로젝션)</translation>
     </message>
     <message>
-        <location line="+18"/>
         <source>PROJECTION</source>
-        <translation>프로젝션</translation>
+        <translation type="vanished">프로젝션</translation>
     </message>
 </context>
 <context>
@@ -7340,84 +7220,74 @@ Add content, a camera, or another scene.</source>
 <context>
     <name>SettingsWidget</name>
     <message>
-        <location filename="../../widgets/settings_widget.py" line="+277"/>
-        <location line="+265"/>
+        <location filename="../../qml/SettingsView.qml" line="+115"/>
         <source>Settings</source>
         <translation>설정</translation>
     </message>
     <message>
-        <location line="-145"/>
-        <location line="+153"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+113"/>
         <source>Annual Text</source>
         <translation>연간 텍스트</translation>
     </message>
     <message>
-        <location line="+108"/>
+        <location line="+2"/>
         <source>Scripture:</source>
         <translation>경전:</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>E.g.: Happy are those conscious of their spiritual need.</source>
-        <translation>예: 영적 필요를 자각하는 사람들은 행복합니다.</translation>
+        <translation type="vanished">예: 영적 필요를 자각하는 사람들은 행복합니다.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Bible reference:</source>
         <translation>성경 참고 자료:</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>E.g.: Matthew 5:3.</source>
-        <translation>예: 마태복음 5:3.</translation>
+        <translation type="vanished">예: 마태복음 5:3.</translation>
     </message>
     <message>
-        <location line="-106"/>
+        <location line="-47"/>
         <source>Auto-download on play</source>
         <translation>재생 시 자동 다운로드</translation>
     </message>
     <message>
-        <location line="-214"/>
-        <location line="+203"/>
+        <location line="+6"/>
         <source>Meetings</source>
         <translation>모임</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+29"/>
         <source>Auto-download weekly study</source>
         <translation>주간 연구를 자동으로 다운로드</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="-38"/>
         <source>Song Announcement Mode</source>
         <translation>곡 공지 모드</translation>
     </message>
     <message>
-        <location line="-236"/>
-        <location line="+217"/>
+        <location line="-11"/>
         <source>Language</source>
         <translation>언어</translation>
     </message>
     <message>
-        <location line="-209"/>
-        <location line="+210"/>
         <source>Media</source>
-        <translation>미디어</translation>
+        <translation type="vanished">미디어</translation>
     </message>
     <message>
-        <location line="-194"/>
-        <location line="+196"/>
+        <location line="+16"/>
         <source>Folders</source>
         <translation>폴더</translation>
     </message>
     <message>
-        <location line="-179"/>
-        <location line="+181"/>
+        <location line="+52"/>
         <source>Integrations</source>
         <translation>통합</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="-67"/>
         <source>Interface</source>
         <translation>인터페이스</translation>
     </message>
@@ -7427,55 +7297,53 @@ Add content, a camera, or another scene.</source>
         <translation>JW 미디어</translation>
     </message>
     <message>
-        <location line="-147"/>
-        <location line="+144"/>
+        <location line="+53"/>
+        <location line="+1"/>
         <source>Screens</source>
         <translation>화면</translation>
     </message>
     <message>
-        <location line="+81"/>
+        <location line="+28"/>
         <source>Audio controls and attendance count during meetings.</source>
         <translation>집회 중 오디오 제어 및 참석자 수.</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+8"/>
+        <location line="+1"/>
         <source>Auto Screen Share</source>
         <translation>자동 화면 공유</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Automatically shares screen via hotkeys when projecting media.</source>
         <translation>미디어를 투사할 때 단축키로 화면을 자동 공유합니다.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Share hotkey</source>
         <translation>공유 단축키</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Uses Zoom&apos;s single start/stop screen-share shortcut.</source>
-        <translation>Zoom의 화면 공유 시작/중지 단일 단축키를 사용합니다.</translation>
+        <translation type="vanished">Zoom의 화면 공유 시작/중지 단일 단축키를 사용합니다.</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+1"/>
         <source>Share target</source>
         <translation>공유 대상</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>The Solin Media Preview tile inside Zoom&apos;s share dialog.</source>
-        <translation>Zoom 공유 대화 상자 안의 “Solin Media Preview” 타일입니다.</translation>
+        <translation type="vanished">Zoom 공유 대화 상자 안의 “Solin Media Preview” 타일입니다.</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+1"/>
         <source>Accessibility permission</source>
         <translation>손쉬운 사용 권한</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Open Settings</source>
-        <translation>설정 열기</translation>
+        <translation type="vanished">설정 열기</translation>
     </message>
     <message>
         <source>Click Position</source>
@@ -7486,17 +7354,17 @@ Add content, a camera, or another scene.</source>
         <translation type="vanished">공유 대화 상자가 열린 뒤 대상을 선택하기 위해 클릭할 위치입니다.</translation>
     </message>
     <message>
-        <location line="-3"/>
         <source>Configure</source>
-        <translation>구성</translation>
+        <translation type="vanished">구성</translation>
     </message>
     <message>
-        <location line="-61"/>
+        <location line="-26"/>
+        <location line="+1"/>
         <source>OBS Studio</source>
         <translation>OBS Studio</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+0"/>
         <source>Automatically switches scenes during projection</source>
         <translation>프로젝션 중에 자동으로 장면을 전환</translation>
     </message>
@@ -7511,9 +7379,8 @@ Add content, a camera, or another scene.</source>
         <translation>비밀번호(선택 사항)</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Leave blank if no password is set</source>
-        <translation>비밀번호가 설정되지 않은 경우 비워 두십시오</translation>
+        <translation type="vanished">비밀번호가 설정되지 않은 경우 비워 두십시오</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -7521,9 +7388,8 @@ Add content, a camera, or another scene.</source>
         <translation>기본 장면(대기 상태)</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Scene shown when nothing is being projected.</source>
-        <translation>아무것도 투사되지 않을 때 표시되는 장면입니다.</translation>
+        <translation type="vanished">아무것도 투사되지 않을 때 표시되는 장면입니다.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -7531,55 +7397,51 @@ Add content, a camera, or another scene.</source>
         <translation>미디어 창 장면</translation>
     </message>
     <message>
-        <location line="-179"/>
-        <location line="+137"/>
+        <location line="+45"/>
         <source>About</source>
         <translation>정보</translation>
     </message>
     <message>
-        <location line="+113"/>
+        <location filename="../../qml/SettingsPage.qml" line="+184"/>
         <source>Audio &amp; Video app for Kingdom Hall meetings.</source>
         <translation>왕국회관 모임을 위한 오디오 및 비디오 애플리케이션.</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+9"/>
         <source>Official Website</source>
         <translation>공식 웹사이트</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+4"/>
         <source>Changelog</source>
         <translation>변경 사항</translation>
     </message>
     <message>
-        <location line="-6"/>
+        <location line="+6"/>
         <source>This app is independent and is not affiliated with or endorsed by the Watch Tower Bible and Tract Society of Pennsylvania or any of its associated organizations.</source>
         <translation>이 앱은 독립적으로 개발되었으며, 워치 타워 성서 책자 협회(펜실베이니아) 또는 그 관련 단체와 제휴하거나 승인을 받은 것이 아닙니다.</translation>
     </message>
     <message>
-        <location line="-12"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-61"/>
         <source>Update</source>
         <translation>업데이트</translation>
     </message>
     <message>
-        <location line="-98"/>
+        <location line="-45"/>
         <source>Downloads the playing media for offline use.</source>
         <translation>재생 중인 미디어를 오프라인 사용을 위해 다운로드합니다.</translation>
     </message>
     <message>
-        <location line="-312"/>
-        <location line="+289"/>
         <source>Loading…</source>
-        <translation>로드 중…</translation>
+        <translation type="vanished">로드 중…</translation>
     </message>
     <message>
-        <location line="-176"/>
-        <location line="+189"/>
+        <location line="+89"/>
         <source>Remote access</source>
         <translation>원격 접속</translation>
     </message>
     <message>
-        <location line="-34"/>
+        <location filename="../../ui/qml/settings/general.py" line="+158"/>
         <source>Dark</source>
         <translation>어둡게</translation>
     </message>
@@ -7589,72 +7451,72 @@ Add content, a camera, or another scene.</source>
         <translation>밝게</translation>
     </message>
     <message>
-        <location line="+45"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-54"/>
         <source>Downloads this week’s and next week’s meeting media.</source>
         <translation>이번 주와 다음 주 모임의 미디어를 다운로드합니다.</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="-38"/>
         <source>Song starts muted for title display. Press play to start.</source>
         <translation>제목 표시를 위해 노래가 음소거 상태로 시작됩니다. 재생 버튼을 눌러 처음부터 시작하십시오.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+39"/>
         <source>Automatic background song</source>
         <translation>자동 배경 노래</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-41"/>
         <source>Start videos paused</source>
         <translation>동영상 일시 정지 상태로 시작</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Videos open paused so you can start them manually.</source>
         <translation>동영상이 일시 정지 상태로 열리므로 수동으로 시작할 수 있습니다.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Playback protection</source>
         <translation>재생 보호</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+0"/>
         <source>Prevents media changes and seeking while audio or video is playing. Pause first to make changes.</source>
         <translation>오디오 또는 비디오 재생 중에는 미디어 변경과 재생 위치 이동을 방지합니다. 변경하려면 먼저 일시 중지하세요.</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+7"/>
         <source>Link Folder</source>
         <translation>폴더 링크</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Sync folder (Dropbox, OneDrive, etc.) shown as playlists.</source>
         <translation>동기화 폴더(Dropbox, OneDrive 등)가 재생목록으로 표시됩니다.</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location filename="../../qml/SettingsRow.qml" line="+264"/>
         <source>Choose…</source>
         <translation>선택…</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+60"/>
+        <location line="+1"/>
         <source>Program stream (NDI)</source>
         <translation>프로그램 스트림(NDI)</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Receive the DistroAV/NDI output from OBS as a live projection.</source>
         <translation>OBS의 DistroAV/NDI 출력을 라이브 투사로 수신합니다.</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Enable Main Output in DistroAV, then select the NDI source shown by OBS.</source>
-        <translation>DistroAV에서 메인 출력을 활성화한 다음, OBS에 표시된 NDI 소스를 선택하십시오.</translation>
+        <translation type="vanished">DistroAV에서 메인 출력을 활성화한 다음, OBS에 표시된 NDI 소스를 선택하십시오.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Available NDI sources</source>
         <translation>사용 가능한 NDI 소스</translation>
     </message>
@@ -7664,64 +7526,576 @@ Add content, a camera, or another scene.</source>
         <translation>소스 찾기</translation>
     </message>
     <message>
-        <location line="-11"/>
         <source>Scene that captures the projection monitor. Activated when content is displayed.</source>
-        <translation>투사 모니터를 캡처하는 장면입니다. 콘텐츠가 표시될 때 활성화됩니다.</translation>
+        <translation type="vanished">투사 모니터를 캡처하는 장면입니다. 콘텐츠가 표시될 때 활성화됩니다.</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+6"/>
+        <location line="+1"/>
         <source>Camera</source>
         <translation>카메라</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Shows a camera button in the live tools toolbar.</source>
         <translation>라이브 도구 모음줄에 카메라 버튼을 표시합니다.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+11"/>
+        <location line="+1"/>
         <source>Automatic Shortcuts</source>
         <translation>자동 바로가기</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Sends keyboard shortcuts when visual media changes state.</source>
         <translation>시각 매체의 상태가 변경될 때 키보드 단축키를 전송합니다.</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Create one or more shortcuts for start, end, pause and resume events.</source>
-        <translation>시작, 종료, 일시 정지, 재개 이벤트에 대한 단축키를 하나 이상 만드십시오.</translation>
+        <translation type="vanished">시작, 종료, 일시 정지, 재개 이벤트에 대한 단축키를 하나 이상 만드십시오.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location filename="../../qml/SettingsRow.qml" line="+68"/>
         <source>No shortcuts configured.</source>
         <translation>설정된 단축키가 없습니다.</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+1"/>
         <source>Add shortcut</source>
         <translation>단축키 추가</translation>
     </message>
     <message>
-        <location line="+19"/>
+        <location filename="../../qml/SettingsRow.qml" line="-7"/>
         <source>Edit</source>
         <translation>편집</translation>
     </message>
     <message>
-        <location line="-13"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-17"/>
+        <location line="+1"/>
         <source>Zoom Meetings</source>
         <translation>Zoom 회의</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="-25"/>
         <source>Text shown on the projection screen when idle.</source>
         <translation>비활성일 때 프로젝션 화면에 표시되는 텍스트입니다.</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+3"/>
         <source>Save changes</source>
         <translation>변경 사항 저장</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsSectionHeader.qml" line="+28"/>
+        <location line="+35"/>
+        <source>Back to sections</source>
+        <translation>섹션으로 돌아가기</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsView.qml" line="+15"/>
+        <source>Search settings</source>
+        <translation>검색 설정</translation>
+    </message>
+    <message>
+        <location line="+173"/>
+        <source>Search results</source>
+        <translation>검색 결과</translation>
+    </message>
+    <message>
+        <location line="+77"/>
+        <source>No settings found. Try another word.</source>
+        <translation>설정을 찾을 수 없습니다. 다른 단어를 사용해 보세요.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-67"/>
+        <source>Appearance and languages</source>
+        <translation>모양과 언어</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Theme and languages</source>
+        <translation>테마 및 언어</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Appearance</source>
+        <translation>외관</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Theme</source>
+        <translation>테마</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Update languages</source>
+        <translation>언어 업데이트</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Media and files</source>
+        <translation>미디어 및 파일</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Playback, downloads and folders</source>
+        <translation>재생, 다운로드 및 폴더</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Playback</source>
+        <translation>재생</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Downloads</source>
+        <translation>다운로드</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Schedule and preparation</source>
+        <translation>일정 및 준비</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Meeting schedule</source>
+        <translation>회의 일정</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Midweek meeting</source>
+        <translation>주중 집회</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <location line="+7"/>
+        <source>Time</source>
+        <translation>시간</translation>
+    </message>
+    <message>
+        <location line="-3"/>
+        <source>Weekend meeting</source>
+        <translation>주말 집회</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Preparation</source>
+        <translation>준비</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Projection</source>
+        <translation>프로젝션</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Screens and annual text</source>
+        <translation>스크린 및 연간 텍스트</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Scenes</source>
+        <translation>장면</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Native scenes engine</source>
+        <translation>네이티브 씬 엔진</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Restart Solin to apply this change.</source>
+        <translation>이 변경 사항을 적용하려면 Solin을 다시 시작하세요.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>OBS, Zoom and camera</source>
+        <translation>OBS, 줌 및 카메라</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>Automations</source>
+        <translation>자동화</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Sharing and shortcuts</source>
+        <translation>공유 및 바로가기</translation>
+    </message>
+    <message>
+        <location line="+30"/>
+        <source>Version and information</source>
+        <translation>버전 및 정보</translation>
+    </message>
+    <message>
+        <location line="-17"/>
+        <source>Control over your local network</source>
+        <translation>로컬 네트워크 제어</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+1"/>
+        <source>Remote control</source>
+        <translation>원격 제어</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Control Solin securely from another device on this local network.</source>
+        <translation>이 로컬 네트워크에 있는 다른 기기에서 Solin을 안전하게 제어하십시오.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Network interface</source>
+        <translation>네트워크 인터페이스</translation>
+    </message>
+    <message>
+        <source>Refresh</source>
+        <translation type="vanished">새로고침</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Copy address</source>
+        <translation>주소 복사</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Access credentials</source>
+        <translation>액세스 자격 증명</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Username</source>
+        <translation>사용자 이름</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>New password</source>
+        <translation>새 비밀번호</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Confirm password</source>
+        <translation>비밀번호 확인</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Save credentials</source>
+        <translation>자격 증명 저장</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Devices</source>
+        <translation>장치</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Set up a device</source>
+        <translation>기기 설정</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/general.py" line="-125"/>
+        <source>Searching jw.org…</source>
+        <translation>jw.org 검색 중…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Reading the meeting times…</source>
+        <translation>집회 시간을 읽는 중…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>No congregation found with that name.</source>
+        <translation>그 이름의 회중을 찾을 수 없습니다.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>jw.org does not publish meeting times for this congregation.</source>
+        <translation>jw.org에 이 회중의 집회 시간이 게시되어 있지 않습니다.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Too many searches in a row. Wait a moment and type again.</source>
+        <translation>연속된 검색이 너무 많습니다. 잠시 기다린 후 다시 입력하세요.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Could not reach jw.org. Check the connection and try again.</source>
+        <translation>jw.org에 연결할 수 없습니다. 연결을 확인하고 다시 시도하세요.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-90"/>
+        <location filename="../../ui/qml/settings/general.py" line="+5"/>
+        <source>Search your congregation to fill the days and times below.</source>
+        <translation>회중을 검색하면 아래의 요일과 시간이 채워집니다.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/general.py" line="+94"/>
+        <source>(same as interface)</source>
+        <translation>(인터페이스와 동일)</translation>
+    </message>
+    <message>
+        <location line="+54"/>
+        <source>Primary Screen (control)</source>
+        <translation>주 화면 (제어)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Secondary {n} (projection)</source>
+        <translation>보조 {n} (프로젝션)</translation>
+    </message>
+    <message>
+        <location line="+210"/>
+        <source>Configure the meeting day/time before automatic playback can start.</source>
+        <translation>자동 재생을 시작하기 전에 집회 요일과 시간을 설정하십시오.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Plays audio songs before configured meetings and fades out before start.</source>
+        <translation>설정된 집회 전에 오디오 노래를 재생하고 시작 전에 서서히 음량을 줄입니다.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Select folder to link</source>
+        <translation>링크할 폴더를 선택하세요</translation>
+    </message>
+    <message>
+        <location line="+117"/>
+        <source>Fetching annual text…</source>
+        <translation>연간 텍스트 검색 중…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Could not fetch annual text</source>
+        <translation>연간 텍스트를 가져올 수 없습니다</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Annual text updated for {year}</source>
+        <translation>{year}에 대한 연간 텍스트 업데이트됨</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsRow.qml" line="-134"/>
+        <source>Select…</source>
+        <translation>선택…</translation>
+    </message>
+    <message>
+        <location line="+61"/>
+        <source>No folder selected</source>
+        <translation>선택된 폴더 없음</translation>
+    </message>
+    <message>
+        <location line="+48"/>
+        <source>No secondary screen detected. Connect an external monitor.</source>
+        <translation>보조 화면을 감지할 수 없습니다. 외부 모니터를 연결하세요.</translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <source>Delete</source>
+        <translation>삭제</translation>
+    </message>
+    <message>
+        <location filename="../../qml/AppTextField.qml" line="+67"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-10"/>
+        <source>Clear</source>
+        <translation>지우기</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsClockPicker.qml" line="+45"/>
+        <source>Choose hour</source>
+        <translation>시간 선택</translation>
+    </message>
+    <message>
+        <location line="+30"/>
+        <source>Choose minute</source>
+        <translation>분 선택</translation>
+    </message>
+    <message>
+        <location line="+101"/>
+        <source>Hour %1</source>
+        <translation>시간%1</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Minute %1</source>
+        <translation>분%1</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsCongregationDialog.qml" line="+31"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+8"/>
+        <source>Fill in from jw.org</source>
+        <translation>jw.org에서 가져오기</translation>
+    </message>
+    <message>
+        <location line="+23"/>
+        <source>Search by congregation name</source>
+        <translation>회중 이름으로 검색</translation>
+    </message>
+    <message>
+        <location line="+86"/>
+        <location filename="../../qml/SettingsRemoteSetup.qml" line="-201"/>
+        <source>Close</source>
+        <translation>닫기</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsRow.qml" line="-88"/>
+        <location filename="../../qml/SettingsSelectionDialog.qml" line="+30"/>
+        <source>Search…</source>
+        <translation>검색…</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsSelectionDialog.qml" line="+8"/>
+        <source>HH:mm</source>
+        <translation>HH:mm</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>No results found.</source>
+        <translation>검색된 결과가 없습니다.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <location filename="../../qml/SettingsTimeDialog.qml" line="+58"/>
+        <source>Apply</source>
+        <translation>적용</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <location filename="../../qml/SettingsTimeDialog.qml" line="-2"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+37"/>
+        <location line="+52"/>
+        <source>Cancel</source>
+        <translation>취소</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsShortcutDialog.qml" line="-144"/>
+        <source>Share Hotkey</source>
+        <translation>공유 단축키</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Press the Zoom shortcut that starts and stops screen sharing.</source>
+        <translation>화면 공유를 시작하고 중지하는 Zoom 단축키를 누르세요.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="-309"/>
+        <location line="+63"/>
+        <source>Select a private network…</source>
+        <translation>개인 네트워크 선택…</translation>
+    </message>
+    <message>
+        <location line="-50"/>
+        <source>Choose a network and save credentials before enabling remote control.</source>
+        <translation>원격 제어를 활성화하기 전에 네트워크를 선택하고 자격 증명을 저장하십시오.</translation>
+    </message>
+    <message>
+        <location line="+83"/>
+        <source>Starting secure remote control…</source>
+        <translation>보안 원격 제어를 시작하는 중…</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Ready to enable.</source>
+        <translation>활성화 준비 완료.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Configuration required.</source>
+        <translation>구성이 필요합니다.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Configured as %1</source>
+        <translation>%1(으)로 구성됨</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/integrations.py" line="-106"/>
+        <source>Enter a valid port (1–65535).</source>
+        <translation>올바른 포트를 입력하세요(1~65535).</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>✓ Configuration saved — reconnecting…</source>
+        <translation>✓ 설정 저장됨 — 다시 연결 중...</translation>
+    </message>
+    <message>
+        <location line="+31"/>
+        <source>— Select scene —</source>
+        <translation>— 장면 선택 —</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>NDI receiver is not available.</source>
+        <translation>NDI 수신기를 사용할 수 없습니다.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <location line="+34"/>
+        <source>Looking for NDI sources on this network.</source>
+        <translation>이 네트워크에서 NDI 소스를 찾는 중입니다.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>No NDI sources found. Check that DistroAV Main Output is enabled in OBS.</source>
+        <translation>NDI 소스를 찾을 수 없습니다. OBS에서 DistroAV 메인 출력이 활성화되어 있는지 확인하십시오.</translation>
+    </message>
+    <message>
+        <location line="+48"/>
+        <source>Press a shortcut before saving.</source>
+        <translation>저장하기 전에 단축키를 누르십시오.</translation>
+    </message>
+    <message>
+        <location line="+78"/>
+        <source>Configured</source>
+        <translation>구성됨</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <location filename="../../ui/qml/settings/remote.py" line="+4"/>
+        <source>Not configured</source>
+        <translation>구성되지 않음</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Solin can send the automatic click.</source>
+        <translation>Solin에서 자동 클릭을 보낼 수 있습니다.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Allow Solin in macOS Accessibility so automatic clicks can work.</source>
+        <translation>자동 클릭이 작동하도록 macOS 손쉬운 사용에서 Solin을 허용하세요.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="+2"/>
+        <source>Use at least %1 characters. Credentials belong only to this profile.</source>
+        <translation>%1자 이상 사용하십시오. 자격 증명은 이 프로필에만 적용됩니다.</translation>
+    </message>
+    <message>
+        <location line="+33"/>
+        <source>The passwords do not match.</source>
+        <translation>비밀번호가 일치하지 않습니다.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Enter a new password to save.</source>
+        <translation>저장할 새 비밀번호를 입력하십시오.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Check the username and use a password with at least %1 characters.</source>
+        <translation>사용자 이름을 확인하고 %1자 이상의 비밀번호를 사용하십시오.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/general.py" line="+18"/>
+        <location filename="../../ui/qml/settings/remote.py" line="+10"/>
+        <location line="+142"/>
+        <source>Saved</source>
+        <translation>저장됨</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="-23"/>
+        <source>Copied</source>
+        <translation>복사됨</translation>
     </message>
 </context>
 <context>
@@ -8872,34 +9246,28 @@ Click &apos;Download&apos; to open the download page.</source>
 <context>
     <name>WatchedFolderSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/watched_folder_section.py" line="+48"/>
         <source>Link Folder</source>
-        <translation>폴더 링크</translation>
+        <translation type="vanished">폴더 링크</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Sync folder (Dropbox, OneDrive, etc.) shown as playlists.</source>
-        <translation>동기화 폴더(Dropbox, OneDrive 등)가 재생목록으로 표시됩니다.</translation>
+        <translation type="vanished">동기화 폴더(Dropbox, OneDrive 등)가 재생목록으로 표시됩니다.</translation>
     </message>
     <message>
-        <location line="+19"/>
         <source>Choose…</source>
-        <translation>선택…</translation>
+        <translation type="vanished">선택…</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>Clear</source>
-        <translation>지우기</translation>
+        <translation type="vanished">지우기</translation>
     </message>
     <message>
-        <location line="+48"/>
         <source>No folder selected</source>
-        <translation>선택된 폴더 없음</translation>
+        <translation type="vanished">선택된 폴더 없음</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Select folder to link</source>
-        <translation>링크할 폴더를 선택하세요</translation>
+        <translation type="vanished">링크할 폴더를 선택하세요</translation>
     </message>
 </context>
 <context>
@@ -9143,76 +9511,60 @@ Both devices must be on the same Wi-Fi network.</source>
 <context>
     <name>YearlyTextSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/yearly_text_section.py" line="+62"/>
         <source>Text shown on the projection screen when idle.</source>
-        <translation>비활성일 때 프로젝션 화면에 표시되는 텍스트입니다.</translation>
+        <translation type="vanished">비활성일 때 프로젝션 화면에 표시되는 텍스트입니다.</translation>
     </message>
     <message>
-        <location line="+18"/>
-        <location line="+309"/>
         <source>Fetching annual text…</source>
-        <translation>연간 텍스트 검색 중…</translation>
+        <translation type="vanished">연간 텍스트 검색 중…</translation>
     </message>
     <message>
-        <location line="-295"/>
-        <location line="+276"/>
         <source>Update</source>
-        <translation>업데이트</translation>
+        <translation type="vanished">업데이트</translation>
     </message>
     <message>
-        <location line="-241"/>
         <source>Scripture:</source>
-        <translation>경전:</translation>
+        <translation type="vanished">경전:</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>E.g.: Happy are those conscious of their spiritual need.</source>
-        <translation>예: 영적 필요를 자각하는 사람들은 행복합니다.</translation>
+        <translation type="vanished">예: 영적 필요를 자각하는 사람들은 행복합니다.</translation>
     </message>
     <message>
-        <location line="+11"/>
         <source>Bible reference:</source>
-        <translation>성경 참고 자료:</translation>
+        <translation type="vanished">성경 참고 자료:</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>E.g.: Matthew 5:3.</source>
-        <translation>예: 마태복음 5:3.</translation>
+        <translation type="vanished">예: 마태복음 5:3.</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>Save changes</source>
-        <translation>변경 사항 저장</translation>
+        <translation type="vanished">변경 사항 저장</translation>
     </message>
     <message>
-        <location line="+196"/>
         <source>Annual text updated for {year}</source>
-        <translation>{year}에 대한 연간 텍스트 업데이트됨</translation>
+        <translation type="vanished">{year}에 대한 연간 텍스트 업데이트됨</translation>
     </message>
     <message>
-        <location line="+33"/>
         <source>Loading…</source>
-        <translation>로드 중…</translation>
+        <translation type="vanished">로드 중…</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Could not fetch annual text</source>
-        <translation>연간 텍스트를 가져올 수 없습니다</translation>
+        <translation type="vanished">연간 텍스트를 가져올 수 없습니다</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Retry</source>
-        <translation>다시 시도</translation>
+        <translation type="vanished">다시 시도</translation>
     </message>
     <message>
-        <location line="+23"/>
         <source>▲  Edit text manually</source>
-        <translation>▲  수동으로 텍스트 편집</translation>
+        <translation type="vanished">▲  수동으로 텍스트 편집</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>▼  Edit text manually</source>
-        <translation>▼  수동으로 텍스트 편집</translation>
+        <translation type="vanished">▼  수동으로 텍스트 편집</translation>
     </message>
 </context>
 <context>
@@ -9434,14 +9786,12 @@ A number at the end has priority.</source>
 <context>
     <name>ZoomSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/zoom_section.py" line="+32"/>
         <source>Zoom Meetings</source>
-        <translation>Zoom 회의</translation>
+        <translation type="vanished">Zoom 회의</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Audio controls and attendance count during meetings.</source>
-        <translation>집회 중 오디오 제어 및 참석자 수.</translation>
+        <translation type="vanished">집회 중 오디오 제어 및 참석자 수.</translation>
     </message>
 </context>
 <context>
@@ -10972,8 +11322,7 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
 <context>
     <name>_ShortcutSequenceEdit</name>
     <message>
-        <location filename="../../widgets/settings/auto_key_dialog.py" line="-257"/>
-        <location line="+52"/>
+        <location filename="../../qml/SettingsShortcutDialog.qml" line="+98"/>
         <source>Click to record</source>
         <translation>클릭하여 기록</translation>
     </message>
@@ -10981,37 +11330,31 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
 <context>
     <name>_TimePickerPopup</name>
     <message>
-        <location filename="../../widgets/settings/meeting_schedule_section.py" line="-477"/>
         <source>Hour</source>
-        <translation>시간</translation>
+        <translation type="vanished">시간</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Minute</source>
-        <translation>분</translation>
+        <translation type="vanished">분</translation>
     </message>
     <message>
-        <location line="+15"/>
         <source>Cancel</source>
-        <translation>취소</translation>
+        <translation type="vanished">취소</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Apply</source>
-        <translation>적용</translation>
+        <translation type="vanished">적용</translation>
     </message>
 </context>
 <context>
     <name>_TimeStepper</name>
     <message>
-        <location line="-108"/>
         <source>Increase</source>
-        <translation>늘리기</translation>
+        <translation type="vanished">늘리기</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Decrease</source>
-        <translation>줄이기</translation>
+        <translation type="vanished">줄이기</translation>
     </message>
 </context>
 <context>

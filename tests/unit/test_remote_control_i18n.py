@@ -132,7 +132,7 @@ def test_every_non_english_catalog_compiles_the_new_remote_control_copy() -> Non
                 "Install Solin Remote on this device for quick access from your home screen.",
             )
             password_hint = QCoreApplication.translate(
-                "RemoteControlSectionMixin",
+                "SettingsWidget",
                 "Use at least %1 characters. Credentials belong only to this profile.",
             )
         finally:

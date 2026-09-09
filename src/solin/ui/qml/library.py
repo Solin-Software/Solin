@@ -48,11 +48,6 @@ from solin.styles.icons import (
 from solin.styles.theme import PALETTE
 
 
-_ICON_SEARCH = (
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
-    ' stroke="currentColor" stroke-width="2" stroke-linecap="round">'
-    '<circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>'
-)
 _ICON_CLOSE = (
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
     ' stroke="currentColor" stroke-width="2" stroke-linecap="round">'
@@ -118,7 +113,6 @@ class LibraryIconProvider(QQuickImageProvider):
             "music": ICON_MUSIC,
             "play_all": ICON_PLAY_ALL,
             "refresh": ICON_REFRESH,
-            "search": _ICON_SEARCH,
             "select_all": _ICON_SELECT_ALL,
             "shuffle": ICON_PLAY_SHUFFLE,
             "trash": ICON_TRASH,

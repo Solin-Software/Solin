@@ -4,24 +4,20 @@
 <context>
     <name>AboutSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/about_section.py" line="+48"/>
         <source>Audio &amp; Video app for Kingdom Hall meetings.</source>
-        <translation>用于王国聚会所聚会的音视频应用程序。</translation>
+        <translation type="vanished">用于王国聚会所聚会的音视频应用程序。</translation>
     </message>
     <message>
-        <location line="+10"/>
         <source>Official Website</source>
-        <translation>官方网站</translation>
+        <translation type="vanished">官方网站</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Changelog</source>
-        <translation>更新日志</translation>
+        <translation type="vanished">更新日志</translation>
     </message>
     <message>
-        <location line="+14"/>
         <source>This app is independent and is not affiliated with or endorsed by the Watch Tower Bible and Tract Society of Pennsylvania or any of its associated organizations.</source>
-        <translation>本应用程序是独立开发的，与宾夕法尼亚法人守望台圣经书社或其任何相关组织无任何关联或认可关系。</translation>
+        <translation type="vanished">本应用程序是独立开发的，与宾夕法尼亚法人守望台圣经书社或其任何相关组织无任何关联或认可关系。</translation>
     </message>
 </context>
 <context>
@@ -271,60 +267,60 @@
 <context>
     <name>AutoKeyEditorDialog</name>
     <message>
-        <location filename="../../widgets/settings/auto_key_dialog.py" line="+125"/>
+        <location filename="../../qml/SettingsShortcutDialog.qml" line="+53"/>
         <source>Automatic Shortcut</source>
         <translation>自动快捷键</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+12"/>
         <source>Choose an app event and press the shortcut to send.</source>
         <translation>选择一个应用事件并按下要发送的快捷键。</translation>
     </message>
     <message>
-        <location line="+45"/>
+        <location line="+9"/>
+        <location line="+15"/>
         <source>Event</source>
         <translation>事件</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+67"/>
+        <location line="+7"/>
         <source>Shortcut</source>
         <translation>快捷键</translation>
     </message>
     <message>
-        <location line="+12"/>
-        <location line="+95"/>
+        <location line="+35"/>
         <source>Click the field, then press one shortcut.</source>
         <translation>点击该字段，然后按下快捷键。</translation>
     </message>
     <message>
-        <location line="-86"/>
+        <location line="+12"/>
         <source>Enabled</source>
         <translation>已启用</translation>
     </message>
     <message>
-        <location line="+18"/>
+        <location line="+53"/>
         <source>Cancel</source>
         <translation>取消</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+7"/>
         <source>Save</source>
         <translation>保存</translation>
     </message>
     <message>
-        <location line="+54"/>
         <source>Press a shortcut before saving.</source>
-        <translation>保存前请按下快捷键。</translation>
+        <translation type="vanished">保存前请按下快捷键。</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="-109"/>
+        <location line="+36"/>
         <source>Listening... press one shortcut.</source>
         <translation>正在等待输入...请按下快捷键。</translation>
     </message>
     <message>
-        <location line="+13"/>
         <source>Shortcut captured.</source>
-        <translation>快捷键已捕获。</translation>
+        <translation type="vanished">快捷键已捕获。</translation>
     </message>
 </context>
 <context>
@@ -353,109 +349,87 @@
 <context>
     <name>AutoKeysSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/auto_keys_section.py" line="+59"/>
         <source>Automatic Shortcuts</source>
-        <translation>自动快捷键</translation>
+        <translation type="vanished">自动快捷键</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Sends keyboard shortcuts when visual media changes state.</source>
-        <translation>当视觉媒体状态改变时发送键盘快捷键。</translation>
+        <translation type="vanished">当视觉媒体状态改变时发送键盘快捷键。</translation>
     </message>
     <message>
-        <location line="+24"/>
         <source>Create one or more shortcuts for start, end, pause and resume events.</source>
-        <translation>为开始、结束、暂停和恢复事件创建一个或多个快捷键。</translation>
+        <translation type="vanished">为开始、结束、暂停和恢复事件创建一个或多个快捷键。</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>No shortcuts configured.</source>
-        <translation>未配置快捷键。</translation>
+        <translation type="vanished">未配置快捷键。</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>Add shortcut</source>
-        <translation>添加快捷键</translation>
+        <translation type="vanished">添加快捷键</translation>
     </message>
     <message>
-        <location line="+131"/>
         <source>Enabled</source>
-        <translation>已启用</translation>
+        <translation type="vanished">已启用</translation>
     </message>
     <message>
-        <location line="+0"/>
         <source>Disabled</source>
-        <translation>已禁用</translation>
+        <translation type="vanished">已禁用</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Edit</source>
-        <translation>编辑</translation>
+        <translation type="vanished">编辑</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Delete</source>
-        <translation>删除</translation>
+        <translation type="vanished">删除</translation>
     </message>
 </context>
 <context>
     <name>AutoShareSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/auto_share_section.py" line="+55"/>
         <source>Auto Screen Share</source>
-        <translation>自动屏幕共享</translation>
+        <translation type="vanished">自动屏幕共享</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Automatically shares screen via hotkeys when projecting media.</source>
-        <translation>投放媒体时通过快捷键自动共享屏幕。</translation>
+        <translation type="vanished">投放媒体时通过快捷键自动共享屏幕。</translation>
     </message>
     <message>
-        <location line="+30"/>
         <source>Share hotkey</source>
-        <translation>共享快捷键</translation>
+        <translation type="vanished">共享快捷键</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Uses Zoom&apos;s single start/stop screen-share shortcut.</source>
-        <translation>使用 Zoom 的单个开始/停止屏幕共享快捷键。</translation>
+        <translation type="vanished">使用 Zoom 的单个开始/停止屏幕共享快捷键。</translation>
     </message>
     <message>
-        <location line="+10"/>
-        <location line="+241"/>
-        <location line="+9"/>
         <source>Not configured</source>
-        <translation>未配置</translation>
+        <translation type="vanished">未配置</translation>
     </message>
     <message>
-        <location line="-243"/>
         <source>Edit</source>
-        <translation>编辑</translation>
+        <translation type="vanished">编辑</translation>
     </message>
     <message>
-        <location line="+20"/>
         <source>Accessibility permission</source>
-        <translation>辅助功能权限</translation>
+        <translation type="vanished">辅助功能权限</translation>
     </message>
     <message>
-        <location line="+14"/>
         <source>Open Settings</source>
-        <translation>打开设置</translation>
+        <translation type="vanished">打开设置</translation>
     </message>
     <message>
-        <location line="+35"/>
         <source>Share target</source>
-        <translation>共享目标</translation>
+        <translation type="vanished">共享目标</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Where Solin should click after Zoom&apos;s share shortcut opens the dialog.</source>
-        <translation>Zoom 的共享快捷键打开对话框后，Solin 应点击的位置。</translation>
+        <translation type="vanished">Zoom 的共享快捷键打开对话框后，Solin 应点击的位置。</translation>
     </message>
     <message>
-        <location line="+167"/>
         <source>Configured</source>
-        <translation>已配置</translation>
+        <translation type="vanished">已配置</translation>
     </message>
     <message>
         <source>Click Position</source>
@@ -466,33 +440,28 @@
         <translation type="vanished">共享对话框打开后用于选择目标的点击位置。</translation>
     </message>
     <message>
-        <location line="-141"/>
         <source>Configure</source>
-        <translation>配置</translation>
+        <translation type="vanished">配置</translation>
     </message>
     <message>
-        <location line="+122"/>
         <source>Share Hotkey</source>
-        <translation>共享快捷键</translation>
+        <translation type="vanished">共享快捷键</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Press the Zoom shortcut that starts and stops screen sharing.</source>
-        <translation>按下用于开始和停止屏幕共享的 Zoom 快捷键。</translation>
+        <translation type="vanished">按下用于开始和停止屏幕共享的 Zoom 快捷键。</translation>
     </message>
     <message>
         <source>Position: {x}, {y}</source>
         <translation type="vanished">位置: {x}, {y}</translation>
     </message>
     <message>
-        <location line="+35"/>
         <source>Solin can send the automatic click.</source>
-        <translation>Solin 可以发送自动点击。</translation>
+        <translation type="vanished">Solin 可以发送自动点击。</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>Allow Solin in macOS Accessibility so automatic clicks can work.</source>
-        <translation>请在 macOS 辅助功能中允许 Solin，以便自动点击正常工作。</translation>
+        <translation type="vanished">请在 macOS 辅助功能中允许 Solin，以便自动点击正常工作。</translation>
     </message>
 </context>
 <context>
@@ -906,14 +875,12 @@
 <context>
     <name>CameraSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/camera_section.py" line="+13"/>
         <source>Camera</source>
-        <translation>摄像机</translation>
+        <translation type="vanished">摄像机</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Shows a camera button in the live tools toolbar.</source>
-        <translation>在直播工具栏中显示摄像机按钮。</translation>
+        <translation type="vanished">在直播工具栏中显示摄像机按钮。</translation>
     </message>
 </context>
 <context>
@@ -1029,6 +996,16 @@
         <location line="+16"/>
         <source>Enable projection aspect first</source>
         <translation>请先启用投影宽高比</translation>
+    </message>
+</context>
+<context>
+    <name>IntegrationSettings</name>
+    <message numerus="yes">
+        <location filename="../../ui/qml/settings/integrations.py" line="+330"/>
+        <source>%n NDI source found.</source>
+        <translation>
+            <numerusform>找到 %n 个 NDI 源。</numerusform>
+        </translation>
     </message>
 </context>
 <context>
@@ -1175,19 +1152,16 @@
 <context>
     <name>LanguageSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/language_section.py" line="+22"/>
         <source>Interface</source>
-        <translation>界面</translation>
+        <translation type="vanished">界面</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>JW Media</source>
-        <translation>JW 媒体</translation>
+        <translation type="vanished">JW 媒体</translation>
     </message>
     <message>
-        <location line="+36"/>
         <source>(same as interface)</source>
-        <translation>（与界面相同）</translation>
+        <translation type="vanished">（与界面相同）</translation>
     </message>
 </context>
 <context>
@@ -1576,13 +1550,13 @@
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../../main_window.py" line="+551"/>
+        <location filename="../../main_window.py" line="+565"/>
         <location filename="../../controllers/main_window_nav.py" line="+11"/>
         <source>Solin</source>
         <translation>Solin</translation>
     </message>
     <message>
-        <location line="+694"/>
+        <location line="+717"/>
         <location filename="../../controllers/main_window_nav.py" line="+27"/>
         <source>Scenes</source>
         <translation>场景</translation>
@@ -1623,7 +1597,7 @@
         <translation>正在录制</translation>
     </message>
     <message>
-        <location line="+379"/>
+        <location line="+381"/>
         <source>Pause playback before changing the projected content.</source>
         <translation>请先暂停播放，再更改投影内容。</translation>
     </message>
@@ -2477,69 +2451,56 @@ Solin 将继续尝试从当前位置重新连接。
 <context>
     <name>MediaSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/media_section.py" line="+23"/>
         <source>Auto-download on play</source>
-        <translation>播放时自动下载</translation>
+        <translation type="vanished">播放时自动下载</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Downloads the playing media for offline use.</source>
-        <translation>下载正在播放的媒体以供离线使用。</translation>
+        <translation type="vanished">下载正在播放的媒体以供离线使用。</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Auto-download weekly study</source>
-        <translation>自动下载每周学习资料</translation>
+        <translation type="vanished">自动下载每周学习资料</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Downloads this week’s and next week’s meeting media.</source>
-        <translation>下载本周和下周的聚会媒体。</translation>
+        <translation type="vanished">下载本周和下周的聚会媒体。</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Song Announcement Mode</source>
-        <translation>诗歌宣布模式</translation>
+        <translation type="vanished">诗歌宣布模式</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Song starts muted for title display. Press play to start.</source>
-        <translation>诗歌开始时处于静音状态以显示标题。请按播放键开始。</translation>
+        <translation type="vanished">诗歌开始时处于静音状态以显示标题。请按播放键开始。</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Automatic background song</source>
-        <translation>自动背景诗歌</translation>
+        <translation type="vanished">自动背景诗歌</translation>
     </message>
     <message>
-        <location line="+13"/>
         <source>Start videos paused</source>
-        <translation>视频开始时暂停</translation>
+        <translation type="vanished">视频开始时暂停</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Videos open paused so you can start them manually.</source>
-        <translation>视频打开时处于暂停状态，以便您可以手动开始播放。</translation>
+        <translation type="vanished">视频打开时处于暂停状态，以便您可以手动开始播放。</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Playback protection</source>
-        <translation>播放保护</translation>
+        <translation type="vanished">播放保护</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Prevents media changes and seeking while audio or video is playing. Pause first to make changes.</source>
-        <translation>播放音频或视频时，防止更改媒体或调整播放位置。如需更改，请先暂停播放。</translation>
+        <translation type="vanished">播放音频或视频时，防止更改媒体或调整播放位置。如需更改，请先暂停播放。</translation>
     </message>
     <message>
-        <location line="+35"/>
         <source>Configure the meeting day/time before automatic playback can start.</source>
-        <translation>请先设置聚会日期和时间，再启动自动播放。</translation>
+        <translation type="vanished">请先设置聚会日期和时间，再启动自动播放。</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Plays audio songs before configured meetings and fades out before start.</source>
-        <translation>在已配置的聚会前播放音频诗歌，并在开始前淡出。</translation>
+        <translation type="vanished">在已配置的聚会前播放音频诗歌，并在开始前淡出。</translation>
     </message>
 </context>
 <context>
@@ -2694,77 +2655,60 @@ Manually added content, trims, framing and expanded state will be kept.</source>
 <context>
     <name>MeetingScheduleSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/meeting_schedule_section.py" line="+528"/>
-        <location line="+334"/>
         <source>Used by automatic features that depend on the meeting start time.</source>
-        <translation>供依赖聚会开始时间的自动功能使用。</translation>
+        <translation type="vanished">供依赖聚会开始时间的自动功能使用。</translation>
     </message>
     <message>
-        <location line="-275"/>
-        <location line="+285"/>
         <source>Fill in from jw.org</source>
-        <translation>从 jw.org 填充</translation>
+        <translation type="vanished">从 jw.org 填充</translation>
     </message>
     <message>
-        <location line="-270"/>
-        <location line="+271"/>
         <source>Congregation name</source>
-        <translation>会众名称</translation>
+        <translation type="vanished">会众名称</translation>
     </message>
     <message>
-        <location line="-174"/>
         <source>Searching jw.org…</source>
-        <translation>正在搜索 jw.org…</translation>
+        <translation type="vanished">正在搜索 jw.org…</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>No congregation found with that name.</source>
-        <translation>找不到该名称的会众。</translation>
+        <translation type="vanished">找不到该名称的会众。</translation>
     </message>
     <message>
-        <location line="-6"/>
         <source>Reading the meeting times…</source>
-        <translation>正在读取聚会时间…</translation>
+        <translation type="vanished">正在读取聚会时间…</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>jw.org does not publish meeting times for this congregation.</source>
-        <translation>jw.org 未公布此会众的聚会时间。</translation>
+        <translation type="vanished">jw.org 未公布此会众的聚会时间。</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Too many searches in a row. Wait a moment and type again.</source>
-        <translation>连续搜索次数过多。请稍等一下再输入。</translation>
+        <translation type="vanished">连续搜索次数过多。请稍等一下再输入。</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Could not reach jw.org. Check the connection and try again.</source>
-        <translation>无法连接 jw.org。请检查网络连接后重试。</translation>
+        <translation type="vanished">无法连接 jw.org。请检查网络连接后重试。</translation>
     </message>
     <message>
-        <location line="+13"/>
         <source>Search your congregation to fill the days and times below.</source>
-        <translation>搜索您的会众，即可填写下面的日期和时间。</translation>
+        <translation type="vanished">搜索您的会众，即可填写下面的日期和时间。</translation>
     </message>
     <message>
         <source>Midweek meeting</source>
         <translation type="vanished">周中聚会</translation>
     </message>
     <message>
-        <location line="-193"/>
-        <location line="+320"/>
         <source>Day and time for the midweek meeting.</source>
-        <translation>周中聚会的日期和时间。</translation>
+        <translation type="vanished">周中聚会的日期和时间。</translation>
     </message>
     <message>
         <source>Weekend meeting</source>
         <translation type="vanished">周末聚会</translation>
     </message>
     <message>
-        <location line="-313"/>
-        <location line="+317"/>
         <source>Day and time for the weekend meeting.</source>
-        <translation>周末聚会的日期和时间。</translation>
+        <translation type="vanished">周末聚会的日期和时间。</translation>
     </message>
     <message>
         <source>Not configured</source>
@@ -3095,129 +3039,102 @@ Manually added content, trims, framing and expanded state will be kept.</source>
 <context>
     <name>ObsSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/obs_section.py" line="+50"/>
         <source>OBS Studio</source>
-        <translation>OBS Studio</translation>
+        <translation type="vanished">OBS Studio</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Automatically switches scenes during projection</source>
-        <translation>在投影过程中自动切换场景</translation>
+        <translation type="vanished">在投影过程中自动切换场景</translation>
     </message>
     <message>
-        <location line="+29"/>
         <source>Disconnected</source>
-        <translation>已断开连接</translation>
+        <translation type="vanished">已断开连接</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>WebSocket Port</source>
-        <translation>WebSocket 端口</translation>
+        <translation type="vanished">WebSocket 端口</translation>
     </message>
     <message>
-        <location line="+14"/>
         <source>Password (optional)</source>
-        <translation>密码（可选）</translation>
+        <translation type="vanished">密码（可选）</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>Leave blank if no password is set</source>
-        <translation>如果没有设置密码，请留空</translation>
+        <translation type="vanished">如果没有设置密码，请留空</translation>
     </message>
     <message>
-        <location line="+9"/>
-        <location line="+363"/>
         <source>● Changes saved automatically</source>
-        <translation>● 更改会自动保存</translation>
+        <translation type="vanished">● 更改会自动保存</translation>
     </message>
     <message>
-        <location line="-327"/>
         <source>Program stream (NDI)</source>
-        <translation>节目串流 (NDI)</translation>
+        <translation type="vanished">节目串流 (NDI)</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Receive the DistroAV/NDI output from OBS as a live projection.</source>
-        <translation>接收来自 OBS 的 DistroAV/NDI 输出作为实时投影。</translation>
+        <translation type="vanished">接收来自 OBS 的 DistroAV/NDI 输出作为实时投影。</translation>
     </message>
     <message>
-        <location line="+21"/>
         <source>Enable Main Output in DistroAV, then select the NDI source shown by OBS.</source>
-        <translation>请在 DistroAV 中启用“主输出”(Main Output)，然后选择 OBS 显示的 NDI 源。</translation>
+        <translation type="vanished">请在 DistroAV 中启用“主输出”(Main Output)，然后选择 OBS 显示的 NDI 源。</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>Available NDI sources</source>
-        <translation>可用的 NDI 源</translation>
+        <translation type="vanished">可用的 NDI 源</translation>
     </message>
     <message>
-        <location line="+15"/>
         <source>No sources loaded</source>
-        <translation>未加载任何源</translation>
+        <translation type="vanished">未加载任何源</translation>
     </message>
     <message>
-        <location line="+6"/>
-        <location line="+335"/>
-        <location line="+35"/>
         <source>Find sources</source>
-        <translation>查找源</translation>
+        <translation type="vanished">查找源</translation>
     </message>
     <message>
-        <location line="-338"/>
         <source>Default scene (idle)</source>
-        <translation>默认场景（空闲）</translation>
+        <translation type="vanished">默认场景（空闲）</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Scene shown when nothing is being projected.</source>
-        <translation>未投影任何内容时显示的场景。</translation>
+        <translation type="vanished">未投影任何内容时显示的场景。</translation>
     </message>
     <message>
-        <location line="+13"/>
         <source>Media window scene</source>
-        <translation>媒体窗口场景</translation>
+        <translation type="vanished">媒体窗口场景</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Scene that captures the projection monitor. Activated when content is displayed.</source>
-        <translation>捕获投影显示器的场景。当显示内容时激活。</translation>
+        <translation type="vanished">捕获投影显示器的场景。当显示内容时激活。</translation>
     </message>
     <message>
-        <location line="+206"/>
         <source>✓ Configuration saved — reconnecting…</source>
-        <translation>✓ 配置已保存 — 正在重新连接...</translation>
+        <translation type="vanished">✓ 配置已保存 — 正在重新连接...</translation>
     </message>
     <message>
-        <location line="+57"/>
         <source>NDI receiver is not available.</source>
-        <translation>NDI 接收器不可用。</translation>
+        <translation type="vanished">NDI 接收器不可用。</translation>
     </message>
     <message>
-        <location line="+5"/>
         <source>Searching…</source>
-        <translation>正在搜索……</translation>
+        <translation type="vanished">正在搜索……</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Looking for NDI sources on this network.</source>
-        <translation>正在此网络上搜索 NDI 源。</translation>
+        <translation type="vanished">正在此网络上搜索 NDI 源。</translation>
     </message>
     <message numerus="yes">
-        <location line="+25"/>
         <source>%n NDI source found.</source>
-        <translation>
+        <translation type="vanished">
             <numerusform>找到 %n 个 NDI 源。</numerusform>
         </translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>No NDI sources found</source>
-        <translation>未找到 NDI 源</translation>
+        <translation type="vanished">未找到 NDI 源</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>No NDI sources found. Check that DistroAV Main Output is enabled in OBS.</source>
-        <translation>未找到 NDI 源。请检查 OBS 中的 DistroAV 主输出是否已启用。</translation>
+        <translation type="vanished">未找到 NDI 源。请检查 OBS 中的 DistroAV 主输出是否已启用。</translation>
     </message>
     <message>
         <source>Connecting…</source>
@@ -3236,9 +3153,8 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation type="vanished">连接错误</translation>
     </message>
     <message>
-        <location line="+72"/>
         <source>— Select scene —</source>
-        <translation>— 选择场景 —</translation>
+        <translation type="vanished">— 选择场景 —</translation>
     </message>
 </context>
 <context>
@@ -3284,7 +3200,7 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation>配置文件名称</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+10"/>
         <source>Example: Main Hall</source>
         <translation>示例：主会场</translation>
     </message>
@@ -3317,13 +3233,13 @@ Manually added content, trims, framing and expanded state will be kept.</source>
     </message>
     <message>
         <location line="+5"/>
-        <location line="+406"/>
+        <location line="+414"/>
         <source>Meeting schedule</source>
         <translation>聚会时间表</translation>
     </message>
     <message>
-        <location line="-400"/>
-        <location line="+1161"/>
+        <location line="-408"/>
+        <location line="+1150"/>
         <source>Congregation</source>
         <translation>会众</translation>
     </message>
@@ -3332,18 +3248,18 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation type="vanished">可选</translation>
     </message>
     <message>
-        <location line="-1150"/>
+        <location line="-1139"/>
         <source>Find your congregation to fill the meeting days and times from jw.org.</source>
         <translation>搜索您的会众，即可从 jw.org 填写聚会日期和时间。</translation>
     </message>
     <message>
         <location line="+8"/>
-        <location line="+375"/>
+        <location line="+383"/>
         <source>Meeting media</source>
         <translation>聚会媒体资料</translation>
     </message>
     <message>
-        <location line="-364"/>
+        <location line="-372"/>
         <source>Download automatically</source>
         <translation>自动下载</translation>
     </message>
@@ -3354,12 +3270,12 @@ Manually added content, trims, framing and expanded state will be kept.</source>
     </message>
     <message>
         <location line="+8"/>
-        <location line="+357"/>
+        <location line="+365"/>
         <source>Manual download</source>
         <translation>手动下载</translation>
     </message>
     <message>
-        <location line="-356"/>
+        <location line="-364"/>
         <source>Only download media when you click the cloud button.</source>
         <translation>只有点击云朵按钮时才下载媒体。</translation>
     </message>
@@ -3404,12 +3320,12 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation>WebSocket 端口</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+16"/>
         <source>Password (optional)</source>
         <translation>密码（可选）</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+16"/>
         <source>Connecting…</source>
         <translation>正在连接…</translation>
     </message>
@@ -3539,8 +3455,8 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation>本周和下周</translation>
     </message>
     <message>
-        <location line="-393"/>
-        <location line="+400"/>
+        <location line="-401"/>
+        <location line="+408"/>
         <location line="+5"/>
         <location line="+9"/>
         <source>Not configured</source>
@@ -3562,7 +3478,7 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation>自动共享已就绪</translation>
     </message>
     <message>
-        <location line="+120"/>
+        <location line="+101"/>
         <source>Finishing…</source>
         <translation>正在完成…</translation>
     </message>
@@ -3573,17 +3489,17 @@ Manually added content, trims, framing and expanded state will be kept.</source>
     </message>
     <message>
         <location line="+303"/>
-        <location line="+167"/>
+        <location line="+149"/>
         <source>Close</source>
         <translation>关闭</translation>
     </message>
     <message>
-        <location line="-159"/>
+        <location line="-135"/>
         <source>Search by congregation name</source>
         <translation>按会众名称搜索</translation>
     </message>
     <message>
-        <location filename="../../ui/qml/onboarding.py" line="+69"/>
+        <location filename="../../ui/qml/onboarding.py" line="+73"/>
         <source>Searching jw.org…</source>
         <translation>正在搜索 jw.org…</translation>
     </message>
@@ -3592,17 +3508,17 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation type="vanished">聚会日期和时间来自 jw.org。</translation>
     </message>
     <message>
-        <location filename="../../qml/OnboardingView.qml" line="+88"/>
+        <location filename="../../qml/OnboardingView.qml" line="+64"/>
         <source>Remove congregation</source>
         <translation>移除会众</translation>
     </message>
     <message>
-        <location line="+78"/>
+        <location line="+83"/>
         <source>Search languages</source>
         <translation>搜索语言</translation>
     </message>
     <message>
-        <location filename="../../ui/qml/onboarding.py" line="+255"/>
+        <location filename="../../ui/qml/onboarding.py" line="+259"/>
         <source>Enter a port between 1 and 65535.</source>
         <translation>请输入 1 到 65535 之间的端口。</translation>
     </message>
@@ -3612,7 +3528,7 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation>共享目标选择器不可用。</translation>
     </message>
     <message>
-        <location line="+139"/>
+        <location line="+140"/>
         <source>Enter a profile name.</source>
         <translation>请输入配置文件名称。</translation>
     </message>
@@ -3647,7 +3563,7 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation>无法创建配置文件。</translation>
     </message>
     <message>
-        <location line="-542"/>
+        <location line="-547"/>
         <source>jw.org does not publish meeting times for this congregation.</source>
         <translation>jw.org 未公布此会众的聚会时间。</translation>
     </message>
@@ -3672,7 +3588,7 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation>无法连接 jw.org。请检查网络连接后重试。</translation>
     </message>
     <message>
-        <location line="+685"/>
+        <location line="+690"/>
         <source>Allow Solin in macOS Accessibility settings.</source>
         <translation>请在 macOS“辅助功能”设置中允许 Solin。</translation>
     </message>
@@ -5343,211 +5259,180 @@ This action cannot be undone.</source>
 <context>
     <name>RemoteControlSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/remote_control_section.py" line="+54"/>
-        <location line="+403"/>
         <source>Remote control</source>
-        <translation>远程控制</translation>
+        <translation type="vanished">远程控制</translation>
     </message>
     <message>
-        <location line="-402"/>
-        <location line="+404"/>
         <source>Control Solin securely from another device on this local network.</source>
-        <translation>在此局域网内，通过另一台设备安全地控制Solin。</translation>
+        <translation type="vanished">在此局域网内，通过另一台设备安全地控制Solin。</translation>
     </message>
     <message>
-        <location line="-388"/>
-        <location line="+390"/>
         <source>Network interface</source>
-        <translation>网络接口</translation>
+        <translation type="vanished">网络接口</translation>
     </message>
     <message>
-        <location line="-376"/>
-        <location line="+377"/>
         <source>Access credentials</source>
-        <translation>访问凭据</translation>
+        <translation type="vanished">访问凭据</translation>
     </message>
     <message>
-        <location line="-349"/>
-        <location line="+350"/>
         <source>Username</source>
-        <translation>用户名</translation>
+        <translation type="vanished">用户名</translation>
     </message>
     <message>
-        <location line="-345"/>
-        <location line="+346"/>
         <source>New password</source>
-        <translation>新密码</translation>
+        <translation type="vanished">新密码</translation>
     </message>
     <message>
-        <location line="-341"/>
-        <location line="+342"/>
         <source>Confirm password</source>
-        <translation>确认密码</translation>
+        <translation type="vanished">确认密码</translation>
     </message>
     <message>
-        <location line="-328"/>
-        <location line="+330"/>
         <source>Use at least %1 characters. Credentials belong only to this profile.</source>
-        <translation>请至少使用%1个字符。凭据仅属于此个人资料。</translation>
+        <translation type="vanished">请至少使用%1个字符。凭据仅属于此个人资料。</translation>
     </message>
     <message>
-        <location line="-323"/>
-        <location line="+327"/>
         <source>Save credentials</source>
-        <translation>保存凭据</translation>
+        <translation type="vanished">保存凭据</translation>
     </message>
     <message>
-        <location line="-298"/>
-        <location line="+300"/>
         <source>Copy address</source>
-        <translation>复制地址</translation>
+        <translation type="vanished">复制地址</translation>
     </message>
     <message>
-        <location line="-285"/>
-        <location line="+286"/>
         <source>Set up a device</source>
-        <translation>设置设备</translation>
+        <translation type="vanished">设置设备</translation>
     </message>
     <message>
-        <location line="-265"/>
         <source>Select a private network…</source>
-        <translation>选择专用网络…</translation>
+        <translation type="vanished">选择专用网络…</translation>
     </message>
     <message>
-        <location line="+30"/>
         <source>Choose a network and save credentials before enabling remote control.</source>
-        <translation>在启用远程控制前，请选择网络并保存凭据。</translation>
+        <translation type="vanished">在启用远程控制前，请选择网络并保存凭据。</translation>
     </message>
     <message>
-        <location line="+17"/>
         <source>The passwords do not match.</source>
-        <translation>密码不匹配。</translation>
+        <translation type="vanished">密码不匹配。</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Enter a new password to save.</source>
-        <translation>请输入新密码以保存。</translation>
+        <translation type="vanished">请输入新密码以保存。</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Check the username and use a password with at least %1 characters.</source>
-        <translation>请检查用户名，并使用至少%1个字符的密码。</translation>
+        <translation type="vanished">请检查用户名，并使用至少%1个字符的密码。</translation>
     </message>
     <message>
-        <location line="+31"/>
         <source>Configured as %1</source>
-        <translation>已配置为%1</translation>
+        <translation type="vanished">已配置为%1</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Not configured</source>
-        <translation>未配置</translation>
+        <translation type="vanished">未配置</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>Cancel</source>
-        <translation>取消</translation>
+        <translation type="vanished">取消</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Change</source>
-        <translation>更改</translation>
+        <translation type="vanished">更改</translation>
     </message>
     <message>
-        <location line="+20"/>
         <source>No network selected</source>
-        <translation>未选择网络</translation>
+        <translation type="vanished">未选择网络</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>Starting secure remote control…</source>
-        <translation>正在启动安全远程控制…</translation>
+        <translation type="vanished">正在启动安全远程控制…</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Ready to enable.</source>
-        <translation>准备就绪，可以启用。</translation>
+        <translation type="vanished">准备就绪，可以启用。</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Configuration required.</source>
-        <translation>需要进行配置。</translation>
+        <translation type="vanished">需要进行配置。</translation>
     </message>
 </context>
 <context>
     <name>RemoteControlSetupDialog</name>
     <message>
-        <location filename="../../widgets/remote_control_setup_dialog.py" line="+81"/>
         <source>Set up a device</source>
-        <translation>设置设备</translation>
+        <translation type="vanished">设置设备</translation>
     </message>
     <message>
-        <location line="+29"/>
+        <location filename="../../qml/SettingsRemoteSetup.qml" line="+43"/>
         <source>Set up Solin Remote</source>
         <translation>设置Solin远程控制</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+47"/>
         <source>Scan once to open the secure setup on your phone or tablet.</source>
         <translation>扫描一次，即可在手机或平板电脑上打开安全设置。</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+29"/>
         <source>Generating QR code…</source>
         <translation>正在生成二维码…</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="-5"/>
+        <location line="+21"/>
         <source>1  Scan the QR code</source>
         <translation>1  扫描二维码</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+8"/>
         <source>Keep Solin open and connect both devices to the same local network. The guide explains the certificate and app installation.</source>
         <translation>请保持Solin处于开启状态，并将两台设备连接到同一个局域网。指南中说明了证书和应用的安装方法。</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+9"/>
+        <location line="+6"/>
         <source>Copy setup address</source>
         <translation>复制设置地址</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+7"/>
         <source>On the first opening, the browser may show a privacy warning. Confirm that the local address matches, choose Advanced or Show Details, and continue only to this address. The warning disappears after the certificate is trusted.</source>
         <translation>首次打开时，浏览器可能会显示隐私警告。请确认本地地址是否匹配，选择“高级”或“显示详细信息”，然后仅继续访问此地址。信任证书后，警告就会消失。</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+15"/>
+        <location line="+12"/>
         <source>VERIFICATION CODE</source>
         <translation>验证码</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+4"/>
         <source>Compare this code on the device before installing the certificate.</source>
         <translation>在安装证书前，请核对设备上的此代码。</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+10"/>
+        <location line="+15"/>
         <source>Show full SHA-256 fingerprint</source>
         <translation>显示完整的SHA-256指纹</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+27"/>
         <source>Save certificate…</source>
         <translation>保存证书…</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+10"/>
         <source>Done</source>
         <translation>完成</translation>
     </message>
     <message>
-        <location line="+93"/>
+        <location filename="../../ui/qml/settings/remote.py" line="+182"/>
+        <location line="+179"/>
         <source>Could not generate the QR code. Copy the address instead.</source>
         <translation>无法生成二维码。请改用复制地址的方式。</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+40"/>
         <source>Save Solin certificate</source>
         <translation>保存Solin证书</translation>
     </message>
@@ -5557,12 +5442,11 @@ This action cannot be undone.</source>
         <translation>证书文件 (*.cer)</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>Could not save certificate</source>
-        <translation>无法保存证书</translation>
+        <translation type="vanished">无法保存证书</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+8"/>
         <source>Choose another location and try again.</source>
         <translation>请选择其他位置并重试。</translation>
     </message>
@@ -7294,24 +7178,20 @@ Add content, a camera, or another scene.</source>
 <context>
     <name>ScreensSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/screens_section.py" line="+54"/>
         <source>Primary Screen (control)</source>
-        <translation>主屏（操控）</translation>
+        <translation type="vanished">主屏（操控）</translation>
     </message>
     <message>
-        <location line="+20"/>
         <source>No secondary screen detected. Connect an external monitor.</source>
-        <translation>未检测到辅助屏幕。请连接外部显示器。</translation>
+        <translation type="vanished">未检测到辅助屏幕。请连接外部显示器。</translation>
     </message>
     <message>
-        <location line="+27"/>
         <source>Secondary {n} (projection)</source>
-        <translation>辅助显示器 {n}（投影）</translation>
+        <translation type="vanished">辅助显示器 {n}（投影）</translation>
     </message>
     <message>
-        <location line="+18"/>
         <source>PROJECTION</source>
-        <translation>投影</translation>
+        <translation type="vanished">投影</translation>
     </message>
 </context>
 <context>
@@ -7340,55 +7220,50 @@ Add content, a camera, or another scene.</source>
 <context>
     <name>SettingsWidget</name>
     <message>
-        <location filename="../../widgets/settings_widget.py" line="+277"/>
-        <location line="+265"/>
+        <location filename="../../qml/SettingsView.qml" line="+115"/>
         <source>Settings</source>
         <translation>设置</translation>
     </message>
     <message>
-        <location line="-145"/>
-        <location line="+153"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+113"/>
         <source>Annual Text</source>
         <translation>年度经文</translation>
     </message>
     <message>
-        <location line="+108"/>
+        <location line="+2"/>
         <source>Scripture:</source>
         <translation>经文：</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>E.g.: Happy are those conscious of their spiritual need.</source>
-        <translation>例如：意识到自己属灵需要的人有福了。</translation>
+        <translation type="vanished">例如：意识到自己属灵需要的人有福了。</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Bible reference:</source>
         <translation>圣经出处：</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>E.g.: Matthew 5:3.</source>
-        <translation>例如：马太福音5:3。</translation>
+        <translation type="vanished">例如：马太福音5:3。</translation>
     </message>
     <message>
-        <location line="-106"/>
+        <location line="-47"/>
         <source>Auto-download on play</source>
         <translation>播放时自动下载</translation>
     </message>
     <message>
-        <location line="-214"/>
-        <location line="+203"/>
+        <location line="+6"/>
         <source>Meetings</source>
         <translation>聚会</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+29"/>
         <source>Auto-download weekly study</source>
         <translation>自动下载每周学习资料</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="-38"/>
         <source>Song Announcement Mode</source>
         <translation>诗歌宣布模式</translation>
     </message>
@@ -7403,12 +7278,13 @@ Add content, a camera, or another scene.</source>
         <translation>JW 媒体</translation>
     </message>
     <message>
-        <location line="+33"/>
+        <location line="+68"/>
+        <location line="+1"/>
         <source>OBS Studio</source>
         <translation>OBS Studio</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+0"/>
         <source>Automatically switches scenes during projection</source>
         <translation>在投影过程中自动切换场景</translation>
     </message>
@@ -7423,9 +7299,8 @@ Add content, a camera, or another scene.</source>
         <translation>密码（可选）</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Leave blank if no password is set</source>
-        <translation>如果没有设置密码，请留空</translation>
+        <translation type="vanished">如果没有设置密码，请留空</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -7433,9 +7308,8 @@ Add content, a camera, or another scene.</source>
         <translation>默认场景（空闲）</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Scene shown when nothing is being projected.</source>
-        <translation>未投影任何内容时显示的场景。</translation>
+        <translation type="vanished">未投影任何内容时显示的场景。</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -7443,49 +7317,41 @@ Add content, a camera, or another scene.</source>
         <translation>媒体窗口场景</translation>
     </message>
     <message>
-        <location line="-267"/>
-        <location line="+217"/>
+        <location line="-75"/>
         <source>Language</source>
         <translation>语言</translation>
     </message>
     <message>
-        <location line="-298"/>
-        <location line="+289"/>
         <source>Loading…</source>
-        <translation>正在加载……</translation>
+        <translation type="vanished">正在加载……</translation>
     </message>
     <message>
-        <location line="-200"/>
-        <location line="+210"/>
         <source>Media</source>
-        <translation>媒体</translation>
+        <translation type="vanished">媒体</translation>
     </message>
     <message>
-        <location line="-194"/>
-        <location line="+196"/>
+        <location line="+16"/>
         <source>Folders</source>
         <translation>文件夹</translation>
     </message>
     <message>
-        <location line="-188"/>
-        <location line="+189"/>
+        <location line="+87"/>
         <source>Remote access</source>
         <translation>远程访问</translation>
     </message>
     <message>
-        <location line="-180"/>
-        <location line="+181"/>
+        <location line="-35"/>
         <source>Integrations</source>
         <translation>集成</translation>
     </message>
     <message>
-        <location line="-142"/>
-        <location line="+144"/>
+        <location line="-13"/>
+        <location line="+1"/>
         <source>Screens</source>
         <translation>屏幕</translation>
     </message>
     <message>
-        <location line="-37"/>
+        <location filename="../../ui/qml/settings/general.py" line="+158"/>
         <source>Dark</source>
         <translation>深色</translation>
     </message>
@@ -7495,77 +7361,77 @@ Add content, a camera, or another scene.</source>
         <translation>浅色</translation>
     </message>
     <message>
-        <location line="+42"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-42"/>
         <source>Downloads the playing media for offline use.</source>
         <translation>下载正在播放的媒体以供离线使用。</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+35"/>
         <source>Downloads this week’s and next week’s meeting media.</source>
         <translation>下载本周和下周的聚会媒体。</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="-38"/>
         <source>Song starts muted for title display. Press play to start.</source>
         <translation>诗歌开始时处于静音状态以显示标题。请按播放键开始。</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+39"/>
         <source>Automatic background song</source>
         <translation>自动背景诗歌</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-41"/>
         <source>Start videos paused</source>
         <translation>视频开始时暂停</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Videos open paused so you can start them manually.</source>
         <translation>视频打开时处于暂停状态，以便您可以手动开始播放。</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Playback protection</source>
         <translation>播放保护</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+0"/>
         <source>Prevents media changes and seeking while audio or video is playing. Pause first to make changes.</source>
         <translation>播放音频或视频时，防止更改媒体或调整播放位置。如需更改，请先暂停播放。</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+7"/>
         <source>Link Folder</source>
         <translation>关联文件夹</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Sync folder (Dropbox, OneDrive, etc.) shown as playlists.</source>
         <translation>将同步文件夹（Dropbox、OneDrive 等）显示为播放列表。</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location filename="../../qml/SettingsRow.qml" line="+264"/>
         <source>Choose…</source>
         <translation>选择……</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+60"/>
+        <location line="+1"/>
         <source>Program stream (NDI)</source>
         <translation>节目串流 (NDI)</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Receive the DistroAV/NDI output from OBS as a live projection.</source>
         <translation>接收来自 OBS 的 DistroAV/NDI 输出作为实时投影。</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Enable Main Output in DistroAV, then select the NDI source shown by OBS.</source>
-        <translation>请在 DistroAV 中启用“主输出”(Main Output)，然后选择 OBS 显示的 NDI 源。</translation>
+        <translation type="vanished">请在 DistroAV 中启用“主输出”(Main Output)，然后选择 OBS 显示的 NDI 源。</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Available NDI sources</source>
         <translation>可用的 NDI 源</translation>
     </message>
@@ -7575,140 +7441,138 @@ Add content, a camera, or another scene.</source>
         <translation>查找源</translation>
     </message>
     <message>
-        <location line="-11"/>
         <source>Scene that captures the projection monitor. Activated when content is displayed.</source>
-        <translation>捕获投影显示器的场景。当显示内容时激活。</translation>
+        <translation type="vanished">捕获投影显示器的场景。当显示内容时激活。</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+6"/>
+        <location line="+1"/>
         <source>Camera</source>
         <translation>摄像机</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Shows a camera button in the live tools toolbar.</source>
         <translation>在直播工具栏中显示摄像机按钮。</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+11"/>
+        <location line="+1"/>
         <source>Automatic Shortcuts</source>
         <translation>自动快捷键</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Sends keyboard shortcuts when visual media changes state.</source>
         <translation>当视觉媒体状态改变时发送键盘快捷键。</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Create one or more shortcuts for start, end, pause and resume events.</source>
-        <translation>为开始、结束、暂停和恢复事件创建一个或多个快捷键。</translation>
+        <translation type="vanished">为开始、结束、暂停和恢复事件创建一个或多个快捷键。</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location filename="../../qml/SettingsRow.qml" line="+68"/>
         <source>No shortcuts configured.</source>
         <translation>未配置快捷键。</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+1"/>
         <source>Add shortcut</source>
         <translation>添加快捷键</translation>
     </message>
     <message>
-        <location line="+19"/>
+        <location filename="../../qml/SettingsRow.qml" line="-7"/>
         <source>Edit</source>
         <translation>编辑</translation>
     </message>
     <message>
-        <location line="-13"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-17"/>
+        <location line="+1"/>
         <source>Zoom Meetings</source>
         <translation>Zoom会议</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="-25"/>
         <source>Text shown on the projection screen when idle.</source>
         <translation>空闲时在投影屏幕上显示的文字。</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+3"/>
         <source>Save changes</source>
         <translation>保存更改</translation>
     </message>
     <message>
-        <location line="-249"/>
-        <location line="+137"/>
+        <location line="+58"/>
         <source>About</source>
         <translation>关于</translation>
     </message>
     <message>
-        <location line="+113"/>
+        <location filename="../../qml/SettingsPage.qml" line="+184"/>
         <source>Audio &amp; Video app for Kingdom Hall meetings.</source>
         <translation>用于王国聚会所聚会的音视频应用程序。</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+9"/>
         <source>Official Website</source>
         <translation>官方网站</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+4"/>
         <source>Changelog</source>
         <translation>更新日志</translation>
     </message>
     <message>
-        <location line="-6"/>
+        <location line="+6"/>
         <source>This app is independent and is not affiliated with or endorsed by the Watch Tower Bible and Tract Society of Pennsylvania or any of its associated organizations.</source>
         <translation>本应用程序是独立开发的，与宾夕法尼亚法人守望台圣经书社或其任何相关组织无任何关联或认可关系。</translation>
     </message>
     <message>
-        <location line="-12"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-61"/>
         <source>Update</source>
         <translation>更新</translation>
     </message>
     <message>
-        <location line="-24"/>
+        <location line="+25"/>
         <source>Audio controls and attendance count during meetings.</source>
         <translation>会议期间的音频控制和出席人数。</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+8"/>
+        <location line="+1"/>
         <source>Auto Screen Share</source>
         <translation>自动屏幕共享</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Automatically shares screen via hotkeys when projecting media.</source>
         <translation>投放媒体时通过快捷键自动共享屏幕。</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Share hotkey</source>
         <translation>共享快捷键</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Uses Zoom&apos;s single start/stop screen-share shortcut.</source>
-        <translation>使用 Zoom 的单个开始/停止屏幕共享快捷键。</translation>
+        <translation type="vanished">使用 Zoom 的单个开始/停止屏幕共享快捷键。</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+1"/>
         <source>Share target</source>
         <translation>共享目标</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>The Solin Media Preview tile inside Zoom&apos;s share dialog.</source>
-        <translation>Zoom 共享对话框中的“Solin Media Preview”磁贴。</translation>
+        <translation type="vanished">Zoom 共享对话框中的“Solin Media Preview”磁贴。</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+1"/>
         <source>Accessibility permission</source>
         <translation>辅助功能权限</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Open Settings</source>
-        <translation>打开设置</translation>
+        <translation type="vanished">打开设置</translation>
     </message>
     <message>
         <source>Click Position</source>
@@ -7719,9 +7583,519 @@ Add content, a camera, or another scene.</source>
         <translation type="vanished">共享对话框打开后用于选择目标的点击位置。</translation>
     </message>
     <message>
-        <location line="-3"/>
         <source>Configure</source>
-        <translation>配置</translation>
+        <translation type="vanished">配置</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsSectionHeader.qml" line="+28"/>
+        <location line="+35"/>
+        <source>Back to sections</source>
+        <translation>返回章节</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsView.qml" line="+15"/>
+        <source>Search settings</source>
+        <translation>搜索设置</translation>
+    </message>
+    <message>
+        <location line="+173"/>
+        <source>Search results</source>
+        <translation>搜索结果</translation>
+    </message>
+    <message>
+        <location line="+77"/>
+        <source>No settings found. Try another word.</source>
+        <translation>没有找到设置。尝试另一个词。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-101"/>
+        <source>Appearance and languages</source>
+        <translation>外观和语言</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Theme and languages</source>
+        <translation>主题和语言</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Appearance</source>
+        <translation>外观</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Theme</source>
+        <translation>主题</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Update languages</source>
+        <translation>更新语言</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Media and files</source>
+        <translation>媒体和文件</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Playback, downloads and folders</source>
+        <translation>播放、下载和文件夹</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Playback</source>
+        <translation>回放</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Downloads</source>
+        <translation>下载内容</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Schedule and preparation</source>
+        <translation>日程安排和准备</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Meeting schedule</source>
+        <translation>会议日程</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Midweek meeting</source>
+        <translation>周中聚会</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <location line="+7"/>
+        <source>Time</source>
+        <translation>时间</translation>
+    </message>
+    <message>
+        <location line="-3"/>
+        <source>Weekend meeting</source>
+        <translation>周末聚会</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Preparation</source>
+        <translation>准备工作</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Projection</source>
+        <translation>投影</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Screens and annual text</source>
+        <translation>屏幕和年度文本</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Scenes</source>
+        <translation>场景</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Native scenes engine</source>
+        <translation>原生场景引擎</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Restart Solin to apply this change.</source>
+        <translation>重新启动 Solin 以应用此更改。</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>OBS, Zoom and camera</source>
+        <translation>OBS、变焦和相机</translation>
+    </message>
+    <message>
+        <location line="+52"/>
+        <source>Version and information</source>
+        <translation>版本及信息</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/general.py" line="-125"/>
+        <source>Searching jw.org…</source>
+        <translation>正在搜索 jw.org…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Reading the meeting times…</source>
+        <translation>正在读取聚会时间…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>No congregation found with that name.</source>
+        <translation>找不到该名称的会众。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>jw.org does not publish meeting times for this congregation.</source>
+        <translation>jw.org 未公布此会众的聚会时间。</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Too many searches in a row. Wait a moment and type again.</source>
+        <translation>连续搜索次数过多。请稍等一下再输入。</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Could not reach jw.org. Check the connection and try again.</source>
+        <translation>无法连接 jw.org。请检查网络连接后重试。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-94"/>
+        <location filename="../../ui/qml/settings/general.py" line="+5"/>
+        <source>Search your congregation to fill the days and times below.</source>
+        <translation>搜索您的会众，即可填写下面的日期和时间。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/general.py" line="+94"/>
+        <source>(same as interface)</source>
+        <translation>（与界面相同）</translation>
+    </message>
+    <message>
+        <location line="+54"/>
+        <source>Primary Screen (control)</source>
+        <translation>主屏（操控）</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Secondary {n} (projection)</source>
+        <translation>辅助显示器 {n}（投影）</translation>
+    </message>
+    <message>
+        <location line="+210"/>
+        <source>Configure the meeting day/time before automatic playback can start.</source>
+        <translation>请先设置聚会日期和时间，再启动自动播放。</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Plays audio songs before configured meetings and fades out before start.</source>
+        <translation>在已配置的聚会前播放音频诗歌，并在开始前淡出。</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Select folder to link</source>
+        <translation>选择要关联的文件夹</translation>
+    </message>
+    <message>
+        <location line="+117"/>
+        <source>Fetching annual text…</source>
+        <translation>正在获取年度经文…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Could not fetch annual text</source>
+        <translation>无法获取年度经文</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Annual text updated for {year}</source>
+        <translation>{year}年度经文已更新</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsRow.qml" line="-134"/>
+        <source>Select…</source>
+        <translation>选择…</translation>
+    </message>
+    <message>
+        <location line="+61"/>
+        <source>No folder selected</source>
+        <translation>未选择文件夹</translation>
+    </message>
+    <message>
+        <location line="+48"/>
+        <source>No secondary screen detected. Connect an external monitor.</source>
+        <translation>未检测到辅助屏幕。请连接外部显示器。</translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <source>Delete</source>
+        <translation>删除</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+77"/>
+        <source>Control over your local network</source>
+        <translation>控制您的本地网络</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+1"/>
+        <source>Remote control</source>
+        <translation>远程控制</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Control Solin securely from another device on this local network.</source>
+        <translation>在此局域网内，通过另一台设备安全地控制Solin。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Network interface</source>
+        <translation>网络接口</translation>
+    </message>
+    <message>
+        <source>Refresh</source>
+        <translation type="vanished">刷新</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Copy address</source>
+        <translation>复制地址</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Access credentials</source>
+        <translation>访问凭据</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Username</source>
+        <translation>用户名</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>New password</source>
+        <translation>新密码</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Confirm password</source>
+        <translation>确认密码</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Save credentials</source>
+        <translation>保存凭据</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Devices</source>
+        <translation>设备</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Set up a device</source>
+        <translation>设置设备</translation>
+    </message>
+    <message>
+        <location line="-27"/>
+        <source>Automations</source>
+        <translation>自动化</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Sharing and shortcuts</source>
+        <translation>共享和快捷方式</translation>
+    </message>
+    <message>
+        <location filename="../../qml/AppTextField.qml" line="+67"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-74"/>
+        <source>Clear</source>
+        <translation>清除</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsClockPicker.qml" line="+45"/>
+        <source>Choose hour</source>
+        <translation>选择时间</translation>
+    </message>
+    <message>
+        <location line="+30"/>
+        <source>Choose minute</source>
+        <translation>选择分钟</translation>
+    </message>
+    <message>
+        <location line="+101"/>
+        <source>Hour %1</source>
+        <translation>%1 小时</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Minute %1</source>
+        <translation>分钟 %1</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsCongregationDialog.qml" line="+31"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+8"/>
+        <source>Fill in from jw.org</source>
+        <translation>从 jw.org 填充</translation>
+    </message>
+    <message>
+        <location line="+23"/>
+        <source>Search by congregation name</source>
+        <translation>按会众名称搜索</translation>
+    </message>
+    <message>
+        <location line="+86"/>
+        <location filename="../../qml/SettingsRemoteSetup.qml" line="-201"/>
+        <source>Close</source>
+        <translation>关闭</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsRow.qml" line="-88"/>
+        <location filename="../../qml/SettingsSelectionDialog.qml" line="+30"/>
+        <source>Search…</source>
+        <translation>搜索…</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsSelectionDialog.qml" line="+8"/>
+        <source>HH:mm</source>
+        <translation>高:毫米</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>No results found.</source>
+        <translation>没有找到结果。</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <location filename="../../qml/SettingsTimeDialog.qml" line="+58"/>
+        <source>Apply</source>
+        <translation>应用</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <location filename="../../qml/SettingsTimeDialog.qml" line="-2"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+37"/>
+        <location line="+52"/>
+        <source>Cancel</source>
+        <translation>取消</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsShortcutDialog.qml" line="-144"/>
+        <source>Share Hotkey</source>
+        <translation>共享快捷键</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Press the Zoom shortcut that starts and stops screen sharing.</source>
+        <translation>按下用于开始和停止屏幕共享的 Zoom 快捷键。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="-309"/>
+        <location line="+63"/>
+        <source>Select a private network…</source>
+        <translation>选择专用网络…</translation>
+    </message>
+    <message>
+        <location line="-50"/>
+        <source>Choose a network and save credentials before enabling remote control.</source>
+        <translation>在启用远程控制前，请选择网络并保存凭据。</translation>
+    </message>
+    <message>
+        <location line="+83"/>
+        <source>Starting secure remote control…</source>
+        <translation>正在启动安全远程控制…</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Ready to enable.</source>
+        <translation>准备就绪，可以启用。</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Configuration required.</source>
+        <translation>需要进行配置。</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Configured as %1</source>
+        <translation>已配置为%1</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/integrations.py" line="-106"/>
+        <source>Enter a valid port (1–65535).</source>
+        <translation>请输入有效端口（1–65535）。</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>✓ Configuration saved — reconnecting…</source>
+        <translation>✓ 配置已保存 — 正在重新连接...</translation>
+    </message>
+    <message>
+        <location line="+31"/>
+        <source>— Select scene —</source>
+        <translation>— 选择场景 —</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>NDI receiver is not available.</source>
+        <translation>NDI 接收器不可用。</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <location line="+34"/>
+        <source>Looking for NDI sources on this network.</source>
+        <translation>正在此网络上搜索 NDI 源。</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>No NDI sources found. Check that DistroAV Main Output is enabled in OBS.</source>
+        <translation>未找到 NDI 源。请检查 OBS 中的 DistroAV 主输出是否已启用。</translation>
+    </message>
+    <message>
+        <location line="+48"/>
+        <source>Press a shortcut before saving.</source>
+        <translation>保存前请按下快捷键。</translation>
+    </message>
+    <message>
+        <location line="+78"/>
+        <source>Configured</source>
+        <translation>已配置</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <location filename="../../ui/qml/settings/remote.py" line="+4"/>
+        <source>Not configured</source>
+        <translation>未配置</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Solin can send the automatic click.</source>
+        <translation>Solin 可以发送自动点击。</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Allow Solin in macOS Accessibility so automatic clicks can work.</source>
+        <translation>请在 macOS 辅助功能中允许 Solin，以便自动点击正常工作。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="+2"/>
+        <source>Use at least %1 characters. Credentials belong only to this profile.</source>
+        <translation>请至少使用%1个字符。凭据仅属于此个人资料。</translation>
+    </message>
+    <message>
+        <location line="+33"/>
+        <source>The passwords do not match.</source>
+        <translation>密码不匹配。</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Enter a new password to save.</source>
+        <translation>请输入新密码以保存。</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Check the username and use a password with at least %1 characters.</source>
+        <translation>请检查用户名，并使用至少%1个字符的密码。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/general.py" line="+18"/>
+        <location filename="../../ui/qml/settings/remote.py" line="+10"/>
+        <location line="+142"/>
+        <source>Saved</source>
+        <translation>已保存</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="-23"/>
+        <source>Copied</source>
+        <translation>已复制</translation>
     </message>
 </context>
 <context>
@@ -8872,34 +9246,28 @@ Click &apos;Download&apos; to open the download page.</source>
 <context>
     <name>WatchedFolderSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/watched_folder_section.py" line="+48"/>
         <source>Link Folder</source>
-        <translation>关联文件夹</translation>
+        <translation type="vanished">关联文件夹</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Sync folder (Dropbox, OneDrive, etc.) shown as playlists.</source>
-        <translation>将同步文件夹（Dropbox、OneDrive 等）显示为播放列表。</translation>
+        <translation type="vanished">将同步文件夹（Dropbox、OneDrive 等）显示为播放列表。</translation>
     </message>
     <message>
-        <location line="+19"/>
         <source>Choose…</source>
-        <translation>选择……</translation>
+        <translation type="vanished">选择……</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>Clear</source>
-        <translation>清除</translation>
+        <translation type="vanished">清除</translation>
     </message>
     <message>
-        <location line="+48"/>
         <source>No folder selected</source>
-        <translation>未选择文件夹</translation>
+        <translation type="vanished">未选择文件夹</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Select folder to link</source>
-        <translation>选择要关联的文件夹</translation>
+        <translation type="vanished">选择要关联的文件夹</translation>
     </message>
 </context>
 <context>
@@ -9143,76 +9511,60 @@ Both devices must be on the same Wi-Fi network.</source>
 <context>
     <name>YearlyTextSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/yearly_text_section.py" line="+62"/>
         <source>Text shown on the projection screen when idle.</source>
-        <translation>空闲时在投影屏幕上显示的文字。</translation>
+        <translation type="vanished">空闲时在投影屏幕上显示的文字。</translation>
     </message>
     <message>
-        <location line="+18"/>
-        <location line="+309"/>
         <source>Fetching annual text…</source>
-        <translation>正在获取年度经文…</translation>
+        <translation type="vanished">正在获取年度经文…</translation>
     </message>
     <message>
-        <location line="-295"/>
-        <location line="+276"/>
         <source>Update</source>
-        <translation>更新</translation>
+        <translation type="vanished">更新</translation>
     </message>
     <message>
-        <location line="-241"/>
         <source>Scripture:</source>
-        <translation>经文：</translation>
+        <translation type="vanished">经文：</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>E.g.: Happy are those conscious of their spiritual need.</source>
-        <translation>例如：意识到自己属灵需要的人有福了。</translation>
+        <translation type="vanished">例如：意识到自己属灵需要的人有福了。</translation>
     </message>
     <message>
-        <location line="+11"/>
         <source>Bible reference:</source>
-        <translation>圣经出处：</translation>
+        <translation type="vanished">圣经出处：</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>E.g.: Matthew 5:3.</source>
-        <translation>例如：马太福音5:3。</translation>
+        <translation type="vanished">例如：马太福音5:3。</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>Save changes</source>
-        <translation>保存更改</translation>
+        <translation type="vanished">保存更改</translation>
     </message>
     <message>
-        <location line="+196"/>
         <source>Annual text updated for {year}</source>
-        <translation>{year}年度经文已更新</translation>
+        <translation type="vanished">{year}年度经文已更新</translation>
     </message>
     <message>
-        <location line="+33"/>
         <source>Loading…</source>
-        <translation>正在加载……</translation>
+        <translation type="vanished">正在加载……</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Could not fetch annual text</source>
-        <translation>无法获取年度经文</translation>
+        <translation type="vanished">无法获取年度经文</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Retry</source>
-        <translation>重试</translation>
+        <translation type="vanished">重试</translation>
     </message>
     <message>
-        <location line="+23"/>
         <source>▲  Edit text manually</source>
-        <translation>▲  手动编辑经文</translation>
+        <translation type="vanished">▲  手动编辑经文</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>▼  Edit text manually</source>
-        <translation>▼  手动编辑经文</translation>
+        <translation type="vanished">▼  手动编辑经文</translation>
     </message>
 </context>
 <context>
@@ -9434,14 +9786,12 @@ A number at the end has priority.</source>
 <context>
     <name>ZoomSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/zoom_section.py" line="+32"/>
         <source>Zoom Meetings</source>
-        <translation>Zoom会议</translation>
+        <translation type="vanished">Zoom会议</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Audio controls and attendance count during meetings.</source>
-        <translation>会议期间的音频控制和出席人数。</translation>
+        <translation type="vanished">会议期间的音频控制和出席人数。</translation>
     </message>
 </context>
 <context>
@@ -10972,8 +11322,7 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
 <context>
     <name>_ShortcutSequenceEdit</name>
     <message>
-        <location filename="../../widgets/settings/auto_key_dialog.py" line="-257"/>
-        <location line="+52"/>
+        <location filename="../../qml/SettingsShortcutDialog.qml" line="+98"/>
         <source>Click to record</source>
         <translation>点击以录制</translation>
     </message>
@@ -10981,37 +11330,31 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
 <context>
     <name>_TimePickerPopup</name>
     <message>
-        <location filename="../../widgets/settings/meeting_schedule_section.py" line="-477"/>
         <source>Hour</source>
-        <translation>小时</translation>
+        <translation type="vanished">小时</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Minute</source>
-        <translation>分钟</translation>
+        <translation type="vanished">分钟</translation>
     </message>
     <message>
-        <location line="+15"/>
         <source>Cancel</source>
-        <translation>取消</translation>
+        <translation type="vanished">取消</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Apply</source>
-        <translation>应用</translation>
+        <translation type="vanished">应用</translation>
     </message>
 </context>
 <context>
     <name>_TimeStepper</name>
     <message>
-        <location line="-108"/>
         <source>Increase</source>
-        <translation>增加</translation>
+        <translation type="vanished">增加</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Decrease</source>
-        <translation>减少</translation>
+        <translation type="vanished">减少</translation>
     </message>
 </context>
 <context>

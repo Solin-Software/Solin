@@ -4,24 +4,20 @@
 <context>
     <name>AboutSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/about_section.py" line="+48"/>
         <source>Audio &amp; Video app for Kingdom Hall meetings.</source>
-        <translation>王国会館の集会用の音声・動画アプリです。</translation>
+        <translation type="vanished">王国会館の集会用の音声・動画アプリです。</translation>
     </message>
     <message>
-        <location line="+10"/>
         <source>Official Website</source>
-        <translation>公式ウェブサイト</translation>
+        <translation type="vanished">公式ウェブサイト</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Changelog</source>
-        <translation>更新履歴</translation>
+        <translation type="vanished">更新履歴</translation>
     </message>
     <message>
-        <location line="+14"/>
         <source>This app is independent and is not affiliated with or endorsed by the Watch Tower Bible and Tract Society of Pennsylvania or any of its associated organizations.</source>
-        <translation>このアプリは独立したものであり、ペンシルバニア法人ウォッチタワー聖書冊子協会またはその関連組織とは一切関係ありません。</translation>
+        <translation type="vanished">このアプリは独立したものであり、ペンシルバニア法人ウォッチタワー聖書冊子協会またはその関連組織とは一切関係ありません。</translation>
     </message>
 </context>
 <context>
@@ -271,60 +267,60 @@
 <context>
     <name>AutoKeyEditorDialog</name>
     <message>
-        <location filename="../../widgets/settings/auto_key_dialog.py" line="+125"/>
+        <location filename="../../qml/SettingsShortcutDialog.qml" line="+53"/>
         <source>Automatic Shortcut</source>
         <translation>自動ショートカット</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+12"/>
         <source>Choose an app event and press the shortcut to send.</source>
         <translation>アプリのイベントを選択し、送信するショートカットを押してください。</translation>
     </message>
     <message>
-        <location line="+45"/>
+        <location line="+9"/>
+        <location line="+15"/>
         <source>Event</source>
         <translation>イベント</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+67"/>
+        <location line="+7"/>
         <source>Shortcut</source>
         <translation>ショートカット</translation>
     </message>
     <message>
-        <location line="+12"/>
-        <location line="+95"/>
+        <location line="+35"/>
         <source>Click the field, then press one shortcut.</source>
         <translation>フィールドをクリックしてから、ショートカットを1つ押してください。</translation>
     </message>
     <message>
-        <location line="-86"/>
+        <location line="+12"/>
         <source>Enabled</source>
         <translation>有効</translation>
     </message>
     <message>
-        <location line="+18"/>
+        <location line="+53"/>
         <source>Cancel</source>
         <translation>キャンセル</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+7"/>
         <source>Save</source>
         <translation>保存</translation>
     </message>
     <message>
-        <location line="+54"/>
         <source>Press a shortcut before saving.</source>
-        <translation>保存する前にショートカットを押してください。</translation>
+        <translation type="vanished">保存する前にショートカットを押してください。</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="-109"/>
+        <location line="+36"/>
         <source>Listening... press one shortcut.</source>
         <translation>待機中...ショートカットを1つ押してください。</translation>
     </message>
     <message>
-        <location line="+13"/>
         <source>Shortcut captured.</source>
-        <translation>ショートカットが記録されました。</translation>
+        <translation type="vanished">ショートカットが記録されました。</translation>
     </message>
 </context>
 <context>
@@ -353,109 +349,87 @@
 <context>
     <name>AutoKeysSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/auto_keys_section.py" line="+59"/>
         <source>Automatic Shortcuts</source>
-        <translation>自動ショートカット</translation>
+        <translation type="vanished">自動ショートカット</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Sends keyboard shortcuts when visual media changes state.</source>
-        <translation>ビジュアルメディアの状態が変化した際にキーボードショートカットを送信します。</translation>
+        <translation type="vanished">ビジュアルメディアの状態が変化した際にキーボードショートカットを送信します。</translation>
     </message>
     <message>
-        <location line="+24"/>
         <source>Create one or more shortcuts for start, end, pause and resume events.</source>
-        <translation>開始、終了、一時停止、再開の各イベントに対して1つ以上のショートカットを作成します。</translation>
+        <translation type="vanished">開始、終了、一時停止、再開の各イベントに対して1つ以上のショートカットを作成します。</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>No shortcuts configured.</source>
-        <translation>ショートカットが設定されていません。</translation>
+        <translation type="vanished">ショートカットが設定されていません。</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>Add shortcut</source>
-        <translation>ショートカットを追加</translation>
+        <translation type="vanished">ショートカットを追加</translation>
     </message>
     <message>
-        <location line="+131"/>
         <source>Enabled</source>
-        <translation>有効</translation>
+        <translation type="vanished">有効</translation>
     </message>
     <message>
-        <location line="+0"/>
         <source>Disabled</source>
-        <translation>無効</translation>
+        <translation type="vanished">無効</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Edit</source>
-        <translation>編集</translation>
+        <translation type="vanished">編集</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Delete</source>
-        <translation>削除</translation>
+        <translation type="vanished">削除</translation>
     </message>
 </context>
 <context>
     <name>AutoShareSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/auto_share_section.py" line="+55"/>
         <source>Auto Screen Share</source>
-        <translation>画面共有の自動化</translation>
+        <translation type="vanished">画面共有の自動化</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Automatically shares screen via hotkeys when projecting media.</source>
-        <translation>メディアの投影時にホットキーで画面を自動的に共有します。</translation>
+        <translation type="vanished">メディアの投影時にホットキーで画面を自動的に共有します。</translation>
     </message>
     <message>
-        <location line="+30"/>
         <source>Share hotkey</source>
-        <translation>共有ホットキー</translation>
+        <translation type="vanished">共有ホットキー</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Uses Zoom&apos;s single start/stop screen-share shortcut.</source>
-        <translation>Zoom の画面共有を開始/停止する 1 つのショートカットを使用します。</translation>
+        <translation type="vanished">Zoom の画面共有を開始/停止する 1 つのショートカットを使用します。</translation>
     </message>
     <message>
-        <location line="+10"/>
-        <location line="+241"/>
-        <location line="+9"/>
         <source>Not configured</source>
-        <translation>未設定</translation>
+        <translation type="vanished">未設定</translation>
     </message>
     <message>
-        <location line="-243"/>
         <source>Edit</source>
-        <translation>編集</translation>
+        <translation type="vanished">編集</translation>
     </message>
     <message>
-        <location line="+20"/>
         <source>Accessibility permission</source>
-        <translation>アクセシビリティ権限</translation>
+        <translation type="vanished">アクセシビリティ権限</translation>
     </message>
     <message>
-        <location line="+14"/>
         <source>Open Settings</source>
-        <translation>設定を開く</translation>
+        <translation type="vanished">設定を開く</translation>
     </message>
     <message>
-        <location line="+35"/>
         <source>Share target</source>
-        <translation>共有対象</translation>
+        <translation type="vanished">共有対象</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Where Solin should click after Zoom&apos;s share shortcut opens the dialog.</source>
-        <translation>Zoomの共有ショートカットでダイアログが開いた後、Solinがクリックする場所です。</translation>
+        <translation type="vanished">Zoomの共有ショートカットでダイアログが開いた後、Solinがクリックする場所です。</translation>
     </message>
     <message>
-        <location line="+167"/>
         <source>Configured</source>
-        <translation>設定済み</translation>
+        <translation type="vanished">設定済み</translation>
     </message>
     <message>
         <source>Click Position</source>
@@ -466,33 +440,28 @@
         <translation type="vanished">共有ダイアログが開いた後、対象を選択するためにクリックする位置です。</translation>
     </message>
     <message>
-        <location line="-141"/>
         <source>Configure</source>
-        <translation>設定</translation>
+        <translation type="vanished">設定</translation>
     </message>
     <message>
-        <location line="+122"/>
         <source>Share Hotkey</source>
-        <translation>共有ホットキー</translation>
+        <translation type="vanished">共有ホットキー</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Press the Zoom shortcut that starts and stops screen sharing.</source>
-        <translation>画面共有を開始および停止する Zoom のショートカットを押してください。</translation>
+        <translation type="vanished">画面共有を開始および停止する Zoom のショートカットを押してください。</translation>
     </message>
     <message>
         <source>Position: {x}, {y}</source>
         <translation type="vanished">位置: {x}, {y}</translation>
     </message>
     <message>
-        <location line="+35"/>
         <source>Solin can send the automatic click.</source>
-        <translation>Solin は自動クリックを送信できます。</translation>
+        <translation type="vanished">Solin は自動クリックを送信できます。</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>Allow Solin in macOS Accessibility so automatic clicks can work.</source>
-        <translation>自動クリックが機能するように、macOS のアクセシビリティで Solin を許可してください。</translation>
+        <translation type="vanished">自動クリックが機能するように、macOS のアクセシビリティで Solin を許可してください。</translation>
     </message>
 </context>
 <context>
@@ -906,14 +875,12 @@
 <context>
     <name>CameraSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/camera_section.py" line="+13"/>
         <source>Camera</source>
-        <translation>カメラ</translation>
+        <translation type="vanished">カメラ</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Shows a camera button in the live tools toolbar.</source>
-        <translation>ライブツールのツールバーにカメラボタンを表示します。</translation>
+        <translation type="vanished">ライブツールのツールバーにカメラボタンを表示します。</translation>
     </message>
 </context>
 <context>
@@ -1029,6 +996,16 @@
         <location line="+16"/>
         <source>Enable projection aspect first</source>
         <translation>先に投影画面の縦横比を有効にしてください</translation>
+    </message>
+</context>
+<context>
+    <name>IntegrationSettings</name>
+    <message numerus="yes">
+        <location filename="../../ui/qml/settings/integrations.py" line="+330"/>
+        <source>%n NDI source found.</source>
+        <translation>
+            <numerusform>%n件のNDIソースが見つかりました。</numerusform>
+        </translation>
     </message>
 </context>
 <context>
@@ -1175,19 +1152,16 @@
 <context>
     <name>LanguageSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/language_section.py" line="+22"/>
         <source>Interface</source>
-        <translation>インターフェース</translation>
+        <translation type="vanished">インターフェース</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>JW Media</source>
-        <translation>JWメディア</translation>
+        <translation type="vanished">JWメディア</translation>
     </message>
     <message>
-        <location line="+36"/>
         <source>(same as interface)</source>
-        <translation>（インターフェースと同じ）</translation>
+        <translation type="vanished">（インターフェースと同じ）</translation>
     </message>
 </context>
 <context>
@@ -1576,13 +1550,13 @@
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../../main_window.py" line="+551"/>
+        <location filename="../../main_window.py" line="+565"/>
         <location filename="../../controllers/main_window_nav.py" line="+11"/>
         <source>Solin</source>
         <translation>Solin</translation>
     </message>
     <message>
-        <location line="+694"/>
+        <location line="+717"/>
         <location filename="../../controllers/main_window_nav.py" line="+27"/>
         <source>Scenes</source>
         <translation>シーン</translation>
@@ -1623,7 +1597,7 @@
         <translation>録画中</translation>
     </message>
     <message>
-        <location line="+379"/>
+        <location line="+381"/>
         <source>Pause playback before changing the projected content.</source>
         <translation>投影する内容を変更する前に再生を一時停止してください。</translation>
     </message>
@@ -2477,69 +2451,56 @@ Solin は現在の位置から再接続を試み続けます。
 <context>
     <name>MediaSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/media_section.py" line="+23"/>
         <source>Auto-download on play</source>
-        <translation>再生時に自動ダウンロード</translation>
+        <translation type="vanished">再生時に自動ダウンロード</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Downloads the playing media for offline use.</source>
-        <translation>再生中のメディアをオフラインで使用するためにダウンロードします。</translation>
+        <translation type="vanished">再生中のメディアをオフラインで使用するためにダウンロードします。</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Auto-download weekly study</source>
-        <translation>毎週の研究を自動ダウンロード</translation>
+        <translation type="vanished">毎週の研究を自動ダウンロード</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Downloads this week’s and next week’s meeting media.</source>
-        <translation>今週と来週の集会用メディアをダウンロードします。</translation>
+        <translation type="vanished">今週と来週の集会用メディアをダウンロードします。</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Song Announcement Mode</source>
-        <translation>歌のアナウンスモード</translation>
+        <translation type="vanished">歌のアナウンスモード</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Song starts muted for title display. Press play to start.</source>
-        <translation>タイトル表示のため、歌はミュート状態で開始されます。再生ボタンを押すと開始します。</translation>
+        <translation type="vanished">タイトル表示のため、歌はミュート状態で開始されます。再生ボタンを押すと開始します。</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Automatic background song</source>
-        <translation>自動バックグラウンド音楽</translation>
+        <translation type="vanished">自動バックグラウンド音楽</translation>
     </message>
     <message>
-        <location line="+13"/>
         <source>Start videos paused</source>
-        <translation>動画を一時停止状態で開始する</translation>
+        <translation type="vanished">動画を一時停止状態で開始する</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Videos open paused so you can start them manually.</source>
-        <translation>動画は一時停止状態で開くため、手動で開始できます。</translation>
+        <translation type="vanished">動画は一時停止状態で開くため、手動で開始できます。</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Playback protection</source>
-        <translation>再生保護</translation>
+        <translation type="vanished">再生保護</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Prevents media changes and seeking while audio or video is playing. Pause first to make changes.</source>
-        <translation>音声または動画の再生中は、メディアの変更とシークを防止します。変更するには、まず一時停止してください。</translation>
+        <translation type="vanished">音声または動画の再生中は、メディアの変更とシークを防止します。変更するには、まず一時停止してください。</translation>
     </message>
     <message>
-        <location line="+35"/>
         <source>Configure the meeting day/time before automatic playback can start.</source>
-        <translation>自動再生を開始する前に集会の曜日と時刻を設定してください。</translation>
+        <translation type="vanished">自動再生を開始する前に集会の曜日と時刻を設定してください。</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Plays audio songs before configured meetings and fades out before start.</source>
-        <translation>設定した集会の前に音声の歌を再生し，開始前にフェードアウトします。</translation>
+        <translation type="vanished">設定した集会の前に音声の歌を再生し，開始前にフェードアウトします。</translation>
     </message>
 </context>
 <context>
@@ -2694,77 +2655,60 @@ Manually added content, trims, framing and expanded state will be kept.</source>
 <context>
     <name>MeetingScheduleSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/meeting_schedule_section.py" line="+528"/>
-        <location line="+334"/>
         <source>Used by automatic features that depend on the meeting start time.</source>
-        <translation>集会の開始時刻に基づく自動機能で使用されます。</translation>
+        <translation type="vanished">集会の開始時刻に基づく自動機能で使用されます。</translation>
     </message>
     <message>
-        <location line="-275"/>
-        <location line="+285"/>
         <source>Fill in from jw.org</source>
-        <translation>jw.orgから取り込む</translation>
+        <translation type="vanished">jw.orgから取り込む</translation>
     </message>
     <message>
-        <location line="-270"/>
-        <location line="+271"/>
         <source>Congregation name</source>
-        <translation>会衆名</translation>
+        <translation type="vanished">会衆名</translation>
     </message>
     <message>
-        <location line="-174"/>
         <source>Searching jw.org…</source>
-        <translation>jw.orgを検索中…</translation>
+        <translation type="vanished">jw.orgを検索中…</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>No congregation found with that name.</source>
-        <translation>その名前の会衆は見つかりませんでした。</translation>
+        <translation type="vanished">その名前の会衆は見つかりませんでした。</translation>
     </message>
     <message>
-        <location line="-6"/>
         <source>Reading the meeting times…</source>
-        <translation>集会の時刻を読み込んでいます…</translation>
+        <translation type="vanished">集会の時刻を読み込んでいます…</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>jw.org does not publish meeting times for this congregation.</source>
-        <translation>jw.orgにはこの会衆の集会時刻が掲載されていません。</translation>
+        <translation type="vanished">jw.orgにはこの会衆の集会時刻が掲載されていません。</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Too many searches in a row. Wait a moment and type again.</source>
-        <translation>検索の回数が多すぎます。少し待ってから入力してください。</translation>
+        <translation type="vanished">検索の回数が多すぎます。少し待ってから入力してください。</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Could not reach jw.org. Check the connection and try again.</source>
-        <translation>jw.orgに接続できませんでした。接続を確認して、もう一度お試しください。</translation>
+        <translation type="vanished">jw.orgに接続できませんでした。接続を確認して、もう一度お試しください。</translation>
     </message>
     <message>
-        <location line="+13"/>
         <source>Search your congregation to fill the days and times below.</source>
-        <translation>会衆を検索すると、下の曜日と時刻が入力されます。</translation>
+        <translation type="vanished">会衆を検索すると、下の曜日と時刻が入力されます。</translation>
     </message>
     <message>
         <source>Midweek meeting</source>
         <translation type="vanished">週日の集会</translation>
     </message>
     <message>
-        <location line="-193"/>
-        <location line="+320"/>
         <source>Day and time for the midweek meeting.</source>
-        <translation>週日の集会の曜日と時刻。</translation>
+        <translation type="vanished">週日の集会の曜日と時刻。</translation>
     </message>
     <message>
         <source>Weekend meeting</source>
         <translation type="vanished">週末の集会</translation>
     </message>
     <message>
-        <location line="-313"/>
-        <location line="+317"/>
         <source>Day and time for the weekend meeting.</source>
-        <translation>週末の集会の曜日と時刻。</translation>
+        <translation type="vanished">週末の集会の曜日と時刻。</translation>
     </message>
     <message>
         <source>Not configured</source>
@@ -3095,129 +3039,102 @@ Manually added content, trims, framing and expanded state will be kept.</source>
 <context>
     <name>ObsSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/obs_section.py" line="+50"/>
         <source>OBS Studio</source>
-        <translation>OBS Studio</translation>
+        <translation type="vanished">OBS Studio</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Automatically switches scenes during projection</source>
-        <translation>投影中にシーンを自動的に切り替え</translation>
+        <translation type="vanished">投影中にシーンを自動的に切り替え</translation>
     </message>
     <message>
-        <location line="+29"/>
         <source>Disconnected</source>
-        <translation>未接続</translation>
+        <translation type="vanished">未接続</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>WebSocket Port</source>
-        <translation>WebSocket ポート</translation>
+        <translation type="vanished">WebSocket ポート</translation>
     </message>
     <message>
-        <location line="+14"/>
         <source>Password (optional)</source>
-        <translation>パスワード（任意）</translation>
+        <translation type="vanished">パスワード（任意）</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>Leave blank if no password is set</source>
-        <translation>パスワードを設定しない場合は空欄のままにする</translation>
+        <translation type="vanished">パスワードを設定しない場合は空欄のままにする</translation>
     </message>
     <message>
-        <location line="+9"/>
-        <location line="+363"/>
         <source>● Changes saved automatically</source>
-        <translation>変更は自動的に保存されます</translation>
+        <translation type="vanished">変更は自動的に保存されます</translation>
     </message>
     <message>
-        <location line="-327"/>
         <source>Program stream (NDI)</source>
-        <translation>プログラムストリーム (NDI)</translation>
+        <translation type="vanished">プログラムストリーム (NDI)</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Receive the DistroAV/NDI output from OBS as a live projection.</source>
-        <translation>OBSからのDistroAV/NDI出力をライブ投影として受信します。</translation>
+        <translation type="vanished">OBSからのDistroAV/NDI出力をライブ投影として受信します。</translation>
     </message>
     <message>
-        <location line="+21"/>
         <source>Enable Main Output in DistroAV, then select the NDI source shown by OBS.</source>
-        <translation>DistroAVでメイン出力を有効にしてから、OBSに表示されるNDIソースを選択してください。</translation>
+        <translation type="vanished">DistroAVでメイン出力を有効にしてから、OBSに表示されるNDIソースを選択してください。</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>Available NDI sources</source>
-        <translation>利用可能なNDIソース</translation>
+        <translation type="vanished">利用可能なNDIソース</translation>
     </message>
     <message>
-        <location line="+15"/>
         <source>No sources loaded</source>
-        <translation>読み込まれたソースはありません</translation>
+        <translation type="vanished">読み込まれたソースはありません</translation>
     </message>
     <message>
-        <location line="+6"/>
-        <location line="+335"/>
-        <location line="+35"/>
         <source>Find sources</source>
-        <translation>ソースを検索</translation>
+        <translation type="vanished">ソースを検索</translation>
     </message>
     <message>
-        <location line="-338"/>
         <source>Default scene (idle)</source>
-        <translation>デフォルトのシーン（待機中）</translation>
+        <translation type="vanished">デフォルトのシーン（待機中）</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Scene shown when nothing is being projected.</source>
-        <translation>何も投影されていないときに表示されるシーン。</translation>
+        <translation type="vanished">何も投影されていないときに表示されるシーン。</translation>
     </message>
     <message>
-        <location line="+13"/>
         <source>Media window scene</source>
-        <translation>メディアウィンドウのシーン</translation>
+        <translation type="vanished">メディアウィンドウのシーン</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Scene that captures the projection monitor. Activated when content is displayed.</source>
-        <translation>投影モニターをキャプチャするシーン。コンテンツが表示されると有効になります。</translation>
+        <translation type="vanished">投影モニターをキャプチャするシーン。コンテンツが表示されると有効になります。</translation>
     </message>
     <message>
-        <location line="+206"/>
         <source>✓ Configuration saved — reconnecting…</source>
-        <translation>✓ 設定を保存しました — 再接続中...</translation>
+        <translation type="vanished">✓ 設定を保存しました — 再接続中...</translation>
     </message>
     <message>
-        <location line="+57"/>
         <source>NDI receiver is not available.</source>
-        <translation>NDIレシーバーが利用できません。</translation>
+        <translation type="vanished">NDIレシーバーが利用できません。</translation>
     </message>
     <message>
-        <location line="+5"/>
         <source>Searching…</source>
-        <translation>検索中…</translation>
+        <translation type="vanished">検索中…</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Looking for NDI sources on this network.</source>
-        <translation>ネットワーク上のNDIソースを検索しています。</translation>
+        <translation type="vanished">ネットワーク上のNDIソースを検索しています。</translation>
     </message>
     <message numerus="yes">
-        <location line="+25"/>
         <source>%n NDI source found.</source>
-        <translation>
+        <translation type="vanished">
             <numerusform>%n件のNDIソースが見つかりました。</numerusform>
         </translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>No NDI sources found</source>
-        <translation>NDIソースが見つかりません</translation>
+        <translation type="vanished">NDIソースが見つかりません</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>No NDI sources found. Check that DistroAV Main Output is enabled in OBS.</source>
-        <translation>NDIソースが見つかりません。OBSでDistroAVのメイン出力が有効になっているか確認してください。</translation>
+        <translation type="vanished">NDIソースが見つかりません。OBSでDistroAVのメイン出力が有効になっているか確認してください。</translation>
     </message>
     <message>
         <source>Connecting…</source>
@@ -3236,9 +3153,8 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation type="vanished">接続エラー</translation>
     </message>
     <message>
-        <location line="+72"/>
         <source>— Select scene —</source>
-        <translation>— シーンを選択 —</translation>
+        <translation type="vanished">— シーンを選択 —</translation>
     </message>
 </context>
 <context>
@@ -3284,7 +3200,7 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation>プロファイル名</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+10"/>
         <source>Example: Main Hall</source>
         <translation>例: メインホール</translation>
     </message>
@@ -3317,13 +3233,13 @@ Manually added content, trims, framing and expanded state will be kept.</source>
     </message>
     <message>
         <location line="+5"/>
-        <location line="+406"/>
+        <location line="+414"/>
         <source>Meeting schedule</source>
         <translation>集会の予定</translation>
     </message>
     <message>
-        <location line="-400"/>
-        <location line="+1161"/>
+        <location line="-408"/>
+        <location line="+1150"/>
         <source>Congregation</source>
         <translation>会衆</translation>
     </message>
@@ -3332,18 +3248,18 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation type="vanished">任意</translation>
     </message>
     <message>
-        <location line="-1150"/>
+        <location line="-1139"/>
         <source>Find your congregation to fill the meeting days and times from jw.org.</source>
         <translation>会衆を検索すると、jw.orgから集会の曜日と時刻が入力されます。</translation>
     </message>
     <message>
         <location line="+8"/>
-        <location line="+375"/>
+        <location line="+383"/>
         <source>Meeting media</source>
         <translation>集会用メディア</translation>
     </message>
     <message>
-        <location line="-364"/>
+        <location line="-372"/>
         <source>Download automatically</source>
         <translation>自動でダウンロード</translation>
     </message>
@@ -3354,12 +3270,12 @@ Manually added content, trims, framing and expanded state will be kept.</source>
     </message>
     <message>
         <location line="+8"/>
-        <location line="+357"/>
+        <location line="+365"/>
         <source>Manual download</source>
         <translation>手動ダウンロード</translation>
     </message>
     <message>
-        <location line="-356"/>
+        <location line="-364"/>
         <source>Only download media when you click the cloud button.</source>
         <translation>クラウドボタンをクリックしたときだけメディアをダウンロードします。</translation>
     </message>
@@ -3404,12 +3320,12 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation>WebSocketポート</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+16"/>
         <source>Password (optional)</source>
         <translation>パスワード（任意）</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+16"/>
         <source>Connecting…</source>
         <translation>接続中…</translation>
     </message>
@@ -3539,8 +3455,8 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation>今週と来週</translation>
     </message>
     <message>
-        <location line="-393"/>
-        <location line="+400"/>
+        <location line="-401"/>
+        <location line="+408"/>
         <location line="+5"/>
         <location line="+9"/>
         <source>Not configured</source>
@@ -3562,7 +3478,7 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation>自動共有の準備完了</translation>
     </message>
     <message>
-        <location line="+120"/>
+        <location line="+101"/>
         <source>Finishing…</source>
         <translation>完了しています…</translation>
     </message>
@@ -3573,17 +3489,17 @@ Manually added content, trims, framing and expanded state will be kept.</source>
     </message>
     <message>
         <location line="+303"/>
-        <location line="+167"/>
+        <location line="+149"/>
         <source>Close</source>
         <translation>閉じる</translation>
     </message>
     <message>
-        <location line="-159"/>
+        <location line="-135"/>
         <source>Search by congregation name</source>
         <translation>会衆名で検索</translation>
     </message>
     <message>
-        <location filename="../../ui/qml/onboarding.py" line="+69"/>
+        <location filename="../../ui/qml/onboarding.py" line="+73"/>
         <source>Searching jw.org…</source>
         <translation>jw.orgを検索中…</translation>
     </message>
@@ -3592,17 +3508,17 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation type="vanished">集会の曜日と時刻はjw.orgから取得されます。</translation>
     </message>
     <message>
-        <location filename="../../qml/OnboardingView.qml" line="+88"/>
+        <location filename="../../qml/OnboardingView.qml" line="+64"/>
         <source>Remove congregation</source>
         <translation>会衆を削除</translation>
     </message>
     <message>
-        <location line="+78"/>
+        <location line="+83"/>
         <source>Search languages</source>
         <translation>言語を検索</translation>
     </message>
     <message>
-        <location filename="../../ui/qml/onboarding.py" line="+255"/>
+        <location filename="../../ui/qml/onboarding.py" line="+259"/>
         <source>Enter a port between 1 and 65535.</source>
         <translation>1から65535までのポートを入力してください。</translation>
     </message>
@@ -3612,7 +3528,7 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation>共有対象の選択ツールを利用できません。</translation>
     </message>
     <message>
-        <location line="+139"/>
+        <location line="+140"/>
         <source>Enter a profile name.</source>
         <translation>プロファイル名を入力してください。</translation>
     </message>
@@ -3647,7 +3563,7 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation>プロファイルを作成できませんでした。</translation>
     </message>
     <message>
-        <location line="-542"/>
+        <location line="-547"/>
         <source>jw.org does not publish meeting times for this congregation.</source>
         <translation>jw.orgにはこの会衆の集会時刻が掲載されていません。</translation>
     </message>
@@ -3672,7 +3588,7 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation>jw.orgに接続できませんでした。接続を確認して、もう一度お試しください。</translation>
     </message>
     <message>
-        <location line="+685"/>
+        <location line="+690"/>
         <source>Allow Solin in macOS Accessibility settings.</source>
         <translation>macOSのアクセシビリティ設定でSolinを許可してください。</translation>
     </message>
@@ -5343,211 +5259,180 @@ This action cannot be undone.</source>
 <context>
     <name>RemoteControlSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/remote_control_section.py" line="+54"/>
-        <location line="+403"/>
         <source>Remote control</source>
-        <translation>リモートコントロール</translation>
+        <translation type="vanished">リモートコントロール</translation>
     </message>
     <message>
-        <location line="-402"/>
-        <location line="+404"/>
         <source>Control Solin securely from another device on this local network.</source>
-        <translation>このローカルネットワーク上の別のデバイスからSolinを安全に操作します。</translation>
+        <translation type="vanished">このローカルネットワーク上の別のデバイスからSolinを安全に操作します。</translation>
     </message>
     <message>
-        <location line="-388"/>
-        <location line="+390"/>
         <source>Network interface</source>
-        <translation>ネットワークインターフェース</translation>
+        <translation type="vanished">ネットワークインターフェース</translation>
     </message>
     <message>
-        <location line="-376"/>
-        <location line="+377"/>
         <source>Access credentials</source>
-        <translation>アクセス認証情報</translation>
+        <translation type="vanished">アクセス認証情報</translation>
     </message>
     <message>
-        <location line="-349"/>
-        <location line="+350"/>
         <source>Username</source>
-        <translation>ユーザー名</translation>
+        <translation type="vanished">ユーザー名</translation>
     </message>
     <message>
-        <location line="-345"/>
-        <location line="+346"/>
         <source>New password</source>
-        <translation>新しいパスワード</translation>
+        <translation type="vanished">新しいパスワード</translation>
     </message>
     <message>
-        <location line="-341"/>
-        <location line="+342"/>
         <source>Confirm password</source>
-        <translation>パスワードの確認</translation>
+        <translation type="vanished">パスワードの確認</translation>
     </message>
     <message>
-        <location line="-328"/>
-        <location line="+330"/>
         <source>Use at least %1 characters. Credentials belong only to this profile.</source>
-        <translation>%1文字以上使用してください。認証情報は、このプロファイル専用です。</translation>
+        <translation type="vanished">%1文字以上使用してください。認証情報は、このプロファイル専用です。</translation>
     </message>
     <message>
-        <location line="-323"/>
-        <location line="+327"/>
         <source>Save credentials</source>
-        <translation>認証情報を保存</translation>
+        <translation type="vanished">認証情報を保存</translation>
     </message>
     <message>
-        <location line="-298"/>
-        <location line="+300"/>
         <source>Copy address</source>
-        <translation>アドレスをコピー</translation>
+        <translation type="vanished">アドレスをコピー</translation>
     </message>
     <message>
-        <location line="-285"/>
-        <location line="+286"/>
         <source>Set up a device</source>
-        <translation>デバイスをセットアップ</translation>
+        <translation type="vanished">デバイスをセットアップ</translation>
     </message>
     <message>
-        <location line="-265"/>
         <source>Select a private network…</source>
-        <translation>プライベートネットワークを選択…</translation>
+        <translation type="vanished">プライベートネットワークを選択…</translation>
     </message>
     <message>
-        <location line="+30"/>
         <source>Choose a network and save credentials before enabling remote control.</source>
-        <translation>リモートコントロールを有効にする前に、ネットワークを選択し、認証情報を保存してください。</translation>
+        <translation type="vanished">リモートコントロールを有効にする前に、ネットワークを選択し、認証情報を保存してください。</translation>
     </message>
     <message>
-        <location line="+17"/>
         <source>The passwords do not match.</source>
-        <translation>パスワードが一致しません。</translation>
+        <translation type="vanished">パスワードが一致しません。</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Enter a new password to save.</source>
-        <translation>保存するには新しいパスワードを入力してください。</translation>
+        <translation type="vanished">保存するには新しいパスワードを入力してください。</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Check the username and use a password with at least %1 characters.</source>
-        <translation>ユーザー名を確認し、%1文字以上のパスワードを使用してください。</translation>
+        <translation type="vanished">ユーザー名を確認し、%1文字以上のパスワードを使用してください。</translation>
     </message>
     <message>
-        <location line="+31"/>
         <source>Configured as %1</source>
-        <translation>%1として設定済み</translation>
+        <translation type="vanished">%1として設定済み</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Not configured</source>
-        <translation>未設定</translation>
+        <translation type="vanished">未設定</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>Cancel</source>
-        <translation>キャンセル</translation>
+        <translation type="vanished">キャンセル</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Change</source>
-        <translation>変更</translation>
+        <translation type="vanished">変更</translation>
     </message>
     <message>
-        <location line="+20"/>
         <source>No network selected</source>
-        <translation>ネットワークが選択されていません</translation>
+        <translation type="vanished">ネットワークが選択されていません</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>Starting secure remote control…</source>
-        <translation>安全なリモートコントロールを開始しています…</translation>
+        <translation type="vanished">安全なリモートコントロールを開始しています…</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Ready to enable.</source>
-        <translation>有効にする準備ができました。</translation>
+        <translation type="vanished">有効にする準備ができました。</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Configuration required.</source>
-        <translation>設定が必要です。</translation>
+        <translation type="vanished">設定が必要です。</translation>
     </message>
 </context>
 <context>
     <name>RemoteControlSetupDialog</name>
     <message>
-        <location filename="../../widgets/remote_control_setup_dialog.py" line="+81"/>
         <source>Set up a device</source>
-        <translation>デバイスをセットアップ</translation>
+        <translation type="vanished">デバイスをセットアップ</translation>
     </message>
     <message>
-        <location line="+29"/>
+        <location filename="../../qml/SettingsRemoteSetup.qml" line="+43"/>
         <source>Set up Solin Remote</source>
         <translation>Solin Remoteをセットアップ</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+47"/>
         <source>Scan once to open the secure setup on your phone or tablet.</source>
         <translation>一度スキャンして、スマートフォンまたはタブレットで安全なセットアップ画面を開いてください。</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+29"/>
         <source>Generating QR code…</source>
         <translation>QRコードを生成中…</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="-5"/>
+        <location line="+21"/>
         <source>1  Scan the QR code</source>
         <translation>1  QRコードをスキャン</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+8"/>
         <source>Keep Solin open and connect both devices to the same local network. The guide explains the certificate and app installation.</source>
         <translation>Solinを開いたままにし，両方のデバイスを同じローカルネットワークに接続してください。証明書とアプリのインストール方法についてはガイドをご覧ください。</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+9"/>
+        <location line="+6"/>
         <source>Copy setup address</source>
         <translation>セットアップ用アドレスをコピー</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+7"/>
         <source>On the first opening, the browser may show a privacy warning. Confirm that the local address matches, choose Advanced or Show Details, and continue only to this address. The warning disappears after the certificate is trusted.</source>
         <translation>初回起動時にブラウザでプライバシーに関する警告が表示されることがあります。ローカルアドレスが一致していることを確認し，「詳細設定」または「詳細を表示」を選択して，このアドレスにアクセスしてください。証明書を信頼すると警告は表示されなくなります。</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+15"/>
+        <location line="+12"/>
         <source>VERIFICATION CODE</source>
         <translation>確認コード</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+4"/>
         <source>Compare this code on the device before installing the certificate.</source>
         <translation>証明書をインストールする前に，デバイス上のコードと照合してください。</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+10"/>
+        <location line="+15"/>
         <source>Show full SHA-256 fingerprint</source>
         <translation>SHA-256フィンガープリントをすべて表示</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+27"/>
         <source>Save certificate…</source>
         <translation>証明書を保存…</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+10"/>
         <source>Done</source>
         <translation>完了</translation>
     </message>
     <message>
-        <location line="+93"/>
+        <location filename="../../ui/qml/settings/remote.py" line="+182"/>
+        <location line="+179"/>
         <source>Could not generate the QR code. Copy the address instead.</source>
         <translation>QRコードを生成できませんでした。代わりにアドレスをコピーしてください。</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+40"/>
         <source>Save Solin certificate</source>
         <translation>Solin証明書を保存</translation>
     </message>
@@ -5557,12 +5442,11 @@ This action cannot be undone.</source>
         <translation>証明書ファイル (*.cer)</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>Could not save certificate</source>
-        <translation>証明書を保存できませんでした</translation>
+        <translation type="vanished">証明書を保存できませんでした</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+8"/>
         <source>Choose another location and try again.</source>
         <translation>別の保存先を選択して，もう一度試してください。</translation>
     </message>
@@ -7294,24 +7178,20 @@ Add content, a camera, or another scene.</source>
 <context>
     <name>ScreensSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/screens_section.py" line="+54"/>
         <source>Primary Screen (control)</source>
-        <translation>メインスクリーン（操作用）</translation>
+        <translation type="vanished">メインスクリーン（操作用）</translation>
     </message>
     <message>
-        <location line="+20"/>
         <source>No secondary screen detected. Connect an external monitor.</source>
-        <translation>セカンダリスリーンが検出されません。外部モニターを接続してください。</translation>
+        <translation type="vanished">セカンダリスリーンが検出されません。外部モニターを接続してください。</translation>
     </message>
     <message>
-        <location line="+27"/>
         <source>Secondary {n} (projection)</source>
-        <translation>セカンダリ {n}（プロジェクター）</translation>
+        <translation type="vanished">セカンダリ {n}（プロジェクター）</translation>
     </message>
     <message>
-        <location line="+18"/>
         <source>PROJECTION</source>
-        <translation>投影</translation>
+        <translation type="vanished">投影</translation>
     </message>
 </context>
 <context>
@@ -7340,84 +7220,74 @@ Add content, a camera, or another scene.</source>
 <context>
     <name>SettingsWidget</name>
     <message>
-        <location filename="../../widgets/settings_widget.py" line="+277"/>
-        <location line="+265"/>
+        <location filename="../../qml/SettingsView.qml" line="+115"/>
         <source>Settings</source>
         <translation>設定</translation>
     </message>
     <message>
-        <location line="-145"/>
-        <location line="+153"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+113"/>
         <source>Annual Text</source>
         <translation>年間テキスト</translation>
     </message>
     <message>
-        <location line="+108"/>
+        <location line="+2"/>
         <source>Scripture:</source>
         <translation>聖句：</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>E.g.: Happy are those conscious of their spiritual need.</source>
-        <translation>例：霊的な必要を自覚している人たちは幸いです。</translation>
+        <translation type="vanished">例：霊的な必要を自覚している人たちは幸いです。</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Bible reference:</source>
         <translation>参照聖句：</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>E.g.: Matthew 5:3.</source>
-        <translation>例：マタイ 5:3。</translation>
+        <translation type="vanished">例：マタイ 5:3。</translation>
     </message>
     <message>
-        <location line="-106"/>
+        <location line="-47"/>
         <source>Auto-download on play</source>
         <translation>再生時に自動ダウンロード</translation>
     </message>
     <message>
-        <location line="-214"/>
-        <location line="+203"/>
+        <location line="+6"/>
         <source>Meetings</source>
         <translation>集会</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+29"/>
         <source>Auto-download weekly study</source>
         <translation>毎週の研究を自動ダウンロード</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="-38"/>
         <source>Song Announcement Mode</source>
         <translation>歌のアナウンスモード</translation>
     </message>
     <message>
-        <location line="-236"/>
-        <location line="+217"/>
+        <location line="-11"/>
         <source>Language</source>
         <translation>言語</translation>
     </message>
     <message>
-        <location line="-209"/>
-        <location line="+210"/>
         <source>Media</source>
-        <translation>メディア</translation>
+        <translation type="vanished">メディア</translation>
     </message>
     <message>
-        <location line="-194"/>
-        <location line="+196"/>
+        <location line="+16"/>
         <source>Folders</source>
         <translation>フォルダー</translation>
     </message>
     <message>
-        <location line="-179"/>
-        <location line="+181"/>
+        <location line="+52"/>
         <source>Integrations</source>
         <translation>連携</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="-67"/>
         <source>Interface</source>
         <translation>インターフェース</translation>
     </message>
@@ -7427,55 +7297,53 @@ Add content, a camera, or another scene.</source>
         <translation>JWメディア</translation>
     </message>
     <message>
-        <location line="-147"/>
-        <location line="+144"/>
+        <location line="+53"/>
+        <location line="+1"/>
         <source>Screens</source>
         <translation>スクリーン</translation>
     </message>
     <message>
-        <location line="+81"/>
+        <location line="+28"/>
         <source>Audio controls and attendance count during meetings.</source>
         <translation>集会中の音声操作と出席者数。</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+8"/>
+        <location line="+1"/>
         <source>Auto Screen Share</source>
         <translation>画面共有の自動化</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Automatically shares screen via hotkeys when projecting media.</source>
         <translation>メディアの投影時にホットキーで画面を自動的に共有します。</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Share hotkey</source>
         <translation>共有ホットキー</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Uses Zoom&apos;s single start/stop screen-share shortcut.</source>
-        <translation>Zoom の画面共有を開始/停止する 1 つのショートカットを使用します。</translation>
+        <translation type="vanished">Zoom の画面共有を開始/停止する 1 つのショートカットを使用します。</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+1"/>
         <source>Share target</source>
         <translation>共有対象</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>The Solin Media Preview tile inside Zoom&apos;s share dialog.</source>
-        <translation>Zoomの共有ダイアログ内にある「Solin Media Preview」のタイルです。</translation>
+        <translation type="vanished">Zoomの共有ダイアログ内にある「Solin Media Preview」のタイルです。</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+1"/>
         <source>Accessibility permission</source>
         <translation>アクセシビリティ権限</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Open Settings</source>
-        <translation>設定を開く</translation>
+        <translation type="vanished">設定を開く</translation>
     </message>
     <message>
         <source>Click Position</source>
@@ -7486,17 +7354,17 @@ Add content, a camera, or another scene.</source>
         <translation type="vanished">共有ダイアログが開いた後、対象を選択するためにクリックする位置です。</translation>
     </message>
     <message>
-        <location line="-3"/>
         <source>Configure</source>
-        <translation>設定</translation>
+        <translation type="vanished">設定</translation>
     </message>
     <message>
-        <location line="-61"/>
+        <location line="-26"/>
+        <location line="+1"/>
         <source>OBS Studio</source>
         <translation>OBS Studio</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+0"/>
         <source>Automatically switches scenes during projection</source>
         <translation>投影中にシーンを自動的に切り替え</translation>
     </message>
@@ -7511,9 +7379,8 @@ Add content, a camera, or another scene.</source>
         <translation>パスワード（任意）</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Leave blank if no password is set</source>
-        <translation>パスワードを設定しない場合は空欄のままにする</translation>
+        <translation type="vanished">パスワードを設定しない場合は空欄のままにする</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -7521,9 +7388,8 @@ Add content, a camera, or another scene.</source>
         <translation>デフォルトのシーン（待機中）</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Scene shown when nothing is being projected.</source>
-        <translation>何も投影されていないときに表示されるシーン。</translation>
+        <translation type="vanished">何も投影されていないときに表示されるシーン。</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -7531,55 +7397,51 @@ Add content, a camera, or another scene.</source>
         <translation>メディアウィンドウのシーン</translation>
     </message>
     <message>
-        <location line="-179"/>
-        <location line="+137"/>
+        <location line="+45"/>
         <source>About</source>
         <translation>アプリについて</translation>
     </message>
     <message>
-        <location line="+113"/>
+        <location filename="../../qml/SettingsPage.qml" line="+184"/>
         <source>Audio &amp; Video app for Kingdom Hall meetings.</source>
         <translation>王国会館の集会用の音声・動画アプリです。</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+9"/>
         <source>Official Website</source>
         <translation>公式ウェブサイト</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+4"/>
         <source>Changelog</source>
         <translation>更新履歴</translation>
     </message>
     <message>
-        <location line="-6"/>
+        <location line="+6"/>
         <source>This app is independent and is not affiliated with or endorsed by the Watch Tower Bible and Tract Society of Pennsylvania or any of its associated organizations.</source>
         <translation>このアプリは独立したものであり、ペンシルバニア法人ウォッチタワー聖書冊子協会またはその関連組織とは一切関係ありません。</translation>
     </message>
     <message>
-        <location line="-12"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-61"/>
         <source>Update</source>
         <translation>更新</translation>
     </message>
     <message>
-        <location line="-98"/>
+        <location line="-45"/>
         <source>Downloads the playing media for offline use.</source>
         <translation>再生中のメディアをオフラインで使用するためにダウンロードします。</translation>
     </message>
     <message>
-        <location line="-312"/>
-        <location line="+289"/>
         <source>Loading…</source>
-        <translation>読み込み中…</translation>
+        <translation type="vanished">読み込み中…</translation>
     </message>
     <message>
-        <location line="-176"/>
-        <location line="+189"/>
+        <location line="+89"/>
         <source>Remote access</source>
         <translation>リモートアクセス</translation>
     </message>
     <message>
-        <location line="-34"/>
+        <location filename="../../ui/qml/settings/general.py" line="+158"/>
         <source>Dark</source>
         <translation>ダーク</translation>
     </message>
@@ -7589,72 +7451,72 @@ Add content, a camera, or another scene.</source>
         <translation>ライト</translation>
     </message>
     <message>
-        <location line="+45"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-54"/>
         <source>Downloads this week’s and next week’s meeting media.</source>
         <translation>今週と来週の集会用メディアをダウンロードします。</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="-38"/>
         <source>Song starts muted for title display. Press play to start.</source>
         <translation>タイトル表示のため、歌はミュート状態で開始されます。再生ボタンを押すと開始します。</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+39"/>
         <source>Automatic background song</source>
         <translation>自動バックグラウンド音楽</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-41"/>
         <source>Start videos paused</source>
         <translation>動画を一時停止状態で開始する</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Videos open paused so you can start them manually.</source>
         <translation>動画は一時停止状態で開くため、手動で開始できます。</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Playback protection</source>
         <translation>再生保護</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+0"/>
         <source>Prevents media changes and seeking while audio or video is playing. Pause first to make changes.</source>
         <translation>音声または動画の再生中は、メディアの変更とシークを防止します。変更するには、まず一時停止してください。</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+7"/>
         <source>Link Folder</source>
         <translation>フォルダーをリンク</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Sync folder (Dropbox, OneDrive, etc.) shown as playlists.</source>
         <translation>同期フォルダー（Dropbox、OneDriveなど）をプレイリストとして表示します。</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location filename="../../qml/SettingsRow.qml" line="+264"/>
         <source>Choose…</source>
         <translation>選択…</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+60"/>
+        <location line="+1"/>
         <source>Program stream (NDI)</source>
         <translation>プログラムストリーム (NDI)</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Receive the DistroAV/NDI output from OBS as a live projection.</source>
         <translation>OBSからのDistroAV/NDI出力をライブ投影として受信します。</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Enable Main Output in DistroAV, then select the NDI source shown by OBS.</source>
-        <translation>DistroAVでメイン出力を有効にしてから、OBSに表示されるNDIソースを選択してください。</translation>
+        <translation type="vanished">DistroAVでメイン出力を有効にしてから、OBSに表示されるNDIソースを選択してください。</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Available NDI sources</source>
         <translation>利用可能なNDIソース</translation>
     </message>
@@ -7664,64 +7526,576 @@ Add content, a camera, or another scene.</source>
         <translation>ソースを検索</translation>
     </message>
     <message>
-        <location line="-11"/>
         <source>Scene that captures the projection monitor. Activated when content is displayed.</source>
-        <translation>投影モニターをキャプチャするシーン。コンテンツが表示されると有効になります。</translation>
+        <translation type="vanished">投影モニターをキャプチャするシーン。コンテンツが表示されると有効になります。</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+6"/>
+        <location line="+1"/>
         <source>Camera</source>
         <translation>カメラ</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Shows a camera button in the live tools toolbar.</source>
         <translation>ライブツールツールバーにカメラボタンを表示します。</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+11"/>
+        <location line="+1"/>
         <source>Automatic Shortcuts</source>
         <translation>自動ショートカット</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Sends keyboard shortcuts when visual media changes state.</source>
         <translation>ビジュアルメディアの状態が変化した際にキーボードショートカットを送信します。</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Create one or more shortcuts for start, end, pause and resume events.</source>
-        <translation>開始、終了、一時停止、再開の各イベントに対して1つ以上のショートカットを作成します。</translation>
+        <translation type="vanished">開始、終了、一時停止、再開の各イベントに対して1つ以上のショートカットを作成します。</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location filename="../../qml/SettingsRow.qml" line="+68"/>
         <source>No shortcuts configured.</source>
         <translation>ショートカットが設定されていません。</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+1"/>
         <source>Add shortcut</source>
         <translation>ショートカットを追加</translation>
     </message>
     <message>
-        <location line="+19"/>
+        <location filename="../../qml/SettingsRow.qml" line="-7"/>
         <source>Edit</source>
         <translation>編集</translation>
     </message>
     <message>
-        <location line="-13"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-17"/>
+        <location line="+1"/>
         <source>Zoom Meetings</source>
         <translation>Zoomミーティング</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="-25"/>
         <source>Text shown on the projection screen when idle.</source>
         <translation>待機中にプロジェクター画面に表示されるテキスト。</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+3"/>
         <source>Save changes</source>
         <translation>変更を保存</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsSectionHeader.qml" line="+28"/>
+        <location line="+35"/>
+        <source>Back to sections</source>
+        <translation>セクションに戻る</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsView.qml" line="+15"/>
+        <source>Search settings</source>
+        <translation>検索設定</translation>
+    </message>
+    <message>
+        <location line="+173"/>
+        <source>Search results</source>
+        <translation>検索結果</translation>
+    </message>
+    <message>
+        <location line="+77"/>
+        <source>No settings found. Try another word.</source>
+        <translation>設定が見つかりません。別の言葉を試してください。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-67"/>
+        <source>Appearance and languages</source>
+        <translation>外見と言語</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Theme and languages</source>
+        <translation>テーマと言語</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Appearance</source>
+        <translation>外観</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Theme</source>
+        <translation>テーマ</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Update languages</source>
+        <translation>言語を更新する</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Media and files</source>
+        <translation>メディアとファイル</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Playback, downloads and folders</source>
+        <translation>再生、ダウンロード、フォルダー</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Playback</source>
+        <translation>再生</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Downloads</source>
+        <translation>ダウンロード</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Schedule and preparation</source>
+        <translation>スケジュールと準備</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Meeting schedule</source>
+        <translation>会議スケジュール</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Midweek meeting</source>
+        <translation>週日の集会</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <location line="+7"/>
+        <source>Time</source>
+        <translation>時刻</translation>
+    </message>
+    <message>
+        <location line="-3"/>
+        <source>Weekend meeting</source>
+        <translation>週末の集会</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Preparation</source>
+        <translation>準備</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Projection</source>
+        <translation>投影</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Screens and annual text</source>
+        <translation>画面と年次テキスト</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Scenes</source>
+        <translation>シーン</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Native scenes engine</source>
+        <translation>ネイティブシーンエンジン</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Restart Solin to apply this change.</source>
+        <translation>この変更を適用するには、Solin を再起動します。</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>OBS, Zoom and camera</source>
+        <translation>OBS、ズーム、カメラ</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>Automations</source>
+        <translation>自動化</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Sharing and shortcuts</source>
+        <translation>共有とショートカット</translation>
+    </message>
+    <message>
+        <location line="+30"/>
+        <source>Version and information</source>
+        <translation>バージョンと情報</translation>
+    </message>
+    <message>
+        <location line="-17"/>
+        <source>Control over your local network</source>
+        <translation>ローカルネットワークを制御する</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+1"/>
+        <source>Remote control</source>
+        <translation>リモコン</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Control Solin securely from another device on this local network.</source>
+        <translation>このローカルネットワーク上の別のデバイスからSolinを安全に操作します。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Network interface</source>
+        <translation>ネットワークインターフェース</translation>
+    </message>
+    <message>
+        <source>Refresh</source>
+        <translation type="vanished">更新</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Copy address</source>
+        <translation>アドレスをコピー</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Access credentials</source>
+        <translation>アクセス認証情報</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Username</source>
+        <translation>ユーザー名</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>New password</source>
+        <translation>新しいパスワード</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Confirm password</source>
+        <translation>パスワードの確認</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Save credentials</source>
+        <translation>認証情報を保存</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Devices</source>
+        <translation>デバイス</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Set up a device</source>
+        <translation>デバイスをセットアップ</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/general.py" line="-125"/>
+        <source>Searching jw.org…</source>
+        <translation>jw.orgを検索中…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Reading the meeting times…</source>
+        <translation>集会の時刻を読み込んでいます…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>No congregation found with that name.</source>
+        <translation>その名前の会衆は見つかりませんでした。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>jw.org does not publish meeting times for this congregation.</source>
+        <translation>jw.orgにはこの会衆の集会時刻が掲載されていません。</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Too many searches in a row. Wait a moment and type again.</source>
+        <translation>検索の回数が多すぎます。少し待ってから入力してください。</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Could not reach jw.org. Check the connection and try again.</source>
+        <translation>jw.orgに接続できませんでした。接続を確認して、もう一度お試しください。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-90"/>
+        <location filename="../../ui/qml/settings/general.py" line="+5"/>
+        <source>Search your congregation to fill the days and times below.</source>
+        <translation>会衆を検索すると、下の曜日と時刻が入力されます。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/general.py" line="+94"/>
+        <source>(same as interface)</source>
+        <translation>（インターフェースと同じ）</translation>
+    </message>
+    <message>
+        <location line="+54"/>
+        <source>Primary Screen (control)</source>
+        <translation>メインスクリーン（操作用）</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Secondary {n} (projection)</source>
+        <translation>セカンダリ {n}（プロジェクター）</translation>
+    </message>
+    <message>
+        <location line="+210"/>
+        <source>Configure the meeting day/time before automatic playback can start.</source>
+        <translation>自動再生を開始する前に集会の曜日と時刻を設定してください。</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Plays audio songs before configured meetings and fades out before start.</source>
+        <translation>設定した集会の前に音声の歌を再生し，開始前にフェードアウトします。</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Select folder to link</source>
+        <translation>リンクするフォルダーを選択</translation>
+    </message>
+    <message>
+        <location line="+117"/>
+        <source>Fetching annual text…</source>
+        <translation>年間テキストを取得中…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Could not fetch annual text</source>
+        <translation>年間テキストを取得できませんでした</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Annual text updated for {year}</source>
+        <translation>{year}年の年間テキストを更新しました</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsRow.qml" line="-134"/>
+        <source>Select…</source>
+        <translation>選択してください…</translation>
+    </message>
+    <message>
+        <location line="+61"/>
+        <source>No folder selected</source>
+        <translation>フォルダーが選択されていません</translation>
+    </message>
+    <message>
+        <location line="+48"/>
+        <source>No secondary screen detected. Connect an external monitor.</source>
+        <translation>セカンダリスリーンが検出されません。外部モニターを接続してください。</translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <source>Delete</source>
+        <translation>削除</translation>
+    </message>
+    <message>
+        <location filename="../../qml/AppTextField.qml" line="+67"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-10"/>
+        <source>Clear</source>
+        <translation>クリア</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsClockPicker.qml" line="+45"/>
+        <source>Choose hour</source>
+        <translation>時間を選択してください</translation>
+    </message>
+    <message>
+        <location line="+30"/>
+        <source>Choose minute</source>
+        <translation>分を選択してください</translation>
+    </message>
+    <message>
+        <location line="+101"/>
+        <source>Hour %1</source>
+        <translation>時間 %1</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Minute %1</source>
+        <translation>分 %1</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsCongregationDialog.qml" line="+31"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+8"/>
+        <source>Fill in from jw.org</source>
+        <translation>jw.orgから取り込む</translation>
+    </message>
+    <message>
+        <location line="+23"/>
+        <source>Search by congregation name</source>
+        <translation>会衆名で検索</translation>
+    </message>
+    <message>
+        <location line="+86"/>
+        <location filename="../../qml/SettingsRemoteSetup.qml" line="-201"/>
+        <source>Close</source>
+        <translation>閉じる</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsRow.qml" line="-88"/>
+        <location filename="../../qml/SettingsSelectionDialog.qml" line="+30"/>
+        <source>Search…</source>
+        <translation>検索…</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsSelectionDialog.qml" line="+8"/>
+        <source>HH:mm</source>
+        <translation>高さ:mm</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>No results found.</source>
+        <translation>結果が見つかりませんでした。</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <location filename="../../qml/SettingsTimeDialog.qml" line="+58"/>
+        <source>Apply</source>
+        <translation>適用</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <location filename="../../qml/SettingsTimeDialog.qml" line="-2"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+37"/>
+        <location line="+52"/>
+        <source>Cancel</source>
+        <translation>キャンセル</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsShortcutDialog.qml" line="-144"/>
+        <source>Share Hotkey</source>
+        <translation>共有ホットキー</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Press the Zoom shortcut that starts and stops screen sharing.</source>
+        <translation>画面共有を開始および停止する Zoom のショートカットを押してください。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="-309"/>
+        <location line="+63"/>
+        <source>Select a private network…</source>
+        <translation>プライベートネットワークを選択…</translation>
+    </message>
+    <message>
+        <location line="-50"/>
+        <source>Choose a network and save credentials before enabling remote control.</source>
+        <translation>リモートコントロールを有効にする前に、ネットワークを選択し、認証情報を保存してください。</translation>
+    </message>
+    <message>
+        <location line="+83"/>
+        <source>Starting secure remote control…</source>
+        <translation>安全なリモートコントロールを開始しています…</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Ready to enable.</source>
+        <translation>有効にする準備ができました。</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Configuration required.</source>
+        <translation>設定が必要です。</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Configured as %1</source>
+        <translation>%1として設定済み</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/integrations.py" line="-106"/>
+        <source>Enter a valid port (1–65535).</source>
+        <translation>有効なポート番号を入力してください（1～65535）。</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>✓ Configuration saved — reconnecting…</source>
+        <translation>✓ 設定を保存しました — 再接続中...</translation>
+    </message>
+    <message>
+        <location line="+31"/>
+        <source>— Select scene —</source>
+        <translation>— シーンを選択 —</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>NDI receiver is not available.</source>
+        <translation>NDIレシーバーが利用できません。</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <location line="+34"/>
+        <source>Looking for NDI sources on this network.</source>
+        <translation>ネットワーク上のNDIソースを検索しています。</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>No NDI sources found. Check that DistroAV Main Output is enabled in OBS.</source>
+        <translation>NDIソースが見つかりません。OBSでDistroAVのメイン出力が有効になっているか確認してください。</translation>
+    </message>
+    <message>
+        <location line="+48"/>
+        <source>Press a shortcut before saving.</source>
+        <translation>保存する前にショートカットを押してください。</translation>
+    </message>
+    <message>
+        <location line="+78"/>
+        <source>Configured</source>
+        <translation>設定済み</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <location filename="../../ui/qml/settings/remote.py" line="+4"/>
+        <source>Not configured</source>
+        <translation>未設定</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Solin can send the automatic click.</source>
+        <translation>Solin は自動クリックを送信できます。</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Allow Solin in macOS Accessibility so automatic clicks can work.</source>
+        <translation>自動クリックが機能するように、macOS のアクセシビリティで Solin を許可してください。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="+2"/>
+        <source>Use at least %1 characters. Credentials belong only to this profile.</source>
+        <translation>%1文字以上使用してください。認証情報は、このプロファイル専用です。</translation>
+    </message>
+    <message>
+        <location line="+33"/>
+        <source>The passwords do not match.</source>
+        <translation>パスワードが一致しません。</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Enter a new password to save.</source>
+        <translation>保存するには新しいパスワードを入力してください。</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Check the username and use a password with at least %1 characters.</source>
+        <translation>ユーザー名を確認し、%1文字以上のパスワードを使用してください。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/general.py" line="+18"/>
+        <location filename="../../ui/qml/settings/remote.py" line="+10"/>
+        <location line="+142"/>
+        <source>Saved</source>
+        <translation>保存されました</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="-23"/>
+        <source>Copied</source>
+        <translation>コピーされました</translation>
     </message>
 </context>
 <context>
@@ -8872,34 +9246,28 @@ Click &apos;Download&apos; to open the download page.</source>
 <context>
     <name>WatchedFolderSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/watched_folder_section.py" line="+48"/>
         <source>Link Folder</source>
-        <translation>フォルダーをリンク</translation>
+        <translation type="vanished">フォルダーをリンク</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Sync folder (Dropbox, OneDrive, etc.) shown as playlists.</source>
-        <translation>同期フォルダー（Dropbox、OneDriveなど）をプレイリストとして表示します。</translation>
+        <translation type="vanished">同期フォルダー（Dropbox、OneDriveなど）をプレイリストとして表示します。</translation>
     </message>
     <message>
-        <location line="+19"/>
         <source>Choose…</source>
-        <translation>選択…</translation>
+        <translation type="vanished">選択…</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>Clear</source>
-        <translation>クリア</translation>
+        <translation type="vanished">クリア</translation>
     </message>
     <message>
-        <location line="+48"/>
         <source>No folder selected</source>
-        <translation>フォルダーが選択されていません</translation>
+        <translation type="vanished">フォルダーが選択されていません</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Select folder to link</source>
-        <translation>リンクするフォルダーを選択</translation>
+        <translation type="vanished">リンクするフォルダーを選択</translation>
     </message>
 </context>
 <context>
@@ -9143,76 +9511,60 @@ Both devices must be on the same Wi-Fi network.</source>
 <context>
     <name>YearlyTextSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/yearly_text_section.py" line="+62"/>
         <source>Text shown on the projection screen when idle.</source>
-        <translation>待機中にプロジェクター画面に表示されるテキスト。</translation>
+        <translation type="vanished">待機中にプロジェクター画面に表示されるテキスト。</translation>
     </message>
     <message>
-        <location line="+18"/>
-        <location line="+309"/>
         <source>Fetching annual text…</source>
-        <translation>年間テキストを取得中…</translation>
+        <translation type="vanished">年間テキストを取得中…</translation>
     </message>
     <message>
-        <location line="-295"/>
-        <location line="+276"/>
         <source>Update</source>
-        <translation>更新</translation>
+        <translation type="vanished">更新</translation>
     </message>
     <message>
-        <location line="-241"/>
         <source>Scripture:</source>
-        <translation>聖句：</translation>
+        <translation type="vanished">聖句：</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>E.g.: Happy are those conscious of their spiritual need.</source>
-        <translation>例：霊的な必要を自覚している人たちは幸いです。</translation>
+        <translation type="vanished">例：霊的な必要を自覚している人たちは幸いです。</translation>
     </message>
     <message>
-        <location line="+11"/>
         <source>Bible reference:</source>
-        <translation>参照聖句：</translation>
+        <translation type="vanished">参照聖句：</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>E.g.: Matthew 5:3.</source>
-        <translation>例：マタイ 5:3。</translation>
+        <translation type="vanished">例：マタイ 5:3。</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>Save changes</source>
-        <translation>変更を保存</translation>
+        <translation type="vanished">変更を保存</translation>
     </message>
     <message>
-        <location line="+196"/>
         <source>Annual text updated for {year}</source>
-        <translation>{year}年の年間テキストを更新しました</translation>
+        <translation type="vanished">{year}年の年間テキストを更新しました</translation>
     </message>
     <message>
-        <location line="+33"/>
         <source>Loading…</source>
-        <translation>読み込み中…</translation>
+        <translation type="vanished">読み込み中…</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Could not fetch annual text</source>
-        <translation>年間テキストを取得できませんでした</translation>
+        <translation type="vanished">年間テキストを取得できませんでした</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Retry</source>
-        <translation>再試行</translation>
+        <translation type="vanished">再試行</translation>
     </message>
     <message>
-        <location line="+23"/>
         <source>▲  Edit text manually</source>
-        <translation>▲  手動でテキストを編集</translation>
+        <translation type="vanished">▲  手動でテキストを編集</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>▼  Edit text manually</source>
-        <translation>▼  手動でテキストを編集</translation>
+        <translation type="vanished">▼  手動でテキストを編集</translation>
     </message>
 </context>
 <context>
@@ -9434,14 +9786,12 @@ A number at the end has priority.</source>
 <context>
     <name>ZoomSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/zoom_section.py" line="+32"/>
         <source>Zoom Meetings</source>
-        <translation>Zoomミーティング</translation>
+        <translation type="vanished">Zoomミーティング</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Audio controls and attendance count during meetings.</source>
-        <translation>集会中の音声操作と出席者数。</translation>
+        <translation type="vanished">集会中の音声操作と出席者数。</translation>
     </message>
 </context>
 <context>
@@ -10972,8 +11322,7 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
 <context>
     <name>_ShortcutSequenceEdit</name>
     <message>
-        <location filename="../../widgets/settings/auto_key_dialog.py" line="-257"/>
-        <location line="+52"/>
+        <location filename="../../qml/SettingsShortcutDialog.qml" line="+98"/>
         <source>Click to record</source>
         <translation>クリックして記録</translation>
     </message>
@@ -10981,37 +11330,31 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
 <context>
     <name>_TimePickerPopup</name>
     <message>
-        <location filename="../../widgets/settings/meeting_schedule_section.py" line="-477"/>
         <source>Hour</source>
-        <translation>時</translation>
+        <translation type="vanished">時</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Minute</source>
-        <translation>分</translation>
+        <translation type="vanished">分</translation>
     </message>
     <message>
-        <location line="+15"/>
         <source>Cancel</source>
-        <translation>キャンセル</translation>
+        <translation type="vanished">キャンセル</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Apply</source>
-        <translation>適用</translation>
+        <translation type="vanished">適用</translation>
     </message>
 </context>
 <context>
     <name>_TimeStepper</name>
     <message>
-        <location line="-108"/>
         <source>Increase</source>
-        <translation>増やす</translation>
+        <translation type="vanished">増やす</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Decrease</source>
-        <translation>減らす</translation>
+        <translation type="vanished">減らす</translation>
     </message>
 </context>
 <context>

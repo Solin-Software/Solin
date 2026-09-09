@@ -4,24 +4,20 @@
 <context>
     <name>AboutSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/about_section.py" line="+48"/>
         <source>Audio &amp; Video app for Kingdom Hall meetings.</source>
-        <translation>Audio- och videoprogramför möten i Kungarikets sal.</translation>
+        <translation type="vanished">Audio- och videoprogramför möten i Kungarikets sal.</translation>
     </message>
     <message>
-        <location line="+10"/>
         <source>Official Website</source>
-        <translation>Officiell webbplats</translation>
+        <translation type="vanished">Officiell webbplats</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Changelog</source>
-        <translation>Ändringslogg</translation>
+        <translation type="vanished">Ändringslogg</translation>
     </message>
     <message>
-        <location line="+14"/>
         <source>This app is independent and is not affiliated with or endorsed by the Watch Tower Bible and Tract Society of Pennsylvania or any of its associated organizations.</source>
-        <translation>Den här appen är oberoende och är inte ansluten till eller godkänd av Watch Tower Bible and Tract Society of Pennsylvania eller någon av dess organisationer.</translation>
+        <translation type="vanished">Den här appen är oberoende och är inte ansluten till eller godkänd av Watch Tower Bible and Tract Society of Pennsylvania eller någon av dess organisationer.</translation>
     </message>
 </context>
 <context>
@@ -271,60 +267,60 @@
 <context>
     <name>AutoKeyEditorDialog</name>
     <message>
-        <location filename="../../widgets/settings/auto_key_dialog.py" line="+125"/>
+        <location filename="../../qml/SettingsShortcutDialog.qml" line="+53"/>
         <source>Automatic Shortcut</source>
         <translation>Automatiskt kortkommando</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+12"/>
         <source>Choose an app event and press the shortcut to send.</source>
         <translation>Välj en apphändelse och tryck på kortkommandot för att skicka.</translation>
     </message>
     <message>
-        <location line="+45"/>
+        <location line="+9"/>
+        <location line="+15"/>
         <source>Event</source>
         <translation>Händelse</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+67"/>
+        <location line="+7"/>
         <source>Shortcut</source>
         <translation>Kortkommando</translation>
     </message>
     <message>
-        <location line="+12"/>
-        <location line="+95"/>
+        <location line="+35"/>
         <source>Click the field, then press one shortcut.</source>
         <translation>Klicka i fältet och tryck sedan på ett kortkommando.</translation>
     </message>
     <message>
-        <location line="-86"/>
+        <location line="+12"/>
         <source>Enabled</source>
         <translation>Aktiverad</translation>
     </message>
     <message>
-        <location line="+18"/>
+        <location line="+53"/>
         <source>Cancel</source>
         <translation>Avbryt</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+7"/>
         <source>Save</source>
         <translation>Spara</translation>
     </message>
     <message>
-        <location line="+54"/>
         <source>Press a shortcut before saving.</source>
-        <translation>Tryck på ett kortkommando innan du sparar.</translation>
+        <translation type="vanished">Tryck på ett kortkommando innan du sparar.</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="-109"/>
+        <location line="+36"/>
         <source>Listening... press one shortcut.</source>
         <translation>Lyssnar... tryck på ett kortkommando.</translation>
     </message>
     <message>
-        <location line="+13"/>
         <source>Shortcut captured.</source>
-        <translation>Kortkommando registrerat.</translation>
+        <translation type="vanished">Kortkommando registrerat.</translation>
     </message>
 </context>
 <context>
@@ -353,109 +349,87 @@
 <context>
     <name>AutoKeysSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/auto_keys_section.py" line="+59"/>
         <source>Automatic Shortcuts</source>
-        <translation>Automatiska genvägar</translation>
+        <translation type="vanished">Automatiska genvägar</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Sends keyboard shortcuts when visual media changes state.</source>
-        <translation>Skickar kortkommandon när visuella medier ändrar status.</translation>
+        <translation type="vanished">Skickar kortkommandon när visuella medier ändrar status.</translation>
     </message>
     <message>
-        <location line="+24"/>
         <source>Create one or more shortcuts for start, end, pause and resume events.</source>
-        <translation>Skapa ett eller flera kortkommandon för händelserna start, slut, paus och återuppta.</translation>
+        <translation type="vanished">Skapa ett eller flera kortkommandon för händelserna start, slut, paus och återuppta.</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>No shortcuts configured.</source>
-        <translation>Inga kortkommandon konfigurerade.</translation>
+        <translation type="vanished">Inga kortkommandon konfigurerade.</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>Add shortcut</source>
-        <translation>Lägg till kortkommando</translation>
+        <translation type="vanished">Lägg till kortkommando</translation>
     </message>
     <message>
-        <location line="+131"/>
         <source>Enabled</source>
-        <translation>Aktiverad</translation>
+        <translation type="vanished">Aktiverad</translation>
     </message>
     <message>
-        <location line="+0"/>
         <source>Disabled</source>
-        <translation>Inaktiverad</translation>
+        <translation type="vanished">Inaktiverad</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Edit</source>
-        <translation>Redigera</translation>
+        <translation type="vanished">Redigera</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Delete</source>
-        <translation>Ta bort</translation>
+        <translation type="vanished">Ta bort</translation>
     </message>
 </context>
 <context>
     <name>AutoShareSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/auto_share_section.py" line="+55"/>
         <source>Auto Screen Share</source>
-        <translation>Automatisk skärmdelning</translation>
+        <translation type="vanished">Automatisk skärmdelning</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Automatically shares screen via hotkeys when projecting media.</source>
-        <translation>Delar skärmen automatiskt via kortkommandon när media projiceras.</translation>
+        <translation type="vanished">Delar skärmen automatiskt via kortkommandon när media projiceras.</translation>
     </message>
     <message>
-        <location line="+30"/>
         <source>Share hotkey</source>
-        <translation>Kortkommando för delning</translation>
+        <translation type="vanished">Kortkommando för delning</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Uses Zoom&apos;s single start/stop screen-share shortcut.</source>
-        <translation>Använder Zooms enda kortkommando för att starta och stoppa skärmdelning.</translation>
+        <translation type="vanished">Använder Zooms enda kortkommando för att starta och stoppa skärmdelning.</translation>
     </message>
     <message>
-        <location line="+10"/>
-        <location line="+241"/>
-        <location line="+9"/>
         <source>Not configured</source>
-        <translation>Inte konfigurerad</translation>
+        <translation type="vanished">Inte konfigurerad</translation>
     </message>
     <message>
-        <location line="-243"/>
         <source>Edit</source>
-        <translation>Redigera</translation>
+        <translation type="vanished">Redigera</translation>
     </message>
     <message>
-        <location line="+20"/>
         <source>Accessibility permission</source>
-        <translation>Behörighet för hjälpmedel</translation>
+        <translation type="vanished">Behörighet för hjälpmedel</translation>
     </message>
     <message>
-        <location line="+14"/>
         <source>Open Settings</source>
-        <translation>Öppna inställningar</translation>
+        <translation type="vanished">Öppna inställningar</translation>
     </message>
     <message>
-        <location line="+35"/>
         <source>Share target</source>
-        <translation>Delningsmål</translation>
+        <translation type="vanished">Delningsmål</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Where Solin should click after Zoom&apos;s share shortcut opens the dialog.</source>
-        <translation>Var Solin ska klicka efter att Zooms delningsgenväg har öppnat dialogrutan.</translation>
+        <translation type="vanished">Var Solin ska klicka efter att Zooms delningsgenväg har öppnat dialogrutan.</translation>
     </message>
     <message>
-        <location line="+167"/>
         <source>Configured</source>
-        <translation>Konfigurerad</translation>
+        <translation type="vanished">Konfigurerad</translation>
     </message>
     <message>
         <source>Click Position</source>
@@ -466,33 +440,28 @@
         <translation type="vanished">Positionen att klicka på efter att delningsdialogen öppnas för att välja målet.</translation>
     </message>
     <message>
-        <location line="-141"/>
         <source>Configure</source>
-        <translation>Konfigurera</translation>
+        <translation type="vanished">Konfigurera</translation>
     </message>
     <message>
-        <location line="+122"/>
         <source>Share Hotkey</source>
-        <translation>Kortkommando för delning</translation>
+        <translation type="vanished">Kortkommando för delning</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Press the Zoom shortcut that starts and stops screen sharing.</source>
-        <translation>Tryck på Zoom-kortkommandot som startar och stoppar skärmdelning.</translation>
+        <translation type="vanished">Tryck på Zoom-kortkommandot som startar och stoppar skärmdelning.</translation>
     </message>
     <message>
         <source>Position: {x}, {y}</source>
         <translation type="vanished">Position: {x}, {y}</translation>
     </message>
     <message>
-        <location line="+35"/>
         <source>Solin can send the automatic click.</source>
-        <translation>Solin kan skicka det automatiska klicket.</translation>
+        <translation type="vanished">Solin kan skicka det automatiska klicket.</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>Allow Solin in macOS Accessibility so automatic clicks can work.</source>
-        <translation>Tillåt Solin i macOS Hjälpmedel så att automatiska klick kan fungera.</translation>
+        <translation type="vanished">Tillåt Solin i macOS Hjälpmedel så att automatiska klick kan fungera.</translation>
     </message>
 </context>
 <context>
@@ -907,14 +876,12 @@
 <context>
     <name>CameraSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/camera_section.py" line="+13"/>
         <source>Camera</source>
-        <translation>Kamera</translation>
+        <translation type="vanished">Kamera</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Shows a camera button in the live tools toolbar.</source>
-        <translation>Visar en kameraknapp i verktygsfältet för liveverktyg.</translation>
+        <translation type="vanished">Visar en kameraknapp i verktygsfältet för liveverktyg.</translation>
     </message>
 </context>
 <context>
@@ -1032,6 +999,17 @@
         <location line="+16"/>
         <source>Enable projection aspect first</source>
         <translation>Aktivera projektionsformatet först</translation>
+    </message>
+</context>
+<context>
+    <name>IntegrationSettings</name>
+    <message numerus="yes">
+        <location filename="../../ui/qml/settings/integrations.py" line="+330"/>
+        <source>%n NDI source found.</source>
+        <translation>
+            <numerusform>%n NDI-källa hittad.</numerusform>
+            <numerusform>%n NDI-källor hittade.</numerusform>
+        </translation>
     </message>
 </context>
 <context>
@@ -1178,19 +1156,16 @@
 <context>
     <name>LanguageSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/language_section.py" line="+22"/>
         <source>Interface</source>
-        <translation>Gränssnitt</translation>
+        <translation type="vanished">Gränssnitt</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>JW Media</source>
-        <translation>JW Media</translation>
+        <translation type="vanished">JW Media</translation>
     </message>
     <message>
-        <location line="+36"/>
         <source>(same as interface)</source>
-        <translation>(samma som gränssnittet)</translation>
+        <translation type="vanished">(samma som gränssnittet)</translation>
     </message>
 </context>
 <context>
@@ -1589,13 +1564,13 @@
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../../main_window.py" line="+551"/>
+        <location filename="../../main_window.py" line="+565"/>
         <location filename="../../controllers/main_window_nav.py" line="+11"/>
         <source>Solin</source>
         <translation>Solin</translation>
     </message>
     <message>
-        <location line="+694"/>
+        <location line="+717"/>
         <location filename="../../controllers/main_window_nav.py" line="+27"/>
         <source>Scenes</source>
         <translation>Scener</translation>
@@ -1636,7 +1611,7 @@
         <translation>Inspelning pågår</translation>
     </message>
     <message>
-        <location line="+379"/>
+        <location line="+381"/>
         <source>Pause playback before changing the projected content.</source>
         <translation>Pausa uppspelningen innan du ändrar det projicerade innehållet.</translation>
     </message>
@@ -2493,69 +2468,56 @@ Solin fortsätter att försöka återansluta från den aktuella positionen.
 <context>
     <name>MediaSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/media_section.py" line="+23"/>
         <source>Auto-download on play</source>
-        <translation>Automatisk nedladdning vid uppspelning</translation>
+        <translation type="vanished">Automatisk nedladdning vid uppspelning</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Downloads the playing media for offline use.</source>
-        <translation>Laddar ned media som spelas upp för offlineanvändning.</translation>
+        <translation type="vanished">Laddar ned media som spelas upp för offlineanvändning.</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Auto-download weekly study</source>
-        <translation>Ladda ned veckans studie automatiskt</translation>
+        <translation type="vanished">Ladda ned veckans studie automatiskt</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Downloads this week’s and next week’s meeting media.</source>
-        <translation>Laddar ned media från möten denna vecka och nästa.</translation>
+        <translation type="vanished">Laddar ned media från möten denna vecka och nästa.</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Song Announcement Mode</source>
-        <translation>Sångmeddelningsläge</translation>
+        <translation type="vanished">Sångmeddelningsläge</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Song starts muted for title display. Press play to start.</source>
-        <translation>Sången startar utan ljud för att visa titeln. Tryck på spela för att starta.</translation>
+        <translation type="vanished">Sången startar utan ljud för att visa titeln. Tryck på spela för att starta.</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Automatic background song</source>
-        <translation>Automatisk bakgrundssång</translation>
+        <translation type="vanished">Automatisk bakgrundssång</translation>
     </message>
     <message>
-        <location line="+13"/>
         <source>Start videos paused</source>
-        <translation>Starta videor pausade</translation>
+        <translation type="vanished">Starta videor pausade</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Videos open paused so you can start them manually.</source>
-        <translation>Videor öppnas pausade så att de kan startas manuellt.</translation>
+        <translation type="vanished">Videor öppnas pausade så att de kan startas manuellt.</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Playback protection</source>
-        <translation>Uppspelningsskydd</translation>
+        <translation type="vanished">Uppspelningsskydd</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Prevents media changes and seeking while audio or video is playing. Pause first to make changes.</source>
-        <translation>Förhindrar mediebyten och sökning medan ljud eller video spelas upp. Pausa först för att göra ändringar.</translation>
+        <translation type="vanished">Förhindrar mediebyten och sökning medan ljud eller video spelas upp. Pausa först för att göra ändringar.</translation>
     </message>
     <message>
-        <location line="+35"/>
         <source>Configure the meeting day/time before automatic playback can start.</source>
-        <translation>Ställ in mötets dag och tid innan automatisk uppspelning kan starta.</translation>
+        <translation type="vanished">Ställ in mötets dag och tid innan automatisk uppspelning kan starta.</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Plays audio songs before configured meetings and fades out before start.</source>
-        <translation>Spelar ljudsånger före inställda möten och tonar ut före starten.</translation>
+        <translation type="vanished">Spelar ljudsånger före inställda möten och tonar ut före starten.</translation>
     </message>
 </context>
 <context>
@@ -2710,77 +2672,60 @@ Manuellt tillagt innehåll, beskärningar, bildutsnitt och expanderat läge beh�
 <context>
     <name>MeetingScheduleSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/meeting_schedule_section.py" line="+528"/>
-        <location line="+334"/>
         <source>Used by automatic features that depend on the meeting start time.</source>
-        <translation>Används av automatiska funktioner som är beroende av mötets starttid.</translation>
+        <translation type="vanished">Används av automatiska funktioner som är beroende av mötets starttid.</translation>
     </message>
     <message>
-        <location line="-275"/>
-        <location line="+285"/>
         <source>Fill in from jw.org</source>
-        <translation>Fyll i från jw.org</translation>
+        <translation type="vanished">Fyll i från jw.org</translation>
     </message>
     <message>
-        <location line="-270"/>
-        <location line="+271"/>
         <source>Congregation name</source>
-        <translation>Församlingens namn</translation>
+        <translation type="vanished">Församlingens namn</translation>
     </message>
     <message>
-        <location line="-174"/>
         <source>Searching jw.org…</source>
-        <translation>Söker på jw.org…</translation>
+        <translation type="vanished">Söker på jw.org…</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>No congregation found with that name.</source>
-        <translation>Ingen församling med det namnet hittades.</translation>
+        <translation type="vanished">Ingen församling med det namnet hittades.</translation>
     </message>
     <message>
-        <location line="-6"/>
         <source>Reading the meeting times…</source>
-        <translation>Läser mötestiderna…</translation>
+        <translation type="vanished">Läser mötestiderna…</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>jw.org does not publish meeting times for this congregation.</source>
-        <translation>jw.org publicerar inga mötestider för den här församlingen.</translation>
+        <translation type="vanished">jw.org publicerar inga mötestider för den här församlingen.</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Too many searches in a row. Wait a moment and type again.</source>
-        <translation>För många sökningar i rad. Vänta en stund och skriv igen.</translation>
+        <translation type="vanished">För många sökningar i rad. Vänta en stund och skriv igen.</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Could not reach jw.org. Check the connection and try again.</source>
-        <translation>Kunde inte nå jw.org. Kontrollera anslutningen och försök igen.</translation>
+        <translation type="vanished">Kunde inte nå jw.org. Kontrollera anslutningen och försök igen.</translation>
     </message>
     <message>
-        <location line="+13"/>
         <source>Search your congregation to fill the days and times below.</source>
-        <translation>Sök din församling för att fylla i dagarna och tiderna nedan.</translation>
+        <translation type="vanished">Sök din församling för att fylla i dagarna och tiderna nedan.</translation>
     </message>
     <message>
         <source>Midweek meeting</source>
         <translation type="vanished">Veckomöte</translation>
     </message>
     <message>
-        <location line="-193"/>
-        <location line="+320"/>
         <source>Day and time for the midweek meeting.</source>
-        <translation>Dag och tid för veckomötet.</translation>
+        <translation type="vanished">Dag och tid för veckomötet.</translation>
     </message>
     <message>
         <source>Weekend meeting</source>
         <translation type="vanished">Helgmöte</translation>
     </message>
     <message>
-        <location line="-313"/>
-        <location line="+317"/>
         <source>Day and time for the weekend meeting.</source>
-        <translation>Dag och tid för helgmötet.</translation>
+        <translation type="vanished">Dag och tid för helgmötet.</translation>
     </message>
     <message>
         <source>Not configured</source>
@@ -3111,130 +3056,103 @@ Manuellt tillagt innehåll, beskärningar, bildutsnitt och expanderat läge beh�
 <context>
     <name>ObsSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/obs_section.py" line="+50"/>
         <source>OBS Studio</source>
-        <translation>OBS Studio</translation>
+        <translation type="vanished">OBS Studio</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Automatically switches scenes during projection</source>
-        <translation>Växlar automatiskt mellan scener under projektion</translation>
+        <translation type="vanished">Växlar automatiskt mellan scener under projektion</translation>
     </message>
     <message>
-        <location line="+29"/>
         <source>Disconnected</source>
-        <translation>Frånkopplad</translation>
+        <translation type="vanished">Frånkopplad</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>WebSocket Port</source>
-        <translation>WebSocket-port</translation>
+        <translation type="vanished">WebSocket-port</translation>
     </message>
     <message>
-        <location line="+14"/>
         <source>Password (optional)</source>
-        <translation>Lösenord (valfritt)</translation>
+        <translation type="vanished">Lösenord (valfritt)</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>Leave blank if no password is set</source>
-        <translation>Lämna tomt om inget lösenord har angetts</translation>
+        <translation type="vanished">Lämna tomt om inget lösenord har angetts</translation>
     </message>
     <message>
-        <location line="+9"/>
-        <location line="+363"/>
         <source>● Changes saved automatically</source>
-        <translation>● Ändringar sparas automatiskt</translation>
+        <translation type="vanished">● Ändringar sparas automatiskt</translation>
     </message>
     <message>
-        <location line="-327"/>
         <source>Program stream (NDI)</source>
-        <translation>Programström (NDI)</translation>
+        <translation type="vanished">Programström (NDI)</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Receive the DistroAV/NDI output from OBS as a live projection.</source>
-        <translation>Ta emot DistroAV/NDI-utdata från OBS som en liveprojektion.</translation>
+        <translation type="vanished">Ta emot DistroAV/NDI-utdata från OBS som en liveprojektion.</translation>
     </message>
     <message>
-        <location line="+21"/>
         <source>Enable Main Output in DistroAV, then select the NDI source shown by OBS.</source>
-        <translation>Aktivera huvudutgången (Main Output) i DistroAV och välj sedan den NDI-källa som visas av OBS.</translation>
+        <translation type="vanished">Aktivera huvudutgången (Main Output) i DistroAV och välj sedan den NDI-källa som visas av OBS.</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>Available NDI sources</source>
-        <translation>Tillgängliga NDI-källor</translation>
+        <translation type="vanished">Tillgängliga NDI-källor</translation>
     </message>
     <message>
-        <location line="+15"/>
         <source>No sources loaded</source>
-        <translation>Inga källor inlästa</translation>
+        <translation type="vanished">Inga källor inlästa</translation>
     </message>
     <message>
-        <location line="+6"/>
-        <location line="+335"/>
-        <location line="+35"/>
         <source>Find sources</source>
-        <translation>Hitta källor</translation>
+        <translation type="vanished">Hitta källor</translation>
     </message>
     <message>
-        <location line="-338"/>
         <source>Default scene (idle)</source>
-        <translation>Standardscen (viloläge)</translation>
+        <translation type="vanished">Standardscen (viloläge)</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Scene shown when nothing is being projected.</source>
-        <translation>Scen som visas när inget projiceras.</translation>
+        <translation type="vanished">Scen som visas när inget projiceras.</translation>
     </message>
     <message>
-        <location line="+13"/>
         <source>Media window scene</source>
-        <translation>Mediefönsterscen</translation>
+        <translation type="vanished">Mediefönsterscen</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Scene that captures the projection monitor. Activated when content is displayed.</source>
-        <translation>Scen som fångar projektorskärmen. Aktiveras när innehåll visas.</translation>
+        <translation type="vanished">Scen som fångar projektorskärmen. Aktiveras när innehåll visas.</translation>
     </message>
     <message>
-        <location line="+206"/>
         <source>✓ Configuration saved — reconnecting…</source>
-        <translation>✓ Inställning sparad — ansluter igen...</translation>
+        <translation type="vanished">✓ Inställning sparad — ansluter igen...</translation>
     </message>
     <message>
-        <location line="+57"/>
         <source>NDI receiver is not available.</source>
-        <translation>NDI-mottagare är inte tillgänglig.</translation>
+        <translation type="vanished">NDI-mottagare är inte tillgänglig.</translation>
     </message>
     <message>
-        <location line="+5"/>
         <source>Searching…</source>
-        <translation>Söker...</translation>
+        <translation type="vanished">Söker...</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Looking for NDI sources on this network.</source>
-        <translation>Söker efter NDI-källor på detta nätverk.</translation>
+        <translation type="vanished">Söker efter NDI-källor på detta nätverk.</translation>
     </message>
     <message numerus="yes">
-        <location line="+25"/>
         <source>%n NDI source found.</source>
-        <translation>
+        <translation type="vanished">
             <numerusform>%n NDI-källa hittad.</numerusform>
             <numerusform>%n NDI-källor hittade.</numerusform>
         </translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>No NDI sources found</source>
-        <translation>Inga NDI-källor hittades</translation>
+        <translation type="vanished">Inga NDI-källor hittades</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>No NDI sources found. Check that DistroAV Main Output is enabled in OBS.</source>
-        <translation>Inga NDI-källor hittades. Kontrollera att DistroAV Main Output är aktiverat i OBS.</translation>
+        <translation type="vanished">Inga NDI-källor hittades. Kontrollera att DistroAV Main Output är aktiverat i OBS.</translation>
     </message>
     <message>
         <source>Connecting…</source>
@@ -3253,9 +3171,8 @@ Manuellt tillagt innehåll, beskärningar, bildutsnitt och expanderat läge beh�
         <translation type="vanished">Anslutningsfel</translation>
     </message>
     <message>
-        <location line="+72"/>
         <source>— Select scene —</source>
-        <translation>— Välj scen —</translation>
+        <translation type="vanished">— Välj scen —</translation>
     </message>
 </context>
 <context>
@@ -3301,7 +3218,7 @@ Manuellt tillagt innehåll, beskärningar, bildutsnitt och expanderat läge beh�
         <translation>Profilnamn</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+10"/>
         <source>Example: Main Hall</source>
         <translation>Exempel: huvudsalen</translation>
     </message>
@@ -3334,13 +3251,13 @@ Manuellt tillagt innehåll, beskärningar, bildutsnitt och expanderat läge beh�
     </message>
     <message>
         <location line="+5"/>
-        <location line="+406"/>
+        <location line="+414"/>
         <source>Meeting schedule</source>
         <translation>Mötesschema</translation>
     </message>
     <message>
-        <location line="-400"/>
-        <location line="+1161"/>
+        <location line="-408"/>
+        <location line="+1150"/>
         <source>Congregation</source>
         <translation>Församling</translation>
     </message>
@@ -3349,18 +3266,18 @@ Manuellt tillagt innehåll, beskärningar, bildutsnitt och expanderat läge beh�
         <translation type="vanished">Valfritt</translation>
     </message>
     <message>
-        <location line="-1150"/>
+        <location line="-1139"/>
         <source>Find your congregation to fill the meeting days and times from jw.org.</source>
         <translation>Sök din församling för att fylla i mötesdagar och tider från jw.org.</translation>
     </message>
     <message>
         <location line="+8"/>
-        <location line="+375"/>
+        <location line="+383"/>
         <source>Meeting media</source>
         <translation>Mötesmedia</translation>
     </message>
     <message>
-        <location line="-364"/>
+        <location line="-372"/>
         <source>Download automatically</source>
         <translation>Ladda ner automatiskt</translation>
     </message>
@@ -3371,12 +3288,12 @@ Manuellt tillagt innehåll, beskärningar, bildutsnitt och expanderat läge beh�
     </message>
     <message>
         <location line="+8"/>
-        <location line="+357"/>
+        <location line="+365"/>
         <source>Manual download</source>
         <translation>Manuell nedladdning</translation>
     </message>
     <message>
-        <location line="-356"/>
+        <location line="-364"/>
         <source>Only download media when you click the cloud button.</source>
         <translation>Ladda bara ner media när du klickar på molnknappen.</translation>
     </message>
@@ -3421,12 +3338,12 @@ Manuellt tillagt innehåll, beskärningar, bildutsnitt och expanderat läge beh�
         <translation>WebSocket-port</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+16"/>
         <source>Password (optional)</source>
         <translation>Lösenord (valfritt)</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+16"/>
         <source>Connecting…</source>
         <translation>Ansluter…</translation>
     </message>
@@ -3556,8 +3473,8 @@ Manuellt tillagt innehåll, beskärningar, bildutsnitt och expanderat läge beh�
         <translation>Den här veckan och nästa vecka</translation>
     </message>
     <message>
-        <location line="-393"/>
-        <location line="+400"/>
+        <location line="-401"/>
+        <location line="+408"/>
         <location line="+5"/>
         <location line="+9"/>
         <source>Not configured</source>
@@ -3579,7 +3496,7 @@ Manuellt tillagt innehåll, beskärningar, bildutsnitt och expanderat läge beh�
         <translation>Automatisk delning klar</translation>
     </message>
     <message>
-        <location line="+120"/>
+        <location line="+101"/>
         <source>Finishing…</source>
         <translation>Slutför…</translation>
     </message>
@@ -3590,17 +3507,17 @@ Manuellt tillagt innehåll, beskärningar, bildutsnitt och expanderat läge beh�
     </message>
     <message>
         <location line="+303"/>
-        <location line="+167"/>
+        <location line="+149"/>
         <source>Close</source>
         <translation>Stäng</translation>
     </message>
     <message>
-        <location line="-159"/>
+        <location line="-135"/>
         <source>Search by congregation name</source>
         <translation>Sök på församlingens namn</translation>
     </message>
     <message>
-        <location filename="../../ui/qml/onboarding.py" line="+69"/>
+        <location filename="../../ui/qml/onboarding.py" line="+73"/>
         <source>Searching jw.org…</source>
         <translation>Söker på jw.org…</translation>
     </message>
@@ -3609,17 +3526,17 @@ Manuellt tillagt innehåll, beskärningar, bildutsnitt och expanderat läge beh�
         <translation type="vanished">Mötesdagar och tider kommer från jw.org.</translation>
     </message>
     <message>
-        <location filename="../../qml/OnboardingView.qml" line="+88"/>
+        <location filename="../../qml/OnboardingView.qml" line="+64"/>
         <source>Remove congregation</source>
         <translation>Ta bort församling</translation>
     </message>
     <message>
-        <location line="+78"/>
+        <location line="+83"/>
         <source>Search languages</source>
         <translation>Sök språk</translation>
     </message>
     <message>
-        <location filename="../../ui/qml/onboarding.py" line="+255"/>
+        <location filename="../../ui/qml/onboarding.py" line="+259"/>
         <source>Enter a port between 1 and 65535.</source>
         <translation>Ange en port mellan 1 och 65535.</translation>
     </message>
@@ -3629,7 +3546,7 @@ Manuellt tillagt innehåll, beskärningar, bildutsnitt och expanderat läge beh�
         <translation>Väljaren för delningsmål är inte tillgänglig.</translation>
     </message>
     <message>
-        <location line="+139"/>
+        <location line="+140"/>
         <source>Enter a profile name.</source>
         <translation>Ange ett profilnamn.</translation>
     </message>
@@ -3664,7 +3581,7 @@ Manuellt tillagt innehåll, beskärningar, bildutsnitt och expanderat läge beh�
         <translation>Det gick inte att skapa profilen.</translation>
     </message>
     <message>
-        <location line="-542"/>
+        <location line="-547"/>
         <source>jw.org does not publish meeting times for this congregation.</source>
         <translation>jw.org publicerar inga mötestider för den här församlingen.</translation>
     </message>
@@ -3689,7 +3606,7 @@ Manuellt tillagt innehåll, beskärningar, bildutsnitt och expanderat läge beh�
         <translation>Kunde inte nå jw.org. Kontrollera anslutningen och försök igen.</translation>
     </message>
     <message>
-        <location line="+685"/>
+        <location line="+690"/>
         <source>Allow Solin in macOS Accessibility settings.</source>
         <translation>Tillåt Solin i macOS-inställningarna för Hjälpmedel.</translation>
     </message>
@@ -5373,211 +5290,180 @@ Den här åtgärden kan inte ångras.</translation>
 <context>
     <name>RemoteControlSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/remote_control_section.py" line="+54"/>
-        <location line="+403"/>
         <source>Remote control</source>
-        <translation>Fjärrstyrning</translation>
+        <translation type="vanished">Fjärrstyrning</translation>
     </message>
     <message>
-        <location line="-402"/>
-        <location line="+404"/>
         <source>Control Solin securely from another device on this local network.</source>
-        <translation>Styr Solin säkert från en annan enhet på detta lokala nätverk.</translation>
+        <translation type="vanished">Styr Solin säkert från en annan enhet på detta lokala nätverk.</translation>
     </message>
     <message>
-        <location line="-388"/>
-        <location line="+390"/>
         <source>Network interface</source>
-        <translation>Nätverksgränssnitt</translation>
+        <translation type="vanished">Nätverksgränssnitt</translation>
     </message>
     <message>
-        <location line="-376"/>
-        <location line="+377"/>
         <source>Access credentials</source>
-        <translation>Inloggningsuppgifter</translation>
+        <translation type="vanished">Inloggningsuppgifter</translation>
     </message>
     <message>
-        <location line="-349"/>
-        <location line="+350"/>
         <source>Username</source>
-        <translation>Användarnamn</translation>
+        <translation type="vanished">Användarnamn</translation>
     </message>
     <message>
-        <location line="-345"/>
-        <location line="+346"/>
         <source>New password</source>
-        <translation>Nytt lösenord</translation>
+        <translation type="vanished">Nytt lösenord</translation>
     </message>
     <message>
-        <location line="-341"/>
-        <location line="+342"/>
         <source>Confirm password</source>
-        <translation>Bekräfta lösenord</translation>
+        <translation type="vanished">Bekräfta lösenord</translation>
     </message>
     <message>
-        <location line="-328"/>
-        <location line="+330"/>
         <source>Use at least %1 characters. Credentials belong only to this profile.</source>
-        <translation>Använd minst %1 tecken. Uppgifterna tillhör endast denna profil.</translation>
+        <translation type="vanished">Använd minst %1 tecken. Uppgifterna tillhör endast denna profil.</translation>
     </message>
     <message>
-        <location line="-323"/>
-        <location line="+327"/>
         <source>Save credentials</source>
-        <translation>Spara inloggningsuppgifter</translation>
+        <translation type="vanished">Spara inloggningsuppgifter</translation>
     </message>
     <message>
-        <location line="-298"/>
-        <location line="+300"/>
         <source>Copy address</source>
-        <translation>Kopiera adress</translation>
+        <translation type="vanished">Kopiera adress</translation>
     </message>
     <message>
-        <location line="-285"/>
-        <location line="+286"/>
         <source>Set up a device</source>
-        <translation>Konfigurera en enhet</translation>
+        <translation type="vanished">Konfigurera en enhet</translation>
     </message>
     <message>
-        <location line="-265"/>
         <source>Select a private network…</source>
-        <translation>Välj ett privat nätverk…</translation>
+        <translation type="vanished">Välj ett privat nätverk…</translation>
     </message>
     <message>
-        <location line="+30"/>
         <source>Choose a network and save credentials before enabling remote control.</source>
-        <translation>Välj ett nätverk och spara inloggningsuppgifter innan fjärrstyrning aktiveras.</translation>
+        <translation type="vanished">Välj ett nätverk och spara inloggningsuppgifter innan fjärrstyrning aktiveras.</translation>
     </message>
     <message>
-        <location line="+17"/>
         <source>The passwords do not match.</source>
-        <translation>Lösenorden matchar inte.</translation>
+        <translation type="vanished">Lösenorden matchar inte.</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Enter a new password to save.</source>
-        <translation>Ange ett nytt lösenord för att spara.</translation>
+        <translation type="vanished">Ange ett nytt lösenord för att spara.</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Check the username and use a password with at least %1 characters.</source>
-        <translation>Kontrollera användarnamnet och använd ett lösenord med minst %1 tecken.</translation>
+        <translation type="vanished">Kontrollera användarnamnet och använd ett lösenord med minst %1 tecken.</translation>
     </message>
     <message>
-        <location line="+31"/>
         <source>Configured as %1</source>
-        <translation>Konfigurerad som %1</translation>
+        <translation type="vanished">Konfigurerad som %1</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Not configured</source>
-        <translation>Inte konfigurerad</translation>
+        <translation type="vanished">Inte konfigurerad</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>Cancel</source>
-        <translation>Avbryt</translation>
+        <translation type="vanished">Avbryt</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Change</source>
-        <translation>Ändra</translation>
+        <translation type="vanished">Ändra</translation>
     </message>
     <message>
-        <location line="+20"/>
         <source>No network selected</source>
-        <translation>Inget nätverk valt</translation>
+        <translation type="vanished">Inget nätverk valt</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>Starting secure remote control…</source>
-        <translation>Startar säker fjärrstyrning…</translation>
+        <translation type="vanished">Startar säker fjärrstyrning…</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Ready to enable.</source>
-        <translation>Redo att aktiveras.</translation>
+        <translation type="vanished">Redo att aktiveras.</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Configuration required.</source>
-        <translation>Konfiguration krävs.</translation>
+        <translation type="vanished">Konfiguration krävs.</translation>
     </message>
 </context>
 <context>
     <name>RemoteControlSetupDialog</name>
     <message>
-        <location filename="../../widgets/remote_control_setup_dialog.py" line="+81"/>
         <source>Set up a device</source>
-        <translation>Konfigurera en enhet</translation>
+        <translation type="vanished">Konfigurera en enhet</translation>
     </message>
     <message>
-        <location line="+29"/>
+        <location filename="../../qml/SettingsRemoteSetup.qml" line="+43"/>
         <source>Set up Solin Remote</source>
         <translation>Konfigurera Solin Remote</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+47"/>
         <source>Scan once to open the secure setup on your phone or tablet.</source>
         <translation>Skanna en gång för att öppna den säkra konfigurationen på din telefon eller surfplatta.</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+29"/>
         <source>Generating QR code…</source>
         <translation>Genererar QR-kod…</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="-5"/>
+        <location line="+21"/>
         <source>1  Scan the QR code</source>
         <translation>1  Skanna QR-koden</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+8"/>
         <source>Keep Solin open and connect both devices to the same local network. The guide explains the certificate and app installation.</source>
         <translation>Låt Solin vara öppet och anslut båda enheterna till samma lokala nätverk. Guiden förklarar hur certifikatet och appen installeras.</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+9"/>
+        <location line="+6"/>
         <source>Copy setup address</source>
         <translation>Kopiera konfigurationsadress</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+7"/>
         <source>On the first opening, the browser may show a privacy warning. Confirm that the local address matches, choose Advanced or Show Details, and continue only to this address. The warning disappears after the certificate is trusted.</source>
         <translation>Vid första öppnandet kan webbläsaren visa en säkerhetsvarning. Kontrollera att den lokala adressen stämmer, välj Avancerat eller Visa detaljer och fortsätt endast till denna adress. Varningen försvinner när certifikatet har godkänts.</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+15"/>
+        <location line="+12"/>
         <source>VERIFICATION CODE</source>
         <translation>VERIFIERINGSKOD</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+4"/>
         <source>Compare this code on the device before installing the certificate.</source>
         <translation>Jämför denna kod på enheten innan certifikatet installeras.</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+10"/>
+        <location line="+15"/>
         <source>Show full SHA-256 fingerprint</source>
         <translation>Visa fullständigt SHA-256-fingeravtryck</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+27"/>
         <source>Save certificate…</source>
         <translation>Spara certifikat…</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+10"/>
         <source>Done</source>
         <translation>Klar</translation>
     </message>
     <message>
-        <location line="+93"/>
+        <location filename="../../ui/qml/settings/remote.py" line="+182"/>
+        <location line="+179"/>
         <source>Could not generate the QR code. Copy the address instead.</source>
         <translation>Det gick inte att generera QR-koden. Kopiera adressen i stället.</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+40"/>
         <source>Save Solin certificate</source>
         <translation>Spara Solin-certifikat</translation>
     </message>
@@ -5587,12 +5473,11 @@ Den här åtgärden kan inte ångras.</translation>
         <translation>Certifikatfiler (*.cer)</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>Could not save certificate</source>
-        <translation>Det gick inte att spara certifikatet</translation>
+        <translation type="vanished">Det gick inte att spara certifikatet</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+8"/>
         <source>Choose another location and try again.</source>
         <translation>Välj en annan plats och försök igen.</translation>
     </message>
@@ -7324,24 +7209,20 @@ Lägg till innehåll, en kamera eller en annan scen.</translation>
 <context>
     <name>ScreensSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/screens_section.py" line="+54"/>
         <source>Primary Screen (control)</source>
-        <translation>Huvudskärm (kontroll)</translation>
+        <translation type="vanished">Huvudskärm (kontroll)</translation>
     </message>
     <message>
-        <location line="+20"/>
         <source>No secondary screen detected. Connect an external monitor.</source>
-        <translation>Ingen sekundär skärm detecterad. Anslut en extern skärm.</translation>
+        <translation type="vanished">Ingen sekundär skärm detecterad. Anslut en extern skärm.</translation>
     </message>
     <message>
-        <location line="+27"/>
         <source>Secondary {n} (projection)</source>
-        <translation>Sekundär {n} (projektion)</translation>
+        <translation type="vanished">Sekundär {n} (projektion)</translation>
     </message>
     <message>
-        <location line="+18"/>
         <source>PROJECTION</source>
-        <translation>PROJEKTION</translation>
+        <translation type="vanished">PROJEKTION</translation>
     </message>
 </context>
 <context>
@@ -7370,84 +7251,74 @@ Lägg till innehåll, en kamera eller en annan scen.</translation>
 <context>
     <name>SettingsWidget</name>
     <message>
-        <location filename="../../widgets/settings_widget.py" line="+277"/>
-        <location line="+265"/>
+        <location filename="../../qml/SettingsView.qml" line="+115"/>
         <source>Settings</source>
         <translation>Inställningar</translation>
     </message>
     <message>
-        <location line="-145"/>
-        <location line="+153"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+113"/>
         <source>Annual Text</source>
         <translation>Årstext</translation>
     </message>
     <message>
-        <location line="+108"/>
+        <location line="+2"/>
         <source>Scripture:</source>
         <translation>Skrift:</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>E.g.: Happy are those conscious of their spiritual need.</source>
-        <translation>Ex: Lyckliga är de som är medvetna om sitt andliga behov.</translation>
+        <translation type="vanished">Ex: Lyckliga är de som är medvetna om sitt andliga behov.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Bible reference:</source>
         <translation>Bibelreferens:</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>E.g.: Matthew 5:3.</source>
-        <translation>Ex: Matteus 5:3.</translation>
+        <translation type="vanished">Ex: Matteus 5:3.</translation>
     </message>
     <message>
-        <location line="-106"/>
+        <location line="-47"/>
         <source>Auto-download on play</source>
         <translation>Automatisk nedladdning vid uppspelning</translation>
     </message>
     <message>
-        <location line="-214"/>
-        <location line="+203"/>
+        <location line="+6"/>
         <source>Meetings</source>
         <translation>Möten</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+29"/>
         <source>Auto-download weekly study</source>
         <translation>Ladda ned veckans studie automatiskt</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="-38"/>
         <source>Song Announcement Mode</source>
         <translation>Sångmeddelningsläge</translation>
     </message>
     <message>
-        <location line="-236"/>
-        <location line="+217"/>
+        <location line="-11"/>
         <source>Language</source>
         <translation>Språk</translation>
     </message>
     <message>
-        <location line="-209"/>
-        <location line="+210"/>
         <source>Media</source>
-        <translation>Media</translation>
+        <translation type="vanished">Media</translation>
     </message>
     <message>
-        <location line="-194"/>
-        <location line="+196"/>
+        <location line="+16"/>
         <source>Folders</source>
         <translation>Mappar</translation>
     </message>
     <message>
-        <location line="-179"/>
-        <location line="+181"/>
+        <location line="+52"/>
         <source>Integrations</source>
         <translation>Integrationer</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="-67"/>
         <source>Interface</source>
         <translation>Gränssnitt</translation>
     </message>
@@ -7457,55 +7328,53 @@ Lägg till innehåll, en kamera eller en annan scen.</translation>
         <translation>JW Media</translation>
     </message>
     <message>
-        <location line="-147"/>
-        <location line="+144"/>
+        <location line="+53"/>
+        <location line="+1"/>
         <source>Screens</source>
         <translation>Skärmar</translation>
     </message>
     <message>
-        <location line="+81"/>
+        <location line="+28"/>
         <source>Audio controls and attendance count during meetings.</source>
         <translation>Ljudkontroller och närvaroantal under möten.</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+8"/>
+        <location line="+1"/>
         <source>Auto Screen Share</source>
         <translation>Automatisk skärmdelning</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Automatically shares screen via hotkeys when projecting media.</source>
         <translation>Delar skärmen automatiskt via kortkommandon när media projiceras.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Share hotkey</source>
         <translation>Kortkommando för delning</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Uses Zoom&apos;s single start/stop screen-share shortcut.</source>
-        <translation>Använder Zooms enda kortkommando för att starta och stoppa skärmdelning.</translation>
+        <translation type="vanished">Använder Zooms enda kortkommando för att starta och stoppa skärmdelning.</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+1"/>
         <source>Share target</source>
         <translation>Delningsmål</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>The Solin Media Preview tile inside Zoom&apos;s share dialog.</source>
-        <translation>Rutan “Solin Media Preview” i Zooms delningsdialog.</translation>
+        <translation type="vanished">Rutan “Solin Media Preview” i Zooms delningsdialog.</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+1"/>
         <source>Accessibility permission</source>
         <translation>Behörighet för hjälpmedel</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Open Settings</source>
-        <translation>Öppna inställningar</translation>
+        <translation type="vanished">Öppna inställningar</translation>
     </message>
     <message>
         <source>Click Position</source>
@@ -7516,17 +7385,17 @@ Lägg till innehåll, en kamera eller en annan scen.</translation>
         <translation type="vanished">Positionen att klicka på efter att delningsdialogen öppnas för att välja målet.</translation>
     </message>
     <message>
-        <location line="-3"/>
         <source>Configure</source>
-        <translation>Konfigurera</translation>
+        <translation type="vanished">Konfigurera</translation>
     </message>
     <message>
-        <location line="-61"/>
+        <location line="-26"/>
+        <location line="+1"/>
         <source>OBS Studio</source>
         <translation>OBS Studio</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+0"/>
         <source>Automatically switches scenes during projection</source>
         <translation>Växlar automatiskt mellan scener under projektion</translation>
     </message>
@@ -7541,9 +7410,8 @@ Lägg till innehåll, en kamera eller en annan scen.</translation>
         <translation>Lösenord (valfritt)</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Leave blank if no password is set</source>
-        <translation>Lämna tomt om inget lösenord har angetts</translation>
+        <translation type="vanished">Lämna tomt om inget lösenord har angetts</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -7551,9 +7419,8 @@ Lägg till innehåll, en kamera eller en annan scen.</translation>
         <translation>Standardscen (viloläge)</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Scene shown when nothing is being projected.</source>
-        <translation>Scen som visas när inget projiceras.</translation>
+        <translation type="vanished">Scen som visas när inget projiceras.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -7561,55 +7428,51 @@ Lägg till innehåll, en kamera eller en annan scen.</translation>
         <translation>Mediefönsterscen</translation>
     </message>
     <message>
-        <location line="-179"/>
-        <location line="+137"/>
+        <location line="+45"/>
         <source>About</source>
         <translation>Om</translation>
     </message>
     <message>
-        <location line="+113"/>
+        <location filename="../../qml/SettingsPage.qml" line="+184"/>
         <source>Audio &amp; Video app for Kingdom Hall meetings.</source>
         <translation>Audio- och videoprogramför möten i Kungarikets sal.</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+9"/>
         <source>Official Website</source>
         <translation>Officiell webbplats</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+4"/>
         <source>Changelog</source>
         <translation>Ändringslogg</translation>
     </message>
     <message>
-        <location line="-6"/>
+        <location line="+6"/>
         <source>This app is independent and is not affiliated with or endorsed by the Watch Tower Bible and Tract Society of Pennsylvania or any of its associated organizations.</source>
         <translation>Den här appen är oberoende och är inte ansluten till eller godkänd av Watch Tower Bible and Tract Society of Pennsylvania eller någon av dess organisationer.</translation>
     </message>
     <message>
-        <location line="-12"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-61"/>
         <source>Update</source>
         <translation>Uppdatera</translation>
     </message>
     <message>
-        <location line="-98"/>
+        <location line="-45"/>
         <source>Downloads the playing media for offline use.</source>
         <translation>Laddar ned media som spelas upp för offlineanvändning.</translation>
     </message>
     <message>
-        <location line="-312"/>
-        <location line="+289"/>
         <source>Loading…</source>
-        <translation>Laddar…</translation>
+        <translation type="vanished">Laddar…</translation>
     </message>
     <message>
-        <location line="-176"/>
-        <location line="+189"/>
+        <location line="+89"/>
         <source>Remote access</source>
         <translation>Fjärråtkomst</translation>
     </message>
     <message>
-        <location line="-34"/>
+        <location filename="../../ui/qml/settings/general.py" line="+158"/>
         <source>Dark</source>
         <translation>Mörkt</translation>
     </message>
@@ -7619,72 +7482,72 @@ Lägg till innehåll, en kamera eller en annan scen.</translation>
         <translation>Ljust</translation>
     </message>
     <message>
-        <location line="+45"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-54"/>
         <source>Downloads this week’s and next week’s meeting media.</source>
         <translation>Laddar ned media från möten denna vecka och nästa.</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="-38"/>
         <source>Song starts muted for title display. Press play to start.</source>
         <translation>Sången startar utan ljud för att visa titeln. Tryck på spela för att starta.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+39"/>
         <source>Automatic background song</source>
         <translation>Automatisk bakgrundssång</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-41"/>
         <source>Start videos paused</source>
         <translation>Starta videor pausade</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Videos open paused so you can start them manually.</source>
         <translation>Videor öppnas pausade så att de kan startas manuellt.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Playback protection</source>
         <translation>Uppspelningsskydd</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+0"/>
         <source>Prevents media changes and seeking while audio or video is playing. Pause first to make changes.</source>
         <translation>Förhindrar mediebyten och sökning medan ljud eller video spelas upp. Pausa först för att göra ändringar.</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+7"/>
         <source>Link Folder</source>
         <translation>Länka mapp</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Sync folder (Dropbox, OneDrive, etc.) shown as playlists.</source>
         <translation>Synkroniseringsmapp (Dropbox, OneDrive, osv.) visas som spellista.</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location filename="../../qml/SettingsRow.qml" line="+264"/>
         <source>Choose…</source>
         <translation>Välj…</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+60"/>
+        <location line="+1"/>
         <source>Program stream (NDI)</source>
         <translation>Programström (NDI)</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Receive the DistroAV/NDI output from OBS as a live projection.</source>
         <translation>Ta emot DistroAV/NDI-utdata från OBS som en liveprojektion.</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Enable Main Output in DistroAV, then select the NDI source shown by OBS.</source>
-        <translation>Aktivera huvudutgången (Main Output) i DistroAV och välj sedan den NDI-källa som visas av OBS.</translation>
+        <translation type="vanished">Aktivera huvudutgången (Main Output) i DistroAV och välj sedan den NDI-källa som visas av OBS.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Available NDI sources</source>
         <translation>Tillgängliga NDI-källor</translation>
     </message>
@@ -7694,64 +7557,576 @@ Lägg till innehåll, en kamera eller en annan scen.</translation>
         <translation>Hitta källor</translation>
     </message>
     <message>
-        <location line="-11"/>
         <source>Scene that captures the projection monitor. Activated when content is displayed.</source>
-        <translation>Scen som fångar projektorskärmen. Aktiveras när innehåll visas.</translation>
+        <translation type="vanished">Scen som fångar projektorskärmen. Aktiveras när innehåll visas.</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+6"/>
+        <location line="+1"/>
         <source>Camera</source>
         <translation>Kamera</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Shows a camera button in the live tools toolbar.</source>
         <translation>Visar en kameraknapp i verktygsfältet för liveverktyg.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+11"/>
+        <location line="+1"/>
         <source>Automatic Shortcuts</source>
         <translation>Automatiska genvägar</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Sends keyboard shortcuts when visual media changes state.</source>
         <translation>Skickar kortkommandon när visuella medier ändrar status.</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Create one or more shortcuts for start, end, pause and resume events.</source>
-        <translation>Skapa ett eller flera kortkommandon för händelserna start, slut, paus och återuppta.</translation>
+        <translation type="vanished">Skapa ett eller flera kortkommandon för händelserna start, slut, paus och återuppta.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location filename="../../qml/SettingsRow.qml" line="+68"/>
         <source>No shortcuts configured.</source>
         <translation>Inga kortkommandon konfigurerade.</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+1"/>
         <source>Add shortcut</source>
         <translation>Lägg till kortkommando</translation>
     </message>
     <message>
-        <location line="+19"/>
+        <location filename="../../qml/SettingsRow.qml" line="-7"/>
         <source>Edit</source>
         <translation>Redigera</translation>
     </message>
     <message>
-        <location line="-13"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-17"/>
+        <location line="+1"/>
         <source>Zoom Meetings</source>
         <translation>Zoom-möten</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="-25"/>
         <source>Text shown on the projection screen when idle.</source>
         <translation>Text som visas på projektionsskärmen när den är inaktiv.</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+3"/>
         <source>Save changes</source>
         <translation>Spara ändringar</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsSectionHeader.qml" line="+28"/>
+        <location line="+35"/>
+        <source>Back to sections</source>
+        <translation>Tillbaka till avsnitt</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsView.qml" line="+15"/>
+        <source>Search settings</source>
+        <translation>Sökinställningar</translation>
+    </message>
+    <message>
+        <location line="+173"/>
+        <source>Search results</source>
+        <translation>Sökresultat</translation>
+    </message>
+    <message>
+        <location line="+77"/>
+        <source>No settings found. Try another word.</source>
+        <translation>Inga inställningar hittades. Försök med ett annat ord.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-67"/>
+        <source>Appearance and languages</source>
+        <translation>Utseende och språk</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Theme and languages</source>
+        <translation>Tema och språk</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Appearance</source>
+        <translation>Utseende</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Theme</source>
+        <translation>Tema</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Update languages</source>
+        <translation>Uppdatera språk</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Media and files</source>
+        <translation>Media och filer</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Playback, downloads and folders</source>
+        <translation>Uppspelning, nedladdningar och mappar</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Playback</source>
+        <translation>Uppspelning</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Downloads</source>
+        <translation>Nedladdningar</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Schedule and preparation</source>
+        <translation>Schema och förberedelser</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Meeting schedule</source>
+        <translation>Mötesschema</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Midweek meeting</source>
+        <translation>Veckomöte</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <location line="+7"/>
+        <source>Time</source>
+        <translation>Tid</translation>
+    </message>
+    <message>
+        <location line="-3"/>
+        <source>Weekend meeting</source>
+        <translation>Helgmöte</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Preparation</source>
+        <translation>Förberedelse</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Projection</source>
+        <translation>Utsprång</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Screens and annual text</source>
+        <translation>Skärmar och årstext</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Scenes</source>
+        <translation>Scener</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Native scenes engine</source>
+        <translation>Motor för infödda scener</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Restart Solin to apply this change.</source>
+        <translation>Starta om Solin för att tillämpa denna ändring.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>OBS, Zoom and camera</source>
+        <translation>OBS, zoom och kamera</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>Automations</source>
+        <translation>Automatiseringar</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Sharing and shortcuts</source>
+        <translation>Delning och genvägar</translation>
+    </message>
+    <message>
+        <location line="+30"/>
+        <source>Version and information</source>
+        <translation>Version och information</translation>
+    </message>
+    <message>
+        <location line="-17"/>
+        <source>Control over your local network</source>
+        <translation>Kontroll över ditt lokala nätverk</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+1"/>
+        <source>Remote control</source>
+        <translation>Fjärrkontroll</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Control Solin securely from another device on this local network.</source>
+        <translation>Styr Solin säkert från en annan enhet på detta lokala nätverk.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Network interface</source>
+        <translation>Nätverksgränssnitt</translation>
+    </message>
+    <message>
+        <source>Refresh</source>
+        <translation type="vanished">Uppdatera</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Copy address</source>
+        <translation>Kopiera adress</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Access credentials</source>
+        <translation>Inloggningsuppgifter</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Username</source>
+        <translation>Användarnamn</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>New password</source>
+        <translation>Nytt lösenord</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Confirm password</source>
+        <translation>Bekräfta lösenord</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Save credentials</source>
+        <translation>Spara inloggningsuppgifter</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Devices</source>
+        <translation>Enheter</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Set up a device</source>
+        <translation>Konfigurera en enhet</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/general.py" line="-125"/>
+        <source>Searching jw.org…</source>
+        <translation>Söker på jw.org…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Reading the meeting times…</source>
+        <translation>Läser mötestiderna…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>No congregation found with that name.</source>
+        <translation>Ingen församling med det namnet hittades.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>jw.org does not publish meeting times for this congregation.</source>
+        <translation>jw.org publicerar inga mötestider för den här församlingen.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Too many searches in a row. Wait a moment and type again.</source>
+        <translation>För många sökningar i rad. Vänta en stund och skriv igen.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Could not reach jw.org. Check the connection and try again.</source>
+        <translation>Kunde inte nå jw.org. Kontrollera anslutningen och försök igen.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-90"/>
+        <location filename="../../ui/qml/settings/general.py" line="+5"/>
+        <source>Search your congregation to fill the days and times below.</source>
+        <translation>Sök din församling för att fylla i dagarna och tiderna nedan.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/general.py" line="+94"/>
+        <source>(same as interface)</source>
+        <translation>(samma som gränssnittet)</translation>
+    </message>
+    <message>
+        <location line="+54"/>
+        <source>Primary Screen (control)</source>
+        <translation>Huvudskärm (kontroll)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Secondary {n} (projection)</source>
+        <translation>Sekundär {n} (projektion)</translation>
+    </message>
+    <message>
+        <location line="+210"/>
+        <source>Configure the meeting day/time before automatic playback can start.</source>
+        <translation>Ställ in mötets dag och tid innan automatisk uppspelning kan starta.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Plays audio songs before configured meetings and fades out before start.</source>
+        <translation>Spelar ljudsånger före inställda möten och tonar ut före starten.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Select folder to link</source>
+        <translation>Välj mapp att länka</translation>
+    </message>
+    <message>
+        <location line="+117"/>
+        <source>Fetching annual text…</source>
+        <translation>Söker årstext…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Could not fetch annual text</source>
+        <translation>Kunde inte hämta årstexten</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Annual text updated for {year}</source>
+        <translation>Årstexten uppdaterad för {year}</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsRow.qml" line="-134"/>
+        <source>Select…</source>
+        <translation>Välja…</translation>
+    </message>
+    <message>
+        <location line="+61"/>
+        <source>No folder selected</source>
+        <translation>Ingen mapp vald</translation>
+    </message>
+    <message>
+        <location line="+48"/>
+        <source>No secondary screen detected. Connect an external monitor.</source>
+        <translation>Ingen sekundär skärm detecterad. Anslut en extern skärm.</translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <source>Delete</source>
+        <translation>Ta bort</translation>
+    </message>
+    <message>
+        <location filename="../../qml/AppTextField.qml" line="+67"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-10"/>
+        <source>Clear</source>
+        <translation>Rensa</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsClockPicker.qml" line="+45"/>
+        <source>Choose hour</source>
+        <translation>Välj timme</translation>
+    </message>
+    <message>
+        <location line="+30"/>
+        <source>Choose minute</source>
+        <translation>Välj minut</translation>
+    </message>
+    <message>
+        <location line="+101"/>
+        <source>Hour %1</source>
+        <translation>Timme %1</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Minute %1</source>
+        <translation>Minut %1</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsCongregationDialog.qml" line="+31"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+8"/>
+        <source>Fill in from jw.org</source>
+        <translation>Fyll i från jw.org</translation>
+    </message>
+    <message>
+        <location line="+23"/>
+        <source>Search by congregation name</source>
+        <translation>Sök på församlingens namn</translation>
+    </message>
+    <message>
+        <location line="+86"/>
+        <location filename="../../qml/SettingsRemoteSetup.qml" line="-201"/>
+        <source>Close</source>
+        <translation>Stäng</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsRow.qml" line="-88"/>
+        <location filename="../../qml/SettingsSelectionDialog.qml" line="+30"/>
+        <source>Search…</source>
+        <translation>Sök…</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsSelectionDialog.qml" line="+8"/>
+        <source>HH:mm</source>
+        <translation>HH:mm</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>No results found.</source>
+        <translation>Inga resultat hittades.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <location filename="../../qml/SettingsTimeDialog.qml" line="+58"/>
+        <source>Apply</source>
+        <translation>Tillämpas</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <location filename="../../qml/SettingsTimeDialog.qml" line="-2"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+37"/>
+        <location line="+52"/>
+        <source>Cancel</source>
+        <translation>Avbryt</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsShortcutDialog.qml" line="-144"/>
+        <source>Share Hotkey</source>
+        <translation>Kortkommando för delning</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Press the Zoom shortcut that starts and stops screen sharing.</source>
+        <translation>Tryck på Zoom-kortkommandot som startar och stoppar skärmdelning.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="-309"/>
+        <location line="+63"/>
+        <source>Select a private network…</source>
+        <translation>Välj ett privat nätverk…</translation>
+    </message>
+    <message>
+        <location line="-50"/>
+        <source>Choose a network and save credentials before enabling remote control.</source>
+        <translation>Välj ett nätverk och spara inloggningsuppgifter innan fjärrstyrning aktiveras.</translation>
+    </message>
+    <message>
+        <location line="+83"/>
+        <source>Starting secure remote control…</source>
+        <translation>Startar säker fjärrstyrning…</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Ready to enable.</source>
+        <translation>Redo att aktiveras.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Configuration required.</source>
+        <translation>Konfiguration krävs.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Configured as %1</source>
+        <translation>Konfigurerad som %1</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/integrations.py" line="-106"/>
+        <source>Enter a valid port (1–65535).</source>
+        <translation>Ange en giltig port (1–65535).</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>✓ Configuration saved — reconnecting…</source>
+        <translation>✓ Inställning sparad — ansluter igen...</translation>
+    </message>
+    <message>
+        <location line="+31"/>
+        <source>— Select scene —</source>
+        <translation>— Välj scen —</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>NDI receiver is not available.</source>
+        <translation>NDI-mottagare är inte tillgänglig.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <location line="+34"/>
+        <source>Looking for NDI sources on this network.</source>
+        <translation>Söker efter NDI-källor på detta nätverk.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>No NDI sources found. Check that DistroAV Main Output is enabled in OBS.</source>
+        <translation>Inga NDI-källor hittades. Kontrollera att DistroAV Main Output är aktiverat i OBS.</translation>
+    </message>
+    <message>
+        <location line="+48"/>
+        <source>Press a shortcut before saving.</source>
+        <translation>Tryck på ett kortkommando innan du sparar.</translation>
+    </message>
+    <message>
+        <location line="+78"/>
+        <source>Configured</source>
+        <translation>Konfigurerad</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <location filename="../../ui/qml/settings/remote.py" line="+4"/>
+        <source>Not configured</source>
+        <translation>Inte konfigurerad</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Solin can send the automatic click.</source>
+        <translation>Solin kan skicka det automatiska klicket.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Allow Solin in macOS Accessibility so automatic clicks can work.</source>
+        <translation>Tillåt Solin i macOS Hjälpmedel så att automatiska klick kan fungera.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="+2"/>
+        <source>Use at least %1 characters. Credentials belong only to this profile.</source>
+        <translation>Använd minst %1 tecken. Uppgifterna tillhör endast denna profil.</translation>
+    </message>
+    <message>
+        <location line="+33"/>
+        <source>The passwords do not match.</source>
+        <translation>Lösenorden matchar inte.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Enter a new password to save.</source>
+        <translation>Ange ett nytt lösenord för att spara.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Check the username and use a password with at least %1 characters.</source>
+        <translation>Kontrollera användarnamnet och använd ett lösenord med minst %1 tecken.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/general.py" line="+18"/>
+        <location filename="../../ui/qml/settings/remote.py" line="+10"/>
+        <location line="+142"/>
+        <source>Saved</source>
+        <translation>Sparad</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="-23"/>
+        <source>Copied</source>
+        <translation>Kopierade</translation>
     </message>
 </context>
 <context>
@@ -8902,34 +9277,28 @@ Klicka på ”Ladda ner” för att öppna nedladdningssidan.</translation>
 <context>
     <name>WatchedFolderSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/watched_folder_section.py" line="+48"/>
         <source>Link Folder</source>
-        <translation>Länka mapp</translation>
+        <translation type="vanished">Länka mapp</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Sync folder (Dropbox, OneDrive, etc.) shown as playlists.</source>
-        <translation>Synkroniseringsmapp (Dropbox, OneDrive, osv.) visas som spellista.</translation>
+        <translation type="vanished">Synkroniseringsmapp (Dropbox, OneDrive, osv.) visas som spellista.</translation>
     </message>
     <message>
-        <location line="+19"/>
         <source>Choose…</source>
-        <translation>Välj…</translation>
+        <translation type="vanished">Välj…</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>Clear</source>
-        <translation>Rensa</translation>
+        <translation type="vanished">Rensa</translation>
     </message>
     <message>
-        <location line="+48"/>
         <source>No folder selected</source>
-        <translation>Ingen mapp vald</translation>
+        <translation type="vanished">Ingen mapp vald</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Select folder to link</source>
-        <translation>Välj mapp att länka</translation>
+        <translation type="vanished">Välj mapp att länka</translation>
     </message>
 </context>
 <context>
@@ -9178,76 +9547,60 @@ Båda enheterna måste vara anslutna till samma Wi-Fi-nätverk.</translation>
 <context>
     <name>YearlyTextSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/yearly_text_section.py" line="+62"/>
         <source>Text shown on the projection screen when idle.</source>
-        <translation>Text som visas på projektionsskärmen när den är inaktiv.</translation>
+        <translation type="vanished">Text som visas på projektionsskärmen när den är inaktiv.</translation>
     </message>
     <message>
-        <location line="+18"/>
-        <location line="+309"/>
         <source>Fetching annual text…</source>
-        <translation>Söker årstext…</translation>
+        <translation type="vanished">Söker årstext…</translation>
     </message>
     <message>
-        <location line="-295"/>
-        <location line="+276"/>
         <source>Update</source>
-        <translation>Uppdatera</translation>
+        <translation type="vanished">Uppdatera</translation>
     </message>
     <message>
-        <location line="-241"/>
         <source>Scripture:</source>
-        <translation>Skrift:</translation>
+        <translation type="vanished">Skrift:</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>E.g.: Happy are those conscious of their spiritual need.</source>
-        <translation>Ex: Lyckliga är de som är medvetna om sitt andliga behov.</translation>
+        <translation type="vanished">Ex: Lyckliga är de som är medvetna om sitt andliga behov.</translation>
     </message>
     <message>
-        <location line="+11"/>
         <source>Bible reference:</source>
-        <translation>Bibelreferens:</translation>
+        <translation type="vanished">Bibelreferens:</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>E.g.: Matthew 5:3.</source>
-        <translation>Ex: Matteus 5:3.</translation>
+        <translation type="vanished">Ex: Matteus 5:3.</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>Save changes</source>
-        <translation>Spara ändringar</translation>
+        <translation type="vanished">Spara ändringar</translation>
     </message>
     <message>
-        <location line="+196"/>
         <source>Annual text updated for {year}</source>
-        <translation>Årstexten uppdaterad för {year}</translation>
+        <translation type="vanished">Årstexten uppdaterad för {year}</translation>
     </message>
     <message>
-        <location line="+33"/>
         <source>Loading…</source>
-        <translation>Laddar…</translation>
+        <translation type="vanished">Laddar…</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Could not fetch annual text</source>
-        <translation>Kunde inte hämta årstexten</translation>
+        <translation type="vanished">Kunde inte hämta årstexten</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Retry</source>
-        <translation>Försök igen</translation>
+        <translation type="vanished">Försök igen</translation>
     </message>
     <message>
-        <location line="+23"/>
         <source>▲  Edit text manually</source>
-        <translation>▲  Redigera text manuellt</translation>
+        <translation type="vanished">▲  Redigera text manuellt</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>▼  Edit text manually</source>
-        <translation>▼  Redigera text manuellt</translation>
+        <translation type="vanished">▼  Redigera text manuellt</translation>
     </message>
 </context>
 <context>
@@ -9475,14 +9828,12 @@ Ett nummer i slutet har prioritet.</translation>
 <context>
     <name>ZoomSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/zoom_section.py" line="+32"/>
         <source>Zoom Meetings</source>
-        <translation>Zoom-möten</translation>
+        <translation type="vanished">Zoom-möten</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Audio controls and attendance count during meetings.</source>
-        <translation>Ljudkontroller och närvaroantal under möten.</translation>
+        <translation type="vanished">Ljudkontroller och närvaroantal under möten.</translation>
     </message>
 </context>
 <context>
@@ -11013,8 +11364,7 @@ Använd uppspelningsknappen för att projicera · Dra handtaget ⠿ för att än
 <context>
     <name>_ShortcutSequenceEdit</name>
     <message>
-        <location filename="../../widgets/settings/auto_key_dialog.py" line="-257"/>
-        <location line="+52"/>
+        <location filename="../../qml/SettingsShortcutDialog.qml" line="+98"/>
         <source>Click to record</source>
         <translation>Klicka för att spela in</translation>
     </message>
@@ -11022,37 +11372,31 @@ Använd uppspelningsknappen för att projicera · Dra handtaget ⠿ för att än
 <context>
     <name>_TimePickerPopup</name>
     <message>
-        <location filename="../../widgets/settings/meeting_schedule_section.py" line="-477"/>
         <source>Hour</source>
-        <translation>Timme</translation>
+        <translation type="vanished">Timme</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Minute</source>
-        <translation>Minut</translation>
+        <translation type="vanished">Minut</translation>
     </message>
     <message>
-        <location line="+15"/>
         <source>Cancel</source>
-        <translation>Avbryt</translation>
+        <translation type="vanished">Avbryt</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Apply</source>
-        <translation>Verkställ</translation>
+        <translation type="vanished">Verkställ</translation>
     </message>
 </context>
 <context>
     <name>_TimeStepper</name>
     <message>
-        <location line="-108"/>
         <source>Increase</source>
-        <translation>Öka</translation>
+        <translation type="vanished">Öka</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Decrease</source>
-        <translation>Minska</translation>
+        <translation type="vanished">Minska</translation>
     </message>
 </context>
 <context>

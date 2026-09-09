@@ -19,6 +19,20 @@ AUTO_KEY_EVENTS = (
 )
 
 
+def first_shortcut_chord(sequence: str) -> str:
+    """Take one portable Qt chord, preserving comma when it is the key.
+
+    Qt represents a comma key as ``,`` or ``Ctrl+,`` and separates subsequent
+    chords with another comma. Splitting on every comma loses that key.
+    """
+    text = sequence.strip()
+    separator = text.find(",")
+    if separator < 0:
+        return text
+    comma_is_key = separator == 0 or text[:separator].rstrip().endswith("+")
+    return text[:separator + int(comma_is_key)].strip()
+
+
 @dataclass(frozen=True)
 class AutoKeyAction:
     id: str
@@ -31,7 +45,7 @@ class AutoKeyAction:
         if not isinstance(data, dict):
             return None
         event = str(data.get("event") or "")
-        sequence = str(data.get("sequence") or "").split(",", 1)[0].strip()
+        sequence = first_shortcut_chord(str(data.get("sequence") or ""))
         if event not in AUTO_KEY_EVENTS or not sequence:
             return None
         return cls(
@@ -76,6 +90,7 @@ __all__ = [
     "EVENT_MEDIA_RESUMED",
     "EVENT_MEDIA_STARTED",
     "AutoKeyAction",
+    "first_shortcut_chord",
     "parse_actions",
     "serialize_actions",
 ]

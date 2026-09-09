@@ -26,6 +26,7 @@ log = logging.getLogger(__name__)
 class _FetchCompletion:
     api_code: str
     year: int
+    generation: int
     quote: str = ""
     reference: str = ""
     error: str = ""
@@ -55,7 +56,8 @@ class YeartextService(QObject):
     ) -> None:
         super().__init__(parent)
         self._cache: dict = {}
-        self._fetches: set[str] = set()
+        self._fetches: dict[str, int] = {}
+        self._next_generation = 0
         self._workers = ThreadedWorkerPool()
         self._closed = False
         self._cache_path = Path(cache_file)
@@ -116,7 +118,9 @@ class YeartextService(QObject):
         """Dispara fetch em background. Idempotente."""
         if self._closed or self.is_fetching(api_code):
             return
-        self._fetches.add(api_code)
+        self._next_generation += 1
+        generation = self._next_generation
+        self._fetches[api_code] = generation
         self.fetch_started.emit(api_code, year)
 
         def fetch() -> None:
@@ -125,11 +129,12 @@ class YeartextService(QObject):
                 completion = _FetchCompletion(
                     api_code=result.api_code,
                     year=result.year,
+                    generation=generation,
                     quote=result.quote,
                     reference=result.reference,
                 )
             except YeartextFetchError as exc:
-                completion = _FetchCompletion(api_code, year, error=str(exc))
+                completion = _FetchCompletion(api_code, year, generation, error=str(exc))
             if self._closed:
                 return
             try:
@@ -140,7 +145,7 @@ class YeartextService(QObject):
                 return
 
         if self._workers.submit(f"yeartext-{api_code}", fetch) is None:
-            self._fetches.discard(api_code)
+            self._fetches.pop(api_code, None)
 
     def ensure_current(self, api_code: str, year: int) -> Optional[tuple[str, str]]:
         cached = self.get_cached(api_code, year)
@@ -151,15 +156,18 @@ class YeartextService(QObject):
 
     def override_cache(self, api_code: str, year: int, quote: str, reference: str) -> None:
         """Sobrescreve o cache com texto editado manualmente."""
+        # The worker may finish after a manual save. Invalidate its generation
+        # before it can update the cache or emit an obsolete success/error.
+        self._fetches.pop(api_code, None)
         self._update_cache(api_code, year, quote, reference)
 
     @Slot(object)
     def _consume_fetch_completion(self, value: object) -> None:
         if not isinstance(value, _FetchCompletion):
             return
-        self._fetches.discard(value.api_code)
-        if self._closed:
+        if self._closed or self._fetches.get(value.api_code) != value.generation:
             return
+        self._fetches.pop(value.api_code)
         if value.error:
             self.fetch_failed.emit(value.api_code, value.year, value.error)
             return

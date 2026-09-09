@@ -71,12 +71,22 @@ Item {
             }
         }
 
-        LibrarySearchField {
+        AppTextField {
+            objectName: "libraryDownloadsSearchField"
             Layout.fillWidth: true
             enabled: !controller.downloadsDeleting
             placeholderText: controller.searchPlaceholder
-            value: controller.searchText
-            onEdited: function(text) { controller.setDownloadsSearchText(text) }
+            text: controller.searchText
+            searchIcon: true
+            clearActionVisible: text.length > 0
+            restingColor: appTheme.surface2
+            cornerRadius: 12
+            font.pixelSize: 13
+            onTextEdited: controller.setDownloadsSearchText(text)
+            onClearRequested: {
+                controller.setDownloadsSearchText("")
+                forceActiveFocus()
+            }
         }
 
         Flickable {

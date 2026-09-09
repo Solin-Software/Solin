@@ -87,11 +87,21 @@ Item {
             Layout.fillWidth: true
             spacing: 8
 
-            LibrarySearchField {
+            AppTextField {
+                objectName: "librarySearchField"
                 Layout.fillWidth: true
                 placeholderText: controller.searchPlaceholder
-                value: controller.searchText
-                onEdited: function(text) { controller.setSearchText(text) }
+                text: controller.searchText
+                searchIcon: true
+                clearActionVisible: text.length > 0
+                restingColor: appTheme.surface2
+                cornerRadius: 12
+                font.pixelSize: 13
+                onTextEdited: controller.setSearchText(text)
+                onClearRequested: {
+                    controller.setSearchText("")
+                    forceActiveFocus()
+                }
             }
 
             Rectangle {

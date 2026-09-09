@@ -91,8 +91,8 @@ def test_qml_onboarding_language_sheet_uses_flickable_list_handlers():
     assert "id: languageList" in source
     assert "TapHandler" in source
     assert "HoverHandler" in source
-    assert "id: languageScrollBar" in source
-    assert "opacity: (languageScrollBar.active" in source
+    assert "AppSelectionList {" in source
+    assert "width: languageList.delegateWidth" in source
     assert "root.borderStrong" not in source
     assert "id: languageScroll\n" not in source
 
