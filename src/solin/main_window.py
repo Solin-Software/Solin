@@ -138,7 +138,6 @@ from .ui.notifications import NotificationCenter
 from .ui.screens import ScreenManager
 from .styles.theme import activate_theme, app_stylesheet, apply_application_palette
 from .core.foundation.runtime_paths import ProfilePaths, RuntimePaths
-from .core.foundation.constants import NATIVE_SCENES_SUPPORTED
 from .core.foundation.qt_threads import OwnedQThreadRegistry
 from .core.playlists.storage import PlaylistRepository, PlaylistStoragePaths
 from .core.meetings.tree_store import MeetingTreeStore
@@ -241,7 +240,7 @@ class MainWindow(QWidget):
         active_profile: ProfileInfo,
         *,
         talk_theme_output_settings: Any,
-        scene_workspace: SceneWorkspaceService,
+        scene_workspace: SceneWorkspaceService | None,
         window_host: ApplicationWindow,
         scene_engine: SceneEngine | None = None,
         ptz_executor: PtzRecallExecutor | None = None,
@@ -314,66 +313,73 @@ class MainWindow(QWidget):
             ),
         )
         self.scene_workspace = scene_workspace
-        program_output = self.scene_documents.document.output(BusId.VIRTUAL_CAMERA)
-        self._content_frame_ingress = ContentFrameIngressController(
-            self,
-            canvas_width=program_output.video_format.width,
-            canvas_height=program_output.video_format.height,
-        )
-        self._content_frame_ingress.bind_video_sink(self.media_ctrl.video_sink)
-        self._content_frame_ingress.direct_submission_changed.connect(
-            self._reconcile_python_video_frame_delivery,
-            Qt.ConnectionType.QueuedConnection,
-        )
-        self.media_ctrl.decoded_frame_acceptance_changed.connect(
-            self._content_frame_ingress.set_decoder_frame_gate
-        )
-        self._content_frame_ingress.set_decoder_frame_gate(
-            self.media_ctrl.session_id,
-            self.media_ctrl.decoded_frames_accepted,
-        )
-        self._program_content = ProgramContentController(
-            self.projection_session,
-            self.font_manager,
-            self._content_frame_ingress.submit_frame,
-            self._current_yearly_projection_text,
-            media_epoch_sink=self._content_frame_ingress.begin_presentation,
-            image_transform_sink=self._content_frame_ingress.set_image_transform,
-            width=program_output.video_format.width,
-            height=program_output.video_format.height,
-            parent=self,
-        )
-        # Content identity and retained pixels must advance before the scene
-        # observer prepares Program. ProjectionSession preserves subscription
-        # order, so constructing these owners in data-flow order removes the
-        # first-frame race without coupling either controller to the other.
-        self.scene_runtime = SceneRuntimeController(
-            scene_workspace,
-            self.projection_session,
-            engine=scene_engine,
-            ptz=ptz_executor,
-            parent=self,
-        )
-        self._program_recording = ProgramRecordingController(
-            scene_workspace,
-            self.scene_runtime,
-            engine=scene_engine,
-            profile_paths=profile_paths,
-            parent=self,
-        )
-        self._content_frame_ingress.descriptor_changed.connect(
-            self.scene_runtime.set_content_ingress
-        )
-        self.scene_runtime.source_health_changed.connect(
-            self._on_native_content_source_health_changed
-        )
-        self.scene_runtime.set_content_ingress(self._content_frame_ingress.descriptor)
-        self.scene_runtime.content_ingress_demand_changed.connect(
-            self._on_content_ingress_demand_changed
-        )
-        self._on_content_ingress_demand_changed(
-            self.scene_runtime.content_ingress_required
-        )
+        self.scene_runtime: SceneRuntimeController | None = None
+        self._program_recording: ProgramRecordingController | None = None
+        self._content_frame_ingress: ContentFrameIngressController | None = None
+        self._program_content: ProgramContentController | None = None
+        self._scene_preview_egress: SceneFrameEgressController | None = None
+        self._scene_program_egress: SceneVideoFrameEgressController | None = None
+        if scene_workspace is not None:
+            program_output = scene_workspace.documents.document.output(BusId.VIRTUAL_CAMERA)
+            self._content_frame_ingress = ContentFrameIngressController(
+                self,
+                canvas_width=program_output.video_format.width,
+                canvas_height=program_output.video_format.height,
+            )
+            self._content_frame_ingress.bind_video_sink(self.media_ctrl.video_sink)
+            self._content_frame_ingress.direct_submission_changed.connect(
+                self._reconcile_python_video_frame_delivery,
+                Qt.ConnectionType.QueuedConnection,
+            )
+            self.media_ctrl.decoded_frame_acceptance_changed.connect(
+                self._content_frame_ingress.set_decoder_frame_gate
+            )
+            self._content_frame_ingress.set_decoder_frame_gate(
+                self.media_ctrl.session_id,
+                self.media_ctrl.decoded_frames_accepted,
+            )
+            self._program_content = ProgramContentController(
+                self.projection_session,
+                self.font_manager,
+                self._content_frame_ingress.submit_frame,
+                self._current_yearly_projection_text,
+                media_epoch_sink=self._content_frame_ingress.begin_presentation,
+                image_transform_sink=self._content_frame_ingress.set_image_transform,
+                width=program_output.video_format.width,
+                height=program_output.video_format.height,
+                parent=self,
+            )
+            # Content identity and retained pixels must advance before the scene
+            # observer prepares Program. ProjectionSession preserves subscription
+            # order, so constructing these owners in data-flow order removes the
+            # first-frame race without coupling either controller to the other.
+            self.scene_runtime = SceneRuntimeController(
+                scene_workspace,
+                self.projection_session,
+                engine=scene_engine,
+                ptz=ptz_executor,
+                parent=self,
+            )
+            self._program_recording = ProgramRecordingController(
+                scene_workspace,
+                self.scene_runtime,
+                engine=scene_engine,
+                profile_paths=profile_paths,
+                parent=self,
+            )
+            self._content_frame_ingress.descriptor_changed.connect(
+                self.scene_runtime.set_content_ingress
+            )
+            self.scene_runtime.source_health_changed.connect(
+                self._on_native_content_source_health_changed
+            )
+            self.scene_runtime.set_content_ingress(self._content_frame_ingress.descriptor)
+            self.scene_runtime.content_ingress_demand_changed.connect(
+                self._on_content_ingress_demand_changed
+            )
+            self._on_content_ingress_demand_changed(
+                self.scene_runtime.content_ingress_required
+            )
         self._obs_scene_session = ObsSceneSession()
         self._monitor_popup = None
         self._ipc_controller = None
@@ -393,7 +399,7 @@ class MainWindow(QWidget):
         )
         self._profile_switch = ProfileSwitchController(
             self.switch_profile_requested.emit,
-            can_switch=lambda: not self._program_recording.busy,
+            can_switch=lambda: self._program_recording is None or not self._program_recording.busy,
             notify_blocked=self._notify_recording_blocks_profile_switch,
         )
         self._projection_targets = ProjectionWindowController(
@@ -406,8 +412,14 @@ class MainWindow(QWidget):
                 ),
                 sync_obs_scene=lambda active: self._projection_integrations.sync_obs_scene(active),
                 yearly_text=self._current_yearly_projection_text,
-                content_frame_sink=self._program_content.submit_idle_frame,
-                refresh_program_content=self._program_content.refresh,
+                content_frame_sink=(
+                    self._program_content.submit_idle_frame
+                    if self._program_content is not None else None
+                ),
+                refresh_program_content=(
+                    self._program_content.refresh
+                    if self._program_content is not None else None
+                ),
                 set_projection_screen_count=(lambda count: self.proj_bar.set_screen_count(count)),
                 set_toolbar_screen_count=(
                     lambda count: self._quick_toolbar.set_screen_count(count)
@@ -428,53 +440,55 @@ class MainWindow(QWidget):
         self._unsubscribe_native_projection_state = self.projection_session.subscribe(
             self._on_projection_state_changed_for_native
         )
-        self.scene_runtime.runtime_changed.connect(self._on_scene_window_route_changed)
         self.destroyed.connect(
             lambda _object=None: self._unsubscribe_native_projection_state()
         )
-        document = self.scene_documents.document
-        preview_output = document.output(BusId.MEDIA_WINDOWS)
-        program_output = document.output(BusId.VIRTUAL_CAMERA)
-        self._scene_preview_egress = SceneFrameEgressController(
-            preview_output.video_format.width,
-            preview_output.video_format.height,
-            self,
-            worker_name="solin-scene-preview-egress",
-        )
-        self._scene_preview_egress.descriptor_changed.connect(
-            self._on_scene_frame_egress_descriptor_changed
-        )
-        self._scene_preview_egress.frame_ready.connect(
-            self._on_scene_preview_frame
-        )
-        self._scene_program_egress = SceneVideoFrameEgressController(
-            program_output.video_format.width,
-            program_output.video_format.height,
-            self,
-            worker_name="solin-scene-program-egress",
-        )
-        self._scene_program_egress.descriptor_changed.connect(
-            self._on_scene_frame_egress_descriptor_changed
-        )
-        self._scene_program_egress.frame_ready.connect(
-            self._on_scene_program_frame
-        )
-        self.scene_runtime.set_preview_egress(self._scene_preview_egress.descriptor)
-        self.scene_runtime.set_program_egress(None)
-        self.scene_runtime.document_changed.connect(
-            self._on_scene_document_changed_for_egress
-        )
+        if self.scene_runtime is not None:
+            self.scene_runtime.runtime_changed.connect(self._on_scene_window_route_changed)
+            document = self.scene_runtime.document
+            preview_output = document.output(BusId.MEDIA_WINDOWS)
+            program_output = document.output(BusId.VIRTUAL_CAMERA)
+            self._scene_preview_egress = SceneFrameEgressController(
+                preview_output.video_format.width,
+                preview_output.video_format.height,
+                self,
+                worker_name="solin-scene-preview-egress",
+            )
+            self._scene_preview_egress.descriptor_changed.connect(
+                self._on_scene_frame_egress_descriptor_changed
+            )
+            self._scene_preview_egress.frame_ready.connect(
+                self._on_scene_preview_frame
+            )
+            self._scene_program_egress = SceneVideoFrameEgressController(
+                program_output.video_format.width,
+                program_output.video_format.height,
+                self,
+                worker_name="solin-scene-program-egress",
+            )
+            self._scene_program_egress.descriptor_changed.connect(
+                self._on_scene_frame_egress_descriptor_changed
+            )
+            self._scene_program_egress.frame_ready.connect(
+                self._on_scene_program_frame
+            )
+            self.scene_runtime.set_preview_egress(self._scene_preview_egress.descriptor)
+            self.scene_runtime.set_program_egress(None)
+            self.scene_runtime.document_changed.connect(
+                self._on_scene_document_changed_for_egress
+            )
 
         self.notifications = NotificationCenter(self)
         self._last_program_recording_status = ProgramRecordingStatus.IDLE
-        self._program_recording.state_changed.connect(
-            self._on_program_recording_state_changed
-        )
-        if self._program_recording.state.status is ProgramRecordingStatus.FAILED:
-            self._on_program_recording_state_changed(self._program_recording.state)
-        self.scene_runtime.transition_fallback.connect(
-            self._on_scene_transition_fallback
-        )
+        if self._program_recording is not None and self.scene_runtime is not None:
+            self._program_recording.state_changed.connect(
+                self._on_program_recording_state_changed
+            )
+            if self._program_recording.state.status is ProgramRecordingStatus.FAILED:
+                self._on_program_recording_state_changed(self._program_recording.state)
+            self.scene_runtime.transition_fallback.connect(
+                self._on_scene_transition_fallback
+            )
         self.playback_protection = PlaybackProtectionController(
             self._media_settings,
             self.media_ctrl,
@@ -821,7 +835,10 @@ class MainWindow(QWidget):
                 sjjm_announce_mode=self.settings_widget.get_sjjm_announce_mode,
                 start_videos_paused=self.settings_widget.get_start_videos_paused,
                 playback_protection=self.playback_protection,
-                content_frame_sink=self._program_content.submit_frame,
+                content_frame_sink=(
+                    self._program_content.submit_frame
+                    if self._program_content is not None else None
+                ),
                 projection_aspect_ratio_provider=(
                     lambda: projection_aspect_ratio_from_windows(
                         tuple(self.projection_session.projection_windows)
@@ -880,7 +897,10 @@ class MainWindow(QWidget):
                 quick_toolbar=lambda: getattr(self, "_quick_toolbar", None),
                 projection_windows=self._raw_projection_windows,
                 playback_protection=self.playback_protection,
-                content_frame_sink=self._program_content.submit_frame,
+                content_frame_sink=(
+                    self._program_content.submit_frame
+                    if self._program_content is not None else None
+                ),
                 camera_settings=self._camera_settings,
                 camera_service=self._camera_service,
             ),
@@ -955,9 +975,10 @@ class MainWindow(QWidget):
         )
         startup.mark("projection_controllers_ready")
         self._signal_connections.connect_signals()
-        self.settings_widget.yearly_text_changed.connect(
-            self._program_content.update_yearly_text
-        )
+        if self._program_content is not None:
+            self.settings_widget.yearly_text_changed.connect(
+                self._program_content.update_yearly_text
+            )
         self.settings_widget.remote_control_settings_changed.connect(
             self._ensure_remote_control_started
         )
@@ -1011,9 +1032,11 @@ class MainWindow(QWidget):
                     program_recording=self._program_recording,
                     program_content=self._program_content,
                     content_frame_ingress=self._content_frame_ingress,
-                    scene_frame_egresses=(
-                        self._scene_preview_egress,
-                        self._scene_program_egress,
+                    scene_frame_egresses=tuple(
+                        egress for egress in (
+                            self._scene_preview_egress,
+                            self._scene_program_egress,
+                        ) if egress is not None
                     ),
                 ),
                 widget_providers=(
@@ -1038,6 +1061,8 @@ class MainWindow(QWidget):
         self,
         document: SceneDocument,
     ) -> None:
+        if self._scene_preview_egress is None or self._scene_program_egress is None:
+            return
         preview_output = document.output(BusId.MEDIA_WINDOWS)
         self._scene_preview_egress.reconfigure(
             preview_output.video_format.width,
@@ -1057,6 +1082,12 @@ class MainWindow(QWidget):
         self._reconcile_native_scene_surfaces()
 
     def _reconcile_scene_media_egress(self) -> None:
+        if (
+            self.scene_runtime is None
+            or self._scene_preview_egress is None
+            or self._scene_program_egress is None
+        ):
+            return
         self.scene_runtime.set_preview_egress(self._scene_preview_egress.descriptor)
         self.scene_runtime.set_program_egress(
             self._scene_program_egress.descriptor
@@ -1088,7 +1119,11 @@ class MainWindow(QWidget):
         self._reconcile_native_scene_surfaces()
 
     def _on_native_content_source_health_changed(self, source_id: str) -> None:
-        if source_id != CONTENT_SOURCE_ID:
+        if (
+            source_id != CONTENT_SOURCE_ID
+            or self.scene_runtime is None
+            or self._content_frame_ingress is None
+        ):
             return
         health = self.scene_runtime.source_health(source_id)
         if health is not None and health.error_code:
@@ -1112,7 +1147,7 @@ class MainWindow(QWidget):
             "camera_stream",
         }
         native_window_routing_ready = (
-            NATIVE_SCENES_SUPPORTED
+            self.scene_runtime is not None
             and self.scene_runtime.native_window_routing_ready
             and not self._native_window_output_suppressed
         )
@@ -1194,10 +1229,8 @@ class MainWindow(QWidget):
             not getattr(window, "native_output_active", False)
             for window in fallback_windows
         )
-        if targets:
+        if self.scene_runtime is not None:
             self.scene_runtime.set_window_targets(tuple(targets))
-        else:
-            self.scene_runtime.set_window_targets(())
         for window in raw_fallback_windows:
             self._projection_targets.restore_state_to_window(window)
         self._reconcile_scene_media_egress()
@@ -1214,7 +1247,8 @@ class MainWindow(QWidget):
         delivery_required = True
         state = self.projection_session.state
         if (
-            self._content_frame_ingress.direct_submission_active
+            self._content_frame_ingress is not None
+            and self._content_frame_ingress.direct_submission_active
             and state.get("type") == "video"
             and not state.get("is_audio", False)
         ):
@@ -1234,7 +1268,10 @@ class MainWindow(QWidget):
         self._reconcile_native_scene_surfaces()
 
     def _on_native_scene_engine_error(self, _message: str) -> None:
-        if self.scene_runtime.last_engine_error_code != "native_window_output_failed":
+        if (
+            self.scene_runtime is None
+            or self.scene_runtime.last_engine_error_code != "native_window_output_failed"
+        ):
             return
         self._native_window_output_suppressed = True
         self._reconcile_native_scene_surfaces()
@@ -1299,7 +1336,8 @@ class MainWindow(QWidget):
         )
 
     def _on_scene_preview_frame(self, image) -> None:
-        self.scene_runtime.publish_preview_frame(image)
+        if self.scene_runtime is not None:
+            self.scene_runtime.publish_preview_frame(image)
 
     def _on_scene_program_frame(self, frame) -> None:
         if not self._program_mirror_enabled():
@@ -1317,21 +1355,20 @@ class MainWindow(QWidget):
             self.proj_bar.update_tab_live_preview(image)
 
     def _program_mirror_enabled(self) -> bool:
-        return self.scene_live.state.output(BusId.MEDIA_WINDOWS).enabled
-
-    @property
-    def scene_documents(self):
-        return self.scene_workspace.documents
-
-    @property
-    def scene_live(self):
-        return self.scene_workspace.runtime
+        return (
+            self.scene_workspace is not None
+            and self.scene_workspace.runtime.state.output(BusId.MEDIA_WINDOWS).enabled
+        )
 
     def _program_content_requested(self) -> bool:
-        state = self.scene_live.state
+        if self.scene_workspace is None:
+            return False
+        state = self.scene_workspace.runtime.state
         return any(state.output(bus_id).enabled for bus_id in BusId)
 
     def _on_content_ingress_demand_changed(self, required: bool) -> None:
+        if self._content_frame_ingress is None or self._program_content is None:
+            return
         self._content_frame_ingress.set_enabled(required)
         if not required:
             return
@@ -1358,7 +1395,8 @@ class MainWindow(QWidget):
         self._media_mirror_was_enabled = mirror_enabled
         self._reconcile_native_scene_surfaces()
         if mirror_enabled:
-            self._program_content.refresh()
+            if self._program_content is not None:
+                self._program_content.refresh()
             return
         QTimer.singleShot(0, self._restore_raw_projection_windows)
 
@@ -1377,7 +1415,7 @@ class MainWindow(QWidget):
         self._application_maintenance()
         self.settings_widget.start_deferred_services()
         self._ui_preparation.start()
-        if self.scene_runtime.engine_configured:
+        if self.scene_runtime is not None and self.scene_runtime.engine_configured:
             self.scene_runtime.start_engine()
         self._ensure_remote_control_started()
         self._timer_output_startup_timer.start(_STARTUP_SCREEN_SETTLE_MS)
@@ -1588,16 +1626,17 @@ class MainWindow(QWidget):
         self.proj_bar.video_output_target_changed.connect(
             self._reconcile_native_scene_surfaces
         )
-        self.scene_runtime.engine_ready_changed.connect(
-            self._on_native_scene_engine_ready_changed
-        )
-        self.scene_runtime.operational_state_changed.connect(
-            self._reconcile_native_scene_surfaces
-        )
-        self.scene_runtime.engine_error.connect(self._on_native_scene_engine_error)
-        self.scene_runtime.desired_scenes_changed.connect(
-            self._on_scene_desired_changed_for_egress
-        )
+        if self.scene_runtime is not None:
+            self.scene_runtime.engine_ready_changed.connect(
+                self._on_native_scene_engine_ready_changed
+            )
+            self.scene_runtime.operational_state_changed.connect(
+                self._reconcile_native_scene_surfaces
+            )
+            self.scene_runtime.engine_error.connect(self._on_native_scene_engine_error)
+            self.scene_runtime.desired_scenes_changed.connect(
+                self._on_scene_desired_changed_for_egress
+            )
         self._reconcile_native_scene_surfaces()
         self.library_widget = resources.library_widget
         self.settings_widget = resources.settings_widget
@@ -1986,7 +2025,7 @@ class MainWindow(QWidget):
         super().closeEvent(event)
 
     def confirm_close(self) -> bool:
-        if self._program_recording.busy:
+        if self._program_recording is not None and self._program_recording.busy:
             self.notifications.warning(
                 self.tr("Stop recording before closing Solin."),
                 dedupe_key="program-recording-blocks-close",

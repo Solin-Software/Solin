@@ -138,6 +138,12 @@ class ProfileAppSettingsStore:
     def set_app_theme_id(self, theme_id: str) -> None:
         self.settings.set_value(SettingsKey.APP_THEME, str(theme_id or "").strip())
 
+    def native_scenes_enabled(self) -> bool:
+        return bool(self.settings.value(SettingsKey.NATIVE_SCENES_ENABLED, True, bool))
+
+    def set_native_scenes_enabled(self, enabled: bool) -> None:
+        self.settings.set_value(SettingsKey.NATIVE_SCENES_ENABLED, bool(enabled))
+
     def hover_popup_ids(self) -> frozenset[str]:
         value = self.settings.value(SettingsKey.TOOLBAR_HOVER_POPUPS, [])
         if not isinstance(value, (list, tuple)):

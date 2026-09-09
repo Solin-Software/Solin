@@ -16,7 +16,6 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..core.foundation.constants import NATIVE_SCENES_SUPPORTED
 from ..core.meetings.preparation import MeetingPreparationService
 from ..styles.icons import (
     ICON_CLAPPERBOARD,
@@ -183,7 +182,7 @@ class MainWindowUiResources:
     talk_theme_widget: DeferredTalkThemeWidget
     playlist_widget: PlaylistWidget
     meetings_widget: MeetingsWidget
-    scenes_widget: DeferredScenesWidget
+    scenes_widget: DeferredScenesWidget | None
     quick_toolbar: QuickAccessToolbar
     sidebar_title_label: QLabel
     sidebar_subtitle_label: QLabel
@@ -201,7 +200,7 @@ class _PageResources:
     talk_theme_widget: DeferredTalkThemeWidget
     playlist_widget: PlaylistWidget
     meetings_widget: MeetingsWidget
-    scenes_widget: DeferredScenesWidget
+    scenes_widget: DeferredScenesWidget | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -262,16 +261,16 @@ class MainWindowUiController:
         self._browser_image_fetch_service_factory = browser_image_fetch_service_factory
 
     @classmethod
-    def nav_button_specs(cls) -> tuple[tuple[str, str, str, int], ...]:
-        if NATIVE_SCENES_SUPPORTED:
+    def nav_button_specs(cls, *, scenes_enabled: bool) -> tuple[tuple[str, str, str, int], ...]:
+        if scenes_enabled:
             return cls._NAV_BUTTON_SPECS
         return tuple(
             spec for spec in cls._NAV_BUTTON_SPECS if spec[0] != "nav_scenes_btn"
         )
 
     @classmethod
-    def sidebar_layout_order(cls) -> tuple[str, ...]:
-        if NATIVE_SCENES_SUPPORTED:
+    def sidebar_layout_order(cls, *, scenes_enabled: bool) -> tuple[str, ...]:
+        if scenes_enabled:
             return cls._SIDEBAR_LAYOUT_ORDER
         return tuple(
             name for name in cls._SIDEBAR_LAYOUT_ORDER if name != "nav_scenes_btn"
@@ -355,7 +354,7 @@ class MainWindowUiController:
             int(MainPage.SETTINGS): pages.settings_widget.preparation_handle,
             int(MainPage.PLAYLISTS): pages.playlist_widget.preparation_handle,
         }
-        if NATIVE_SCENES_SUPPORTED:
+        if pages.scenes_widget is not None:
             on_demand_tasks[int(MainPage.SCENES)] = pages.scenes_widget.preparation_handle
         preparation = UiPreparationCoordinator(
             {
@@ -461,6 +460,7 @@ class MainWindowUiController:
             obs_service=context.obs_service,
             ndi_service=context.ndi_service,
             app_settings=context.app_settings,
+            native_scenes_enabled=context.scene_runtime is not None,
             obs_settings=context.obs_settings,
             zoom_settings=context.zoom_settings,
             auto_share_settings=context.auto_share_settings,
@@ -564,12 +564,16 @@ class MainWindowUiController:
             parent=context.parent,
         )
         timeline.mark("page_meetings_constructed")
-        scenes_widget = DeferredScenesWidget(
-            context.scene_runtime,
-            recording=context.program_recording,
-            credentials=context.ptz_credentials,
-            notifications=context.notifications,
-            parent=context.parent,
+        scenes_widget = (
+            DeferredScenesWidget(
+                context.scene_runtime,
+                recording=context.program_recording,
+                credentials=context.ptz_credentials,
+                notifications=context.notifications,
+                parent=context.parent,
+            )
+            if context.scene_runtime is not None
+            else None
         )
         timeline.mark("page_scenes_constructed")
         meetings_widget.set_watched_folder(watched_folder)
@@ -585,7 +589,7 @@ class MainWindowUiController:
         stack.addWidget(settings_widget)
         stack.addWidget(playlist_widget)
         stack.addWidget(lazy_pages.placeholder())
-        stack.addWidget(scenes_widget)
+        stack.addWidget(scenes_widget if scenes_widget is not None else lazy_pages.placeholder())
 
         return _PageResources(
             library_widget=library_widget,
@@ -639,7 +643,9 @@ class MainWindowUiController:
         layout.addSpacing(8)
         layout.addWidget(self._separator())
         layout.addSpacing(4)
-        for attr_name in self.sidebar_layout_order():
+        for attr_name in self.sidebar_layout_order(
+            scenes_enabled=context.scene_runtime is not None
+        ):
             layout.addWidget(nav_buttons_by_name[attr_name])
         layout.addStretch()
         layout.addWidget(nav_buttons_by_name["nav_settings_btn"])
@@ -714,10 +720,8 @@ class MainWindowUiController:
             obs_settings=context.obs_settings,
             app_settings=context.app_settings,
             background_song_service=context.background_song_service,
-            scene_runtime=(context.scene_runtime if NATIVE_SCENES_SUPPORTED else None),
-            program_recording=(
-                context.program_recording if NATIVE_SCENES_SUPPORTED else None
-            ),
+            scene_runtime=context.scene_runtime,
+            program_recording=context.program_recording,
             camera_service=context.camera_service,
             camera_settings=context.camera_settings,
         )
@@ -808,7 +812,9 @@ class MainWindowUiController:
     ) -> tuple[dict[str, SidebarButton], list[SidebarButton]]:
         nav_buttons_by_name: dict[str, SidebarButton] = {}
         nav_buttons: list[SidebarButton] = []
-        for attr_name, icon, label, page_index in self.nav_button_specs():
+        for attr_name, icon, label, page_index in self.nav_button_specs(
+            scenes_enabled=self._context.scene_runtime is not None
+        ):
             button = SidebarButton(icon, self._context.translate(label))
             button.clicked.connect(
                 lambda _checked=False, index=page_index: navigation.switch_page(index)

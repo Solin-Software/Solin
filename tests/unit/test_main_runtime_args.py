@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import sys
+
+import pytest
 from types import SimpleNamespace
 
 from solin.bootstrap import application as main
@@ -45,8 +47,10 @@ def test_parse_runtime_args_supports_profile_equals_form(tmp_path):
     assert runtime_args.media_files == (str(csv_file),)
 
 
-def test_build_main_window_runtime_wires_services_to_stable_window_host(monkeypatch):
-    monkeypatch.setattr(main, "NATIVE_SCENES_SUPPORTED", True)
+@pytest.mark.parametrize("native_scenes_enabled", [True, False])
+def test_build_main_window_runtime_wires_services_to_stable_window_host(
+    monkeypatch, native_scenes_enabled
+):
     events = []
     file_args = ["clip.mp4", "song.mp3"]
     runtime_paths = SimpleNamespace()
@@ -68,7 +72,7 @@ def test_build_main_window_runtime_wires_services_to_stable_window_host(monkeypa
     runtime_paths.pdf_pages_dir = "pdf_pages"
     runtime_paths.pptx_pages_dir = "pptx_pages"
     runtime_paths.docx_pages_dir = "docx_pages"
-    profile_settings = object()
+    profile_settings = SimpleNamespace(app_settings=lambda: object())
     media_cache_manager = object()
     media_settings = object()
     profile_settings_bundle = SimpleNamespace(
@@ -229,7 +233,7 @@ def test_build_main_window_runtime_wires_services_to_stable_window_host(monkeypa
     monkeypatch.setattr(
         main,
         "_build_main_window_profile_settings",
-        lambda received_settings: (
+        lambda received_settings, **_options: (
             events.append(("profile_settings_bundle", received_settings)) or profile_settings_bundle
         ),
     )
@@ -272,6 +276,7 @@ def test_build_main_window_runtime_wires_services_to_stable_window_host(monkeypa
         active_profile=active_profile,
         talk_theme_output_settings=talk_theme_output_settings,
         window_host=window_host,
+        native_scenes_enabled=native_scenes_enabled,
     )
 
     assert window.lang_manager == "lang"
@@ -321,11 +326,11 @@ def test_build_main_window_runtime_wires_services_to_stable_window_host(monkeypa
     assert window.timer_session is timer_session
     assert window.active_profile is active_profile
     assert window.talk_theme_output_settings is talk_theme_output_settings
-    assert window.scene_workspace is scene_workspace
-    assert window.scene_engine is not None
-    assert window.ptz_executor is ptz_executor
-    assert window.ptz_credentials is ptz_credentials
-    assert credential_cleaners == [ptz_credentials.delete]
+    assert window.scene_workspace is (scene_workspace if native_scenes_enabled else None)
+    assert window.scene_engine is (scene_engine if native_scenes_enabled else None)
+    assert window.ptz_executor is (ptz_executor if native_scenes_enabled else None)
+    assert window.ptz_credentials is (ptz_credentials if native_scenes_enabled else None)
+    assert credential_cleaners == ([ptz_credentials.delete] if native_scenes_enabled else [])
     assert window.window_host is window_host
     assert events == [
         ("profile_settings_bundle", profile_settings),
@@ -345,7 +350,6 @@ def test_build_main_window_runtime_wires_services_to_stable_window_host(monkeypa
 
 
 def test_build_main_window_runtime_does_not_mutate_native_window_lifecycle(monkeypatch):
-    monkeypatch.setattr(main, "NATIVE_SCENES_SUPPORTED", True)
     events = []
     runtime_paths = SimpleNamespace()
     profile_paths = SimpleNamespace(
@@ -366,7 +370,7 @@ def test_build_main_window_runtime_does_not_mutate_native_window_lifecycle(monke
     runtime_paths.pdf_pages_dir = "pdf_pages"
     runtime_paths.pptx_pages_dir = "pptx_pages"
     runtime_paths.docx_pages_dir = "docx_pages"
-    profile_settings = object()
+    profile_settings = SimpleNamespace(app_settings=lambda: object())
     media_cache_manager = object()
     media_settings = object()
     profile_settings_bundle = SimpleNamespace(
@@ -521,7 +525,7 @@ def test_build_main_window_runtime_does_not_mutate_native_window_lifecycle(monke
     monkeypatch.setattr(
         main,
         "_build_main_window_profile_settings",
-        lambda received_settings: (
+        lambda received_settings, **_options: (
             events.append(("profile_settings_bundle", received_settings)) or profile_settings_bundle
         ),
     )
@@ -564,6 +568,7 @@ def test_build_main_window_runtime_does_not_mutate_native_window_lifecycle(monke
         active_profile=active_profile,
         talk_theme_output_settings=talk_theme_output_settings,
         window_host=window_host,
+        native_scenes_enabled=True,
     )
 
     assert events == [
