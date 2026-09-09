@@ -113,11 +113,9 @@ def test_library_qml_loads_catalog_and_downloads_sections(tmp_path, size) -> Non
     assert "Library" in _visible_texts(widget.rootObject())
     assert "Sample song" in _visible_texts(widget.rootObject())
 
-    search_input = widget.rootObject().findChild(QObject, "librarySearchInput")
     search_field = widget.rootObject().findChild(QObject, "librarySearchField")
-    assert search_input is not None
     assert search_field is not None
-    assert search_input.property("activeFocus") is False
+    assert search_field.property("activeFocus") is False
     search_icon_area = search_field.mapToScene(QPointF(10, search_field.height() / 2))
     QTest.mouseClick(
         widget,
@@ -125,7 +123,7 @@ def test_library_qml_loads_catalog_and_downloads_sections(tmp_path, size) -> Non
         pos=QPoint(round(search_icon_area.x()), round(search_icon_area.y())),
     )
     _APP.processEvents()
-    assert search_input.property("activeFocus") is True
+    assert search_field.property("activeFocus") is True
     inside = search_field.mapToScene(QPointF(search_field.width() / 2, search_field.height() / 2))
     QTest.mouseClick(
         widget,
@@ -133,14 +131,14 @@ def test_library_qml_loads_catalog_and_downloads_sections(tmp_path, size) -> Non
         pos=QPoint(round(inside.x()), round(inside.y())),
     )
     _APP.processEvents()
-    assert search_input.property("activeFocus") is True
+    assert search_field.property("activeFocus") is True
     QTest.mouseClick(
         widget,
         Qt.MouseButton.LeftButton,
         pos=QPoint(widget.width() - 24, widget.height() - 24),
     )
     _APP.processEvents()
-    assert search_input.property("activeFocus") is False
+    assert search_field.property("activeFocus") is False
 
     bridge.update_state(
         active_section="downloads",

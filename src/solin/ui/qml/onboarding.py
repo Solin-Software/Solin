@@ -860,6 +860,7 @@ class OnboardingQmlHost(QQuickWidget):
                 )
             },
             mouse_tracking=True,
+            dismiss_text_focus_on_pointer_press=True,
         )
         if language_manager is not None:
             language_manager.language_changed.connect(

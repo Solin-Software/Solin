@@ -4,13 +4,14 @@ import os
 from collections.abc import Mapping
 from typing import Any, cast
 
-from PySide6.QtCore import QEvent, QObject, Qt
+from PySide6.QtCore import QEvent, QObject, Qt, Slot
 from PySide6.QtGui import QColor, QMouseEvent, QSurfaceFormat
 from PySide6.QtQuick import QQuickItem
 from PySide6.QtQuickControls2 import QQuickStyle
 from PySide6.QtQuickWidgets import QQuickWidget
 
 from solin.styles.theme import PALETTE, QML_THEME
+from solin.ui.helpers import QmlPointerCursorState
 from solin.ui.qml.loader import QmlLoadHandle
 
 _QML_CONTROLS_STYLE = "Basic"
@@ -53,6 +54,29 @@ class _TextFocusDismissFilter(QObject):
                 return current
             current = current.parentItem()
         return None
+
+
+class _PointerCursorBridge(QObject):
+    """Apply QML pointer hints to every native window owned by a QQuickWidget."""
+
+    def __init__(self, widget: QQuickWidget) -> None:
+        super().__init__(widget)
+        self._widget = widget
+        self._state = QmlPointerCursorState(widget)
+        widget.installEventFilter(self)
+
+    @Slot()
+    def enter(self) -> None:
+        self._state.enter()
+
+    @Slot()
+    def exit(self) -> None:
+        self._state.exit()
+
+    def eventFilter(self, watched, event):  # noqa: N802 - Qt override
+        if watched is self._widget and event.type() == QEvent.Type.Leave:
+            self._state.reset()
+        return False
 
 
 def current_qml_theme() -> dict[str, Any]:
@@ -101,6 +125,10 @@ def configure_qml_host(
     widget.setFormat(surface_format)
     widget.setClearColor(clear_color if isinstance(clear_color, QColor) else QColor(clear_color))
     widget.setMouseTracking(mouse_tracking)
+    pointer_cursor = None
+    if mouse_tracking:
+        pointer_cursor = _PointerCursorBridge(widget)
+        cast(Any, widget)._qml_pointer_cursor_bridge = pointer_cursor
     if dismiss_text_focus_on_pointer_press:
         focus_filter = _TextFocusDismissFilter(widget)
         widget.installEventFilter(focus_filter)
@@ -114,6 +142,8 @@ def configure_qml_host(
 
     context = widget.rootContext()
     merged_context: dict[str, Any] = {"appTheme": current_qml_theme()}
+    if pointer_cursor is not None:
+        merged_context["appPointerCursor"] = pointer_cursor
     merged_context.update(context_properties or {})
     for name, value in merged_context.items():
         context.setContextProperty(name, value)

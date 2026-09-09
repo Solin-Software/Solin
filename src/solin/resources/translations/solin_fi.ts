@@ -4,24 +4,20 @@
 <context>
     <name>AboutSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/about_section.py" line="+48"/>
         <source>Audio &amp; Video app for Kingdom Hall meetings.</source>
-        <translation>Ääni ja video -sovellus valtakunnansalin kokouksiin.</translation>
+        <translation type="vanished">Ääni ja video -sovellus valtakunnansalin kokouksiin.</translation>
     </message>
     <message>
-        <location line="+10"/>
         <source>Official Website</source>
-        <translation>Virallinen verkkosivusto</translation>
+        <translation type="vanished">Virallinen verkkosivusto</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Changelog</source>
-        <translation>Muutosloki</translation>
+        <translation type="vanished">Muutosloki</translation>
     </message>
     <message>
-        <location line="+14"/>
         <source>This app is independent and is not affiliated with or endorsed by the Watch Tower Bible and Tract Society of Pennsylvania or any of its associated organizations.</source>
-        <translation>Tämä sovellus on itsenäinen, eikä sillä ole yhteyttä Watch Tower Bible and Tract Society of Pennsylvaniaan tai sen järjestöihin, eivätkä ne tue sitä.</translation>
+        <translation type="vanished">Tämä sovellus on itsenäinen, eikä sillä ole yhteyttä Watch Tower Bible and Tract Society of Pennsylvaniaan tai sen järjestöihin, eivätkä ne tue sitä.</translation>
     </message>
 </context>
 <context>
@@ -271,60 +267,60 @@
 <context>
     <name>AutoKeyEditorDialog</name>
     <message>
-        <location filename="../../widgets/settings/auto_key_dialog.py" line="+125"/>
+        <location filename="../../qml/SettingsShortcutDialog.qml" line="+53"/>
         <source>Automatic Shortcut</source>
         <translation>Automaattinen pikanäppäin</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+12"/>
         <source>Choose an app event and press the shortcut to send.</source>
         <translation>Valitse sovellustapahtuma ja paina pikanäppäintä, joka lähetetään.</translation>
     </message>
     <message>
-        <location line="+45"/>
+        <location line="+9"/>
+        <location line="+15"/>
         <source>Event</source>
         <translation>Tapahtuma</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+67"/>
+        <location line="+7"/>
         <source>Shortcut</source>
         <translation>Pikanäppäin</translation>
     </message>
     <message>
-        <location line="+12"/>
-        <location line="+95"/>
+        <location line="+35"/>
         <source>Click the field, then press one shortcut.</source>
         <translation>Napsauta kenttää ja paina sitten pikanäppäintä.</translation>
     </message>
     <message>
-        <location line="-86"/>
+        <location line="+12"/>
         <source>Enabled</source>
         <translation>Käytössä</translation>
     </message>
     <message>
-        <location line="+18"/>
+        <location line="+53"/>
         <source>Cancel</source>
         <translation>Peruuta</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+7"/>
         <source>Save</source>
         <translation>Tallenna</translation>
     </message>
     <message>
-        <location line="+54"/>
         <source>Press a shortcut before saving.</source>
-        <translation>Paina pikanäppäintä ennen tallentamista.</translation>
+        <translation type="vanished">Paina pikanäppäintä ennen tallentamista.</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="-109"/>
+        <location line="+36"/>
         <source>Listening... press one shortcut.</source>
         <translation>Kuunnellaan... paina pikanäppäintä.</translation>
     </message>
     <message>
-        <location line="+13"/>
         <source>Shortcut captured.</source>
-        <translation>Pikanäppäin tallennettu.</translation>
+        <translation type="vanished">Pikanäppäin tallennettu.</translation>
     </message>
 </context>
 <context>
@@ -353,109 +349,87 @@
 <context>
     <name>AutoKeysSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/auto_keys_section.py" line="+59"/>
         <source>Automatic Shortcuts</source>
-        <translation>Automaattiset pikanäppäimet</translation>
+        <translation type="vanished">Automaattiset pikanäppäimet</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Sends keyboard shortcuts when visual media changes state.</source>
-        <translation>Lähettää pikanäppäinkomentoja, kun visuaalisen median tila muuttuu.</translation>
+        <translation type="vanished">Lähettää pikanäppäinkomentoja, kun visuaalisen median tila muuttuu.</translation>
     </message>
     <message>
-        <location line="+24"/>
         <source>Create one or more shortcuts for start, end, pause and resume events.</source>
-        <translation>Luo yksi tai useampi pikanäppäin aloitus-, lopetus-, tauko- ja jatkamistapahtumia varten.</translation>
+        <translation type="vanished">Luo yksi tai useampi pikanäppäin aloitus-, lopetus-, tauko- ja jatkamistapahtumia varten.</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>No shortcuts configured.</source>
-        <translation>Pikanäppäimiä ei ole määritetty.</translation>
+        <translation type="vanished">Pikanäppäimiä ei ole määritetty.</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>Add shortcut</source>
-        <translation>Lisää pikanäppäin</translation>
+        <translation type="vanished">Lisää pikanäppäin</translation>
     </message>
     <message>
-        <location line="+131"/>
         <source>Enabled</source>
-        <translation>Käytössä</translation>
+        <translation type="vanished">Käytössä</translation>
     </message>
     <message>
-        <location line="+0"/>
         <source>Disabled</source>
-        <translation>Ei käytössä</translation>
+        <translation type="vanished">Ei käytössä</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Edit</source>
-        <translation>Muokkaa</translation>
+        <translation type="vanished">Muokkaa</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Delete</source>
-        <translation>Poista</translation>
+        <translation type="vanished">Poista</translation>
     </message>
 </context>
 <context>
     <name>AutoShareSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/auto_share_section.py" line="+55"/>
         <source>Auto Screen Share</source>
-        <translation>Automaattinen näytönjako</translation>
+        <translation type="vanished">Automaattinen näytönjako</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Automatically shares screen via hotkeys when projecting media.</source>
-        <translation>Jakaa näytön automaattisesti pikanäppäimillä mediaa projisoitaessa.</translation>
+        <translation type="vanished">Jakaa näytön automaattisesti pikanäppäimillä mediaa projisoitaessa.</translation>
     </message>
     <message>
-        <location line="+30"/>
         <source>Share hotkey</source>
-        <translation>Jakamisen pikanäppäin</translation>
+        <translation type="vanished">Jakamisen pikanäppäin</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Uses Zoom&apos;s single start/stop screen-share shortcut.</source>
-        <translation>Käyttää Zoomin yhtä näytönjaon aloitus-/lopetuspikanäppäintä.</translation>
+        <translation type="vanished">Käyttää Zoomin yhtä näytönjaon aloitus-/lopetuspikanäppäintä.</translation>
     </message>
     <message>
-        <location line="+10"/>
-        <location line="+241"/>
-        <location line="+9"/>
         <source>Not configured</source>
-        <translation>Ei määritetty</translation>
+        <translation type="vanished">Ei määritetty</translation>
     </message>
     <message>
-        <location line="-243"/>
         <source>Edit</source>
-        <translation>Muokkaa</translation>
+        <translation type="vanished">Muokkaa</translation>
     </message>
     <message>
-        <location line="+20"/>
         <source>Accessibility permission</source>
-        <translation>Käyttöapu-oikeus</translation>
+        <translation type="vanished">Käyttöapu-oikeus</translation>
     </message>
     <message>
-        <location line="+14"/>
         <source>Open Settings</source>
-        <translation>Avaa asetukset</translation>
+        <translation type="vanished">Avaa asetukset</translation>
     </message>
     <message>
-        <location line="+35"/>
         <source>Share target</source>
-        <translation>Jakamisen kohde</translation>
+        <translation type="vanished">Jakamisen kohde</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Where Solin should click after Zoom&apos;s share shortcut opens the dialog.</source>
-        <translation>Kohta, johon Solinin tulee klikata sen jälkeen, kun Zoomin jakopikanäppäin avaa ikkunan.</translation>
+        <translation type="vanished">Kohta, johon Solinin tulee klikata sen jälkeen, kun Zoomin jakopikanäppäin avaa ikkunan.</translation>
     </message>
     <message>
-        <location line="+167"/>
         <source>Configured</source>
-        <translation>Määritetty</translation>
+        <translation type="vanished">Määritetty</translation>
     </message>
     <message>
         <source>Click Position</source>
@@ -466,33 +440,28 @@
         <translation type="vanished">Sijainti, jota napsautetaan jakovalintaikkunan avautumisen jälkeen kohteen valitsemiseksi.</translation>
     </message>
     <message>
-        <location line="-141"/>
         <source>Configure</source>
-        <translation>Määritä</translation>
+        <translation type="vanished">Määritä</translation>
     </message>
     <message>
-        <location line="+122"/>
         <source>Share Hotkey</source>
-        <translation>Jakamisen pikanäppäin</translation>
+        <translation type="vanished">Jakamisen pikanäppäin</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Press the Zoom shortcut that starts and stops screen sharing.</source>
-        <translation>Paina Zoomin pikanäppäintä, jolla näytönjako aloitetaan ja lopetetaan.</translation>
+        <translation type="vanished">Paina Zoomin pikanäppäintä, jolla näytönjako aloitetaan ja lopetetaan.</translation>
     </message>
     <message>
         <source>Position: {x}, {y}</source>
         <translation type="vanished">Sijainti: {x}, {y}</translation>
     </message>
     <message>
-        <location line="+35"/>
         <source>Solin can send the automatic click.</source>
-        <translation>Solin voi lähettää automaattisen napsautuksen.</translation>
+        <translation type="vanished">Solin voi lähettää automaattisen napsautuksen.</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>Allow Solin in macOS Accessibility so automatic clicks can work.</source>
-        <translation>Salli Solin macOS:n Käyttöavussa, jotta automaattiset napsautukset toimivat.</translation>
+        <translation type="vanished">Salli Solin macOS:n Käyttöavussa, jotta automaattiset napsautukset toimivat.</translation>
     </message>
 </context>
 <context>
@@ -907,14 +876,12 @@
 <context>
     <name>CameraSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/camera_section.py" line="+13"/>
         <source>Camera</source>
-        <translation>Kamera</translation>
+        <translation type="vanished">Kamera</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Shows a camera button in the live tools toolbar.</source>
-        <translation>Näyttää kamerapainikkeen livetyökalujen palkissa.</translation>
+        <translation type="vanished">Näyttää kamerapainikkeen livetyökalujen palkissa.</translation>
     </message>
 </context>
 <context>
@@ -1032,6 +999,17 @@
         <location line="+16"/>
         <source>Enable projection aspect first</source>
         <translation>Ota ensin esityksen kuvasuhde käyttöön</translation>
+    </message>
+</context>
+<context>
+    <name>IntegrationSettings</name>
+    <message numerus="yes">
+        <location filename="../../ui/qml/settings/integrations.py" line="+330"/>
+        <source>%n NDI source found.</source>
+        <translation>
+            <numerusform>%n NDI-lähde löytyi.</numerusform>
+            <numerusform>%n NDI-lähdettä löytyi.</numerusform>
+        </translation>
     </message>
 </context>
 <context>
@@ -1178,19 +1156,16 @@
 <context>
     <name>LanguageSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/language_section.py" line="+22"/>
         <source>Interface</source>
-        <translation>Käyttöliittymä</translation>
+        <translation type="vanished">Käyttöliittymä</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>JW Media</source>
-        <translation>JW-media</translation>
+        <translation type="vanished">JW-media</translation>
     </message>
     <message>
-        <location line="+36"/>
         <source>(same as interface)</source>
-        <translation>(sama kuin käyttöliittymä)</translation>
+        <translation type="vanished">(sama kuin käyttöliittymä)</translation>
     </message>
 </context>
 <context>
@@ -1589,13 +1564,13 @@
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../../main_window.py" line="+551"/>
+        <location filename="../../main_window.py" line="+565"/>
         <location filename="../../controllers/main_window_nav.py" line="+11"/>
         <source>Solin</source>
         <translation>Solin</translation>
     </message>
     <message>
-        <location line="+694"/>
+        <location line="+717"/>
         <location filename="../../controllers/main_window_nav.py" line="+27"/>
         <source>Scenes</source>
         <translation>Näkymät</translation>
@@ -1636,7 +1611,7 @@
         <translation>Tallennus käynnissä</translation>
     </message>
     <message>
-        <location line="+379"/>
+        <location line="+381"/>
         <source>Pause playback before changing the projected content.</source>
         <translation>Keskeytä toisto ennen esitettävän sisällön vaihtamista.</translation>
     </message>
@@ -2493,69 +2468,56 @@ Solin yrittää edelleen yhdistää uudelleen nykyisestä kohdasta.
 <context>
     <name>MediaSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/media_section.py" line="+23"/>
         <source>Auto-download on play</source>
-        <translation>Lataa automaattisesti toistettaessa</translation>
+        <translation type="vanished">Lataa automaattisesti toistettaessa</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Downloads the playing media for offline use.</source>
-        <translation>Lataa toistettavan median offline-käyttöä varten.</translation>
+        <translation type="vanished">Lataa toistettavan median offline-käyttöä varten.</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Auto-download weekly study</source>
-        <translation>Lataa viikon kokouksen aineisto automaattisesti</translation>
+        <translation type="vanished">Lataa viikon kokouksen aineisto automaattisesti</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Downloads this week’s and next week’s meeting media.</source>
-        <translation>Lataa tämän ja ensi viikon kokouksen median.</translation>
+        <translation type="vanished">Lataa tämän ja ensi viikon kokouksen median.</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Song Announcement Mode</source>
-        <translation>Laulun ilmoitustila</translation>
+        <translation type="vanished">Laulun ilmoitustila</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Song starts muted for title display. Press play to start.</source>
-        <translation>Laulu alkaa mykistettynä otsikon näyttämistä varten. Paina toista aloittaaksesi.</translation>
+        <translation type="vanished">Laulu alkaa mykistettynä otsikon näyttämistä varten. Paina toista aloittaaksesi.</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Automatic background song</source>
-        <translation>Automaattinen taustalaulu</translation>
+        <translation type="vanished">Automaattinen taustalaulu</translation>
     </message>
     <message>
-        <location line="+13"/>
         <source>Start videos paused</source>
-        <translation>Aloita videot tauotettuna</translation>
+        <translation type="vanished">Aloita videot tauotettuna</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Videos open paused so you can start them manually.</source>
-        <translation>Videot avautuvat tauotettuina, jotta voit käynnistää ne manuaalisesti.</translation>
+        <translation type="vanished">Videot avautuvat tauotettuina, jotta voit käynnistää ne manuaalisesti.</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Playback protection</source>
-        <translation>Toiston suojaus</translation>
+        <translation type="vanished">Toiston suojaus</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Prevents media changes and seeking while audio or video is playing. Pause first to make changes.</source>
-        <translation>Estää median vaihtamisen ja siirtymisen äänen tai videon toiston aikana. Keskeytä toisto ensin, jotta voit tehdä muutoksia.</translation>
+        <translation type="vanished">Estää median vaihtamisen ja siirtymisen äänen tai videon toiston aikana. Keskeytä toisto ensin, jotta voit tehdä muutoksia.</translation>
     </message>
     <message>
-        <location line="+35"/>
         <source>Configure the meeting day/time before automatic playback can start.</source>
-        <translation>Määritä kokouksen päivä ja aika ennen automaattisen toiston aloittamista.</translation>
+        <translation type="vanished">Määritä kokouksen päivä ja aika ennen automaattisen toiston aloittamista.</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Plays audio songs before configured meetings and fades out before start.</source>
-        <translation>Toistaa äänilauluja ennen määritettyjä kokouksia ja häivyttää äänen ennen alkua.</translation>
+        <translation type="vanished">Toistaa äänilauluja ennen määritettyjä kokouksia ja häivyttää äänen ennen alkua.</translation>
     </message>
 </context>
 <context>
@@ -2710,77 +2672,60 @@ Manuaalisesti lisätty sisältö, leikkaukset, rajaukset ja laajennettu tila sä
 <context>
     <name>MeetingScheduleSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/meeting_schedule_section.py" line="+528"/>
-        <location line="+334"/>
         <source>Used by automatic features that depend on the meeting start time.</source>
-        <translation>Automaattiset ominaisuudet käyttävät tätä kokouksen alkamisajan perusteella.</translation>
+        <translation type="vanished">Automaattiset ominaisuudet käyttävät tätä kokouksen alkamisajan perusteella.</translation>
     </message>
     <message>
-        <location line="-275"/>
-        <location line="+285"/>
         <source>Fill in from jw.org</source>
-        <translation>Täytä jw.orgista</translation>
+        <translation type="vanished">Täytä jw.orgista</translation>
     </message>
     <message>
-        <location line="-270"/>
-        <location line="+271"/>
         <source>Congregation name</source>
-        <translation>Seurakunnan nimi</translation>
+        <translation type="vanished">Seurakunnan nimi</translation>
     </message>
     <message>
-        <location line="-174"/>
         <source>Searching jw.org…</source>
-        <translation>Haetaan jw.orgista…</translation>
+        <translation type="vanished">Haetaan jw.orgista…</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>No congregation found with that name.</source>
-        <translation>Tällä nimellä ei löytynyt seurakuntaa.</translation>
+        <translation type="vanished">Tällä nimellä ei löytynyt seurakuntaa.</translation>
     </message>
     <message>
-        <location line="-6"/>
         <source>Reading the meeting times…</source>
-        <translation>Luetaan kokousaikoja…</translation>
+        <translation type="vanished">Luetaan kokousaikoja…</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>jw.org does not publish meeting times for this congregation.</source>
-        <translation>jw.org ei julkaise tämän seurakunnan kokousaikoja.</translation>
+        <translation type="vanished">jw.org ei julkaise tämän seurakunnan kokousaikoja.</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Too many searches in a row. Wait a moment and type again.</source>
-        <translation>Liian monta hakua peräkkäin. Odota hetki ja kirjoita uudelleen.</translation>
+        <translation type="vanished">Liian monta hakua peräkkäin. Odota hetki ja kirjoita uudelleen.</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Could not reach jw.org. Check the connection and try again.</source>
-        <translation>jw.orgiin ei saatu yhteyttä. Tarkista yhteys ja yritä uudelleen.</translation>
+        <translation type="vanished">jw.orgiin ei saatu yhteyttä. Tarkista yhteys ja yritä uudelleen.</translation>
     </message>
     <message>
-        <location line="+13"/>
         <source>Search your congregation to fill the days and times below.</source>
-        <translation>Hae seurakuntasi, niin alla olevat päivät ja ajat täyttyvät.</translation>
+        <translation type="vanished">Hae seurakuntasi, niin alla olevat päivät ja ajat täyttyvät.</translation>
     </message>
     <message>
         <source>Midweek meeting</source>
         <translation type="vanished">Viikkokokous</translation>
     </message>
     <message>
-        <location line="-193"/>
-        <location line="+320"/>
         <source>Day and time for the midweek meeting.</source>
-        <translation>Viikkokokouksen päivä ja aika.</translation>
+        <translation type="vanished">Viikkokokouksen päivä ja aika.</translation>
     </message>
     <message>
         <source>Weekend meeting</source>
         <translation type="vanished">Viikonlopun kokous</translation>
     </message>
     <message>
-        <location line="-313"/>
-        <location line="+317"/>
         <source>Day and time for the weekend meeting.</source>
-        <translation>Viikonlopun kokouksen päivä ja aika.</translation>
+        <translation type="vanished">Viikonlopun kokouksen päivä ja aika.</translation>
     </message>
     <message>
         <source>Not configured</source>
@@ -3111,130 +3056,103 @@ Manuaalisesti lisätty sisältö, leikkaukset, rajaukset ja laajennettu tila sä
 <context>
     <name>ObsSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/obs_section.py" line="+50"/>
         <source>OBS Studio</source>
-        <translation>OBS Studio</translation>
+        <translation type="vanished">OBS Studio</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Automatically switches scenes during projection</source>
-        <translation>Vaihtaa skenejä automaattisesti heijastuksen aikana</translation>
+        <translation type="vanished">Vaihtaa skenejä automaattisesti heijastuksen aikana</translation>
     </message>
     <message>
-        <location line="+29"/>
         <source>Disconnected</source>
-        <translation>Yhteys katkaistu</translation>
+        <translation type="vanished">Yhteys katkaistu</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>WebSocket Port</source>
-        <translation>WebSocket-portti</translation>
+        <translation type="vanished">WebSocket-portti</translation>
     </message>
     <message>
-        <location line="+14"/>
         <source>Password (optional)</source>
-        <translation>Salasana (valinnainen)</translation>
+        <translation type="vanished">Salasana (valinnainen)</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>Leave blank if no password is set</source>
-        <translation>Jätä tyhjäksi, jos salasanaa ei ole asetettu</translation>
+        <translation type="vanished">Jätä tyhjäksi, jos salasanaa ei ole asetettu</translation>
     </message>
     <message>
-        <location line="+9"/>
-        <location line="+363"/>
         <source>● Changes saved automatically</source>
-        <translation>● Muutokset tallennetaan automaattisesti</translation>
+        <translation type="vanished">● Muutokset tallennetaan automaattisesti</translation>
     </message>
     <message>
-        <location line="-327"/>
         <source>Program stream (NDI)</source>
-        <translation>Ohjelmalähetys (NDI)</translation>
+        <translation type="vanished">Ohjelmalähetys (NDI)</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Receive the DistroAV/NDI output from OBS as a live projection.</source>
-        <translation>Vastaanota DistroAV/NDI-lähtö OBS:stä suorana heijastuksena.</translation>
+        <translation type="vanished">Vastaanota DistroAV/NDI-lähtö OBS:stä suorana heijastuksena.</translation>
     </message>
     <message>
-        <location line="+21"/>
         <source>Enable Main Output in DistroAV, then select the NDI source shown by OBS.</source>
-        <translation>Ota käyttöön päälähtö (Main Output) DistroAV:ssä ja valitse sitten OBS:n näyttämä NDI-lähde.</translation>
+        <translation type="vanished">Ota käyttöön päälähtö (Main Output) DistroAV:ssä ja valitse sitten OBS:n näyttämä NDI-lähde.</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>Available NDI sources</source>
-        <translation>Käytettävissä olevat NDI-lähteet</translation>
+        <translation type="vanished">Käytettävissä olevat NDI-lähteet</translation>
     </message>
     <message>
-        <location line="+15"/>
         <source>No sources loaded</source>
-        <translation>Lähteitä ei ole ladattu</translation>
+        <translation type="vanished">Lähteitä ei ole ladattu</translation>
     </message>
     <message>
-        <location line="+6"/>
-        <location line="+335"/>
-        <location line="+35"/>
         <source>Find sources</source>
-        <translation>Etsi lähteitä</translation>
+        <translation type="vanished">Etsi lähteitä</translation>
     </message>
     <message>
-        <location line="-338"/>
         <source>Default scene (idle)</source>
-        <translation>Oletuskohtaus (valmiustila)</translation>
+        <translation type="vanished">Oletuskohtaus (valmiustila)</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Scene shown when nothing is being projected.</source>
-        <translation>Kohtaus, joka näkyy, kun mitään ei heijasteta.</translation>
+        <translation type="vanished">Kohtaus, joka näkyy, kun mitään ei heijasteta.</translation>
     </message>
     <message>
-        <location line="+13"/>
         <source>Media window scene</source>
-        <translation>Mediaikkunakohtaus</translation>
+        <translation type="vanished">Mediaikkunakohtaus</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Scene that captures the projection monitor. Activated when content is displayed.</source>
-        <translation>Kohtaus, joka sieppaa heijastusnäytön. Aktivoituu, kun sisältöä näytetään.</translation>
+        <translation type="vanished">Kohtaus, joka sieppaa heijastusnäytön. Aktivoituu, kun sisältöä näytetään.</translation>
     </message>
     <message>
-        <location line="+206"/>
         <source>✓ Configuration saved — reconnecting…</source>
-        <translation>✓ Asetukset tallennettu — yhdistetään uudelleen…</translation>
+        <translation type="vanished">✓ Asetukset tallennettu — yhdistetään uudelleen…</translation>
     </message>
     <message>
-        <location line="+57"/>
         <source>NDI receiver is not available.</source>
-        <translation>NDI-vastaanotin ei ole käytettävissä.</translation>
+        <translation type="vanished">NDI-vastaanotin ei ole käytettävissä.</translation>
     </message>
     <message>
-        <location line="+5"/>
         <source>Searching…</source>
-        <translation>Etsitään...</translation>
+        <translation type="vanished">Etsitään...</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Looking for NDI sources on this network.</source>
-        <translation>Etsitään NDI-lähteitä tästä verkosta.</translation>
+        <translation type="vanished">Etsitään NDI-lähteitä tästä verkosta.</translation>
     </message>
     <message numerus="yes">
-        <location line="+25"/>
         <source>%n NDI source found.</source>
-        <translation>
+        <translation type="vanished">
             <numerusform>%n NDI-lähde löytyi.</numerusform>
             <numerusform>%n NDI-lähdettä löytyi.</numerusform>
         </translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>No NDI sources found</source>
-        <translation>NDI-lähteitä ei löytynyt</translation>
+        <translation type="vanished">NDI-lähteitä ei löytynyt</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>No NDI sources found. Check that DistroAV Main Output is enabled in OBS.</source>
-        <translation>NDI-lähteitä ei löytynyt. Varmista, että DistroAV:n päälähtö on käytössä OBS:ssä.</translation>
+        <translation type="vanished">NDI-lähteitä ei löytynyt. Varmista, että DistroAV:n päälähtö on käytössä OBS:ssä.</translation>
     </message>
     <message>
         <source>Connecting…</source>
@@ -3253,9 +3171,8 @@ Manuaalisesti lisätty sisältö, leikkaukset, rajaukset ja laajennettu tila sä
         <translation type="vanished">Yhteysvirhe</translation>
     </message>
     <message>
-        <location line="+72"/>
         <source>— Select scene —</source>
-        <translation>— Valitse kohtaus —</translation>
+        <translation type="vanished">— Valitse kohtaus —</translation>
     </message>
 </context>
 <context>
@@ -3301,7 +3218,7 @@ Manuaalisesti lisätty sisältö, leikkaukset, rajaukset ja laajennettu tila sä
         <translation>Profiilin nimi</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+10"/>
         <source>Example: Main Hall</source>
         <translation>Esimerkki: Pääsali</translation>
     </message>
@@ -3334,13 +3251,13 @@ Manuaalisesti lisätty sisältö, leikkaukset, rajaukset ja laajennettu tila sä
     </message>
     <message>
         <location line="+5"/>
-        <location line="+406"/>
+        <location line="+414"/>
         <source>Meeting schedule</source>
         <translation>Kokousaikataulu</translation>
     </message>
     <message>
-        <location line="-400"/>
-        <location line="+1161"/>
+        <location line="-408"/>
+        <location line="+1150"/>
         <source>Congregation</source>
         <translation>Seurakunta</translation>
     </message>
@@ -3349,18 +3266,18 @@ Manuaalisesti lisätty sisältö, leikkaukset, rajaukset ja laajennettu tila sä
         <translation type="vanished">Valinnainen</translation>
     </message>
     <message>
-        <location line="-1150"/>
+        <location line="-1139"/>
         <source>Find your congregation to fill the meeting days and times from jw.org.</source>
         <translation>Hae seurakuntasi, niin kokouspäivät ja -ajat täyttyvät jw.orgista.</translation>
     </message>
     <message>
         <location line="+8"/>
-        <location line="+375"/>
+        <location line="+383"/>
         <source>Meeting media</source>
         <translation>Kokouksen media</translation>
     </message>
     <message>
-        <location line="-364"/>
+        <location line="-372"/>
         <source>Download automatically</source>
         <translation>Lataa automaattisesti</translation>
     </message>
@@ -3371,12 +3288,12 @@ Manuaalisesti lisätty sisältö, leikkaukset, rajaukset ja laajennettu tila sä
     </message>
     <message>
         <location line="+8"/>
-        <location line="+357"/>
+        <location line="+365"/>
         <source>Manual download</source>
         <translation>Manuaalinen lataus</translation>
     </message>
     <message>
-        <location line="-356"/>
+        <location line="-364"/>
         <source>Only download media when you click the cloud button.</source>
         <translation>Lataa media vain, kun napsautat pilvipainiketta.</translation>
     </message>
@@ -3421,12 +3338,12 @@ Manuaalisesti lisätty sisältö, leikkaukset, rajaukset ja laajennettu tila sä
         <translation>WebSocket-portti</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+16"/>
         <source>Password (optional)</source>
         <translation>Salasana (valinnainen)</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+16"/>
         <source>Connecting…</source>
         <translation>Yhdistetään…</translation>
     </message>
@@ -3556,8 +3473,8 @@ Manuaalisesti lisätty sisältö, leikkaukset, rajaukset ja laajennettu tila sä
         <translation>Tämä ja ensi viikko</translation>
     </message>
     <message>
-        <location line="-393"/>
-        <location line="+400"/>
+        <location line="-401"/>
+        <location line="+408"/>
         <location line="+5"/>
         <location line="+9"/>
         <source>Not configured</source>
@@ -3579,7 +3496,7 @@ Manuaalisesti lisätty sisältö, leikkaukset, rajaukset ja laajennettu tila sä
         <translation>Automaattinen jakaminen valmis</translation>
     </message>
     <message>
-        <location line="+120"/>
+        <location line="+101"/>
         <source>Finishing…</source>
         <translation>Viimeistellään…</translation>
     </message>
@@ -3590,17 +3507,17 @@ Manuaalisesti lisätty sisältö, leikkaukset, rajaukset ja laajennettu tila sä
     </message>
     <message>
         <location line="+303"/>
-        <location line="+167"/>
+        <location line="+149"/>
         <source>Close</source>
         <translation>Sulje</translation>
     </message>
     <message>
-        <location line="-159"/>
+        <location line="-135"/>
         <source>Search by congregation name</source>
         <translation>Hae seurakunnan nimellä</translation>
     </message>
     <message>
-        <location filename="../../ui/qml/onboarding.py" line="+69"/>
+        <location filename="../../ui/qml/onboarding.py" line="+73"/>
         <source>Searching jw.org…</source>
         <translation>Haetaan jw.orgista…</translation>
     </message>
@@ -3609,17 +3526,17 @@ Manuaalisesti lisätty sisältö, leikkaukset, rajaukset ja laajennettu tila sä
         <translation type="vanished">Kokouspäivät ja -ajat tulevat jw.orgista.</translation>
     </message>
     <message>
-        <location filename="../../qml/OnboardingView.qml" line="+88"/>
+        <location filename="../../qml/OnboardingView.qml" line="+64"/>
         <source>Remove congregation</source>
         <translation>Poista seurakunta</translation>
     </message>
     <message>
-        <location line="+78"/>
+        <location line="+83"/>
         <source>Search languages</source>
         <translation>Etsi kieliä</translation>
     </message>
     <message>
-        <location filename="../../ui/qml/onboarding.py" line="+255"/>
+        <location filename="../../ui/qml/onboarding.py" line="+259"/>
         <source>Enter a port between 1 and 65535.</source>
         <translation>Anna portti väliltä 1–65535.</translation>
     </message>
@@ -3629,7 +3546,7 @@ Manuaalisesti lisätty sisältö, leikkaukset, rajaukset ja laajennettu tila sä
         <translation>Jakamiskohteen valitsin ei ole käytettävissä.</translation>
     </message>
     <message>
-        <location line="+139"/>
+        <location line="+140"/>
         <source>Enter a profile name.</source>
         <translation>Anna profiilin nimi.</translation>
     </message>
@@ -3664,7 +3581,7 @@ Manuaalisesti lisätty sisältö, leikkaukset, rajaukset ja laajennettu tila sä
         <translation>Profiilin luominen ei onnistunut.</translation>
     </message>
     <message>
-        <location line="-542"/>
+        <location line="-547"/>
         <source>jw.org does not publish meeting times for this congregation.</source>
         <translation>jw.org ei julkaise tämän seurakunnan kokousaikoja.</translation>
     </message>
@@ -3689,7 +3606,7 @@ Manuaalisesti lisätty sisältö, leikkaukset, rajaukset ja laajennettu tila sä
         <translation>jw.orgiin ei saatu yhteyttä. Tarkista yhteys ja yritä uudelleen.</translation>
     </message>
     <message>
-        <location line="+685"/>
+        <location line="+690"/>
         <source>Allow Solin in macOS Accessibility settings.</source>
         <translation>Salli Solin macOS:n Käyttöapu-asetuksissa.</translation>
     </message>
@@ -5374,211 +5291,180 @@ Tätä toimintoa ei voi peruuttaa.</translation>
 <context>
     <name>RemoteControlSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/remote_control_section.py" line="+54"/>
-        <location line="+403"/>
         <source>Remote control</source>
-        <translation>Etäohjaus</translation>
+        <translation type="vanished">Etäohjaus</translation>
     </message>
     <message>
-        <location line="-402"/>
-        <location line="+404"/>
         <source>Control Solin securely from another device on this local network.</source>
-        <translation>Ohjaa Solinia suojatusti toiselta laitteelta tässä lähiverkossa.</translation>
+        <translation type="vanished">Ohjaa Solinia suojatusti toiselta laitteelta tässä lähiverkossa.</translation>
     </message>
     <message>
-        <location line="-388"/>
-        <location line="+390"/>
         <source>Network interface</source>
-        <translation>Verkkoliitäntä</translation>
+        <translation type="vanished">Verkkoliitäntä</translation>
     </message>
     <message>
-        <location line="-376"/>
-        <location line="+377"/>
         <source>Access credentials</source>
-        <translation>Kirjautumistiedot</translation>
+        <translation type="vanished">Kirjautumistiedot</translation>
     </message>
     <message>
-        <location line="-349"/>
-        <location line="+350"/>
         <source>Username</source>
-        <translation>Käyttäjätunnus</translation>
+        <translation type="vanished">Käyttäjätunnus</translation>
     </message>
     <message>
-        <location line="-345"/>
-        <location line="+346"/>
         <source>New password</source>
-        <translation>Uusi salasana</translation>
+        <translation type="vanished">Uusi salasana</translation>
     </message>
     <message>
-        <location line="-341"/>
-        <location line="+342"/>
         <source>Confirm password</source>
-        <translation>Vahvista salasana</translation>
+        <translation type="vanished">Vahvista salasana</translation>
     </message>
     <message>
-        <location line="-328"/>
-        <location line="+330"/>
         <source>Use at least %1 characters. Credentials belong only to this profile.</source>
-        <translation>Käytä vähintään %1 merkkiä. Kirjautumistiedot kuuluvat vain tälle profiilille.</translation>
+        <translation type="vanished">Käytä vähintään %1 merkkiä. Kirjautumistiedot kuuluvat vain tälle profiilille.</translation>
     </message>
     <message>
-        <location line="-323"/>
-        <location line="+327"/>
         <source>Save credentials</source>
-        <translation>Tallenna kirjautumistiedot</translation>
+        <translation type="vanished">Tallenna kirjautumistiedot</translation>
     </message>
     <message>
-        <location line="-298"/>
-        <location line="+300"/>
         <source>Copy address</source>
-        <translation>Kopioi osoite</translation>
+        <translation type="vanished">Kopioi osoite</translation>
     </message>
     <message>
-        <location line="-285"/>
-        <location line="+286"/>
         <source>Set up a device</source>
-        <translation>Määritä laite</translation>
+        <translation type="vanished">Määritä laite</translation>
     </message>
     <message>
-        <location line="-265"/>
         <source>Select a private network…</source>
-        <translation>Valitse yksityinen verkko…</translation>
+        <translation type="vanished">Valitse yksityinen verkko…</translation>
     </message>
     <message>
-        <location line="+30"/>
         <source>Choose a network and save credentials before enabling remote control.</source>
-        <translation>Valitse verkko ja tallenna kirjautumistiedot ennen etäohjauksen käyttöönottoa.</translation>
+        <translation type="vanished">Valitse verkko ja tallenna kirjautumistiedot ennen etäohjauksen käyttöönottoa.</translation>
     </message>
     <message>
-        <location line="+17"/>
         <source>The passwords do not match.</source>
-        <translation>Salasanat eivät täsmää.</translation>
+        <translation type="vanished">Salasanat eivät täsmää.</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Enter a new password to save.</source>
-        <translation>Anna uusi salasana tallennusta varten.</translation>
+        <translation type="vanished">Anna uusi salasana tallennusta varten.</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Check the username and use a password with at least %1 characters.</source>
-        <translation>Tarkista käyttäjätunnus ja käytä salasanaa, jossa on vähintään %1 merkkiä.</translation>
+        <translation type="vanished">Tarkista käyttäjätunnus ja käytä salasanaa, jossa on vähintään %1 merkkiä.</translation>
     </message>
     <message>
-        <location line="+31"/>
         <source>Configured as %1</source>
-        <translation>Määritetty muodossa %1</translation>
+        <translation type="vanished">Määritetty muodossa %1</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Not configured</source>
-        <translation>Ei määritetty</translation>
+        <translation type="vanished">Ei määritetty</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>Cancel</source>
-        <translation>Peruuta</translation>
+        <translation type="vanished">Peruuta</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Change</source>
-        <translation>Muuta</translation>
+        <translation type="vanished">Muuta</translation>
     </message>
     <message>
-        <location line="+20"/>
         <source>No network selected</source>
-        <translation>Verkkoa ei ole valittu</translation>
+        <translation type="vanished">Verkkoa ei ole valittu</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>Starting secure remote control…</source>
-        <translation>Käynnistetään suojattua etäohjausta…</translation>
+        <translation type="vanished">Käynnistetään suojattua etäohjausta…</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Ready to enable.</source>
-        <translation>Valmis otettavaksi käyttöön.</translation>
+        <translation type="vanished">Valmis otettavaksi käyttöön.</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Configuration required.</source>
-        <translation>Määritys vaaditaan.</translation>
+        <translation type="vanished">Määritys vaaditaan.</translation>
     </message>
 </context>
 <context>
     <name>RemoteControlSetupDialog</name>
     <message>
-        <location filename="../../widgets/remote_control_setup_dialog.py" line="+81"/>
         <source>Set up a device</source>
-        <translation>Määritä laite</translation>
+        <translation type="vanished">Määritä laite</translation>
     </message>
     <message>
-        <location line="+29"/>
+        <location filename="../../qml/SettingsRemoteSetup.qml" line="+43"/>
         <source>Set up Solin Remote</source>
         <translation>Määritä Solin Remote</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+47"/>
         <source>Scan once to open the secure setup on your phone or tablet.</source>
         <translation>Skannaa kerran avataksesi suojatun määrityksen puhelimellasi tai tabletillasi.</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+29"/>
         <source>Generating QR code…</source>
         <translation>Luodaan QR-koodia…</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="-5"/>
+        <location line="+21"/>
         <source>1  Scan the QR code</source>
         <translation>1  Skannaa QR-koodi</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+8"/>
         <source>Keep Solin open and connect both devices to the same local network. The guide explains the certificate and app installation.</source>
         <translation>Pidä Solin auki ja yhdistä molemmat laitteet samaan lähiverkkoon. Ohjeessa selitetään varmenteen ja sovelluksen asentaminen.</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+9"/>
+        <location line="+6"/>
         <source>Copy setup address</source>
         <translation>Kopioi asennusosoite</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+7"/>
         <source>On the first opening, the browser may show a privacy warning. Confirm that the local address matches, choose Advanced or Show Details, and continue only to this address. The warning disappears after the certificate is trusted.</source>
         <translation>Ensimmäisellä kerralla selain saattaa näyttää tietoturvavaroituksen. Varmista, että lähiverkko-osoite täsmää, valitse Lisäasetukset tai Näytä tiedot ja jatka vain tähän osoitteeseen. Varoitus poistuu, kun varmenne on luotettu.</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+15"/>
+        <location line="+12"/>
         <source>VERIFICATION CODE</source>
         <translation>VAHVISTUSKOODI</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+4"/>
         <source>Compare this code on the device before installing the certificate.</source>
         <translation>Vertaa tätä koodia laitteessa ennen varmenteen asentamista.</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+10"/>
+        <location line="+15"/>
         <source>Show full SHA-256 fingerprint</source>
         <translation>Näytä koko SHA-256-sormenjälki</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+27"/>
         <source>Save certificate…</source>
         <translation>Tallenna varmenne…</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+10"/>
         <source>Done</source>
         <translation>Valmis</translation>
     </message>
     <message>
-        <location line="+93"/>
+        <location filename="../../ui/qml/settings/remote.py" line="+182"/>
+        <location line="+179"/>
         <source>Could not generate the QR code. Copy the address instead.</source>
         <translation>QR-koodia ei voitu luoda. Kopioi sen sijaan osoite.</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+40"/>
         <source>Save Solin certificate</source>
         <translation>Tallenna Solin-varmenne</translation>
     </message>
@@ -5588,12 +5474,11 @@ Tätä toimintoa ei voi peruuttaa.</translation>
         <translation>Varmennetiedostot (*.cer)</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>Could not save certificate</source>
-        <translation>Varmenteen tallentaminen epäonnistui</translation>
+        <translation type="vanished">Varmenteen tallentaminen epäonnistui</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+8"/>
         <source>Choose another location and try again.</source>
         <translation>Valitse toinen sijainti ja yritä uudelleen.</translation>
     </message>
@@ -7325,24 +7210,20 @@ Lisää sisältöä, kamera tai toinen näkymä.</translation>
 <context>
     <name>ScreensSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/screens_section.py" line="+54"/>
         <source>Primary Screen (control)</source>
-        <translation>Päänäyttö (ohjaus)</translation>
+        <translation type="vanished">Päänäyttö (ohjaus)</translation>
     </message>
     <message>
-        <location line="+20"/>
         <source>No secondary screen detected. Connect an external monitor.</source>
-        <translation>Toissijaista näyttöä ei havaittu. Yhdistä ulkoinen näyttö.</translation>
+        <translation type="vanished">Toissijaista näyttöä ei havaittu. Yhdistä ulkoinen näyttö.</translation>
     </message>
     <message>
-        <location line="+27"/>
         <source>Secondary {n} (projection)</source>
-        <translation>Toissijainen {n} (heijastus)</translation>
+        <translation type="vanished">Toissijainen {n} (heijastus)</translation>
     </message>
     <message>
-        <location line="+18"/>
         <source>PROJECTION</source>
-        <translation>HEIJASTUS</translation>
+        <translation type="vanished">HEIJASTUS</translation>
     </message>
 </context>
 <context>
@@ -7371,67 +7252,57 @@ Lisää sisältöä, kamera tai toinen näkymä.</translation>
 <context>
     <name>SettingsWidget</name>
     <message>
-        <location filename="../../widgets/settings_widget.py" line="+277"/>
-        <location line="+265"/>
+        <location filename="../../qml/SettingsView.qml" line="+115"/>
         <source>Settings</source>
         <translation>Asetukset</translation>
     </message>
     <message>
-        <location line="-215"/>
-        <location line="+217"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+55"/>
         <source>Language</source>
         <translation>Kieli</translation>
     </message>
     <message>
-        <location line="-209"/>
-        <location line="+210"/>
         <source>Media</source>
-        <translation>Media</translation>
+        <translation type="vanished">Media</translation>
     </message>
     <message>
-        <location line="-202"/>
-        <location line="+203"/>
+        <location line="+20"/>
         <source>Meetings</source>
         <translation>Kokoukset</translation>
     </message>
     <message>
-        <location line="-195"/>
-        <location line="+196"/>
+        <location line="-4"/>
         <source>Folders</source>
         <translation>Kansiot</translation>
     </message>
     <message>
-        <location line="-188"/>
-        <location line="+189"/>
+        <location line="+87"/>
         <source>Remote access</source>
         <translation>Etäkäyttö</translation>
     </message>
     <message>
-        <location line="-180"/>
-        <location line="+181"/>
+        <location line="-35"/>
         <source>Integrations</source>
         <translation>Integraatiot</translation>
     </message>
     <message>
-        <location line="-152"/>
-        <location line="+153"/>
+        <location line="-10"/>
         <source>Annual Text</source>
         <translation>Vuositeksti</translation>
     </message>
     <message>
-        <location line="-143"/>
-        <location line="+144"/>
+        <location line="-3"/>
+        <location line="+1"/>
         <source>Screens</source>
         <translation>Näytöt</translation>
     </message>
     <message>
-        <location line="-136"/>
-        <location line="+137"/>
+        <location line="+64"/>
         <source>About</source>
         <translation>Tietoja</translation>
     </message>
     <message>
-        <location line="-38"/>
+        <location filename="../../ui/qml/settings/general.py" line="+158"/>
         <source>Dark</source>
         <translation>Tumma</translation>
     </message>
@@ -7441,7 +7312,7 @@ Lisää sisältöä, kamera tai toinen näkymä.</translation>
         <translation>Vaalea</translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-119"/>
         <source>Interface</source>
         <translation>Käyttöliittymä</translation>
     </message>
@@ -7451,82 +7322,83 @@ Lisää sisältöä, kamera tai toinen näkymä.</translation>
         <translation>JW-media</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+12"/>
         <source>Auto-download on play</source>
         <translation>Lataa automaattisesti toistettaessa</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+0"/>
         <source>Downloads the playing media for offline use.</source>
         <translation>Lataa toistettavan median offline-käyttöä varten.</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+35"/>
         <source>Auto-download weekly study</source>
         <translation>Lataa viikon kokouksen aineisto automaattisesti</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Downloads this week’s and next week’s meeting media.</source>
         <translation>Lataa tämän ja ensi viikon kokouksen median.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-38"/>
         <source>Song Announcement Mode</source>
         <translation>Laulun ilmoitustila</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Song starts muted for title display. Press play to start.</source>
         <translation>Laulu alkaa mykistettynä otsikon näyttämistä varten. Paina toista aloittaaksesi.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+39"/>
         <source>Automatic background song</source>
         <translation>Automaattinen taustalaulu</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-41"/>
         <source>Start videos paused</source>
         <translation>Aloita videot tauotettuna</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Videos open paused so you can start them manually.</source>
         <translation>Videot avautuvat tauotettuina, jotta voit käynnistää ne manuaalisesti.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Playback protection</source>
         <translation>Toiston suojaus</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+0"/>
         <source>Prevents media changes and seeking while audio or video is playing. Pause first to make changes.</source>
         <translation>Estää median vaihtamisen ja siirtymisen äänen tai videon toiston aikana. Keskeytä toisto ensin, jotta voit tehdä muutoksia.</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+7"/>
         <source>Link Folder</source>
         <translation>Linkitä kansio</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Sync folder (Dropbox, OneDrive, etc.) shown as playlists.</source>
         <translation>Synkronointikansio (Dropbox, OneDrive jne.) näytetään soittolistoina.</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location filename="../../qml/SettingsRow.qml" line="+264"/>
         <source>Choose…</source>
         <translation>Valitse…</translation>
     </message>
     <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+53"/>
         <location line="+1"/>
         <source>OBS Studio</source>
         <translation>OBS Studio</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+0"/>
         <source>Automatically switches scenes during projection</source>
         <translation>Vaihtaa skenejä automaattisesti heijastuksen aikana</translation>
     </message>
@@ -7541,27 +7413,26 @@ Lisää sisältöä, kamera tai toinen näkymä.</translation>
         <translation>Salasana (valinnainen)</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Leave blank if no password is set</source>
-        <translation>Jätä tyhjäksi, jos salasanaa ei ole asetettu</translation>
+        <translation type="vanished">Jätä tyhjäksi, jos salasanaa ei ole asetettu</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+4"/>
+        <location line="+1"/>
         <source>Program stream (NDI)</source>
         <translation>Ohjelmalähetys (NDI)</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Receive the DistroAV/NDI output from OBS as a live projection.</source>
         <translation>Vastaanota DistroAV/NDI-lähtö OBS:stä suorana heijastuksena.</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Enable Main Output in DistroAV, then select the NDI source shown by OBS.</source>
-        <translation>Ota käyttöön päälähtö (Main Output) DistroAV:ssä ja valitse sitten OBS:n näyttämä NDI-lähde.</translation>
+        <translation type="vanished">Ota käyttöön päälähtö (Main Output) DistroAV:ssä ja valitse sitten OBS:n näyttämä NDI-lähde.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Available NDI sources</source>
         <translation>Käytettävissä olevat NDI-lähteet</translation>
     </message>
@@ -7571,20 +7442,17 @@ Lisää sisältöä, kamera tai toinen näkymä.</translation>
         <translation>Etsi lähteitä</translation>
     </message>
     <message>
-        <location line="-16"/>
+        <location line="-6"/>
         <source>Default scene (idle)</source>
         <translation>Oletuskohtaus (valmiustila)</translation>
     </message>
     <message>
-        <location line="-346"/>
-        <location line="+289"/>
         <source>Loading…</source>
-        <translation>Ladataan…</translation>
+        <translation type="vanished">Ladataan…</translation>
     </message>
     <message>
-        <location line="+58"/>
         <source>Scene shown when nothing is being projected.</source>
-        <translation>Kohtaus, joka näkyy, kun mitään ei heijasteta.</translation>
+        <translation type="vanished">Kohtaus, joka näkyy, kun mitään ei heijasteta.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -7592,54 +7460,51 @@ Lisää sisältöä, kamera tai toinen näkymä.</translation>
         <translation>Mediaikkunakohtaus</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Scene that captures the projection monitor. Activated when content is displayed.</source>
-        <translation>Kohtaus, joka sieppaa heijastusnäytön. Aktivoituu, kun sisältöä näytetään.</translation>
+        <translation type="vanished">Kohtaus, joka sieppaa heijastusnäytön. Aktivoituu, kun sisältöä näytetään.</translation>
     </message>
     <message>
-        <location line="+35"/>
+        <location line="+9"/>
         <source>Audio controls and attendance count during meetings.</source>
         <translation>Ääniohjaimet ja läsnäolomäärä kokousten aikana.</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+8"/>
+        <location line="+1"/>
         <source>Auto Screen Share</source>
         <translation>Automaattinen näytönjako</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Automatically shares screen via hotkeys when projecting media.</source>
         <translation>Jakaa näytön automaattisesti pikanäppäimillä mediaa projisoitaessa.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Share hotkey</source>
         <translation>Jakamisen pikanäppäin</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Uses Zoom&apos;s single start/stop screen-share shortcut.</source>
-        <translation>Käyttää Zoomin yhtä näytönjaon aloitus-/lopetuspikanäppäintä.</translation>
+        <translation type="vanished">Käyttää Zoomin yhtä näytönjaon aloitus-/lopetuspikanäppäintä.</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+1"/>
         <source>Share target</source>
         <translation>Jakamisen kohde</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>The Solin Media Preview tile inside Zoom&apos;s share dialog.</source>
-        <translation>“Solin Media Preview” -ruutu Zoomin jakamisikkunassa.</translation>
+        <translation type="vanished">“Solin Media Preview” -ruutu Zoomin jakamisikkunassa.</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+1"/>
         <source>Accessibility permission</source>
         <translation>Käyttöapu-oikeus</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Open Settings</source>
-        <translation>Avaa asetukset</translation>
+        <translation type="vanished">Avaa asetukset</translation>
     </message>
     <message>
         <source>Click Position</source>
@@ -7650,84 +7515,83 @@ Lisää sisältöä, kamera tai toinen näkymä.</translation>
         <translation type="vanished">Sijainti, jota napsautetaan jakovalintaikkunan avautumisen jälkeen kohteen valitsemiseksi.</translation>
     </message>
     <message>
-        <location line="-3"/>
         <source>Configure</source>
-        <translation>Määritä</translation>
+        <translation type="vanished">Määritä</translation>
     </message>
     <message>
-        <location line="-36"/>
+        <location line="-10"/>
+        <location line="+1"/>
         <source>Camera</source>
         <translation>Kamera</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Shows a camera button in the live tools toolbar.</source>
         <translation>Näyttää kamerapainikkeen suorien lähetysten työkalupalkissa.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+11"/>
+        <location line="+1"/>
         <source>Automatic Shortcuts</source>
         <translation>Automaattiset pikanäppäimet</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Sends keyboard shortcuts when visual media changes state.</source>
         <translation>Lähettää pikanäppäinkomentoja, kun visuaalisen median tila muuttuu.</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Create one or more shortcuts for start, end, pause and resume events.</source>
-        <translation>Luo yksi tai useampi pikanäppäin aloitus-, lopetus-, tauko- ja jatkamistapahtumia varten.</translation>
+        <translation type="vanished">Luo yksi tai useampi pikanäppäin aloitus-, lopetus-, tauko- ja jatkamistapahtumia varten.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location filename="../../qml/SettingsRow.qml" line="+68"/>
         <source>No shortcuts configured.</source>
         <translation>Pikanäppäimiä ei ole määritetty.</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+1"/>
         <source>Add shortcut</source>
         <translation>Lisää pikanäppäin</translation>
     </message>
     <message>
-        <location line="+19"/>
+        <location filename="../../qml/SettingsRow.qml" line="-7"/>
         <source>Edit</source>
         <translation>Muokkaa</translation>
     </message>
     <message>
-        <location line="-13"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-17"/>
+        <location line="+1"/>
         <source>Zoom Meetings</source>
         <translation>Zoom-kokoukset</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="-25"/>
         <source>Text shown on the projection screen when idle.</source>
         <translation>Teksti, joka näytetään heijastusnäytöllä valmiustilassa.</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+0"/>
         <source>Update</source>
         <translation>Päivitä</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Scripture:</source>
         <translation>Raamatunkohta:</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>E.g.: Happy are those conscious of their spiritual need.</source>
-        <translation>Esim.: Onnellisia ovat ne, jotka ymmärtävät hengellisen tarpeensa.</translation>
+        <translation type="vanished">Esim.: Onnellisia ovat ne, jotka ymmärtävät hengellisen tarpeensa.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Bible reference:</source>
         <translation>Raamatunpaikka:</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>E.g.: Matthew 5:3.</source>
-        <translation>Esim.: Matteus 5:3.</translation>
+        <translation type="vanished">Esim.: Matteus 5:3.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -7735,24 +7599,535 @@ Lisää sisältöä, kamera tai toinen näkymä.</translation>
         <translation>Tallenna muutokset</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location filename="../../qml/SettingsPage.qml" line="+184"/>
         <source>Audio &amp; Video app for Kingdom Hall meetings.</source>
         <translation>Ääni ja video -sovellus valtakunnansalin kokouksiin.</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+9"/>
         <source>Official Website</source>
         <translation>Virallinen verkkosivusto</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+4"/>
         <source>Changelog</source>
         <translation>Muutosloki</translation>
     </message>
     <message>
-        <location line="-6"/>
+        <location line="+6"/>
         <source>This app is independent and is not affiliated with or endorsed by the Watch Tower Bible and Tract Society of Pennsylvania or any of its associated organizations.</source>
         <translation>Tämä sovellus on itsenäinen, eikä sillä ole yhteyttä Watch Tower Bible and Tract Society of Pennsylvaniaan tai sen järjestöihin, eivätkä ne tue sitä.</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsSectionHeader.qml" line="+28"/>
+        <location line="+35"/>
+        <source>Back to sections</source>
+        <translation>Takaisin osioihin</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsView.qml" line="+15"/>
+        <source>Search settings</source>
+        <translation>Hakuasetukset</translation>
+    </message>
+    <message>
+        <location line="+173"/>
+        <source>Search results</source>
+        <translation>Hakutulokset</translation>
+    </message>
+    <message>
+        <location line="+77"/>
+        <source>No settings found. Try another word.</source>
+        <translation>Asetuksia ei löytynyt. Kokeile toista sanaa.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+2"/>
+        <source>Scenes</source>
+        <translation>Näkymät</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Native scenes engine</source>
+        <translation>Alkuperäisten kohtausten moottori</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Restart Solin to apply this change.</source>
+        <translation>Ota tämä muutos käyttöön käynnistämällä Solin uudelleen.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>OBS, Zoom and camera</source>
+        <translation>OBS, zoom ja kamera</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>Automations</source>
+        <translation>Automaatiot</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Sharing and shortcuts</source>
+        <translation>Jakaminen ja pikakuvakkeet</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Control over your local network</source>
+        <translation>Hallitse paikallista verkkoasi</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+1"/>
+        <source>Remote control</source>
+        <translation>Kaukosäädin</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Control Solin securely from another device on this local network.</source>
+        <translation>Ohjaa Solinia suojatusti toiselta laitteelta tässä lähiverkossa.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Network interface</source>
+        <translation>Verkkoliitäntä</translation>
+    </message>
+    <message>
+        <source>Refresh</source>
+        <translation type="vanished">Päivitä</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Copy address</source>
+        <translation>Kopioi osoite</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Access credentials</source>
+        <translation>Kirjautumistiedot</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Username</source>
+        <translation>Käyttäjätunnus</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>New password</source>
+        <translation>Uusi salasana</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Confirm password</source>
+        <translation>Vahvista salasana</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Save credentials</source>
+        <translation>Tallenna kirjautumistiedot</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Devices</source>
+        <translation>Laitteet</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Set up a device</source>
+        <translation>Määritä laite</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Version and information</source>
+        <translation>Versio ja tiedot</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/general.py" line="-125"/>
+        <source>Searching jw.org…</source>
+        <translation>Haetaan jw.orgista…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Reading the meeting times…</source>
+        <translation>Luetaan kokousaikoja…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>No congregation found with that name.</source>
+        <translation>Tällä nimellä ei löytynyt seurakuntaa.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>jw.org does not publish meeting times for this congregation.</source>
+        <translation>jw.org ei julkaise tämän seurakunnan kokousaikoja.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Too many searches in a row. Wait a moment and type again.</source>
+        <translation>Liian monta hakua peräkkäin. Odota hetki ja kirjoita uudelleen.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Could not reach jw.org. Check the connection and try again.</source>
+        <translation>jw.orgiin ei saatu yhteyttä. Tarkista yhteys ja yritä uudelleen.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-94"/>
+        <location filename="../../ui/qml/settings/general.py" line="+5"/>
+        <source>Search your congregation to fill the days and times below.</source>
+        <translation>Hae seurakuntasi, niin alla olevat päivät ja ajat täyttyvät.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/general.py" line="+94"/>
+        <source>(same as interface)</source>
+        <translation>(sama kuin käyttöliittymä)</translation>
+    </message>
+    <message>
+        <location line="+54"/>
+        <source>Primary Screen (control)</source>
+        <translation>Päänäyttö (ohjaus)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Secondary {n} (projection)</source>
+        <translation>Toissijainen {n} (heijastus)</translation>
+    </message>
+    <message>
+        <location line="+210"/>
+        <source>Configure the meeting day/time before automatic playback can start.</source>
+        <translation>Määritä kokouksen päivä ja aika ennen automaattisen toiston aloittamista.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Plays audio songs before configured meetings and fades out before start.</source>
+        <translation>Toistaa äänilauluja ennen määritettyjä kokouksia ja häivyttää äänen ennen alkua.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Select folder to link</source>
+        <translation>Valitse linkitettävä kansio</translation>
+    </message>
+    <message>
+        <location line="+117"/>
+        <source>Fetching annual text…</source>
+        <translation>Haetaan vuositekstiä…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Could not fetch annual text</source>
+        <translation>Vuositekstiä ei voitu hakea</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Annual text updated for {year}</source>
+        <translation>Vuositeksti päivitetty vuodelle {year}</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-6"/>
+        <source>Schedule and preparation</source>
+        <translation>Aikataulu ja valmistautuminen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Meeting schedule</source>
+        <translation>Kokouksen aikataulu</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Midweek meeting</source>
+        <translation>Viikkokokous</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <location line="+7"/>
+        <source>Time</source>
+        <translation>Aika</translation>
+    </message>
+    <message>
+        <location line="-3"/>
+        <source>Weekend meeting</source>
+        <translation>Viikonlopun kokous</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Preparation</source>
+        <translation>Valmistelu</translation>
+    </message>
+    <message>
+        <location line="-53"/>
+        <source>Appearance and languages</source>
+        <translation>Ulkonäkö ja kielet</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Theme and languages</source>
+        <translation>Teema ja kielet</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Appearance</source>
+        <translation>Ulkonäkö</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Theme</source>
+        <translation>Teema</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Update languages</source>
+        <translation>Päivitä kielet</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Media and files</source>
+        <translation>Media ja tiedostot</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Playback, downloads and folders</source>
+        <translation>Toisto, lataukset ja kansiot</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Playback</source>
+        <translation>Toisto</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Downloads</source>
+        <translation>Lataukset</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsRow.qml" line="-134"/>
+        <source>Select…</source>
+        <translation>Valitse…</translation>
+    </message>
+    <message>
+        <location line="+61"/>
+        <source>No folder selected</source>
+        <translation>Kansiota ei ole valittu</translation>
+    </message>
+    <message>
+        <location line="+48"/>
+        <source>No secondary screen detected. Connect an external monitor.</source>
+        <translation>Toissijaista näyttöä ei havaittu. Yhdistä ulkoinen näyttö.</translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <source>Delete</source>
+        <translation>Poista</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+40"/>
+        <source>Projection</source>
+        <translation>Projektio</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Screens and annual text</source>
+        <translation>Näytöt ja vuositeksti</translation>
+    </message>
+    <message>
+        <location filename="../../qml/AppTextField.qml" line="+67"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-37"/>
+        <source>Clear</source>
+        <translation>Tyhjennä</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsClockPicker.qml" line="+45"/>
+        <source>Choose hour</source>
+        <translation>Valitse tunti</translation>
+    </message>
+    <message>
+        <location line="+30"/>
+        <source>Choose minute</source>
+        <translation>Valitse minuutti</translation>
+    </message>
+    <message>
+        <location line="+101"/>
+        <source>Hour %1</source>
+        <translation>Tunti %1</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Minute %1</source>
+        <translation>Minuutti %1</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsCongregationDialog.qml" line="+31"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+8"/>
+        <source>Fill in from jw.org</source>
+        <translation>Täytä jw.orgista</translation>
+    </message>
+    <message>
+        <location line="+23"/>
+        <source>Search by congregation name</source>
+        <translation>Hae seurakunnan nimellä</translation>
+    </message>
+    <message>
+        <location line="+86"/>
+        <location filename="../../qml/SettingsRemoteSetup.qml" line="-201"/>
+        <source>Close</source>
+        <translation>Sulje</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsRow.qml" line="-88"/>
+        <location filename="../../qml/SettingsSelectionDialog.qml" line="+30"/>
+        <source>Search…</source>
+        <translation>Hae…</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsSelectionDialog.qml" line="+8"/>
+        <source>HH:mm</source>
+        <translation>HH:mm</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>No results found.</source>
+        <translation>Tuloksia ei löytynyt.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <location filename="../../qml/SettingsTimeDialog.qml" line="+58"/>
+        <source>Apply</source>
+        <translation>Käytä</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <location filename="../../qml/SettingsTimeDialog.qml" line="-2"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+37"/>
+        <location line="+52"/>
+        <source>Cancel</source>
+        <translation>Peruuta</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsShortcutDialog.qml" line="-144"/>
+        <source>Share Hotkey</source>
+        <translation>Jakamisen pikanäppäin</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Press the Zoom shortcut that starts and stops screen sharing.</source>
+        <translation>Paina Zoomin pikanäppäintä, jolla näytönjako aloitetaan ja lopetetaan.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="-309"/>
+        <location line="+63"/>
+        <source>Select a private network…</source>
+        <translation>Valitse yksityinen verkko…</translation>
+    </message>
+    <message>
+        <location line="-50"/>
+        <source>Choose a network and save credentials before enabling remote control.</source>
+        <translation>Valitse verkko ja tallenna kirjautumistiedot ennen etäohjauksen käyttöönottoa.</translation>
+    </message>
+    <message>
+        <location line="+83"/>
+        <source>Starting secure remote control…</source>
+        <translation>Käynnistetään suojattua etäohjausta…</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Ready to enable.</source>
+        <translation>Valmis otettavaksi käyttöön.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Configuration required.</source>
+        <translation>Määritys vaaditaan.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Configured as %1</source>
+        <translation>Määritetty muodossa %1</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/integrations.py" line="-106"/>
+        <source>Enter a valid port (1–65535).</source>
+        <translation>Anna kelvollinen portti (1–65535).</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>✓ Configuration saved — reconnecting…</source>
+        <translation>✓ Asetukset tallennettu — yhdistetään uudelleen…</translation>
+    </message>
+    <message>
+        <location line="+31"/>
+        <source>— Select scene —</source>
+        <translation>— Valitse kohtaus —</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>NDI receiver is not available.</source>
+        <translation>NDI-vastaanotin ei ole käytettävissä.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <location line="+34"/>
+        <source>Looking for NDI sources on this network.</source>
+        <translation>Etsitään NDI-lähteitä tästä verkosta.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>No NDI sources found. Check that DistroAV Main Output is enabled in OBS.</source>
+        <translation>NDI-lähteitä ei löytynyt. Varmista, että DistroAV:n päälähtö on käytössä OBS:ssä.</translation>
+    </message>
+    <message>
+        <location line="+48"/>
+        <source>Press a shortcut before saving.</source>
+        <translation>Paina pikanäppäintä ennen tallentamista.</translation>
+    </message>
+    <message>
+        <location line="+78"/>
+        <source>Configured</source>
+        <translation>Määritetty</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <location filename="../../ui/qml/settings/remote.py" line="+4"/>
+        <source>Not configured</source>
+        <translation>Ei määritetty</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Solin can send the automatic click.</source>
+        <translation>Solin voi lähettää automaattisen napsautuksen.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Allow Solin in macOS Accessibility so automatic clicks can work.</source>
+        <translation>Salli Solin macOS:n Käyttöavussa, jotta automaattiset napsautukset toimivat.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="+2"/>
+        <source>Use at least %1 characters. Credentials belong only to this profile.</source>
+        <translation>Käytä vähintään %1 merkkiä. Kirjautumistiedot kuuluvat vain tälle profiilille.</translation>
+    </message>
+    <message>
+        <location line="+33"/>
+        <source>The passwords do not match.</source>
+        <translation>Salasanat eivät täsmää.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Enter a new password to save.</source>
+        <translation>Anna uusi salasana tallennusta varten.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Check the username and use a password with at least %1 characters.</source>
+        <translation>Tarkista käyttäjätunnus ja käytä salasanaa, jossa on vähintään %1 merkkiä.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/general.py" line="+18"/>
+        <location filename="../../ui/qml/settings/remote.py" line="+10"/>
+        <location line="+142"/>
+        <source>Saved</source>
+        <translation>Tallennettu</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="-23"/>
+        <source>Copied</source>
+        <translation>Kopioitu</translation>
     </message>
 </context>
 <context>
@@ -8903,34 +9278,28 @@ Avaa lataussivu napsauttamalla &apos;Lataa&apos;.</translation>
 <context>
     <name>WatchedFolderSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/watched_folder_section.py" line="+48"/>
         <source>Link Folder</source>
-        <translation>Linkitä kansio</translation>
+        <translation type="vanished">Linkitä kansio</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Sync folder (Dropbox, OneDrive, etc.) shown as playlists.</source>
-        <translation>Synkronointikansio (Dropbox, OneDrive jne.) näytetään soittolistoina.</translation>
+        <translation type="vanished">Synkronointikansio (Dropbox, OneDrive jne.) näytetään soittolistoina.</translation>
     </message>
     <message>
-        <location line="+19"/>
         <source>Choose…</source>
-        <translation>Valitse…</translation>
+        <translation type="vanished">Valitse…</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>Clear</source>
-        <translation>Tyhjennä</translation>
+        <translation type="vanished">Tyhjennä</translation>
     </message>
     <message>
-        <location line="+48"/>
         <source>No folder selected</source>
-        <translation>Kansiota ei ole valittu</translation>
+        <translation type="vanished">Kansiota ei ole valittu</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Select folder to link</source>
-        <translation>Valitse linkitettävä kansio</translation>
+        <translation type="vanished">Valitse linkitettävä kansio</translation>
     </message>
 </context>
 <context>
@@ -9179,76 +9548,60 @@ Molempien laitteiden on oltava samassa Wi-Fi-verkossa.</translation>
 <context>
     <name>YearlyTextSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/yearly_text_section.py" line="+62"/>
         <source>Text shown on the projection screen when idle.</source>
-        <translation>Teksti, joka näytetään heijastusnäytöllä valmiustilassa.</translation>
+        <translation type="vanished">Teksti, joka näytetään heijastusnäytöllä valmiustilassa.</translation>
     </message>
     <message>
-        <location line="+18"/>
-        <location line="+309"/>
         <source>Fetching annual text…</source>
-        <translation>Haetaan vuositekstiä…</translation>
+        <translation type="vanished">Haetaan vuositekstiä…</translation>
     </message>
     <message>
-        <location line="-295"/>
-        <location line="+276"/>
         <source>Update</source>
-        <translation>Päivitä</translation>
+        <translation type="vanished">Päivitä</translation>
     </message>
     <message>
-        <location line="-241"/>
         <source>Scripture:</source>
-        <translation>Raamatunkohta:</translation>
+        <translation type="vanished">Raamatunkohta:</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>E.g.: Happy are those conscious of their spiritual need.</source>
-        <translation>Esim.: Onnellisia ovat ne, jotka ymmärtävät hengellisen tarpeensa.</translation>
+        <translation type="vanished">Esim.: Onnellisia ovat ne, jotka ymmärtävät hengellisen tarpeensa.</translation>
     </message>
     <message>
-        <location line="+11"/>
         <source>Bible reference:</source>
-        <translation>Raamatunpaikka:</translation>
+        <translation type="vanished">Raamatunpaikka:</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>E.g.: Matthew 5:3.</source>
-        <translation>Esim.: Matteus 5:3.</translation>
+        <translation type="vanished">Esim.: Matteus 5:3.</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>Save changes</source>
-        <translation>Tallenna muutokset</translation>
+        <translation type="vanished">Tallenna muutokset</translation>
     </message>
     <message>
-        <location line="+196"/>
         <source>Annual text updated for {year}</source>
-        <translation>Vuositeksti päivitetty vuodelle {year}</translation>
+        <translation type="vanished">Vuositeksti päivitetty vuodelle {year}</translation>
     </message>
     <message>
-        <location line="+33"/>
         <source>Loading…</source>
-        <translation>Ladataan…</translation>
+        <translation type="vanished">Ladataan…</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Could not fetch annual text</source>
-        <translation>Vuositekstiä ei voitu hakea</translation>
+        <translation type="vanished">Vuositekstiä ei voitu hakea</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Retry</source>
-        <translation>Yritä uudelleen</translation>
+        <translation type="vanished">Yritä uudelleen</translation>
     </message>
     <message>
-        <location line="+23"/>
         <source>▲  Edit text manually</source>
-        <translation>▲  Muokkaa tekstiä manuaalisesti</translation>
+        <translation type="vanished">▲  Muokkaa tekstiä manuaalisesti</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>▼  Edit text manually</source>
-        <translation>▼  Muokkaa tekstiä manuaalisesti</translation>
+        <translation type="vanished">▼  Muokkaa tekstiä manuaalisesti</translation>
     </message>
 </context>
 <context>
@@ -9476,14 +9829,12 @@ Lopussa oleva numero on ensisijainen.</translation>
 <context>
     <name>ZoomSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/zoom_section.py" line="+32"/>
         <source>Zoom Meetings</source>
-        <translation>Zoom-kokoukset</translation>
+        <translation type="vanished">Zoom-kokoukset</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Audio controls and attendance count during meetings.</source>
-        <translation>Ääniohjaimet ja läsnäolomäärä kokousten aikana.</translation>
+        <translation type="vanished">Ääniohjaimet ja läsnäolomäärä kokousten aikana.</translation>
     </message>
 </context>
 <context>
@@ -11014,8 +11365,7 @@ Käytä toistopainiketta esittämiseen · Muuta järjestystä vetämällä kahva
 <context>
     <name>_ShortcutSequenceEdit</name>
     <message>
-        <location filename="../../widgets/settings/auto_key_dialog.py" line="-257"/>
-        <location line="+52"/>
+        <location filename="../../qml/SettingsShortcutDialog.qml" line="+98"/>
         <source>Click to record</source>
         <translation>Napsauta tallentaaksesi</translation>
     </message>
@@ -11023,37 +11373,31 @@ Käytä toistopainiketta esittämiseen · Muuta järjestystä vetämällä kahva
 <context>
     <name>_TimePickerPopup</name>
     <message>
-        <location filename="../../widgets/settings/meeting_schedule_section.py" line="-477"/>
         <source>Hour</source>
-        <translation>Tunti</translation>
+        <translation type="vanished">Tunti</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Minute</source>
-        <translation>Minuutti</translation>
+        <translation type="vanished">Minuutti</translation>
     </message>
     <message>
-        <location line="+15"/>
         <source>Cancel</source>
-        <translation>Peruuta</translation>
+        <translation type="vanished">Peruuta</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Apply</source>
-        <translation>Käytä</translation>
+        <translation type="vanished">Käytä</translation>
     </message>
 </context>
 <context>
     <name>_TimeStepper</name>
     <message>
-        <location line="-108"/>
         <source>Increase</source>
-        <translation>Lisää</translation>
+        <translation type="vanished">Lisää</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Decrease</source>
-        <translation>Vähennä</translation>
+        <translation type="vanished">Vähennä</translation>
     </message>
 </context>
 <context>

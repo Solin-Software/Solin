@@ -524,11 +524,11 @@ class RemoteControlController(QObject):
             lambda _value: self.playback_invalidated.emit()
         )
         dependencies.playback_protection.lockedChanged.connect(self.playback_invalidated.emit)
-        dependencies.settings_widget.remote_control_settings_changed.connect(self.reconfigure)
-        dependencies.settings_widget.remote_control_credentials_changed.connect(
+        dependencies.settings_widget.remote.remote_control_settings_changed.connect(self.reconfigure)
+        dependencies.settings_widget.remote.remote_control_credentials_changed.connect(
             self.credentials_changed
         )
-        dependencies.settings_widget.watched_folder_changed.connect(self._on_watched_folder_changed)
+        dependencies.settings_widget.general.watched_folder_changed.connect(self._on_watched_folder_changed)
 
     @Slot(str)
     def _on_watched_folder_changed(self, _path: str) -> None:
@@ -1278,7 +1278,7 @@ class RemoteControlController(QObject):
         identity = self._tls_identity
         binding = getattr(self._server, "binding", None)
         access_url = binding.url if binding is not None and running else ""
-        self._dependencies.settings_widget.set_remote_control_runtime_status(
+        self._dependencies.settings_widget.remote.set_remote_control_runtime_status(
             running=running,
             message=message,
             fingerprint=identity.trust_anchor_fingerprint_sha256 if identity else "",

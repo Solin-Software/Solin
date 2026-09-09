@@ -4,24 +4,20 @@
 <context>
     <name>AboutSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/about_section.py" line="+48"/>
         <source>Audio &amp; Video app for Kingdom Hall meetings.</source>
-        <translation>Додаток для роботи з аудіо та відео на зібраннях у Залі Царства.</translation>
+        <translation type="vanished">Додаток для роботи з аудіо та відео на зібраннях у Залі Царства.</translation>
     </message>
     <message>
-        <location line="+10"/>
         <source>Official Website</source>
-        <translation>Офіційний вебсайт</translation>
+        <translation type="vanished">Офіційний вебсайт</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Changelog</source>
-        <translation>Список змін (Changelog)</translation>
+        <translation type="vanished">Список змін (Changelog)</translation>
     </message>
     <message>
-        <location line="+14"/>
         <source>This app is independent and is not affiliated with or endorsed by the Watch Tower Bible and Tract Society of Pennsylvania or any of its associated organizations.</source>
-        <translation>Цей додаток є незалежним і не пов’язаний з Товариством Вартової башти, Біблій і трактатів (Пенсільванія) або будь-якими іншими пов’язаними з ним організаціями, та не підтримується ними.</translation>
+        <translation type="vanished">Цей додаток є незалежним і не пов’язаний з Товариством Вартової башти, Біблій і трактатів (Пенсільванія) або будь-якими іншими пов’язаними з ним організаціями, та не підтримується ними.</translation>
     </message>
 </context>
 <context>
@@ -271,60 +267,60 @@
 <context>
     <name>AutoKeyEditorDialog</name>
     <message>
-        <location filename="../../widgets/settings/auto_key_dialog.py" line="+125"/>
+        <location filename="../../qml/SettingsShortcutDialog.qml" line="+53"/>
         <source>Automatic Shortcut</source>
         <translation>Автоматичне скорочення</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+12"/>
         <source>Choose an app event and press the shortcut to send.</source>
         <translation>Виберіть подію програми та натисніть скорочення для надсилання.</translation>
     </message>
     <message>
-        <location line="+45"/>
+        <location line="+9"/>
+        <location line="+15"/>
         <source>Event</source>
         <translation>Подія</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+67"/>
+        <location line="+7"/>
         <source>Shortcut</source>
         <translation>Скорочення</translation>
     </message>
     <message>
-        <location line="+12"/>
-        <location line="+95"/>
+        <location line="+35"/>
         <source>Click the field, then press one shortcut.</source>
         <translation>Клацніть поле, а потім натисніть скорочення.</translation>
     </message>
     <message>
-        <location line="-86"/>
+        <location line="+12"/>
         <source>Enabled</source>
         <translation>Увімкнено</translation>
     </message>
     <message>
-        <location line="+18"/>
+        <location line="+53"/>
         <source>Cancel</source>
         <translation>Скасувати</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+7"/>
         <source>Save</source>
         <translation>Зберегти</translation>
     </message>
     <message>
-        <location line="+54"/>
         <source>Press a shortcut before saving.</source>
-        <translation>Натисніть скорочення перед збереженням.</translation>
+        <translation type="vanished">Натисніть скорочення перед збереженням.</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="-109"/>
+        <location line="+36"/>
         <source>Listening... press one shortcut.</source>
         <translation>Очікування... натисніть скорочення.</translation>
     </message>
     <message>
-        <location line="+13"/>
         <source>Shortcut captured.</source>
-        <translation>Скорочення записано.</translation>
+        <translation type="vanished">Скорочення записано.</translation>
     </message>
 </context>
 <context>
@@ -353,109 +349,87 @@
 <context>
     <name>AutoKeysSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/auto_keys_section.py" line="+59"/>
         <source>Automatic Shortcuts</source>
-        <translation>Автоматичні клавіші швидкого доступу</translation>
+        <translation type="vanished">Автоматичні клавіші швидкого доступу</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Sends keyboard shortcuts when visual media changes state.</source>
-        <translation>Надсилає клавіатурні скорочення, коли змінюється стан візуальних медіа.</translation>
+        <translation type="vanished">Надсилає клавіатурні скорочення, коли змінюється стан візуальних медіа.</translation>
     </message>
     <message>
-        <location line="+24"/>
         <source>Create one or more shortcuts for start, end, pause and resume events.</source>
-        <translation>Створіть одне або кілька скорочень для подій початку, завершення, паузи та відновлення.</translation>
+        <translation type="vanished">Створіть одне або кілька скорочень для подій початку, завершення, паузи та відновлення.</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>No shortcuts configured.</source>
-        <translation>Скорочення не налаштовані.</translation>
+        <translation type="vanished">Скорочення не налаштовані.</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>Add shortcut</source>
-        <translation>Додати скорочення</translation>
+        <translation type="vanished">Додати скорочення</translation>
     </message>
     <message>
-        <location line="+131"/>
         <source>Enabled</source>
-        <translation>Увімкнено</translation>
+        <translation type="vanished">Увімкнено</translation>
     </message>
     <message>
-        <location line="+0"/>
         <source>Disabled</source>
-        <translation>Вимкнено</translation>
+        <translation type="vanished">Вимкнено</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Edit</source>
-        <translation>Редагувати</translation>
+        <translation type="vanished">Редагувати</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Delete</source>
-        <translation>Видалити</translation>
+        <translation type="vanished">Видалити</translation>
     </message>
 </context>
 <context>
     <name>AutoShareSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/auto_share_section.py" line="+55"/>
         <source>Auto Screen Share</source>
-        <translation>Автоматична демонстрація екрана</translation>
+        <translation type="vanished">Автоматична демонстрація екрана</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Automatically shares screen via hotkeys when projecting media.</source>
-        <translation>Автоматично демонструє екран за допомогою гарячих клавіш під час показу медіа.</translation>
+        <translation type="vanished">Автоматично демонструє екран за допомогою гарячих клавіш під час показу медіа.</translation>
     </message>
     <message>
-        <location line="+30"/>
         <source>Share hotkey</source>
-        <translation>Гаряча клавіша демонстрації</translation>
+        <translation type="vanished">Гаряча клавіша демонстрації</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Uses Zoom&apos;s single start/stop screen-share shortcut.</source>
-        <translation>Використовує одну гарячу клавішу Zoom для запуску й зупинки демонстрації екрана.</translation>
+        <translation type="vanished">Використовує одну гарячу клавішу Zoom для запуску й зупинки демонстрації екрана.</translation>
     </message>
     <message>
-        <location line="+10"/>
-        <location line="+241"/>
-        <location line="+9"/>
         <source>Not configured</source>
-        <translation>Не налаштовано</translation>
+        <translation type="vanished">Не налаштовано</translation>
     </message>
     <message>
-        <location line="-243"/>
         <source>Edit</source>
-        <translation>Редагувати</translation>
+        <translation type="vanished">Редагувати</translation>
     </message>
     <message>
-        <location line="+20"/>
         <source>Accessibility permission</source>
-        <translation>Дозвіл доступності</translation>
+        <translation type="vanished">Дозвіл доступності</translation>
     </message>
     <message>
-        <location line="+14"/>
         <source>Open Settings</source>
-        <translation>Відкрити налаштування</translation>
+        <translation type="vanished">Відкрити налаштування</translation>
     </message>
     <message>
-        <location line="+35"/>
         <source>Share target</source>
-        <translation>Ціль демонстрації</translation>
+        <translation type="vanished">Ціль демонстрації</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Where Solin should click after Zoom&apos;s share shortcut opens the dialog.</source>
-        <translation>Місце, де Solin має клацнути після того, як комбінація клавіш Zoom відкриє вікно демонстрації.</translation>
+        <translation type="vanished">Місце, де Solin має клацнути після того, як комбінація клавіш Zoom відкриє вікно демонстрації.</translation>
     </message>
     <message>
-        <location line="+167"/>
         <source>Configured</source>
-        <translation>Налаштовано</translation>
+        <translation type="vanished">Налаштовано</translation>
     </message>
     <message>
         <source>Click Position</source>
@@ -466,33 +440,28 @@
         <translation type="vanished">Позиція, яку потрібно клацнути після відкриття діалогу демонстрації, щоб вибрати ціль.</translation>
     </message>
     <message>
-        <location line="-141"/>
         <source>Configure</source>
-        <translation>Налаштувати</translation>
+        <translation type="vanished">Налаштувати</translation>
     </message>
     <message>
-        <location line="+122"/>
         <source>Share Hotkey</source>
-        <translation>Гаряча клавіша демонстрації</translation>
+        <translation type="vanished">Гаряча клавіша демонстрації</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Press the Zoom shortcut that starts and stops screen sharing.</source>
-        <translation>Натисніть гарячу клавішу Zoom, яка запускає й зупиняє демонстрацію екрана.</translation>
+        <translation type="vanished">Натисніть гарячу клавішу Zoom, яка запускає й зупиняє демонстрацію екрана.</translation>
     </message>
     <message>
         <source>Position: {x}, {y}</source>
         <translation type="vanished">Позиція: {x}, {y}</translation>
     </message>
     <message>
-        <location line="+35"/>
         <source>Solin can send the automatic click.</source>
-        <translation>Solin може надіслати автоматичне клацання.</translation>
+        <translation type="vanished">Solin може надіслати автоматичне клацання.</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>Allow Solin in macOS Accessibility so automatic clicks can work.</source>
-        <translation>Дозвольте Solin у розділі «Доступність» macOS, щоб автоматичні клацання працювали.</translation>
+        <translation type="vanished">Дозвольте Solin у розділі «Доступність» macOS, щоб автоматичні клацання працювали.</translation>
     </message>
 </context>
 <context>
@@ -908,14 +877,12 @@
 <context>
     <name>CameraSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/camera_section.py" line="+13"/>
         <source>Camera</source>
-        <translation>Камера</translation>
+        <translation type="vanished">Камера</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Shows a camera button in the live tools toolbar.</source>
-        <translation>Показує кнопку камери на панелі інструментів прямого ефіру.</translation>
+        <translation type="vanished">Показує кнопку камери на панелі інструментів прямого ефіру.</translation>
     </message>
 </context>
 <context>
@@ -1035,6 +1002,18 @@
         <location line="+16"/>
         <source>Enable projection aspect first</source>
         <translation>Спочатку ввімкніть співвідношення сторін проекції</translation>
+    </message>
+</context>
+<context>
+    <name>IntegrationSettings</name>
+    <message numerus="yes">
+        <location filename="../../ui/qml/settings/integrations.py" line="+330"/>
+        <source>%n NDI source found.</source>
+        <translation>
+            <numerusform>Знайдено %n джерело NDI.</numerusform>
+            <numerusform>Знайдено %n джерела NDI.</numerusform>
+            <numerusform>Знайдено %n джерел NDI.</numerusform>
+        </translation>
     </message>
 </context>
 <context>
@@ -1181,19 +1160,16 @@
 <context>
     <name>LanguageSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/language_section.py" line="+22"/>
         <source>Interface</source>
-        <translation>Інтерфейс</translation>
+        <translation type="vanished">Інтерфейс</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>JW Media</source>
-        <translation>Медіа JW</translation>
+        <translation type="vanished">Медіа JW</translation>
     </message>
     <message>
-        <location line="+36"/>
         <source>(same as interface)</source>
-        <translation>(така ж, як інтерфейс)</translation>
+        <translation type="vanished">(така ж, як інтерфейс)</translation>
     </message>
 </context>
 <context>
@@ -1602,13 +1578,13 @@
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../../main_window.py" line="+551"/>
+        <location filename="../../main_window.py" line="+565"/>
         <location filename="../../controllers/main_window_nav.py" line="+11"/>
         <source>Solin</source>
         <translation>Solin</translation>
     </message>
     <message>
-        <location line="+694"/>
+        <location line="+717"/>
         <location filename="../../controllers/main_window_nav.py" line="+27"/>
         <source>Scenes</source>
         <translation>Сцени</translation>
@@ -1649,7 +1625,7 @@
         <translation>Триває запис</translation>
     </message>
     <message>
-        <location line="+379"/>
+        <location line="+381"/>
         <source>Pause playback before changing the projected content.</source>
         <translation>Призупиніть відтворення, перш ніж змінювати вміст проекції.</translation>
     </message>
@@ -2509,69 +2485,56 @@ Solin продовжить спроби відновити з’єднання �
 <context>
     <name>MediaSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/media_section.py" line="+23"/>
         <source>Auto-download on play</source>
-        <translation>Автоматичне завантаження під час відтворення</translation>
+        <translation type="vanished">Автоматичне завантаження під час відтворення</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Downloads the playing media for offline use.</source>
-        <translation>Завантажує медіафайли для використання офлайн.</translation>
+        <translation type="vanished">Завантажує медіафайли для використання офлайн.</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Auto-download weekly study</source>
-        <translation>Автозавантаження для зібрань</translation>
+        <translation type="vanished">Автозавантаження для зібрань</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Downloads this week’s and next week’s meeting media.</source>
-        <translation>Завантажує медіа для зібрань цього та наступного тижня.</translation>
+        <translation type="vanished">Завантажує медіа для зібрань цього та наступного тижня.</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Song Announcement Mode</source>
-        <translation>Режим оголошення пісень</translation>
+        <translation type="vanished">Режим оголошення пісень</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Song starts muted for title display. Press play to start.</source>
-        <translation>Пісня починається без звуку для показу назви. Натисніть відтворення, щоб почати.</translation>
+        <translation type="vanished">Пісня починається без звуку для показу назви. Натисніть відтворення, щоб почати.</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Automatic background song</source>
-        <translation>Автоматична фонова пісня</translation>
+        <translation type="vanished">Автоматична фонова пісня</translation>
     </message>
     <message>
-        <location line="+13"/>
         <source>Start videos paused</source>
-        <translation>Запускати відео на паузі</translation>
+        <translation type="vanished">Запускати відео на паузі</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Videos open paused so you can start them manually.</source>
-        <translation>Відео відкриваються на паузі, щоб їх можна було запустити вручну.</translation>
+        <translation type="vanished">Відео відкриваються на паузі, щоб їх можна було запустити вручну.</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Playback protection</source>
-        <translation>Захист відтворення</translation>
+        <translation type="vanished">Захист відтворення</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Prevents media changes and seeking while audio or video is playing. Pause first to make changes.</source>
-        <translation>Не дозволяє змінювати медіа й перемотувати під час відтворення аудіо або відео. Щоб внести зміни, спочатку призупиніть відтворення.</translation>
+        <translation type="vanished">Не дозволяє змінювати медіа й перемотувати під час відтворення аудіо або відео. Щоб внести зміни, спочатку призупиніть відтворення.</translation>
     </message>
     <message>
-        <location line="+35"/>
         <source>Configure the meeting day/time before automatic playback can start.</source>
-        <translation>Налаштуйте день і час зібрання, перш ніж запускати автоматичне відтворення.</translation>
+        <translation type="vanished">Налаштуйте день і час зібрання, перш ніж запускати автоматичне відтворення.</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Plays audio songs before configured meetings and fades out before start.</source>
-        <translation>Відтворює аудіопісні перед налаштованими зібраннями й поступово зменшує гучність перед початком.</translation>
+        <translation type="vanished">Відтворює аудіопісні перед налаштованими зібраннями й поступово зменшує гучність перед початком.</translation>
     </message>
 </context>
 <context>
@@ -2726,77 +2689,60 @@ Manually added content, trims, framing and expanded state will be kept.</source>
 <context>
     <name>MeetingScheduleSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/meeting_schedule_section.py" line="+528"/>
-        <location line="+334"/>
         <source>Used by automatic features that depend on the meeting start time.</source>
-        <translation>Використовується автоматичними функціями, які залежать від часу початку зібрання.</translation>
+        <translation type="vanished">Використовується автоматичними функціями, які залежать від часу початку зібрання.</translation>
     </message>
     <message>
-        <location line="-275"/>
-        <location line="+285"/>
         <source>Fill in from jw.org</source>
-        <translation>Заповнити з jw.org</translation>
+        <translation type="vanished">Заповнити з jw.org</translation>
     </message>
     <message>
-        <location line="-270"/>
-        <location line="+271"/>
         <source>Congregation name</source>
-        <translation>Назва збору</translation>
+        <translation type="vanished">Назва збору</translation>
     </message>
     <message>
-        <location line="-174"/>
         <source>Searching jw.org…</source>
-        <translation>Пошук на jw.org…</translation>
+        <translation type="vanished">Пошук на jw.org…</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>No congregation found with that name.</source>
-        <translation>Збору з такою назвою не знайдено.</translation>
+        <translation type="vanished">Збору з такою назвою не знайдено.</translation>
     </message>
     <message>
-        <location line="-6"/>
         <source>Reading the meeting times…</source>
-        <translation>Читання часу зібрань…</translation>
+        <translation type="vanished">Читання часу зібрань…</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>jw.org does not publish meeting times for this congregation.</source>
-        <translation>На jw.org немає часу зібрань для цього збору.</translation>
+        <translation type="vanished">На jw.org немає часу зібрань для цього збору.</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Too many searches in a row. Wait a moment and type again.</source>
-        <translation>Занадто багато запитів підряд. Зачекайте трохи і введіть знову.</translation>
+        <translation type="vanished">Занадто багато запитів підряд. Зачекайте трохи і введіть знову.</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Could not reach jw.org. Check the connection and try again.</source>
-        <translation>Не вдалося підключитися до jw.org. Перевірте підключення і спробуйте ще раз.</translation>
+        <translation type="vanished">Не вдалося підключитися до jw.org. Перевірте підключення і спробуйте ще раз.</translation>
     </message>
     <message>
-        <location line="+13"/>
         <source>Search your congregation to fill the days and times below.</source>
-        <translation>Знайдіть свій збір, щоб заповнити дні та час нижче.</translation>
+        <translation type="vanished">Знайдіть свій збір, щоб заповнити дні та час нижче.</translation>
     </message>
     <message>
         <source>Midweek meeting</source>
         <translation type="vanished">Зібрання серед тижня</translation>
     </message>
     <message>
-        <location line="-193"/>
-        <location line="+320"/>
         <source>Day and time for the midweek meeting.</source>
-        <translation>День і час зібрання серед тижня.</translation>
+        <translation type="vanished">День і час зібрання серед тижня.</translation>
     </message>
     <message>
         <source>Weekend meeting</source>
         <translation type="vanished">Зібрання у вихідні</translation>
     </message>
     <message>
-        <location line="-313"/>
-        <location line="+317"/>
         <source>Day and time for the weekend meeting.</source>
-        <translation>День і час зібрання у вихідні.</translation>
+        <translation type="vanished">День і час зібрання у вихідні.</translation>
     </message>
     <message>
         <source>Not configured</source>
@@ -3127,131 +3073,104 @@ Manually added content, trims, framing and expanded state will be kept.</source>
 <context>
     <name>ObsSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/obs_section.py" line="+50"/>
         <source>OBS Studio</source>
-        <translation>OBS Studio</translation>
+        <translation type="vanished">OBS Studio</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Automatically switches scenes during projection</source>
-        <translation>Автоматично перемикає сцени під час проектування</translation>
+        <translation type="vanished">Автоматично перемикає сцени під час проектування</translation>
     </message>
     <message>
-        <location line="+29"/>
         <source>Disconnected</source>
-        <translation>Відключено</translation>
+        <translation type="vanished">Відключено</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>WebSocket Port</source>
-        <translation>Порт WebSocket</translation>
+        <translation type="vanished">Порт WebSocket</translation>
     </message>
     <message>
-        <location line="+14"/>
         <source>Password (optional)</source>
-        <translation>Пароль (необов’язково)</translation>
+        <translation type="vanished">Пароль (необов’язково)</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>Leave blank if no password is set</source>
-        <translation>Залиште порожнім, якщо пароль не встановлено</translation>
+        <translation type="vanished">Залиште порожнім, якщо пароль не встановлено</translation>
     </message>
     <message>
-        <location line="+9"/>
-        <location line="+363"/>
         <source>● Changes saved automatically</source>
-        <translation>● Зміни зберігаються автоматично</translation>
+        <translation type="vanished">● Зміни зберігаються автоматично</translation>
     </message>
     <message>
-        <location line="-327"/>
         <source>Program stream (NDI)</source>
-        <translation>Програмна трансляція (NDI)</translation>
+        <translation type="vanished">Програмна трансляція (NDI)</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Receive the DistroAV/NDI output from OBS as a live projection.</source>
-        <translation>Отримувати вихідний сигнал DistroAV/NDI з OBS як трансляцію наживо.</translation>
+        <translation type="vanished">Отримувати вихідний сигнал DistroAV/NDI з OBS як трансляцію наживо.</translation>
     </message>
     <message>
-        <location line="+21"/>
         <source>Enable Main Output in DistroAV, then select the NDI source shown by OBS.</source>
-        <translation>Увімкніть основний вихід (Main Output) у DistroAV, а потім виберіть джерело NDI, яке відображається в OBS.</translation>
+        <translation type="vanished">Увімкніть основний вихід (Main Output) у DistroAV, а потім виберіть джерело NDI, яке відображається в OBS.</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>Available NDI sources</source>
-        <translation>Доступні джерела NDI</translation>
+        <translation type="vanished">Доступні джерела NDI</translation>
     </message>
     <message>
-        <location line="+15"/>
         <source>No sources loaded</source>
-        <translation>Джерела не завантажено</translation>
+        <translation type="vanished">Джерела не завантажено</translation>
     </message>
     <message>
-        <location line="+6"/>
-        <location line="+335"/>
-        <location line="+35"/>
         <source>Find sources</source>
-        <translation>Знайти джерела</translation>
+        <translation type="vanished">Знайти джерела</translation>
     </message>
     <message>
-        <location line="-338"/>
         <source>Default scene (idle)</source>
-        <translation>Сцена за замовчуванням (режим очікування)</translation>
+        <translation type="vanished">Сцена за замовчуванням (режим очікування)</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Scene shown when nothing is being projected.</source>
-        <translation>Сцена, що відображається, коли нічого не проектується.</translation>
+        <translation type="vanished">Сцена, що відображається, коли нічого не проектується.</translation>
     </message>
     <message>
-        <location line="+13"/>
         <source>Media window scene</source>
-        <translation>Сцена медіавікна</translation>
+        <translation type="vanished">Сцена медіавікна</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Scene that captures the projection monitor. Activated when content is displayed.</source>
-        <translation>Сцена, що захоплює монітор проекції. Активується під час відображення вмісту.</translation>
+        <translation type="vanished">Сцена, що захоплює монітор проекції. Активується під час відображення вмісту.</translation>
     </message>
     <message>
-        <location line="+206"/>
         <source>✓ Configuration saved — reconnecting…</source>
-        <translation>✓ Налаштування збережено — перепідключення…</translation>
+        <translation type="vanished">✓ Налаштування збережено — перепідключення…</translation>
     </message>
     <message>
-        <location line="+57"/>
         <source>NDI receiver is not available.</source>
-        <translation>Приймач NDI недоступний.</translation>
+        <translation type="vanished">Приймач NDI недоступний.</translation>
     </message>
     <message>
-        <location line="+5"/>
         <source>Searching…</source>
-        <translation>Пошук…</translation>
+        <translation type="vanished">Пошук…</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Looking for NDI sources on this network.</source>
-        <translation>Пошук джерел NDI у цій мережі.</translation>
+        <translation type="vanished">Пошук джерел NDI у цій мережі.</translation>
     </message>
     <message numerus="yes">
-        <location line="+25"/>
         <source>%n NDI source found.</source>
-        <translation>
+        <translation type="vanished">
             <numerusform>Знайдено %n джерело NDI.</numerusform>
             <numerusform>Знайдено %n джерела NDI.</numerusform>
             <numerusform>Знайдено %n джерел NDI.</numerusform>
         </translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>No NDI sources found</source>
-        <translation>Джерел NDI не знайдено</translation>
+        <translation type="vanished">Джерел NDI не знайдено</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>No NDI sources found. Check that DistroAV Main Output is enabled in OBS.</source>
-        <translation>Джерел NDI не знайдено. Перевірте, чи ввімкнено основний вихід (Main Output) DistroAV в OBS.</translation>
+        <translation type="vanished">Джерел NDI не знайдено. Перевірте, чи ввімкнено основний вихід (Main Output) DistroAV в OBS.</translation>
     </message>
     <message>
         <source>Connecting…</source>
@@ -3270,9 +3189,8 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation type="vanished">Помилка підключення</translation>
     </message>
     <message>
-        <location line="+72"/>
         <source>— Select scene —</source>
-        <translation>— Виберіть сцену —</translation>
+        <translation type="vanished">— Виберіть сцену —</translation>
     </message>
 </context>
 <context>
@@ -3318,7 +3236,7 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation>Назва профілю</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+10"/>
         <source>Example: Main Hall</source>
         <translation>Приклад: головний зал</translation>
     </message>
@@ -3351,13 +3269,13 @@ Manually added content, trims, framing and expanded state will be kept.</source>
     </message>
     <message>
         <location line="+5"/>
-        <location line="+406"/>
+        <location line="+414"/>
         <source>Meeting schedule</source>
         <translation>Розклад зібрань</translation>
     </message>
     <message>
-        <location line="-400"/>
-        <location line="+1161"/>
+        <location line="-408"/>
+        <location line="+1150"/>
         <source>Congregation</source>
         <translation>Збір</translation>
     </message>
@@ -3366,18 +3284,18 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation type="vanished">Необов’язково</translation>
     </message>
     <message>
-        <location line="-1150"/>
+        <location line="-1139"/>
         <source>Find your congregation to fill the meeting days and times from jw.org.</source>
         <translation>Знайдіть свій збір, щоб заповнити дні та час зібрань з jw.org.</translation>
     </message>
     <message>
         <location line="+8"/>
-        <location line="+375"/>
+        <location line="+383"/>
         <source>Meeting media</source>
         <translation>Медіафайли для зібрання</translation>
     </message>
     <message>
-        <location line="-364"/>
+        <location line="-372"/>
         <source>Download automatically</source>
         <translation>Завантажувати автоматично</translation>
     </message>
@@ -3388,12 +3306,12 @@ Manually added content, trims, framing and expanded state will be kept.</source>
     </message>
     <message>
         <location line="+8"/>
-        <location line="+357"/>
+        <location line="+365"/>
         <source>Manual download</source>
         <translation>Ручне завантаження</translation>
     </message>
     <message>
-        <location line="-356"/>
+        <location line="-364"/>
         <source>Only download media when you click the cloud button.</source>
         <translation>Завантажувати медіа лише після натискання кнопки з хмарою.</translation>
     </message>
@@ -3438,12 +3356,12 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation>Порт WebSocket</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+16"/>
         <source>Password (optional)</source>
         <translation>Пароль (необов’язково)</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+16"/>
         <source>Connecting…</source>
         <translation>Підключення…</translation>
     </message>
@@ -3573,8 +3491,8 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation>Цей і наступний тиждень</translation>
     </message>
     <message>
-        <location line="-393"/>
-        <location line="+400"/>
+        <location line="-401"/>
+        <location line="+408"/>
         <location line="+5"/>
         <location line="+9"/>
         <source>Not configured</source>
@@ -3596,7 +3514,7 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation>Автоматична демонстрація готова</translation>
     </message>
     <message>
-        <location line="+120"/>
+        <location line="+101"/>
         <source>Finishing…</source>
         <translation>Завершення…</translation>
     </message>
@@ -3607,17 +3525,17 @@ Manually added content, trims, framing and expanded state will be kept.</source>
     </message>
     <message>
         <location line="+303"/>
-        <location line="+167"/>
+        <location line="+149"/>
         <source>Close</source>
         <translation>Закрити</translation>
     </message>
     <message>
-        <location line="-159"/>
+        <location line="-135"/>
         <source>Search by congregation name</source>
         <translation>Пошук за назвою збору</translation>
     </message>
     <message>
-        <location filename="../../ui/qml/onboarding.py" line="+69"/>
+        <location filename="../../ui/qml/onboarding.py" line="+73"/>
         <source>Searching jw.org…</source>
         <translation>Пошук на jw.org…</translation>
     </message>
@@ -3626,17 +3544,17 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation type="vanished">Дні та час зібрань беруться з jw.org.</translation>
     </message>
     <message>
-        <location filename="../../qml/OnboardingView.qml" line="+88"/>
+        <location filename="../../qml/OnboardingView.qml" line="+64"/>
         <source>Remove congregation</source>
         <translation>Видалити збір</translation>
     </message>
     <message>
-        <location line="+78"/>
+        <location line="+83"/>
         <source>Search languages</source>
         <translation>Пошук мов</translation>
     </message>
     <message>
-        <location filename="../../ui/qml/onboarding.py" line="+255"/>
+        <location filename="../../ui/qml/onboarding.py" line="+259"/>
         <source>Enter a port between 1 and 65535.</source>
         <translation>Введіть порт від 1 до 65535.</translation>
     </message>
@@ -3646,7 +3564,7 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation>Засіб вибору цілі демонстрації недоступний.</translation>
     </message>
     <message>
-        <location line="+139"/>
+        <location line="+140"/>
         <source>Enter a profile name.</source>
         <translation>Введіть назву профілю.</translation>
     </message>
@@ -3681,7 +3599,7 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation>Не вдалося створити профіль.</translation>
     </message>
     <message>
-        <location line="-542"/>
+        <location line="-547"/>
         <source>jw.org does not publish meeting times for this congregation.</source>
         <translation>На jw.org немає часу зібрань для цього збору.</translation>
     </message>
@@ -3706,7 +3624,7 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <translation>Не вдалося підключитися до jw.org. Перевірте підключення і спробуйте ще раз.</translation>
     </message>
     <message>
-        <location line="+685"/>
+        <location line="+690"/>
         <source>Allow Solin in macOS Accessibility settings.</source>
         <translation>Дозвольте Solin у налаштуваннях доступності macOS.</translation>
     </message>
@@ -5405,211 +5323,180 @@ This action cannot be undone.</source>
 <context>
     <name>RemoteControlSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/remote_control_section.py" line="+54"/>
-        <location line="+403"/>
         <source>Remote control</source>
-        <translation>Дистанційне керування</translation>
+        <translation type="vanished">Дистанційне керування</translation>
     </message>
     <message>
-        <location line="-402"/>
-        <location line="+404"/>
         <source>Control Solin securely from another device on this local network.</source>
-        <translation>Керуйте Solin безпечно з іншого пристрою в цій локальній мережі.</translation>
+        <translation type="vanished">Керуйте Solin безпечно з іншого пристрою в цій локальній мережі.</translation>
     </message>
     <message>
-        <location line="-388"/>
-        <location line="+390"/>
         <source>Network interface</source>
-        <translation>Мережевий інтерфейс</translation>
+        <translation type="vanished">Мережевий інтерфейс</translation>
     </message>
     <message>
-        <location line="-376"/>
-        <location line="+377"/>
         <source>Access credentials</source>
-        <translation>Облікові дані для доступу</translation>
+        <translation type="vanished">Облікові дані для доступу</translation>
     </message>
     <message>
-        <location line="-349"/>
-        <location line="+350"/>
         <source>Username</source>
-        <translation>Ім&apos;я користувача</translation>
+        <translation type="vanished">Ім&apos;я користувача</translation>
     </message>
     <message>
-        <location line="-345"/>
-        <location line="+346"/>
         <source>New password</source>
-        <translation>Новий пароль</translation>
+        <translation type="vanished">Новий пароль</translation>
     </message>
     <message>
-        <location line="-341"/>
-        <location line="+342"/>
         <source>Confirm password</source>
-        <translation>Підтвердьте пароль</translation>
+        <translation type="vanished">Підтвердьте пароль</translation>
     </message>
     <message>
-        <location line="-328"/>
-        <location line="+330"/>
         <source>Use at least %1 characters. Credentials belong only to this profile.</source>
-        <translation>Використовуйте принаймні %1 символів. Облікові дані належать лише цьому профілю.</translation>
+        <translation type="vanished">Використовуйте принаймні %1 символів. Облікові дані належать лише цьому профілю.</translation>
     </message>
     <message>
-        <location line="-323"/>
-        <location line="+327"/>
         <source>Save credentials</source>
-        <translation>Зберегти облікові дані</translation>
+        <translation type="vanished">Зберегти облікові дані</translation>
     </message>
     <message>
-        <location line="-298"/>
-        <location line="+300"/>
         <source>Copy address</source>
-        <translation>Копіювати адресу</translation>
+        <translation type="vanished">Копіювати адресу</translation>
     </message>
     <message>
-        <location line="-285"/>
-        <location line="+286"/>
         <source>Set up a device</source>
-        <translation>Налаштувати пристрій</translation>
+        <translation type="vanished">Налаштувати пристрій</translation>
     </message>
     <message>
-        <location line="-265"/>
         <source>Select a private network…</source>
-        <translation>Виберіть приватну мережу…</translation>
+        <translation type="vanished">Виберіть приватну мережу…</translation>
     </message>
     <message>
-        <location line="+30"/>
         <source>Choose a network and save credentials before enabling remote control.</source>
-        <translation>Виберіть мережу та збережіть облікові дані перед увімкненням дистанційного керування.</translation>
+        <translation type="vanished">Виберіть мережу та збережіть облікові дані перед увімкненням дистанційного керування.</translation>
     </message>
     <message>
-        <location line="+17"/>
         <source>The passwords do not match.</source>
-        <translation>Паролі не збігаються.</translation>
+        <translation type="vanished">Паролі не збігаються.</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Enter a new password to save.</source>
-        <translation>Введіть новий пароль для збереження.</translation>
+        <translation type="vanished">Введіть новий пароль для збереження.</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Check the username and use a password with at least %1 characters.</source>
-        <translation>Перевірте ім&apos;я користувача та використовуйте пароль, що містить принаймні %1 символів.</translation>
+        <translation type="vanished">Перевірте ім&apos;я користувача та використовуйте пароль, що містить принаймні %1 символів.</translation>
     </message>
     <message>
-        <location line="+31"/>
         <source>Configured as %1</source>
-        <translation>Налаштовано як %1</translation>
+        <translation type="vanished">Налаштовано як %1</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Not configured</source>
-        <translation>Не налаштовано</translation>
+        <translation type="vanished">Не налаштовано</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>Cancel</source>
-        <translation>Скасувати</translation>
+        <translation type="vanished">Скасувати</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Change</source>
-        <translation>Змінити</translation>
+        <translation type="vanished">Змінити</translation>
     </message>
     <message>
-        <location line="+20"/>
         <source>No network selected</source>
-        <translation>Мережу не вибрано</translation>
+        <translation type="vanished">Мережу не вибрано</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>Starting secure remote control…</source>
-        <translation>Запуск безпечного дистанційного керування…</translation>
+        <translation type="vanished">Запуск безпечного дистанційного керування…</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Ready to enable.</source>
-        <translation>Готово до ввімкнення.</translation>
+        <translation type="vanished">Готово до ввімкнення.</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Configuration required.</source>
-        <translation>Потрібне налаштування.</translation>
+        <translation type="vanished">Потрібне налаштування.</translation>
     </message>
 </context>
 <context>
     <name>RemoteControlSetupDialog</name>
     <message>
-        <location filename="../../widgets/remote_control_setup_dialog.py" line="+81"/>
         <source>Set up a device</source>
-        <translation>Налаштувати пристрій</translation>
+        <translation type="vanished">Налаштувати пристрій</translation>
     </message>
     <message>
-        <location line="+29"/>
+        <location filename="../../qml/SettingsRemoteSetup.qml" line="+43"/>
         <source>Set up Solin Remote</source>
         <translation>Налаштувати Solin Remote</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+47"/>
         <source>Scan once to open the secure setup on your phone or tablet.</source>
         <translation>Відскануйте один раз, щоб відкрити безпечне налаштування на телефоні або планшеті.</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+29"/>
         <source>Generating QR code…</source>
         <translation>Створення QR-коду…</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="-5"/>
+        <location line="+21"/>
         <source>1  Scan the QR code</source>
         <translation>1  Відскануйте QR-код</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+8"/>
         <source>Keep Solin open and connect both devices to the same local network. The guide explains the certificate and app installation.</source>
         <translation>Тримайте Solin відкритим і під’єднайте обидва пристрої до однієї локальної мережі. У посібнику пояснюється, як встановити сертифікат і програму.</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+9"/>
+        <location line="+6"/>
         <source>Copy setup address</source>
         <translation>Скопіювати адресу налаштування</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+7"/>
         <source>On the first opening, the browser may show a privacy warning. Confirm that the local address matches, choose Advanced or Show Details, and continue only to this address. The warning disappears after the certificate is trusted.</source>
         <translation>Під час першого відкриття браузер може відобразити попередження про конфіденційність. Переконайтеся, що локальна адреса збігається, виберіть «Додатково» або «Показати деталі» і перейдіть лише за цією адресою. Попередження зникне після того, як сертифікат буде додано до довірених.</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+15"/>
+        <location line="+12"/>
         <source>VERIFICATION CODE</source>
         <translation>КОД ПЕРЕВІРКИ</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+4"/>
         <source>Compare this code on the device before installing the certificate.</source>
         <translation>Звірте цей код на пристрої перед встановленням сертифіката.</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+10"/>
+        <location line="+15"/>
         <source>Show full SHA-256 fingerprint</source>
         <translation>Показати повний відбиток SHA-256</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+27"/>
         <source>Save certificate…</source>
         <translation>Зберегти сертифікат…</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+10"/>
         <source>Done</source>
         <translation>Готово</translation>
     </message>
     <message>
-        <location line="+93"/>
+        <location filename="../../ui/qml/settings/remote.py" line="+182"/>
+        <location line="+179"/>
         <source>Could not generate the QR code. Copy the address instead.</source>
         <translation>Не вдалося згенерувати QR-код. Натомість скопіюйте адресу.</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+40"/>
         <source>Save Solin certificate</source>
         <translation>Зберегти сертифікат Solin</translation>
     </message>
@@ -5619,12 +5506,11 @@ This action cannot be undone.</source>
         <translation>Файли сертифіката (*.cer)</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>Could not save certificate</source>
-        <translation>Не вдалося зберегти сертифікат</translation>
+        <translation type="vanished">Не вдалося зберегти сертифікат</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+8"/>
         <source>Choose another location and try again.</source>
         <translation>Виберіть інше місце і спробуйте ще раз.</translation>
     </message>
@@ -7356,24 +7242,20 @@ Add content, a camera, or another scene.</source>
 <context>
     <name>ScreensSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/screens_section.py" line="+54"/>
         <source>Primary Screen (control)</source>
-        <translation>Головний екран (керування)</translation>
+        <translation type="vanished">Головний екран (керування)</translation>
     </message>
     <message>
-        <location line="+20"/>
         <source>No secondary screen detected. Connect an external monitor.</source>
-        <translation>Додатковий екран не виявлено. Підключіть зовнішній монітор.</translation>
+        <translation type="vanished">Додатковий екран не виявлено. Підключіть зовнішній монітор.</translation>
     </message>
     <message>
-        <location line="+27"/>
         <source>Secondary {n} (projection)</source>
-        <translation>Додатковий {n} (проекція)</translation>
+        <translation type="vanished">Додатковий {n} (проекція)</translation>
     </message>
     <message>
-        <location line="+18"/>
         <source>PROJECTION</source>
-        <translation>ПРОЕКЦІЯ</translation>
+        <translation type="vanished">ПРОЕКЦІЯ</translation>
     </message>
 </context>
 <context>
@@ -7402,67 +7284,57 @@ Add content, a camera, or another scene.</source>
 <context>
     <name>SettingsWidget</name>
     <message>
-        <location filename="../../widgets/settings_widget.py" line="+277"/>
-        <location line="+265"/>
+        <location filename="../../qml/SettingsView.qml" line="+115"/>
         <source>Settings</source>
         <translation>Налаштування</translation>
     </message>
     <message>
-        <location line="-215"/>
-        <location line="+217"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+55"/>
         <source>Language</source>
         <translation>Мова</translation>
     </message>
     <message>
-        <location line="-209"/>
-        <location line="+210"/>
         <source>Media</source>
-        <translation>Медіа</translation>
+        <translation type="vanished">Медіа</translation>
     </message>
     <message>
-        <location line="-202"/>
-        <location line="+203"/>
+        <location line="+20"/>
         <source>Meetings</source>
         <translation>Зібрання</translation>
     </message>
     <message>
-        <location line="-195"/>
-        <location line="+196"/>
+        <location line="-4"/>
         <source>Folders</source>
         <translation>Папки</translation>
     </message>
     <message>
-        <location line="-188"/>
-        <location line="+189"/>
+        <location line="+87"/>
         <source>Remote access</source>
         <translation>Віддалений доступ</translation>
     </message>
     <message>
-        <location line="-180"/>
-        <location line="+181"/>
+        <location line="-35"/>
         <source>Integrations</source>
         <translation>Інтеграції</translation>
     </message>
     <message>
-        <location line="-152"/>
-        <location line="+153"/>
+        <location line="-10"/>
         <source>Annual Text</source>
         <translation>Річний вірш</translation>
     </message>
     <message>
-        <location line="-143"/>
-        <location line="+144"/>
+        <location line="-3"/>
+        <location line="+1"/>
         <source>Screens</source>
         <translation>Екрани</translation>
     </message>
     <message>
-        <location line="-136"/>
-        <location line="+137"/>
+        <location line="+64"/>
         <source>About</source>
         <translation>Про програму</translation>
     </message>
     <message>
-        <location line="-38"/>
+        <location filename="../../ui/qml/settings/general.py" line="+158"/>
         <source>Dark</source>
         <translation>Темна</translation>
     </message>
@@ -7472,7 +7344,7 @@ Add content, a camera, or another scene.</source>
         <translation>Світла</translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-119"/>
         <source>Interface</source>
         <translation>Інтерфейс</translation>
     </message>
@@ -7482,82 +7354,83 @@ Add content, a camera, or another scene.</source>
         <translation>Медіа JW</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+12"/>
         <source>Auto-download on play</source>
         <translation>Автоматичне завантаження під час відтворення</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+0"/>
         <source>Downloads the playing media for offline use.</source>
         <translation>Завантажує медіафайли для використання офлайн.</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+35"/>
         <source>Auto-download weekly study</source>
         <translation>Автозавантаження для зібрань</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Downloads this week’s and next week’s meeting media.</source>
         <translation>Завантажує медіа для зібрань цього та наступного тижня.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-38"/>
         <source>Song Announcement Mode</source>
         <translation>Режим оголошення пісень</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Song starts muted for title display. Press play to start.</source>
         <translation>Пісня починається без звуку для показу назви. Натисніть відтворення, щоб почати.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+39"/>
         <source>Automatic background song</source>
         <translation>Автоматична фонова пісня</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-41"/>
         <source>Start videos paused</source>
         <translation>Запускати відео на паузі</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Videos open paused so you can start them manually.</source>
         <translation>Відео відкриваються на паузі, щоб їх можна було запустити вручну.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Playback protection</source>
         <translation>Захист відтворення</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+0"/>
         <source>Prevents media changes and seeking while audio or video is playing. Pause first to make changes.</source>
         <translation>Не дозволяє змінювати медіа й перемотувати під час відтворення аудіо або відео. Щоб внести зміни, спочатку призупиніть відтворення.</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+7"/>
         <source>Link Folder</source>
         <translation>Прив&apos;язати папку</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Sync folder (Dropbox, OneDrive, etc.) shown as playlists.</source>
         <translation>Папка синхронізації (Dropbox, OneDrive тощо), що відображається як плейлісти.</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location filename="../../qml/SettingsRow.qml" line="+264"/>
         <source>Choose…</source>
         <translation>Вибрати…</translation>
     </message>
     <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+53"/>
         <location line="+1"/>
         <source>OBS Studio</source>
         <translation>OBS Studio</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+0"/>
         <source>Automatically switches scenes during projection</source>
         <translation>Автоматично перемикає сцени під час проектування</translation>
     </message>
@@ -7572,27 +7445,26 @@ Add content, a camera, or another scene.</source>
         <translation>Пароль (необов’язково)</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Leave blank if no password is set</source>
-        <translation>Залиште порожнім, якщо пароль не встановлено</translation>
+        <translation type="vanished">Залиште порожнім, якщо пароль не встановлено</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+4"/>
+        <location line="+1"/>
         <source>Program stream (NDI)</source>
         <translation>Програмна трансляція (NDI)</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Receive the DistroAV/NDI output from OBS as a live projection.</source>
         <translation>Отримувати вихідний сигнал DistroAV/NDI з OBS як трансляцію наживо.</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Enable Main Output in DistroAV, then select the NDI source shown by OBS.</source>
-        <translation>Увімкніть основний вихід (Main Output) у DistroAV, а потім виберіть джерело NDI, яке відображається в OBS.</translation>
+        <translation type="vanished">Увімкніть основний вихід (Main Output) у DistroAV, а потім виберіть джерело NDI, яке відображається в OBS.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Available NDI sources</source>
         <translation>Доступні джерела NDI</translation>
     </message>
@@ -7602,20 +7474,17 @@ Add content, a camera, or another scene.</source>
         <translation>Знайти джерела</translation>
     </message>
     <message>
-        <location line="-16"/>
+        <location line="-6"/>
         <source>Default scene (idle)</source>
         <translation>Сцена за замовчуванням (режим очікування)</translation>
     </message>
     <message>
-        <location line="-346"/>
-        <location line="+289"/>
         <source>Loading…</source>
-        <translation>Завантаження…</translation>
+        <translation type="vanished">Завантаження…</translation>
     </message>
     <message>
-        <location line="+58"/>
         <source>Scene shown when nothing is being projected.</source>
-        <translation>Сцена, що відображається, коли нічого не проектується.</translation>
+        <translation type="vanished">Сцена, що відображається, коли нічого не проектується.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -7623,54 +7492,51 @@ Add content, a camera, or another scene.</source>
         <translation>Сцена медіавікна</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Scene that captures the projection monitor. Activated when content is displayed.</source>
-        <translation>Сцена, що захоплює монітор проекції. Активується під час відображення вмісту.</translation>
+        <translation type="vanished">Сцена, що захоплює монітор проекції. Активується під час відображення вмісту.</translation>
     </message>
     <message>
-        <location line="+35"/>
+        <location line="+9"/>
         <source>Audio controls and attendance count during meetings.</source>
         <translation>Керування звуком і кількість присутніх під час зібрань.</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+8"/>
+        <location line="+1"/>
         <source>Auto Screen Share</source>
         <translation>Автоматична демонстрація екрана</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Automatically shares screen via hotkeys when projecting media.</source>
         <translation>Автоматично демонструє екран за допомогою гарячих клавіш під час показу медіа.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Share hotkey</source>
         <translation>Гаряча клавіша демонстрації</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Uses Zoom&apos;s single start/stop screen-share shortcut.</source>
-        <translation>Використовує одну гарячу клавішу Zoom для запуску й зупинки демонстрації екрана.</translation>
+        <translation type="vanished">Використовує одну гарячу клавішу Zoom для запуску й зупинки демонстрації екрана.</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+1"/>
         <source>Share target</source>
         <translation>Ціль демонстрації</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>The Solin Media Preview tile inside Zoom&apos;s share dialog.</source>
-        <translation>Плитка «Solin Media Preview» у вікні демонстрації Zoom.</translation>
+        <translation type="vanished">Плитка «Solin Media Preview» у вікні демонстрації Zoom.</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+1"/>
         <source>Accessibility permission</source>
         <translation>Дозвіл доступності</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Open Settings</source>
-        <translation>Відкрити налаштування</translation>
+        <translation type="vanished">Відкрити налаштування</translation>
     </message>
     <message>
         <source>Click Position</source>
@@ -7681,84 +7547,83 @@ Add content, a camera, or another scene.</source>
         <translation type="vanished">Позиція, яку потрібно клацнути після відкриття діалогу демонстрації, щоб вибрати ціль.</translation>
     </message>
     <message>
-        <location line="-3"/>
         <source>Configure</source>
-        <translation>Налаштувати</translation>
+        <translation type="vanished">Налаштувати</translation>
     </message>
     <message>
-        <location line="-36"/>
+        <location line="-10"/>
+        <location line="+1"/>
         <source>Camera</source>
         <translation>Камера</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Shows a camera button in the live tools toolbar.</source>
         <translation>Відображає кнопку камери на панелі інструментів для трансляцій.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+11"/>
+        <location line="+1"/>
         <source>Automatic Shortcuts</source>
         <translation>Автоматичні клавіші швидкого доступу</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Sends keyboard shortcuts when visual media changes state.</source>
         <translation>Надсилає клавіатурні скорочення, коли змінюється стан візуальних медіа.</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Create one or more shortcuts for start, end, pause and resume events.</source>
-        <translation>Створіть одне або кілька скорочень для подій початку, завершення, паузи та відновлення.</translation>
+        <translation type="vanished">Створіть одне або кілька скорочень для подій початку, завершення, паузи та відновлення.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location filename="../../qml/SettingsRow.qml" line="+68"/>
         <source>No shortcuts configured.</source>
         <translation>Скорочення не налаштовані.</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+1"/>
         <source>Add shortcut</source>
         <translation>Додати скорочення</translation>
     </message>
     <message>
-        <location line="+19"/>
+        <location filename="../../qml/SettingsRow.qml" line="-7"/>
         <source>Edit</source>
         <translation>Редагувати</translation>
     </message>
     <message>
-        <location line="-13"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-17"/>
+        <location line="+1"/>
         <source>Zoom Meetings</source>
         <translation>Конференції Zoom</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="-25"/>
         <source>Text shown on the projection screen when idle.</source>
         <translation>Текст, який відображається на екрані проекції у фоновому режимі.</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+0"/>
         <source>Update</source>
         <translation>Оновити</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Scripture:</source>
         <translation>Вірш:</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>E.g.: Happy are those conscious of their spiritual need.</source>
-        <translation>Напр.: Щасливі ті, хто усвідомлює свої духовні потреби.</translation>
+        <translation type="vanished">Напр.: Щасливі ті, хто усвідомлює свої духовні потреби.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Bible reference:</source>
         <translation>Біблійне посилання:</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>E.g.: Matthew 5:3.</source>
-        <translation>Напр.: Матвія 5:3.</translation>
+        <translation type="vanished">Напр.: Матвія 5:3.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -7766,24 +7631,535 @@ Add content, a camera, or another scene.</source>
         <translation>Зберегти зміни</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location filename="../../qml/SettingsPage.qml" line="+184"/>
         <source>Audio &amp; Video app for Kingdom Hall meetings.</source>
         <translation>Додаток для роботи з аудіо та відео на зібраннях у Залі Царства.</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+9"/>
         <source>Official Website</source>
         <translation>Офіційний вебсайт</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+4"/>
         <source>Changelog</source>
         <translation>Список змін (Changelog)</translation>
     </message>
     <message>
-        <location line="-6"/>
+        <location line="+6"/>
         <source>This app is independent and is not affiliated with or endorsed by the Watch Tower Bible and Tract Society of Pennsylvania or any of its associated organizations.</source>
         <translation>Цей додаток є незалежним і не пов’язаний з Товариством Вартової башти, Біблій і трактатів (Пенсільванія) або будь-якими іншими пов’язаними з ним організаціями, та не підтримується ними.</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsSectionHeader.qml" line="+28"/>
+        <location line="+35"/>
+        <source>Back to sections</source>
+        <translation>Назад до розділів</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsView.qml" line="+15"/>
+        <source>Search settings</source>
+        <translation>Налаштування пошуку</translation>
+    </message>
+    <message>
+        <location line="+173"/>
+        <source>Search results</source>
+        <translation>Результати пошуку</translation>
+    </message>
+    <message>
+        <location line="+77"/>
+        <source>No settings found. Try another word.</source>
+        <translation>Налаштувань не знайдено. Спробуйте інше слово.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+2"/>
+        <source>Scenes</source>
+        <translation>Сцени</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Native scenes engine</source>
+        <translation>Двигун рідних сцен</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Restart Solin to apply this change.</source>
+        <translation>Перезапустіть Solin, щоб застосувати цю зміну.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>OBS, Zoom and camera</source>
+        <translation>OBS, Zoom і камера</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>Automations</source>
+        <translation>Автоматизації</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Sharing and shortcuts</source>
+        <translation>Обмін і ярлики</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Control over your local network</source>
+        <translation>Контроль над локальною мережею</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+1"/>
+        <source>Remote control</source>
+        <translation>Дистанційне керування</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Control Solin securely from another device on this local network.</source>
+        <translation>Керуйте Solin безпечно з іншого пристрою в цій локальній мережі.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Network interface</source>
+        <translation>Мережевий інтерфейс</translation>
+    </message>
+    <message>
+        <source>Refresh</source>
+        <translation type="vanished">Оновити</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Copy address</source>
+        <translation>Копіювати адресу</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Access credentials</source>
+        <translation>Облікові дані для доступу</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Username</source>
+        <translation>Ім&apos;я користувача</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>New password</source>
+        <translation>Новий пароль</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Confirm password</source>
+        <translation>Підтвердьте пароль</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Save credentials</source>
+        <translation>Зберегти облікові дані</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Devices</source>
+        <translation>Пристрої</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Set up a device</source>
+        <translation>Налаштувати пристрій</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Version and information</source>
+        <translation>Версія та інформація</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/general.py" line="-125"/>
+        <source>Searching jw.org…</source>
+        <translation>Пошук на jw.org…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Reading the meeting times…</source>
+        <translation>Читання часу зібрань…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>No congregation found with that name.</source>
+        <translation>Збору з такою назвою не знайдено.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>jw.org does not publish meeting times for this congregation.</source>
+        <translation>На jw.org немає часу зібрань для цього збору.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Too many searches in a row. Wait a moment and type again.</source>
+        <translation>Занадто багато запитів підряд. Зачекайте трохи і введіть знову.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Could not reach jw.org. Check the connection and try again.</source>
+        <translation>Не вдалося підключитися до jw.org. Перевірте підключення і спробуйте ще раз.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-94"/>
+        <location filename="../../ui/qml/settings/general.py" line="+5"/>
+        <source>Search your congregation to fill the days and times below.</source>
+        <translation>Знайдіть свій збір, щоб заповнити дні та час нижче.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/general.py" line="+94"/>
+        <source>(same as interface)</source>
+        <translation>(така ж, як інтерфейс)</translation>
+    </message>
+    <message>
+        <location line="+54"/>
+        <source>Primary Screen (control)</source>
+        <translation>Головний екран (керування)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Secondary {n} (projection)</source>
+        <translation>Додатковий {n} (проекція)</translation>
+    </message>
+    <message>
+        <location line="+210"/>
+        <source>Configure the meeting day/time before automatic playback can start.</source>
+        <translation>Налаштуйте день і час зібрання, перш ніж запускати автоматичне відтворення.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Plays audio songs before configured meetings and fades out before start.</source>
+        <translation>Відтворює аудіопісні перед налаштованими зібраннями й поступово зменшує гучність перед початком.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Select folder to link</source>
+        <translation>Виберіть папку для прив&apos;язки</translation>
+    </message>
+    <message>
+        <location line="+117"/>
+        <source>Fetching annual text…</source>
+        <translation>Отримання річного вірша…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Could not fetch annual text</source>
+        <translation>Не вдалося отримати річний вірш</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Annual text updated for {year}</source>
+        <translation>Річний вірш оновлено для {year} року</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-6"/>
+        <source>Schedule and preparation</source>
+        <translation>Розклад і підготовка</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Meeting schedule</source>
+        <translation>Розклад зустрічей</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Midweek meeting</source>
+        <translation>Зібрання серед тижня</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <location line="+7"/>
+        <source>Time</source>
+        <translation>Час</translation>
+    </message>
+    <message>
+        <location line="-3"/>
+        <source>Weekend meeting</source>
+        <translation>Зібрання у вихідні</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Preparation</source>
+        <translation>Підготовка</translation>
+    </message>
+    <message>
+        <location line="-53"/>
+        <source>Appearance and languages</source>
+        <translation>Зовнішній вигляд і мови</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Theme and languages</source>
+        <translation>Тема і мови</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Appearance</source>
+        <translation>Зовнішній вигляд</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Theme</source>
+        <translation>Тема</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Update languages</source>
+        <translation>Оновіть мови</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Media and files</source>
+        <translation>Медіа та файли</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Playback, downloads and folders</source>
+        <translation>Відтворення, завантаження та папки</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Playback</source>
+        <translation>Відтворення</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Downloads</source>
+        <translation>Завантаження</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsRow.qml" line="-134"/>
+        <source>Select…</source>
+        <translation>Виберіть…</translation>
+    </message>
+    <message>
+        <location line="+61"/>
+        <source>No folder selected</source>
+        <translation>Папку не вибрано</translation>
+    </message>
+    <message>
+        <location line="+48"/>
+        <source>No secondary screen detected. Connect an external monitor.</source>
+        <translation>Додатковий екран не виявлено. Підключіть зовнішній монітор.</translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <source>Delete</source>
+        <translation>Видалити</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+40"/>
+        <source>Projection</source>
+        <translation>Проекція</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Screens and annual text</source>
+        <translation>Екрани та річний текст</translation>
+    </message>
+    <message>
+        <location filename="../../qml/AppTextField.qml" line="+67"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-37"/>
+        <source>Clear</source>
+        <translation>Очистити</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsClockPicker.qml" line="+45"/>
+        <source>Choose hour</source>
+        <translation>Виберіть годину</translation>
+    </message>
+    <message>
+        <location line="+30"/>
+        <source>Choose minute</source>
+        <translation>Виберіть хвилину</translation>
+    </message>
+    <message>
+        <location line="+101"/>
+        <source>Hour %1</source>
+        <translation>Година %1</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Minute %1</source>
+        <translation>Хвилина %1</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsCongregationDialog.qml" line="+31"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+8"/>
+        <source>Fill in from jw.org</source>
+        <translation>Заповнити з jw.org</translation>
+    </message>
+    <message>
+        <location line="+23"/>
+        <source>Search by congregation name</source>
+        <translation>Пошук за назвою збору</translation>
+    </message>
+    <message>
+        <location line="+86"/>
+        <location filename="../../qml/SettingsRemoteSetup.qml" line="-201"/>
+        <source>Close</source>
+        <translation>Закрити</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsRow.qml" line="-88"/>
+        <location filename="../../qml/SettingsSelectionDialog.qml" line="+30"/>
+        <source>Search…</source>
+        <translation>Пошук…</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsSelectionDialog.qml" line="+8"/>
+        <source>HH:mm</source>
+        <translation>ГГ:хм</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>No results found.</source>
+        <translation>Результатів не знайдено.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <location filename="../../qml/SettingsTimeDialog.qml" line="+58"/>
+        <source>Apply</source>
+        <translation>Застосувати</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <location filename="../../qml/SettingsTimeDialog.qml" line="-2"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+37"/>
+        <location line="+52"/>
+        <source>Cancel</source>
+        <translation>Скасувати</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsShortcutDialog.qml" line="-144"/>
+        <source>Share Hotkey</source>
+        <translation>Гаряча клавіша демонстрації</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Press the Zoom shortcut that starts and stops screen sharing.</source>
+        <translation>Натисніть гарячу клавішу Zoom, яка запускає й зупиняє демонстрацію екрана.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="-309"/>
+        <location line="+63"/>
+        <source>Select a private network…</source>
+        <translation>Виберіть приватну мережу…</translation>
+    </message>
+    <message>
+        <location line="-50"/>
+        <source>Choose a network and save credentials before enabling remote control.</source>
+        <translation>Виберіть мережу та збережіть облікові дані перед увімкненням дистанційного керування.</translation>
+    </message>
+    <message>
+        <location line="+83"/>
+        <source>Starting secure remote control…</source>
+        <translation>Запуск безпечного дистанційного керування…</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Ready to enable.</source>
+        <translation>Готово до ввімкнення.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Configuration required.</source>
+        <translation>Потрібне налаштування.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Configured as %1</source>
+        <translation>Налаштовано як %1</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/integrations.py" line="-106"/>
+        <source>Enter a valid port (1–65535).</source>
+        <translation>Введіть дійсний порт (1–65535).</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>✓ Configuration saved — reconnecting…</source>
+        <translation>✓ Налаштування збережено — перепідключення…</translation>
+    </message>
+    <message>
+        <location line="+31"/>
+        <source>— Select scene —</source>
+        <translation>— Виберіть сцену —</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>NDI receiver is not available.</source>
+        <translation>Приймач NDI недоступний.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <location line="+34"/>
+        <source>Looking for NDI sources on this network.</source>
+        <translation>Пошук джерел NDI у цій мережі.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>No NDI sources found. Check that DistroAV Main Output is enabled in OBS.</source>
+        <translation>Джерел NDI не знайдено. Перевірте, чи ввімкнено основний вихід (Main Output) DistroAV в OBS.</translation>
+    </message>
+    <message>
+        <location line="+48"/>
+        <source>Press a shortcut before saving.</source>
+        <translation>Натисніть скорочення перед збереженням.</translation>
+    </message>
+    <message>
+        <location line="+78"/>
+        <source>Configured</source>
+        <translation>Налаштовано</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <location filename="../../ui/qml/settings/remote.py" line="+4"/>
+        <source>Not configured</source>
+        <translation>Не налаштовано</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Solin can send the automatic click.</source>
+        <translation>Solin може надіслати автоматичне клацання.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Allow Solin in macOS Accessibility so automatic clicks can work.</source>
+        <translation>Дозвольте Solin у розділі «Доступність» macOS, щоб автоматичні клацання працювали.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="+2"/>
+        <source>Use at least %1 characters. Credentials belong only to this profile.</source>
+        <translation>Використовуйте принаймні %1 символів. Облікові дані належать лише цьому профілю.</translation>
+    </message>
+    <message>
+        <location line="+33"/>
+        <source>The passwords do not match.</source>
+        <translation>Паролі не збігаються.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Enter a new password to save.</source>
+        <translation>Введіть новий пароль для збереження.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Check the username and use a password with at least %1 characters.</source>
+        <translation>Перевірте ім&apos;я користувача та використовуйте пароль, що містить принаймні %1 символів.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/general.py" line="+18"/>
+        <location filename="../../ui/qml/settings/remote.py" line="+10"/>
+        <location line="+142"/>
+        <source>Saved</source>
+        <translation>Збережено</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="-23"/>
+        <source>Copied</source>
+        <translation>Скопійовано</translation>
     </message>
 </context>
 <context>
@@ -8934,34 +9310,28 @@ Click &apos;Download&apos; to open the download page.</source>
 <context>
     <name>WatchedFolderSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/watched_folder_section.py" line="+48"/>
         <source>Link Folder</source>
-        <translation>Прив&apos;язати папку</translation>
+        <translation type="vanished">Прив&apos;язати папку</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Sync folder (Dropbox, OneDrive, etc.) shown as playlists.</source>
-        <translation>Папка синхронізації (Dropbox, OneDrive тощо), що відображається як плейлісти.</translation>
+        <translation type="vanished">Папка синхронізації (Dropbox, OneDrive тощо), що відображається як плейлісти.</translation>
     </message>
     <message>
-        <location line="+19"/>
         <source>Choose…</source>
-        <translation>Вибрати…</translation>
+        <translation type="vanished">Вибрати…</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>Clear</source>
-        <translation>Очистити</translation>
+        <translation type="vanished">Очистити</translation>
     </message>
     <message>
-        <location line="+48"/>
         <source>No folder selected</source>
-        <translation>Папку не вибрано</translation>
+        <translation type="vanished">Папку не вибрано</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Select folder to link</source>
-        <translation>Виберіть папку для прив&apos;язки</translation>
+        <translation type="vanished">Виберіть папку для прив&apos;язки</translation>
     </message>
 </context>
 <context>
@@ -9215,76 +9585,60 @@ Both devices must be on the same Wi-Fi network.</source>
 <context>
     <name>YearlyTextSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/yearly_text_section.py" line="+62"/>
         <source>Text shown on the projection screen when idle.</source>
-        <translation>Текст, який відображається на екрані проекції у фоновому режимі.</translation>
+        <translation type="vanished">Текст, який відображається на екрані проекції у фоновому режимі.</translation>
     </message>
     <message>
-        <location line="+18"/>
-        <location line="+309"/>
         <source>Fetching annual text…</source>
-        <translation>Отримання річного вірша…</translation>
+        <translation type="vanished">Отримання річного вірша…</translation>
     </message>
     <message>
-        <location line="-295"/>
-        <location line="+276"/>
         <source>Update</source>
-        <translation>Оновити</translation>
+        <translation type="vanished">Оновити</translation>
     </message>
     <message>
-        <location line="-241"/>
         <source>Scripture:</source>
-        <translation>Вірш:</translation>
+        <translation type="vanished">Вірш:</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>E.g.: Happy are those conscious of their spiritual need.</source>
-        <translation>Напр.: Щасливі ті, хто усвідомлює свої духовні потреби.</translation>
+        <translation type="vanished">Напр.: Щасливі ті, хто усвідомлює свої духовні потреби.</translation>
     </message>
     <message>
-        <location line="+11"/>
         <source>Bible reference:</source>
-        <translation>Біблійне посилання:</translation>
+        <translation type="vanished">Біблійне посилання:</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>E.g.: Matthew 5:3.</source>
-        <translation>Напр.: Матвія 5:3.</translation>
+        <translation type="vanished">Напр.: Матвія 5:3.</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>Save changes</source>
-        <translation>Зберегти зміни</translation>
+        <translation type="vanished">Зберегти зміни</translation>
     </message>
     <message>
-        <location line="+196"/>
         <source>Annual text updated for {year}</source>
-        <translation>Річний вірш оновлено для {year} року</translation>
+        <translation type="vanished">Річний вірш оновлено для {year} року</translation>
     </message>
     <message>
-        <location line="+33"/>
         <source>Loading…</source>
-        <translation>Завантаження…</translation>
+        <translation type="vanished">Завантаження…</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Could not fetch annual text</source>
-        <translation>Не вдалося отримати річний вірш</translation>
+        <translation type="vanished">Не вдалося отримати річний вірш</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Retry</source>
-        <translation>Повторити</translation>
+        <translation type="vanished">Повторити</translation>
     </message>
     <message>
-        <location line="+23"/>
         <source>▲  Edit text manually</source>
-        <translation>▲  Редагувати текст вручну</translation>
+        <translation type="vanished">▲  Редагувати текст вручну</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>▼  Edit text manually</source>
-        <translation>▼  Редагувати текст вручну</translation>
+        <translation type="vanished">▼  Редагувати текст вручну</translation>
     </message>
 </context>
 <context>
@@ -9518,14 +9872,12 @@ A number at the end has priority.</source>
 <context>
     <name>ZoomSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/zoom_section.py" line="+32"/>
         <source>Zoom Meetings</source>
-        <translation>Конференції Zoom</translation>
+        <translation type="vanished">Конференції Zoom</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Audio controls and attendance count during meetings.</source>
-        <translation>Керування звуком і кількість присутніх під час зібрань.</translation>
+        <translation type="vanished">Керування звуком і кількість присутніх під час зібрань.</translation>
     </message>
 </context>
 <context>
@@ -11056,8 +11408,7 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
 <context>
     <name>_ShortcutSequenceEdit</name>
     <message>
-        <location filename="../../widgets/settings/auto_key_dialog.py" line="-257"/>
-        <location line="+52"/>
+        <location filename="../../qml/SettingsShortcutDialog.qml" line="+98"/>
         <source>Click to record</source>
         <translation>Клацніть для запису</translation>
     </message>
@@ -11065,37 +11416,31 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
 <context>
     <name>_TimePickerPopup</name>
     <message>
-        <location filename="../../widgets/settings/meeting_schedule_section.py" line="-477"/>
         <source>Hour</source>
-        <translation>Година</translation>
+        <translation type="vanished">Година</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Minute</source>
-        <translation>Хвилина</translation>
+        <translation type="vanished">Хвилина</translation>
     </message>
     <message>
-        <location line="+15"/>
         <source>Cancel</source>
-        <translation>Скасувати</translation>
+        <translation type="vanished">Скасувати</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Apply</source>
-        <translation>Застосувати</translation>
+        <translation type="vanished">Застосувати</translation>
     </message>
 </context>
 <context>
     <name>_TimeStepper</name>
     <message>
-        <location line="-108"/>
         <source>Increase</source>
-        <translation>Збільшити</translation>
+        <translation type="vanished">Збільшити</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Decrease</source>
-        <translation>Зменшити</translation>
+        <translation type="vanished">Зменшити</translation>
     </message>
 </context>
 <context>

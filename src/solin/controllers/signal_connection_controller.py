@@ -131,30 +131,30 @@ class SignalConnectionController:
             handlers.language_controller.change_language
         )
         settings = sources.settings_widget
-        settings.yearly_text_changed.connect(handlers.projection_targets.apply_yearly_text)
-        settings.yearly_text_changed.connect(projection_bar.set_yearly_text)
-        settings.watched_folder_changed.connect(sources.playlist_widget.set_watched_folder)
-        settings.watched_folder_changed.connect(sources.meetings_widget.set_watched_folder)
-        settings.zoom_enabled_toggled.connect(live_integrations.on_zoom_settings_enabled_toggled)
-        settings.zoom_participants_toggled.connect(live_integrations.on_zoom_settings_parts_toggled)
-        settings.obs_stream_config_changed.connect(
+        settings.general.yearly_text_changed.connect(handlers.projection_targets.apply_yearly_text)
+        settings.general.yearly_text_changed.connect(projection_bar.set_yearly_text)
+        settings.general.watched_folder_changed.connect(sources.playlist_widget.set_watched_folder)
+        settings.general.watched_folder_changed.connect(sources.meetings_widget.set_watched_folder)
+        settings.integrations.zoom_enabled_toggled.connect(live_integrations.on_zoom_settings_enabled_toggled)
+        settings.integrations.zoom_participants_toggled.connect(live_integrations.on_zoom_settings_parts_toggled)
+        settings.integrations.obs_stream_config_changed.connect(
             live_integrations.refresh_obs_stream_availability
         )
         if sources.camera_service is not None:
-            settings.camera_enabled_toggled.connect(
+            settings.integrations.camera_enabled_toggled.connect(
                 live_integrations.on_camera_settings_enabled_toggled
             )
-        settings.background_song_toggled.connect(
+        settings.general.background_song_toggled.connect(
             handlers.background_song_service.set_enabled
         )
-        settings.meeting_schedule_changed.connect(
+        settings.general.meeting_schedule_changed.connect(
             handlers.background_song_service.reload_settings
         )
-        settings.meeting_schedule_changed.connect(
+        settings.general.meeting_schedule_changed.connect(
             sources.media_countdown_automation.reload_schedule
         )
         if handlers.apply_theme is not None:
-            settings.theme_changed.connect(handlers.apply_theme)
+            settings.general.theme_changed.connect(handlers.apply_theme)
 
         sources.obs_service.state_changed.connect(live_integrations.on_obs_state_changed)
         sources.obs_service.current_scene_changed.connect(live_integrations.on_obs_scene_changed)

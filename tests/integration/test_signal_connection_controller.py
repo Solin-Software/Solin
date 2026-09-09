@@ -92,15 +92,23 @@ class _WindowStub:
 
         self.screen_mgr = _signal_namespace("screen_mgr", "screens_changed")
         self.lang = _signal_namespace("lang", "language_changed")
-        self.settings_widget = _signal_namespace(
-            "settings",
-            "yearly_text_changed",
-            "watched_folder_changed",
-            "zoom_enabled_toggled",
-            "zoom_participants_toggled",
-            "obs_stream_config_changed",
-            "background_song_toggled",
-            "meeting_schedule_changed",
+        self.settings_widget = SimpleNamespace(
+            general=_signal_namespace(
+                "settings.general",
+                "yearly_text_changed",
+                "watched_folder_changed",
+                "background_song_toggled",
+                "meeting_schedule_changed",
+                "theme_changed",
+            ),
+            integrations=_signal_namespace(
+                "settings.integrations",
+                "zoom_enabled_toggled",
+                "zoom_participants_toggled",
+                "obs_stream_config_changed",
+                "camera_enabled_toggled",
+            ),
+            remote=SimpleNamespace(),
         )
         self.meetings_widget.set_watched_folder = _slot("meetings_set_watched_folder")
 
@@ -150,6 +158,10 @@ class _WindowStub:
             on_obs_ndi_error=_slot("ndi_error"),
             on_obs_ndi_stopped=_slot("ndi_stopped"),
             on_obs_scene_toggle=_slot("obs_scene_toggle"),
+            on_camera_settings_enabled_toggled=_slot("camera_enabled"),
+            on_camera_frame=_slot("camera_frame"),
+            on_camera_error=_slot("camera_error"),
+            on_camera_stopped=_slot("camera_stopped"),
         )
         self._projection_integrations = SimpleNamespace(
             on_auto_share_finished=_slot("auto_share_finished"),
@@ -183,7 +195,7 @@ class _WindowStub:
         self.talk_theme_projection_handler = handler
 
 
-def _sources(window):
+def _sources(window, *, camera_service=None):
     return MainWindowSignalSources(
         library_widget=window.library_widget,
         meetings_widget=window.meetings_widget,
@@ -200,10 +212,11 @@ def _sources(window):
         ndi_service=window._ndi_service,
         auto_share_finished=window._auto_share_finished,
         media_countdown_automation=window._media_countdown_automation,
+        camera_service=camera_service,
     )
 
 
-def _handlers(window, *, timer_output=None, timer_bridge=None):
+def _handlers(window, *, timer_output=None, timer_bridge=None, apply_theme=None):
     return MainWindowSignalHandlers(
         media_projection=window._media_projection,
         timer_projection=window._timer_projection,
@@ -219,6 +232,7 @@ def _handlers(window, *, timer_output=None, timer_bridge=None):
         open_meeting_schedule_settings=_slot("open_meeting_schedule_settings"),
         timer_output=timer_output,
         timer_bridge=timer_bridge,
+        apply_theme=apply_theme,
     )
 
 
@@ -237,11 +251,11 @@ def test_connect_signals_wires_expected_signal_graph():
     assert window.library_widget.play_cached_media_signal.connected == [
         window._media_projection.on_cache_play
     ]
-    assert window.settings_widget.watched_folder_changed.connected == [
+    assert window.settings_widget.general.watched_folder_changed.connected == [
         window.playlist_widget.set_watched_folder,
         window.meetings_widget.set_watched_folder,
     ]
-    assert window.settings_widget.yearly_text_changed.connected == [
+    assert window.settings_widget.general.yearly_text_changed.connected == [
         window._projection_targets.apply_yearly_text,
         window.proj_bar.set_yearly_text,
     ]
@@ -250,10 +264,10 @@ def test_connect_signals_wires_expected_signal_graph():
     assert window.proj_bar.source_duration_discovered.connected == [
         window.playlist_widget.record_source_duration
     ]
-    assert window.settings_widget.background_song_toggled.connected == [
+    assert window.settings_widget.general.background_song_toggled.connected == [
         window._background_song_service.set_enabled
     ]
-    assert window.settings_widget.meeting_schedule_changed.connected == [
+    assert window.settings_widget.general.meeting_schedule_changed.connected == [
         window._background_song_service.reload_settings,
         window._media_countdown_automation.reload_schedule,
     ]
@@ -271,6 +285,38 @@ def test_connect_signals_wires_expected_signal_graph():
         window._projection_integrations.on_auto_share_finished
     ]
     assert len(window._obs_service.scenes_updated.connected) == 2
+    integrations = window.settings_widget.integrations
+    assert integrations.zoom_enabled_toggled.connected == [
+        window._live_integrations.on_zoom_settings_enabled_toggled
+    ]
+    assert integrations.zoom_participants_toggled.connected == [
+        window._live_integrations.on_zoom_settings_parts_toggled
+    ]
+    assert integrations.obs_stream_config_changed.connected == [
+        window._live_integrations.refresh_obs_stream_availability
+    ]
+    assert integrations.camera_enabled_toggled.connected == []
+    assert window.settings_widget.general.theme_changed.connected == []
+
+
+def test_optional_camera_and_theme_consumers_connect_to_settings_domains():
+    window = _WindowStub()
+    camera = _signal_namespace("camera", "frame_ready", "error", "stopped")
+    apply_theme = _slot("apply_theme")
+    controller = SignalConnectionController(
+        _sources(window, camera_service=camera),
+        _handlers(window, apply_theme=apply_theme),
+    )
+
+    controller.connect_signals()
+
+    assert window.settings_widget.general.theme_changed.connected == [apply_theme]
+    assert window.settings_widget.integrations.camera_enabled_toggled.connected == [
+        window._live_integrations.on_camera_settings_enabled_toggled
+    ]
+    assert camera.frame_ready.connected == [window._live_integrations.on_camera_frame]
+    assert camera.error.connected == [window._live_integrations.on_camera_error]
+    assert camera.stopped.connected == [window._live_integrations.on_camera_stopped]
 
 
 def test_controller_uses_explicit_endpoints_instead_of_main_window():

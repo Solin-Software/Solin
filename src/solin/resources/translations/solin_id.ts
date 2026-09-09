@@ -4,24 +4,20 @@
 <context>
     <name>AboutSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/about_section.py" line="+48"/>
         <source>Audio &amp; Video app for Kingdom Hall meetings.</source>
-        <translation>Aplikasi Audio &amp; Video untuk perhimpunan di Balai Kerajaan.</translation>
+        <translation type="vanished">Aplikasi Audio &amp; Video untuk perhimpunan di Balai Kerajaan.</translation>
     </message>
     <message>
-        <location line="+10"/>
         <source>Official Website</source>
-        <translation>Situs Web Resmi</translation>
+        <translation type="vanished">Situs Web Resmi</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Changelog</source>
-        <translation>Changelog</translation>
+        <translation type="vanished">Changelog</translation>
     </message>
     <message>
-        <location line="+14"/>
         <source>This app is independent and is not affiliated with or endorsed by the Watch Tower Bible and Tract Society of Pennsylvania or any of its associated organizations.</source>
-        <translation>Aplikasi ini independen dan tidak berafiliasi dengan atau didukung oleh Watch Tower Bible and Tract Society of Pennsylvania atau organisasi terkait lainnya.</translation>
+        <translation type="vanished">Aplikasi ini independen dan tidak berafiliasi dengan atau didukung oleh Watch Tower Bible and Tract Society of Pennsylvania atau organisasi terkait lainnya.</translation>
     </message>
 </context>
 <context>
@@ -271,60 +267,60 @@
 <context>
     <name>AutoKeyEditorDialog</name>
     <message>
-        <location filename="../../widgets/settings/auto_key_dialog.py" line="+125"/>
+        <location filename="../../qml/SettingsShortcutDialog.qml" line="+53"/>
         <source>Automatic Shortcut</source>
         <translation>Pintasan Otomatis</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+12"/>
         <source>Choose an app event and press the shortcut to send.</source>
         <translation>Pilih peristiwa aplikasi dan tekan pintasan untuk mengirim.</translation>
     </message>
     <message>
-        <location line="+45"/>
+        <location line="+9"/>
+        <location line="+15"/>
         <source>Event</source>
         <translation>Peristiwa</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+67"/>
+        <location line="+7"/>
         <source>Shortcut</source>
         <translation>Pintasan</translation>
     </message>
     <message>
-        <location line="+12"/>
-        <location line="+95"/>
+        <location line="+35"/>
         <source>Click the field, then press one shortcut.</source>
         <translation>Klik kolom tersebut, lalu tekan satu pintasan.</translation>
     </message>
     <message>
-        <location line="-86"/>
+        <location line="+12"/>
         <source>Enabled</source>
         <translation>Diaktifkan</translation>
     </message>
     <message>
-        <location line="+18"/>
+        <location line="+53"/>
         <source>Cancel</source>
         <translation>Batal</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+7"/>
         <source>Save</source>
         <translation>Simpan</translation>
     </message>
     <message>
-        <location line="+54"/>
         <source>Press a shortcut before saving.</source>
-        <translation>Tekan pintasan sebelum menyimpan.</translation>
+        <translation type="vanished">Tekan pintasan sebelum menyimpan.</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="-109"/>
+        <location line="+36"/>
         <source>Listening... press one shortcut.</source>
         <translation>Menunggu input... tekan satu pintasan.</translation>
     </message>
     <message>
-        <location line="+13"/>
         <source>Shortcut captured.</source>
-        <translation>Pintasan direkam.</translation>
+        <translation type="vanished">Pintasan direkam.</translation>
     </message>
 </context>
 <context>
@@ -353,109 +349,87 @@
 <context>
     <name>AutoKeysSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/auto_keys_section.py" line="+59"/>
         <source>Automatic Shortcuts</source>
-        <translation>Pintasan Otomatis</translation>
+        <translation type="vanished">Pintasan Otomatis</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Sends keyboard shortcuts when visual media changes state.</source>
-        <translation>Mengirim pintasan papan tik saat status media visual berubah.</translation>
+        <translation type="vanished">Mengirim pintasan papan tik saat status media visual berubah.</translation>
     </message>
     <message>
-        <location line="+24"/>
         <source>Create one or more shortcuts for start, end, pause and resume events.</source>
-        <translation>Buat satu atau beberapa pintasan untuk peristiwa mulai, selesai, jeda, dan lanjutkan.</translation>
+        <translation type="vanished">Buat satu atau beberapa pintasan untuk peristiwa mulai, selesai, jeda, dan lanjutkan.</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>No shortcuts configured.</source>
-        <translation>Tidak ada pintasan yang dikonfigurasi.</translation>
+        <translation type="vanished">Tidak ada pintasan yang dikonfigurasi.</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>Add shortcut</source>
-        <translation>Tambah pintasan</translation>
+        <translation type="vanished">Tambah pintasan</translation>
     </message>
     <message>
-        <location line="+131"/>
         <source>Enabled</source>
-        <translation>Diaktifkan</translation>
+        <translation type="vanished">Diaktifkan</translation>
     </message>
     <message>
-        <location line="+0"/>
         <source>Disabled</source>
-        <translation>Dinonaktifkan</translation>
+        <translation type="vanished">Dinonaktifkan</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Edit</source>
-        <translation>Edit</translation>
+        <translation type="vanished">Edit</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Delete</source>
-        <translation>Hapus</translation>
+        <translation type="vanished">Hapus</translation>
     </message>
 </context>
 <context>
     <name>AutoShareSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/auto_share_section.py" line="+55"/>
         <source>Auto Screen Share</source>
-        <translation>Berbagi Layar Otomatis</translation>
+        <translation type="vanished">Berbagi Layar Otomatis</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Automatically shares screen via hotkeys when projecting media.</source>
-        <translation>Secara otomatis membagikan layar melalui pintasan keyboard saat memproyeksikan media.</translation>
+        <translation type="vanished">Secara otomatis membagikan layar melalui pintasan keyboard saat memproyeksikan media.</translation>
     </message>
     <message>
-        <location line="+30"/>
         <source>Share hotkey</source>
-        <translation>Pintasan berbagi</translation>
+        <translation type="vanished">Pintasan berbagi</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Uses Zoom&apos;s single start/stop screen-share shortcut.</source>
-        <translation>Menggunakan satu pintasan Zoom untuk memulai/menghentikan berbagi layar.</translation>
+        <translation type="vanished">Menggunakan satu pintasan Zoom untuk memulai/menghentikan berbagi layar.</translation>
     </message>
     <message>
-        <location line="+10"/>
-        <location line="+241"/>
-        <location line="+9"/>
         <source>Not configured</source>
-        <translation>Belum dikonfigurasi</translation>
+        <translation type="vanished">Belum dikonfigurasi</translation>
     </message>
     <message>
-        <location line="-243"/>
         <source>Edit</source>
-        <translation>Edit</translation>
+        <translation type="vanished">Edit</translation>
     </message>
     <message>
-        <location line="+20"/>
         <source>Accessibility permission</source>
-        <translation>Izin Aksesibilitas</translation>
+        <translation type="vanished">Izin Aksesibilitas</translation>
     </message>
     <message>
-        <location line="+14"/>
         <source>Open Settings</source>
-        <translation>Buka Pengaturan</translation>
+        <translation type="vanished">Buka Pengaturan</translation>
     </message>
     <message>
-        <location line="+35"/>
         <source>Share target</source>
-        <translation>Target berbagi</translation>
+        <translation type="vanished">Target berbagi</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Where Solin should click after Zoom&apos;s share shortcut opens the dialog.</source>
-        <translation>Tempat Solin harus mengklik setelah pintasan berbagi Zoom membuka dialog.</translation>
+        <translation type="vanished">Tempat Solin harus mengklik setelah pintasan berbagi Zoom membuka dialog.</translation>
     </message>
     <message>
-        <location line="+167"/>
         <source>Configured</source>
-        <translation>Sudah dikonfigurasi</translation>
+        <translation type="vanished">Sudah dikonfigurasi</translation>
     </message>
     <message>
         <source>Click Position</source>
@@ -466,33 +440,28 @@
         <translation type="vanished">Posisi yang diklik setelah dialog berbagi terbuka untuk memilih target.</translation>
     </message>
     <message>
-        <location line="-141"/>
         <source>Configure</source>
-        <translation>Konfigurasi</translation>
+        <translation type="vanished">Konfigurasi</translation>
     </message>
     <message>
-        <location line="+122"/>
         <source>Share Hotkey</source>
-        <translation>Pintasan Berbagi</translation>
+        <translation type="vanished">Pintasan Berbagi</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Press the Zoom shortcut that starts and stops screen sharing.</source>
-        <translation>Tekan pintasan Zoom yang memulai dan menghentikan berbagi layar.</translation>
+        <translation type="vanished">Tekan pintasan Zoom yang memulai dan menghentikan berbagi layar.</translation>
     </message>
     <message>
         <source>Position: {x}, {y}</source>
         <translation type="vanished">Posisi: {x}, {y}</translation>
     </message>
     <message>
-        <location line="+35"/>
         <source>Solin can send the automatic click.</source>
-        <translation>Solin dapat mengirim klik otomatis.</translation>
+        <translation type="vanished">Solin dapat mengirim klik otomatis.</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>Allow Solin in macOS Accessibility so automatic clicks can work.</source>
-        <translation>Izinkan Solin di Aksesibilitas macOS agar klik otomatis dapat berfungsi.</translation>
+        <translation type="vanished">Izinkan Solin di Aksesibilitas macOS agar klik otomatis dapat berfungsi.</translation>
     </message>
 </context>
 <context>
@@ -906,14 +875,12 @@
 <context>
     <name>CameraSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/camera_section.py" line="+13"/>
         <source>Camera</source>
-        <translation>Kamera</translation>
+        <translation type="vanished">Kamera</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Shows a camera button in the live tools toolbar.</source>
-        <translation>Menampilkan tombol kamera di bilah alat langsung.</translation>
+        <translation type="vanished">Menampilkan tombol kamera di bilah alat langsung.</translation>
     </message>
 </context>
 <context>
@@ -1029,6 +996,16 @@
         <location line="+16"/>
         <source>Enable projection aspect first</source>
         <translation>Aktifkan rasio aspek proyeksi terlebih dahulu</translation>
+    </message>
+</context>
+<context>
+    <name>IntegrationSettings</name>
+    <message numerus="yes">
+        <location filename="../../ui/qml/settings/integrations.py" line="+330"/>
+        <source>%n NDI source found.</source>
+        <translation>
+            <numerusform>%n sumber NDI ditemukan.</numerusform>
+        </translation>
     </message>
 </context>
 <context>
@@ -1175,19 +1152,16 @@
 <context>
     <name>LanguageSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/language_section.py" line="+22"/>
         <source>Interface</source>
-        <translation>Antarmuka</translation>
+        <translation type="vanished">Antarmuka</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>JW Media</source>
-        <translation>Media JW</translation>
+        <translation type="vanished">Media JW</translation>
     </message>
     <message>
-        <location line="+36"/>
         <source>(same as interface)</source>
-        <translation>(sama seperti antarmuka)</translation>
+        <translation type="vanished">(sama seperti antarmuka)</translation>
     </message>
 </context>
 <context>
@@ -1576,13 +1550,13 @@
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../../main_window.py" line="+551"/>
+        <location filename="../../main_window.py" line="+565"/>
         <location filename="../../controllers/main_window_nav.py" line="+11"/>
         <source>Solin</source>
         <translation>Solin</translation>
     </message>
     <message>
-        <location line="+694"/>
+        <location line="+717"/>
         <location filename="../../controllers/main_window_nav.py" line="+27"/>
         <source>Scenes</source>
         <translation>Adegan</translation>
@@ -1623,7 +1597,7 @@
         <translation>Perekaman sedang berlangsung</translation>
     </message>
     <message>
-        <location line="+379"/>
+        <location line="+381"/>
         <source>Pause playback before changing the projected content.</source>
         <translation>Jeda pemutaran sebelum mengubah konten yang diproyeksikan.</translation>
     </message>
@@ -2477,69 +2451,56 @@ Solin akan terus mencoba menyambung kembali dari posisi saat ini.
 <context>
     <name>MediaSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/media_section.py" line="+23"/>
         <source>Auto-download on play</source>
-        <translation>Unduh otomatis saat diputar</translation>
+        <translation type="vanished">Unduh otomatis saat diputar</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Downloads the playing media for offline use.</source>
-        <translation>Mengunduh media yang diputar untuk penggunaan offline.</translation>
+        <translation type="vanished">Mengunduh media yang diputar untuk penggunaan offline.</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Auto-download weekly study</source>
-        <translation>Unduh otomatis pelajaran mingguan</translation>
+        <translation type="vanished">Unduh otomatis pelajaran mingguan</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Downloads this week’s and next week’s meeting media.</source>
-        <translation>Mengunduh media perhimpunan minggu ini dan minggu depan.</translation>
+        <translation type="vanished">Mengunduh media perhimpunan minggu ini dan minggu depan.</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Song Announcement Mode</source>
-        <translation>Mode Pengumuman Lagu</translation>
+        <translation type="vanished">Mode Pengumuman Lagu</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Song starts muted for title display. Press play to start.</source>
-        <translation>Lagu dimulai dalam keadaan bisu untuk menampilkan judul. Tekan putar untuk memulai.</translation>
+        <translation type="vanished">Lagu dimulai dalam keadaan bisu untuk menampilkan judul. Tekan putar untuk memulai.</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Automatic background song</source>
-        <translation>Lagu latar otomatis</translation>
+        <translation type="vanished">Lagu latar otomatis</translation>
     </message>
     <message>
-        <location line="+13"/>
         <source>Start videos paused</source>
-        <translation>Mulai video dalam keadaan dijeda</translation>
+        <translation type="vanished">Mulai video dalam keadaan dijeda</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Videos open paused so you can start them manually.</source>
-        <translation>Video terbuka dalam keadaan dijeda agar dapat dimulai secara manual.</translation>
+        <translation type="vanished">Video terbuka dalam keadaan dijeda agar dapat dimulai secara manual.</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Playback protection</source>
-        <translation>Perlindungan pemutaran</translation>
+        <translation type="vanished">Perlindungan pemutaran</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Prevents media changes and seeking while audio or video is playing. Pause first to make changes.</source>
-        <translation>Mencegah perubahan media dan pergeseran posisi selama audio atau video diputar. Jeda terlebih dahulu untuk membuat perubahan.</translation>
+        <translation type="vanished">Mencegah perubahan media dan pergeseran posisi selama audio atau video diputar. Jeda terlebih dahulu untuk membuat perubahan.</translation>
     </message>
     <message>
-        <location line="+35"/>
         <source>Configure the meeting day/time before automatic playback can start.</source>
-        <translation>Atur hari dan waktu perhimpunan sebelum pemutaran otomatis dapat dimulai.</translation>
+        <translation type="vanished">Atur hari dan waktu perhimpunan sebelum pemutaran otomatis dapat dimulai.</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Plays audio songs before configured meetings and fades out before start.</source>
-        <translation>Memutar lagu audio sebelum perhimpunan yang dikonfigurasi dan menurunkan volume sebelum dimulai.</translation>
+        <translation type="vanished">Memutar lagu audio sebelum perhimpunan yang dikonfigurasi dan menurunkan volume sebelum dimulai.</translation>
     </message>
 </context>
 <context>
@@ -2694,77 +2655,60 @@ Konten yang ditambahkan secara manual, pemangkasan, pembingkaian, dan status ter
 <context>
     <name>MeetingScheduleSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/meeting_schedule_section.py" line="+528"/>
-        <location line="+334"/>
         <source>Used by automatic features that depend on the meeting start time.</source>
-        <translation>Digunakan oleh fitur otomatis yang bergantung pada waktu mulai perhimpunan.</translation>
+        <translation type="vanished">Digunakan oleh fitur otomatis yang bergantung pada waktu mulai perhimpunan.</translation>
     </message>
     <message>
-        <location line="-275"/>
-        <location line="+285"/>
         <source>Fill in from jw.org</source>
-        <translation>Isi dari jw.org</translation>
+        <translation type="vanished">Isi dari jw.org</translation>
     </message>
     <message>
-        <location line="-270"/>
-        <location line="+271"/>
         <source>Congregation name</source>
-        <translation>Nama sidang</translation>
+        <translation type="vanished">Nama sidang</translation>
     </message>
     <message>
-        <location line="-174"/>
         <source>Searching jw.org…</source>
-        <translation>Mencari di jw.org…</translation>
+        <translation type="vanished">Mencari di jw.org…</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>No congregation found with that name.</source>
-        <translation>Tidak ada sidang dengan nama itu.</translation>
+        <translation type="vanished">Tidak ada sidang dengan nama itu.</translation>
     </message>
     <message>
-        <location line="-6"/>
         <source>Reading the meeting times…</source>
-        <translation>Membaca waktu perhimpunan…</translation>
+        <translation type="vanished">Membaca waktu perhimpunan…</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>jw.org does not publish meeting times for this congregation.</source>
-        <translation>jw.org tidak menerbitkan waktu perhimpunan untuk sidang ini.</translation>
+        <translation type="vanished">jw.org tidak menerbitkan waktu perhimpunan untuk sidang ini.</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Too many searches in a row. Wait a moment and type again.</source>
-        <translation>Terlalu banyak pencarian berturut-turut. Tunggu sebentar dan ketik lagi.</translation>
+        <translation type="vanished">Terlalu banyak pencarian berturut-turut. Tunggu sebentar dan ketik lagi.</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Could not reach jw.org. Check the connection and try again.</source>
-        <translation>Tidak dapat menghubungi jw.org. Periksa koneksi dan coba lagi.</translation>
+        <translation type="vanished">Tidak dapat menghubungi jw.org. Periksa koneksi dan coba lagi.</translation>
     </message>
     <message>
-        <location line="+13"/>
         <source>Search your congregation to fill the days and times below.</source>
-        <translation>Cari sidang Anda untuk mengisi hari dan waktu di bawah.</translation>
+        <translation type="vanished">Cari sidang Anda untuk mengisi hari dan waktu di bawah.</translation>
     </message>
     <message>
         <source>Midweek meeting</source>
         <translation type="vanished">Perhimpunan tengah pekan</translation>
     </message>
     <message>
-        <location line="-193"/>
-        <location line="+320"/>
         <source>Day and time for the midweek meeting.</source>
-        <translation>Hari dan waktu perhimpunan tengah pekan.</translation>
+        <translation type="vanished">Hari dan waktu perhimpunan tengah pekan.</translation>
     </message>
     <message>
         <source>Weekend meeting</source>
         <translation type="vanished">Perhimpunan akhir pekan</translation>
     </message>
     <message>
-        <location line="-313"/>
-        <location line="+317"/>
         <source>Day and time for the weekend meeting.</source>
-        <translation>Hari dan waktu perhimpunan akhir pekan.</translation>
+        <translation type="vanished">Hari dan waktu perhimpunan akhir pekan.</translation>
     </message>
     <message>
         <source>Not configured</source>
@@ -3095,129 +3039,102 @@ Konten yang ditambahkan secara manual, pemangkasan, pembingkaian, dan status ter
 <context>
     <name>ObsSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/obs_section.py" line="+50"/>
         <source>OBS Studio</source>
-        <translation>OBS Studio</translation>
+        <translation type="vanished">OBS Studio</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Automatically switches scenes during projection</source>
-        <translation>Beralih adegan secara otomatis selama proyeksi</translation>
+        <translation type="vanished">Beralih adegan secara otomatis selama proyeksi</translation>
     </message>
     <message>
-        <location line="+29"/>
         <source>Disconnected</source>
-        <translation>Terputus</translation>
+        <translation type="vanished">Terputus</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>WebSocket Port</source>
-        <translation>Port WebSocket</translation>
+        <translation type="vanished">Port WebSocket</translation>
     </message>
     <message>
-        <location line="+14"/>
         <source>Password (optional)</source>
-        <translation>Kata sandi (opsional)</translation>
+        <translation type="vanished">Kata sandi (opsional)</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>Leave blank if no password is set</source>
-        <translation>Biarkan kosong jika tidak ada kata sandi yang diatur</translation>
+        <translation type="vanished">Biarkan kosong jika tidak ada kata sandi yang diatur</translation>
     </message>
     <message>
-        <location line="+9"/>
-        <location line="+363"/>
         <source>● Changes saved automatically</source>
-        <translation>● Perubahan disimpan secara otomatis</translation>
+        <translation type="vanished">● Perubahan disimpan secara otomatis</translation>
     </message>
     <message>
-        <location line="-327"/>
         <source>Program stream (NDI)</source>
-        <translation>Siaran program (NDI)</translation>
+        <translation type="vanished">Siaran program (NDI)</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Receive the DistroAV/NDI output from OBS as a live projection.</source>
-        <translation>Terima output DistroAV/NDI dari OBS sebagai proyeksi langsung.</translation>
+        <translation type="vanished">Terima output DistroAV/NDI dari OBS sebagai proyeksi langsung.</translation>
     </message>
     <message>
-        <location line="+21"/>
         <source>Enable Main Output in DistroAV, then select the NDI source shown by OBS.</source>
-        <translation>Aktifkan Output Utama di DistroAV, lalu pilih sumber NDI yang ditampilkan oleh OBS.</translation>
+        <translation type="vanished">Aktifkan Output Utama di DistroAV, lalu pilih sumber NDI yang ditampilkan oleh OBS.</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>Available NDI sources</source>
-        <translation>Sumber NDI yang tersedia</translation>
+        <translation type="vanished">Sumber NDI yang tersedia</translation>
     </message>
     <message>
-        <location line="+15"/>
         <source>No sources loaded</source>
-        <translation>Tidak ada sumber yang dimuat</translation>
+        <translation type="vanished">Tidak ada sumber yang dimuat</translation>
     </message>
     <message>
-        <location line="+6"/>
-        <location line="+335"/>
-        <location line="+35"/>
         <source>Find sources</source>
-        <translation>Cari sumber</translation>
+        <translation type="vanished">Cari sumber</translation>
     </message>
     <message>
-        <location line="-338"/>
         <source>Default scene (idle)</source>
-        <translation>Adegan standar (diam)</translation>
+        <translation type="vanished">Adegan standar (diam)</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Scene shown when nothing is being projected.</source>
-        <translation>Adegan yang ditampilkan saat tidak ada yang diproyeksikan.</translation>
+        <translation type="vanished">Adegan yang ditampilkan saat tidak ada yang diproyeksikan.</translation>
     </message>
     <message>
-        <location line="+13"/>
         <source>Media window scene</source>
-        <translation>Adegan jendela media</translation>
+        <translation type="vanished">Adegan jendela media</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Scene that captures the projection monitor. Activated when content is displayed.</source>
-        <translation>Adegan yang menangkap monitor proyeksi. Diaktifkan saat konten ditampilkan.</translation>
+        <translation type="vanished">Adegan yang menangkap monitor proyeksi. Diaktifkan saat konten ditampilkan.</translation>
     </message>
     <message>
-        <location line="+206"/>
         <source>✓ Configuration saved — reconnecting…</source>
-        <translation>✓ Konfigurasi disimpan — menghubungkan kembali…</translation>
+        <translation type="vanished">✓ Konfigurasi disimpan — menghubungkan kembali…</translation>
     </message>
     <message>
-        <location line="+57"/>
         <source>NDI receiver is not available.</source>
-        <translation>Penerima NDI tidak tersedia.</translation>
+        <translation type="vanished">Penerima NDI tidak tersedia.</translation>
     </message>
     <message>
-        <location line="+5"/>
         <source>Searching…</source>
-        <translation>Mencari…</translation>
+        <translation type="vanished">Mencari…</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Looking for NDI sources on this network.</source>
-        <translation>Mencari sumber NDI di jaringan ini.</translation>
+        <translation type="vanished">Mencari sumber NDI di jaringan ini.</translation>
     </message>
     <message numerus="yes">
-        <location line="+25"/>
         <source>%n NDI source found.</source>
-        <translation>
+        <translation type="vanished">
             <numerusform>%n sumber NDI ditemukan.</numerusform>
         </translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>No NDI sources found</source>
-        <translation>Tidak ada sumber NDI yang ditemukan</translation>
+        <translation type="vanished">Tidak ada sumber NDI yang ditemukan</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>No NDI sources found. Check that DistroAV Main Output is enabled in OBS.</source>
-        <translation>Tidak ada sumber NDI yang ditemukan. Pastikan Output Utama DistroAV diaktifkan di OBS.</translation>
+        <translation type="vanished">Tidak ada sumber NDI yang ditemukan. Pastikan Output Utama DistroAV diaktifkan di OBS.</translation>
     </message>
     <message>
         <source>Connecting…</source>
@@ -3236,9 +3153,8 @@ Konten yang ditambahkan secara manual, pemangkasan, pembingkaian, dan status ter
         <translation type="vanished">Kesalahan koneksi</translation>
     </message>
     <message>
-        <location line="+72"/>
         <source>— Select scene —</source>
-        <translation>— Pilih adegan —</translation>
+        <translation type="vanished">— Pilih adegan —</translation>
     </message>
 </context>
 <context>
@@ -3284,7 +3200,7 @@ Konten yang ditambahkan secara manual, pemangkasan, pembingkaian, dan status ter
         <translation>Nama profil</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+10"/>
         <source>Example: Main Hall</source>
         <translation>Contoh: Aula Utama</translation>
     </message>
@@ -3317,13 +3233,13 @@ Konten yang ditambahkan secara manual, pemangkasan, pembingkaian, dan status ter
     </message>
     <message>
         <location line="+5"/>
-        <location line="+406"/>
+        <location line="+414"/>
         <source>Meeting schedule</source>
         <translation>Jadwal perhimpunan</translation>
     </message>
     <message>
-        <location line="-400"/>
-        <location line="+1161"/>
+        <location line="-408"/>
+        <location line="+1150"/>
         <source>Congregation</source>
         <translation>Sidang</translation>
     </message>
@@ -3332,18 +3248,18 @@ Konten yang ditambahkan secara manual, pemangkasan, pembingkaian, dan status ter
         <translation type="vanished">Opsional</translation>
     </message>
     <message>
-        <location line="-1150"/>
+        <location line="-1139"/>
         <source>Find your congregation to fill the meeting days and times from jw.org.</source>
         <translation>Cari sidang Anda untuk mengisi hari dan waktu perhimpunan dari jw.org.</translation>
     </message>
     <message>
         <location line="+8"/>
-        <location line="+375"/>
+        <location line="+383"/>
         <source>Meeting media</source>
         <translation>Media perhimpunan</translation>
     </message>
     <message>
-        <location line="-364"/>
+        <location line="-372"/>
         <source>Download automatically</source>
         <translation>Unduh otomatis</translation>
     </message>
@@ -3354,12 +3270,12 @@ Konten yang ditambahkan secara manual, pemangkasan, pembingkaian, dan status ter
     </message>
     <message>
         <location line="+8"/>
-        <location line="+357"/>
+        <location line="+365"/>
         <source>Manual download</source>
         <translation>Unduhan manual</translation>
     </message>
     <message>
-        <location line="-356"/>
+        <location line="-364"/>
         <source>Only download media when you click the cloud button.</source>
         <translation>Unduh media hanya saat Anda mengklik tombol awan.</translation>
     </message>
@@ -3404,12 +3320,12 @@ Konten yang ditambahkan secara manual, pemangkasan, pembingkaian, dan status ter
         <translation>Port WebSocket</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+16"/>
         <source>Password (optional)</source>
         <translation>Kata sandi (opsional)</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+16"/>
         <source>Connecting…</source>
         <translation>Menghubungkan…</translation>
     </message>
@@ -3539,8 +3455,8 @@ Konten yang ditambahkan secara manual, pemangkasan, pembingkaian, dan status ter
         <translation>Minggu ini dan minggu depan</translation>
     </message>
     <message>
-        <location line="-393"/>
-        <location line="+400"/>
+        <location line="-401"/>
+        <location line="+408"/>
         <location line="+5"/>
         <location line="+9"/>
         <source>Not configured</source>
@@ -3562,7 +3478,7 @@ Konten yang ditambahkan secara manual, pemangkasan, pembingkaian, dan status ter
         <translation>Berbagi otomatis siap</translation>
     </message>
     <message>
-        <location line="+120"/>
+        <location line="+101"/>
         <source>Finishing…</source>
         <translation>Menyelesaikan…</translation>
     </message>
@@ -3573,17 +3489,17 @@ Konten yang ditambahkan secara manual, pemangkasan, pembingkaian, dan status ter
     </message>
     <message>
         <location line="+303"/>
-        <location line="+167"/>
+        <location line="+149"/>
         <source>Close</source>
         <translation>Tutup</translation>
     </message>
     <message>
-        <location line="-159"/>
+        <location line="-135"/>
         <source>Search by congregation name</source>
         <translation>Cari berdasarkan nama sidang</translation>
     </message>
     <message>
-        <location filename="../../ui/qml/onboarding.py" line="+69"/>
+        <location filename="../../ui/qml/onboarding.py" line="+73"/>
         <source>Searching jw.org…</source>
         <translation>Mencari di jw.org…</translation>
     </message>
@@ -3592,17 +3508,17 @@ Konten yang ditambahkan secara manual, pemangkasan, pembingkaian, dan status ter
         <translation type="vanished">Hari dan waktu perhimpunan berasal dari jw.org.</translation>
     </message>
     <message>
-        <location filename="../../qml/OnboardingView.qml" line="+88"/>
+        <location filename="../../qml/OnboardingView.qml" line="+64"/>
         <source>Remove congregation</source>
         <translation>Hapus sidang</translation>
     </message>
     <message>
-        <location line="+78"/>
+        <location line="+83"/>
         <source>Search languages</source>
         <translation>Cari bahasa</translation>
     </message>
     <message>
-        <location filename="../../ui/qml/onboarding.py" line="+255"/>
+        <location filename="../../ui/qml/onboarding.py" line="+259"/>
         <source>Enter a port between 1 and 65535.</source>
         <translation>Masukkan port antara 1 dan 65535.</translation>
     </message>
@@ -3612,7 +3528,7 @@ Konten yang ditambahkan secara manual, pemangkasan, pembingkaian, dan status ter
         <translation>Pemilih target berbagi tidak tersedia.</translation>
     </message>
     <message>
-        <location line="+139"/>
+        <location line="+140"/>
         <source>Enter a profile name.</source>
         <translation>Masukkan nama profil.</translation>
     </message>
@@ -3647,7 +3563,7 @@ Konten yang ditambahkan secara manual, pemangkasan, pembingkaian, dan status ter
         <translation>Tidak dapat membuat profil.</translation>
     </message>
     <message>
-        <location line="-542"/>
+        <location line="-547"/>
         <source>jw.org does not publish meeting times for this congregation.</source>
         <translation>jw.org tidak menerbitkan waktu perhimpunan untuk sidang ini.</translation>
     </message>
@@ -3672,7 +3588,7 @@ Konten yang ditambahkan secara manual, pemangkasan, pembingkaian, dan status ter
         <translation>Tidak dapat menghubungi jw.org. Periksa koneksi dan coba lagi.</translation>
     </message>
     <message>
-        <location line="+685"/>
+        <location line="+690"/>
         <source>Allow Solin in macOS Accessibility settings.</source>
         <translation>Izinkan Solin di pengaturan Aksesibilitas macOS.</translation>
     </message>
@@ -5343,211 +5259,180 @@ Tindakan ini tidak dapat dibatalkan.</translation>
 <context>
     <name>RemoteControlSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/remote_control_section.py" line="+54"/>
-        <location line="+403"/>
         <source>Remote control</source>
-        <translation>Remote control</translation>
+        <translation type="vanished">Remote control</translation>
     </message>
     <message>
-        <location line="-402"/>
-        <location line="+404"/>
         <source>Control Solin securely from another device on this local network.</source>
-        <translation>Kontrol Solin dengan aman dari perangkat lain di jaringan lokal ini.</translation>
+        <translation type="vanished">Kontrol Solin dengan aman dari perangkat lain di jaringan lokal ini.</translation>
     </message>
     <message>
-        <location line="-388"/>
-        <location line="+390"/>
         <source>Network interface</source>
-        <translation>Antarmuka jaringan</translation>
+        <translation type="vanished">Antarmuka jaringan</translation>
     </message>
     <message>
-        <location line="-376"/>
-        <location line="+377"/>
         <source>Access credentials</source>
-        <translation>Kredensial akses</translation>
+        <translation type="vanished">Kredensial akses</translation>
     </message>
     <message>
-        <location line="-349"/>
-        <location line="+350"/>
         <source>Username</source>
-        <translation>Nama pengguna</translation>
+        <translation type="vanished">Nama pengguna</translation>
     </message>
     <message>
-        <location line="-345"/>
-        <location line="+346"/>
         <source>New password</source>
-        <translation>Kata sandi baru</translation>
+        <translation type="vanished">Kata sandi baru</translation>
     </message>
     <message>
-        <location line="-341"/>
-        <location line="+342"/>
         <source>Confirm password</source>
-        <translation>Konfirmasi kata sandi</translation>
+        <translation type="vanished">Konfirmasi kata sandi</translation>
     </message>
     <message>
-        <location line="-328"/>
-        <location line="+330"/>
         <source>Use at least %1 characters. Credentials belong only to this profile.</source>
-        <translation>Gunakan setidaknya %1 karakter. Kredensial hanya milik profil ini.</translation>
+        <translation type="vanished">Gunakan setidaknya %1 karakter. Kredensial hanya milik profil ini.</translation>
     </message>
     <message>
-        <location line="-323"/>
-        <location line="+327"/>
         <source>Save credentials</source>
-        <translation>Simpan kredensial</translation>
+        <translation type="vanished">Simpan kredensial</translation>
     </message>
     <message>
-        <location line="-298"/>
-        <location line="+300"/>
         <source>Copy address</source>
-        <translation>Salin alamat</translation>
+        <translation type="vanished">Salin alamat</translation>
     </message>
     <message>
-        <location line="-285"/>
-        <location line="+286"/>
         <source>Set up a device</source>
-        <translation>Siapkan perangkat</translation>
+        <translation type="vanished">Siapkan perangkat</translation>
     </message>
     <message>
-        <location line="-265"/>
         <source>Select a private network…</source>
-        <translation>Pilih jaringan pribadi…</translation>
+        <translation type="vanished">Pilih jaringan pribadi…</translation>
     </message>
     <message>
-        <location line="+30"/>
         <source>Choose a network and save credentials before enabling remote control.</source>
-        <translation>Pilih jaringan dan simpan kredensial sebelum mengaktifkan remote control.</translation>
+        <translation type="vanished">Pilih jaringan dan simpan kredensial sebelum mengaktifkan remote control.</translation>
     </message>
     <message>
-        <location line="+17"/>
         <source>The passwords do not match.</source>
-        <translation>Kata sandi tidak cocok.</translation>
+        <translation type="vanished">Kata sandi tidak cocok.</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Enter a new password to save.</source>
-        <translation>Masukkan kata sandi baru untuk disimpan.</translation>
+        <translation type="vanished">Masukkan kata sandi baru untuk disimpan.</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Check the username and use a password with at least %1 characters.</source>
-        <translation>Periksa nama pengguna dan gunakan kata sandi dengan setidaknya %1 karakter.</translation>
+        <translation type="vanished">Periksa nama pengguna dan gunakan kata sandi dengan setidaknya %1 karakter.</translation>
     </message>
     <message>
-        <location line="+31"/>
         <source>Configured as %1</source>
-        <translation>Dikonfigurasi sebagai %1</translation>
+        <translation type="vanished">Dikonfigurasi sebagai %1</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Not configured</source>
-        <translation>Belum dikonfigurasi</translation>
+        <translation type="vanished">Belum dikonfigurasi</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>Cancel</source>
-        <translation>Batal</translation>
+        <translation type="vanished">Batal</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Change</source>
-        <translation>Ubah</translation>
+        <translation type="vanished">Ubah</translation>
     </message>
     <message>
-        <location line="+20"/>
         <source>No network selected</source>
-        <translation>Tidak ada jaringan yang dipilih</translation>
+        <translation type="vanished">Tidak ada jaringan yang dipilih</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>Starting secure remote control…</source>
-        <translation>Memulai remote control aman…</translation>
+        <translation type="vanished">Memulai remote control aman…</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Ready to enable.</source>
-        <translation>Siap untuk diaktifkan.</translation>
+        <translation type="vanished">Siap untuk diaktifkan.</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Configuration required.</source>
-        <translation>Diperlukan konfigurasi.</translation>
+        <translation type="vanished">Diperlukan konfigurasi.</translation>
     </message>
 </context>
 <context>
     <name>RemoteControlSetupDialog</name>
     <message>
-        <location filename="../../widgets/remote_control_setup_dialog.py" line="+81"/>
         <source>Set up a device</source>
-        <translation>Siapkan perangkat</translation>
+        <translation type="vanished">Siapkan perangkat</translation>
     </message>
     <message>
-        <location line="+29"/>
+        <location filename="../../qml/SettingsRemoteSetup.qml" line="+43"/>
         <source>Set up Solin Remote</source>
         <translation>Siapkan Solin Remote</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+47"/>
         <source>Scan once to open the secure setup on your phone or tablet.</source>
         <translation>Pindai sekali untuk membuka pengaturan aman di ponsel atau tablet Anda.</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+29"/>
         <source>Generating QR code…</source>
         <translation>Membuat kode QR…</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="-5"/>
+        <location line="+21"/>
         <source>1  Scan the QR code</source>
         <translation>1  Pindai kode QR</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+8"/>
         <source>Keep Solin open and connect both devices to the same local network. The guide explains the certificate and app installation.</source>
         <translation>Biarkan Solin tetap terbuka dan hubungkan kedua perangkat ke jaringan lokal yang sama. Panduan ini menjelaskan cara instalasi sertifikat dan aplikasi.</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+9"/>
+        <location line="+6"/>
         <source>Copy setup address</source>
         <translation>Salin alamat pengaturan</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+7"/>
         <source>On the first opening, the browser may show a privacy warning. Confirm that the local address matches, choose Advanced or Show Details, and continue only to this address. The warning disappears after the certificate is trusted.</source>
         <translation>Saat pertama kali dibuka, peramban mungkin menampilkan peringatan privasi. Pastikan alamat lokalnya sudah sesuai, pilih Lanjutan (Advanced) atau Tampilkan Detail (Show Details), lalu lanjutkan hanya ke alamat ini. Peringatan tersebut akan hilang setelah sertifikat dipercaya.</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+15"/>
+        <location line="+12"/>
         <source>VERIFICATION CODE</source>
         <translation>KODE VERIFIKASI</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+4"/>
         <source>Compare this code on the device before installing the certificate.</source>
         <translation>Bandingkan kode ini pada perangkat sebelum menginstal sertifikat.</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+10"/>
+        <location line="+15"/>
         <source>Show full SHA-256 fingerprint</source>
         <translation>Tampilkan sidik jari SHA-256 lengkap</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+27"/>
         <source>Save certificate…</source>
         <translation>Simpan sertifikat…</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+10"/>
         <source>Done</source>
         <translation>Selesai</translation>
     </message>
     <message>
-        <location line="+93"/>
+        <location filename="../../ui/qml/settings/remote.py" line="+182"/>
+        <location line="+179"/>
         <source>Could not generate the QR code. Copy the address instead.</source>
         <translation>Kode QR tidak dapat dibuat. Salin alamatnya saja.</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+40"/>
         <source>Save Solin certificate</source>
         <translation>Simpan sertifikat Solin</translation>
     </message>
@@ -5557,12 +5442,11 @@ Tindakan ini tidak dapat dibatalkan.</translation>
         <translation>File sertifikat (*.cer)</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>Could not save certificate</source>
-        <translation>Sertifikat tidak dapat disimpan</translation>
+        <translation type="vanished">Sertifikat tidak dapat disimpan</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+8"/>
         <source>Choose another location and try again.</source>
         <translation>Pilih lokasi lain dan coba lagi.</translation>
     </message>
@@ -7294,24 +7178,20 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
 <context>
     <name>ScreensSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/screens_section.py" line="+54"/>
         <source>Primary Screen (control)</source>
-        <translation>Layar Utama (kontrol)</translation>
+        <translation type="vanished">Layar Utama (kontrol)</translation>
     </message>
     <message>
-        <location line="+20"/>
         <source>No secondary screen detected. Connect an external monitor.</source>
-        <translation>Tidak ada layar sekunder yang terdeteksi. Hubungkan monitor eksternal.</translation>
+        <translation type="vanished">Tidak ada layar sekunder yang terdeteksi. Hubungkan monitor eksternal.</translation>
     </message>
     <message>
-        <location line="+27"/>
         <source>Secondary {n} (projection)</source>
-        <translation>Sekunder {n} (proyeksi)</translation>
+        <translation type="vanished">Sekunder {n} (proyeksi)</translation>
     </message>
     <message>
-        <location line="+18"/>
         <source>PROJECTION</source>
-        <translation>PROYEKSI</translation>
+        <translation type="vanished">PROYEKSI</translation>
     </message>
 </context>
 <context>
@@ -7340,67 +7220,57 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
 <context>
     <name>SettingsWidget</name>
     <message>
-        <location filename="../../widgets/settings_widget.py" line="+277"/>
-        <location line="+265"/>
+        <location filename="../../qml/SettingsView.qml" line="+115"/>
         <source>Settings</source>
         <translation>Pengaturan</translation>
     </message>
     <message>
-        <location line="-215"/>
-        <location line="+217"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+55"/>
         <source>Language</source>
         <translation>Bahasa</translation>
     </message>
     <message>
-        <location line="-209"/>
-        <location line="+210"/>
         <source>Media</source>
-        <translation>Media</translation>
+        <translation type="vanished">Media</translation>
     </message>
     <message>
-        <location line="-202"/>
-        <location line="+203"/>
+        <location line="+20"/>
         <source>Meetings</source>
         <translation>Perhimpunan</translation>
     </message>
     <message>
-        <location line="-195"/>
-        <location line="+196"/>
+        <location line="-4"/>
         <source>Folders</source>
         <translation>Folder</translation>
     </message>
     <message>
-        <location line="-188"/>
-        <location line="+189"/>
+        <location line="+87"/>
         <source>Remote access</source>
         <translation>Akses jarak jauh</translation>
     </message>
     <message>
-        <location line="-180"/>
-        <location line="+181"/>
+        <location line="-35"/>
         <source>Integrations</source>
         <translation>Integrasi</translation>
     </message>
     <message>
-        <location line="-152"/>
-        <location line="+153"/>
+        <location line="-10"/>
         <source>Annual Text</source>
         <translation>Ayat Tahunan</translation>
     </message>
     <message>
-        <location line="-143"/>
-        <location line="+144"/>
+        <location line="-3"/>
+        <location line="+1"/>
         <source>Screens</source>
         <translation>Layar</translation>
     </message>
     <message>
-        <location line="-136"/>
-        <location line="+137"/>
+        <location line="+64"/>
         <source>About</source>
         <translation>Tentang</translation>
     </message>
     <message>
-        <location line="-38"/>
+        <location filename="../../ui/qml/settings/general.py" line="+158"/>
         <source>Dark</source>
         <translation>Gelap</translation>
     </message>
@@ -7410,7 +7280,7 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
         <translation>Terang</translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-119"/>
         <source>Interface</source>
         <translation>Antarmuka</translation>
     </message>
@@ -7420,82 +7290,83 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
         <translation>Media JW</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+12"/>
         <source>Auto-download on play</source>
         <translation>Unduh otomatis saat diputar</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+0"/>
         <source>Downloads the playing media for offline use.</source>
         <translation>Mengunduh media yang diputar untuk penggunaan offline.</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+35"/>
         <source>Auto-download weekly study</source>
         <translation>Unduh otomatis pelajaran mingguan</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Downloads this week’s and next week’s meeting media.</source>
         <translation>Mengunduh media perhimpunan minggu ini dan minggu depan.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-38"/>
         <source>Song Announcement Mode</source>
         <translation>Mode Pengumuman Lagu</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Song starts muted for title display. Press play to start.</source>
         <translation>Lagu dimulai dalam keadaan bisu untuk menampilkan judul. Tekan putar untuk memulai.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+39"/>
         <source>Automatic background song</source>
         <translation>Lagu latar otomatis</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-41"/>
         <source>Start videos paused</source>
         <translation>Mulai video dalam keadaan dijeda</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Videos open paused so you can start them manually.</source>
         <translation>Video terbuka dalam keadaan dijeda agar dapat dimulai secara manual.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Playback protection</source>
         <translation>Perlindungan pemutaran</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+0"/>
         <source>Prevents media changes and seeking while audio or video is playing. Pause first to make changes.</source>
         <translation>Mencegah perubahan media dan pergeseran posisi selama audio atau video diputar. Jeda terlebih dahulu untuk membuat perubahan.</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+7"/>
         <source>Link Folder</source>
         <translation>Tautkan Folder</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Sync folder (Dropbox, OneDrive, etc.) shown as playlists.</source>
         <translation>Folder sinkronisasi (Dropbox, OneDrive, dll.) ditampilkan sebagai daftar putar.</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location filename="../../qml/SettingsRow.qml" line="+264"/>
         <source>Choose…</source>
         <translation>Pilih…</translation>
     </message>
     <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+53"/>
         <location line="+1"/>
         <source>OBS Studio</source>
         <translation>OBS Studio</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+0"/>
         <source>Automatically switches scenes during projection</source>
         <translation>Beralih adegan secara otomatis selama proyeksi</translation>
     </message>
@@ -7510,27 +7381,26 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
         <translation>Kata sandi (opsional)</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Leave blank if no password is set</source>
-        <translation>Biarkan kosong jika tidak ada kata sandi yang diatur</translation>
+        <translation type="vanished">Biarkan kosong jika tidak ada kata sandi yang diatur</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+4"/>
+        <location line="+1"/>
         <source>Program stream (NDI)</source>
         <translation>Siaran program (NDI)</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Receive the DistroAV/NDI output from OBS as a live projection.</source>
         <translation>Terima output DistroAV/NDI dari OBS sebagai proyeksi langsung.</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Enable Main Output in DistroAV, then select the NDI source shown by OBS.</source>
-        <translation>Aktifkan Output Utama di DistroAV, lalu pilih sumber NDI yang ditampilkan oleh OBS.</translation>
+        <translation type="vanished">Aktifkan Output Utama di DistroAV, lalu pilih sumber NDI yang ditampilkan oleh OBS.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Available NDI sources</source>
         <translation>Sumber NDI yang tersedia</translation>
     </message>
@@ -7540,20 +7410,17 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
         <translation>Cari sumber</translation>
     </message>
     <message>
-        <location line="-16"/>
+        <location line="-6"/>
         <source>Default scene (idle)</source>
         <translation>Adegan standar (diam)</translation>
     </message>
     <message>
-        <location line="-346"/>
-        <location line="+289"/>
         <source>Loading…</source>
-        <translation>Memuat…</translation>
+        <translation type="vanished">Memuat…</translation>
     </message>
     <message>
-        <location line="+58"/>
         <source>Scene shown when nothing is being projected.</source>
-        <translation>Adegan yang ditampilkan saat tidak ada yang diproyeksikan.</translation>
+        <translation type="vanished">Adegan yang ditampilkan saat tidak ada yang diproyeksikan.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -7561,54 +7428,51 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
         <translation>Adegan jendela media</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Scene that captures the projection monitor. Activated when content is displayed.</source>
-        <translation>Adegan yang menangkap monitor proyeksi. Diaktifkan saat konten ditampilkan.</translation>
+        <translation type="vanished">Adegan yang menangkap monitor proyeksi. Diaktifkan saat konten ditampilkan.</translation>
     </message>
     <message>
-        <location line="+35"/>
+        <location line="+9"/>
         <source>Audio controls and attendance count during meetings.</source>
         <translation>Kontrol audio dan jumlah kehadiran selama pertemuan.</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+8"/>
+        <location line="+1"/>
         <source>Auto Screen Share</source>
         <translation>Berbagi Layar Otomatis</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Automatically shares screen via hotkeys when projecting media.</source>
         <translation>Secara otomatis membagikan layar melalui pintasan keyboard saat memproyeksikan media.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Share hotkey</source>
         <translation>Pintasan berbagi</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Uses Zoom&apos;s single start/stop screen-share shortcut.</source>
-        <translation>Menggunakan satu pintasan Zoom untuk memulai/menghentikan berbagi layar.</translation>
+        <translation type="vanished">Menggunakan satu pintasan Zoom untuk memulai/menghentikan berbagi layar.</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+1"/>
         <source>Share target</source>
         <translation>Target berbagi</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>The Solin Media Preview tile inside Zoom&apos;s share dialog.</source>
-        <translation>Ubin “Solin Media Preview” di dalam dialog berbagi Zoom.</translation>
+        <translation type="vanished">Ubin “Solin Media Preview” di dalam dialog berbagi Zoom.</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+1"/>
         <source>Accessibility permission</source>
         <translation>Izin Aksesibilitas</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Open Settings</source>
-        <translation>Buka Pengaturan</translation>
+        <translation type="vanished">Buka Pengaturan</translation>
     </message>
     <message>
         <source>Click Position</source>
@@ -7619,84 +7483,83 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
         <translation type="vanished">Posisi yang diklik setelah dialog berbagi terbuka untuk memilih target.</translation>
     </message>
     <message>
-        <location line="-3"/>
         <source>Configure</source>
-        <translation>Konfigurasi</translation>
+        <translation type="vanished">Konfigurasi</translation>
     </message>
     <message>
-        <location line="-36"/>
+        <location line="-10"/>
+        <location line="+1"/>
         <source>Camera</source>
         <translation>Kamera</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Shows a camera button in the live tools toolbar.</source>
         <translation>Menampilkan tombol kamera di bilah alat perangkat langsung.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+11"/>
+        <location line="+1"/>
         <source>Automatic Shortcuts</source>
         <translation>Pintasan Otomatis</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
         <source>Sends keyboard shortcuts when visual media changes state.</source>
         <translation>Mengirim pintasan papan tik saat status media visual berubah.</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Create one or more shortcuts for start, end, pause and resume events.</source>
-        <translation>Buat satu atau beberapa pintasan untuk peristiwa mulai, selesai, jeda, dan lanjutkan.</translation>
+        <translation type="vanished">Buat satu atau beberapa pintasan untuk peristiwa mulai, selesai, jeda, dan lanjutkan.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location filename="../../qml/SettingsRow.qml" line="+68"/>
         <source>No shortcuts configured.</source>
         <translation>Tidak ada pintasan yang dikonfigurasi.</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+1"/>
         <source>Add shortcut</source>
         <translation>Tambah pintasan</translation>
     </message>
     <message>
-        <location line="+19"/>
+        <location filename="../../qml/SettingsRow.qml" line="-7"/>
         <source>Edit</source>
         <translation>Edit</translation>
     </message>
     <message>
-        <location line="-13"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-17"/>
+        <location line="+1"/>
         <source>Zoom Meetings</source>
         <translation>Zoom Meetings</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="-25"/>
         <source>Text shown on the projection screen when idle.</source>
         <translation>Teks yang ditampilkan di layar proyeksi saat siaga.</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+0"/>
         <source>Update</source>
         <translation>Perbarui</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Scripture:</source>
         <translation>Ayat:</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>E.g.: Happy are those conscious of their spiritual need.</source>
-        <translation>Cth.: Berbahagialah orang yang sadar akan kebutuhan rohani mereka.</translation>
+        <translation type="vanished">Cth.: Berbahagialah orang yang sadar akan kebutuhan rohani mereka.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Bible reference:</source>
         <translation>Referensi Alkitab:</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>E.g.: Matthew 5:3.</source>
-        <translation>Cth.: Matius 5:3.</translation>
+        <translation type="vanished">Cth.: Matius 5:3.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -7704,24 +7567,535 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
         <translation>Simpan perubahan</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location filename="../../qml/SettingsPage.qml" line="+184"/>
         <source>Audio &amp; Video app for Kingdom Hall meetings.</source>
         <translation>Aplikasi Audio &amp; Video untuk perhimpunan di Balai Kerajaan.</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+9"/>
         <source>Official Website</source>
         <translation>Situs Web Resmi</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+4"/>
         <source>Changelog</source>
         <translation>Changelog</translation>
     </message>
     <message>
-        <location line="-6"/>
+        <location line="+6"/>
         <source>This app is independent and is not affiliated with or endorsed by the Watch Tower Bible and Tract Society of Pennsylvania or any of its associated organizations.</source>
         <translation>Aplikasi ini independen dan tidak berafiliasi dengan atau didukung oleh Watch Tower Bible and Tract Society of Pennsylvania atau organisasi terkait lainnya.</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsSectionHeader.qml" line="+28"/>
+        <location line="+35"/>
+        <source>Back to sections</source>
+        <translation>Kembali ke bagian</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsView.qml" line="+15"/>
+        <source>Search settings</source>
+        <translation>Pengaturan pencarian</translation>
+    </message>
+    <message>
+        <location line="+173"/>
+        <source>Search results</source>
+        <translation>Hasil pencarian</translation>
+    </message>
+    <message>
+        <location line="+77"/>
+        <source>No settings found. Try another word.</source>
+        <translation>Tidak ada pengaturan yang ditemukan. Coba kata lain.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+2"/>
+        <source>Scenes</source>
+        <translation>Adegan</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Native scenes engine</source>
+        <translation>Mesin adegan asli</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Restart Solin to apply this change.</source>
+        <translation>Mulai ulang Solin untuk menerapkan perubahan ini.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>OBS, Zoom and camera</source>
+        <translation>OBS, Zoom dan kamera</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>Automations</source>
+        <translation>Otomatisasi</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Sharing and shortcuts</source>
+        <translation>Berbagi dan pintasan</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Control over your local network</source>
+        <translation>Kontrol atas jaringan lokal Anda</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+1"/>
+        <source>Remote control</source>
+        <translation>Kendali jarak jauh</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Control Solin securely from another device on this local network.</source>
+        <translation>Kontrol Solin dengan aman dari perangkat lain di jaringan lokal ini.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Network interface</source>
+        <translation>Antarmuka jaringan</translation>
+    </message>
+    <message>
+        <source>Refresh</source>
+        <translation type="vanished">Segarkan</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Copy address</source>
+        <translation>Salin alamat</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Access credentials</source>
+        <translation>Kredensial akses</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Username</source>
+        <translation>Nama pengguna</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>New password</source>
+        <translation>Kata sandi baru</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Confirm password</source>
+        <translation>Konfirmasi kata sandi</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Save credentials</source>
+        <translation>Simpan kredensial</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Devices</source>
+        <translation>Perangkat</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Set up a device</source>
+        <translation>Siapkan perangkat</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Version and information</source>
+        <translation>Versi dan informasi</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/general.py" line="-125"/>
+        <source>Searching jw.org…</source>
+        <translation>Mencari di jw.org…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Reading the meeting times…</source>
+        <translation>Membaca waktu perhimpunan…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>No congregation found with that name.</source>
+        <translation>Tidak ada sidang dengan nama itu.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>jw.org does not publish meeting times for this congregation.</source>
+        <translation>jw.org tidak menerbitkan waktu perhimpunan untuk sidang ini.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Too many searches in a row. Wait a moment and type again.</source>
+        <translation>Terlalu banyak pencarian berturut-turut. Tunggu sebentar dan ketik lagi.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Could not reach jw.org. Check the connection and try again.</source>
+        <translation>Tidak dapat menghubungi jw.org. Periksa koneksi dan coba lagi.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-94"/>
+        <location filename="../../ui/qml/settings/general.py" line="+5"/>
+        <source>Search your congregation to fill the days and times below.</source>
+        <translation>Cari sidang Anda untuk mengisi hari dan waktu di bawah.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/general.py" line="+94"/>
+        <source>(same as interface)</source>
+        <translation>(sama seperti antarmuka)</translation>
+    </message>
+    <message>
+        <location line="+54"/>
+        <source>Primary Screen (control)</source>
+        <translation>Layar Utama (kontrol)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Secondary {n} (projection)</source>
+        <translation>Sekunder {n} (proyeksi)</translation>
+    </message>
+    <message>
+        <location line="+210"/>
+        <source>Configure the meeting day/time before automatic playback can start.</source>
+        <translation>Atur hari dan waktu perhimpunan sebelum pemutaran otomatis dapat dimulai.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Plays audio songs before configured meetings and fades out before start.</source>
+        <translation>Memutar lagu audio sebelum perhimpunan yang dikonfigurasi dan menurunkan volume sebelum dimulai.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Select folder to link</source>
+        <translation>Pilih folder untuk ditautkan</translation>
+    </message>
+    <message>
+        <location line="+117"/>
+        <source>Fetching annual text…</source>
+        <translation>Mengambil ayat tahunan…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Could not fetch annual text</source>
+        <translation>Tidak dapat mengambil ayat tahunan</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Annual text updated for {year}</source>
+        <translation>Ayat tahunan diperbarui untuk {year}</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-6"/>
+        <source>Schedule and preparation</source>
+        <translation>Jadwal dan persiapan</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Meeting schedule</source>
+        <translation>Jadwal pertemuan</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Midweek meeting</source>
+        <translation>Perhimpunan tengah pekan</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <location line="+7"/>
+        <source>Time</source>
+        <translation>Waktu</translation>
+    </message>
+    <message>
+        <location line="-3"/>
+        <source>Weekend meeting</source>
+        <translation>Perhimpunan akhir pekan</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Preparation</source>
+        <translation>Persiapan</translation>
+    </message>
+    <message>
+        <location line="-53"/>
+        <source>Appearance and languages</source>
+        <translation>Penampilan dan bahasa</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Theme and languages</source>
+        <translation>Tema dan bahasa</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Appearance</source>
+        <translation>Penampilan</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Theme</source>
+        <translation>Tema</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Update languages</source>
+        <translation>Perbarui bahasa</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Media and files</source>
+        <translation>Media dan file</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Playback, downloads and folders</source>
+        <translation>Pemutaran, unduhan, dan folder</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Playback</source>
+        <translation>Pemutaran</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Downloads</source>
+        <translation>Unduhan</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsRow.qml" line="-134"/>
+        <source>Select…</source>
+        <translation>Pilih…</translation>
+    </message>
+    <message>
+        <location line="+61"/>
+        <source>No folder selected</source>
+        <translation>Tidak ada folder yang dipilih</translation>
+    </message>
+    <message>
+        <location line="+48"/>
+        <source>No secondary screen detected. Connect an external monitor.</source>
+        <translation>Tidak ada layar sekunder yang terdeteksi. Hubungkan monitor eksternal.</translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <source>Delete</source>
+        <translation>Hapus</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+40"/>
+        <source>Projection</source>
+        <translation>Proyeksi</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Screens and annual text</source>
+        <translation>Layar dan teks tahunan</translation>
+    </message>
+    <message>
+        <location filename="../../qml/AppTextField.qml" line="+67"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="-37"/>
+        <source>Clear</source>
+        <translation>Bersihkan</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsClockPicker.qml" line="+45"/>
+        <source>Choose hour</source>
+        <translation>Pilih jam</translation>
+    </message>
+    <message>
+        <location line="+30"/>
+        <source>Choose minute</source>
+        <translation>Pilih menit</translation>
+    </message>
+    <message>
+        <location line="+101"/>
+        <source>Hour %1</source>
+        <translation>Jam %1</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Minute %1</source>
+        <translation>Menit %1</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsCongregationDialog.qml" line="+31"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+8"/>
+        <source>Fill in from jw.org</source>
+        <translation>Isi dari jw.org</translation>
+    </message>
+    <message>
+        <location line="+23"/>
+        <source>Search by congregation name</source>
+        <translation>Cari berdasarkan nama sidang</translation>
+    </message>
+    <message>
+        <location line="+86"/>
+        <location filename="../../qml/SettingsRemoteSetup.qml" line="-201"/>
+        <source>Close</source>
+        <translation>Tutup</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsRow.qml" line="-88"/>
+        <location filename="../../qml/SettingsSelectionDialog.qml" line="+30"/>
+        <source>Search…</source>
+        <translation>Cari…</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsSelectionDialog.qml" line="+8"/>
+        <source>HH:mm</source>
+        <translation>HH:mm</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>No results found.</source>
+        <translation>Tidak ada hasil yang ditemukan.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <location filename="../../qml/SettingsTimeDialog.qml" line="+58"/>
+        <source>Apply</source>
+        <translation>Terapkan</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <location filename="../../qml/SettingsTimeDialog.qml" line="-2"/>
+        <location filename="../../ui/qml/settings/catalogue.py" line="+37"/>
+        <location line="+52"/>
+        <source>Cancel</source>
+        <translation>Batal</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsShortcutDialog.qml" line="-144"/>
+        <source>Share Hotkey</source>
+        <translation>Pintasan Berbagi</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Press the Zoom shortcut that starts and stops screen sharing.</source>
+        <translation>Tekan pintasan Zoom yang memulai dan menghentikan berbagi layar.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="-309"/>
+        <location line="+63"/>
+        <source>Select a private network…</source>
+        <translation>Pilih jaringan pribadi…</translation>
+    </message>
+    <message>
+        <location line="-50"/>
+        <source>Choose a network and save credentials before enabling remote control.</source>
+        <translation>Pilih jaringan dan simpan kredensial sebelum mengaktifkan remote control.</translation>
+    </message>
+    <message>
+        <location line="+83"/>
+        <source>Starting secure remote control…</source>
+        <translation>Memulai remote control aman…</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Ready to enable.</source>
+        <translation>Siap untuk diaktifkan.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Configuration required.</source>
+        <translation>Diperlukan konfigurasi.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Configured as %1</source>
+        <translation>Dikonfigurasi sebagai %1</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/integrations.py" line="-106"/>
+        <source>Enter a valid port (1–65535).</source>
+        <translation>Masukkan port yang valid (1–65535).</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>✓ Configuration saved — reconnecting…</source>
+        <translation>✓ Konfigurasi disimpan — menghubungkan kembali…</translation>
+    </message>
+    <message>
+        <location line="+31"/>
+        <source>— Select scene —</source>
+        <translation>— Pilih adegan —</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>NDI receiver is not available.</source>
+        <translation>Penerima NDI tidak tersedia.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <location line="+34"/>
+        <source>Looking for NDI sources on this network.</source>
+        <translation>Mencari sumber NDI di jaringan ini.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>No NDI sources found. Check that DistroAV Main Output is enabled in OBS.</source>
+        <translation>Tidak ada sumber NDI yang ditemukan. Pastikan Output Utama DistroAV diaktifkan di OBS.</translation>
+    </message>
+    <message>
+        <location line="+48"/>
+        <source>Press a shortcut before saving.</source>
+        <translation>Tekan pintasan sebelum menyimpan.</translation>
+    </message>
+    <message>
+        <location line="+78"/>
+        <source>Configured</source>
+        <translation>Sudah dikonfigurasi</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <location filename="../../ui/qml/settings/remote.py" line="+4"/>
+        <source>Not configured</source>
+        <translation>Belum dikonfigurasi</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Solin can send the automatic click.</source>
+        <translation>Solin dapat mengirim klik otomatis.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Allow Solin in macOS Accessibility so automatic clicks can work.</source>
+        <translation>Izinkan Solin di Aksesibilitas macOS agar klik otomatis dapat berfungsi.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="+2"/>
+        <source>Use at least %1 characters. Credentials belong only to this profile.</source>
+        <translation>Gunakan setidaknya %1 karakter. Kredensial hanya milik profil ini.</translation>
+    </message>
+    <message>
+        <location line="+33"/>
+        <source>The passwords do not match.</source>
+        <translation>Kata sandi tidak cocok.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Enter a new password to save.</source>
+        <translation>Masukkan kata sandi baru untuk disimpan.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Check the username and use a password with at least %1 characters.</source>
+        <translation>Periksa nama pengguna dan gunakan kata sandi dengan setidaknya %1 karakter.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/general.py" line="+18"/>
+        <location filename="../../ui/qml/settings/remote.py" line="+10"/>
+        <location line="+142"/>
+        <source>Saved</source>
+        <translation>Disimpan</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="-23"/>
+        <source>Copied</source>
+        <translation>Disalin</translation>
     </message>
 </context>
 <context>
@@ -8872,34 +9246,28 @@ Klik &apos;Unduh&apos; untuk membuka halaman unduhan.</translation>
 <context>
     <name>WatchedFolderSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/watched_folder_section.py" line="+48"/>
         <source>Link Folder</source>
-        <translation>Tautkan Folder</translation>
+        <translation type="vanished">Tautkan Folder</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Sync folder (Dropbox, OneDrive, etc.) shown as playlists.</source>
-        <translation>Folder sinkronisasi (Dropbox, OneDrive, dll.) ditampilkan sebagai daftar putar.</translation>
+        <translation type="vanished">Folder sinkronisasi (Dropbox, OneDrive, dll.) ditampilkan sebagai daftar putar.</translation>
     </message>
     <message>
-        <location line="+19"/>
         <source>Choose…</source>
-        <translation>Pilih…</translation>
+        <translation type="vanished">Pilih…</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>Clear</source>
-        <translation>Bersihkan</translation>
+        <translation type="vanished">Bersihkan</translation>
     </message>
     <message>
-        <location line="+48"/>
         <source>No folder selected</source>
-        <translation>Tidak ada folder yang dipilih</translation>
+        <translation type="vanished">Tidak ada folder yang dipilih</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Select folder to link</source>
-        <translation>Pilih folder untuk ditautkan</translation>
+        <translation type="vanished">Pilih folder untuk ditautkan</translation>
     </message>
 </context>
 <context>
@@ -9143,76 +9511,60 @@ Kedua perangkat harus berada di jaringan Wi-Fi yang sama.</translation>
 <context>
     <name>YearlyTextSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/yearly_text_section.py" line="+62"/>
         <source>Text shown on the projection screen when idle.</source>
-        <translation>Teks yang ditampilkan di layar proyeksi saat siaga.</translation>
+        <translation type="vanished">Teks yang ditampilkan di layar proyeksi saat siaga.</translation>
     </message>
     <message>
-        <location line="+18"/>
-        <location line="+309"/>
         <source>Fetching annual text…</source>
-        <translation>Mengambil ayat tahunan…</translation>
+        <translation type="vanished">Mengambil ayat tahunan…</translation>
     </message>
     <message>
-        <location line="-295"/>
-        <location line="+276"/>
         <source>Update</source>
-        <translation>Perbarui</translation>
+        <translation type="vanished">Perbarui</translation>
     </message>
     <message>
-        <location line="-241"/>
         <source>Scripture:</source>
-        <translation>Ayat:</translation>
+        <translation type="vanished">Ayat:</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>E.g.: Happy are those conscious of their spiritual need.</source>
-        <translation>Cth.: Berbahagialah orang yang sadar akan kebutuhan rohani mereka.</translation>
+        <translation type="vanished">Cth.: Berbahagialah orang yang sadar akan kebutuhan rohani mereka.</translation>
     </message>
     <message>
-        <location line="+11"/>
         <source>Bible reference:</source>
-        <translation>Referensi Alkitab:</translation>
+        <translation type="vanished">Referensi Alkitab:</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>E.g.: Matthew 5:3.</source>
-        <translation>Cth.: Matius 5:3.</translation>
+        <translation type="vanished">Cth.: Matius 5:3.</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>Save changes</source>
-        <translation>Simpan perubahan</translation>
+        <translation type="vanished">Simpan perubahan</translation>
     </message>
     <message>
-        <location line="+196"/>
         <source>Annual text updated for {year}</source>
-        <translation>Ayat tahunan diperbarui untuk {year}</translation>
+        <translation type="vanished">Ayat tahunan diperbarui untuk {year}</translation>
     </message>
     <message>
-        <location line="+33"/>
         <source>Loading…</source>
-        <translation>Memuat…</translation>
+        <translation type="vanished">Memuat…</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Could not fetch annual text</source>
-        <translation>Tidak dapat mengambil ayat tahunan</translation>
+        <translation type="vanished">Tidak dapat mengambil ayat tahunan</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Retry</source>
-        <translation>Coba lagi</translation>
+        <translation type="vanished">Coba lagi</translation>
     </message>
     <message>
-        <location line="+23"/>
         <source>▲  Edit text manually</source>
-        <translation>▲  Edit teks secara manual</translation>
+        <translation type="vanished">▲  Edit teks secara manual</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>▼  Edit text manually</source>
-        <translation>▼  Edit teks secara manual</translation>
+        <translation type="vanished">▼  Edit teks secara manual</translation>
     </message>
 </context>
 <context>
@@ -9434,14 +9786,12 @@ Angka di akhir memiliki prioritas.</translation>
 <context>
     <name>ZoomSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/zoom_section.py" line="+32"/>
         <source>Zoom Meetings</source>
-        <translation>Zoom Meetings</translation>
+        <translation type="vanished">Zoom Meetings</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Audio controls and attendance count during meetings.</source>
-        <translation>Kontrol audio dan jumlah kehadiran selama pertemuan.</translation>
+        <translation type="vanished">Kontrol audio dan jumlah kehadiran selama pertemuan.</translation>
     </message>
 </context>
 <context>
@@ -10972,8 +11322,7 @@ Gunakan tombol putar untuk memproyeksikan · Seret pegangan ⠿ untuk mengubah u
 <context>
     <name>_ShortcutSequenceEdit</name>
     <message>
-        <location filename="../../widgets/settings/auto_key_dialog.py" line="-257"/>
-        <location line="+52"/>
+        <location filename="../../qml/SettingsShortcutDialog.qml" line="+98"/>
         <source>Click to record</source>
         <translation>Klik untuk merekam</translation>
     </message>
@@ -10981,37 +11330,31 @@ Gunakan tombol putar untuk memproyeksikan · Seret pegangan ⠿ untuk mengubah u
 <context>
     <name>_TimePickerPopup</name>
     <message>
-        <location filename="../../widgets/settings/meeting_schedule_section.py" line="-477"/>
         <source>Hour</source>
-        <translation>Jam</translation>
+        <translation type="vanished">Jam</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Minute</source>
-        <translation>Menit</translation>
+        <translation type="vanished">Menit</translation>
     </message>
     <message>
-        <location line="+15"/>
         <source>Cancel</source>
-        <translation>Batal</translation>
+        <translation type="vanished">Batal</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Apply</source>
-        <translation>Terapkan</translation>
+        <translation type="vanished">Terapkan</translation>
     </message>
 </context>
 <context>
     <name>_TimeStepper</name>
     <message>
-        <location line="-108"/>
         <source>Increase</source>
-        <translation>Tambah</translation>
+        <translation type="vanished">Tambah</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Decrease</source>
-        <translation>Kurangi</translation>
+        <translation type="vanished">Kurangi</translation>
     </message>
 </context>
 <context>
