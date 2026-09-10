@@ -194,6 +194,9 @@ class LibobsSidecarEngine:
         self._media_source: Any | None = None
         self._bg_media_source: Any | None = None
         self._media_lock = threading.Lock()
+        # slot -> the last (position, duration) actually observed, so a dropped
+        # stream can be told apart from a video that reached its end.
+        self._media_last_progress: dict[int, tuple[int, int]] = {}
         self._media_poller: threading.Thread | None = None
         self._media_poll_stop = threading.Event()
         self._media_trim_start_ms = 0
@@ -614,6 +617,9 @@ class LibobsSidecarEngine:
             media = self._media_for_slot(slot)
             if media is None or media.source is None:
                 return None
+            # A rate change rebuilds the decoder on a later tick, so the position
+            # it threw away can only be restored once that has happened.
+            media.apply_pending_resume()
             position = media.position_ms
             state = media.state
             duration = media.duration_ms
@@ -640,7 +646,47 @@ class LibobsSidecarEngine:
         window_end = effective_end if effective_end else duration
         rel_position = max(0, position - start)
         rel_duration = max(0, window_end - start) if window_end else 0
+        state, rel_position, rel_duration = self._survive_disconnect(
+            slot, state, rel_position, rel_duration, path
+        )
         return (state, rel_position, rel_duration, path)
+
+    # A stream that drops mid-play reports ENDED, exactly like a video that
+    # finished. Below this fraction of the duration, treat it as a disconnect.
+    _ENDED_IS_REALLY_THE_END = 0.98
+
+    def _survive_disconnect(
+        self,
+        slot: int,
+        state: int,
+        position: int,
+        duration: int,
+        path: str,
+    ) -> tuple[int, int, int]:
+        """Report a mid-stream disconnect as buffering, not as end-of-media.
+
+        media-playback ends its decode thread on any read error and ffmpeg_source
+        turns that into ENDED — indistinguishable from a video that actually
+        finished. Taken at face value the app advances the playlist, so a moment of
+        bad wifi skipped to the next item mid-meeting. ffmpeg_source is already
+        rebuilding the media underneath, so the honest report is "buffering", and
+        the last known position is held so the transport does not snap to zero.
+        """
+        from solin.core.scenes.libobs_media_source import (
+            STATE_BUFFERING,
+            STATE_ENDED,
+            _is_remote,
+        )
+
+        if state == STATE_ENDED and _is_remote(path) and not self._media_trim_ended:
+            last_position, last_duration = self._media_last_progress.get(slot, (0, 0))
+            reference = duration or last_duration
+            reached = position or last_position
+            if reference and reached < reference * self._ENDED_IS_REALLY_THE_END:
+                return (STATE_BUFFERING, reached, reference)
+        if position or duration:
+            self._media_last_progress[slot] = (position, duration)
+        return (state, position, duration)
 
     def _emit_media_state_now(self, slot: int = 0) -> None:
         snapshot = self._sample_media(slot)

@@ -48,11 +48,22 @@ STATE_ERROR = 7
 _REMOTE_SCHEMES = ("http://", "https://", "rtsp://", "rtmp://", "srt://")
 # Progressive downloads can be seeked with byte ranges; live transports cannot.
 _SEEKABLE_REMOTE_SCHEMES = ("http://", "https://")
-# ffmpeg_source only applies these to a network input. Marking a stream seekable
-# puts media-playback into its local-file mode, which skips the readahead buffer
-# and the socket interrupt callback it would otherwise install; ffmpeg_options is
-# merged into the same avformat_open_input dict, so ask for both back explicitly.
-_PROGRESSIVE_FFMPEG_OPTIONS = "buffer_size=2097152 rw_timeout=15000000"
+# Options for a progressive HTTP input. media-playback has no notion of a
+# recoverable read: any error out of av_read_frame ends its decode thread, which
+# ffmpeg_source reports as ENDED — so one dropped packet looked like the end of the
+# video. Letting ffmpeg's own http layer re-issue the request with a Range header
+# keeps the failure below av_read_frame, where nothing upstream ever sees it.
+#
+# reconnect_at_eof stays off so a real end of file still ends. rw_timeout also caps
+# how long teardown can block: marking a stream seekable drops the interrupt
+# callback media-playback would otherwise install.
+_PROGRESSIVE_FFMPEG_OPTIONS = (
+    "reconnect=1 "
+    "reconnect_streamed=1 "
+    "reconnect_on_network_error=1 "
+    "reconnect_delay_max=4 "
+    "rw_timeout=10000000"
+)
 
 
 def _is_remote(path: str) -> bool:
@@ -72,6 +83,12 @@ class LibobsMediaSource:
         self._path = ""
         # True while this source holds an activate ref (see _set_active).
         self._active = False
+        # Mirrors the rate libobs already has, so an unchanged value never reaches
+        # obs_source_update (see set_speed for why that matters).
+        self._speed_percent = 100
+        # Where to return to after a rate change rebuilds the decoder.
+        self._resume_ms = 0
+        self._resume_paused = False
 
     @property
     def source(self) -> Any:
@@ -116,6 +133,10 @@ class LibobsMediaSource:
             # alone: they cannot seek and do need the interrupt callback.
             settings["seekable"] = True
             settings["ffmpeg_options"] = _PROGRESSIVE_FFMPEG_OPTIONS
+            # If ffmpeg's own reconnect does give up, ffmpeg_source rebuilds the
+            # media after this delay. Its default is 10 s, which reads as a dead
+            # video in the middle of a meeting.
+            settings["reconnect_delay_sec"] = 2
         # Ask libobs to decode on the GPU when hardware is available; it falls
         # back to software per stream (see _hw_decode_enabled).
         settings["hw_decode"] = _hw_decode_enabled()
@@ -137,6 +158,9 @@ class LibobsMediaSource:
             return False
         self._source = source
         self._path = path
+        self._speed_percent = max(1, int(speed_percent or 100))
+        self._resume_ms = 0
+        self._resume_paused = False
         self.set_volume(volume_percent)
         try:
             from solin.core.media.obs_runtime import MONITORING_MONITOR_ONLY
@@ -190,13 +214,53 @@ class LibobsMediaSource:
             log.debug("could not set media volume", exc_info=True)
 
     def set_speed(self, speed_percent: int) -> None:
-        """Set the playback rate (100 = normal). Applied on the next decode pass."""
-        if self._source is None:
+        """Set the playback rate (100 = normal), keeping the current position.
+
+        ffmpeg_source has no live rate control: the rate is baked into the media
+        object at creation, so a change tears the decoder down and replays from
+        zero — for local files as much as for streams, since the restart check is
+        on the rate, not on where the media came from. It also force-resumes a
+        paused source.
+
+        So: do nothing when the rate has not changed — volume travels on the same
+        properties message, and re-sending an unchanged rate was enough to restart
+        a stream every time the operator touched the volume slider. When it has
+        changed, remember where we were and let :meth:`apply_pending_resume` put us
+        back once the new decoder exists. The seek cannot be issued here: this is
+        an async source, so obs_source_update only marks the source for a deferred
+        update and the media object is still the old one.
+        """
+        speed = max(1, int(speed_percent))
+        source = self._source
+        if source is None or speed == self._speed_percent:
             return
+        self._resume_ms = self.position_ms
+        self._resume_paused = self.state == STATE_PAUSED
+        self._speed_percent = speed
         try:
-            self._source.update({"speed_percent": max(1, int(speed_percent))})
+            source.update({"speed_percent": speed})
         except Exception:  # noqa: BLE001 - libobs boundary
+            self._resume_ms = 0
             log.debug("could not set media speed", exc_info=True)
+
+    def apply_pending_resume(self) -> None:
+        """Restore the position a rate change threw away, once it can land.
+
+        Called from the sidecar's media poll rather than straight after the update,
+        because the decoder is rebuilt on a later tick — a seek issued before that
+        would be applied to the media object about to be destroyed.
+        """
+        target = self._resume_ms
+        if target <= 0 or self._source is None:
+            return
+        state = self.state
+        if state in (STATE_NONE, STATE_OPENING):
+            return  # still rebuilding; try again on the next poll
+        self._resume_ms = 0
+        if self.position_ms < target:
+            self.seek(target)
+        if self._resume_paused:
+            self.pause()
 
     def play(self) -> None:
         if self._source is not None:
@@ -249,6 +313,9 @@ class LibobsMediaSource:
     def close(self) -> None:
         source, self._source = self._source, None
         self._path = ""
+        self._speed_percent = 100
+        self._resume_ms = 0
+        self._resume_paused = False
         if source is None:
             return
         self._set_active(source, False)  # symmetrical: never leak an activate ref
