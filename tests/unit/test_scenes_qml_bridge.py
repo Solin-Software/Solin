@@ -1451,3 +1451,6 @@ def test_a_camera_already_in_this_scene_is_not_offered_again(tmp_path: Path) -> 
     assert camera_id not in {camera["id"] for camera in bridge.configuredCameras}
     bridge.close()
     controller.close()
+
+
+

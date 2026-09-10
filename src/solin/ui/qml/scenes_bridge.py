@@ -719,9 +719,20 @@ class ScenesBridge(QObject):
         # Do NOT blank the canvas here: _on_preview_frame already ignores frames
         # from other scenes, so the last frame stays until the newly selected
         # scene produces its first frame — a smooth cross-over instead of a blink.
-        if self._active:
-            self._controller.set_preview_scene(scene_id)
+        self._preview_selected_scene()
         self._refresh_models()
+
+    def _preview_selected_scene(self) -> None:
+        """Point the editor canvas at whatever scene is selected now.
+
+        Moving ``_selected_scene_id`` only moves the highlight in the scene list;
+        the preview keeps rendering the scene it was last pointed at. Creating,
+        duplicating or deleting a scene changes the selection too, so each of those
+        has to re-point the canvas as well — otherwise the new scene looks selected
+        while the canvas still shows the old one.
+        """
+        if self._active:
+            self._controller.set_preview_scene(self._selected_scene_id)
 
     @Slot(str)
     def selectLayer(self, layer_id: str) -> None:
@@ -843,7 +854,8 @@ class ScenesBridge(QObject):
             self._selected_scene_id = document.scenes[-1].id
             self._selected_layer_id = ""
 
-        self._run_edit(create)
+        if self._run_edit(create):
+            self._preview_selected_scene()
 
     @Slot(str, str)
     def renameScene(self, scene_id: str, name: str) -> None:
@@ -861,7 +873,8 @@ class ScenesBridge(QObject):
             self._selected_scene_id = document.scenes[-1].id
             self._selected_layer_id = ""
 
-        self._run_edit(duplicate)
+        if self._run_edit(duplicate):
+            self._preview_selected_scene()
 
     @Slot(str, int)
     def reorderScene(self, scene_id: str, target_row: int) -> None:
@@ -894,7 +907,8 @@ class ScenesBridge(QObject):
             self._selected_scene_id = replacement or fallback
             self._selected_layer_id = ""
 
-        self._run_edit(delete)
+        if self._run_edit(delete):
+            self._preview_selected_scene()
 
     @Slot(str, bool)
     def setDefaultScene(self, scene_id: str, enabled: bool) -> None:
