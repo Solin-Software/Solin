@@ -7,8 +7,17 @@ from collections.abc import Buffer, Callable
 from dataclasses import dataclass
 from typing import Any, Protocol, cast
 
-from PySide6.QtCore import QObject, QSize, QThread, Qt, QTimer, Signal, Slot
-from PySide6.QtGui import QImage
+from PySide6.QtCore import (
+    QObject,
+    QRectF,
+    QSize,
+    QThread,
+    Qt,
+    QTimer,
+    Signal,
+    Slot,
+)
+from PySide6.QtGui import QImage, QPainter
 
 from solin.core.scenes.engine import FrameChannelDescriptor
 from solin.core.scenes.frame_channel import (
@@ -20,8 +29,13 @@ from solin.core.projection.image_framing import (
     ImageTransform,
     normalize_image_transform,
 )
+from solin.core.projection.image_framing import (
+    IDENTITY_IMAGE_TRANSFORM,
+    is_identity_image_transform,
+)
 from solin.core.projection.transform_animation import (
     PROJECTION_TRANSFORM_DURATION_SECONDS,
+    ProjectionTransformAnimation,
 )
 
 
@@ -31,6 +45,8 @@ _DEFAULT_CANVAS_WIDTH = 1920
 _DEFAULT_CANVAS_HEIGHT = 1080
 _SHUTDOWN_BUDGET_SECONDS = 0.5
 _TRANSFORM_DURATION_MS = round(PROJECTION_TRANSFORM_DURATION_SECONDS * 1_000)
+# Redraw rate while a zoom/pan is in flight; the sidecar polls at 1/60.
+_ANIMATION_INTERVAL = 1.0 / 60.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,6 +140,8 @@ class ContentFrameIngressController(QObject):
         )
         self._pending_frame: tuple[QImage, int] | None = None
         self._pending_image_transform: _ImageTransformRequest | None = None
+        # Worker-thread only: interpolates zoom/pan so a reframe glides.
+        self._animation = ProjectionTransformAnimation()
         self._retained_frame: tuple[QImage, int] | None = None
         self._media_epoch = 0
         self._image_transform = _ImageTransformRequest(
@@ -278,6 +296,7 @@ class ContentFrameIngressController(QObject):
                         not self._closed
                         and self._pending_frame is None
                         and self._pending_image_transform is None
+                        and not self._animation.is_active
                     ):
                         self._condition.wait()
                     if self._closed:
@@ -293,6 +312,10 @@ class ContentFrameIngressController(QObject):
                 publish_started_at = time.monotonic()
                 controls_ready = True
                 if pending_image_transform is not None:
+                    self._animation.set_target(
+                        pending_image_transform.transform or IDENTITY_IMAGE_TRANSFORM,
+                        animate=pending_image_transform.animate,
+                    )
                     try:
                         self._publish_image_transform(pending_image_transform)
                     except FrameChannelUnavailableError:
@@ -334,7 +357,22 @@ class ContentFrameIngressController(QObject):
                         log.warning("Could not publish a content frame", exc_info=True)
                         self._reset_publisher()
                         self.descriptor_changed.emit(None)
-                next_publish_at = publish_started_at + self._minimum_interval
+                if self._animation.is_active:
+                    # A framed still has no next frame of its own: redraw the
+                    # retained one so the move is animated rather than a jump.
+                    with self._condition:
+                        retained = self._retained_frame
+                        if (
+                            not self._closed
+                            and self._enabled
+                            and retained is not None
+                            and self._pending_frame is None
+                        ):
+                            self._pending_frame = retained
+                            self._condition.notify()
+                    next_publish_at = publish_started_at + _ANIMATION_INTERVAL
+                else:
+                    next_publish_at = publish_started_at + self._minimum_interval
         finally:
             self._reset_publisher()
             self._worker_stopped.set()
@@ -342,6 +380,12 @@ class ContentFrameIngressController(QObject):
     def _publish(self, image: QImage, media_epoch: int) -> None:
         if image.isNull() or image.width() <= 0 or image.height() <= 0:
             return
+        framing = self._animation.sample()
+        if not is_identity_image_transform(framing):
+            # Bake the operator's zoom/pan into the frame. Only when it is actually
+            # framed: with no transform the raw image is published as before and the
+            # scene item letterboxes it, which is one less copy per frame.
+            image = _framed_for_canvas(image, framing, self._canvas_size)
         bgra = _prepare_bgra_for_capacity(image, self._canvas_size)
         with self._condition:
             if self._closed or not self._enabled or media_epoch != self._media_epoch:
@@ -482,6 +526,47 @@ def _packed_bgra(image: QImage) -> memoryview | bytearray:
             source_start : source_start + width_bytes
         ]
     return packed
+
+
+def _framed_for_canvas(
+    image: QImage,
+    transform: ImageTransform,
+    canvas: QSize,
+) -> QImage:
+    """Draw ``image`` into a canvas-sized frame at ``transform``'s zoom and pan.
+
+    Zoom/pan travels beside the pixels as a control, and under the libobs engine
+    nothing consumed it — the publisher's set_image_transform is a no-op, so the
+    raw image was shown however the operator framed it. Bake it in here instead,
+    which is what the retired native compositor did in C++.
+
+    The maths mirrors the operator's own preview so the two agree: fit the image to
+    the canvas, scale by zoom about the centre, then offset by a pan expressed as a
+    fraction of the canvas.
+    """
+    width = max(1, image.width())
+    height = max(1, image.height())
+    canvas_width = max(1, canvas.width())
+    canvas_height = max(1, canvas.height())
+    base_scale = min(canvas_width / width, canvas_height / height)
+    scale = base_scale * max(0.0, float(transform.zoom))
+    drawn_width = width * scale
+    drawn_height = height * scale
+    left = (canvas_width - drawn_width) / 2.0 + transform.norm_x * canvas_width
+    top = (canvas_height - drawn_height) / 2.0 + transform.norm_y * canvas_height
+
+    target = QImage(canvas_width, canvas_height, QImage.Format.Format_ARGB32)
+    target.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(target)
+    painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+    painter.setClipRect(QRectF(0, 0, canvas_width, canvas_height))
+    painter.drawImage(
+        QRectF(left, top, drawn_width, drawn_height),
+        image,
+        QRectF(0, 0, width, height),
+    )
+    painter.end()
+    return target
 
 
 def _prepare_bgra_for_capacity(image: QImage, capacity: QSize) -> QImage:
