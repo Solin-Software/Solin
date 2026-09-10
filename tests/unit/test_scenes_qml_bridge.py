@@ -1453,4 +1453,132 @@ def test_a_camera_already_in_this_scene_is_not_offered_again(tmp_path: Path) -> 
     controller.close()
 
 
+def test_a_new_scene_becomes_the_one_being_edited(tmp_path: Path) -> None:
+    """Creating a scene must move the canvas to it, not just the list highlight.
 
+    The preview only renders the scene it was last pointed at, so setting the
+    selection alone left the new scene looking selected while the canvas still
+    showed the previous one.
+    """
+    _workspace, controller, bridge, _preview = _bridge(tmp_path)
+    bridge.setActive(True)
+    starting = bridge.selectedSceneId
+
+    bridge.createScene("Fresh")
+
+    created = controller.document.scenes[-1]
+    assert created.name == "Fresh"
+    assert bridge.selectedSceneId == created.id
+    assert controller.preview_scene_id == created.id != starting
+    bridge.close()
+    controller.close()
+
+
+def test_duplicating_a_scene_moves_the_canvas_to_the_copy(tmp_path: Path) -> None:
+    _workspace, controller, bridge, _preview = _bridge(tmp_path)
+    bridge.setActive(True)
+
+    bridge.duplicateScene(bridge.selectedSceneId)
+
+    copy = controller.document.scenes[-1]
+    assert bridge.selectedSceneId == copy.id
+    assert controller.preview_scene_id == copy.id
+    bridge.close()
+    controller.close()
+
+
+def test_deleting_a_scene_moves_the_canvas_to_what_replaces_it(tmp_path: Path) -> None:
+    _workspace, controller, bridge, _preview = _bridge(tmp_path)
+    bridge.setActive(True)
+    bridge.createScene("Doomed")
+    doomed = bridge.selectedSceneId
+
+    bridge.deleteScene(doomed, "")
+
+    assert bridge.selectedSceneId != doomed
+    assert controller.preview_scene_id == bridge.selectedSceneId
+    bridge.close()
+    controller.close()
+
+
+def test_the_canvas_is_not_pointed_anywhere_while_the_editor_is_inactive(
+    tmp_path: Path,
+) -> None:
+    """An off-screen editor must not claim the preview by creating a scene."""
+    _workspace, controller, bridge, _preview = _bridge(tmp_path)
+
+    bridge.createScene("Offscreen")
+
+    assert controller.preview_scene_id is None
+    bridge.close()
+    controller.close()
+
+
+def test_an_rtsp_address_without_credentials_is_not_flagged(tmp_path: Path) -> None:
+    """The vendor in-path login form must still save; only userinfo is rejected."""
+    _workspace, controller, bridge, _preview = _bridge(tmp_path)
+
+    saved = bridge.saveCamera(
+        {
+            "kind": "rtsp_camera",
+            "name": "externa",
+            "uri": (
+                "rtsp://192.168.0.100:554/user=admin_password=FrwI7MsQ"
+                "_channel=0_stream=0&protocol=unicast.sdp?real_stream"
+            ),
+        },
+        False,
+    )
+
+    assert saved is True
+    bridge.close()
+    controller.close()
+
+
+def test_a_pasted_address_with_a_login_is_split_not_rejected(tmp_path: Path) -> None:
+    """Operators paste vendor URLs carrying a login; refusing them helps nobody.
+
+    The address is persisted and printed by libobs, so the credential cannot stay
+    in it — but it can be lifted out and stored, which turns the paste into a valid
+    camera instead of an error.
+    """
+    credentials = _Credentials()
+    _workspace, controller, bridge, _preview = _bridge(
+        tmp_path, credentials=credentials
+    )
+
+    saved = bridge.saveCamera(
+        {
+            "kind": "rtsp_camera",
+            "name": "externa",
+            "uri": "rtsp://admin:hunter2@192.168.0.100:554/stream",
+        },
+        False,
+    )
+
+    assert saved is True
+    camera = controller.workspace.configured_cameras[-1]
+    assert camera.configuration.uri == "rtsp://192.168.0.100:554/stream"
+    assert "hunter2" not in camera.configuration.uri
+    assert camera.credential_ref, "the login must be stored, not discarded"
+
+
+def test_the_stored_address_never_keeps_the_login(tmp_path: Path) -> None:
+    credentials = _Credentials()
+    _workspace, controller, bridge, _preview = _bridge(
+        tmp_path, credentials=credentials
+    )
+
+    bridge.saveCamera(
+        {
+            "kind": "rtsp_camera",
+            "name": "externa",
+            "uri": "rtsp://admin:p%40ss@10.0.0.5:554/s",
+        },
+        False,
+    )
+
+    camera = controller.workspace.configured_cameras[-1]
+    assert "admin" not in camera.configuration.uri
+    assert "p%40ss" not in camera.configuration.uri
+    assert repr(camera.configuration) .count("pass") == 0

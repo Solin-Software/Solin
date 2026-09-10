@@ -783,6 +783,10 @@ class LibobsSidecarEngine:
                     payload.get("document") or {},
                     active_scenes,
                     self._effective_content_source(),
+                    # Sent beside the document, never inside it: the document
+                    # record is persisted and cached, and a password must be in
+                    # neither. Absent on older payloads, hence the default.
+                    payload.get("source_credentials") or {},
                 )
             if thumbnails is not None:
                 thumbnails.resume()  # type: ignore[attr-defined]

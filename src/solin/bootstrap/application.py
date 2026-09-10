@@ -34,6 +34,21 @@ from solin.core.profiles.application import ProfileRegistryLoadError
 from solin.bootstrap.startup_timeline import startup_timeline
 
 
+def _bind_source_credential_resolver(scene_engine, credentials) -> None:
+    """Let the engine turn a stored credential reference into a login."""
+    binder = getattr(scene_engine, "set_credential_resolver", None)
+    if not callable(binder):
+        return
+
+    def resolve(reference: str):
+        resolved = credentials.resolve(reference)
+        if resolved is None:
+            return None
+        return resolved.username, resolved.password
+
+    binder(resolve)
+
+
 def _scenes_engine_available() -> bool:
     """True when a scene engine owns the cameras — native (Windows) or libobs.
 
@@ -461,6 +476,11 @@ def _build_main_window_runtime(
         scene_engine = None
     ptz_services = create_ptz_runtime_services(active_profile.id)
     scene_workspace.set_credential_cleaner(ptz_services.credentials.delete)
+    if scene_engine is not None:
+        # A camera's stream login lives in the keyring, not in the scene document.
+        # The engine client resolves it per hydrate and sends it beside the
+        # document, so the secret never reaches disk or the graph-signature cache.
+        _bind_source_credential_resolver(scene_engine, ptz_services.credentials)
     meeting_linked_folder_sync = MeetingLinkedFolderSync(
         _meeting_weekday_resolver(main_window_profile_settings.meeting_schedule)
     )

@@ -6,6 +6,7 @@ from collections.abc import Callable
 from concurrent.futures import Future
 from dataclasses import dataclass, replace
 import logging
+from urllib.parse import unquote, urlsplit, urlunsplit
 import math
 from pathlib import Path
 import time
@@ -1442,6 +1443,67 @@ class ScenesBridge(QObject):
         )
         return self._camera_draft(source)
 
+    @staticmethod
+    def _split_stream_credentials(
+        values: dict[str, object],
+    ) -> tuple[str, PtzCredentials | None]:
+        """Separate a login pasted into the RTSP address from the address itself.
+
+        Solin does not store credentials in the address — it is persisted to disk
+        and printed by libobs — but operators paste vendor URLs that carry one, and
+        rejecting the paste helps nobody. Take the login out, keep the address, and
+        hand the two back separately.
+
+        ``urlsplit`` does not percent-decode userinfo while libavformat does, so
+        decode here: a password written as ``p%40ss`` is really ``p@ss``.
+        """
+        uri = str(values.get("uri", "")).strip()
+        if str(values.get("kind", "")) != SourceKind.RTSP_CAMERA.value or not uri:
+            return uri, None
+        try:
+            parsed = urlsplit(uri)
+        except ValueError:
+            return uri, None
+        if parsed.username is None and parsed.password is None:
+            return uri, None
+        host = parsed.hostname or ""
+        if not host:
+            return uri, None
+        if ":" in host:
+            host = f"[{host}]"
+        if parsed.port:
+            host = f"{host}:{parsed.port}"
+        stripped = urlunsplit(
+            (parsed.scheme, host, parsed.path, parsed.query, parsed.fragment)
+        )
+        try:
+            harvested = PtzCredentials(
+                username=unquote(parsed.username or ""),
+                password=unquote(parsed.password or ""),
+            )
+        except ValueError:
+            return stripped, None  # half a login is not worth storing
+        return stripped, harvested
+
+    @staticmethod
+    def _stream_credentials(
+        values: dict[str, object],
+        harvested: PtzCredentials | None,
+    ) -> PtzCredentials | None:
+        """The stream login to store, from the dialog fields or the pasted address.
+
+        Typed fields win: an operator correcting a password should not be overridden
+        by whatever an old address happened to carry.
+        """
+        username = str(values.get("streamUsername", "")).strip()
+        password = str(values.get("streamPassword", ""))
+        if username or password:
+            try:
+                return PtzCredentials(username=username, password=password)
+            except ValueError as exc:
+                raise SceneValidationError("Stream credentials are incomplete") from exc
+        return harvested
+
     @Slot("QVariantMap", bool, result=bool)
     def saveCamera(self, values: dict[str, object], add_to_scene: bool) -> bool:
         source_id = str(values.get("id", ""))
@@ -1454,6 +1516,8 @@ class ScenesBridge(QObject):
             None,
         )
         created_credential_ref = ""
+        created_stream_ref = ""
+        stream_uri, harvested = self._split_stream_credentials(values)
         try:
             kind = SourceKind(str(values.get("kind", SourceKind.LOCAL_CAMERA.value)))
             ptz_binding, credentials = self._ptz_binding(values, existing)
@@ -1465,7 +1529,7 @@ class ScenesBridge(QObject):
                 )
             elif kind is SourceKind.RTSP_CAMERA:
                 configuration = RtspCameraConfig(
-                    uri=str(values.get("uri", "")).strip(),
+                    uri=stream_uri,
                     transport=RtspTransport(str(values.get("transport", "tcp"))),
                     latency_ms=_qml_int(values.get("latencyMs", 200)),
                     ptz_binding=ptz_binding,
@@ -1488,6 +1552,14 @@ class ScenesBridge(QObject):
                 camera = self._with_ptz_credential_ref(camera, created_credential_ref)
             elif bool(values.get("clearCredentials", False)):
                 camera = self._with_ptz_credential_ref(camera, "")
+            stream_credentials = self._stream_credentials(values, harvested)
+            if stream_credentials is not None:
+                if self._credentials is None:
+                    raise SceneValidationError("Protected credential storage is unavailable")
+                created_stream_ref = self._credentials.save(stream_credentials)
+                camera = replace(camera, credential_ref=created_stream_ref)
+            elif bool(values.get("clearStreamCredentials", False)):
+                camera = replace(camera, credential_ref="")
         except (SceneValidationError, ValueError, TypeError):
             log.warning("Invalid camera configuration", exc_info=True)
             self._notify_failure(
@@ -1496,6 +1568,7 @@ class ScenesBridge(QObject):
             )
             return False
         previous_ref = self._ptz_credential_ref(existing)
+        previous_stream_ref = existing.credential_ref if existing is not None else ""
         committed = self._run_edit(
             lambda: self._controller.workspace.upsert_camera(
                 camera,
@@ -1503,12 +1576,25 @@ class ScenesBridge(QObject):
             )
         )
         if not committed:
-            if created_credential_ref:
-                self._delete_credential(created_credential_ref, notify=False)
+            for orphan in (created_credential_ref, created_stream_ref):
+                if orphan:
+                    self._delete_credential(orphan, notify=False)
             return False
         current_ref = self._ptz_credential_ref(camera)
         if previous_ref and previous_ref != current_ref:
             self._delete_credential(previous_ref, notify=True)
+        if previous_stream_ref and previous_stream_ref != camera.credential_ref:
+            self._delete_credential(previous_stream_ref, notify=True)
+        if harvested is not None:
+            # Say so: the operator typed an address and got a different one back.
+            self._notify_failure(
+                self.tr(
+                    "The user name and password were moved out of the RTSP address "
+                    "and stored securely. Solin adds them again when it connects."
+                ),
+                dedupe_key="scenes-camera-address-credentials-moved",
+                warning=True,
+            )
         if existing is None and add_to_scene:
             self._add_source_layer(camera.id)
         return True
@@ -2279,6 +2365,9 @@ class ScenesBridge(QObject):
             "ptzBaudRate": 9600,
             "ptzCameraAddress": 1,
             "hasCredentials": bool(self._ptz_credential_ref(source)),
+            "hasStreamCredentials": bool(
+                source.credential_ref if source is not None else ""
+            ),
             "keepActive": bool(
                 isinstance(configuration, (LocalCameraConfig, RtspCameraConfig))
                 and configuration.keep_active

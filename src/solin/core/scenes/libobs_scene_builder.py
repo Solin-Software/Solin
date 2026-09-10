@@ -15,6 +15,7 @@ the not-yet-built content transport.
 from __future__ import annotations
 
 import logging
+from urllib.parse import quote, urlsplit, urlunsplit
 from typing import Any
 
 log = logging.getLogger(__name__)
@@ -89,6 +90,8 @@ class LibobsSceneGraph:
         # Scene items keyed by (scene_id, layer_id), so a layer's geometry can be
         # updated live (obs_sceneitem transform) without rebuilding the graph.
         self._layer_items: dict[tuple[str, str], Any] = {}
+        # source id -> {"username", "password"}; never persisted, see hydrate().
+        self._source_credentials: dict[str, Any] = {}
         # A live geometry edit carries only a rect, so remember what fit each layer
         # was built with and re-apply it rather than silently reverting to contain.
         self._layer_fit_modes: dict[tuple[str, str], str] = {}
@@ -115,13 +118,19 @@ class LibobsSceneGraph:
         document: dict,
         active_scenes: dict,
         content_source: Any | None = None,
+        source_credentials: dict | None = None,
     ) -> None:
         """Rebuild the scene graph from a document record and route the program.
 
         ``content_source`` (a libobs source fed by the content ingress) is placed
         for layers referencing the canonical content id; it is *referenced*, not
         owned, so the scene graph never releases it.
+
+        ``source_credentials`` maps a source id to its ``{"username", "password"}``.
+        It is passed alongside the document rather than inside it: the document
+        record is persisted and cached, and a password must live in neither.
         """
+        self._source_credentials = dict(source_credentials or {})
         self.clear()
         self._content_source = content_source
         ob = self._runtime.ob
@@ -275,10 +284,20 @@ class LibobsSceneGraph:
             uri = str(config.get("uri", ""))
             if not uri:
                 return (None, False)
+            camera_id = str(layer.get("source_id", ""))
+            uri = self._authenticated_uri(uri, camera_id)
             source = ob.Source.create(
                 "ffmpeg_source",
                 f"solin-rtsp-{layer.get('id', 'layer')}",
-                {"is_local_file": False, "input": uri, "reconnect_delay_sec": 2},
+                {
+                    "is_local_file": False,
+                    "input": uri,
+                    "reconnect_delay_sec": 2,
+                    # ffmpeg_source dumps its settings — the full URL included — at
+                    # LOG_INFO on every update, and that stream reaches the log users
+                    # attach to bug reports. An RTSP address carries the password.
+                    "log_changes": False,
+                },
             )
             return (source, True)
         if kind == "scene_reference":
@@ -348,6 +367,46 @@ class LibobsSceneGraph:
         except OSError:
             return None
         return str(matches[0]) if matches else None
+
+    def _authenticated_uri(self, uri: str, source_id: str) -> str:
+        """Put the stream login back into the URI, only for the connection.
+
+        ffmpeg_source takes a single ``input`` string and the RTSP demuxer exposes
+        no user/password option, so credentials can only reach the camera embedded
+        in the URI. Solin keeps them out of the stored address and re-attaches them
+        here, at the moment the source is created.
+
+        Percent-encode on the way in: libavformat decodes the userinfo before
+        authenticating, so a password containing @ : / ? # would otherwise arrive
+        mangled or split the URI.
+        """
+        credentials = self._source_credentials.get(source_id) if source_id else None
+        if not isinstance(credentials, dict):
+            return uri
+        username = str(credentials.get("username", ""))
+        password = str(credentials.get("password", ""))
+        if not username and not password:
+            return uri
+        try:
+            parsed = urlsplit(uri)
+        except ValueError:
+            return uri
+        if parsed.username is not None or parsed.password is not None:
+            return uri  # the address already carries a login; do not double it
+        host = parsed.hostname or ""
+        if not host:
+            return uri
+        if ":" in host:
+            host = f"[{host}]"  # IPv6 literals keep their brackets
+        if parsed.port:
+            host = f"{host}:{parsed.port}"
+        userinfo = quote(username, safe="")
+        if password:
+            userinfo = f"{userinfo}:{quote(password, safe='')}"
+        return urlunsplit(
+            (parsed.scheme, f"{userinfo}@{host}", parsed.path, parsed.query,
+             parsed.fragment)
+        )
 
     def set_content_source(self, new_source: Any | None) -> None:
         """Retarget the content-slot items to ``new_source`` without re-hydrating.

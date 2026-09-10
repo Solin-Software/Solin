@@ -173,6 +173,7 @@ def redact_secrets(message: str) -> str:
     return _SECRET_ASSIGNMENT.sub(lambda m: m.group(1) + "=***", redacted)
 
 
+
 class SceneEngineProcessError(RuntimeError):
     """Base class for failures at the isolated scene-engine boundary."""
 
@@ -372,6 +373,8 @@ class SubprocessSceneEngine:
         self._request_count = 0
         self._timeout_count = 0
         self._rejected_count = 0
+        # Resolves a source credential reference to a login at hydrate time.
+        self._credential_resolver: Callable[[str], tuple[str, str] | None] | None = None
         self._protocol_error_count = 0
         self._process: subprocess.Popen[bytes] | None = None
         self._supervisor: threading.Thread | None = None
@@ -476,6 +479,39 @@ class SubprocessSceneEngine:
             self._supervisor.start()
             return future
 
+    def set_credential_resolver(
+        self,
+        resolver: Callable[[str], tuple[str, str] | None] | None,
+    ) -> None:
+        """Supply the reader that turns a credential reference into a login.
+
+        The engine client resolves references itself so the secret never enters the
+        document record — that record is persisted to disk and kept in a long-lived
+        graph-signature cache. Resolved values travel only on the sidecar's
+        anonymous stdin pipe, and only for as long as a hydrate takes.
+        """
+        self._credential_resolver = resolver
+
+    def _source_credentials_record(self, document: object) -> dict[str, object]:
+        resolver = self._credential_resolver
+        if resolver is None:
+            return {}
+        record: dict[str, object] = {}
+        for source in getattr(document, "sources", ()) or ():
+            reference = getattr(source, "credential_ref", "")
+            if not reference:
+                continue
+            try:
+                resolved = resolver(reference)
+            except Exception:  # noqa: BLE001 - a vault failure must not block hydrate
+                log.warning("Could not resolve a source credential", exc_info=True)
+                continue
+            if not resolved:
+                continue
+            username, password = resolved
+            record[source.id] = {"username": username, "password": password}
+        return record
+
     def hydrate(
         self,
         snapshot: SceneEngineSnapshot,
@@ -503,6 +539,9 @@ class SubprocessSceneEngine:
                 _window_target_record(target) for target in snapshot.window_targets
             ],
         }
+        credentials = self._source_credentials_record(snapshot.document)
+        if credentials:
+            payload["source_credentials"] = credentials
         return self._request(
             message_type="hydrate",
             expected_message_type="ack",
