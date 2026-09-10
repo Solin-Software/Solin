@@ -25,12 +25,15 @@ class SolinPlaybackState(Enum):
 # core.scenes.libobs_media_source.STATE_*) → the UI state. Anything not listed
 # (NONE=0, STOPPED=5, ENDED=6, ERROR=7) resolves to STOPPED.
 ENGINE_STATE_PLAYING = 1
+# A dropped stream is reported as buffering rather than ended, so the transport
+# can show it re-establishing instead of tearing the item down.
+ENGINE_STATE_BUFFERING = 3
 ENGINE_STATE_PAUSED = 4
 ENGINE_STATE_ENDED = 6
 ENGINE_STATE_TO_SOLIN: dict[int, SolinPlaybackState] = {
     ENGINE_STATE_PLAYING: SolinPlaybackState.PLAYING,
     2: SolinPlaybackState.PAUSED,  # OPENING
-    3: SolinPlaybackState.PAUSED,  # BUFFERING
+    ENGINE_STATE_BUFFERING: SolinPlaybackState.PAUSED,
     ENGINE_STATE_PAUSED: SolinPlaybackState.PAUSED,
 }
 
@@ -38,6 +41,7 @@ ENGINE_STATE_TO_SOLIN: dict[int, SolinPlaybackState] = {
 __all__ = [
     "SolinPlaybackState",
     "ENGINE_STATE_PLAYING",
+    "ENGINE_STATE_BUFFERING",
     "ENGINE_STATE_PAUSED",
     "ENGINE_STATE_ENDED",
     "ENGINE_STATE_TO_SOLIN",

@@ -918,6 +918,9 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         # item is already cached on disk. The handler survived the QtMultimedia
         # removal but its signal did not, so nothing had been driving it.
         self.media.buffer_progress.connect(self._on_buffer_progress)
+        # The reconnecting slider animation: another handler left without an
+        # emitter by the QtMultimedia removal.
+        self.media.playback_recovery_changed.connect(self._on_playback_recovery_changed)
 
     def _sync_protected_media_controls(self) -> None:
         seek_enabled = (

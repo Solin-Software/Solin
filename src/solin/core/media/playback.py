@@ -19,6 +19,7 @@ from PySide6.QtGui import QPixmap  # noqa: F401 - part of the cover_art_changed 
 
 from .cache import MediaCacheManager
 from .playback_state import (
+    ENGINE_STATE_BUFFERING,
     ENGINE_STATE_ENDED,
     ENGINE_STATE_PAUSED,
     ENGINE_STATE_PLAYING,
@@ -56,6 +57,10 @@ class MediaController(QObject):
     # the playback position.
     buffer_progress = Signal(int, int)
 
+    # True while a stream is re-establishing itself after a dropped read, so the
+    # transport can say so instead of looking frozen.
+    playback_recovery_changed = Signal(bool)
+
     # Internal: a sidecar media_playback_state arrived on the engine's reader
     # thread; re-emitted here so the connected slot runs on the GUI thread
     # (AutoConnection → QueuedConnection), serialising engine state with the
@@ -88,6 +93,8 @@ class MediaController(QObject):
         self._volume = 1.0  # 0.0–1.0; forwarded to the sidecar as a percent
         # True while a background cache copy is downloading behind a stream.
         self._caching_remote = False
+        # True while the engine reports the stream re-establishing itself.
+        self._engine_recovering = False
 
         # libobs sidecar route: the only decode path.
         self._engine_route = None
@@ -237,6 +244,12 @@ class MediaController(QObject):
             self.state_changed.emit(
                 ENGINE_STATE_TO_SOLIN.get(raw_state, SolinPlaybackState.STOPPED)
             )
+        # The sidecar reports a dropped stream as buffering rather than ended, so
+        # this is the operator's cue that it is coming back rather than stuck.
+        recovering = raw_state == ENGINE_STATE_BUFFERING
+        if recovering != self._engine_recovering:
+            self._engine_recovering = recovering
+            self.playback_recovery_changed.emit(recovering)
         if raw_state == ENGINE_STATE_ENDED and not self._engine_media_ended_emitted:
             self._engine_media_ended_emitted = True
             self._session.mark_media_ended()

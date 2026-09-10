@@ -9,6 +9,8 @@ gone, so only the surviving cache decisions are exercised here.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from PySide6.QtCore import QCoreApplication, QObject, Signal
 
 from solin.core.media.cache import MediaCacheManager
@@ -327,3 +329,35 @@ def test_stopping_playback_stops_reporting_buffer(tmp_path):
     downloader.progress.emit(512, 2048)
 
     assert reported == []
+
+
+def test_a_dropped_stream_reports_recovering_not_stopped(tmp_path):
+    """The engine reports a dropped read as buffering; say so in the transport.
+
+    The reconnecting slider animation lost its emitter with QtMultimedia, so a
+    stream re-establishing itself just looked frozen.
+    """
+    from solin.core.media.playback_state import (
+        ENGINE_STATE_BUFFERING,
+        ENGINE_STATE_PLAYING,
+    )
+
+    controller, _downloader = _controller_with_downloader(tmp_path, auto_download=True)
+    controller.set_engine_media_route(_FakeRoute())
+    _start(controller, REMOTE)
+    recovering: list[bool] = []
+    controller.playback_recovery_changed.connect(recovering.append)
+
+    controller.on_engine_media_state(
+        SimpleNamespace(state=ENGINE_STATE_BUFFERING, position_ms=30_000,
+                        duration_ms=140_000, path=REMOTE, error_code="")
+    )
+    QCoreApplication.processEvents()
+    controller.on_engine_media_state(
+        SimpleNamespace(state=ENGINE_STATE_PLAYING, position_ms=30_100,
+                        duration_ms=140_000, path=REMOTE, error_code="")
+    )
+    QCoreApplication.processEvents()
+
+    assert recovering == [True, False]
+    controller.stop()
