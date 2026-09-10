@@ -512,6 +512,8 @@ class _CompositingRuntime:
         self.transitions: list[_FakeTransition] = []
         self.outputs: list[_FakeOutput] = []
         self.camera_sources: list[tuple[str, str]] = []
+        self.rtsp_sources: dict[str, object] = {}
+        self.rtsp_requests: list[tuple[str, str]] = []
         self.channels: dict[int, object] = {}
         self.released_channels: list[int] = []
         self.output_types = ["virtualcam_output", "mp4_output", "ffmpeg_muxer"]
@@ -659,6 +661,18 @@ class _CompositingRuntime:
                       pixel_format: str = "", width: int = 0, height: int = 0):
         self.camera_sources.append((device_id, name))
         return types.SimpleNamespace(kind="camera", device_id=device_id, name=name)
+
+    # shared IP camera source (runtime-owned) — one per camera, not per layer
+    def rtsp_source(self, camera_id: str, uri: str, settings: dict):
+        self.rtsp_requests.append((camera_id, uri))
+        existing = self.rtsp_sources.get(camera_id)
+        if existing is not None:
+            existing.settings.update(settings)
+            return existing
+        source = _FakeColorSource("ffmpeg_source", f"shared-rtsp-{camera_id}", settings)
+        self.rtsp_sources[camera_id] = source
+        self.sources.append(source)
+        return source
 
     # channel routing
     def acquire_channel(self) -> int:
@@ -3112,3 +3126,68 @@ def test_an_unknown_fit_mode_falls_back_to_letterboxing() -> None:
 
     items = next(s for s in runtime.scenes if s.name == "solin-scene-s").items
     assert items[0].bounds_type == 2  # contain: never crop on a bad value
+
+
+def test_one_ip_camera_in_many_scenes_opens_a_single_connection():
+    """An IP camera usually serves only one or two concurrent streams.
+
+    Creating a source per layer meant the first scene connected and every other
+    scene was refused by the camera and rendered black — the camera appeared to
+    work in exactly one scene however many it had been added to.
+    """
+    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+
+    runtime = _CompositingRuntime()
+    document = {
+        "sources": [
+            {"id": "cam", "type": "rtsp_camera", "name": "fachada",
+             "configuration": {"uri": "rtsp://host/stream"}}
+        ],
+        "scenes": [
+            {"id": "a", "layers": [
+                {"id": "L1", "source_id": "cam", "visible": True,
+                 "rect": {"x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0}}]},
+            {"id": "b", "layers": [
+                {"id": "L2", "source_id": "cam", "visible": True,
+                 "rect": {"x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0}}]},
+            {"id": "c", "layers": [
+                {"id": "L3", "source_id": "cam", "visible": True,
+                 "rect": {"x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0}}]},
+        ],
+    }
+
+    LibobsSceneGraph(runtime).hydrate(document, {"virtual_camera": "a"})
+
+    assert len(runtime.rtsp_sources) == 1, "one camera must mean one connection"
+    assert [request[0] for request in runtime.rtsp_requests] == ["cam"] * 3
+    scenes = {scene.name: scene for scene in runtime.scenes}
+    shown = {
+        scenes[f"solin-scene-{scene_id}"].items[0].source
+        for scene_id in ("a", "b", "c")
+    }
+    assert len(shown) == 1, "every scene must show the same source object"
+
+
+def test_two_different_ip_cameras_get_their_own_connections():
+    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+
+    runtime = _CompositingRuntime()
+    document = {
+        "sources": [
+            {"id": "cam1", "type": "rtsp_camera", "name": "a",
+             "configuration": {"uri": "rtsp://host/one"}},
+            {"id": "cam2", "type": "rtsp_camera", "name": "b",
+             "configuration": {"uri": "rtsp://host/two"}},
+        ],
+        "scenes": [
+            {"id": "s", "layers": [
+                {"id": "L1", "source_id": "cam1", "visible": True,
+                 "rect": {"x": 0.0, "y": 0.0, "width": 0.5, "height": 1.0}},
+                {"id": "L2", "source_id": "cam2", "visible": True,
+                 "rect": {"x": 0.5, "y": 0.0, "width": 0.5, "height": 1.0}}]},
+        ],
+    }
+
+    LibobsSceneGraph(runtime).hydrate(document, {"virtual_camera": "s"})
+
+    assert len(runtime.rtsp_sources) == 2

@@ -210,6 +210,8 @@ class ObsRuntime:
         # opened twice, so the projector and the virtual camera reference the same
         # source (see :meth:`camera_source`).
         self._camera_sources: dict[str, Any] = {}
+        self._rtsp_sources: dict[str, Any] = {}
+        self._rtsp_source_seq = 0
         self._camera_source_seq = 0
 
     # ── Lifecycle ─────────────────────────────────────────────────────────
@@ -295,6 +297,54 @@ class ObsRuntime:
                 return None
             self._camera_sources[device_path] = (source, signature)
             return source
+
+    def rtsp_source(self, camera_id: str, uri: str, settings: dict) -> Any:
+        """The ONE shared ``ffmpeg_source`` for ``camera_id``, created on first use.
+
+        The same reason local capture devices are shared: an IP camera usually caps
+        how many concurrent streams it will serve — often one for the main stream —
+        so a source per scene means the first scene connects and the rest are refused
+        and render black. libobs happily shows one source in several scenes at once
+        and opens the connection once while it is active in any of them.
+
+        Editing the address updates the existing source in place, so the connection
+        follows the new URI without the operator rebuilding their scenes. The runtime
+        owns these and frees them on shutdown; callers add them ``owned=False``.
+        """
+        if not camera_id or not uri:
+            return None
+        with self._lock:
+            existing = self._rtsp_sources.get(camera_id)
+            if existing is not None:
+                source, cached_uri = existing
+                if cached_uri != uri:
+                    try:
+                        source.update(settings)  # follow the edited address live
+                        self._rtsp_sources[camera_id] = (source, uri)
+                    except Exception:  # noqa: BLE001 - update/plugin boundary
+                        log.warning("Could not update the IP camera address", exc_info=True)
+                return source
+            self.ensure_started()
+            self._rtsp_source_seq += 1
+            try:
+                source = self.ob.Source.create(
+                    "ffmpeg_source", f"solin-shared-rtsp-{self._rtsp_source_seq}", settings
+                )
+            except Exception:  # noqa: BLE001 - source-creation boundary
+                log.warning("Could not create the IP camera source", exc_info=True)
+                return None
+            if source is None:
+                return None
+            self._rtsp_sources[camera_id] = (source, uri)
+            return source
+
+    def _release_rtsp_sources(self) -> None:
+        for source, _uri in self._rtsp_sources.values():
+            try:
+                source.release()
+            except Exception:  # noqa: BLE001 - shutdown must be total
+                log.debug("Error releasing shared IP camera source", exc_info=True)
+        self._rtsp_sources.clear()
 
     def _release_camera_sources(self) -> None:
         for source, _signature in self._camera_sources.values():
@@ -382,6 +432,7 @@ class ObsRuntime:
             self._used_channels.clear()
             # Release the shared camera sources now that no scene references them.
             self._release_camera_sources()
+            self._release_rtsp_sources()
             try:
                 self._context.shutdown()
             except Exception:  # noqa: BLE001 - shutdown must not raise

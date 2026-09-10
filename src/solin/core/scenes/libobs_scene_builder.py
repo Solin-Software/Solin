@@ -286,20 +286,26 @@ class LibobsSceneGraph:
                 return (None, False)
             camera_id = str(layer.get("source_id", ""))
             uri = self._authenticated_uri(uri, camera_id)
-            source = ob.Source.create(
-                "ffmpeg_source",
-                f"solin-rtsp-{layer.get('id', 'layer')}",
-                {
-                    "is_local_file": False,
-                    "input": uri,
-                    "reconnect_delay_sec": 2,
-                    # ffmpeg_source dumps its settings — the full URL included — at
-                    # LOG_INFO on every update, and that stream reaches the log users
-                    # attach to bug reports. An RTSP address carries the password.
-                    "log_changes": False,
-                },
+            # Shared per camera, not per layer: an IP camera usually serves only one
+            # or two concurrent streams, so a source per scene meant the first scene
+            # connected and every other one was refused and rendered black.
+            return (
+                self._runtime.rtsp_source(
+                    camera_id,
+                    uri,
+                    {
+                        "is_local_file": False,
+                        "input": uri,
+                        "reconnect_delay_sec": 2,
+                        # ffmpeg_source dumps its settings — the full URL included —
+                        # at LOG_INFO on every update, and that stream reaches the
+                        # log users attach to bug reports. An RTSP address routinely
+                        # carries the camera password.
+                        "log_changes": False,
+                    },
+                ),
+                False,  # runtime-owned, like the shared local capture sources
             )
-            return (source, True)
         if kind == "scene_reference":
             target = str(config.get("target_scene_id", ""))
             scene = self._scenes.get(target)
