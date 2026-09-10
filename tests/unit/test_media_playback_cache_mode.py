@@ -237,3 +237,93 @@ def test_without_a_route_emits_engine_unavailable_and_skips_caching(tmp_path):
     # nothing is streamed or cached.
     assert errors == ["engine_unavailable"]
     assert downloader.started == []
+
+
+# ── the "playing offline" badge must follow the actual source ────────────────
+
+
+def test_streamed_media_does_not_claim_to_be_playing_offline(tmp_path):
+    """The badge means "playing from a local copy".
+
+    It was emitted unconditionally whenever engine playback began, so a streamed
+    item lit it too — telling the operator a network-dependent item was safe to
+    run with no connection.
+    """
+    controller, _downloader = _controller_with_downloader(tmp_path, auto_download=True)
+    controller.set_engine_media_route(_FakeRoute())
+    source_states: list[bool] = []
+    controller.playback_source_changed.connect(source_states.append)
+
+    _start(controller, REMOTE)
+
+    assert source_states == [False]
+    controller.stop()
+
+
+def test_a_cached_copy_still_reports_offline(tmp_path):
+    """A remote item already on disk plays locally, so the badge belongs."""
+    cached = tmp_path / "cached-song.mp3"
+    cached.write_bytes(b"cached")
+    controller, _downloader = _controller_with_downloader(
+        tmp_path, auto_download=True, cached_path=str(cached)
+    )
+    route = _FakeRoute()
+    controller.set_engine_media_route(route)
+    source_states: list[bool] = []
+    controller.playback_source_changed.connect(source_states.append)
+
+    _start(controller, REMOTE)
+
+    assert route.opened[0][1]["is_local_file"] is True
+    assert source_states == [True]
+    controller.stop()
+
+
+# ── the buffer bar behind the playback position ──────────────────────────────
+
+
+def test_cache_progress_is_reported_while_a_stream_plays(tmp_path):
+    """The transport draws how much is already on disk behind the position.
+
+    The handler for this survived the QtMultimedia removal but its signal did
+    not, so the buffer bar had nothing driving it.
+    """
+    controller, downloader = _controller_with_downloader(tmp_path, auto_download=True)
+    controller.set_engine_media_route(_FakeRoute())
+    reported: list[tuple[int, int]] = []
+    controller.buffer_progress.connect(lambda done, total: reported.append((done, total)))
+
+    _start(controller, REMOTE)
+    downloader.progress.emit(512, 2048)
+
+    assert reported == [(512, 2048)]
+    controller.stop()
+
+
+def test_no_buffer_is_reported_for_a_local_file(tmp_path):
+    """Nothing is downloading behind it, so a bar there would never move."""
+    local_media = tmp_path / "local.mp4"
+    local_media.write_bytes(b"local")
+    controller, downloader = _controller_with_downloader(tmp_path, auto_download=True)
+    controller.set_engine_media_route(_FakeRoute())
+    reported: list[tuple[int, int]] = []
+    controller.buffer_progress.connect(lambda done, total: reported.append((done, total)))
+
+    _start(controller, str(local_media))
+    downloader.progress.emit(512, 2048)
+
+    assert reported == []
+    controller.stop()
+
+
+def test_stopping_playback_stops_reporting_buffer(tmp_path):
+    controller, downloader = _controller_with_downloader(tmp_path, auto_download=True)
+    controller.set_engine_media_route(_FakeRoute())
+    _start(controller, REMOTE)
+    reported: list[tuple[int, int]] = []
+    controller.buffer_progress.connect(lambda done, total: reported.append((done, total)))
+
+    controller.stop()
+    downloader.progress.emit(512, 2048)
+
+    assert reported == []

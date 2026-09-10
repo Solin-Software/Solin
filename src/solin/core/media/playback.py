@@ -51,6 +51,11 @@ class MediaController(QObject):
     # True  -> a source is loaded and playing/paused; False -> stopped/cleared.
     playback_source_changed = Signal(bool)
 
+    # (downloaded_bytes, total_bytes) of the background cache copy while a remote
+    # item streams, so the transport can show how much is already on disk behind
+    # the playback position.
+    buffer_progress = Signal(int, int)
+
     # Internal: a sidecar media_playback_state arrived on the engine's reader
     # thread; re-emitted here so the connected slot runs on the GUI thread
     # (AutoConnection → QueuedConnection), serialising engine state with the
@@ -72,10 +77,17 @@ class MediaController(QObject):
         # Retained only for cache lookups / background caching (get_cached_path,
         # start, cancel) — no Qt streaming or source-swap under the libobs engine.
         self._downloader = downloader_factory(self)
+        # The cache download runs behind a streaming item; report it so the
+        # transport can show what is already safely on disk.
+        progress = getattr(self._downloader, "progress", None)
+        if progress is not None and hasattr(progress, "connect"):
+            progress.connect(self._on_cache_progress)
         self._session = MediaPlaybackSession()
         self._request: MediaPlaybackRequest | None = None
         self._playback_rate = 1.0
         self._volume = 1.0  # 0.0–1.0; forwarded to the sidecar as a percent
+        # True while a background cache copy is downloading behind a stream.
+        self._caching_remote = False
 
         # libobs sidecar route: the only decode path.
         self._engine_route = None
@@ -185,7 +197,10 @@ class MediaController(QObject):
         )
         # The sidecar decodes the media; read its title + cover here for the UI.
         self._metadata_extractor.request(self._session.session_id, url)
-        self.playback_source_changed.emit(True)
+        # The badge means "playing from a local copy", so it must follow the source.
+        # Emitting True unconditionally lit it for streamed media too, telling the
+        # operator a network item was safe to run offline.
+        self.playback_source_changed.emit(not is_remote)
 
     def _on_routed_metadata(self, session_id: int, title: str, cover) -> None:
         """Apply a routed file's metadata.
@@ -252,13 +267,25 @@ class MediaController(QObject):
         if MediaCacheManager.is_remote(url):
             cached = self._downloader.get_cached_path(url)
             if cached:
+                self._caching_remote = False
                 self._downloader.cancel()
                 target = cached
             else:
                 self._maybe_cache_remote(request, url)
         else:
+            self._caching_remote = False
             self._downloader.cancel()
         self._begin_engine_playback(request, target)
+
+    def _on_cache_progress(self, downloaded: int, total: int) -> None:
+        """Forward the background cache download's progress to the transport.
+
+        Only meaningful while a remote item streams: a local file has nothing
+        downloading behind it, and reporting there would draw a buffer bar that
+        never moves.
+        """
+        if self._caching_remote:
+            self.buffer_progress.emit(int(downloaded), int(total))
 
     def _maybe_cache_remote(self, request: MediaPlaybackRequest, url: str) -> None:
         """Populate the cache in the background for offline reuse (no source-swap)."""
@@ -267,6 +294,7 @@ class MediaController(QObject):
         else:
             persist = request.cache_policy is PlaybackCachePolicy.PERSISTENT
         if persist:
+            self._caching_remote = True
             self._downloader.start(url, persist=True)
 
     def play(self):
@@ -281,6 +309,7 @@ class MediaController(QObject):
 
     def stop(self):
         self._metadata_extractor.cancel()
+        self._caching_remote = False
         self._downloader.cancel()
         if not self._engine_route_active:
             return

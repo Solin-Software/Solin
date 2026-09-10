@@ -914,6 +914,10 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.media.position_changed.connect(self._on_position_changed)
         self.media.media_ended.connect(self._on_media_ended)
         self.media.playback_source_changed.connect(self._on_playback_source_changed)
+        # The buffer bar behind the playback position: how much of a streaming
+        # item is already cached on disk. The handler survived the QtMultimedia
+        # removal but its signal did not, so nothing had been driving it.
+        self.media.buffer_progress.connect(self._on_buffer_progress)
 
     def _sync_protected_media_controls(self) -> None:
         seek_enabled = (
