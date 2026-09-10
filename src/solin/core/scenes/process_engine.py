@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import random
+import re
 import subprocess
 import sys
 import threading
@@ -150,6 +151,26 @@ _MEDIA_PLAYBACK_STATE_FIELDS = frozenset(
 )
 _T = TypeVar("_T")
 log = logging.getLogger(__name__)
+
+# The sidecar's stdout is dup2'd onto its stderr, so every line libobs and its
+# plugins print is re-emitted into Solin's rotating log — the log users attach to
+# bug reports. Camera and media URLs routinely carry credentials: ffmpeg_source
+# dumps its `input` setting on update, media-playback prints the whole URL when a
+# stream fails to open, and some camera firmware wants the login inside the path.
+# Redact before any of it is written, so this covers plugins Solin does not own.
+_USERINFO_IN_URL = re.compile(r"(?P<scheme>\b[a-z][a-z0-9+.-]*://)[^/\s@]*:[^/\s@]*@")
+# No leading \b: camera firmware writes the login inside the path as
+# "user=admin_password=hunter2", where the character before "password" is an
+# underscore — a word character, so a boundary never matches there.
+_SECRET_ASSIGNMENT = re.compile(
+    r"(?i)(password|passwd|pwd|secret|token|auth)=[^\s&'\"]+"
+)
+
+
+def redact_secrets(message: str) -> str:
+    """Mask credentials in a line before it reaches the log file."""
+    redacted = _USERINFO_IN_URL.sub(lambda m: m.group("scheme") + "***@", message)
+    return _SECRET_ASSIGNMENT.sub(lambda m: m.group(1) + "=***", redacted)
 
 
 class SceneEngineProcessError(RuntimeError):
@@ -1179,7 +1200,7 @@ class SubprocessSceneEngine:
             while raw_line := stream.readline(8192):
                 message = raw_line.decode("utf-8", errors="replace").strip()
                 if message:
-                    log.warning("Native scene engine: %s", message)
+                    log.warning("Native scene engine: %s", redact_secrets(message))
         except OSError:
             pass
 
