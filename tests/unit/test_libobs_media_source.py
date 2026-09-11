@@ -6,6 +6,7 @@ import types
 
 from solin.core.scenes.libobs_media_source import (
     _PROGRESSIVE_FFMPEG_OPTIONS,
+    _RESUME_REBUILD_TICKS,
     STATE_NONE,
     STATE_OPENING,
     STATE_PAUSED,
@@ -402,6 +403,45 @@ def test_a_paused_source_stays_paused_across_a_rate_change():
     media.apply_pending_resume()
 
     assert source.play_pause[-1] is True, "must be paused again"
+
+
+def test_a_poll_before_the_rebuild_does_not_spend_the_restore():
+    """The media poll runs four times a second, so it lands in the gap.
+
+    ffmpeg_source does not swap its media object on the tick that asks for a new
+    rate: for a moment the old one still answers, reporting the very position being
+    preserved. Seeking then is a no-op that the restart goes on to undo, so a
+    restore counted as done there leaves playback at the start of the item.
+    """
+    runtime = _Runtime()
+    media = LibobsMediaSource(runtime)
+    media.open("/tmp/clip.mp4")
+    source = runtime.created[-1]
+    source.media_time = 42_000
+
+    media.set_speed(150)
+    media.apply_pending_resume()  # the old media object is still answering
+    source.media_time = 0  # now the rebuilt decoder appears
+    media.apply_pending_resume()
+
+    assert source.media_time == 42_000
+
+
+def test_a_decoder_that_keeps_its_place_is_not_waited_on_for_ever():
+    """Nothing guarantees a restart; the restore has to settle either way."""
+    runtime = _Runtime()
+    media = LibobsMediaSource(runtime)
+    media.open("/tmp/clip.mp4")
+    source = runtime.created[-1]
+    source.media_time = 8_000
+
+    media.set_speed(150)
+    for _ in range(_RESUME_REBUILD_TICKS + 2):
+        source.media_time += 400  # it carried on from where it was
+        media.apply_pending_resume()
+
+    assert media._resume_ms == 0, "the restore must not stay armed for ever"
+    assert source.media_time > 8_000, "and must not drag playback backwards"
 
 
 def test_the_resume_is_applied_only_once():

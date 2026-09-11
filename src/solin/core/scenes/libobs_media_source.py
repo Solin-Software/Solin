@@ -65,6 +65,16 @@ _PROGRESSIVE_FFMPEG_OPTIONS = (
     "rw_timeout=10000000"
 )
 
+# Poll ticks to wait for the rebuilt decoder to announce itself by falling back
+# to the start. It has always arrived within one tick in practice; the cap is
+# only so a decoder that keeps its place is not waited on forever.
+_RESUME_REBUILD_TICKS = 8
+
+# How far past the target counts as "back where it was": one poll tick of
+# playback, so a restore is not called a failure for landing a frame late.
+_RESTORE_TOLERANCE_MS = 500
+
+
 
 def _is_remote(path: str) -> bool:
     return path.startswith(_REMOTE_SCHEMES)
@@ -88,6 +98,8 @@ class LibobsMediaSource:
         self._speed_percent = 100
         # Where to return to after a rate change rebuilds the decoder.
         self._resume_ms = 0
+        self._resume_tries = 0
+        self._resume_restarted = False
         self._resume_paused = False
 
     @property
@@ -160,6 +172,8 @@ class LibobsMediaSource:
         self._path = path
         self._speed_percent = max(1, int(speed_percent or 100))
         self._resume_ms = 0
+        self._resume_tries = 0
+        self._resume_restarted = False
         self._resume_paused = False
         self.set_volume(volume_percent)
         try:
@@ -235,6 +249,8 @@ class LibobsMediaSource:
         if source is None or speed == self._speed_percent:
             return
         self._resume_ms = self.position_ms
+        self._resume_tries = 0
+        self._resume_restarted = False
         self._resume_paused = self.state == STATE_PAUSED
         self._speed_percent = speed
         try:
@@ -250,17 +266,42 @@ class LibobsMediaSource:
         because the decoder is rebuilt on a later tick — a seek issued before that
         would be applied to the media object about to be destroyed.
         """
-        target = self._resume_ms
-        if target <= 0 or self._source is None:
+        if self._source is None or self._resume_ms <= 0:
             return
-        state = self.state
-        if state in (STATE_NONE, STATE_OPENING):
+        if self.state in (STATE_NONE, STATE_OPENING):
             return  # still rebuilding; try again on the next poll
-        self._resume_ms = 0
-        if self.position_ms < target:
-            self.seek(target)
+        if not self._restore_position():
+            return  # the rebuilt decoder has not shown itself yet
         if self._resume_paused:
             self.pause()
+
+    def _restore_position(self) -> bool:
+        """Put playback back where it was; True once that question is settled.
+
+        Changing the rate makes ffmpeg_source throw its media object away and build
+        a new one, which starts from zero. The new object does not appear on the
+        tick that asks for it — for a moment the old one is still answering, with
+        the very position being preserved — so seeking straight away would be a
+        no-op that the restart then goes on to undo. Waiting for the position to
+        fall back is what makes the restore land.
+
+        The seek is keyframe-granular, so playback resumes at the keyframe before
+        where it was rather than exactly on it.
+        """
+        target = self._resume_ms
+        self._resume_tries += 1
+        if self.position_ms + _RESTORE_TOLERANCE_MS < target:
+            # The rebuilt decoder has shown itself. Ask once and let it land:
+            # re-asking every tick restarts each seek before the last has finished
+            # and playback sits at the start going nowhere.
+            self._resume_restarted = True
+            self._resume_ms = 0
+            self.seek(target)
+            return True
+        if self._resume_restarted or self._resume_tries > _RESUME_REBUILD_TICKS:
+            self._resume_ms = 0  # no restart came; it kept its place after all
+            return True
+        return False
 
     def play(self) -> None:
         if self._source is not None:
@@ -315,6 +356,8 @@ class LibobsMediaSource:
         self._path = ""
         self._speed_percent = 100
         self._resume_ms = 0
+        self._resume_tries = 0
+        self._resume_restarted = False
         self._resume_paused = False
         if source is None:
             return
