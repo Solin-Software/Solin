@@ -35,7 +35,9 @@ log = logging.getLogger(__name__)
 _PROFILES_FILENAME = "profiles.json"
 _BASE_APP_GLOBAL_KEYS = {
     SettingsKey.INSTALL_ID,
-    SettingsKey.PENDING_PATCH_CLEANUP,
+    SettingsKey.LEGACY_PENDING_PATCH_CLEANUP,
+    SettingsKey.PENDING_UPDATE_CLEANUP,
+    SettingsKey.UPDATE_CHANNEL,
 }
 
 

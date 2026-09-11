@@ -1,6 +1,14 @@
 name: Build Solin Linux
 
 on:
+  workflow_call:
+    inputs:
+      release:
+        type: boolean
+        default: true
+      retention_days:
+        type: number
+        default: 5
   workflow_dispatch:
     inputs:
       retention_days:
@@ -22,6 +30,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  SOLIN_E2E_STRICT: "1"
   APP_NAME: Solin
   PYTHON_VERSION: "3.13.12"
   DIST_DIR: dist
@@ -34,7 +43,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Install Linux build and runtime dependencies
         shell: bash
@@ -76,36 +85,36 @@ jobs:
             pkg-config
 
       - name: Set up Python ${{ env.PYTHON_VERSION }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Cache pip packages
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ env.PYTHON_VERSION }}-${{ hashFiles('requirements.txt', 'requirements-dev.txt') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-pip-${{ env.PYTHON_VERSION }}-${{ hashFiles('requirements.txt', 'requirements-dev.txt', 'requirements-build.txt') }}
           restore-keys: |
-            ${{ runner.os }}-pip-${{ env.PYTHON_VERSION }}-
-            ${{ runner.os }}-pip-
+            ${{ runner.os }}-${{ runner.arch }}-pip-${{ env.PYTHON_VERSION }}-
+            ${{ runner.os }}-${{ runner.arch }}-pip-
 
       - name: Cache Nuitka compilation cache
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.cache/Nuitka
-          key: ${{ runner.os }}-nuitka-${{ env.PYTHON_VERSION }}-${{ hashFiles('**/*.py') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-nuitka-${{ env.PYTHON_VERSION }}-${{ hashFiles('**/*.py') }}
           restore-keys: |
-            ${{ runner.os }}-nuitka-${{ env.PYTHON_VERSION }}-
-            ${{ runner.os }}-nuitka-
+            ${{ runner.os }}-${{ runner.arch }}-nuitka-${{ env.PYTHON_VERSION }}-
+            ${{ runner.os }}-${{ runner.arch }}-nuitka-
 
       - name: Cache C compiler output
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.cache/ccache
-          key: ${{ runner.os }}-ccache-${{ env.PYTHON_VERSION }}-${{ hashFiles('**/*.py') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-ccache-${{ env.PYTHON_VERSION }}-${{ hashFiles('**/*.py') }}
           restore-keys: |
-            ${{ runner.os }}-ccache-${{ env.PYTHON_VERSION }}-
-            ${{ runner.os }}-ccache-
+            ${{ runner.os }}-${{ runner.arch }}-ccache-${{ env.PYTHON_VERSION }}-
+            ${{ runner.os }}-${{ runner.arch }}-ccache-
 
       - name: Install Python dependencies
         shell: bash
@@ -113,26 +122,11 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements-dev.txt
           python -m pip install --no-deps -e .
-          python -m pip install --upgrade nuitka ordered-set zstandard
-
-      - name: Quality gate
-        shell: bash
-        run: |
-          python -m ruff check .
-          python scripts/typecheck.py
-          xvfb-run --auto-servernum python -m pytest
+          python -m pip install -r requirements-build.txt
 
       - name: Read app version
         id: version
-        shell: bash
-        run: |
-          version=$(python -c 'from solin.version import __version__; print(__version__)')
-          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Invalid app version: $version" >&2
-            exit 1
-          fi
-          echo "APP_VERSION=$version" >> "$GITHUB_ENV"
-          echo "app_version=$version" >> "$GITHUB_OUTPUT"
+        run: python scripts/release.py metadata --github-output
 
       - name: Build Linux standalone
         shell: bash
@@ -158,10 +152,10 @@ jobs:
         run: SOLIN_PYTHON="$(command -v python)" bash scripts/package_solin_appimage.sh
 
       - name: Run AppImage startup smoke
-        if: ${{ inputs.run_packaged_smoke_test }}
+        if: ${{ (inputs.release || inputs.run_packaged_smoke_test) }}
         shell: bash
         run: |
-          appimage="${DIST_DIR}/${APP_NAME}-${APP_VERSION}-x86_64.AppImage"
+          appimage="${DIST_DIR}/${APP_NAME}-${APP_VERSION}-linux-x86_64.AppImage"
           set +e
           timeout --signal=TERM 15s xvfb-run --auto-servernum \
             --server-args="-screen 0 1280x720x24" \
@@ -170,16 +164,29 @@ jobs:
           set -e
           if [[ "$status" -ne 124 && "$status" -ne 143 ]]; then
             echo "Solin AppImage exited unexpectedly with status $status." >&2
-            exit "$status"
+            exit 1
           fi
           echo "Solin AppImage remained running for the smoke-test window."
 
+      - name: Download verified predecessor
+        if: inputs.release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOLIN_TRANSITION_LINUX_URL: ${{ vars.SOLIN_TRANSITION_LINUX_URL }}
+          SOLIN_TRANSITION_LINUX_SHA256: ${{ vars.SOLIN_TRANSITION_LINUX_SHA256 }}
+        run: python scripts/release.py download-predecessor --platform linux --architecture x86_64 --output build/previous-app/Solin.AppImage --github-env SOLIN_OLD_APPIMAGE
+
+      - name: AppImage replacement smoke
+        if: inputs.release
+        env:
+          SOLIN_NEW_APPIMAGE: ${{ github.workspace }}/dist/Solin-${{ env.APP_VERSION }}-linux-x86_64.AppImage
+        run: xvfb-run --auto-servernum python -m pytest tests/e2e/test_linux_app_upgrade_smoke.py -q
+
       - name: Upload Linux AppImage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: Solin-${{ steps.version.outputs.app_version }}-x86_64-AppImage
+          name: release-linux-x86_64
           path: |
-            dist/*.AppImage
-            dist/*.AppImage.sha256
+            dist/Solin-${{ env.APP_VERSION }}-linux-x86_64.AppImage
           if-no-files-found: error
           retention-days: ${{ inputs.retention_days }}

@@ -1,58 +1,114 @@
 # Versioning and releases
 
-## Version contract
+## CalVer contract
 
-Solin versions contain four numeric components:
-
-```text
-YY.RELEASE.PATCH.REVISION
-```
+The public version is `YY.RELEASE.PATCH`, optionally followed by the Python
+pre-release suffix `bN`. Examples are `26.32.0`, `26.32.1`, and `26.33.0b2`.
+Tags and GitHub Releases use the corresponding display form without a `v`
+prefix: `26.32.0` and `26.33.0-beta.2`.
 
 - `YY` is the two-digit release year.
-- `RELEASE` is the sequential release line within that year.
-- `PATCH` starts at zero and increments for a corrective release on the same
-  release line.
-- `REVISION` is reserved for packaging compatibility and remains zero for
-  normal cross-platform releases.
+- `RELEASE` is the sequential release line in that year. It starts at one in a
+  new year.
+- `PATCH` starts at zero and increases for corrective releases on that line.
+- `bN` identifies a beta. A stable release has no suffix.
 
-For example, `26.26.1.0` is the first corrective release for release line 26 in
-2026. The canonical version is defined once in `src/solin/version.py`.
+`src/solin/version.py` is the single source of truth. Native package metadata
+is derived from it because Windows and macOS impose different numeric formats:
 
-macOS application metadata uses the first three components. Do not increment
-`REVISION` without reviewing the update API and every platform workflow.
+- Windows uses `YY.RELEASE.PATCH.BUILD`, where beta `N` uses `BUILD=N` and the
+  stable build uses `65535`.
+- macOS uses `YY.RELEASE.PATCH` as its short version and a numeric build of
+  `YY.RELEASE.(PATCH*65536+BUILD)`.
 
-## Release policy
+These projections keep successive betas ordered before their stable release
+without exposing a fourth public component. The GitHub updater accepts only
+this canonical three-component public version and its optional beta suffix.
 
-Merging to `main` does not distribute a new version. `main` should remain in a
-state that can be built, while distribution is a separate, explicit step.
+## Preparing a release pull request
 
-Prepare a distributed version in a focused pull request:
+Release preparation runs from a clean checkout of `main` with one explicit
+intent:
 
-1. choose the next version according to the contract above;
-2. update `src/solin/version.py`;
-3. prepare the release notes in the existing external changelog flow;
-4. run lint, type checking, tests, and locale validation;
-5. verify the version in application, installer, and update metadata;
-6. merge the reviewed release preparation;
-7. run the required platform build workflows manually, keeping the default
-   Windows signing gate enabled for every distributed Windows build;
-8. run packaged startup and previous-version upgrade checks;
-9. publish the verified files through the existing distribution process;
-10. record the full source commit SHA with the distributed version.
+```text
+python scripts/release.py prepare release
+python scripts/release.py prepare patch
+python scripts/release.py prepare beta
+python scripts/release.py prepare promote
+```
 
-An internal Git tag such as `v26.26.1` may be used as a convenient name for that
-commit. A tag does not create a GitHub Release, publish files, or expose a
-private repository; the recorded commit SHA remains the required traceability
-reference.
+The command calculates the next version, rejects existing local or remote tags,
+updates the canonical version, and creates the English release-note draft. It
+does not create a tag or publish anything. The generated notes and version
+change are reviewed together in a focused pull request, which also receives the
+normal quality checks.
 
-## GitHub Actions
+Release notes live under `docs/release-notes/<tag>/<locale>.md`. `en.md` is
+required before tagging. Other files use an existing application locale such as
+`pt_BR.md`; the updater falls back to English when a translation is absent.
+Stable notes consolidate the user-visible changes that were exercised in beta.
 
-The platform workflows build and verify the application. Their artifacts are
-temporary, and a successful run does not distribute a new version.
+Conventional Commits and pull-request labels can organize the draft, but they do
+not choose a CalVer increment. The release intent remains an explicit reviewed
+decision.
 
-Windows and macOS upgrade smoke tests require the URL of the previously
-distributed build. Do not keep an old URL as a workflow default: provide the
-correct predecessor or disable the upgrade smoke test for a diagnostic build.
-Unsigned Windows workflow output is diagnostic-only, uses an explicit
-`unsigned-diagnostic` artifact/file suffix, and must not enter the distribution
-process.
+## Publishing
+
+Publication starts when the exact reviewed tag is pushed on the merged release
+commit. Tags matching the release contract start `.github/workflows/release.yml`,
+and the workflow accepts only tag commits contained in `main`.
+
+The release workflow validates the identity and notes, runs the cross-platform
+quality gate, then builds and tests all required packages:
+
+- Windows x86-64 setup, which also installs and registers the virtual camera;
+- ad-hoc signed macOS 13+ DMGs for Intel and Apple Silicon;
+- Linux x86-64 AppImage requiring glibc 2.35 or newer.
+
+The publisher runs only after every required job succeeds. It verifies the exact
+asset inventory, sizes, SHA-256 hashes, source commit, architecture, and release
+channel. Files are first uploaded to a draft and the draft is published only
+after GitHub reports every expected asset as complete with the expected digest.
+A beta is marked as a prerelease and never becomes `latest`.
+
+Published assets are never replaced. A failed run may safely complete its owned
+draft; a correction to a published release requires a new version. Repository
+release immutability is an external prerequisite for production publication;
+it locks each published tag and its assets after the workflow publishes the
+draft.
+
+The platform workflows remain manually runnable for diagnostics. Manual output
+is short lived and is not distribution.
+
+## External repository prerequisites
+
+Production publication depends on repository controls that cannot be declared
+by a workflow file. The expected state is:
+
+- release immutability enabled;
+- `main` protected by the required `Quality Gate` check;
+- release tags protected from deletion and force updates.
+
+The first GitHub-hosted release also depends on repository variables containing
+the externally distributed predecessor package and its verified digest:
+
+- `SOLIN_TRANSITION_WINDOWS_URL` and `SOLIN_TRANSITION_WINDOWS_SHA256`
+- `SOLIN_TRANSITION_MACOS_URL` and `SOLIN_TRANSITION_MACOS_SHA256`
+- `SOLIN_TRANSITION_LINUX_URL` and `SOLIN_TRANSITION_LINUX_SHA256`
+
+These variables are build-time E2E fixtures only. They are never read by the
+application and do not preserve the previous update protocol. Apple Silicon has
+no native transition predecessor and is validated as a clean install on its
+first release. Later workflows resolve predecessors and hashes from prior
+GitHub release manifests automatically, so the transition variables are no
+longer used.
+
+The first version containing the GitHub updater must also be announced through
+the old SolinAV version endpoint so existing installations can migrate. New
+versions use GitHub only for update discovery; the SolinAV notification service
+remains independent.
+
+macOS packages currently use free ad-hoc signing. This seals the bundle but does
+not establish a Developer ID identity or provide notarization, so Gatekeeper may
+require explicit user approval. Developer ID signing, hardened runtime, and
+notarization remain future distribution work.

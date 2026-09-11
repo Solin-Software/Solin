@@ -280,15 +280,51 @@ def _build_main_window_service_factories(
             RemoteUpdateService,
         )
         from solin.core.remote.notifications import NotificationService
-        from solin.core.remote.patch_installer import (
-            PatchDownloadWorker,
-            launch_patch_installer,
-            save_pending_patch_cleanup,
+        from solin.core.remote.update_download import UpdateDownloadWorker
+        from solin.core.remote.update_installer import (
+            UpdateInstaller,
+            windows_installation_present,
+            windows_auto_update_available,
         )
         from solin.core.remote.update_policy import UpdateInfo
         from solin.core.remote.updates import UpdateService
         from solin.ui.dialogs.notifications import RemoteNotificationQueue
         from solin.ui.dialogs.update import UpdateDialog
+
+        def create_update_dialog(info):
+            installer = UpdateInstaller(parent)
+            closing_for_update = False
+            dialog = UpdateDialog(
+                cast(UpdateInfo, info), parent,
+                downloader_factory=lambda update, owner: UpdateDownloadWorker(
+                    update, owner, directory=runtime_paths.cache_dir / "updates",
+                ),
+                launch_installer=installer.start,
+            )
+            installer.failed.connect(dialog.installation_failed)
+
+            def abort_abandoned_install(_result):
+                if not closing_for_update:
+                    installer.abort()
+
+            dialog.finished.connect(abort_abandoned_install)
+
+            def close_for_update():
+                nonlocal closing_for_update
+                # The visible shell owns close confirmation, geometry and runtime shutdown.
+                closing_for_update = True
+                installation_settings.set_pending_update_cleanup_path(dialog.downloaded_path)
+                window = parent.window()
+                if window.close():
+                    installer.accept_shutdown()
+                else:
+                    closing_for_update = False
+                    installation_settings.clear_pending_update_cleanup_path()
+                    installer.abort()
+                    dialog.installation_failed("Application close was cancelled.")
+
+            installer.ready.connect(close_for_update)
+            return dialog
 
         return RemoteServicesController(
             cast(QWidget, parent),
@@ -308,21 +344,15 @@ def _build_main_window_service_factories(
             update_service=cast(
                 RemoteUpdateService,
                 UpdateService(
-                    install_id_provider,
-                    lambda: lang_manager.api_code,
+                    lambda: lang_manager.current_code,
+                    installation_settings.update_channel,
+                    runtime_paths.cache_dir / "update-check",
                     parent,
+                    installed_windows_provider=windows_installation_present,
+                    automatic_windows_provider=windows_auto_update_available,
                 ),
             ),
-            update_dialog_factory=lambda info: UpdateDialog(
-                cast(UpdateInfo, info),
-                parent,
-                patch_downloader_factory=PatchDownloadWorker,
-                save_cleanup_path=lambda path: save_pending_patch_cleanup(
-                    installation_settings,
-                    path,
-                ),
-                launch_patch=launch_patch_installer,
-            ),
+            update_dialog_factory=create_update_dialog,
         )
 
     factories = MainWindowServiceFactories(

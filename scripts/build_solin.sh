@@ -179,7 +179,7 @@ XDOTOOL_SOURCE="$(command -v xdotool || true)"
     "xdotool is required for packaging. On Ubuntu run: sudo apt install xdotool"
 
 "${PYTHON}" -c "import nuitka, PySide6, sideview" >/dev/null 2>&1 || fail \
-    "Nuitka, PySide6 and SideView are required. Install requirements and run: python -m pip install nuitka ordered-set zstandard"
+    "Nuitka, PySide6 and SideView are required. Install requirements.txt and requirements-build.txt."
 
 SIDEVIEW_PACKAGE_DIR="$(
     "${PYTHON}" -c \

@@ -11,6 +11,7 @@ from solin.core.foundation.constants import (
     QSETTINGS_ORG_NAME,
 )
 from solin.core.foundation.settings_keys import SettingsKey
+from solin.core.releases.channel import UpdateChannel
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,14 +109,45 @@ class InstallationSettingsStore:
     def set_install_id(self, install_id: str) -> None:
         self.settings.set_value(SettingsKey.INSTALL_ID, install_id)
 
-    def pending_patch_cleanup_path(self) -> str:
-        return self.settings.string(SettingsKey.PENDING_PATCH_CLEANUP)
+    def update_channel(self) -> UpdateChannel:
+        try:
+            return UpdateChannel(self.settings.string(SettingsKey.UPDATE_CHANNEL, "stable"))
+        except ValueError:
+            return UpdateChannel.STABLE
 
-    def set_pending_patch_cleanup_path(self, path: str) -> None:
-        self.settings.set_value(SettingsKey.PENDING_PATCH_CLEANUP, path)
+    def set_update_channel(self, channel: UpdateChannel) -> None:
+        self.settings.set_value(SettingsKey.UPDATE_CHANNEL, UpdateChannel(channel).value)
 
-    def clear_pending_patch_cleanup_path(self) -> None:
-        self.settings.remove(SettingsKey.PENDING_PATCH_CLEANUP)
+    def pending_update_cleanup_path(self) -> str:
+        return self.settings.string(SettingsKey.PENDING_UPDATE_CLEANUP)
+
+    def set_pending_update_cleanup_path(self, path: str) -> None:
+        self.settings.set_value(SettingsKey.PENDING_UPDATE_CLEANUP, path)
+
+    def clear_pending_update_cleanup_path(self) -> None:
+        self.settings.remove(SettingsKey.PENDING_UPDATE_CLEANUP)
+
+    def clean_legacy_update_download(self) -> None:
+        """Retire old patch state without following arbitrary persisted paths."""
+        import tempfile
+        from pathlib import Path
+
+        value = self.settings.string(SettingsKey.LEGACY_PENDING_PATCH_CLEANUP)
+        if not value:
+            return
+        path = Path(value)
+        valid = (
+            not path.is_symlink()
+            and path.name.startswith("Solin_patch_")
+            and path.suffix == ".exe"
+            and path.resolve().parent == Path(tempfile.gettempdir()).resolve()
+        )
+        if valid:
+            try:
+                path.unlink(missing_ok=True)
+            except OSError:
+                return  # Retain the old key until a subsequent startup can remove the file.
+        self.settings.remove(SettingsKey.LEGACY_PENDING_PATCH_CLEANUP)
 
 
 @dataclass(frozen=True, slots=True)

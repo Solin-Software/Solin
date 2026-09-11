@@ -45,7 +45,9 @@ from solin.core.playlists.items import create_playlist_item
 
 EXPECTED_SETTINGS_KEYS = {
     "INSTALL_ID": "install_id",
-    "PENDING_PATCH_CLEANUP": "pending_patch_cleanup",
+    "LEGACY_PENDING_PATCH_CLEANUP": "pending_patch_cleanup",
+    "PENDING_UPDATE_CLEANUP": "updates/pending_cleanup",
+    "UPDATE_CHANNEL": "updates/channel",
     "LAST_ACTIVE_PROFILE": "last_active_profile",
     "BOOTSTRAP_LANGUAGE": "bootstrap_language",
     "APP_LANGUAGE": "language",

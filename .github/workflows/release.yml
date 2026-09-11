@@ -1,0 +1,84 @@
+name: Release
+
+on:
+  push:
+    tags: ['[0-9][0-9].*']
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.13.12"
+      - run: python -m pip install packaging==26.0 requests==2.32.5
+      - name: Validate tag and approved commit
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
+          SOLIN_TRANSITION_WINDOWS_URL: ${{ vars.SOLIN_TRANSITION_WINDOWS_URL }}
+          SOLIN_TRANSITION_WINDOWS_SHA256: ${{ vars.SOLIN_TRANSITION_WINDOWS_SHA256 }}
+          SOLIN_TRANSITION_MACOS_URL: ${{ vars.SOLIN_TRANSITION_MACOS_URL }}
+          SOLIN_TRANSITION_MACOS_SHA256: ${{ vars.SOLIN_TRANSITION_MACOS_SHA256 }}
+          SOLIN_TRANSITION_LINUX_URL: ${{ vars.SOLIN_TRANSITION_LINUX_URL }}
+          SOLIN_TRANSITION_LINUX_SHA256: ${{ vars.SOLIN_TRANSITION_LINUX_SHA256 }}
+        run: |
+          git fetch origin main
+          git merge-base --is-ancestor "$RELEASE_SHA" origin/main
+          python scripts/release.py preflight --tag "$RELEASE_TAG" --sha "$RELEASE_SHA"
+  quality:
+    needs: preflight
+    uses: ./.github/workflows/quality.yml
+  windows:
+    needs: preflight
+    uses: ./.github/workflows/build-solin-windows.yml
+    with:
+      release: true
+  linux:
+    needs: preflight
+    uses: ./.github/workflows/build-solin-linux.yml
+    with:
+      release: true
+  macos:
+    needs: preflight
+    uses: ./.github/workflows/build-solin-macos.yml
+    with:
+      release: true
+  publish:
+    needs: [quality, windows, linux, macos]
+    runs-on: ubuntu-24.04
+    # Builds may run concurrently, while the final latest decision is serialized.
+    concurrency:
+      group: solin-release-publication
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - run: git fetch origin main
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.13.12"
+      - run: python -m pip install packaging==26.0 requests==2.32.5
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: dist
+      - name: Assemble and atomically publish complete release
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python scripts/release.py manifest --artifacts dist --tag "$RELEASE_TAG" --sha "$RELEASE_SHA"
+          python scripts/release.py publish --artifacts dist --tag "$RELEASE_TAG" --sha "$RELEASE_SHA"

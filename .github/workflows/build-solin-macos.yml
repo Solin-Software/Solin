@@ -1,6 +1,14 @@
 name: Build Solin macOS
 
 on:
+  workflow_call:
+    inputs:
+      release:
+        type: boolean
+        default: true
+      retention_days:
+        type: number
+        default: 5
   workflow_dispatch:
     inputs:
       retention_days:
@@ -13,10 +21,6 @@ on:
         required: true
         type: boolean
         default: false
-      previous_macos_dmg_url:
-        description: Previously distributed DMG used for app replacement smoke
-        required: false
-        type: string
 
 permissions:
   contents: read
@@ -26,69 +30,56 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  SOLIN_E2E_STRICT: "1"
   APP_NAME: Solin
   PYTHON_VERSION: "3.13.12"
-  MACOSX_DEPLOYMENT_TARGET: "12.0"
+  MACOSX_DEPLOYMENT_TARGET: "13.0"
   BUILD_DIR: build
   DIST_DIR: dist
   NUITKA_CACHE_DIR: ${{ github.workspace }}/.cache/nuitka
 
 jobs:
   build:
-    name: macOS Intel
-    runs-on: macos-15-intel
+    name: macOS ${{ matrix.architecture }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15-intel
+            architecture: x86_64
+          - runner: macos-15
+            architecture: arm64
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 180
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Python ${{ env.PYTHON_VERSION }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Cache pip packages
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             ~/Library/Caches/pip
             .pip-wheels
-          key: ${{ runner.os }}-pip-${{ env.PYTHON_VERSION }}-${{ hashFiles('requirements.txt', 'requirements-dev.txt') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-pip-${{ env.PYTHON_VERSION }}-${{ hashFiles('requirements.txt', 'requirements-dev.txt', 'requirements-build.txt') }}
           restore-keys: |
-            ${{ runner.os }}-pip-${{ env.PYTHON_VERSION }}-
-            ${{ runner.os }}-pip-
+            ${{ runner.os }}-${{ runner.arch }}-pip-${{ env.PYTHON_VERSION }}-
+            ${{ runner.os }}-${{ runner.arch }}-pip-
 
       - name: Cache Nuitka and C compilation
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: .cache/nuitka
-          key: ${{ runner.os }}-${{ runner.arch }}-nuitka-${{ env.PYTHON_VERSION }}-${{ hashFiles('requirements.txt', 'requirements-dev.txt') }}-${{ hashFiles('**/*.py') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-nuitka-${{ env.PYTHON_VERSION }}-${{ hashFiles('requirements.txt', 'requirements-dev.txt', 'requirements-build.txt') }}-${{ hashFiles('**/*.py') }}
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-nuitka-${{ env.PYTHON_VERSION }}-${{ hashFiles('requirements.txt', 'requirements-dev.txt') }}-
             ${{ runner.os }}-${{ runner.arch }}-nuitka-${{ env.PYTHON_VERSION }}-
-
-      - name: Read app version
-        id: version
-        shell: bash
-        run: |
-          python - <<'PY' | tee -a "$GITHUB_ENV" >> "$GITHUB_OUTPUT"
-          from pathlib import Path
-
-          namespace = {}
-          exec(Path("src/solin/version.py").read_text(encoding="utf-8"), namespace)
-          internal_version = namespace["__version__"]
-          parts = internal_version.split(".")
-          if len(parts) != 4 or not all(part.isdigit() for part in parts):
-              raise SystemExit(
-                  "Version must use YY.RELEASE.PATCH.REVISION format. "
-                  f"Got: {internal_version}"
-              )
-          macos_version = ".".join(parts[:3])
-          print(f"APP_VERSION={macos_version}")
-          print(f"app_version={macos_version}")
-          print(f"APP_INTERNAL_VERSION={internal_version}")
-          PY
 
       - name: Verify required macOS inputs
         shell: bash
@@ -122,14 +113,11 @@ jobs:
             --find-links .pip-wheels \
             --requirement requirements-dev.txt
           python -m pip install --no-deps -e .
-          python -m pip install --upgrade --retries 10 --timeout 120 --prefer-binary nuitka ordered-set zstandard
+          python -m pip install --retries 10 --timeout 120 --prefer-binary -r requirements-build.txt
 
-      - name: Quality gate
-        shell: bash
-        run: |
-          python -m ruff check .
-          python scripts/typecheck.py
-          python -m pytest
+      - name: Read app version
+        id: version
+        run: python scripts/release.py metadata --github-output
 
       - name: Generate compiled QML cache
         shell: bash
@@ -170,7 +158,7 @@ jobs:
             --macos-app-console-mode=disable \
             --output-dir="${BUILD_DIR}" \
             --macos-app-name="${APP_NAME}" \
-            --macos-app-version="${APP_VERSION}" \
+            --macos-app-version="${MACOS_VERSION}" \
             --macos-app-icon="src/solin/resources/assets/icon.icns" \
             --assume-yes-for-downloads \
             --follow-imports \
@@ -436,6 +424,21 @@ jobs:
             --application-dir "$BUNDLE/Contents/MacOS" \
             --executable "$BUNDLE/Contents/MacOS/main"
 
+      - name: Validate architecture and set numeric bundle versions
+        shell: bash
+        env:
+          EXPECTED_ARCH: ${{ matrix.architecture }}
+        run: |
+          bundle="${BUILD_DIR}/${APP_NAME}.app"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${MACOS_VERSION}" "$bundle/Contents/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${MACOS_BUILD}" "$bundle/Contents/Info.plist"
+          /usr/libexec/PlistBuddy -c "Add :LSMinimumSystemVersion string 13.0" "$bundle/Contents/Info.plist" || /usr/libexec/PlistBuddy -c "Set :LSMinimumSystemVersion 13.0" "$bundle/Contents/Info.plist"
+          while IFS= read -r -d '' binary; do
+            if file "$binary" | grep -q 'Mach-O'; then
+              lipo -verify_arch "$EXPECTED_ARCH" "$binary"
+            fi
+          done < <(find "$bundle" -type f -print0)
+
       - name: Ad-hoc sign app bundle
         shell: bash
         run: |
@@ -467,7 +470,10 @@ jobs:
 
       - name: Install create-dmg
         shell: bash
-        run: brew install create-dmg
+        run: |
+          git clone https://github.com/create-dmg/create-dmg.git "$RUNNER_TEMP/create-dmg"
+          git -C "$RUNNER_TEMP/create-dmg" checkout --detach 799d390992c97a2eff5ac2b148b7c23e3f8acf40
+          echo "$RUNNER_TEMP/create-dmg" >> "$GITHUB_PATH"
 
       - name: Create DMG
         shell: bash
@@ -483,7 +489,7 @@ jobs:
             --hide-extension "${APP_NAME}.app" \
             --app-drop-link 495 195 \
             --no-internet-enable \
-            "${DIST_DIR}/${APP_NAME}-${APP_VERSION}-macOS.dmg" \
+            "${DIST_DIR}/${APP_NAME}-${APP_VERSION}-macos-${{ matrix.architecture }}.dmg" \
             "${BUILD_DIR}/${APP_NAME}.app" \
           || [ $? -eq 2 ]
 
@@ -491,7 +497,7 @@ jobs:
           ls -lh "${DIST_DIR}/"
 
       - name: Locate newly built macOS DMG
-        if: ${{ inputs.run_release_smoke_tests }}
+        if: ${{ (inputs.release || inputs.run_release_smoke_tests) }}
         shell: bash
         run: |
           set -euo pipefail
@@ -507,30 +513,17 @@ jobs:
           echo "SOLIN_NEW_MACOS_DMG=${PWD}/${dmgs[0]}" >> "$GITHUB_ENV"
           ls -lh "${dmgs[0]}"
 
-      - name: Download previous macOS DMG
-        if: ${{ inputs.run_release_smoke_tests }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          url="${{ inputs.previous_macos_dmg_url }}"
-          if [ -z "${url//[[:space:]]/}" ]; then
-            echo "::error::previous_macos_dmg_url must not be empty when release smoke tests are enabled."
-            exit 1
-          fi
-
-          out_dir="${BUILD_DIR}/previous-dmg"
-          mkdir -p "$out_dir"
-          old_dmg="${PWD}/${out_dir}/${APP_NAME}_previous.dmg"
-          curl --fail --location --retry 3 --retry-delay 5 --output "$old_dmg" "$url"
-          if [ ! -s "$old_dmg" ]; then
-            echo "::error::Downloaded previous DMG is empty: $old_dmg"
-            exit 1
-          fi
-          echo "SOLIN_OLD_MACOS_DMG=$old_dmg" >> "$GITHUB_ENV"
-          ls -lh "$old_dmg"
+      - name: Download verified predecessor
+        id: predecessor
+        if: ${{ inputs.release || inputs.run_release_smoke_tests }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOLIN_TRANSITION_MACOS_URL: ${{ vars.SOLIN_TRANSITION_MACOS_URL }}
+          SOLIN_TRANSITION_MACOS_SHA256: ${{ vars.SOLIN_TRANSITION_MACOS_SHA256 }}
+        run: python scripts/release.py download-predecessor --platform macos --architecture ${{ matrix.architecture }} --output build/previous-dmg/Solin.dmg --github-env SOLIN_OLD_MACOS_DMG
 
       - name: Extract macOS release apps
-        if: ${{ inputs.run_release_smoke_tests }}
+        if: ${{ (inputs.release || inputs.run_release_smoke_tests) }}
         shell: bash
         run: |
           set -euo pipefail
@@ -578,11 +571,13 @@ jobs:
             echo "${env_name}=${PWD}/${output_dir}/${APP_NAME}.app" >> "$GITHUB_ENV"
           }
 
-          extract_app "$SOLIN_OLD_MACOS_DMG" "${BUILD_DIR}/previous-app" "SOLIN_OLD_MACOS_APP"
+          if [ -n "${SOLIN_OLD_MACOS_DMG:-}" ]; then
+            extract_app "$SOLIN_OLD_MACOS_DMG" "${BUILD_DIR}/previous-app" "SOLIN_OLD_MACOS_APP"
+          fi
           extract_app "$SOLIN_NEW_MACOS_DMG" "${BUILD_DIR}/new-dmg-app" "SOLIN_NEW_MACOS_APP"
 
       - name: Run macOS app replacement smoke
-        if: ${{ inputs.run_release_smoke_tests }}
+        if: ${{ steps.predecessor.outputs.has_predecessor == 'true' }}
         shell: bash
         env:
           SOLIN_E2E_STARTUP_SECONDS: "8"
@@ -594,15 +589,14 @@ jobs:
         env:
           SOLIN_E2E_STARTUP_SECONDS: "8"
         run: |
-          export SOLIN_PACKAGED_EXE="${PWD}/${BUILD_DIR}/${APP_NAME}.app/Contents/MacOS/main"
+          export SOLIN_PACKAGED_EXE="${SOLIN_NEW_MACOS_APP:-${PWD}/${BUILD_DIR}/${APP_NAME}.app}/Contents/MacOS/main"
           python -m pytest tests/e2e/test_packaged_app_smoke.py -q
 
       - name: Upload macOS DMG
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: Solin-${{ steps.version.outputs.app_version }}-macOS
+          name: release-macos-${{ matrix.architecture }}
           path: |
-            dist/*.dmg
-            dist/SHA256SUMS-macos.txt
+            dist/Solin-${{ env.APP_VERSION }}-macos-${{ matrix.architecture }}.dmg
           if-no-files-found: error
           retention-days: ${{ inputs.retention_days }}

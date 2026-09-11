@@ -1,19 +1,4 @@
-"""
-update.py
-================
-Update dialogs for Solin.
-
-Two modes:
-  • SETUP  → informs the user of the new version and opens the browser.
-             Nothing is downloaded — the user installs manually.
-  • PATCH  → asks, downloads the .exe with a progress bar,
-             saves to temp, launches the installer and exits the app.
-
-Temp-file cleanup:
-  Before launching the patch, delegates persistence to the injected adapter.
-  On next launch, bootstrap delegates deletion to the same remote adapter.
-  (Cannot delete while patch.exe is running on Windows.)
-"""
+"""Release notes and explicit download/install actions for verified packages."""
 
 from __future__ import annotations
 
@@ -33,6 +18,7 @@ from PySide6.QtCore import (
 from PySide6.QtGui import QDesktopServices, QMouseEvent, QTextDocument
 from PySide6.QtWidgets import (
     QDialog,
+    QWidget,
     QVBoxLayout,
     QHBoxLayout,
     QLabel,
@@ -44,7 +30,7 @@ from PySide6.QtWidgets import (
 )
 
 if TYPE_CHECKING:
-    from solin.core.remote.patch_installer import PatchDownloadWorker
+    from solin.core.remote.update_download import UpdateDownloadWorker
     from solin.core.remote.update_policy import UpdateInfo
 
 from solin.core.remote.urls import is_safe_remote_url
@@ -162,32 +148,22 @@ QProgressBar::chunk {{
 
 
 class UpdateDialog(QDialog):
-    """
-    Non-modal dialog (show) for SETUP or implicit-modal for PATCH.
-
-    For PATCH, call show() — the dialog manages its own lifecycle,
-    exiting the app when the patch is ready.
-
-    The dialog is frameless and draggable: click-and-drag anywhere on it
-    to reposition it on screen.
-    """
+    """Non-modal presentation with cancellable download and explicit installation."""
 
     def __init__(
         self,
         info: "UpdateInfo",
         parent=None,
         *,
-        patch_downloader_factory: Callable[[str, QObject], PatchDownloadWorker],
-        save_cleanup_path: Callable[[str], None],
-        launch_patch: Callable[[str], None],
+        downloader_factory: Callable[[UpdateInfo, QObject], UpdateDownloadWorker],
+        launch_installer: Callable[[str], None],
     ) -> None:
         super().__init__(parent, Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
         self._info = info
-        self._patch_downloader_factory = patch_downloader_factory
-        self._save_cleanup_path = save_cleanup_path
-        self._launch_patch = launch_patch
-        self._downloader: PatchDownloadWorker | None = None
-        self._patch_path = ""
+        self._downloader_factory = downloader_factory
+        self._launch_installer = launch_installer
+        self._downloader: UpdateDownloadWorker | None = None
+        self._package_path = ""
 
         # Drag state
         self._drag_active = False
@@ -201,11 +177,14 @@ class UpdateDialog(QDialog):
         self.setStyleSheet(_QSS)
         self._fade_in()
 
+    @property
+    def downloaded_path(self) -> str:
+        """Verified package path, empty until the transfer is complete."""
+        return self._package_path
+
     # ── UI construction ────────────────────────────────────────────────────────
 
     def _build_ui(self) -> None:
-        from solin.core.remote.update_policy import UpdateKind
-
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
 
@@ -242,16 +221,7 @@ class UpdateDialog(QDialog):
         lay.addWidget(sep)
 
         # ── Body ───────────────────────────────────────────────────────────────
-        if self._info.kind == UpdateKind.PATCH:
-            body_text = self.tr(
-                "A new update is available for Solin.\n"
-                "The download is quick and the app will restart automatically."
-            )
-        else:
-            body_text = self.tr(
-                "A new full version of Solin is available.\n"
-                "Click 'Download' to open the download page."
-            )
+        body_text = self.tr("A new version of Solin is available. Download it to continue.")
 
         body = QLabel(body_text)
         body.setObjectName("body")
@@ -282,7 +252,7 @@ class UpdateDialog(QDialog):
             lay.addWidget(browser)
             self._changelog_browser = browser
 
-        # ── Progress bar (patch only) ──────────────────────────────────────────
+        # ── Download progress ──────────────────────────────────────────
         self._progress_bar = QProgressBar()
         self._progress_bar.setRange(0, 100)
         self._progress_bar.setValue(0)
@@ -305,10 +275,7 @@ class UpdateDialog(QDialog):
         self._btn_cancel.clicked.connect(self._on_cancel)
         btn_row.addWidget(self._btn_cancel)
 
-        if self._info.kind == UpdateKind.PATCH:
-            self._btn_action = QPushButton(self.tr("Update now"))
-        else:
-            self._btn_action = QPushButton(self.tr("Download"))
+        self._btn_action = QPushButton(self.tr("Download"))
 
         self._btn_action.setObjectName("btn_primary")
         self._btn_action.clicked.connect(self._on_action)
@@ -335,24 +302,21 @@ class UpdateDialog(QDialog):
         self.close()
 
     def _on_action(self) -> None:
-        from solin.core.remote.update_policy import UpdateKind
-
-        if self._info.kind == UpdateKind.SETUP:
-            QDesktopServices.openUrl(QUrl(self._info.url))
-            self.close()
+        if self._package_path:
+            self._open_package()
         else:
             self._start_download()
 
     def _start_download(self) -> None:
         self._btn_action.setEnabled(False)
         self._btn_action.setText(self.tr("Downloading…"))
-        self._btn_cancel.setEnabled(False)
+        self._btn_cancel.setEnabled(True)
 
         self._progress_bar.setVisible(True)
         self._status_label.setVisible(True)
         self._status_label.setText(self.tr("Starting download…"))
 
-        self._downloader = self._patch_downloader_factory(self._info.url, self)
+        self._downloader = self._downloader_factory(self._info, self)
         self._downloader.progress.connect(self._on_progress)
         self._downloader.finished.connect(self._on_download_done)
         self._downloader.failed.connect(self._on_download_failed)
@@ -363,16 +327,21 @@ class UpdateDialog(QDialog):
         self._status_label.setText(self.tr("Downloading… %1%").replace("%1", str(pct)))
 
     def _on_download_done(self, path: str) -> None:
-        self._patch_path = path
+        from solin.core.remote.update_policy import UpdateAction
+
+        self._downloader = None
+        self._package_path = path
         self._progress_bar.setValue(100)
-        self._status_label.setText(self.tr("Completed. Applying update…"))
-        self._btn_cancel.setEnabled(False)
-
-        self._save_cleanup_path(path)
-
-        from PySide6.QtCore import QTimer
-
-        QTimer.singleShot(800, self._launch_patch_and_quit)
+        self._status_label.setText(self.tr("Download verified. Ready to install."))
+        self._btn_cancel.setEnabled(True)
+        self._btn_action.setEnabled(True)
+        self._btn_action.setText(
+            self.tr("Install and restart")
+            if self._info.action == UpdateAction.INSTALL
+            else self.tr("Open installer")
+            if self._info.action == UpdateAction.OPEN
+            else self.tr("Show in folder")
+        )
 
     def _on_download_failed(self, msg: str) -> None:
         log.warning("[Update] download failed: %s", msg)
@@ -385,23 +354,39 @@ class UpdateDialog(QDialog):
         self._btn_cancel.setEnabled(True)
         self._downloader = None
 
-    def _launch_patch_and_quit(self) -> None:
-        """
-        Launches the patch with /SILENT /CLOSEAPPLICATIONS and exits this process.
-        The patch.iss [Run] section is configured to reopen Solin after install.
-        """
+    def _open_package(self) -> None:
+        from pathlib import Path
+        from solin.core.remote.update_policy import UpdateAction
+
         try:
-            self._launch_patch(self._patch_path)
+            if self._info.action == UpdateAction.INSTALL:
+                self._launch_installer(self._package_path)
+                self._btn_action.setEnabled(False)
+            else:
+                path = Path(self._package_path)
+                if self._info.action == UpdateAction.REVEAL:
+                    path = path.parent
+                if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(path))):
+                    raise OSError("Unable to open downloaded package")
         except (OSError, RuntimeError) as exc:
-            log.error("[Update] failed to launch patch: %s", exc)
-            self._status_label.setStyleSheet(f"color:{_C['red']}; background:transparent;")
-            self._status_label.setText(self.tr("Failed to launch installer."))
-            self._btn_cancel.setEnabled(True)
-            return
+            self.installation_failed(str(exc))
 
-        from PySide6.QtWidgets import QApplication
+    def installation_failed(self, message: str) -> None:
+        log.warning("[Update] installer failed: %s", message)
+        self._status_label.setVisible(True)
+        self._status_label.setText(self.tr("Failed to launch installer."))
+        self._btn_cancel.setEnabled(True)
+        self._btn_action.setEnabled(True)
 
-        QApplication.quit()
+    def reject(self) -> None:
+        if self._downloader:
+            self._downloader.abort()
+        super().reject()
+
+    def closeEvent(self, event) -> None:
+        if self._downloader:
+            self._downloader.abort()
+        super().closeEvent(event)
 
     # ── Drag to move ───────────────────────────────────────────────────────────
 
@@ -444,8 +429,8 @@ class UpdateDialog(QDialog):
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
-        if self.parent():
-            p = self.parent()
+        p = self.parent()
+        if isinstance(p, QWidget):
             geo = p.geometry()
             x = geo.x() + (geo.width() - self.width()) // 2
             y = geo.y() + (geo.height() - self.height()) // 2

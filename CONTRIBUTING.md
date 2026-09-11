@@ -41,6 +41,15 @@ Run focused tests while developing, then run the complete applicable suite
 before requesting review. Packaged-app and installer tests are run when their
 platform or delivery contract changes.
 
+Pull requests run application and native protocol tests on Windows, Linux,
+Intel macOS, and Apple Silicon. Lint, locale validation, release-note validation,
+and workflow validation run once. Branch protection should require the aggregate
+`Quality Gate` result.
+
+Release preparation is a separate pull request. Use an explicit
+`python scripts/release.py prepare <intent>` command and review its version and
+English notes; do not create or move a release tag from an unreviewed commit.
+
 ## Repository hygiene
 
 Do not commit:

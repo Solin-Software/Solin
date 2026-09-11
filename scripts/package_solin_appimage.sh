@@ -65,15 +65,14 @@ PYTHON="$(resolve_python)"
 cd "${PROJECT_ROOT}"
 
 APP_VERSION="$("${PYTHON}" - <<'PY'
-from pathlib import Path
-
-namespace = {}
-exec(Path("src/solin/version.py").read_text(encoding="utf-8"), namespace)
-print(namespace["__version__"])
+from solin.version import VERSION
+from solin.core.releases.version import ReleaseVersion
+version = ReleaseVersion.parse(VERSION)
+if version is None:
+    raise SystemExit("Invalid release version")
+print(version.display_version)
 PY
 )"
-[[ "${APP_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] \
-    || fail "Invalid Solin version: ${APP_VERSION}"
 
 if [[ -n "${SOURCE_DATE_EPOCH:-}" ]]; then
     RELEASE_EPOCH="${SOURCE_DATE_EPOCH}"
@@ -114,8 +113,8 @@ fi
 [[ -n "${WORK_ROOT}" && "${WORK_ROOT}" != "/" ]] || fail "Unsafe AppImage work path."
 
 APPDIR="${WORK_ROOT}/Solin.AppDir"
-WORK_OUTPUT="${WORK_ROOT}/Solin-${APP_VERSION}-x86_64.AppImage"
-FINAL_OUTPUT="${OUTPUT_ROOT}/Solin-${APP_VERSION}-x86_64.AppImage"
+WORK_OUTPUT="${WORK_ROOT}/Solin-${APP_VERSION}-linux-x86_64.AppImage"
+FINAL_OUTPUT="${OUTPUT_ROOT}/Solin-${APP_VERSION}-linux-x86_64.AppImage"
 TOOL_CACHE="${HOME}/.cache/solin/tools"
 APPIMAGETOOL="${SOLIN_APPIMAGETOOL:-${TOOL_CACHE}/appimagetool-${APPIMAGETOOL_VERSION}-x86_64.AppImage}"
 TYPE2_RUNTIME="${SOLIN_APPIMAGE_RUNTIME:-${TOOL_CACHE}/runtime-x86_64-${TYPE2_RUNTIME_COMMIT}}"

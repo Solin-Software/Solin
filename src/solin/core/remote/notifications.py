@@ -60,6 +60,7 @@ from solin.core.foundation.constants import (
     NOTIFICATION_API_URL,
 )
 from solin.core.network.http import HttpError, get_json
+from solin.core.releases.version import ReleaseVersion
 from solin.core.remote.notification_policy import Notification, resolve_remote_notifications
 from solin.core.remote.notification_settings import NotificationSettingsStore
 
@@ -100,7 +101,7 @@ class NotificationWorker(QObject):
             #  uma chamada extra dedicada). Ambos são opcionais pelo servidor.
             params = {
                 "id":       self._install_id_provider(),
-                "v":        APP_VERSION,
+                "v":        _notification_version(),
                 "platform": APP_PLATFORM,
                 "lang":     self._api_code,
             }
@@ -246,3 +247,10 @@ class NotificationService(QObject):
         self._running = False
         if self._delete_when_stopped:
             self.deleteLater()
+
+
+def _notification_version() -> str:
+    version = ReleaseVersion.parse(APP_VERSION)
+    if version is None:
+        raise ValueError("Invalid application version")
+    return version.notification_version

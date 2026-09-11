@@ -2,67 +2,97 @@ name: Quality
 
 on:
   pull_request:
-    branches:
-      - main
+    branches: [main]
+  push:
+    branches: [main]
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
-
-concurrency:
-  group: quality-${{ github.ref }}
-  cancel-in-progress: true
 
 env:
   PYTHON_VERSION: "3.13.12"
   QT_QPA_PLATFORM: offscreen
 
 jobs:
-  quality:
-    name: Quality Gate
+  changes:
+    name: Classify changes
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
-
+    outputs:
+      application_required: ${{ steps.classify.outputs.application_required }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
-
-      - name: Detect quality-relevant changes
-        id: filter
+      - name: Detect documentation-only changes
+        id: classify
         shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+          REF_TYPE: ${{ github.ref_type }}
         run: |
-          set -euo pipefail
-
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "run_quality=true" >> "$GITHUB_OUTPUT"
-            exit 0
+          application_required=true
+          if [[ "$REF_TYPE" != "tag" && "$BASE_SHA" =~ ^[0-9a-f]{40}$ && ! "$BASE_SHA" =~ ^0+$ ]]; then
+            application_required=false
+            while IFS= read -r path; do
+              case "$path" in
+                *.md) ;;
+                *) application_required=true; break ;;
+              esac
+            done < <(git diff --no-renames --name-only "$BASE_SHA" "$HEAD_SHA")
           fi
+          echo "application_required=$application_required" >> "$GITHUB_OUTPUT"
 
-          base="${{ github.event.pull_request.base.sha }}"
-          head="${{ github.sha }}"
-          mapfile -t changed_files < <(git diff --name-only "$base" "$head")
+  static:
+    name: Static checks
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: python -m pip install ruff==0.15.16 packaging==26.0
+      - run: python -m ruff check .
+      - run: python scripts/check_locales.py
+      - name: Validate release notes
+        run: python scripts/release.py check-notes
+      - name: Validate workflows
+        run: |
+          archive="$RUNNER_TEMP/actionlint.tar.gz"
+          curl --fail --location --proto '=https' \
+            --output "$archive" \
+            https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz
+          echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  $archive" \
+            | sha256sum --check --strict
+          tar --extract --gzip --file "$archive" --directory "$RUNNER_TEMP" actionlint
+          "$RUNNER_TEMP/actionlint" -shellcheck=""
 
-          run_quality=false
-          for file in "${changed_files[@]}"; do
-            case "$file" in
-              *.md|docs/*|src/solin/resources/translations/locales/*.json|src/solin/resources/translations/*.ts|src/solin/resources/translations/*.qm)
-                ;;
-              *)
-                run_quality=true
-                break
-                ;;
-            esac
-          done
+  platforms:
+    name: Tests (${{ matrix.runner }})
+    needs: changes
+    if: needs.changes.outputs.application_required == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            platform: Linux
+          - runner: windows-2025
+            platform: Windows
+          - runner: macos-15-intel
+            platform: Darwin
+          - runner: macos-15
+            platform: Darwin
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-          echo "run_quality=$run_quality" >> "$GITHUB_OUTPUT"
-
-      - name: Validate locales
-        run: python3 scripts/check_locales.py
-
-      - name: Install Qt, SideView and libobs dependencies
-        if: ${{ steps.filter.outputs.run_quality == 'true' }}
+      - name: Install Linux runtime dependencies
+        if: runner.os == 'Linux'
+        shell: bash
         run: |
           sudo apt-get update
           mapfile -t libobs_packages < <(bash scripts/build_solin.sh --print-native-packages)
@@ -70,57 +100,79 @@ jobs:
             "${libobs_packages[@]}" \
             cmake \
             ffmpeg \
+            libegl1 \
             libgl1 \
             libgtk-3-dev \
             libopengl0 \
+            libpulse0 \
             libwebkit2gtk-4.1-dev \
             libxcb-cursor0 \
             libxkbcommon-x11-0 \
+            pkg-config \
             xauth \
-            xvfb \
-            pkg-config
+            xvfb
 
-      - name: Set up Python ${{ env.PYTHON_VERSION }}
-        if: ${{ steps.filter.outputs.run_quality == 'true' }}
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Set up uv
-        if: ${{ steps.filter.outputs.run_quality == 'true' }}
-        uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-          cache-dependency-glob: |
+          cache: pip
+          cache-dependency-path: |
             requirements.txt
             requirements-dev.txt
 
-      - name: Install dependencies
-        if: ${{ steps.filter.outputs.run_quality == 'true' }}
-        run: uv pip install --system -r requirements-dev.txt -e .
-
-      - name: Ruff lint
-        if: ${{ steps.filter.outputs.run_quality == 'true' }}
-        run: python -m ruff check .
-
-      - name: Pyright typecheck
-        if: ${{ steps.filter.outputs.run_quality == 'true' }}
+      - name: Build Intel macOS pylibobs wheel
+        if: runner.os == 'macOS' && runner.arch == 'X64'
+        shell: bash
         run: |
-          for platform in Linux Windows Darwin; do
-            python scripts/typecheck.py --pythonplatform "$platform"
-          done
+          python -m pip install setuptools==80.10.2 wheel==0.46.3 cffi==2.0.0
+          python scripts/build_pylibobs_macos.py --output-dir .pip-wheels
 
-      - name: Build and test native media-engine protocol
-        if: ${{ steps.filter.outputs.run_quality == 'true' }}
+      - name: Install dependencies on Intel macOS
+        if: runner.os == 'macOS' && runner.arch == 'X64'
+        run: python -m pip install --find-links .pip-wheels -r requirements-dev.txt -e .
+
+      - name: Install dependencies
+        if: runner.os != 'macOS' || runner.arch != 'X64'
+        run: python -m pip install -r requirements-dev.txt -e .
+
+      - run: python scripts/typecheck.py --pythonplatform ${{ matrix.platform }}
+
+      - name: Native protocol and benchmarks
         run: |
           cmake -S native/media_engine -B build/native/media-engine-ci -DCMAKE_BUILD_TYPE=Release
-          cmake --build build/native/media-engine-ci --parallel
-          ctest --test-dir build/native/media-engine-ci --output-on-failure
+          cmake --build build/native/media-engine-ci --config Release --parallel
+          ctest --test-dir build/native/media-engine-ci -C Release --output-on-failure
 
-      - name: Pytest application suites
-        if: ${{ steps.filter.outputs.run_quality == 'true' }}
-        run: xvfb-run --auto-servernum python -m pytest tests/contract tests/integration tests/e2e
+      - name: Python suites on Linux
+        if: runner.os == 'Linux'
+        run: |
+          xvfb-run --auto-servernum python -m pytest tests/contract tests/integration tests/e2e --durations=20
+          xvfb-run --auto-servernum python -m pytest tests/unit --durations=20
 
-      - name: Pytest unit suite
-        if: ${{ steps.filter.outputs.run_quality == 'true' }}
-        run: xvfb-run --auto-servernum python -m pytest tests/unit
+      - name: Python suites
+        if: runner.os != 'Linux'
+        run: python -m pytest tests/unit tests/contract tests/integration --durations=20
+
+      - name: Packaging source checks
+        run: python -m pytest tests/contract/test_build_console_modes.py tests/contract/test_linux_appimage_packaging.py tests/contract/test_playlist_file_associations.py
+
+  gate:
+    name: Quality Gate
+    if: always()
+    needs: [changes, static, platforms]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require every check
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          STATIC_RESULT: ${{ needs.static.result }}
+          PLATFORM_RESULT: ${{ needs.platforms.result }}
+          APPLICATION_REQUIRED: ${{ needs.changes.outputs.application_required }}
+        run: |
+          test "$CHANGES_RESULT" = success
+          test "$STATIC_RESULT" = success
+          if [ "$APPLICATION_REQUIRED" = true ]; then
+            test "$PLATFORM_RESULT" = success
+          else
+            test "$PLATFORM_RESULT" = skipped
+          fi

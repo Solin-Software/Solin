@@ -1,7 +1,8 @@
 # Building and platform requirements
 
-The repository has Windows x64, Intel macOS, and Linux x86_64 build recipes.
-Generated files are written under `build/` or `dist/` and must not be committed.
+The repository supports Windows x86-64, macOS 13+ on Intel and Apple Silicon,
+and Linux x86-64 with glibc 2.35 or newer. Generated files are written under
+`build/` or `dist/` and must not be committed.
 
 Playback and scenes use the supervised libobs sidecar. Source runs launch its
 Python module; standalone builds launch the Solin executable with
@@ -30,6 +31,7 @@ Install the Python dependencies before invoking a build. On Intel macOS, use the
 
 ```text
 python -m pip install -r requirements-dev.txt
+python -m pip install -r requirements-build.txt
 python -m pip install -e .
 ```
 
@@ -115,25 +117,26 @@ For the historical QtMultimedia-to-native media route measurements, including
 fixture generation, explicit one-second CPU buckets, and provenance requirements, see
 [Native media performance measurements](native-media-performance.md).
 
-The manual `Build Solin Windows` workflow builds the standalone application and
-full installer. Upgrade smoke testing additionally requires the URL of the
-previously distributed installer.
+The `Build Solin Windows` workflow first creates a Nuitka staging tree and then
+the single full installer used for clean installs and upgrades. The staging tree
+is an installer input, not a public portable distribution. This is required
+because Inno Setup performs the virtual-camera registration and transactional
+rollback that a copied directory cannot provide. Release runs resolve and
+verify their predecessor automatically; a manual diagnostic run may disable
+upgrade smoke testing.
 
-The workflow signs by default. Diagnostic runs may explicitly disable signing;
-their files and uploaded artifacts receive an `unsigned-diagnostic` suffix. A
-build intended for distribution must keep `sign_windows_artifacts` enabled and
-provide the repository secrets
-`SOLIN_SIGNING_CERTIFICATE_BASE64` and
-`SOLIN_SIGNING_CERTIFICATE_PASSWORD`. The workflow signs and verifies the app,
-native sidecar, both DirectShow filter DLLs, and full installer. Inno Setup
-signs the embedded uninstaller through the same required signing command before
-the workflow produces checksums.
+Windows artifacts are currently unsigned, matching the existing distribution
+model. Release integrity is enforced by the exact asset inventory, immutable
+GitHub release, recorded size, and SHA-256 verification before installation.
+Windows may consequently identify the publisher as unknown when the installer
+requests elevation.
 
 ## macOS
 
-The `Build Solin macOS` workflow is the maintained delivery recipe. It runs on
-Intel macOS, builds the application with Nuitka, creates a DMG, and validates
-both packaged startup and replacement of a previous application when requested.
+The `Build Solin macOS` workflow is the maintained delivery recipe. Its native
+Intel and Apple Silicon jobs build with Nuitka, apply ad-hoc signatures, create
+architecture-specific DMGs, verify the bundle architecture, and validate
+packaged startup and application replacement.
 
 Published `pylibobs` wheels provide the runtime on Windows, Linux and Apple Silicon
 macOS. On Intel macOS, bootstrap a local `pylibobs==0.1.2` wheel against the official
@@ -149,8 +152,10 @@ python -m pip install --no-deps -e .
 The helper verifies the downloads, target architecture and native initialization.
 It leaves other hosts unchanged. The workflow uses the local wheel during its
 binary dependency download and runs the same packaged runtime qualification.
-
-The replacement smoke test requires the URL of the previously distributed DMG.
+Release replacement tests resolve the previous DMG for the same architecture.
+The first Apple Silicon release runs clean-install and startup checks because no
+native predecessor exists. Ad-hoc signing does not provide a Developer ID or
+notarization.
 
 ## Linux development
 
@@ -197,7 +202,7 @@ Python 3.13 or newer and the native dependencies above. The standalone build
 entry point is:
 
 ```text
-python -m pip install nuitka ordered-set zstandard
+python -m pip install -r requirements-build.txt
 xvfb-run --auto-servernum bash scripts/build_solin.sh
 ```
 
@@ -241,6 +246,6 @@ Linux rendering, decoding and packaging qualification are gated by the Ubuntu
 
 ## Build workflows
 
-Platform build workflows are intentionally manual. They produce short-lived
-verification artifacts; distributing the application is a separate step. See
-[Versioning and releases](releases.md).
+Platform workflows support manual diagnostics and reusable release calls. Only
+the tag-driven release orchestrator can gather all four required targets and
+publish them. See [Versioning and releases](releases.md).

@@ -86,8 +86,8 @@ def test_linux_workflow_packages_and_smokes_the_same_appimage_recipe():
     assert "SOLIN_APPIMAGE_SKIP_BUILD: \"1\"" in workflow
     assert "runs-on: ubuntu-24.04" in workflow
     assert "APPIMAGE_EXTRACT_AND_RUN=1" in workflow
-    assert "*.AppImage" in workflow
-    assert "*.AppImage.sha256" in workflow
+    assert "-linux-x86_64.AppImage" in workflow
+    assert "dist/Solin-${{ env.APP_VERSION }}-linux-x86_64.AppImage" in workflow
 
 
 def test_windows_wrapper_delegates_to_wsl_and_propagates_failures():
