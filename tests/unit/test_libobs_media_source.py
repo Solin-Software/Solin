@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import types
 
+import pytest
+
+from solin.core.scenes import libobs_media_source
 from solin.core.scenes.libobs_media_source import (
     _PROGRESSIVE_FFMPEG_OPTIONS,
     _RESUME_REBUILD_TICKS,
@@ -340,7 +343,7 @@ def test_a_real_rate_change_is_applied(monkeypatch):
     source = runtime.created[-1]
     source.updates.clear()
 
-    media.set_speed(150)
+    _change_speed(media, 150)
 
     assert source.updates == [{"speed_percent": 150}]
     # …and asking for it twice does not update twice.
@@ -527,3 +530,342 @@ def test_a_trimmed_end_still_ends():
     state, _p, _d = sidecar._survive_disconnect(0, STATE_ENDED, 5_000, 140_000, "https://cdn/x.mp4")
 
     assert state == STATE_ENDED
+
+
+# ── pitch-preserving speed changes ───────────────────────────────────────────
+
+
+class _FakeCompanion:
+    """Records what the media source asks of the stretched-audio companion."""
+
+    def __init__(self) -> None:
+        self.starts: list[dict] = []
+        self.stops = 0
+        self.volumes: list[int] = []
+        self.paused: list[bool] = []
+        self.available = True
+        self.running = False
+        self.flow_delay_ms = 0  # how much audio plays before obs emits it
+
+    def start(self, path, *, position_ms, rate, volume_percent=100, paused=False) -> bool:
+        self.starts.append(
+            {"path": path, "position_ms": position_ms, "rate": rate,
+             "volume_percent": volume_percent, "paused": paused}
+        )
+        self.running = self.available
+        return self.available
+
+    def await_audio(self, timeout_s: float = 3.0) -> int:
+        return self.flow_delay_ms
+
+    @property
+    def elapsed_ms(self) -> int:
+        return self.flow_delay_ms
+
+    def stop(self) -> None:
+        self.stops += 1
+        self.running = False
+
+    def set_volume(self, volume_percent: int) -> None:
+        self.volumes.append(volume_percent)
+
+    def set_paused(self, paused: bool) -> None:
+        self.paused.append(paused)
+
+
+def _opened(path="/tmp/clip.mp4", **kwargs):
+    """A media source open on ``path`` with a fake companion in place."""
+    runtime = _Runtime()
+    media = LibobsMediaSource(runtime)
+    companion = _FakeCompanion()
+    media._tempo_audio = companion
+    assert media.open(path, **kwargs) is True
+    return media, runtime, companion
+
+
+# What the rebuilt decoder's position moves by once it really starts running.
+_RESUME_STEP_MS = 40
+
+
+@pytest.fixture(autouse=True)
+def _dont_wait_for_a_fake_decoder(monkeypatch):
+    """These fakes never advance on their own; waiting only slows the suite down.
+
+    The wait itself is covered by test_the_audio_is_released_when_the_picture_moves.
+    """
+    monkeypatch.setattr(libobs_media_source, "_MOTION_TIMEOUT_S", 0.0)
+
+
+def _change_speed(media, percent: int, *, restarts: bool = True) -> None:
+    """Change the rate and run the poll ticks the sidecar would run next.
+
+    ffmpeg_source rebuilds its media object for a new rate and the rebuilt one
+    starts from zero — but not on the tick that asked for it, so the first tick
+    still sees the old position.
+    """
+    media.set_speed(percent)
+    source = media._source
+    media.apply_pending_resume()  # the old media object is still answering
+    if source is None:
+        return
+    if restarts:
+        source.media_time = 0  # the rebuilt decoder appears...
+        media.apply_pending_resume()  # ...and is put back where it was
+    source.media_time += _RESUME_STEP_MS  # it starts running again
+    media.apply_pending_resume()  # the stretch can be opened now
+
+
+def test_a_speed_change_stretches_the_audio_instead_of_raising_its_pitch():
+    media, runtime, companion = _opened()
+    runtime.created[-1].media_time = 42_000
+
+    _change_speed(media, 150)
+
+    assert companion.starts[-1]["rate"] == 1.5
+    assert companion.starts[-1]["path"] == "/tmp/clip.mp4"
+
+
+def test_the_stretch_picks_up_from_where_playback_had_reached():
+    media, runtime, companion = _opened()
+    runtime.created[-1].media_time = 42_000
+
+    _change_speed(media, 150)
+
+    assert companion.starts[-1]["position_ms"] == pytest.approx(42_000, abs=100)
+
+
+def test_the_source_is_muted_while_the_companion_carries_the_audio():
+    """Otherwise both the varispeeded and the stretched audio would be heard."""
+    media, runtime, _companion = _opened()
+
+    _change_speed(media, 150)
+
+    assert runtime.created[-1].volume == 0.0
+
+
+def test_returning_to_normal_speed_stops_the_stretch_and_unmutes():
+    media, runtime, companion = _opened(volume_percent=80)
+    _change_speed(media, 150)
+
+    _change_speed(media, 100)
+
+    assert companion.stops >= 1
+    assert companion.running is False
+    assert runtime.created[-1].volume == 0.8
+
+
+def test_a_companion_that_cannot_start_leaves_the_audio_audible():
+    """Falling back to varispeed is worse than pitch-perfect, better than silence."""
+    media, runtime, companion = _opened(volume_percent=60)
+    companion.available = False
+
+    _change_speed(media, 150)
+
+    assert runtime.created[-1].volume == 0.6
+
+
+def test_volume_changes_reach_the_companion_and_keep_the_source_muted():
+    media, runtime, companion = _opened()
+    _change_speed(media, 150)
+
+    media.set_volume(30)
+
+    assert companion.volumes[-1] == 30
+    assert runtime.created[-1].volume == 0.0
+
+
+def test_pausing_and_resuming_carry_the_stretched_audio_with_them():
+    media, _runtime, companion = _opened()
+    _change_speed(media, 150)
+
+    media.pause()
+    media.play()
+
+    assert companion.paused[-2:] == [True, False]
+
+
+def test_seeking_restarts_the_stretch_at_the_new_position():
+    """The stretch is a separate decode, so it has to be re-cut at the seek point."""
+    media, _runtime, companion = _opened()
+    _change_speed(media, 150)
+
+    media.seek(90_000)
+
+    assert companion.starts[-1]["position_ms"] == 90_000
+
+
+def test_closing_the_media_takes_the_stretch_down_with_it():
+    media, _runtime, companion = _opened()
+    _change_speed(media, 150)
+
+    media.close()
+
+    assert companion.stops >= 1
+    assert companion.running is False
+
+
+def test_media_opened_at_a_faster_rate_is_stretched_from_the_start():
+    _media, _runtime, companion = _opened(speed_percent=150)
+
+    assert companion.starts[-1]["rate"] == 1.5
+    assert companion.starts[-1]["position_ms"] == 0
+
+
+def test_remote_media_keeps_varispeed_rather_than_downloading_it_twice():
+    media, runtime, companion = _opened("https://example.org/talk.mp4", volume_percent=70)
+
+    _change_speed(media, 150)
+
+    assert companion.starts == []
+    assert runtime.created[-1].volume == 0.7  # audible, just varispeeded
+
+
+def test_setting_the_same_speed_again_does_not_restart_the_stretch():
+    media, _runtime, companion = _opened()
+    _change_speed(media, 150)
+
+    _change_speed(media, 150)
+
+    assert len(companion.starts) == 1
+
+
+def test_the_stretch_waits_for_the_rebuilt_decoder_before_it_starts():
+    """Started at set_speed time, the audio would run ahead of the winding-back picture."""
+    media, _runtime, companion = _opened()
+
+    media.set_speed(150)
+
+    assert companion.starts == []
+
+
+def test_the_source_stays_silent_over_the_gap_rather_than_blipping_in_pitch():
+    media, runtime, _companion = _opened(volume_percent=90)
+
+    media.set_speed(150)
+
+    assert runtime.created[-1].volume == 0.0
+
+
+def test_the_stretch_waits_for_the_decoder_to_actually_start_moving():
+    """It reports PLAYING for a second or two first; audio opened then runs ahead."""
+    media, runtime, companion = _opened()
+    source = runtime.created[-1]
+    source.media_time = 42_000
+
+    media.set_speed(150)
+    media.apply_pending_resume()  # PLAYING, but the position has not budged
+    assert companion.starts == []
+
+    source.media_time = 0  # the rebuilt decoder appears
+    media.apply_pending_resume()  # and is put back to 42_000
+    assert companion.starts == []
+
+    source.media_time = 42_040  # now it is really running
+    media.apply_pending_resume()
+
+    assert companion.starts[-1]["position_ms"] == 42_040
+
+
+def test_a_stretch_that_never_starts_gives_the_audio_straight_back():
+    media, runtime, companion = _opened(volume_percent=90)
+    companion.available = False
+
+    media.set_speed(150)
+    assert runtime.created[-1].volume == 0.0  # silent while it is being tried
+    _change_speed(media, 150)  # the decoder comes back and the attempt is made
+
+    assert runtime.created[-1].volume == 0.9
+
+
+def test_a_rate_change_while_the_decoder_rebuilds_is_retried_next_tick():
+    media, runtime, companion = _opened()
+    source = runtime.created[-1]
+    media.set_speed(150)
+    source.media_state = STATE_OPENING
+
+    media.apply_pending_resume()
+    assert companion.starts == []
+
+    source.media_state = STATE_PLAYING
+    source.media_time = 0
+    media.apply_pending_resume()
+    source.media_time += _RESUME_STEP_MS
+    media.apply_pending_resume()
+    assert len(companion.starts) == 1
+
+
+def test_the_picture_is_held_still_while_the_stretch_is_opened():
+    """Left running, the video would end up seconds ahead of the audio for good."""
+    media, runtime, _companion = _opened()
+    source = runtime.created[-1]
+    source.play_pause.clear()
+
+    _change_speed(media, 150)
+
+    assert source.play_pause == [True, False]
+
+
+def test_the_picture_skips_the_audio_that_played_before_it_was_audible():
+    media, runtime, companion = _opened()
+    source = runtime.created[-1]
+    source.media_time = 20_000
+    companion.flow_delay_ms = 400  # obs buffered for 400 ms before emitting
+
+    _change_speed(media, 150)
+
+    resumed_at = 20_000 + _RESUME_STEP_MS
+    assert source.media_time == resumed_at + int(400 * 1.5)
+
+
+def test_a_paused_media_gets_a_paused_stretch_and_stays_paused():
+    media, runtime, companion = _opened(autoplay=False)
+    source = runtime.created[-1]
+    source.media_state = STATE_PAUSED
+    source.play_pause.clear()
+
+    _change_speed(media, 150)
+
+    assert companion.paused[-1] is True
+    assert False not in source.play_pause  # never nudged back into playing
+
+
+def test_the_audio_is_held_until_the_picture_actually_moves(monkeypatch):
+    """Released earlier, it would run on alone while the decoder is still resuming."""
+    monkeypatch.setattr(libobs_media_source, "_MOTION_TIMEOUT_S", 2.0)
+    monkeypatch.setattr(libobs_media_source, "_MOTION_STEP_S", 0.001)
+    media, _runtime, _companion = _opened()
+    reads = {"n": 0}
+
+    def position(_self):
+        reads["n"] += 1
+        return 10_000 if reads["n"] < 5 else 10_400
+
+    monkeypatch.setattr(type(media), "position_ms", property(position))
+
+    media._await_motion(10_000)
+
+    assert reads["n"] >= 5  # it waited for movement rather than assuming it
+
+
+def test_it_gives_up_on_a_picture_that_never_moves(monkeypatch):
+    """A stalled decoder must not leave the audio held for ever."""
+    monkeypatch.setattr(libobs_media_source, "_MOTION_TIMEOUT_S", 0.05)
+    monkeypatch.setattr(libobs_media_source, "_MOTION_STEP_S", 0.001)
+    media, _runtime, _companion = _opened()
+    monkeypatch.setattr(type(media), "position_ms", property(lambda _s: 10_000))
+
+    media._await_motion(10_000)  # returns instead of hanging
+
+
+def test_resuming_lets_the_picture_lead_before_the_audio_follows():
+    """Released together, the audio would win by the decoder's resume delay."""
+    media, runtime, companion = _opened()
+    source = runtime.created[-1]
+    _change_speed(media, 150)
+    source.media_state = STATE_PAUSED
+    companion.paused.clear()
+
+    media.play()
+
+    assert companion.paused == [False]
+    assert source.play_pause[-1] is False

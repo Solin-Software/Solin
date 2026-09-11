@@ -16,7 +16,13 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 from typing import Any
+
+from solin.core.scenes.audio_tempo import (
+    TempoAudioCompanion,
+    is_unity_rate,
+)
 
 log = logging.getLogger(__name__)
 
@@ -65,6 +71,11 @@ _PROGRESSIVE_FFMPEG_OPTIONS = (
     "rw_timeout=10000000"
 )
 
+# Poll ticks to give the rebuilt decoder to start moving before the stretched
+# audio is opened anyway. Generous: overshooting only costs a little sync on
+# media that never advances, while giving up early costs sync on all of it.
+_TEMPO_MOTION_TICKS = 40
+
 # Poll ticks to wait for the rebuilt decoder to announce itself by falling back
 # to the start. It has always arrived within one tick in practice; the cap is
 # only so a decoder that keeps its place is not waited on forever.
@@ -74,6 +85,10 @@ _RESUME_REBUILD_TICKS = 8
 # playback, so a restore is not called a failure for landing a frame late.
 _RESTORE_TOLERANCE_MS = 500
 
+# How closely the hand-over watches for the picture to start moving again, and
+# how long it waits before going ahead without it.
+_MOTION_STEP_S = 0.02
+_MOTION_TIMEOUT_S = 1.5
 
 
 def _is_remote(path: str) -> bool:
@@ -91,6 +106,7 @@ class LibobsMediaSource:
         self._runtime = runtime
         self._source: Any = None
         self._path = ""
+        self._local = True
         # True while this source holds an activate ref (see _set_active).
         self._active = False
         # Mirrors the rate libobs already has, so an unchanged value never reaches
@@ -101,6 +117,13 @@ class LibobsMediaSource:
         self._resume_tries = 0
         self._resume_restarted = False
         self._resume_paused = False
+        self._volume_percent = 100
+        # Carries the audio, pitch intact, whenever the rate is not normal.
+        self._tempo_audio = TempoAudioCompanion(runtime)
+        self._tempo_audio_running = False
+        self._tempo_pending = False
+        self._tempo_anchor = 0
+        self._tempo_waits = 0
 
     @property
     def source(self) -> Any:
@@ -170,6 +193,8 @@ class LibobsMediaSource:
             return False
         self._source = source
         self._path = path
+        self._local = local
+        self._tempo_pending = False
         self._speed_percent = max(1, int(speed_percent or 100))
         self._resume_ms = 0
         self._resume_tries = 0
@@ -186,6 +211,7 @@ class LibobsMediaSource:
             log.warning("Could not set media source monitoring", exc_info=True)
         self._set_active(source, True)
         source.media_play_pause(not autoplay)
+        self._reconcile_tempo_audio(0)
         return True
 
     def _set_active(self, source: Any, active: bool) -> None:
@@ -220,12 +246,10 @@ class LibobsMediaSource:
 
     def set_volume(self, volume_percent: int) -> None:
         """Set the source volume (100 = unity gain)."""
-        if self._source is None:
-            return
-        try:
-            self._source.volume = max(0.0, int(volume_percent) / 100.0)
-        except Exception:  # noqa: BLE001 - libobs boundary
-            log.debug("could not set media volume", exc_info=True)
+        self._volume_percent = max(0, int(volume_percent))
+        if self._tempo_audio is not None and self._tempo_audio_running:
+            self._tempo_audio.set_volume(self._volume_percent)
+        self._apply_source_volume()
 
     def set_speed(self, speed_percent: int) -> None:
         """Set the playback rate (100 = normal), keeping the current position.
@@ -249,8 +273,6 @@ class LibobsMediaSource:
         if source is None or speed == self._speed_percent:
             return
         self._resume_ms = self.position_ms
-        self._resume_tries = 0
-        self._resume_restarted = False
         self._resume_paused = self.state == STATE_PAUSED
         self._speed_percent = speed
         try:
@@ -258,20 +280,150 @@ class LibobsMediaSource:
         except Exception:  # noqa: BLE001 - libobs boundary
             self._resume_ms = 0
             log.debug("could not set media speed", exc_info=True)
+            return
+        # The stretch is a second decode with its own clock, so it is started
+        # only once the rebuilt decoder has taken the position back — otherwise the
+        # audio would begin while the video is still winding back to meet it.
+        if self._tempo_audio is not None:
+            self._tempo_audio.stop()
+        self._tempo_audio_running = False
+        self._tempo_pending = self._wants_tempo_audio()
+        self._tempo_anchor = self._resume_ms
+        self._tempo_waits = 0
+        self._resume_tries = 0
+        self._resume_restarted = False
+        self._apply_source_volume()
+
+    def _wants_tempo_audio(self) -> bool:
+        """Whether this media, at this rate, should be stretched rather than resampled.
+
+        Only local files: stretching re-reads the media from the start position, and
+        doing that over the network would double the bandwidth of something already
+        struggling — or, on a live stream, be meaningless. Remote media keeps libobs'
+        varispeed, which is how it behaved before.
+        """
+        return (
+            self._tempo_audio is not None
+            and self._local
+            and not is_unity_rate(self._speed_percent / 100.0)
+        )
+
+    def _reconcile_tempo_audio(self, position_ms: int) -> None:
+        """Play the audio stretched rather than varispeeded, when off normal rate.
+
+        libobs changes rate by resampling, so its audio rises in pitch with the
+        speed. ffmpeg's atempo does the same stretch without touching pitch, so at
+        anything other than normal speed the real source is muted and a companion
+        plays the stretched audio alongside it.
+
+        Best-effort throughout: if the companion cannot start, the source is
+        unmuted and libobs' own varispeed is heard, which is what happened before.
+        """
+        companion = self._tempo_audio
+        self._tempo_pending = False
+        if not self._wants_tempo_audio():
+            if companion is not None:
+                companion.stop()
+            self._tempo_audio_running = False
+            self._apply_source_volume()
+            return
+        rate = self._speed_percent / 100.0
+        # Hold the picture still over the whole hand-over. Starting ffmpeg, getting
+        # obs to buffer the stream and letting the decoder resume all take a
+        # noticeable moment, and whatever the picture does during them the audio
+        # cannot be wound back to match — nothing pulls the two together again
+        # afterwards, so an item would stay out of step to its end.
+        paused = self.state == STATE_PAUSED
+        if not paused:
+            self._set_paused(True)
+        started = companion.start(
+            self._path,
+            position_ms=position_ms,
+            rate=rate,
+            volume_percent=self._volume_percent,
+            # Opened but held: it is released below, once the picture is moving.
+            paused=True,
+        )
+        self._tempo_audio_running = started
+        released = paused
+        try:
+            if not started or paused:
+                # A media that is paused keeps its stretch held too; play() lets
+                # the two go together when it resumes.
+                return
+            # The stretch is open but held, so only the little it played while
+            # connecting has to be skipped. The picture is moved to meet it, and
+            # the two are released together below.
+            resume_at = position_ms + int(companion.elapsed_ms * rate)
+            self._rewind_to(resume_at)
+            self._set_paused(False)
+            released = True
+            self._await_motion(resume_at)
+            companion.set_paused(False)
+        finally:
+            if not released:
+                self._set_paused(False)
+            self._apply_source_volume()
+
+    def _await_motion(self, from_ms: int) -> None:
+        """Block until the picture is past ``from_ms``, so the audio can join it."""
+        clock = threading.Event()
+        waited = 0.0
+        while waited < _MOTION_TIMEOUT_S:
+            if self.position_ms > from_ms:
+                return
+            clock.wait(_MOTION_STEP_S)
+            waited += _MOTION_STEP_S
+        log.info("The picture did not resume in time to meet the stretched audio")
+
+    def _set_paused(self, paused: bool) -> None:
+        source = self._source
+        if source is None:
+            return
+        try:
+            source.media_play_pause(bool(paused))
+        except Exception:  # noqa: BLE001 - libobs boundary
+            log.debug("could not hold the picture", exc_info=True)
+
+    def _rewind_to(self, position_ms: int) -> None:
+        """Move the picture without touching the companion (seek() would restart it)."""
+        source = self._source
+        if source is None:
+            return
+        try:
+            source.media_time = max(0, int(position_ms))
+        except Exception:  # noqa: BLE001 - libobs boundary
+            log.debug("could not align media to the stretched audio", exc_info=True)
+
+    def _apply_source_volume(self) -> None:
+        """Mute the media source itself while the companion carries the audio."""
+        source = self._source
+        if source is None:
+            return
+        carried_elsewhere = self._tempo_audio_running or self._tempo_pending
+        percent = 0 if carried_elsewhere else self._volume_percent
+        try:
+            source.volume = max(0.0, int(percent) / 100.0)
+        except Exception:  # noqa: BLE001 - libobs boundary
+            log.debug("could not set media volume", exc_info=True)
 
     def apply_pending_resume(self) -> None:
         """Restore the position a rate change threw away, once it can land.
 
         Called from the sidecar's media poll rather than straight after the update,
-        because the decoder is rebuilt on a later tick — a seek issued before that
+        because the decoder is rebuilt on a later tick — a seek issued here and now
         would be applied to the media object about to be destroyed.
         """
-        if self._source is None or self._resume_ms <= 0:
+        if self._source is None:
+            return
+        if self._resume_ms <= 0 and not self._tempo_pending:
             return
         if self.state in (STATE_NONE, STATE_OPENING):
             return  # still rebuilding; try again on the next poll
-        if not self._restore_position():
+        if self._resume_ms > 0 and not self._restore_position():
             return  # the rebuilt decoder has not shown itself yet
+        if self._tempo_pending and self._ready_for_tempo_audio():
+            self._reconcile_tempo_audio(self._tempo_anchor)
         if self._resume_paused:
             self.pause()
 
@@ -290,26 +442,57 @@ class LibobsMediaSource:
         """
         target = self._resume_ms
         self._resume_tries += 1
-        if self.position_ms + _RESTORE_TOLERANCE_MS < target:
+        position = self.position_ms
+        if position + _RESTORE_TOLERANCE_MS < target:
             # The rebuilt decoder has shown itself. Ask once and let it land:
             # re-asking every tick restarts each seek before the last has finished
             # and playback sits at the start going nowhere.
             self._resume_restarted = True
             self._resume_ms = 0
+            self._tempo_anchor = target
             self.seek(target)
             return True
         if self._resume_restarted or self._resume_tries > _RESUME_REBUILD_TICKS:
-            self._resume_ms = 0  # no restart came; it kept its place after all
+            self._resume_ms = 0
+            self._tempo_anchor = max(self._tempo_anchor, position)
+            return True
+        return False
+
+    def _ready_for_tempo_audio(self) -> bool:
+        """Whether the rebuilt decoder is really running yet.
+
+        It reports PLAYING for a second or two before the position starts moving,
+        and audio opened during that window would run that far ahead of the picture
+        for the rest of the item. Waiting for actual movement makes the hand-over
+        self-correcting whatever the rebuild costs — but only up to a point, so
+        media that legitimately never advances still gets its stretched audio.
+        """
+        self._tempo_waits += 1
+        if self._resume_paused or self._tempo_waits > _TEMPO_MOTION_TICKS:
+            return True
+        if self.position_ms > self._tempo_anchor:
+            self._tempo_anchor = self.position_ms
             return True
         return False
 
     def play(self) -> None:
+        resuming = self.state == STATE_PAUSED
+        at = self.position_ms
         if self._source is not None:
             self._source.media_play_pause(False)
+        if self._tempo_audio_running:
+            if resuming:
+                # The picture takes a moment to pick up again. Letting the audio
+                # go first would leave the two out of step for the rest of the
+                # item, since nothing pulls them back together afterwards.
+                self._await_motion(at)
+            self._tempo_audio.set_paused(False)
 
     def pause(self) -> None:
         if self._source is not None:
             self._source.media_play_pause(True)
+        if self._tempo_audio_running:
+            self._tempo_audio.set_paused(True)
 
     def stop(self) -> None:
         if self._source is not None:
@@ -323,8 +506,14 @@ class LibobsMediaSource:
             self._source.media_restart()
 
     def seek(self, milliseconds: int) -> None:
-        if self._source is not None:
-            self._source.media_time = max(0, int(milliseconds))
+        if self._source is None:
+            return
+        target = max(0, int(milliseconds))
+        self._source.media_time = target
+        if self._tempo_audio_running:
+            # The companion decodes its own timeline, so it has to be restarted at
+            # the new position rather than followed.
+            self._reconcile_tempo_audio(target)
 
     @property
     def position_ms(self) -> int:
@@ -354,11 +543,16 @@ class LibobsMediaSource:
     def close(self) -> None:
         source, self._source = self._source, None
         self._path = ""
+        self._local = True
         self._speed_percent = 100
         self._resume_ms = 0
         self._resume_tries = 0
         self._resume_restarted = False
         self._resume_paused = False
+        if self._tempo_audio is not None:
+            self._tempo_audio.stop()
+        self._tempo_audio_running = False
+        self._tempo_pending = False
         if source is None:
             return
         self._set_active(source, False)  # symmetrical: never leak an activate ref

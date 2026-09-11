@@ -2383,10 +2383,29 @@ def test_engine_set_media_properties_updates_volume_and_speed():
     media = _media_sources(runtime)[-1]
 
     ack = _ack_from_envelope(engine.handle(_request("set_media_properties", {
-        "volume_percent": 50, "speed_percent": 150,
+        "volume_percent": 50, "speed_percent": 100,
     })))
     assert ack.applied is True
-    assert media.volume == 0.5 and media.settings["speed_percent"] == 150
+    assert media.volume == 0.5 and media.settings.get("speed_percent", 100) == 100
+    engine.shutdown()
+
+
+def test_engine_off_normal_speed_moves_the_audio_off_the_media_source():
+    """The rate change is carried by a pitch-preserving stretch playing alongside."""
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.set_event_sink(lambda _e: None)
+    engine.handle(_request("hello"))
+    engine.handle(_request("open_media", {"path": "/c.mp4", "is_local_file": True}))
+    media = _media_sources(runtime)[-1]
+
+    ack = _ack_from_envelope(engine.handle(_request("set_media_properties", {
+        "volume_percent": 50, "speed_percent": 150,
+    })))
+
+    assert ack.applied is True
+    assert media.settings["speed_percent"] == 150
+    assert media.volume == 0.0  # silenced; the stretch is heard instead
     engine.shutdown()
 
 
