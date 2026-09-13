@@ -15,7 +15,7 @@ from typing import Any
 
 from .models import MeetingMedia, MemorialData, WeekData
 from .section_meta import SECTION_META
-from .tree_types import Node, clean_dict, stable_node_id, source_hash
+from .tree_types import Node, clean_dict, stable_node_id, source_hash, publication_subsection_key
 
 _STRIP = re.compile(r"<[^>]+>")
 
@@ -323,7 +323,7 @@ class MeetingTreeBuilder:
                 )
 
         return _subsection_node(
-            f"subsection:cbs:{pub}",
+            publication_subsection_key(f"subsection:cbs:{pub}", title),
             title,
             hue=275,
             children=children,
@@ -404,7 +404,7 @@ class MeetingTreeBuilder:
                 f"subsection:ref:{section}:{pub}"
             )
             subsection = _subsection_node(
-                subsection_key,
+                publication_subsection_key(subsection_key, title),
                 title,
                 hue=hue,
                 children=children,

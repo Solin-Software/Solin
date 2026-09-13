@@ -46,6 +46,15 @@ def source_hash(payload: Any) -> str:
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
+def publication_subsection_key(base_key: str, title: str) -> str:
+    """Identify the publication-title group within its meeting section.
+
+    Titles here are publication metadata, never a user's display override.
+    Language is scoped by the containing meeting tree.
+    """
+    return f"{base_key}:{source_hash(' '.join(title.split()))[:16]}"
+
+
 def clone_nodes(nodes: list[Node]) -> list[Node]:
     return deepcopy(nodes)
 

@@ -42,7 +42,7 @@ from solin.core.meetings.tree_merger import (
     media_identity_signature,
     merge_persisted_meeting_trees,
 )
-from solin.core.meetings.tree_types import iter_nodes
+from solin.core.meetings.tree_types import iter_nodes, publication_subsection_key
 from solin.core.media.thumbnail_identity import thumbnail_source_fingerprint
 from solin.core.i18n.meeting_sections import display_meeting_section_title
 from solin.ui.qml.media_tree.media_presenter import MediaRoleInput, media_roles
@@ -546,7 +546,9 @@ class MeetingTreeBuilderTests(unittest.TestCase):
         )
         self.assertTrue(placeholder["auto_title"])
         cbs = next(node for node in lac["children"] if node["type"] == "subsection")
-        self.assertEqual(cbs["meeting_source_key"], "subsection:cbs:lfb")
+        self.assertEqual(cbs["meeting_source_key"], publication_subsection_key(
+            "subsection:cbs:lfb", "Synthetic Study Guide (lfb)",
+        ))
         self.assertEqual(cbs["title"], "Synthetic Study Guide (lfb)")
         self.assertFalse(cbs["collapsed"])
         markers = [node for node in cbs["children"] if node["type"] == "marker"]
@@ -2027,7 +2029,7 @@ class MeetingTreeStoreTests(unittest.TestCase):
 
             self.assertEqual(saved.revision, 1)
             raw = json.loads(path.read_text(encoding="utf-8"))
-            self.assertEqual(raw["version"], 5)
+            self.assertEqual(raw["version"], 6)
             self.assertEqual(raw["trees"][tree_key]["revision"], 1)
 
     def test_spoken_and_sign_variants_have_distinct_persisted_identities(self):
