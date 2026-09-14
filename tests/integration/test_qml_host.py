@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import time
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -43,6 +44,7 @@ from solin.ui.qml.media_tree.snapshot import (
 from solin.ui.qml.playlist.bridge import PlaylistEditBridge
 from solin.ui.qml.playlist.visuals import PlaylistIconProvider, PlaylistThumbnailProvider
 from solin.ui.qml.timer_output import ClockRenderBridge
+from solin.ui.qml.timer_icons import TimerIconProvider
 from solin.ui.helpers import (
     begin_qml_pointer_cursor,
     end_qml_pointer_cursor,
@@ -165,6 +167,168 @@ class _MediaCountdownProbe(QObject):
     @Slot()
     def pointerExit(self) -> None:  # noqa: N802 - QML API
         pass
+
+
+class _AdvancedTimerProbe(QObject):
+    scheduleChanged = Signal()
+    liveStateChanged = Signal()
+    clockConfigChanged = Signal()
+    monitorsChanged = Signal()
+    weekChanged = Signal()
+    weekShift = Signal(int)
+
+    def __init__(self, *, part_state: str = "idle") -> None:
+        super().__init__()
+        self._clock_config = {
+            "mode": "digital",
+            "analog_style": "signature",
+            "hour_format_24h": True,
+            "show_seconds": True,
+            "show_ampm": False,
+            "part_timer_display": "timer",
+            "direction": "down",
+            "freeze_seconds": 4,
+            "text_scale_pct": 70,
+        }
+        self._parts = [
+            {
+                "id": "part-1",
+                "section": "ministry",
+                "sectionKey": "ministry",
+                "sectionColor": "#5a9cf8",
+                "sectionTextColor": "#9fc5ff",
+                "sectionBadgeBg": "#172a45",
+                "sectionBorderColor": "#315b91",
+                "title": "Initial Call",
+                "displayNumber": 1,
+                "plannedLabel": "03:00",
+                "state": part_state,
+                "firstOfSection": True,
+                "showSectionHeader": True,
+                "configurableCount": True,
+                "sectionCount": 3,
+                "sectionTotalLabel": "12 min",
+                "startedLabel": "19:30:00" if part_state != "idle" else "",
+                "resultLabel": "02:54" if part_state == "stopped" else "",
+            }
+        ]
+        self._live_state = {
+            "active": part_state == "running",
+            "active_part_id": "part-1" if part_state == "running" else "",
+            "overrun": False,
+            "display_seconds": 96,
+        }
+
+    @Property("QVariant", notify=clockConfigChanged)
+    def clockConfig(self):  # noqa: N802 - QML API
+        return self._clock_config
+
+    @Property("QVariant", constant=True)
+    def clockModes(self):  # noqa: N802 - QML API
+        return ["digital", "analog", "analog_digital"]
+
+    @Property("QVariant", constant=True)
+    def analogClockStyles(self):  # noqa: N802 - QML API
+        return ["signature", "classic"]
+
+    @Property("QVariant", constant=True)
+    def partTimerDisplays(self):  # noqa: N802 - QML API
+        return ["timer", "clock", "clock_timer"]
+
+    @Property(bool, notify=monitorsChanged)
+    def timerVisible(self):  # noqa: N802 - QML API
+        return True
+
+    @Property("QVariant", notify=monitorsChanged)
+    def monitors(self):
+        return [
+            {
+                "index": 1,
+                "name": "Secondary display",
+                "resolution": "1920 × 1080",
+                "reserved": False,
+            }
+        ]
+
+    @Property(str, notify=weekChanged)
+    def weekLabel(self):  # noqa: N802 - QML API
+        return "8–14 June 2026"
+
+    @Property(bool, notify=weekChanged)
+    def isCurrentWeek(self):  # noqa: N802 - QML API
+        return True
+
+    @Property(str, notify=weekChanged)
+    def meetingType(self):  # noqa: N802 - QML API
+        return "midweek"
+
+    @Property("QVariant", notify=scheduleChanged)
+    def parts(self):
+        return self._parts
+
+    @Property("QVariant", notify=liveStateChanged)
+    def liveState(self):  # noqa: N802 - QML API
+        return self._live_state
+
+    @Slot(str, "QVariant")
+    def updateClock(self, key: str, value) -> None:  # noqa: N802 - QML API
+        self._clock_config[key] = value
+        self.clockConfigChanged.emit()
+
+    @Slot(bool)
+    def setTimerVisible(self, _visible: bool) -> None:  # noqa: N802 - QML API
+        pass
+
+    @Slot(str)
+    def setMeetingType(self, _meeting_type: str) -> None:  # noqa: N802 - QML API
+        pass
+
+    @Slot()
+    def previousWeek(self) -> None:  # noqa: N802 - QML API
+        pass
+
+    @Slot()
+    def nextWeek(self) -> None:  # noqa: N802 - QML API
+        pass
+
+    @Slot()
+    def goToCurrentWeek(self) -> None:  # noqa: N802 - QML API
+        pass
+
+    @Slot()
+    def exportSchedulePdf(self) -> None:  # noqa: N802 - QML API
+        pass
+
+    def _set_part_state(self, state: str) -> None:
+        started_label = "19:30:00" if state != "idle" else ""
+        result_label = "02:54" if state == "stopped" else ""
+        self._parts = [
+            {
+                **self._parts[0],
+                "state": state,
+                "startedLabel": started_label,
+                "resultLabel": result_label,
+            }
+        ]
+        self._live_state = {
+            **self._live_state,
+            "active": state == "running",
+            "active_part_id": "part-1" if state == "running" else "",
+        }
+        self.scheduleChanged.emit()
+        self.liveStateChanged.emit()
+
+    @Slot(str)
+    def startPart(self, _part_id: str) -> None:  # noqa: N802 - QML API
+        self._set_part_state("running")
+
+    @Slot(str)
+    def stopPart(self, _part_id: str) -> None:  # noqa: N802 - QML API
+        self._set_part_state("stopped")
+
+    @Slot(str)
+    def resetPart(self, _part_id: str) -> None:  # noqa: N802 - QML API
+        self._set_part_state("idle")
 
 
 class _PlaybackProtectionProbe(QObject):
@@ -412,6 +576,21 @@ def _find_visual(item, object_name: str):
         if match := _find_visual(child, object_name):
             return match
     return None
+
+
+def _find_visuals(item, object_name: str):
+    matches = [item] if item.objectName() == object_name else []
+    for child in item.childItems():
+        matches.extend(_find_visuals(child, object_name))
+    return matches
+
+
+def _wait_until(predicate, *, timeout_seconds: float = 1.0) -> None:
+    deadline = time.monotonic() + timeout_seconds
+    while not predicate():
+        if time.monotonic() >= deadline:
+            raise AssertionError("Timed out waiting for the QML state change")
+        QTest.qWait(10)
 
 
 def test_playlist_tree_reconciles_complete_snapshots_without_recreating_host() -> None:
@@ -1031,6 +1210,7 @@ def test_timer_view_moves_mode_selector_below_header_when_compact(
         type_name="TimerView",
         clear_color="#000000",
         context_properties={"timer": timer},
+        image_providers={"timericons": TimerIconProvider()},
     )
     root = widget.rootObject()
     assert root is not None
@@ -1048,6 +1228,296 @@ def test_timer_view_moves_mode_selector_below_header_when_compact(
     if compact:
         assert compact_selector.property("width") <= width - 40
 
+    widget.deleteLater()
+
+
+@pytest.mark.parametrize(
+    ("width", "compact_navigation"),
+    [(320, True), (480, True), (768, True), (900, False), (1200, False)],
+)
+def test_advanced_timer_keeps_navigation_and_part_actions_inside_available_width(
+    width: int,
+    compact_navigation: bool,
+) -> None:
+    timer = _AdvancedTimerProbe()
+    widget = QQuickWidget()
+    widget.resize(width, 760)
+    configure_qml_host(
+        widget,
+        type_name="AdvancedTimerPage",
+        clear_color="#000000",
+        context_properties={"timer": timer},
+        image_providers={"timericons": TimerIconProvider()},
+    )
+    root = widget.rootObject()
+    assert root is not None
+    widget.show()
+    QTest.qWait(40)
+
+    content = root.findChild(QObject, "advancedTimerContent")
+    navigation = root.findChild(QObject, "timerWeekNavigationCard")
+    wide_layout = root.findChild(QObject, "timerWeekNavigationWide")
+    compact_layout = root.findChild(QObject, "timerWeekNavigationCompact")
+    assert content is not None
+    assert navigation is not None
+    assert wide_layout is not None
+    assert compact_layout is not None
+    assert 0 < content.property("width") <= width
+    assert navigation.property("width") <= content.property("width")
+    assert bool(compact_layout.property("visible")) is compact_navigation
+    assert bool(wide_layout.property("visible")) is not compact_navigation
+
+    settings_buttons = [
+        button
+        for name in ("timerSettingsButtonWide", "timerSettingsButtonCompact")
+        if (button := _find_visual(root, name)) is not None and button.isVisible()
+    ]
+    assert len(settings_buttons) == 1
+    button_origin = settings_buttons[0].mapToItem(navigation, QPointF())
+    assert button_origin.x() >= 0
+    assert button_origin.x() + settings_buttons[0].property("width") <= navigation.property("width")
+
+    part_row = _find_visual(root, "timerMeetingPartRow")
+    assert part_row is not None
+    assert 0 < part_row.property("width") <= content.property("width")
+    assert bool(part_row.property("compactLayout")) is (part_row.property("width") < 620)
+
+    visible_actions = [
+        action
+        for action in _find_visuals(part_row, "timerPartActionButton")
+        if action.isVisible()
+    ]
+    assert len(visible_actions) == 1
+    action = visible_actions[0]
+    action_origin = action.mapToItem(part_row, QPointF())
+    assert action_origin.x() >= 0
+    assert action_origin.x() + action.property("width") <= part_row.property("width") + 0.5
+    assert widget.errors() == []
+    widget.deleteLater()
+
+
+@pytest.mark.parametrize(("width", "height"), [(320, 400), (640, 520), (960, 760)])
+def test_advanced_timer_settings_open_as_a_responsive_modal(
+    width: int,
+    height: int,
+) -> None:
+    timer = _AdvancedTimerProbe()
+    widget = QQuickWidget()
+    widget.resize(width, height)
+    configure_qml_host(
+        widget,
+        type_name="AdvancedTimerPage",
+        clear_color="#000000",
+        context_properties={"timer": timer},
+        image_providers={"timericons": TimerIconProvider()},
+    )
+    root = widget.rootObject()
+    assert root is not None
+    widget.show()
+    QTest.qWait(30)
+
+    settings = root.findChild(QObject, "timerSettingsDialog")
+    viewport = root.findChild(QObject, "timerSettingsViewport")
+    assert settings is not None
+    assert viewport is not None
+    settings_button = next(
+        button
+        for name in ("timerSettingsButtonWide", "timerSettingsButtonCompact")
+        if (button := _find_visual(root, name)) is not None and button.isVisible()
+    )
+    click_point = settings_button.mapToScene(
+        QPointF(settings_button.width() / 2, settings_button.height() / 2)
+    ).toPoint()
+    QTest.mouseClick(widget, Qt.MouseButton.LeftButton, pos=click_point)
+    QTest.qWait(40)
+
+    assert settings.property("visible") is True
+    assert 0 < settings.property("width") <= width - 32
+    assert 0 < settings.property("height") <= height - 32
+    assert bool(settings.property("compact")) is (settings.property("width") < 520)
+    assert 0 < viewport.property("width") <= settings.property("width")
+    assert viewport.property("contentWidth") == pytest.approx(viewport.property("width"))
+    for card_name in (
+        "timerSettingsClockCard",
+        "timerSettingsPartCard",
+        "timerSettingsDisplayCard",
+        "timerSettingsMonitorsCard",
+    ):
+        card = root.findChild(QObject, card_name)
+        assert card is not None
+        assert 0 < card.property("width") <= viewport.property("width")
+
+    clock_mode = root.findChild(QObject, "timerClockModeSelect")
+    assert clock_mode is not None
+    assert QMetaObject.invokeMethod(clock_mode, "picked", Q_ARG(int, 1))
+    assert timer.clockConfig["mode"] == "analog"
+    assert widget.errors() == []
+    assert QMetaObject.invokeMethod(settings, "close")
+    _wait_until(lambda: settings.property("visible") is False)
+    assert settings_button.property("activeFocus") is True
+    assert widget.errors() == []
+    widget.deleteLater()
+
+
+@pytest.mark.parametrize(
+    ("width", "state", "expected_action"),
+    [
+        (320, "running", "Stop"),
+        (320, "stopped", "Reset"),
+        (900, "running", "Stop"),
+        (900, "stopped", "Reset"),
+    ],
+)
+def test_advanced_timer_part_actions_remain_visible_in_live_states(
+    width: int,
+    state: str,
+    expected_action: str,
+) -> None:
+    timer = _AdvancedTimerProbe(part_state=state)
+    widget = QQuickWidget()
+    widget.resize(width, 520)
+    configure_qml_host(
+        widget,
+        type_name="AdvancedTimerPage",
+        clear_color="#000000",
+        context_properties={"timer": timer},
+        image_providers={"timericons": TimerIconProvider()},
+    )
+    root = widget.rootObject()
+    assert root is not None
+    widget.show()
+    QTest.qWait(40)
+
+    part_row = _find_visual(root, "timerMeetingPartRow")
+    assert part_row is not None
+    visible_actions = [
+        action
+        for action in _find_visuals(part_row, "timerPartActionButton")
+        if action.isVisible()
+    ]
+    assert len(visible_actions) == 1
+    action = visible_actions[0]
+    action_origin = action.mapToItem(part_row, QPointF())
+    assert action.property("text") == expected_action
+    assert action_origin.x() + action.property("width") <= part_row.property("width") + 0.5
+    assert widget.errors() == []
+    widget.deleteLater()
+
+
+@pytest.mark.parametrize("width", [320, 900])
+def test_advanced_timer_part_state_changes_keep_the_row_geometry_stable(
+    width: int,
+) -> None:
+    timer = _AdvancedTimerProbe()
+    widget = QQuickWidget()
+    widget.resize(width, 520)
+    configure_qml_host(
+        widget,
+        type_name="AdvancedTimerPage",
+        clear_color="#000000",
+        context_properties={"timer": timer},
+        image_providers={"timericons": TimerIconProvider()},
+    )
+    root = widget.rootObject()
+    assert root is not None
+    widget.show()
+    QTest.qWait(40)
+
+    def visible_part_item(object_name: str):
+        part_row = _find_visual(root, "timerMeetingPartRow")
+        assert part_row is not None
+        matches = [
+            item
+            for item in _find_visuals(part_row, object_name)
+            if item.isVisible()
+        ]
+        assert len(matches) == 1
+        return part_row, matches[0]
+
+    def item_rect(item, relative_to):
+        origin = item.mapToItem(relative_to, QPointF())
+        return (origin.x(), origin.y(), item.property("width"), item.property("height"))
+
+    def stable_geometry():
+        part_row, action = visible_part_item("timerPartActionButton")
+        region_name = (
+            "timerPartCompactTimingArea"
+            if bool(part_row.property("compactLayout"))
+            else "timerPartPlannedControl"
+        )
+        _, timing_region = visible_part_item(region_name)
+        action_x, action_y, action_width, action_height = item_rect(action, part_row)
+        timing_x, timing_y, timing_width, timing_height = item_rect(
+            timing_region,
+            part_row,
+        )
+        return (
+            part_row.property("height"),
+            action_y,
+            action_width,
+            action_height,
+            part_row.property("width") - action_x - action_width,
+            timing_y,
+            timing_height,
+            action_x - timing_x - timing_width,
+        )
+
+    def visible_action():
+        _part_row, action = visible_part_item("timerPartActionButton")
+        return action
+
+    initial_geometry = stable_geometry()
+    for expected_text in ("Stop", "Reset", "Start"):
+        action = visible_action()
+        click_point = action.mapToScene(
+            QPointF(action.width() / 2, action.height() / 2)
+        ).toPoint()
+        QTest.mouseClick(widget, Qt.MouseButton.LeftButton, pos=click_point)
+        _wait_until(
+            lambda expected=expected_text: visible_action().property("text") == expected
+        )
+        assert stable_geometry() == pytest.approx(initial_geometry, abs=0.5)
+
+    assert widget.errors() == []
+    widget.close()
+    widget.deleteLater()
+
+
+def test_advanced_timer_settings_reuse_existing_portuguese_catalog(
+    pt_br_translator,
+) -> None:
+    timer = _AdvancedTimerProbe()
+    widget = QQuickWidget()
+    widget.resize(640, 760)
+    configure_qml_host(
+        widget,
+        type_name="AdvancedTimerPage",
+        clear_color="#000000",
+        context_properties={"timer": timer},
+        image_providers={"timericons": TimerIconProvider()},
+    )
+    root = widget.rootObject()
+    assert root is not None
+    widget.show()
+    QTest.qWait(30)
+
+    settings = root.findChild(QObject, "timerSettingsDialog")
+    close_button = root.findChild(QObject, "timerSettingsCloseButton")
+    assert settings is not None
+    assert close_button is not None
+    assert QMetaObject.invokeMethod(settings, "open")
+    QTest.qWait(220)
+
+    content_item = settings.property("contentItem")
+    visible_text = _visible_texts(content_item)
+    assert "Cronômetro · Configurações" in visible_text
+    assert "Mostrador do relógio" in visible_text
+    assert "Telas" in visible_text
+    assert close_button.property("tip") == "Fechar"
+    assert widget.errors() == []
+    assert QMetaObject.invokeMethod(settings, "close")
+    _wait_until(lambda: settings.property("visible") is False)
+    widget.close()
     widget.deleteLater()
 
 
@@ -1169,6 +1639,90 @@ def test_timer_pointer_area_enters_and_exits_native_cursor_state() -> None:
 
     assert probe.entered == 1
     assert probe.exited == 1
+
+
+def test_timer_icon_only_button_centers_its_visible_content() -> None:
+    widget = QQuickWidget()
+    widget.resize(48, 34)
+    configure_qml_host(
+        widget,
+        type_name="TimerButton",
+        clear_color="#000000",
+        image_providers={"timericons": TimerIconProvider()},
+    )
+    root = widget.rootObject()
+    assert root is not None
+    root.setProperty("iconName", "settings")
+    root.setProperty("iconSize", 16)
+    widget.show()
+    QTest.qWait(30)
+
+    icon = _find_visual(root, "timerButtonIcon")
+    content = _find_visual(root, "timerButtonContent")
+    assert icon is not None
+    assert content is not None
+    icon_origin = icon.mapToItem(root, QPointF())
+    assert content.property("spacing") == 0
+    assert icon_origin.x() + icon.property("width") / 2 == pytest.approx(
+        root.width() / 2
+    )
+    assert widget.errors() == []
+    widget.deleteLater()
+
+
+def test_timer_navigation_tooltip_uses_overlay_and_fits_below_header() -> None:
+    for existing_window in QApplication.topLevelWidgets():
+        existing_window.close()
+    _APP.processEvents()
+
+    timer = _AdvancedTimerProbe()
+    widget = QQuickWidget()
+    widget.resize(640, 500)
+    configure_qml_host(
+        widget,
+        type_name="AdvancedTimerPage",
+        clear_color="#000000",
+        context_properties={"timer": timer},
+        image_providers={"timericons": TimerIconProvider()},
+        mouse_tracking=True,
+    )
+    root = widget.rootObject()
+    assert root is not None
+    widget.show()
+    widget.raise_()
+    widget.activateWindow()
+    widget.setFocus()
+    QTest.qWait(40)
+
+    button = _find_visual(root, "timerPreviousWeekButtonCompact")
+    viewport = _find_visual(root, "advancedTimerViewport")
+    assert button is not None
+    assert viewport is not None
+    tooltip = button.findChild(QObject, "timerButtonTooltip")
+    assert tooltip is not None
+    tooltip.setProperty("delay", 0)
+    hover_point = button.mapToScene(
+        QPointF(button.width() / 2, button.height() / 2)
+    ).toPoint()
+    QTest.mouseMove(widget, QPoint(widget.width() - 2, widget.height() - 2))
+    QTest.qWait(20)
+    QTest.mouseMove(widget, hover_point)
+    QTest.qWait(60)
+    assert tooltip.property("visible") is True
+    tooltip_content = tooltip.property("contentItem")
+    assert tooltip_content is not None
+    popup_item = tooltip_content.parentItem()
+    assert popup_item is not None
+    ancestor = popup_item.parentItem()
+    while ancestor is not None:
+        assert ancestor is not viewport
+        ancestor = ancestor.parentItem()
+    popup_origin = popup_item.mapToScene(QPointF())
+    assert popup_origin.y() >= 0
+    assert popup_origin.y() + popup_item.height() <= root.height()
+    assert popup_origin.y() >= button.mapToScene(QPointF()).y() + button.height()
+    assert widget.errors() == []
+    widget.deleteLater()
 
 
 def test_shared_playlist_tree_requires_explicit_play_when_protection_is_enabled() -> None:

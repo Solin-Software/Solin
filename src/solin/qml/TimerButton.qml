@@ -2,6 +2,7 @@
 // Controlled & presentational: callers set `variant`/`accent` and react to
 // `clicked()`. Variants: "primary" (filled), "soft" (tinted) and "ghost".
 import QtQuick 2.15
+import QtQuick.Controls 2.15
 
 Rectangle {
     id: ctl
@@ -17,8 +18,13 @@ Rectangle {
 
     readonly property bool _filled: variant === "primary"
     readonly property bool _soft: variant === "soft"
+    readonly property bool _hasIcon: iconName !== ""
+    readonly property bool _hasLabel: text !== ""
     readonly property real _contentImplicitWidth: label.implicitWidth
                                                   + (icon.visible ? icon.width + row.spacing : 0)
+    readonly property string _toolTipText: tip !== ""
+                                              ? tip
+                                              : (label.truncated ? text : "")
 
     function iconHex(colorValue) {
         return String(colorValue).replace("#", "")
@@ -31,8 +37,8 @@ Rectangle {
     activeFocusOnTab: enabled
 
     Accessible.role: Accessible.Button
-    Accessible.name: text
-    Accessible.description: tip
+    Accessible.name: text !== "" ? text : tip
+    Accessible.description: text !== "" ? tip : ""
 
     color: _filled
            ? (ma.containsMouse ? Qt.lighter(accent, 1.14) : accent)
@@ -63,14 +69,16 @@ Rectangle {
 
     Row {
         id: row
+        objectName: "timerButtonContent"
         anchors.centerIn: parent
         width: Math.min(ctl._contentImplicitWidth, Math.max(0, ctl.width - 20))
         height: Math.max(icon.visible ? icon.height : 0, label.visible ? label.implicitHeight : 0)
-        spacing: 7
+        spacing: ctl._hasIcon && ctl._hasLabel ? 7 : 0
 
         Image {
             id: icon
-            visible: ctl.iconName !== ""
+            objectName: "timerButtonIcon"
+            visible: ctl._hasIcon
             anchors.verticalCenter: parent.verticalCenter
             width: ctl.iconSize
             height: ctl.iconSize
@@ -84,7 +92,7 @@ Rectangle {
 
         Text {
             id: label
-            visible: ctl.text !== ""
+            visible: ctl._hasLabel
             anchors.verticalCenter: parent.verticalCenter
             width: Math.max(0, row.width - (icon.visible ? icon.width + row.spacing : 0))
             text: ctl.text
@@ -102,13 +110,9 @@ Rectangle {
     }
 
     ThemedToolTip {
-        visible: ctl.tip !== "" && ma.containsMouse
-        text: ctl.tip
-    }
-
-    ThemedToolTip {
-        visible: ctl.tip === "" && label.truncated && ma.containsMouse
-        text: ctl.text
+        objectName: "timerButtonTooltip"
+        visible: ctl.enabled && ma.containsMouse && ctl._toolTipText !== ""
+        text: ctl._toolTipText
     }
 
     TimerPointerArea {
@@ -118,26 +122,21 @@ Rectangle {
         onClicked: ctl.clicked()
     }
 
-    component ThemedToolTip: Rectangle {
+    component ThemedToolTip: ToolTip {
         id: tip
-        property alias text: label.text
+        delay: 450
+        padding: 6
 
-        z: 10
-        x: Math.round((parent.width - width) / 2)
-        y: -height - 6
-        implicitWidth: label.implicitWidth + 12
-        implicitHeight: label.implicitHeight + 12
-        color: appTheme.surface
-        radius: 6
-        border.width: 1
-        border.color: appTheme.border_
-
-        Text {
-            id: label
-            anchors.centerIn: parent
+        contentItem: Text {
             text: tip.text
             color: appTheme.textPrimary
             font.pixelSize: 12
+        }
+        background: Rectangle {
+            color: appTheme.surface
+            radius: 6
+            border.width: 1
+            border.color: appTheme.border_
         }
     }
 }
