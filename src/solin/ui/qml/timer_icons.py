@@ -12,8 +12,11 @@ from solin.styles.icons import (
     ICON_CHEVRON_DOWN,
     ICON_CHEVRON_LEFT,
     ICON_CHEVRON_RIGHT,
+    ICON_CLOSE,
+    ICON_EXPORT,
     ICON_HOME,
     ICON_MONITOR,
+    ICON_NAV_SETTINGS,
     ICON_NAV_TIMER,
     ICON_PLAY,
     ICON_REC_STOP,
@@ -25,17 +28,6 @@ from solin.styles.icons import (
     ICON_SEC_WATCHTOWER,
 )
 from solin.styles.theme import PALETTE
-
-_ICON_PDF = """
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
-     fill="none" stroke="currentColor" stroke-width="1.8"
-     stroke-linecap="round" stroke-linejoin="round">
-  <path d="M6 2h8l4 4v16H6z" />
-  <path d="M14 2v5h5" />
-  <path d="M8 13h8" />
-  <path d="M8 17h6" />
-</svg>
-"""
 
 # Names the timer QML can request via ``image://timericons/<name>/<size>/<hex>``.
 _TIMER_ICON_MAP = {
@@ -50,8 +42,10 @@ _TIMER_ICON_MAP = {
     "play": ICON_PLAY,
     "stop": ICON_REC_STOP,
     "reset": ICON_REPEAT,
-    "pdf": _ICON_PDF,
+    "export": ICON_EXPORT,
     "home": ICON_HOME,
+    "settings": ICON_NAV_SETTINGS,
+    "close": ICON_CLOSE,
     "chevron_left": ICON_CHEVRON_LEFT,
     "chevron_right": ICON_CHEVRON_RIGHT,
     "chevron_down": ICON_CHEVRON_DOWN,
