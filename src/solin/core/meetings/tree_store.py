@@ -25,11 +25,12 @@ from .canonical_restore import canonical_source_keys
 from .thumbnails import meeting_thumb_cache_key, meeting_thumb_dir
 from .media_nodes import should_accept_resolved_media_title
 from .tree_merger import MeetingTreeMerger, media_identity_signature
-from .tree_types import Node, clone_nodes, count_media, iter_nodes, iter_nodes_strict
+from .tree_migrations import migrate_publication_subsections
+from .tree_types import Node, clone_nodes, count_media, iter_nodes, iter_nodes_strict, source_hash
 
 log = logging.getLogger(__name__)
 
-MEETING_TREE_STORE_VERSION = 5
+MEETING_TREE_STORE_VERSION = 6
 
 
 def _migrate_thumbnail_binding(node: Node) -> None:
@@ -178,6 +179,15 @@ class MeetingTreeStore:
             if isinstance(record, dict):
                 record.setdefault("revision", 0)
                 _migrate_record_metadata(record)
+                if version < 6:
+                    nodes = record.get("nodes", [])
+                    canonical = record.get("canonical_nodes", [])
+                    deleted = _string_set(record.get("deleted_source_keys", []))
+                    if isinstance(nodes, list) and isinstance(canonical, list):
+                        if migrate_publication_subsections(nodes, canonical, deleted):
+                            record["deleted_source_keys"] = sorted(deleted)
+                            if canonical:
+                                record["last_canonical_hash"] = source_hash(canonical)
         data["version"] = MEETING_TREE_STORE_VERSION
         return data
 

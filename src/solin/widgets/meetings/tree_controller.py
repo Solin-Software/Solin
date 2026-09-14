@@ -81,6 +81,7 @@ from ...core.ingest.manifest import (
     retry_manifest_write,
 )
 from ...core.meetings.models import MemorialData
+from ...core.meetings.tree_migrations import migrate_publication_subsections
 from ...core.meetings.linked_folder_sync import (
     MeetingSyncRecord,
     MeetingSyncError,
@@ -674,6 +675,9 @@ class MeetingTreeController(QObject):
         sync_generation: int,
         sync_hidden_canonical_media: dict[str, Node],
     ) -> list[Node]:
+        sync_nodes, sync_deleted_source_keys = MeetingTreeController._migrate_sync_publications(
+            self, sync_nodes, sync_deleted_source_keys,
+        )
         local_generation = snapshot.canonical_reset_generation
         if sync_generation > local_generation:
             self._deleted_source_keys = set(sync_deleted_source_keys)
@@ -806,6 +810,8 @@ class MeetingTreeController(QObject):
             self._sync_revision = 0
             self._sync_folder = ""
         self._meeting_folder_pending_sources.clear()
+        if saved is not None:
+            migrate_publication_subsections(saved, canonical, self._deleted_source_keys)
         self._nodes = MeetingTreeMerger(
             canonical,
             self._deleted_source_keys,
@@ -987,24 +993,27 @@ class MeetingTreeController(QObject):
         if self._sync_enabled and record.revision == self._sync_revision:
             return
 
+        sync_nodes, sync_deleted = MeetingTreeController._migrate_sync_publications(
+            self, record.nodes, record.deleted_source_keys,
+        )
         local_generation = self._canonical_reset_generation
         remote_generation = record.canonical_reset_generation
         if remote_generation > local_generation:
-            nodes = include_manual_meeting_nodes(record.nodes, self._nodes)
-            self._deleted_source_keys = set(record.deleted_source_keys)
+            nodes = include_manual_meeting_nodes(sync_nodes, self._nodes)
+            self._deleted_source_keys = sync_deleted
             self._canonical_reset_generation = remote_generation
             self._hidden_canonical_media = copy.deepcopy(record.hidden_canonical_media)
         elif local_generation > remote_generation:
-            nodes = include_manual_meeting_nodes(self._nodes, record.nodes)
+            nodes = include_manual_meeting_nodes(self._nodes, sync_nodes)
         else:
-            self._deleted_source_keys |= set(record.deleted_source_keys)
+            self._deleted_source_keys |= sync_deleted
             self._hidden_canonical_media = {
                 **self._hidden_canonical_media,
                 **copy.deepcopy(record.hidden_canonical_media),
             }
             nodes = merge_persisted_meeting_trees(
                 self._nodes,
-                record.nodes,
+                sync_nodes,
                 self._deleted_source_keys,
             )
         self._nodes = nodes
@@ -1024,8 +1033,9 @@ class MeetingTreeController(QObject):
         _emit_controller_state_changed(self)
 
     def _apply_sync_record(self, record: MeetingSyncRecord) -> None:
-        self._nodes = record.nodes
-        self._deleted_source_keys = record.deleted_source_keys
+        self._nodes, self._deleted_source_keys = MeetingTreeController._migrate_sync_publications(
+            self, record.nodes, record.deleted_source_keys,
+        )
         self._linked_folder_files = record.linked_folder_files
         self._meeting_folder_imports = record.meeting_folder_imports
         self._canonical_reset_generation = getattr(
@@ -1039,6 +1049,16 @@ class MeetingTreeController(QObject):
         self._sync_enabled = True
         self._sync_revision = record.revision
         MeetingTreeController._refresh_canonical_restore_state(self)
+
+    def _migrate_sync_publications(
+        self, nodes: list[Node], deleted: set[str],
+    ) -> tuple[list[Node], set[str]]:
+        nodes = clone_nodes(nodes)
+        deleted = set(deleted)
+        migrate_publication_subsections(
+            nodes, clone_nodes(getattr(self, "_canonical_nodes", [])), deleted,
+        )
+        return nodes, deleted
 
     # ── Meeting-folder autoimport ────────────────────────────────────────────
 

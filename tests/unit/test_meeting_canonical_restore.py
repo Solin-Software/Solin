@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
+
+import pytest
 
 from solin.core.foundation.thread_workers import CancellationFlag
 from solin.core.meetings.canonical_restore import (
@@ -10,11 +14,254 @@ from solin.core.meetings.canonical_restore import (
     restore_canonical_tree,
 )
 from solin.core.meetings.tree_store import MeetingTreeOverview, MeetingTreeStore
-from solin.core.meetings.tree_types import iter_nodes
+from solin.core.meetings.tree_types import iter_nodes, stable_node_id
+from solin.core.meetings.models import MeetingMedia, MeetingPublicationRef, WeekData
+from solin.core.meetings.tree_builder import MeetingTreeBuilder
+from solin.core.meetings.tree_merger import MeetingTreeMerger
+from solin.ui.qml.media_tree.meeting_presenter import MeetingTreePresenter
 from solin.ui.qml.media_tree.media_presenter import MediaRoleInput, media_roles
 from solin.ui.qml.media_tree.state import MediaPresentationState
 from solin.widgets.meetings.tree_controller import MeetingTreeController
 from PySide6.QtWidgets import QMessageBox
+
+
+def _multi_edition_week() -> WeekData:
+    return WeekData(
+        mwb_publication_refs=[
+            MeetingPublicationRef(
+                section="tgw",
+                pub="w",
+                issue=str(year * 10000 + 100),
+                publication_title=f"Study Journal {year}",
+                caption=f"Article {year}",
+                meps_doc_id=year,
+                begin_ordinal=index + 1,
+                items=[
+                    MeetingMedia(multimedia_id=1, label=f"Image {year}", mime_type="image/jpeg")
+                ],
+            )
+            for index, year in enumerate((2021, 2025))
+        ]
+    )
+
+
+def test_multi_edition_initial_merge_does_not_offer_restore() -> None:
+    builder = MeetingTreeBuilder()
+    canonical = builder.build_midweek(_multi_edition_week())
+    initial = builder.build_midweek(WeekData())
+    current = MeetingTreeMerger(canonical).merge(initial)
+    assert not canonical_tree_diff(canonical, current).has_changes
+    current = MeetingTreeMerger(canonical).merge(current)
+
+    assert not canonical_tree_diff(canonical, current).has_changes
+    assert [node["title"] for node in current[0]["children"]] == [
+        "Study Journal 2021",
+        "Study Journal 2025",
+    ]
+
+
+def test_multi_edition_restore_can_be_presented_after_reopening(tmp_path: Path) -> None:
+    builder = MeetingTreeBuilder()
+    canonical = builder.build_midweek(_multi_edition_week())
+    current = MeetingTreeMerger(canonical).merge(builder.build_midweek(WeekData()))
+    restored = restore_canonical_tree(canonical, current)
+    path = tmp_path / "meeting_trees.json"
+    key = "mwb:2026-09-07:T:20260900"
+    MeetingTreeStore(path).save(
+        key, restored, builder.canonical_hash(canonical), canonical_nodes=canonical
+    )
+    snapshot = MeetingTreeStore(path).snapshot(key)
+    assert snapshot is not None
+    MeetingTreePresenter().build(key, snapshot.nodes, revision=1)
+
+
+def _legacy_multi_edition_tree() -> list[dict]:
+    nodes = MeetingTreeBuilder().build_midweek(_multi_edition_week())
+    for node in nodes[0]["children"]:
+        node["meeting_source_key"] = "subsection:ref:tgw:w"
+        node["id"] = stable_node_id("subsection:ref:tgw:w")
+    return nodes
+
+
+@pytest.mark.parametrize("merged", [False, True])
+def test_legacy_multi_edition_store_recovers_offline(tmp_path: Path, merged: bool) -> None:
+    canonical = _legacy_multi_edition_tree()
+    current = deepcopy(canonical)
+    if merged:
+        first, second = current[0]["children"]
+        second["children"] = first["children"] + second["children"]
+        current[0]["children"] = [second]
+    key = "mwb:2026-09-07:T:20260900"
+    path = tmp_path / "meeting_trees.json"
+    path.write_text(
+        json.dumps(
+            {
+                "version": 5,
+                "trees": {
+                    key: {
+                        "nodes": current,
+                        "canonical_nodes": canonical,
+                        "last_canonical_hash": "old",
+                        "canonical_reset_generation": 2,
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    store = MeetingTreeStore(path)
+
+    assert store.migrate_strict()
+    snapshot = store.snapshot(key)
+    assert snapshot is not None
+    assert not canonical_tree_diff(snapshot.canonical_nodes, snapshot.nodes).has_changes
+    assert snapshot.canonical_reset_generation == 2
+    assert [node["title"] for node in snapshot.nodes[0]["children"]] == [
+        "Study Journal 2021",
+        "Study Journal 2025",
+    ]
+    MeetingTreePresenter().build(key, snapshot.nodes, revision=1)
+    assert not MeetingTreeStore(path).migrate_strict()
+    assert MeetingTreeStore(path).snapshot(key) == snapshot
+
+
+def test_legacy_migration_preserves_user_content_and_outside_moves() -> None:
+    from solin.core.meetings.tree_migrations import migrate_publication_subsections
+
+    canonical = _legacy_multi_edition_tree()
+    current = deepcopy(canonical)
+    first, second = current[0]["children"]
+    first["title"] = "My edition"
+    first["user_title_override"] = True
+    first["collapsed"] = False
+    first["color_hue"] = 42
+    manual = _manual_media("manual", "My video")
+    first["children"].append(manual)
+    moved = second["children"].pop()
+    moved["start_trim_ticks"] = 120
+    moved["resolved_url"] = "https://example.invalid/media.mp4"
+    current[2]["children"].append(moved)
+    deleted = {"media:missing"}
+
+    assert migrate_publication_subsections(current, canonical, deleted)
+    first = current[0]["children"][0]
+    assert first["title"] == "My edition"
+    assert first["user_title_override"]
+    assert first["color_hue"] == 42
+    assert not first["collapsed"]
+    assert first["children"][-1] == manual
+    assert current[2]["children"] == [moved]
+    assert deleted == {"media:missing"}
+    MeetingTreePresenter().build("meeting", current, revision=1)
+    assert not migrate_publication_subsections(current, canonical, deleted)
+
+
+def test_legacy_subsection_deletion_maps_to_both_editions() -> None:
+    from solin.core.meetings.tree_migrations import migrate_publication_subsections
+
+    canonical = _legacy_multi_edition_tree()
+    current = deepcopy(canonical)
+    current[0]["children"] = []
+    deleted = {"subsection:ref:tgw:w"}
+    migrate_publication_subsections(current, canonical, deleted)
+
+    assert deleted == {node["meeting_source_key"] for node in canonical[0]["children"]}
+    assert current[0]["children"] == []
+
+
+def test_legacy_collapsed_groups_recover_around_intervening_media() -> None:
+    from solin.core.meetings.tree_migrations import migrate_publication_subsections
+
+    canonical = _legacy_multi_edition_tree()
+    intervening = _media("media:between", "Between editions")
+    canonical[0]["children"].insert(1, intervening)
+    current = deepcopy(canonical)
+    first, between, second = current[0]["children"]
+    second["children"] = first["children"] + second["children"]
+    manual = _manual_media("manual", "My video")
+    current[0]["children"] = [manual, second, between]
+
+    migrate_publication_subsections(current, canonical, set())
+
+    assert not canonical_tree_diff(canonical, current).has_changes
+    assert current[0]["children"][0] == manual
+    assert current[0]["children"][2] == intervening
+
+
+@pytest.mark.parametrize("sync_generation", [0, 1, 2])
+def test_legacy_sync_cannot_reintroduce_duplicate_groups(
+    tmp_path: Path,
+    sync_generation: int,
+) -> None:
+    canonical = MeetingTreeBuilder().build_midweek(_multi_edition_week())
+    snapshot = MeetingTreeStore(tmp_path / "meeting_trees.json").save(
+        "mwb:2026-09-07:T:20260900",
+        canonical,
+        "hash",
+        canonical_nodes=canonical,
+        canonical_reset_generation=1,
+    )
+    remote = _legacy_multi_edition_tree()
+    manual = _manual_media("manual", "My video")
+    remote[0]["children"].append(manual)
+    original_remote = deepcopy(remote)
+    controller = SimpleNamespace(_canonical_nodes=canonical)
+
+    result = MeetingTreeController._merge_snapshot_with_sync(
+        controller,
+        snapshot,
+        remote,
+        set(),
+        sync_generation,
+        {},
+    )
+
+    assert not canonical_tree_diff(canonical, result).has_changes
+    assert next(node for node in iter_nodes(result) if node["id"] == "manual") == manual
+    MeetingTreePresenter().build(snapshot.tree_key, result, revision=1)
+    assert remote == original_remote
+
+
+def test_publication_group_identity_is_stable_during_enrichment() -> None:
+    builder = MeetingTreeBuilder()
+    week = _multi_edition_week()
+    initial = builder.build_midweek(week)
+    week.mwb_publication_refs.reverse()
+    for ref in week.mwb_publication_refs:
+        ref.publication_title = "  " + ref.publication_title.replace(" ", "   ") + " "
+        ref.items.append(MeetingMedia(multimedia_id=2, mime_type="image/jpeg"))
+    enriched = builder.build_midweek(week)
+    assert [node["id"] for node in initial[0]["children"]] == [
+        node["id"] for node in enriched[0]["children"]
+    ]
+
+
+def test_cbs_fallback_and_publication_references_share_group_identity() -> None:
+    builder = MeetingTreeBuilder()
+    item = MeetingMedia(multimedia_id=1, cbs_article_title="Article", mime_type="image/jpeg")
+    week = WeekData(
+        cbs_ref={
+            "pub": "book",
+            "publication_title": "Study Book",
+            "doc_titles": {42: "Article"},
+        },
+        cbs_items=[item],
+    )
+    fallback = builder.build_midweek(week)
+    week.mwb_publication_refs = [
+        MeetingPublicationRef(
+            section="lac",
+            pub="book",
+            publication_title="Study Book",
+            caption="Article",
+            meps_doc_id=42,
+            is_cbs=True,
+            items=[item],
+        )
+    ]
+    prepared = builder.build_midweek(week)
+    assert fallback[2]["children"][0]["id"] == prepared[2]["children"][0]["id"]
+    assert not canonical_tree_diff(prepared, fallback).has_changes
 
 
 def _section(
@@ -599,7 +846,7 @@ def test_store_persists_baseline_and_legacy_waits_for_reconciliation(tmp_path: P
     assert set(saved.hidden_canonical_media) == {"media:a"}
     assert saved.hidden_canonical_media["media:a"]["title"] == "Resolved"
     raw = json.loads(path.read_text(encoding="utf-8"))
-    assert raw["version"] == 5
+    assert raw["version"] == 6
 
 
 def test_preliminary_reconciliation_preserves_confirmed_canonical_state(
