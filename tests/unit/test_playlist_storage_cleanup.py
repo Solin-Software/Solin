@@ -1,5 +1,6 @@
 import json
 import inspect
+import os
 from pathlib import Path
 import threading
 import time
@@ -358,6 +359,33 @@ def test_cleanup_queue_revalidates_current_playlist_references(tmp_path):
     assert media_path.exists()
     assert not thumb_path.exists()
     assert not signature_path.exists()
+
+
+def test_profile_cleanup_keeps_shared_media_after_one_occurrence_is_removed(
+    tmp_path,
+):
+    media_path = tmp_path / "clip.mp4"
+    first = {"id": "first", "url": str(media_path), "type": "video"}
+    second = {"id": "second", "url": str(media_path), "type": "video"}
+    meeting_data = {"trees": {}}
+
+    both = playlist_cleanup.build_profile_cleanup_references(
+        [{"id": "playlist", "items": [first, second]}], meeting_data
+    )
+    remaining = playlist_cleanup.build_profile_cleanup_references(
+        [{"id": "playlist", "items": [second]}], meeting_data
+    )
+    final = playlist_cleanup.build_profile_cleanup_references(
+        [{"id": "playlist", "items": []}], meeting_data
+    )
+
+    normalized = os.path.normcase(os.path.normpath(os.path.abspath(media_path)))
+    assert normalized in both.media_paths
+    assert normalized in remaining.media_paths
+    assert normalized not in final.media_paths
+    assert playlist_cleanup.thumbnail_storage_id("first", str(media_path)) in (
+        both.playlist_thumbnail_ids - remaining.playlist_thumbnail_ids
+    )
 
 
 def test_cleanup_queue_fails_closed_when_playlist_storage_is_corrupt(tmp_path):

@@ -135,6 +135,35 @@ def _rewrite_archive(
         )
 
 
+def test_native_playlist_reuses_one_asset_for_two_video_trim_occurrences(tmp_path):
+    video = tmp_path / "clip.mp4"
+    video.write_bytes(b"video")
+    playlist = _playlist(
+        _item("first", str(video), start_trim_ticks=10, end_trim_ticks=20),
+        _item("second", str(video), start_trim_ticks=30, end_trim_ticks=40),
+    )
+
+    output = _export(tmp_path, playlist)
+    manifest, _payloads = _archive_payload(output)
+    media_assets = [asset for asset in manifest["assets"] if asset["role"] == "media"]
+    assert len(media_assets) == 1
+    assert media_assets[0]["item_ids"] == ["first", "second"]
+
+    result = import_native_playlist(
+        NativePlaylistImportRequest(
+            input_path=output,
+            embedded_media_dir=tmp_path / "profile" / "embedded",
+            thumbnail_cache_dir=tmp_path / "profile" / "thumbs",
+        )
+    )
+    first, second = result.playlist["items"]
+    assert first["id"] != second["id"]
+    assert first["url"] == second["url"]
+    assert [first["start_trim_ticks"], second["start_trim_ticks"]] == [10, 30]
+    assert [first["end_trim_ticks"], second["end_trim_ticks"]] == [20, 40]
+    assert len(list((tmp_path / "profile" / "embedded").iterdir())) == 1
+
+
 def test_native_playlist_round_trip_preserves_state_sources_and_assets(tmp_path):
     local = tmp_path / "local.mp4"
     local.write_bytes(b"local-media")

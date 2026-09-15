@@ -58,7 +58,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-from solin.core.jw.metadata import resolve_jworg_meta
+from solin.core.jw.metadata import ResolvedMediaMetadata, resolve_jworg_meta
 
 log = logging.getLogger(__name__)
 
@@ -171,6 +171,7 @@ class JWLPlaylistReader:
     ):
         self._path = Path(path)
         self._fallback_lang_code = fallback_lang_code
+        self._jw_meta_by_reference: dict[tuple[object, ...], ResolvedMediaMetadata] = {}
         self._progress_callback = progress_callback
         self._should_cancel = should_cancel
 
@@ -482,7 +483,7 @@ class JWLPlaylistReader:
     def _build_independent_media_map(self, con: sqlite3.Connection) -> dict[int, _IndependentMedia]:
         """
         Retorna {PlaylistItemId: _IndependentMedia} para itens com mídia embutida.
-        Carrega os bytes da imagem direto do ZIP.
+        Carrega os bytes da mídia diretamente do ZIP.
         """
         result: dict[int, _IndependentMedia] = {}
         map_columns = {
@@ -510,6 +511,7 @@ class JWLPlaylistReader:
             return result
 
         total_media = len(rows)
+        embedded_bytes: dict[str, bytes | None] = {}
         self._report_progress("media_items", 0, total_media)
         for index, row in enumerate(rows):
             self._raise_if_cancelled()
@@ -534,7 +536,9 @@ class JWLPlaylistReader:
             )
 
             # Tenta ler os bytes do ZIP (busca exata e parcial)
-            data = self._read_zip_entry(file_path)
+            if file_path not in embedded_bytes:
+                embedded_bytes[file_path] = self._read_zip_entry(file_path)
+            data = embedded_bytes[file_path]
             if data is None:
                 log.warning("File %s not found in ZIP - item ignored.", file_path)
                 self._report_progress("media_items", index + 1, total_media)
@@ -646,6 +650,7 @@ class JWLPlaylistReader:
             "data": media.data,
             "mime_type": media.mime_type,
             "filename": media.original_name,
+            "embedded_asset_key": media.filepath,
             "url": None,
             "start_trim_ticks": raw.start_trim_ticks,
             "end_trim_ticks": raw.end_trim_ticks,
@@ -666,6 +671,7 @@ class JWLPlaylistReader:
             "data": media.data,
             "mime_type": media.mime_type,
             "filename": media.original_name,
+            "embedded_asset_key": media.filepath,
             "url": None,
             "start_trim_ticks": raw.start_trim_ticks,
             "end_trim_ticks": raw.end_trim_ticks,
@@ -675,15 +681,28 @@ class JWLPlaylistReader:
         }
 
     def _build_video_entry(self, raw: _RawItem, loc: _Location) -> dict:
-        meta = resolve_jworg_meta(
-            key_symbol=loc.key_symbol,
-            doc_id=loc.doc_id,
-            track=loc.track,
-            issue_tag=loc.issue_tag,
-            meps_language=loc.meps_language,
-            fallback_lang=self._fallback_lang_code,
-            major_multimedia_type=loc.major_multimedia_type,
+        reference_key = (
+            loc.key_symbol,
+            loc.doc_id,
+            loc.track,
+            loc.issue_tag,
+            loc.meps_language,
+            self._fallback_lang_code,
+            loc.major_multimedia_type,
         )
+        meta = self._jw_meta_by_reference.get(reference_key)
+        if meta is None:
+            meta = resolve_jworg_meta(
+                key_symbol=loc.key_symbol,
+                doc_id=loc.doc_id,
+                track=loc.track,
+                issue_tag=loc.issue_tag,
+                meps_language=loc.meps_language,
+                fallback_lang=self._fallback_lang_code,
+                major_multimedia_type=loc.major_multimedia_type,
+            )
+            if meta is not None:
+                self._jw_meta_by_reference[reference_key] = meta
         url = meta["url"] if meta else None
         duration_ticks = (
             loc.base_duration_ticks

@@ -21,6 +21,7 @@ from solin.core.ingest.watched_folder_files import WatchedFolderFileStore
 from solin.core.meetings.meeting_folder_imports import (
     find_meeting_folder_import_record,
 )
+from solin.core.meetings.linked_folder_sync import MeetingLinkedFolderSync
 from solin.core.meetings.models import MeetingMedia, MeetingPublicationRef, WeekData
 from solin.core.meetings.publication_content import (
     dedup_multimedia_rows,
@@ -2655,6 +2656,172 @@ class MeetingTreeControllerMeetingFolderImportTests(unittest.TestCase):
             [node["title"] for node in captured[0][2]],
             ["First", "Second"],
         )
+
+    def test_local_file_batch_rejects_existing_and_repeated_meeting_media(self):
+        captured = []
+        duplicate_events = []
+
+        class FakeController:
+            mediaAlreadyAdded = SimpleNamespace(
+                emit=lambda *args: duplicate_events.append(args)
+            )
+            _media_identity_records = staticmethod(
+                lambda: [{"file_path": "existing.mp4"}]
+            )
+            _manual_media_node = staticmethod(
+                lambda path: {
+                    "id": path,
+                    "type": "media",
+                    "media_ref": {"file_path": path},
+                    "children": [],
+                }
+            )
+            _insert_nodes = staticmethod(
+                lambda list_id, index, nodes: captured.append((list_id, index, nodes))
+                or True
+            )
+
+        MeetingTreeController.add_files(
+            FakeController(),
+            ["existing.mp4", "new.mp4", "new.mp4"],
+            list_id="section:talk",
+            insert_index=2,
+        )
+
+        self.assertEqual(len(captured), 1)
+        self.assertEqual(captured[0][0:2], ("section:talk", 2))
+        self.assertEqual(
+            [node["media_ref"]["file_path"] for node in captured[0][2]],
+            ["new.mp4"],
+        )
+        self.assertEqual(
+            [event[0] for event in duplicate_events],
+            ["existing", "new"],
+        )
+
+        MeetingTreeController.add_files(
+            FakeController(),
+            ["existing.mp4"],
+            list_id="root",
+            insert_index=0,
+        )
+        self.assertEqual(len(captured), 1)
+
+    def test_local_file_rejects_media_pending_sync_copy(self):
+        captured = []
+        duplicate_events = []
+
+        class FakeController:
+            _nodes = []
+            _tree_session = SimpleNamespace(
+                pending_nodes=lambda: (
+                    {
+                        "id": "pending",
+                        "type": "media",
+                        "media_ref": {"file_path": "pending.mp4"},
+                    },
+                )
+            )
+            mediaAlreadyAdded = SimpleNamespace(
+                emit=lambda *args: duplicate_events.append(args)
+            )
+            _media_identity_records = lambda self: (
+                MeetingTreeController._media_identity_records(self)
+            )
+            _manual_media_node = staticmethod(
+                lambda path: {
+                    "id": path,
+                    "type": "media",
+                    "media_ref": {"file_path": path},
+                    "children": [],
+                }
+            )
+            _insert_nodes = staticmethod(
+                lambda *_args: captured.append(True) or True
+            )
+
+        MeetingTreeController.add_files(FakeController(), ["pending.mp4"])
+
+        self.assertEqual(captured, [])
+        self.assertEqual(len(duplicate_events), 1)
+        self.assertEqual(duplicate_events[0][0], "pending")
+
+    def test_sync_commit_rejects_media_converging_to_existing_linked_file(self):
+        class ImmediateOperations:
+            @staticmethod
+            def submit(spec):
+                value = spec.runner(
+                    lambda _progress: None,
+                    SimpleNamespace(is_set=lambda: False),
+                )
+                spec.commit(value)
+                return True
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source" / "clip.mp4"
+            source.parent.mkdir()
+            source.write_bytes(b"video")
+            folder = root / "2026-05-27 MW"
+            folder.mkdir()
+            linked = folder / source.name
+            linked.write_bytes(source.read_bytes())
+            existing = {
+                "id": "existing",
+                "type": "media",
+                "media_ref": {"file_path": str(linked)},
+                "children": [],
+            }
+            duplicate_events = []
+            pending = {}
+            controller = SimpleNamespace(
+                _nodes=[existing],
+                _tree_key="mwb:2026-05-25:T:20260500",
+                _sync_folder=str(folder),
+                _sync_service=MeetingLinkedFolderSync(lambda _pub_type: 2),
+                _linked_folder_files={str(linked): "existing"},
+                _generated_asset_roots=lambda: (),
+                _tree_session=SimpleNamespace(
+                    owner_id="meeting:test",
+                    generation=1,
+                    add_pending=lambda operation_id, nodes, **_kwargs: pending.update(
+                        {operation_id: tuple(nodes)}
+                    ),
+                    remove_pending=lambda operation_id: pending.pop(operation_id, None),
+                ),
+                _media_tree_runtime=SimpleNamespace(operations=ImmediateOperations()),
+                _commit_inserted_nodes=lambda _list_id, _index, nodes, **_kwargs: (
+                    controller._nodes.extend(nodes) or True
+                ),
+                mediaAlreadyAdded=SimpleNamespace(
+                    emit=lambda *args: duplicate_events.append(args)
+                ),
+            )
+            incoming = {
+                "id": "incoming",
+                "type": "media",
+                "title": "Clip",
+                "media_ref": {"file_path": str(source)},
+                "children": [],
+            }
+
+            submitted = MeetingTreeController._queue_nodes_for_sync(
+                controller,
+                "root",
+                1,
+                [incoming],
+                signal_name="media",
+            )
+
+            self.assertTrue(submitted)
+            self.assertEqual([node["id"] for node in controller._nodes], ["existing"])
+            self.assertEqual(
+                controller._linked_folder_files,
+                {str(linked): "existing"},
+            )
+            self.assertEqual(len(duplicate_events), 1)
+            self.assertEqual(duplicate_events[0][0], "Clip")
+            self.assertEqual(pending, {})
 
     def test_sync_active_scan_imports_new_root_file_into_midweek_target(self):
         class FakeController:

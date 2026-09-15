@@ -190,6 +190,8 @@ def test_media_playback_request_has_safe_defaults_and_is_immutable():
     assert request.trim is None
     assert request.autoplay is True
     assert request.cache_policy is PlaybackCachePolicy.PROFILE_DEFAULT
+    assert request.occurrence_id == ""
+    assert request.occurrence_container_id == ""
     with pytest.raises(FrozenInstanceError):
         request.autoplay = False  # type: ignore[misc]
 
@@ -201,12 +203,16 @@ def test_media_playback_request_accepts_explicit_session_policy():
         trim=trim,
         autoplay=False,
         cache_policy=PlaybackCachePolicy.TEMPORARY,
+        occurrence_id="playlist-node",
+        occurrence_container_id="playlist",
     )
 
     assert request.source == "clip.mp4"
     assert request.trim is trim
     assert request.autoplay is False
     assert request.cache_policy.value == "temporary"
+    assert request.occurrence_id == "playlist-node"
+    assert request.occurrence_container_id == "playlist"
 
 
 def test_playback_cache_policy_values_are_stable_wire_values():
@@ -226,6 +232,8 @@ def test_playback_cache_policy_values_are_stable_wire_values():
         ({"source": "clip.mp4", "trim": object()}, TypeError),
         ({"source": "clip.mp4", "autoplay": 1}, TypeError),
         ({"source": "clip.mp4", "cache_policy": "temporary"}, TypeError),
+        ({"source": "clip.mp4", "occurrence_id": 1}, TypeError),
+        ({"source": "clip.mp4", "occurrence_container_id": 1}, TypeError),
     ],
 )
 def test_media_playback_request_rejects_invalid_contract_values(kwargs, error_type):

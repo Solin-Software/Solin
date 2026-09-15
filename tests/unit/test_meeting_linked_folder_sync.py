@@ -647,6 +647,41 @@ class MeetingLinkedFolderSyncTests(unittest.TestCase):
             self.assertEqual(materialized[0]["media_ref"]["file_path"], str(copied))
             self.assertEqual(linked[str(copied)], "media")
 
+    def test_materialize_same_named_content_reuses_file_and_first_node_mapping(self):
+        service = _linked_folder_sync()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            first = root / "first" / "clip.mp4"
+            second = root / "second" / "clip.mp4"
+            first.parent.mkdir()
+            second.parent.mkdir()
+            first.write_bytes(b"same-video")
+            second.write_bytes(b"same-video")
+            folder = root / "2026-05-25 MW"
+            folder.mkdir()
+            nodes = [
+                {
+                    "id": node_id,
+                    "type": "media",
+                    "children": [],
+                    "media_ref": {"file_path": str(path)},
+                }
+                for node_id, path in (("first", first), ("second", second))
+            ]
+
+            materialized, linked = service.materialize_tree_files(
+                nodes,
+                folder,
+                generated_roots=[],
+            )
+
+            copied = folder / "clip.mp4"
+            self.assertEqual(
+                [node["media_ref"]["file_path"] for node in materialized],
+                [str(copied), str(copied)],
+            )
+            self.assertEqual(linked, {str(copied): "first"})
+
     def test_materialize_copies_meeting_generated_physical_file_to_cache(self):
         service = _linked_folder_sync()
         with tempfile.TemporaryDirectory() as tmp:

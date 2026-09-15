@@ -15,7 +15,7 @@ import os
 import random
 import time
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
@@ -53,7 +53,7 @@ from ...core.foundation.constants import (
     PPTX_EXTS,
 )
 from ...core.media.formats import MEDIA_EXTS
-from ...core.media.identity import partition_media_items
+from ...core.media.identity import media_identity, partition_media_items
 from ...core.media.insertion import MediaInsertPayload, MediaInsertResult
 from ...core.media.operations import (
     MediaOperationCancelled,
@@ -175,6 +175,48 @@ _SYNC_SAVE_RETRY_BUDGET_SECONDS = 60.0
 log = logging.getLogger(__name__)
 
 
+def _media_identity_records_for_nodes(
+    nodes: Sequence[Node],
+) -> list[dict[str, Any]]:
+    return [
+        ref
+        for node in iter_nodes(list(nodes))
+        if node.get("type") == "media"
+        and isinstance((ref := node.get("media_ref")), dict)
+    ]
+
+
+def _partition_meeting_media_nodes(
+    existing_records: Sequence[Mapping[str, Any]],
+    nodes: Sequence[Node],
+) -> tuple[list[Node], list[Node]]:
+    media_entries = [
+        (node, ref)
+        for node in nodes
+        if node.get("type") == "media"
+        and isinstance((ref := node.get("media_ref")), dict)
+    ]
+    partition = partition_media_items(
+        existing_records,
+        [ref for _node, ref in media_entries],
+    )
+    accepted_refs = {id(ref) for ref in partition.unique_items}
+    duplicate_refs = {id(ref) for ref in partition.duplicate_items}
+    accepted_nodes = [
+        node
+        for node in nodes
+        if node.get("type") != "media"
+        or not isinstance((ref := node.get("media_ref")), dict)
+        or id(ref) in accepted_refs
+    ]
+    duplicate_nodes = [
+        node
+        for node, ref in media_entries
+        if id(ref) in duplicate_refs
+    ]
+    return accepted_nodes, duplicate_nodes
+
+
 @dataclass(slots=True)
 class _PendingSyncSave:
     folder: Path
@@ -287,6 +329,7 @@ class MeetingTreeController(QObject):
     canonicalMediaRecoveryRequested = Signal(str, str)  # tree_key, missing local source
     storageSaved = Signal(str)  # tree_key
     storageSaveFailed = Signal(str, str)  # tree_key, error message
+    mediaAlreadyAdded = Signal(str, str)  # title, stable identity token
     _syncSaveCompleted = Signal(str, int, object, object)
 
     def __init__(
@@ -1554,8 +1597,21 @@ class MeetingTreeController(QObject):
 
         cursor = insert_index
         if media_paths:
-            nodes = [self._manual_media_node(path) for path in media_paths]
-            self._insert_nodes(list_id or "root", cursor, nodes)
+            candidates = [{"file_path": path} for path in media_paths]
+            partition = partition_media_items(
+                self._media_identity_records(),
+                candidates,
+            )
+            MeetingTreeController._emit_duplicate_media_records(
+                self,
+                partition.duplicate_items,
+            )
+            nodes = [
+                self._manual_media_node(str(candidate["file_path"]))
+                for candidate in partition.unique_items
+            ]
+            if nodes:
+                self._insert_nodes(list_id or "root", cursor, nodes)
             if cursor < _BIG_INDEX:
                 cursor += len(nodes)
         if pdf_paths:
@@ -1617,11 +1673,58 @@ class MeetingTreeController(QObject):
         return MediaInsertResult(added_items=(payload.to_identity_mapping(),))
 
     def _media_identity_records(self) -> list[dict[str, Any]]:
-        return [
-            node.get("media_ref") or {}
-            for node in iter_nodes(self._nodes)
-            if node.get("type") == "media"
-        ]
+        records = _media_identity_records_for_nodes(self._nodes)
+        pending_nodes = getattr(getattr(self, "_tree_session", None), "pending_nodes", None)
+        if callable(pending_nodes):
+            records.extend(_media_identity_records_for_nodes(pending_nodes()))
+        return records
+
+    def _emit_duplicate_media_records(
+        self,
+        records: Sequence[Mapping[str, Any]],
+    ) -> None:
+        signal = getattr(self, "mediaAlreadyAdded", None)
+        if signal is None:
+            return
+        for record in records:
+            location = next(
+                (
+                    str(record.get(field) or "")
+                    for field in (
+                        "file_path",
+                        "source_url",
+                        "url",
+                        "download_url",
+                        "jworg_url",
+                    )
+                    if record.get(field)
+                ),
+                "",
+            )
+            title = str(
+                record.get("title")
+                or record.get("label")
+                or record.get("caption")
+                or Path(location).stem
+                or _tr("_MediaRow", "Media")
+            )
+            identity = media_identity(record)
+            signal.emit(
+                title,
+                identity.dedupe_token if identity is not None else "unknown",
+            )
+
+    def _emit_duplicate_media_nodes(self, nodes: Sequence[Node]) -> None:
+        records: list[dict[str, Any]] = []
+        for node in nodes:
+            ref = node.get("media_ref")
+            if not isinstance(ref, dict):
+                continue
+            record = dict(ref)
+            if node.get("title"):
+                record["title"] = node["title"]
+            records.append(record)
+        MeetingTreeController._emit_duplicate_media_records(self, records)
 
     def _import_pdfs(self, paths: list[str], list_id: str, insert_index: int) -> None:
         for path in paths:
@@ -3322,6 +3425,13 @@ class MeetingTreeController(QObject):
         target_children = self._children_for_target(kind, target_id)
         if target_children is None:
             return False
+        nodes, duplicates = _partition_meeting_media_nodes(
+            self._media_identity_records(),
+            nodes,
+        )
+        MeetingTreeController._emit_duplicate_media_nodes(self, duplicates)
+        if not nodes:
+            return True
         index = max(0, min(insert_index, len(target_children)))
         if self._sync_enabled and self._sync_folder and nodes:
             return self._queue_nodes_for_sync(
@@ -3395,14 +3505,32 @@ class MeetingTreeController(QObject):
             ):
                 discard(value)
                 return
-            self._linked_folder_files.update(value.linked_files)
-            if not self._commit_inserted_nodes(
-                list_id,
-                insert_index,
+            accepted_nodes, duplicates = _partition_meeting_media_nodes(
+                _media_identity_records_for_nodes(self._nodes),
                 value.nodes,
-                signal_name=signal_name,
-            ):
-                raise RuntimeError("Meeting insertion target is no longer available")
+            )
+            MeetingTreeController._emit_duplicate_media_nodes(self, duplicates)
+            accepted_node_ids = {
+                str(node.get("id") or "")
+                for node in iter_nodes(accepted_nodes)
+                if node.get("id")
+            }
+            accepted_linked_files = {
+                path: node_id
+                for path, node_id in value.linked_files.items()
+                if node_id in accepted_node_ids
+            }
+            if accepted_nodes:
+                previous_linked_files = dict(self._linked_folder_files)
+                self._linked_folder_files.update(accepted_linked_files)
+                if not self._commit_inserted_nodes(
+                    list_id,
+                    insert_index,
+                    accepted_nodes,
+                    signal_name=signal_name,
+                ):
+                    self._linked_folder_files = previous_linked_files
+                    raise RuntimeError("Meeting insertion target is no longer available")
             self._tree_session.remove_pending(operation_id)
 
         def discard(value: object | None) -> None:

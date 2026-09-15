@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from PySide6.QtCore import QObject, Signal
 
-from solin.ui.media_insertion_feedback import connect_media_picker_feedback
+from solin.ui.media_insertion_feedback import (
+    connect_media_duplicate_feedback,
+    connect_media_picker_feedback,
+)
 
 
 class _Bridge(QObject):
@@ -42,4 +45,20 @@ def test_media_picker_feedback_reports_real_outcomes_and_deduplicates_warning():
             {"dedupe_key": "media-duplicate:identity"},
         ),
         ("error", "Could not add “Song 3”.", {}),
+    ]
+
+
+def test_duplicate_only_feedback_uses_the_shared_warning_contract():
+    source = _Bridge()
+    notifications = _Notifications()
+    connect_media_duplicate_feedback(source, notifications)
+
+    source.mediaAlreadyAdded.emit("Local clip", "local-identity")
+
+    assert notifications.events == [
+        (
+            "warning",
+            "“Local clip” is already added.",
+            {"dedupe_key": "media-duplicate:local-identity"},
+        )
     ]

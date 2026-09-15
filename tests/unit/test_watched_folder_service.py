@@ -150,6 +150,29 @@ class MeetingFolderSourceScannerTests(unittest.TestCase):
 
             self.assertEqual([playlist["name"] for playlist in playlists], ["Music"])
 
+    def test_meeting_scan_keeps_video_occurrences_unique(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            meeting = root / "2026-05-26 MW"
+            meeting.mkdir()
+            remote_url = "https://cdn.example/clip.mp4"
+            first = {"id": "first", "url": remote_url, "type": "video"}
+            second = {"id": "second", "url": remote_url, "type": "video"}
+            _write_manifest(
+                meeting,
+                {
+                    "version": 1,
+                    "processed": {
+                        "source.jwlplaylist": {"virtual_items": [first, second]}
+                    },
+                },
+            )
+
+            meetings = watched_folder_module.scan_meeting_folders(str(root))
+
+            self.assertEqual(len(meetings), 1)
+            self.assertEqual(len(meetings[0]["items"]), 1)
+
     def test_playlist_scan_counts_canonical_virtual_manifest_items(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -560,6 +583,30 @@ def test_watched_playlist_adopts_external_generated_files_into_cache(tmp_path):
         external.unlink(missing_ok=True)
 
 
+def test_watched_playlist_adopts_repeated_external_video_only_once(tmp_path):
+    external = tmp_path.parent / f"external-video-{uuid.uuid4().hex}.mp4"
+    external.write_bytes(b"video")
+    playlist = {
+        "items": [
+            {"id": "first", "url": str(external), "type": "video"},
+            {"id": "second", "url": str(external), "type": "video"},
+        ]
+    }
+
+    try:
+        watched_folder_module.save_manifest_playlist(str(tmp_path), playlist)
+
+        manifest = _read_manifest(tmp_path)
+        assert len(manifest["playlist"]["items"]) == 2
+        assert manifest["playlist"]["items"][0]["url"] == (
+            manifest["playlist"]["items"][1]["url"]
+        )
+        assert playlist["items"][0]["url"] == playlist["items"][1]["url"]
+        assert len(list((tmp_path / ".solin_cache").glob("*.mp4"))) == 1
+    finally:
+        external.unlink(missing_ok=True)
+
+
 def test_watched_playlist_round_trips_prepared_image_framing(tmp_path):
     image = tmp_path / "slide.png"
     image.write_bytes(b"image")
@@ -587,6 +634,51 @@ def test_watched_playlist_round_trips_prepared_image_framing(tmp_path):
 
     assert loaded["items"][0]["image_framing"] == framing
     assert manifest["playlist"]["items"][0]["image_framing"] == framing
+
+
+def test_removing_repeated_video_occurrence_keeps_shared_file_and_manifest_node(
+    tmp_path,
+):
+    video = tmp_path / "clip.mp4"
+    video.write_bytes(b"video")
+    first = {"id": "first", "url": str(video), "type": "video"}
+    second = {"id": "second", "url": str(video), "type": "video"}
+    watched_folder_module.save_manifest_playlist(
+        str(tmp_path),
+        {"items": [first, second], "sections": [], "markers": []},
+    )
+
+    changed = watched_folder_module.remove_item_from_manifest(
+        str(tmp_path),
+        first,
+        remaining_items=[second],
+    )
+
+    manifest = _read_manifest(tmp_path)
+    assert changed is True
+    assert [item["id"] for item in manifest["playlist"]["items"]] == ["second"]
+    assert video.read_bytes() == b"video"
+
+
+def test_removing_last_video_occurrence_deletes_shared_file(tmp_path):
+    video = tmp_path / "clip.mp4"
+    video.write_bytes(b"video")
+    item = {"id": "only", "url": str(video), "type": "video"}
+    watched_folder_module.save_manifest_playlist(
+        str(tmp_path),
+        {"items": [item], "sections": [], "markers": []},
+    )
+
+    changed = watched_folder_module.remove_item_from_manifest(
+        str(tmp_path),
+        item,
+        remaining_items=[],
+    )
+
+    manifest = _read_manifest(tmp_path)
+    assert changed is True
+    assert manifest["playlist"]["items"] == []
+    assert not video.exists()
 
 
 def test_loading_watched_playlist_heals_existing_external_cache_url(tmp_path):
@@ -868,6 +960,111 @@ def test_cancelled_embedded_playlist_output_stays_in_staging(monkeypatch, tmp_pa
         thread._process_jwlplaylist(source, cache)
 
     assert list(cache.iterdir()) == []
+
+
+def test_linked_jwl_import_preserves_repeated_embedded_video_occurrences(
+    monkeypatch, tmp_path,
+):
+    from solin.core.playlists import reader as playlist_reader
+
+    source = tmp_path / "repeated.jwlplaylist"
+    source.write_bytes(b"playlist")
+    cache = tmp_path / ".solin_cache"
+    cache.mkdir()
+    monkeypatch.setattr(
+        playlist_reader,
+        "read_jwlplaylist",
+        lambda *_args, **_kwargs: {
+            "items": [
+                {
+                    "title": "First",
+                    "type": "video",
+                    "filename": "clip.mp4",
+                    "data": b"same-video",
+                    "embedded_asset_key": "asset.mp4",
+                    "start_trim_ticks": 10_000_000,
+                },
+                {
+                    "title": "Second",
+                    "type": "video",
+                    "filename": "clip.mp4",
+                    "data": b"same-video",
+                    "embedded_asset_key": "asset.mp4",
+                    "start_trim_ticks": 20_000_000,
+                },
+            ]
+        },
+    )
+    thread = _sync_thread(tmp_path)
+
+    outputs, virtuals = thread._process_jwlplaylist(source, cache)
+    assert len(outputs) == 1
+    assert len(virtuals) == 2
+    assert virtuals[0]["url"] == virtuals[1]["url"]
+    assert [vi["start_trim_ticks"] for vi in virtuals] == [
+        10_000_000,
+        20_000_000,
+    ]
+    assert len(list(cache.glob("*.mp4"))) == 1
+
+    _write_manifest(
+        tmp_path,
+        {
+            "version": 1,
+            "processed": {
+                source.name: {
+                    "type": "jwlplaylist",
+                    **watched_folder_module._file_fingerprint(source),
+                    "outputs": [Path(outputs[0]).name],
+                    "virtual_items": virtuals,
+                }
+            },
+        },
+    )
+    playlist = watched_folder_module.load_manifest_playlist(str(tmp_path))
+    assert len(playlist["items"]) == 2
+    assert playlist["items"][0]["id"] != playlist["items"][1]["id"]
+    assert playlist["items"][0]["url"] == playlist["items"][1]["url"]
+    assert watched_folder_module._manifest_playlist_item_count(
+        tmp_path,
+        _read_manifest(tmp_path),
+        watched_folder_module.scan_subfolder(str(tmp_path)),
+    ) == 2
+    watched_folder_module.save_manifest_playlist(str(tmp_path), playlist)
+    assert watched_folder_module._manifest_playlist_item_count(
+        tmp_path,
+        _read_manifest(tmp_path),
+        watched_folder_module.scan_subfolder(str(tmp_path)),
+    ) == 2
+    first, second = playlist["items"]
+
+    watched_folder_module.remove_item_from_manifest(
+        str(tmp_path), first, remaining_items=[second]
+    )
+    assert len(_read_manifest(tmp_path)["processed"][source.name]["virtual_items"]) == 1
+    assert Path(first["url"]).is_file()
+    assert [
+        item["id"] for item in watched_folder_module.load_manifest_playlist(str(tmp_path))["items"]
+    ] == [second["id"]]
+
+    watched_folder_module.remove_item_from_manifest(
+        str(tmp_path), second, remaining_items=[]
+    )
+    assert not Path(first["url"]).exists()
+
+
+def test_linked_scan_reconciliation_orders_virtual_occurrences_without_physical_repeat():
+    saved = [{"id": "saved", "url": "clip.mp4", "type": "video"}]
+    scanned = [
+        {"id": "first", "url": "clip.mp4", "type": "video", "_virtual": True},
+        {"id": "physical", "url": "other.mp4", "type": "video"},
+        {"id": "second", "url": "clip.mp4", "type": "video", "_virtual": True},
+        {"id": "redundant", "url": "other.mp4", "type": "video"},
+    ]
+
+    additions = watched_folder_module._new_scanned_playlist_items(saved, scanned)
+
+    assert [item["id"] for item in additions] == ["first", "physical", "second"]
 
 
 if __name__ == "__main__":

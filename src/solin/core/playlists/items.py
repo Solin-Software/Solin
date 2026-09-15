@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import copy
 import uuid
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, NotRequired, TypedDict, cast
 
@@ -105,6 +105,31 @@ def copy_playlist_item_for_destination(
     attributes.pop("origin_container_id", None)
     attributes.pop("origin_item_id", None)
     return create_playlist_item(title, url, **attributes)
+
+
+def distinct_playlist_item_ids(
+    existing_items: Sequence[Mapping[str, Any]],
+    candidates: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """Copy insertions and assign a fresh node ID only when one collides."""
+
+    occupied = {
+        str(item.get("id") or "")
+        for item in existing_items
+        if str(item.get("id") or "")
+    }
+    result: list[dict[str, Any]] = []
+    for candidate in candidates:
+        item = copy.deepcopy(dict(candidate))
+        identifier = str(item.get("id") or "")
+        if not identifier or identifier in occupied:
+            identifier = str(uuid.uuid4())
+            while identifier in occupied:
+                identifier = str(uuid.uuid4())
+            item["id"] = identifier
+        occupied.add(identifier)
+        result.append(item)
+    return result
 
 
 def playlist_items_from_jwpub(

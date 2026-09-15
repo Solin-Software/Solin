@@ -4,6 +4,7 @@ from PySide6.QtCore import QCoreApplication, QObject, Signal
 
 from solin.core.jw.songs import JWSongsStore
 from solin.core.media.insertion import MediaInsertPayload, MediaInsertResult
+from solin.core.media.identity import PLAYLIST_MEDIA_OCCURRENCES
 from solin.ui.qml.jw_songs import JWSongsBridge
 
 
@@ -182,6 +183,38 @@ def test_songs_bridge_rejects_duplicate_before_placement(tmp_path):
         assert rejected[0][0] == "2. Good Song"
         assert bridge._pending_item is None
         assert bridge.showPlacement is False
+    finally:
+        bridge.cleanup()
+
+
+def test_songs_bridge_playlist_policy_allows_existing_video(tmp_path):
+    _app()
+    insertions = []
+    bridge = JWSongsBridge(
+        JWSongsStore(tmp_path),
+        insertion_handler=lambda payload, *_args: (
+            insertions.append(payload)
+            or MediaInsertResult(added_items=({"url": payload.source_url},))
+        ),
+        occurrence_policy=PLAYLIST_MEDIA_OCCURRENCES,
+    )
+    try:
+        song = {
+            "number": 2,
+            "title": "Good Song",
+            "url": "https://akamd1.jw-cdn.org/x/sjjm_T_002_r720P.mp4",
+        }
+        bridge._model.set_items_if_changed([song])
+        bridge.set_playlist_ref(
+            {"items": [{"url": song["url"]}], "sections": []}
+        )
+        rejected = []
+        bridge.mediaAlreadyAdded.connect(lambda *args: rejected.append(args))
+
+        bridge.selectItem(0)
+
+        assert len(insertions) == 1
+        assert rejected == []
     finally:
         bridge.cleanup()
 

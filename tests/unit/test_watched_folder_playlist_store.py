@@ -13,6 +13,7 @@ def test_watched_folder_playlist_store_delegates_manifest_operations(monkeypatch
     store = WatchedFolderPlaylistStore()
     playlist = {"items": [{"id": "1"}]}
     item = {"id": "1"}
+    remaining = [{"id": "2"}]
 
     monkeypatch.setattr(
         watched_folder_playlists,
@@ -32,7 +33,10 @@ def test_watched_folder_playlist_store_delegates_manifest_operations(monkeypatch
     monkeypatch.setattr(
         watched_folder_playlists,
         "remove_item_from_manifest",
-        lambda folder, removed: calls.append(("remove", folder, removed)) or True,
+        lambda folder, removed, *, remaining_items: calls.append(
+            ("remove", folder, removed, remaining_items)
+        )
+        or True,
     )
     monkeypatch.setattr(
         watched_folder_playlists,
@@ -49,14 +53,14 @@ def test_watched_folder_playlist_store_delegates_manifest_operations(monkeypatch
     assert store.scan_root("folder") == [{"path": "folder"}]
     assert store.load_playlist("folder") is playlist
     store.save_playlist("folder", playlist)
-    assert store.remove_item("folder", item) is True
+    assert store.remove_item("folder", item, remaining_items=remaining) is True
     assert store.pending_files("folder") == ["clip.mp4"]
     assert store.file_availability_signature(["clip.mp4"]) == (("clip.mp4", True),)
     assert calls == [
         ("scan", "folder"),
         ("load", "folder"),
         ("save", "folder", playlist),
-        ("remove", "folder", item),
+        ("remove", "folder", item, tuple(remaining)),
         ("pending", "folder"),
         ("availability", ("clip.mp4",)),
     ]

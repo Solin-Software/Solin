@@ -39,7 +39,7 @@ log = logging.getLogger(__name__)
 
 # ── Resolução de metadados JW.org ────────────────────────────────────────────
 from solin.core.jw.identifiers import is_jw_url
-from solin.core.jw.metadata import resolve_jworg_meta
+from solin.core.jw.metadata import ResolvedMediaMetadata, resolve_jworg_meta
 from solin.core.media.download_storage import completed_cached_path
 
 from solin.core.media.jw_reference import parse_jw_media_reference
@@ -441,9 +441,6 @@ def _write_jwlplaylist(
     """
     Escreve um arquivo .jwlplaylist compatível com JW Library ≥ 14.
 
-    do que foi passado pelo chamador.
-    do que foi passado pelo chamador.
-
       • Itens JW.org  → usa Location + PlaylistItemLocationMap (referência canônica).
                         Consulta a API pub-media para título oficial e duração.
                         NUNCA embute o arquivo de mídia JW — apenas a referência.
@@ -476,6 +473,9 @@ def _write_jwlplaylist(
     # Path-backed media is re-read into the ZIP in chunks instead of retaining
     # every local file in memory. Caller-provided bytes remain borrowed references.
     embedded_files: list[tuple[str, bytes | Path, str]] = []
+    embedded_media: dict[tuple[str, str, str], tuple[int, str, int]] = {}
+    jw_locations: dict[tuple[object, ...], int] = {}
+    jw_metadata: dict[tuple[object, ...], ResolvedMediaMetadata] = {}
 
     location_id_seq  = 1
     ind_media_id_seq = 1
@@ -554,16 +554,25 @@ def _write_jwlplaylist(
             if mmt is None:
                 mmt = 0 if item_type == "audio" else 2
 
-            # Consulta API JW.org para título canônico e duração
-            jw_meta = resolve_jworg_meta(
-                key_symbol            = key_symbol,
-                doc_id                = doc_id,
-                track                 = track,
-                issue_tag             = issue_tag,
-                meps_language         = meps_lang,
-                fallback_lang         = fallback_lang_code,
-                major_multimedia_type = mmt,
+            metadata_key = (
+                key_symbol, doc_id, track, issue_tag, meps_lang,
+                fallback_lang_code, mmt,
             )
+            jw_meta = jw_metadata.get(metadata_key)
+            if jw_meta is None:
+                # Cache only successful lookups: a transient API failure on
+                # one occurrence must not suppress a later attempt.
+                jw_meta = resolve_jworg_meta(
+                    key_symbol=key_symbol,
+                    doc_id=doc_id,
+                    track=track,
+                    issue_tag=issue_tag,
+                    meps_language=meps_lang,
+                    fallback_lang=fallback_lang_code,
+                    major_multimedia_type=mmt,
+                )
+                if jw_meta is not None:
+                    jw_metadata[metadata_key] = jw_meta
             if jw_meta:
                 if jw_meta.get("title"):
                     title = jw_meta["title"]
@@ -589,22 +598,28 @@ def _write_jwlplaylist(
                         exc_info=True,
                     )
 
-            # Location.Title deve ser vazio (padrão real do JW Library)
-            con.execute(
-                """INSERT INTO Location
-                   (LocationId, BookNumber, ChapterNumber, DocumentId, Track,
-                    IssueTagNumber, KeySymbol, MepsLanguage, Type, Title)
-                   VALUES (?, NULL, NULL, ?, ?, ?, ?, ?, 3, '')""",
-                (location_id_seq, doc_id, track, issue_tag or 0,
-                 key_symbol, meps_lang),
-            )
+            # JW Library maps repeated occurrences to one canonical Location.
+            location_key = (doc_id, track, issue_tag or 0, key_symbol, meps_lang)
+            location_id = jw_locations.get(location_key)
+            if location_id is None:
+                location_id = location_id_seq
+                # Location.Title remains empty in JW Library playlists.
+                con.execute(
+                    """INSERT INTO Location
+                       (LocationId, BookNumber, ChapterNumber, DocumentId, Track,
+                        IssueTagNumber, KeySymbol, MepsLanguage, Type, Title)
+                       VALUES (?, NULL, NULL, ?, ?, ?, ?, ?, 3, '')""",
+                    (location_id, doc_id, track, issue_tag or 0,
+                     key_symbol, meps_lang),
+                )
+                jw_locations[location_key] = location_id
+                location_id_seq += 1
             con.execute(
                 """INSERT INTO PlaylistItemLocationMap
                    (PlaylistItemId, LocationId, MajorMultimediaType, BaseDurationTicks)
                    VALUES (?, ?, ?, ?)""",
-                (playlist_item_id, location_id_seq, mmt, base_duration),
+                (playlist_item_id, location_id, mmt, base_duration),
             )
-            location_id_seq += 1
 
             # Thumbnail: embute se disponível (sem extensão — padrão JW Library)
             thumb_data = item.get("thumbnail_data")
@@ -688,34 +703,44 @@ def _write_jwlplaylist(
                 if resolved:
                     title = resolved
 
-            # FilePath no ZIP: UUID + extensão (padrão JW Library)
+            # One physical asset may back multiple independent playlist items.
             file_hash = _sha256(file_data)
-            zip_uuid  = _new_uuid()
-            zip_name  = f"{zip_uuid}{ext}"
-
-            con.execute(
-                """INSERT INTO IndependentMedia
-                   (IndependentMediaId, OriginalFilename, FilePath, MimeType, Hash)
-                   VALUES (?, ?, ?, ?, ?)""",
-                (ind_media_id_seq, orig_name, zip_name, mime_type, file_hash),
-            )
+            asset_key = (file_hash, mime_type, ext)
+            existing_asset = embedded_media.get(asset_key)
+            if existing_asset is None:
+                media_id = ind_media_id_seq
+                zip_name = f"{_new_uuid()}{ext}"
+                con.execute(
+                    """INSERT INTO IndependentMedia
+                       (IndependentMediaId, OriginalFilename, FilePath, MimeType, Hash)
+                       VALUES (?, ?, ?, ?, ?)""",
+                    (media_id, orig_name, zip_name, mime_type, file_hash),
+                )
+                embedded_files.append((zip_name, embedded_source, file_hash))
+                ind_media_id_seq += 1
+            else:
+                media_id, zip_name, _ = existing_asset
 
             # Duração: 0 para imagens; real para vídeo/áudio
             if is_image:
                 duration_ticks = 0
             elif base_duration is not None:
                 duration_ticks = base_duration
+            elif existing_asset is not None:
+                duration_ticks = existing_asset[2]
             else:
                 dur_ms = _read_duration_ms_from_bytes(file_data, ext)
                 duration_ticks = dur_ms * 10_000  # ms → 100ns ticks
+
+            if existing_asset is None:
+                embedded_media[asset_key] = (media_id, zip_name, duration_ticks)
 
             con.execute(
                 """INSERT INTO PlaylistItemIndependentMediaMap
                    (PlaylistItemId, IndependentMediaId, DurationTicks)
                    VALUES (?, ?, ?)""",
-                (playlist_item_id, ind_media_id_seq, duration_ticks),
+                (playlist_item_id, media_id, duration_ticks),
             )
-            embedded_files.append((zip_name, embedded_source, file_hash))
 
             # Thumbnail
             if is_image:
@@ -732,7 +757,7 @@ def _write_jwlplaylist(
                         """INSERT INTO IndependentMedia
                            (IndependentMediaId, OriginalFilename, FilePath, MimeType, Hash)
                            VALUES (?, ?, ?, 'image/jpeg', ?)""",
-                        (ind_media_id_seq + 1, t_orig_uuid, t_file_uuid, t_hash),
+                        (ind_media_id_seq, t_orig_uuid, t_file_uuid, t_hash),
                     )
                     embedded_files.append((t_file_uuid, thumb_data, t_hash))
                     thumbnail_path = t_file_uuid
@@ -740,7 +765,6 @@ def _write_jwlplaylist(
                 else:
                     thumbnail_path = item.get("thumbnail_file_path")
 
-            ind_media_id_seq += 1
             if isinstance(embedded_source, Path):
                 file_data = b""
 

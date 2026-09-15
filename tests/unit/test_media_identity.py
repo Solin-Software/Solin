@@ -3,6 +3,7 @@ from __future__ import annotations
 from itertools import product
 
 from solin.core.media.identity import (
+    PLAYLIST_MEDIA_OCCURRENCES,
     contains_media,
     media_identity,
     partition_media_items,
@@ -131,6 +132,67 @@ def test_partition_preserves_order_and_deduplicates_inside_batch() -> None:
         "duplicate-existing",
         "duplicate-batch",
     ]
+
+
+def test_playlist_policy_accepts_repeated_videos_as_distinct_occurrences() -> None:
+    existing = [{"id": "existing", "url": "video.mp4", "type": "video"}]
+    candidates = [
+        {"id": "first", "url": "video.mp4", "type": "video"},
+        {"id": "second", "url": "video.mp4", "media_type": "video"},
+    ]
+
+    result = partition_media_items(
+        existing,
+        candidates,
+        occurrence_policy=PLAYLIST_MEDIA_OCCURRENCES,
+    )
+
+    assert result.unique_items == tuple(candidates)
+    assert result.duplicate_items == ()
+
+
+def test_playlist_policy_keeps_audio_and_image_occurrences_unique() -> None:
+    existing = [
+        {"url": "song.mp3", "type": "audio"},
+        {"url": "slide.png", "type": "image"},
+    ]
+    candidates = [
+        {"id": "audio", "url": "song.mp3", "type": "audio"},
+        {"id": "image", "url": "slide.png", "type": "image"},
+    ]
+
+    result = partition_media_items(
+        existing,
+        candidates,
+        occurrence_policy=PLAYLIST_MEDIA_OCCURRENCES,
+    )
+
+    assert result.unique_items == ()
+    assert result.duplicate_items == tuple(candidates)
+
+
+def test_playlist_policy_infers_repeatable_video_from_location() -> None:
+    candidate = {"id": "candidate", "url": "video.webm"}
+
+    result = partition_media_items(
+        [{"url": "video.webm"}],
+        [candidate],
+        occurrence_policy=PLAYLIST_MEDIA_OCCURRENCES,
+    )
+
+    assert result.unique_items == (candidate,)
+
+
+def test_playlist_policy_does_not_repeat_audio_mislabeled_as_video() -> None:
+    candidate = {"id": "candidate", "url": "song.mp3", "type": "video"}
+
+    result = partition_media_items(
+        [{"url": "song.mp3"}],
+        [candidate],
+        occurrence_policy=PLAYLIST_MEDIA_OCCURRENCES,
+    )
+
+    assert result.duplicate_items == (candidate,)
 
 
 def test_empty_records_never_create_false_duplicates() -> None:

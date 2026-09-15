@@ -40,7 +40,12 @@ from solin.core.media.placement import (
     resolve_media_placement,
 )
 from solin.core.i18n.media_placement import translate_media_placement
-from solin.core.media.identity import contains_media, media_identity
+from solin.core.media.identity import (
+    MediaOccurrencePolicy,
+    UNIQUE_MEDIA_OCCURRENCES,
+    media_identity,
+    partition_media_items,
+)
 from solin.core.media.insertion import MediaInsertPayload, MediaInsertResult
 
 if TYPE_CHECKING:
@@ -347,10 +352,12 @@ class JWMediaCatalogBridge(QObject):
         thumbnail_session_factory: JWCatalogThumbnailSessionFactory,
         *,
         insertion_handler: Callable[[MediaInsertPayload, str, int], MediaInsertResult],
+        occurrence_policy: MediaOccurrencePolicy = UNIQUE_MEDIA_OCCURRENCES,
         parent: Optional[QObject] = None,
     ) -> None:
         super().__init__(parent)
         self._insertion_handler = insertion_handler
+        self._occurrence_policy = occurrence_policy
 
         # Catalog service (async fetch backend)
         self._catalog_service = catalog_service_factory(self)
@@ -577,7 +584,11 @@ class JWMediaCatalogBridge(QObject):
         item = self._model.item_at(index)
         if not item:
             return
-        if contains_media((self._pl or {}).get("items", []), item):
+        if partition_media_items(
+            (self._pl or {}).get("items", []),
+            [item],
+            occurrence_policy=self._occurrence_policy,
+        ).duplicate_items:
             self._emit_duplicate(item)
             return
 

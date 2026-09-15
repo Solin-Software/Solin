@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -44,6 +45,7 @@ def playlist_items_from_jwl_document_items(
     """
     items: list[dict[str, Any]] = []
     skipped_titles: list[str] = []
+    embedded_paths: dict[tuple[str, bytes, str], str] = {}
     fallback_title = Path(source_name).stem or "Item"
 
     for raw in raw_items:
@@ -72,13 +74,24 @@ def playlist_items_from_jwl_document_items(
                 skipped_titles.append(title)
                 continue
             default_suffix = _embedded_default_suffix(raw, media_type)
+            asset_key = str(raw.get("embedded_asset_key") or "")
+            asset_identity = (
+                asset_key,
+                hashlib.sha256(data).digest(),
+                default_suffix,
+            )
             try:
-                item["url"] = save_embedded(
-                    data,
-                    filename,
-                    str(item["id"]),
-                    default_suffix,
-                )
+                if asset_key and asset_identity in embedded_paths:
+                    item["url"] = embedded_paths[asset_identity]
+                else:
+                    item["url"] = save_embedded(
+                        data,
+                        filename,
+                        str(item["id"]),
+                        default_suffix,
+                    )
+                    if asset_key:
+                        embedded_paths[asset_identity] = item["url"]
             except (OSError, ValueError):
                 skipped_titles.append(title)
                 continue

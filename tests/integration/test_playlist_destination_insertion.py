@@ -126,7 +126,7 @@ def test_playlist_placement_ref_is_an_isolated_snapshot(tmp_path):
     assert playlist["sections"][0]["name"] == "Talk"
 
 
-def test_playlist_destination_duplicate_does_not_save_again(tmp_path):
+def test_playlist_destination_adds_repeated_video_as_new_occurrence(tmp_path):
     playlist = _playlist()
     widget, saves = _widget(tmp_path, playlist)
 
@@ -145,12 +145,13 @@ def test_playlist_destination_duplicate_does_not_save_again(tmp_path):
         insert_index=0,
     )
 
-    assert result.duplicate_count == 1
-    assert result.added_items == ()
-    assert saves == []
+    assert result.duplicate_count == 0
+    assert [item["id"] for item in result.added_items] == ["duplicate"]
+    assert [item["id"] for item in playlist["items"]] == ["duplicate", "existing"]
+    assert len(saves) == 1
 
 
-def test_playlist_destination_uses_canonical_jw_identity(tmp_path):
+def test_playlist_destination_allows_repeated_canonical_jw_video(tmp_path):
     playlist = _playlist()
     playlist["items"][0].update(
         {
@@ -179,9 +180,9 @@ def test_playlist_destination_uses_canonical_jw_identity(tmp_path):
         insert_index=0,
     )
 
-    assert result.duplicate_count == 1
-    assert [item["id"] for item in playlist["items"]] == ["existing"]
-    assert saves == []
+    assert result.duplicate_count == 0
+    assert [item["id"] for item in playlist["items"]] == ["duplicate", "existing"]
+    assert len(saves) == 1
 
 
 def test_playlist_destination_partitions_partial_duplicate_batch(tmp_path):
@@ -201,11 +202,66 @@ def test_playlist_destination_partitions_partial_duplicate_batch(tmp_path):
         insert_index=0,
     )
 
-    assert result.added_count == 2
-    assert result.duplicate_count == 2
+    assert result.added_count == 4
+    assert result.duplicate_count == 0
     assert [item["id"] for item in playlist["items"]] == [
+        "old",
         "first",
+        "repeat",
         "second",
         "existing",
     ]
+    assert len(saves) == 1
+
+
+def test_playlist_destination_still_rejects_repeated_audio(tmp_path):
+    playlist = _playlist()
+    playlist["items"] = [
+        {"id": "existing-audio", "url": "song.mp3", "type": "audio"}
+    ]
+    widget, saves = _widget(tmp_path, playlist)
+
+    result = PlaylistWidget.add_items_to_playlist(
+        widget,
+        "saved",
+        [{"id": "duplicate", "url": "song.mp3", "type": "audio"}],
+        list_id="root",
+        insert_index=0,
+    )
+
+    assert result.added_items == ()
+    assert result.duplicate_count == 1
+    assert saves == []
+
+
+def test_playlist_destination_regenerates_colliding_occurrence_ids(tmp_path):
+    playlist = _playlist()
+    widget, saves = _widget(tmp_path, playlist)
+    candidates = [
+        {
+            "id": "existing",
+            "url": "existing.mp4",
+            "type": "video",
+            "start_trim_ticks": 10,
+        },
+        {
+            "id": "existing",
+            "url": "existing.mp4",
+            "type": "video",
+            "start_trim_ticks": 20,
+        },
+    ]
+
+    result = PlaylistWidget.add_items_to_playlist(
+        widget,
+        "saved",
+        candidates,
+        list_id="root",
+        insert_index=0,
+    )
+
+    assert result.added_count == 2
+    assert len({item["id"] for item in playlist["items"]}) == 3
+    assert [item["start_trim_ticks"] for item in result.added_items] == [10, 20]
+    assert candidates[0]["id"] == candidates[1]["id"] == "existing"
     assert len(saves) == 1

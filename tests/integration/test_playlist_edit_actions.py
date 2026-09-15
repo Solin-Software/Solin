@@ -972,11 +972,13 @@ def test_append_temp_playlist_items_updates_matching_session():
     item["title"] = "Mutated externally"
 
     assert appended is True
-    assert edit_view._pl["items"] == [{"title": "Imported"}]
+    assert len(edit_view._pl["items"]) == 1
+    assert edit_view._pl["items"][0]["title"] == "Imported"
+    assert edit_view._pl["items"][0]["id"]
     assert rebuilds == [True]
 
 
-def test_jw_duplicate_is_rejected_before_thumbnail_or_playlist_mutation(tmp_path):
+def test_jw_repeated_video_creates_independent_playlist_occurrence(tmp_path):
     thumbnail = tmp_path / "thumb.jpg"
     thumbnail.write_bytes(b"thumb")
     thumbnail_copies = []
@@ -988,11 +990,20 @@ def test_jw_duplicate_is_rejected_before_thumbnail_or_playlist_mutation(tmp_path
         "track": 2,
         "meps_language": 5,
     }
+    playlist = {"id": "playlist", "items": [existing]}
+    saves = []
     view = SimpleNamespace(
-        _pl={"id": "playlist", "items": [existing]},
-        _playlist_thumbnail_store=SimpleNamespace(
-            copy_from=lambda *args: thumbnail_copies.append(args)
+        _pl=playlist,
+        _tree_session=SimpleNamespace(owner_id="playlist:test", refresh=lambda: None),
+        _media_tree_runtime=SimpleNamespace(
+            thumbnails=SimpleNamespace(
+                copy_file=lambda **kwargs: thumbnail_copies.append(kwargs)
+            )
         ),
+        _playlist_thumbnail_store=object(),
+        _save=lambda: saves.append(True),
+        _sync_playlist_chrome=lambda **_kwargs: None,
+        _request_missing_thumbnails=lambda: None,
     )
 
     result = PlaylistEditActionsMixin._on_jw_media_confirmed(
@@ -1007,14 +1018,17 @@ def test_jw_duplicate_is_rejected_before_thumbnail_or_playlist_mutation(tmp_path
             "meps_language": 5,
             "thumbnail_path": str(thumbnail),
         },
-        "root",
-        0,
+        "",
+        -1,
     )
 
-    assert result.added_count == 0
-    assert result.duplicate_count == 1
-    assert view._pl["items"] == [existing]
-    assert thumbnail_copies == []
+    assert result.added_count == 1
+    assert result.duplicate_count == 0
+    assert [item["id"] for item in view._pl["items"][:1]] == ["existing"]
+    assert view._pl["items"][1]["id"] != "existing"
+    assert view._pl["items"][1]["url"].endswith("sjjm_T_002_r720P.mp4")
+    assert len(thumbnail_copies) == 1
+    assert saves == [True]
 
 
 def test_jw_insert_persists_canonical_duration_and_official_thumbnail(
@@ -1060,7 +1074,7 @@ def test_jw_insert_persists_canonical_duration_and_official_thumbnail(
     assert saves == [True]
 
 
-def test_linked_folder_rejects_a_previously_copied_source_as_duplicate(tmp_path):
+def test_linked_folder_queues_previously_copied_video_as_new_occurrence(tmp_path):
     source = tmp_path / "source" / "S-337-26v_T_02_r720P.mp4"
     destination = tmp_path / "linked" / source.name
     queued = []
@@ -1081,6 +1095,7 @@ def test_linked_folder_rejects_a_previously_copied_source_as_duplicate(tmp_path)
         _tree_session=SimpleNamespace(pending_items=lambda: ()),
         _queue_watched_media_copy=lambda *args, **kwargs: queued.append((args, kwargs)),
         _list_id_for_section=lambda _section_id: "root",
+        _sync_playlist_chrome=lambda **_kwargs: None,
         _notifications=SimpleNamespace(
             warning=warnings.append,
             success=lambda _message: None,
@@ -1092,8 +1107,8 @@ def test_linked_folder_rejects_a_previously_copied_source_as_duplicate(tmp_path)
 
     PlaylistEditActionsMixin._add_files(view, [str(source)])
 
-    assert queued == []
-    assert warnings == ["1 file(s) already in playlist"]
+    assert len(queued) == 1
+    assert warnings == []
 
 
 def test_linked_folder_accepts_distinct_local_jw_filename_variants(tmp_path):
@@ -1128,7 +1143,7 @@ def test_linked_folder_accepts_distinct_local_jw_filename_variants(tmp_path):
     ]
 
 
-def test_linked_folder_commit_deduplicates_legacy_destination(tmp_path):
+def test_linked_folder_commit_reuses_file_for_new_video_occurrence(tmp_path):
     source_folder = tmp_path / "source"
     source_folder.mkdir()
     source = source_folder / "S-337-26v_T_02_r720P.mp4"
@@ -1201,12 +1216,89 @@ def test_linked_folder_commit_deduplicates_legacy_destination(tmp_path):
         target_list_index=-1,
     )
 
-    assert [current["id"] for current in playlist["items"]] == ["existing"]
+    assert [current["id"] for current in playlist["items"]] == [
+        "existing",
+        "candidate",
+    ]
     assert [path.name for path in linked.iterdir()] == [source.name]
     assert removed == ["candidate"]
     assert refreshed == [True]
-    assert warnings == ["File already in playlist"]
-    assert saves == []
+    assert warnings == []
+    assert saves == [True]
+
+
+def test_removing_inactive_duplicate_while_same_video_plays_removes_only_node():
+    first = {"id": "playing", "url": "clip.mp4", "type": "video"}
+    second = {"id": "inactive", "url": "clip.mp4", "type": "video"}
+    playlist = {"items": [first, second]}
+    cleaned = []
+    saves = []
+    view = SimpleNamespace(
+        _pl=playlist,
+        _tree_session=SimpleNamespace(pending_item=lambda _item_id: None),
+        _media_ctrl=SimpleNamespace(
+            current_occurrence_id="playing",
+            current_url="clip.mp4",
+            local_path="clip.mp4",
+        ),
+        _is_watched=False,
+        _watched_path="",
+        _cancel_thumbnail_requests_for_item=lambda _item_id: None,
+        _save=lambda: saves.append(True),
+        _schedule_cleanup=lambda items: cleaned.extend(items),
+        _publish_tree_snapshot=lambda: None,
+        _sync_playlist_chrome=lambda **_kwargs: None,
+    )
+
+    playlist_widget.PlaylistEditView._remove_item(view, "inactive")
+
+    assert playlist["items"] == [first]
+    assert cleaned == [second]
+    assert saves == [True]
+
+
+def test_removing_active_occurrence_still_requires_stopping_projection(monkeypatch):
+    item = {"id": "playing", "title": "Clip", "url": "clip.mp4", "type": "video"}
+    warnings = []
+    view = SimpleNamespace(
+        _pl={"items": [item]},
+        _tree_session=SimpleNamespace(pending_item=lambda _item_id: None),
+        _media_ctrl=SimpleNamespace(current_occurrence_id="playing"),
+        tr=lambda text: text,
+    )
+    monkeypatch.setattr(
+        playlist_widget.QMessageBox,
+        "warning",
+        lambda *_args: warnings.append(True),
+    )
+
+    playlist_widget.PlaylistEditView._remove_item(view, "playing")
+
+    assert view._pl["items"] == [item]
+    assert warnings == [True]
+
+
+def test_same_item_identifier_in_another_playlist_does_not_block_removal():
+    item = {"id": "shared-id", "url": "clip.mp4", "type": "video"}
+    view = SimpleNamespace(
+        _pl={"id": "this-playlist", "items": [item]},
+        _tree_session=SimpleNamespace(pending_item=lambda _item_id: None),
+        _media_ctrl=SimpleNamespace(
+            current_occurrence_id="shared-id",
+            current_occurrence_container_id="another-playlist",
+        ),
+        _is_watched=False,
+        _watched_path="",
+        _cancel_thumbnail_requests_for_item=lambda _item_id: None,
+        _save=lambda: None,
+        _schedule_cleanup=lambda _items: None,
+        _publish_tree_snapshot=lambda: None,
+        _sync_playlist_chrome=lambda **_kwargs: None,
+    )
+
+    playlist_widget.PlaylistEditView._remove_item(view, "shared-id")
+
+    assert view._pl["items"] == []
 
 
 def test_linked_folder_commit_targets_rebound_snapshot_of_same_playlist(tmp_path):
@@ -1597,6 +1689,7 @@ def test_initial_watched_folder_open_defers_all_disk_reads():
             )
         ),
         catalog_bridge=SimpleNamespace(set_playlist_ref=lambda value: rebuilt.append(value)),
+        songs_bridge=SimpleNamespace(set_playlist_ref=lambda value: rebuilt.append(value)),
         _tree_session=SimpleNamespace(
             activate=lambda value: rebuilt.append(value),
         ),

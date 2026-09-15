@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+import zipfile
 from concurrent.futures import CancelledError
 
 import pytest
@@ -85,6 +86,134 @@ def test_jwl_round_trip_preserves_embedded_media_trim_and_duration(tmp_path):
     assert item["start_trim_ticks"] == 10_000_000
     assert item["end_trim_ticks"] == 20_000_000
     assert item["base_duration_ticks"] == 90_000_000
+
+
+def test_jwl_round_trip_shares_embedded_asset_but_preserves_each_trim(tmp_path):
+    archive = tmp_path / "repeated.jwlplaylist"
+    video = tmp_path / "clip.mp4"
+    video.write_bytes(b"embedded-video")
+    writer.write_jwlplaylist(
+        "Repeated",
+        [
+            {
+                "title": "First part",
+                "url": str(video),
+                "type": "video",
+                "start_trim_ticks": 10_000_000,
+                "end_trim_ticks": 30_000_000,
+                "base_duration_ticks": 90_000_000,
+            },
+            {
+                "title": "Second part",
+                "url": str(video),
+                "type": "video",
+                "start_trim_ticks": 40_000_000,
+                "end_trim_ticks": 5_000_000,
+                "base_duration_ticks": 90_000_000,
+            },
+        ],
+        archive,
+        tmp_path / "cache",
+    )
+
+    with zipfile.ZipFile(archive) as zipped:
+        connection = sqlite3.connect(":memory:")
+        connection.deserialize(zipped.read("userData.db"))
+        try:
+            assert connection.execute("SELECT COUNT(*) FROM IndependentMedia").fetchone()[0] == 1
+            mappings = connection.execute(
+                "SELECT IndependentMediaId FROM PlaylistItemIndependentMediaMap "
+                "ORDER BY PlaylistItemId"
+            ).fetchall()
+            assert mappings == [(1,), (1,)]
+            assert sum(name.endswith(".mp4") for name in zipped.namelist()) == 1
+        finally:
+            connection.close()
+
+    items = reader.read_jwlplaylist(archive)["items"]
+    assert len(items) == 2
+    assert [item["start_trim_ticks"] for item in items] == [10_000_000, 40_000_000]
+    assert [item["end_trim_ticks"] for item in items] == [30_000_000, 5_000_000]
+    assert items[0]["embedded_asset_key"] == items[1]["embedded_asset_key"]
+
+
+def test_jwl_writer_shares_jw_location_with_independent_trims_and_thumbnails(
+    monkeypatch, tmp_path,
+):
+    lookups = []
+
+    def resolve(**kwargs):
+        lookups.append(kwargs)
+        return {
+            "url": "https://cdn.example/clip.mp4",
+            "title": "Official clip",
+            "duration_ticks": 182_111_100,
+        }
+
+    monkeypatch.setattr(writer, "resolve_jworg_meta", resolve)
+    archive = tmp_path / "jw-repeated.jwlplaylist"
+    writer.write_jwlplaylist(
+        "Repeated JW video",
+        [
+            {
+                "title": "First",
+                "url": "",
+                "type": "video",
+                "key_symbol": "rwl",
+                "track": 1,
+                "meps_language": 5,
+                "start_trim_ticks": 10_000_000,
+                "end_trim_ticks": 20_000_000,
+                "thumbnail_data": b"thumb-one",
+            },
+            {
+                "title": "Second",
+                "url": "",
+                "type": "video",
+                "key_symbol": "rwl",
+                "track": 1,
+                "meps_language": 5,
+                "start_trim_ticks": 30_000_000,
+                "end_trim_ticks": 40_000_000,
+                "thumbnail_data": b"thumb-two",
+            },
+        ],
+        archive,
+        tmp_path / "cache",
+    )
+
+    with zipfile.ZipFile(archive) as zipped:
+        connection = sqlite3.connect(":memory:")
+        connection.deserialize(zipped.read("userData.db"))
+        try:
+            assert connection.execute("SELECT COUNT(*) FROM Location").fetchone()[0] == 1
+            mappings = connection.execute(
+                "SELECT LocationId, BaseDurationTicks FROM PlaylistItemLocationMap "
+                "ORDER BY PlaylistItemId"
+            ).fetchall()
+            assert mappings == [(1, 182_111_100), (1, 182_111_100)]
+            rows = connection.execute(
+                "SELECT StartTrimOffsetTicks, EndTrimOffsetTicks, ThumbnailFilePath "
+                "FROM PlaylistItem ORDER BY PlaylistItemId"
+            ).fetchall()
+            assert [(row[0], row[1]) for row in rows] == [
+                (10_000_000, 20_000_000),
+                (30_000_000, 40_000_000),
+            ]
+            assert rows[0][2] != rows[1][2]
+            assert connection.execute(
+                "SELECT COUNT(*) FROM IndependentMedia"
+            ).fetchone()[0] == 2
+            assert not any(name.endswith(".mp4") for name in zipped.namelist())
+        finally:
+            connection.close()
+
+    assert len(lookups) == 1
+    monkeypatch.setattr(reader, "resolve_jworg_meta", resolve)
+    items = reader.read_jwlplaylist(archive)["items"]
+    assert [item["start_trim_ticks"] for item in items] == [10_000_000, 30_000_000]
+    assert [item["end_trim_ticks"] for item in items] == [20_000_000, 40_000_000]
+    assert len(lookups) == 2  # one writer lookup and one reader lookup
 
 
 def test_jwl_round_trip_prefers_location_duration_from_database(

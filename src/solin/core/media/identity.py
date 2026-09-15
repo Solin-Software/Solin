@@ -13,6 +13,7 @@ from typing import Any, Generic, Hashable, TypeVar
 from urllib.parse import urlsplit, urlunsplit
 
 from solin.core.jw.identifiers import is_jw_url
+from solin.core.media.formats import MediaKind, media_kind_from_path
 from solin.core.media.jw_reference import parse_jw_media_reference
 
 
@@ -289,6 +290,36 @@ class MediaPartition:
     duplicate_items: tuple[Mapping[str, Any], ...]
 
 
+@dataclass(frozen=True, slots=True)
+class MediaOccurrencePolicy:
+    """Decide which media kinds may repeat inside one destination."""
+
+    repeatable_kinds: frozenset[MediaKind] = frozenset()
+
+    def allows_repeat(self, record: Mapping[str, Any]) -> bool:
+        location = _first_text(
+            record,
+            "url",
+            "download_url",
+            "source_url",
+            "file_path",
+            "jworg_url",
+        )
+        kind = media_kind_from_path(location)
+        if kind is not MediaKind.UNKNOWN:
+            return kind in self.repeatable_kinds
+        raw_kind = _first_text(record, "type", "media_type").lower()
+        try:
+            kind = MediaKind(raw_kind)
+        except ValueError:
+            kind = MediaKind.UNKNOWN
+        return kind in self.repeatable_kinds
+
+
+UNIQUE_MEDIA_OCCURRENCES = MediaOccurrencePolicy()
+PLAYLIST_MEDIA_OCCURRENCES = MediaOccurrencePolicy(frozenset({MediaKind.VIDEO}))
+
+
 def media_identity(record: Mapping[str, Any]) -> MediaIdentity | None:
     locations = tuple(
         dict.fromkeys(
@@ -394,6 +425,8 @@ def contains_media(
 def partition_media_items(
     existing_items: Sequence[Mapping[str, Any]],
     candidates: Sequence[Mapping[str, Any]],
+    *,
+    occurrence_policy: MediaOccurrencePolicy = UNIQUE_MEDIA_OCCURRENCES,
 ) -> MediaPartition:
     accepted: list[Mapping[str, Any]] = []
     duplicates: list[Mapping[str, Any]] = []
@@ -404,7 +437,11 @@ def partition_media_items(
     )
     for candidate in candidates:
         identity = media_identity(candidate)
-        if identity is not None and identities.matches(identity):
+        if (
+            identity is not None
+            and identities.matches(identity)
+            and not occurrence_policy.allows_repeat(candidate)
+        ):
             duplicates.append(candidate)
             # Preserve aliases discovered in a duplicate record so later
             # candidates resolve through the same equivalence component.
@@ -418,7 +455,10 @@ def partition_media_items(
 
 __all__ = [
     "MediaIdentity",
+    "MediaOccurrencePolicy",
     "MediaPartition",
+    "PLAYLIST_MEDIA_OCCURRENCES",
+    "UNIQUE_MEDIA_OCCURRENCES",
     "contains_media",
     "media_identity",
     "partition_media_items",
