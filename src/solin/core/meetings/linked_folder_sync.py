@@ -333,7 +333,7 @@ class MeetingLinkedFolderSync:
                             copied[cache_key] = dest_path
                     owner[field] = str(dest_path)
                     if node_id and field != "thumbnail_local_path":
-                        linked_files[str(dest_path)] = node_id
+                        linked_files.setdefault(str(dest_path), node_id)
         except BaseException:  # noqa: BLE001 - materialization transaction rollback
             for created_path in reversed(created_paths):
                 try:

@@ -472,6 +472,8 @@ def test_project_video_snapshots_custom_times_into_playback_request():
         "start_trim_ticks": 20_000_000,
         "end_trim_ticks": 30_000_000,
         "base_duration_ticks": 100_000_000,
+        "origin_container_id": "saved-playlist",
+        "origin_item_id": "trimmed-occurrence",
     }
 
     controller.project_video("talk.mp4", "Talk", [item])
@@ -481,6 +483,8 @@ def test_project_video_snapshots_custom_times_into_playback_request():
     assert request.trim is not None
     assert request.trim.start_trim_ticks == 20_000_000
     assert request.trim.end_trim_ticks == 30_000_000
+    assert request.occurrence_container_id == "saved-playlist"
+    assert request.occurrence_id == "trimmed-occurrence"
 
 
 def test_resolved_meeting_video_preserves_catalog_origin_in_projection_queue():

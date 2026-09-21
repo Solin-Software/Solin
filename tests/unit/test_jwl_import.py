@@ -109,6 +109,46 @@ def test_jwl_import_saves_embedded_media_with_item_identifier():
     assert item["base_duration_ticks"] == 60_000_000
 
 
+def test_jwl_import_reuses_embedded_asset_for_independent_video_trims():
+    saves = []
+
+    def save_embedded(data, filename, identifier, default_suffix):
+        saves.append((data, filename, identifier, default_suffix))
+        return f"embedded/{identifier}{default_suffix}"
+
+    result = playlist_items_from_jwl_document_items(
+        [
+            {
+                "title": "First",
+                "type": "video",
+                "data": b"video",
+                "filename": "clip.mp4",
+                "embedded_asset_key": "asset.mp4",
+                "start_trim_ticks": 10_000_000,
+            },
+            {
+                "title": "Second",
+                "type": "video",
+                "data": b"video",
+                "filename": "clip.mp4",
+                "embedded_asset_key": "asset.mp4",
+                "start_trim_ticks": 20_000_000,
+            },
+        ],
+        source_name="repeated.jwlplaylist",
+        save_embedded=save_embedded,
+    )
+
+    assert len(saves) == 1
+    assert len(result.items) == 2
+    assert result.items[0]["id"] != result.items[1]["id"]
+    assert result.items[0]["url"] == result.items[1]["url"]
+    assert [item["start_trim_ticks"] for item in result.items] == [
+        10_000_000,
+        20_000_000,
+    ]
+
+
 def test_jwl_import_skips_unresolved_items_and_failed_embedded_write():
     def fail_embedded(*_args):
         raise OSError("disk full")

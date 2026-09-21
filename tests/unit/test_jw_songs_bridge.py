@@ -1,14 +1,21 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QCoreApplication, QObject, Signal
+from PySide6.QtCore import QCoreApplication, QEvent, QObject, Signal
 
 from solin.core.jw.songs import JWSongsStore
 from solin.core.media.insertion import MediaInsertPayload, MediaInsertResult
+from solin.core.media.identity import PLAYLIST_MEDIA_OCCURRENCES
 from solin.ui.qml.jw_songs import JWSongsBridge
 
 
 def _app():
     return QCoreApplication.instance() or QCoreApplication([])
+
+
+def _cleanup_bridge(bridge: JWSongsBridge) -> None:
+    bridge.cleanup()
+    bridge.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
 
 def test_songs_bridge_filters_by_number_prefix_and_title(tmp_path):
@@ -35,7 +42,7 @@ def test_songs_bridge_filters_by_number_prefix_and_title(tmp_path):
         assert bridge.resultCount == 1
         assert bridge.model.item_at(0)["title"] == "Kindness"
     finally:
-        bridge.cleanup()
+        _cleanup_bridge(bridge)
 
 
 def test_songs_bridge_emits_playlist_ready_song_metadata(tmp_path):
@@ -76,7 +83,7 @@ def test_songs_bridge_emits_playlist_ready_song_metadata(tmp_path):
         assert item.base_duration_ticks == 1_230_000_000
         assert item.thumbnail_url == "https://cdn.example/song.jpg"
     finally:
-        bridge.cleanup()
+        _cleanup_bridge(bridge)
 
 
 def test_songs_bridge_exposes_local_thumbnail_as_file_url(tmp_path):
@@ -92,7 +99,7 @@ def test_songs_bridge_exposes_local_thumbnail_as_file_url(tmp_path):
         assert bridge.pendingItemThumb.startswith("file:///")
         assert bridge.pendingItemThumb.endswith("/song cover.jpg")
     finally:
-        bridge.cleanup()
+        _cleanup_bridge(bridge)
 
 
 def test_songs_bridge_waits_for_official_thumbnail_before_insertion(tmp_path):
@@ -150,7 +157,7 @@ def test_songs_bridge_waits_for_official_thumbnail_before_insertion(tmp_path):
         assert inserted[0].thumbnail_path == str(thumbnail_path)
         assert inserted[0].base_duration_ticks == 1_230_000_000
     finally:
-        bridge.cleanup()
+        _cleanup_bridge(bridge)
 
 
 def test_songs_bridge_rejects_duplicate_before_placement(tmp_path):
@@ -183,7 +190,39 @@ def test_songs_bridge_rejects_duplicate_before_placement(tmp_path):
         assert bridge._pending_item is None
         assert bridge.showPlacement is False
     finally:
-        bridge.cleanup()
+        _cleanup_bridge(bridge)
+
+
+def test_songs_bridge_playlist_policy_allows_existing_video(tmp_path):
+    _app()
+    insertions = []
+    bridge = JWSongsBridge(
+        JWSongsStore(tmp_path),
+        insertion_handler=lambda payload, *_args: (
+            insertions.append(payload)
+            or MediaInsertResult(added_items=({"url": payload.source_url},))
+        ),
+        occurrence_policy=PLAYLIST_MEDIA_OCCURRENCES,
+    )
+    try:
+        song = {
+            "number": 2,
+            "title": "Good Song",
+            "url": "https://akamd1.jw-cdn.org/x/sjjm_T_002_r720P.mp4",
+        }
+        bridge._model.set_items_if_changed([song])
+        bridge.set_playlist_ref(
+            {"items": [{"url": song["url"]}], "sections": []}
+        )
+        rejected = []
+        bridge.mediaAlreadyAdded.connect(lambda *args: rejected.append(args))
+
+        bridge.selectItem(0)
+
+        assert len(insertions) == 1
+        assert rejected == []
+    finally:
+        _cleanup_bridge(bridge)
 
 
 def test_songs_store_coalesces_matching_inflight_requests(tmp_path):

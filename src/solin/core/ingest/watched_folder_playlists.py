@@ -82,10 +82,21 @@ class WatchedFolderPlaylistStore:
         )
         self._publish_changed()
 
-    def remove_item(self, folder_path: str, item: dict[str, Any]) -> bool:
+    def remove_item(
+        self,
+        folder_path: str,
+        item: dict[str, Any],
+        *,
+        remaining_items: Iterable[dict[str, Any]] = (),
+    ) -> bool:
+        remaining_snapshot = tuple(remaining_items)
         removed = self._run_claimed(
             child_folder_resource_claim(folder_path),
-            lambda: remove_item_from_manifest(folder_path, item),
+            lambda: remove_item_from_manifest(
+                folder_path,
+                item,
+                remaining_items=remaining_snapshot,
+            ),
         )
         if removed:
             self._publish_changed()

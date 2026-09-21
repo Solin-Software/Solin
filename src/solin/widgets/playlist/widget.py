@@ -64,7 +64,7 @@ from ...ui.helpers import (
 from ...ui.media_insertion_feedback import connect_media_picker_feedback
 from ...core.media.cache import MediaCacheManager
 from ...core.media.formats import media_type_from_path
-from ...core.media.identity import partition_media_items
+from ...core.media.identity import PLAYLIST_MEDIA_OCCURRENCES, partition_media_items
 from ...core.media.insertion import MediaInsertResult
 from ...core.media.operations import MediaOperationPresentation, MediaOperationSpec
 from ...core.media.thumbnail_identity import (
@@ -72,7 +72,10 @@ from ...core.media.thumbnail_identity import (
     thumbnail_storage_id,
 )
 from ...core.media.playback_request import MediaTrim
-from ...core.playlists.items import looks_like_filename_title
+from ...core.playlists.items import (
+    distinct_playlist_item_ids,
+    looks_like_filename_title,
+)
 from ...core.playlists.names import (
     PlaylistNameConflictError,
     PlaylistNameError,
@@ -306,11 +309,13 @@ class PlaylistEditView(
             jw_catalog_service_factory,
             jw_catalog_thumbnail_session_factory,
             insertion_handler=self._on_jw_media_confirmed,
+            occurrence_policy=PLAYLIST_MEDIA_OCCURRENCES,
             parent=self,
         )
         self.songs_bridge = JWSongsBridge(
             jw_songs_store,
             insertion_handler=self._on_jw_media_confirmed,
+            occurrence_policy=PLAYLIST_MEDIA_OCCURRENCES,
             thumbnail_session_factory=jw_catalog_thumbnail_session_factory,
             parent=self,
         )
@@ -944,6 +949,7 @@ class PlaylistEditView(
             "markers": [],
         }
         self.catalog_bridge.set_playlist_ref(loading_playlist)
+        self.songs_bridge.set_playlist_ref(loading_playlist)
         self._tree_session.activate(loading_playlist)
         self.bridge.set_state(
             name=loading_playlist["name"],
@@ -1234,6 +1240,7 @@ class PlaylistEditView(
             return
 
         self.catalog_bridge.set_playlist_ref(self._pl)
+        self.songs_bridge.set_playlist_ref(self._pl)
         self._apply_media_language_context()
 
         # Fix types
@@ -1978,11 +1985,30 @@ class PlaylistEditView(
             item_type = item.get("type", "video")
             if item_type in ("video", "audio"):
                 item_url = item.get("url", "")
-                cur_url = self._media_ctrl.current_url or ""
-                cur_local = self._media_ctrl.local_path or ""
-                playing = item_url and item_url in (cur_url, cur_local)
-                if not playing and cur_local and item_url:
-                    playing = os.path.normpath(item_url) == os.path.normpath(cur_local)
+                current_occurrence_id = str(
+                    getattr(self._media_ctrl, "current_occurrence_id", "") or ""
+                )
+                if current_occurrence_id:
+                    current_container_id = str(
+                        getattr(
+                            self._media_ctrl,
+                            "current_occurrence_container_id",
+                            "",
+                        )
+                        or ""
+                    )
+                    playing = current_occurrence_id == item_id and (
+                        not current_container_id
+                        or current_container_id == str(self._pl.get("id") or "")
+                    )
+                else:
+                    cur_url = self._media_ctrl.current_url or ""
+                    cur_local = self._media_ctrl.local_path or ""
+                    playing = item_url and item_url in (cur_url, cur_local)
+                    if not playing and cur_local and item_url:
+                        playing = os.path.normpath(item_url) == os.path.normpath(
+                            cur_local
+                        )
                 if playing:
                     QMessageBox.warning(
                         self,
@@ -1993,30 +2019,47 @@ class PlaylistEditView(
                     )
                     return
         self._pl["items"] = [it for it in self._pl["items"] if it["id"] != item_id]
+        remaining_items = copy.deepcopy(self._pl["items"])
         self._cancel_thumbnail_requests_for_item(item_id)
         self._save()
         if self._is_watched and self._watched_path and item:
-            self._remove_watched_item(self._watched_path, item)
+            self._remove_watched_item(
+                self._watched_path,
+                item,
+                remaining_items=remaining_items,
+            )
         elif item:
             self._schedule_cleanup([item])
         self._publish_tree_snapshot()
         self._sync_playlist_chrome(emit_data_changed=False)
 
-    def _remove_watched_item(self, folder_path: str, item: dict) -> None:
+    def _remove_watched_item(
+        self,
+        folder_path: str,
+        item: dict,
+        *,
+        remaining_items: list[dict] | None = None,
+    ) -> None:
         operation_id = f"linked-remove:{uuid.uuid4().hex}"
         item_snapshot = copy.deepcopy(item)
+        remaining_snapshot = copy.deepcopy(remaining_items or [])
 
         def run(_progress, _cancellation):
             return self._watched_folder_playlist_store.remove_item(
                 folder_path,
                 item_snapshot,
+                remaining_items=remaining_snapshot,
             )
 
         def failed(message: str, _retryable: bool) -> None:
             if self._warn_manifest_save_failed(folder_path, message):
                 QTimer.singleShot(
                     0,
-                    lambda: self._remove_watched_item(folder_path, item_snapshot),
+                    lambda: self._remove_watched_item(
+                        folder_path,
+                        item_snapshot,
+                        remaining_items=remaining_snapshot,
+                    ),
                 )
 
         self._media_tree_runtime.operations.submit(
@@ -2577,8 +2620,19 @@ class PlaylistWidget(QWidget):
         playlist = edit_view._pl
         if not edit_view._is_temp or playlist is None or playlist.get("id") != playlist_id:
             return False
-        playlist.setdefault("items", []).extend(copy.deepcopy(items))
-        edit_view._reconcile_playlist()
+        partition = partition_media_items(
+            playlist.get("items", []),
+            items,
+            occurrence_policy=PLAYLIST_MEDIA_OCCURRENCES,
+        )
+        if partition.unique_items:
+            playlist.setdefault("items", []).extend(
+                distinct_playlist_item_ids(
+                    playlist.get("items", []),
+                    partition.unique_items,
+                )
+            )
+            edit_view._reconcile_playlist()
         return True
 
     def get_playlist_names(self) -> list[tuple[str, str]]:
@@ -2600,8 +2654,15 @@ class PlaylistWidget(QWidget):
         if pl is None:
             return MediaInsertResult(target_valid=False)
 
-        partition = partition_media_items(pl.get("items", []), items)
-        added_items = [dict(copy.deepcopy(item)) for item in partition.unique_items]
+        partition = partition_media_items(
+            pl.get("items", []),
+            items,
+            occurrence_policy=PLAYLIST_MEDIA_OCCURRENCES,
+        )
+        added_items = distinct_playlist_item_ids(
+            pl.get("items", []),
+            partition.unique_items,
+        )
 
         if not added_items:
             return MediaInsertResult(duplicate_items=partition.duplicate_items)
@@ -2632,11 +2693,15 @@ class PlaylistWidget(QWidget):
 
     def create_playlist_with_items(self, name: str, items: list[dict]) -> str:
         name = ensure_unique_playlist_name(name, self._playlists)
-        partition = partition_media_items([], items)
+        partition = partition_media_items(
+            [],
+            items,
+            occurrence_policy=PLAYLIST_MEDIA_OCCURRENCES,
+        )
         pl = {
             "id": str(uuid.uuid4()),
             "name": name,
-            "items": [copy.deepcopy(item) for item in partition.unique_items],
+            "items": distinct_playlist_item_ids([], partition.unique_items),
         }
         self._playlists.append(pl)
         self._persist_playlists()

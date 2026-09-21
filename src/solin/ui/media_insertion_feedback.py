@@ -47,6 +47,21 @@ def notify_media_duplicate(notifications, title: str, identity_token: str) -> No
     )
 
 
+def connect_media_duplicate_feedback(source, notifications) -> None:
+    """Connect a duplicate-only insertion source to shared user feedback."""
+
+    if notifications is None:
+        return
+
+    source.mediaAlreadyAdded.connect(
+        lambda title, identity_token: notify_media_duplicate(
+            notifications,
+            title,
+            identity_token,
+        )
+    )
+
+
 def connect_media_picker_feedback(bridge, notifications) -> None:
     if notifications is None:
         return
@@ -57,9 +72,6 @@ def connect_media_picker_feedback(bridge, notifications) -> None:
             _tr(_ADDED_SOURCE).format(title=f"“{display_title}”")
         )
 
-    def duplicate(title: str, identity_token: str) -> None:
-        notify_media_duplicate(notifications, title, identity_token)
-
     def failed(title: str) -> None:
         display_title = title or _tr(_THIS_MEDIA_SOURCE)
         notifications.error(
@@ -67,11 +79,12 @@ def connect_media_picker_feedback(bridge, notifications) -> None:
         )
 
     bridge.mediaAdded.connect(added)
-    bridge.mediaAlreadyAdded.connect(duplicate)
+    connect_media_duplicate_feedback(bridge, notifications)
     bridge.mediaInsertionFailed.connect(failed)
 
 
 __all__ = [
+    "connect_media_duplicate_feedback",
     "connect_media_picker_feedback",
     "notify_media_duplicate",
     "tr_media_already_added_count",

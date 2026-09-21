@@ -157,6 +157,8 @@ class MediaPlaybackRequest:
     trim: MediaTrim | None = None
     autoplay: bool = True
     cache_policy: PlaybackCachePolicy = PlaybackCachePolicy.PROFILE_DEFAULT
+    occurrence_id: str = ""
+    occurrence_container_id: str = ""
 
     def __post_init__(self) -> None:
         if not isinstance(self.source, str):
@@ -169,3 +171,7 @@ class MediaPlaybackRequest:
             raise TypeError("autoplay must be a boolean")
         if not isinstance(self.cache_policy, PlaybackCachePolicy):
             raise TypeError("cache_policy must be a PlaybackCachePolicy")
+        if not isinstance(self.occurrence_id, str):
+            raise TypeError("occurrence_id must be a string")
+        if not isinstance(self.occurrence_container_id, str):
+            raise TypeError("occurrence_container_id must be a string")

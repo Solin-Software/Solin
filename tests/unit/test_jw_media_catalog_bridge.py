@@ -5,11 +5,12 @@ import time
 import unittest
 from pathlib import Path
 
-from PySide6.QtCore import QCoreApplication
+from PySide6.QtCore import QCoreApplication, QEvent
 
 from solin.core.jw.catalog import JWMediaCatalogCachePaths
 from solin.core.jw.catalog_service import JWMediaCatalogService
 from solin.core.media.insertion import MediaInsertResult
+from solin.core.media.identity import PLAYLIST_MEDIA_OCCURRENCES
 from solin.core.media.placement import build_media_placement_options
 from solin.ui.qml.jw_media_catalog import (
     JWMediaCatalogBridge,
@@ -213,6 +214,8 @@ class JWMediaCatalogBridgeProgressTests(unittest.TestCase):
     def tearDown(self):
         if hasattr(self, "bridge"):
             self.bridge.cleanup()
+            self.bridge.deleteLater()
+            QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
         self._tmp.cleanup()
 
     def _catalog_service(self, parent):
@@ -503,6 +506,30 @@ class JWMediaCatalogBridgeProgressTests(unittest.TestCase):
         self.assertEqual(closed, [])
         self.assertEqual(rejected[0][0], "Video race")
         self.assertIsNone(self.bridge._pending_item)
+
+    def test_playlist_policy_allows_existing_video_selection(self):
+        inserted = []
+        self.bridge = JWMediaCatalogBridge(
+            self._catalog_service,
+            self.thumbnail_factory,
+            insertion_handler=lambda payload, *_args: (
+                inserted.append(payload)
+                or MediaInsertResult(added_items=({"url": payload.source_url},))
+            ),
+            occurrence_policy=PLAYLIST_MEDIA_OCCURRENCES,
+        )
+        candidate = item("repeat")
+        self.bridge._model.reconcile_items([candidate])
+        self.bridge.set_playlist_ref(
+            {"items": [{"url": candidate["download_url"]}], "sections": []}
+        )
+        rejected = []
+        self.bridge.mediaAlreadyAdded.connect(lambda *args: rejected.append(args))
+
+        self.bridge.selectItem(0)
+
+        self.assertEqual(len(inserted), 1)
+        self.assertEqual(rejected, [])
 
 
 if __name__ == "__main__":

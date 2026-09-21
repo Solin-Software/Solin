@@ -670,6 +670,8 @@ class MediaProjectionController:
             source=source or str(item.get("url") or ""),
             trim=trim if trim.custom else None,
             autoplay=autoplay,
+            occurrence_id=str(item.get("origin_item_id") or item.get("id") or ""),
+            occurrence_container_id=str(item.get("origin_container_id") or ""),
         )
 
     def _resolve_and_project_meeting_item(self, item, title: str) -> None:

@@ -167,6 +167,26 @@ def test_failed_pending_node_can_be_removed(tmp_path: Path) -> None:
     session.close()
 
 
+def test_pending_nodes_expose_inflight_media_for_identity_reservation(
+    tmp_path: Path,
+) -> None:
+    session = MeetingTreeSession(
+        _runtime(),
+        lambda _node, item_id, _source: tmp_path / f"{item_id}.jpg",
+    )
+    session.activate("mwb:week", [])
+    pending = [{
+        "id": "pending",
+        "type": "media",
+        "media_ref": {"file_path": "clip.mp4"},
+    }]
+
+    session.add_pending("copy-1", pending, target_list_id="root", insert_index=0)
+
+    assert session.pending_nodes() == tuple(pending)
+    session.close()
+
+
 def test_failed_initial_snapshot_does_not_leave_the_meeting_tree_locked(
     tmp_path: Path,
 ) -> None:

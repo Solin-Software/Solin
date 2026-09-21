@@ -90,6 +90,26 @@ def test_playback_request_uses_auto_download_setting_by_default(tmp_path):
     controller.stop()
 
 
+def test_playback_occurrence_identity_is_scoped_to_active_request(tmp_path):
+    controller, _downloader, _played = _controller_with_downloader(
+        tmp_path, auto_download=False
+    )
+
+    controller.start_playback(
+        MediaPlaybackRequest(
+            "https://cdn.example/clip.mp4",
+            occurrence_id="first",
+            occurrence_container_id="playlist",
+        )
+    )
+    assert controller.current_occurrence_id == "first"
+    assert controller.current_occurrence_container_id == "playlist"
+
+    controller.stop()
+    assert controller.current_occurrence_id == ""
+    assert controller.current_occurrence_container_id == ""
+
+
 def test_playback_request_can_force_temporary_download(tmp_path):
     controller, downloader, played = _controller_with_downloader(
         tmp_path,

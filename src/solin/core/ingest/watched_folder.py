@@ -22,7 +22,7 @@ Regras de escaneamento:
 Manifesto (_solin_manifest.json):
   - Vive dentro de cada subpasta
   - Rastreia arquivos processados com fingerprint (size + mtime)
-  - Lista outputs gerados (imagens) e virtual items (vídeos de URL)
+  - Lista outputs gerados e ocorrências virtuais (URLs ou mídia embutida)
 
 Cache (.solin_cache/):
   - Subpasta dentro de cada subpasta monitorada
@@ -39,9 +39,10 @@ import subprocess
 import tempfile
 import time
 import uuid
+from collections.abc import Iterable, Mapping
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 from PySide6.QtCore import QObject, QFileSystemWatcher, Signal, QThread
 
@@ -56,7 +57,7 @@ from solin.core.media.formats import (
     VIDEO_EXTS,
     media_type_from_path,
 )
-from solin.core.media.identity import partition_media_items
+from solin.core.media.identity import PLAYLIST_MEDIA_OCCURRENCES, partition_media_items
 from solin.core.playlists.items import create_playlist_item
 from solin.core.ingest.staging import is_watched_folder_staging_path
 from solin.core.ingest.manifest import (
@@ -188,23 +189,22 @@ def _safe_cache_stem(value: str) -> str:
     return stem[:48] or "media"
 
 
-def _adopted_cache_path(source: Path, cache: Path, item_id: str) -> Path:
+def _adopted_cache_path(source: Path, cache: Path) -> Path:
     stat = source.stat()
     fingerprint = "|".join(
         (
             os.path.normcase(os.path.abspath(str(source))),
             str(stat.st_size),
             str(stat.st_mtime_ns),
-            item_id,
         )
     )
     digest = hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()[:12]
     return cache / f"{_safe_cache_stem(source.stem)}-{digest}{source.suffix.lower()}"
 
 
-def _copy_external_file_to_cache(source: Path, subfolder: Path, item_id: str) -> Path:
+def _copy_external_file_to_cache(source: Path, subfolder: Path) -> Path:
     cache = _cache_dir(subfolder)
-    destination = _adopted_cache_path(source, cache, item_id)
+    destination = _adopted_cache_path(source, cache)
     if destination.exists() and destination.stat().st_size == source.stat().st_size:
         return destination
 
@@ -221,7 +221,7 @@ def _copy_external_file_to_cache(source: Path, subfolder: Path, item_id: str) ->
     return destination
 
 
-def _portable_playlist_url(url: str, subfolder: Path, item_id: str) -> tuple[str, str | None]:
+def _portable_playlist_url(url: str, subfolder: Path) -> tuple[str, str | None]:
     """Return (manifest_url, runtime_url) for a watched-folder playlist item."""
 
     if not url or url.startswith(("http://", "https://")):
@@ -235,7 +235,7 @@ def _portable_playlist_url(url: str, subfolder: Path, item_id: str) -> tuple[str
     if path.is_absolute() and path.is_file():
         if _path_is_inside(path, subfolder):
             return _to_manifest_url(str(path), subfolder), None
-        adopted = _copy_external_file_to_cache(path, subfolder, item_id)
+        adopted = _copy_external_file_to_cache(path, subfolder)
         return _to_manifest_url(str(adopted), subfolder), str(adopted)
 
     if _is_absolute_local_url(url):
@@ -302,7 +302,7 @@ def scan_meeting_folders(folder_path: str) -> list[dict]:
         match = match_meeting_folder(sub.name)
         if not match:
             continue
-        items = scan_subfolder(str(sub))
+        items = list(partition_media_items([], scan_subfolder(str(sub))).unique_items)
         result.append({
             "path":        str(sub),
             "name":        sub.name,
@@ -318,7 +318,7 @@ def scan_subfolder(subfolder_path: str) -> list[dict]:
     Escaneia uma subpasta e retorna todos os itens de mídia:
     1. Arquivos de mídia na raiz da subpasta
     2. Arquivos de mídia em .solin_cache/ (outputs de processamento)
-    3. Virtual items do manifesto (vídeos de .jwpub/.jwlplaylist)
+    3. Ocorrências virtuais do manifesto (.jwpub/.jwlplaylist)
     Ordenados por título (case-insensitive).
     """
     sub = Path(subfolder_path)
@@ -339,6 +339,12 @@ def _scan_subfolder(sub: Path, manifest: dict) -> list[dict]:
         for out_name in entry.get("outputs", []):
             allowed_cache_files.add(out_name)
     allowed_cache_files.update(_playlist_cache_references(manifest))
+    virtual_local_resources = {
+        _manifest_resource_key(str(vi.get("url") or ""), sub)
+        for entry in manifest.get("processed", {}).values()
+        for vi in entry.get("virtual_items", [])
+        if vi.get("url") and not str(vi["url"]).startswith(("http://", "https://"))
+    }
 
     # 1. Arquivos de mídia na raiz da subpasta
     for f in sub.iterdir():
@@ -361,17 +367,22 @@ def _scan_subfolder(sub: Path, manifest: dict) -> list[dict]:
             if f.name not in allowed_cache_files:
                 continue
             ext = f.suffix.lower()
-            if ext in SCAN_EXTS:
+            if (
+                ext in SCAN_EXTS
+                and _manifest_resource_key(str(f), sub) not in virtual_local_resources
+            ):
                 items.append(_physical_playlist_item(f))
 
-    # 3. Virtual items do manifesto (URLs de vídeos/áudios de .jwpub/.jwlplaylist)
+    # 3. Manifest-backed occurrences (remote media and embedded JWL assets).
     for src_name, entry in manifest.get("processed", {}).items():
-        for vi in entry.get("virtual_items", []):
-            vid = vi.get("id") or _path_id(src_name + vi.get("url", ""))
-            items.append({
+        for occurrence_index, vi in enumerate(entry.get("virtual_items", [])):
+            vid = vi.get("id") or _path_id(
+                f"{src_name}:{occurrence_index}:{vi.get('url', '')}"
+            )
+            virtual_item = {
                 "id":           vid,
                 "title":        vi.get("title", src_name),
-                "url":          vi.get("url", ""),
+                "url":          _from_manifest_url(str(vi.get("url") or ""), sub),
                 "type":         vi.get("type", "video"),
                 "key_symbol":   vi.get("key_symbol"),
                 "track":        vi.get("track"),
@@ -380,11 +391,57 @@ def _scan_subfolder(sub: Path, manifest: dict) -> list[dict]:
                 "meps_language": vi.get("meps_language", 0),
                 "_virtual":     True,
                 "_source":      src_name,
-            })
+            }
+            for field in (
+                "start_trim_ticks",
+                "end_trim_ticks",
+                "base_duration_ticks",
+                "accuracy",
+                "end_action",
+            ):
+                if field in vi:
+                    virtual_item[field] = vi[field]
+            items.append(virtual_item)
 
     # Ordena por título
     items.sort(key=lambda it: it.get("title", "").lower())
     return items
+
+
+def _new_scanned_playlist_items(
+    saved_items: list[dict],
+    scanned_items: list[dict],
+) -> list[dict]:
+    """Reconcile physical discoveries and manifest-backed occurrences once."""
+
+    saved_ids = {
+        str(item.get("id") or "") for item in saved_items if item.get("id")
+    }
+    physical_candidates = [
+        candidate for candidate in scanned_items if not candidate.get("_virtual")
+    ]
+    new_physical = partition_media_items(
+        saved_items, physical_candidates
+    ).unique_items
+    known_ids = saved_ids | {
+        str(item.get("id") or "") for item in new_physical if item.get("id")
+    }
+    virtual_candidates: list[dict] = []
+    for candidate in scanned_items:
+        if not candidate.get("_virtual"):
+            continue
+        candidate_id = str(candidate.get("id") or "")
+        if candidate_id in known_ids:
+            continue
+        virtual_candidates.append(candidate)
+        known_ids.add(candidate_id)
+    new_virtual = partition_media_items(
+        [*saved_items, *new_physical],
+        virtual_candidates,
+        occurrence_policy=PLAYLIST_MEDIA_OCCURRENCES,
+    ).unique_items
+    selected = {id(item) for item in (*new_physical, *new_virtual)}
+    return [item for item in scanned_items if id(item) in selected]
 
 
 def _manifest_playlist_item_count(
@@ -407,7 +464,7 @@ def _manifest_playlist_item_count(
             )
             saved_items.append(runtime_item)
 
-    new_items = partition_media_items(saved_items, scanned_items).unique_items
+    new_items = _new_scanned_playlist_items(saved_items, scanned_items)
     return len(saved_items) + len(new_items)
 
 
@@ -528,7 +585,6 @@ def load_manifest_playlist(subfolder_path: str) -> dict:
         portable_url, runtime_url = _portable_playlist_url(
             resolved_url,
             sub,
-            str(si.get("id") or ""),
         )
         if portable_url != raw_url:
             si["url"] = portable_url
@@ -565,8 +621,6 @@ def load_manifest_playlist(subfolder_path: str) -> dict:
         if url:
             current_by_url[url] = ci
 
-    saved_urls = {it.get("url", "") for it in saved_items if it.get("url")}
-    
     # Reconcile: keep saved order for ALL items, even if file is missing.
     # Missing files are rendered as "Offline / Syncing" by the UI.
     reconciled = []
@@ -584,11 +638,9 @@ def load_manifest_playlist(subfolder_path: str) -> dict:
             # It may be syncing via a cloud service or temporarily moved.
             reconciled.append(si)
 
-    # Add new items not in saved order
-    for ci in current_items:
-        url = ci.get("url", "")
-        if url and url not in saved_urls:
-            reconciled.append(ci)
+    # Physical discoveries are resource-unique; virtual video occurrences are
+    # distinguished by node ID, even when they share one media resource.
+    reconciled.extend(_new_scanned_playlist_items(saved_items, current_items))
 
     return {
         "id":       _path_id(sub),
@@ -618,7 +670,6 @@ def save_manifest_playlist(subfolder_path: str, pl: dict) -> None:
         portable_url, runtime_url = _portable_playlist_url(
             str(pi.get("url") or ""),
             sub,
-            str(pi.get("id") or ""),
         )
         pi["url"] = portable_url
         if runtime_url is not None:
@@ -637,11 +688,25 @@ def save_manifest_playlist(subfolder_path: str, pl: dict) -> None:
     MANIFEST_REPOSITORY.update(sub, update_manifest, strict=True)
 
 
-def remove_item_from_manifest(subfolder_path: str, item: dict) -> bool:
+def _manifest_resource_key(url: str, folder: Path) -> str:
+    if not url:
+        return ""
+    if url.startswith(("http://", "https://")):
+        return url.strip()
+    resolved = _from_manifest_url(url, folder)
+    return os.path.normcase(os.path.normpath(os.path.abspath(resolved)))
+
+
+def remove_item_from_manifest(
+    subfolder_path: str,
+    item: Mapping[str, Any],
+    *,
+    remaining_items: Iterable[Mapping[str, Any]] = (),
+) -> bool:
     """
-    Remove a single item from a watched folder's manifest and delete its
-    physical file if it resides inside the watched folder (either in the root
-    or inside `.solin_cache/`).
+    Remove one playlist occurrence from a watched folder's manifest. Delete
+    its physical file only when no remaining occurrence references the media
+    and the file resides inside the watched folder.
     
     If the item is a virtual item (e.g. from a `.jwlplaylist`), it is removed
     specifically from the `virtual_items` list of its source file, ensuring
@@ -653,28 +718,89 @@ def remove_item_from_manifest(subfolder_path: str, item: dict) -> bool:
     if not sub.is_dir():
         return False
 
-    item_url = item.get("url", "")
-    url_path = Path(item_url) if item_url else None
+    item_url = str(item.get("url") or "")
+    item_id = str(item.get("id") or "")
+    remaining = tuple(remaining_items)
+    resource_key = _manifest_resource_key(item_url, sub)
+    resource_still_referenced = bool(
+        resource_key
+        and any(
+            _manifest_resource_key(str(other.get("url") or ""), sub) == resource_key
+            for other in remaining
+        )
+    )
+    resolved_url = _from_manifest_url(item_url, sub) if item_url else ""
+    url_path = Path(resolved_url) if resolved_url else None
     changed = False
-    delete_physical = False
-    if url_path and url_path.is_file():
-        norm_sub = os.path.normpath(str(sub))
-        norm_url = os.path.normpath(str(url_path))
-        delete_physical = norm_url.startswith(norm_sub + os.sep)
+    delete_physical = bool(
+        not resource_still_referenced
+        and url_path
+        and url_path.is_file()
+        and _path_is_inside(url_path, sub)
+    )
 
     def update_manifest(manifest: dict) -> bool:
-        nonlocal changed
+        nonlocal changed, resource_still_referenced
+        playlist = manifest.get("playlist", {})
+        items = playlist.get("items", [])
+        remove_index = next(
+            (
+                index
+                for index, candidate in enumerate(items)
+                if item_id and str(candidate.get("id") or "") == item_id
+            ),
+            None,
+        )
+        if remove_index is None and not item_id and item_url:
+            portable_url = _to_manifest_url(resolved_url, sub)
+            remove_index = next(
+                (
+                    index
+                    for index, candidate in enumerate(items)
+                    if str(candidate.get("url") or "") in {item_url, portable_url}
+                ),
+                None,
+            )
+        if remove_index is not None:
+            del items[remove_index]
+            changed = True
+        if resource_key:
+            resource_still_referenced = resource_still_referenced or any(
+                _manifest_resource_key(str(candidate.get("url") or ""), sub)
+                == resource_key
+                for candidate in items
+            )
+
         processed = manifest.get("processed", {})
         if item.get("_virtual") and item.get("_source"):
             src_name = item["_source"]
             if src_name in processed:
                 entry = processed[src_name]
                 virtual_items = entry.get("virtual_items", [])
-                filtered = [vi for vi in virtual_items if vi.get("url") != item_url]
-                if len(filtered) != len(virtual_items):
-                    entry["virtual_items"] = filtered
+                virtual_index = next(
+                    (
+                        index
+                        for index, candidate in enumerate(virtual_items)
+                        if item_id and str(candidate.get("id") or "") == item_id
+                    ),
+                    None,
+                )
+                if virtual_index is None and not item_id:
+                    virtual_index = next(
+                        (
+                            index
+                            for index, candidate in enumerate(virtual_items)
+                            if _manifest_resource_key(
+                                str(candidate.get("url") or ""), sub
+                            )
+                            == resource_key
+                        ),
+                        None,
+                    )
+                if virtual_index is not None:
+                    del virtual_items[virtual_index]
                     changed = True
-        elif url_path:
+        if not resource_still_referenced and url_path:
             target_basename = url_path.name
             for entry in processed.values():
                 outputs = entry.get("outputs", [])
@@ -683,17 +809,10 @@ def remove_item_from_manifest(subfolder_path: str, item: dict) -> bool:
                     changed = True
                     break
 
-        playlist = manifest.get("playlist", {})
-        items = playlist.get("items", [])
-        if items and item_url:
-            filtered = [candidate for candidate in items if candidate.get("url", "") != item_url]
-            if len(filtered) != len(items):
-                playlist["items"] = filtered
-                changed = True
         return changed
 
     MANIFEST_REPOSITORY.update(sub, update_manifest, strict=True)
-    if delete_physical and url_path is not None:
+    if delete_physical and not resource_still_referenced and url_path is not None:
         try:
             url_path.unlink(missing_ok=True)
             changed = True
@@ -1199,26 +1318,47 @@ class WatchedFolderSyncThread(QThread):
             staging_dir = Path(tmp)
             outputs = []
             virtuals = []
+            embedded_assets: dict[tuple[str, bytes, str], str] = {}
             for raw in data.get("items", []):
                 self._check_interrupted()
                 url = raw.get("url") or raw.get("jworg_url") or ""
                 if raw.get("data") and not url:
                     ext = Path(raw.get("filename", "media")).suffix or ".mp4"
-                    fname = f"embedded_{uuid.uuid4().hex[:12]}{ext}"
-                    (staging_dir / fname).write_bytes(raw["data"])
-                    outputs.append(fname)
-                else:
-                    virtuals.append({
-                        "id":            str(uuid.uuid4()),
-                        "title":         raw.get("title", jwl_path.stem),
-                        "url":           url,
-                        "type":          raw.get("type", "video"),
-                        "key_symbol":    raw.get("key_symbol"),
-                        "track":         raw.get("track"),
-                        "issue_tag":     raw.get("issue_tag"),
-                        "doc_id":        raw.get("doc_id"),
-                        "meps_language": raw.get("language", 0),
-                    })
+                    asset_key = str(raw.get("embedded_asset_key") or "")
+                    asset_identity = (
+                        asset_key,
+                        hashlib.sha256(raw["data"]).digest(),
+                        ext.lower(),
+                    )
+                    fname = embedded_assets.get(asset_identity) if asset_key else None
+                    if fname is None:
+                        fname = f"embedded_{uuid.uuid4().hex[:12]}{ext}"
+                        (staging_dir / fname).write_bytes(raw["data"])
+                        outputs.append(fname)
+                        if asset_key:
+                            embedded_assets[asset_identity] = fname
+                    url = (Path(CACHE_DIR_NAME) / fname).as_posix()
+                virtual_item = {
+                    "id":            str(uuid.uuid4()),
+                    "title":         raw.get("title", jwl_path.stem),
+                    "url":           url,
+                    "type":          raw.get("type", "video"),
+                    "key_symbol":    raw.get("key_symbol"),
+                    "track":         raw.get("track"),
+                    "issue_tag":     raw.get("issue_tag"),
+                    "doc_id":        raw.get("doc_id"),
+                    "meps_language": raw.get("language", 0),
+                }
+                for field in (
+                    "start_trim_ticks",
+                    "end_trim_ticks",
+                    "base_duration_ticks",
+                    "accuracy",
+                    "end_action",
+                ):
+                    if field in raw:
+                        virtual_item[field] = raw[field]
+                virtuals.append(virtual_item)
             self._check_interrupted()
             return _publish_staged_outputs(staging_dir, cache, outputs), virtuals
 

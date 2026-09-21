@@ -121,6 +121,14 @@ class MediaController(QObject):
         return self._session.current_url
 
     @property
+    def current_occurrence_id(self) -> str:
+        return self._request.occurrence_id if self._request is not None else ""
+
+    @property
+    def current_occurrence_container_id(self) -> str:
+        return self._request.occurrence_container_id if self._request is not None else ""
+
+    @property
     def local_path(self) -> str | None:
         return self._session.local_path
 

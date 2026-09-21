@@ -199,6 +199,15 @@ class MeetingTreeSession(QObject):
             self._operations.pop(str(node.get("id") or ""), None)
         self._schedule_publish()
 
+    def pending_nodes(self) -> tuple[dict[str, Any], ...]:
+        """Return pending insertion roots for identity reservation."""
+
+        return tuple(
+            node
+            for pending in self._pending.values()
+            for node in pending.nodes
+        )
+
     def remove_pending_node(self, node_id: str) -> bool:
         operation_id = next(
             (

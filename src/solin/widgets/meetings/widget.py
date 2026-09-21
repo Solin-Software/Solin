@@ -67,7 +67,10 @@ from ...core.jw.songs import JWSongsStore
 from ...ui.helpers import (
     QmlPointerCursorState,
 )
-from ...ui.media_insertion_feedback import connect_media_picker_feedback
+from ...ui.media_insertion_feedback import (
+    connect_media_duplicate_feedback,
+    connect_media_picker_feedback,
+)
 from ...core.meetings.tree_store import (
     MeetingTreeSnapshot,
     MeetingTreeStore,
@@ -243,6 +246,7 @@ class StudyDetailView(QWidget):
                 self._canonical_media_recovery_handler
             )
         self.controller.storageSaveFailed.connect(self._on_storage_save_failed)
+        connect_media_duplicate_feedback(self.controller, self._notifications)
         self.controller.set_sync_root(self._watched_folder)
         loaded_snapshot = self.controller.load_saved_tree(
             self._saved_snapshot,
@@ -568,6 +572,7 @@ class _MemorialDetailView(QWidget):
         self.controller.pointerCursorExited.connect(self.end_qml_shaped_pointer_cursor)
         self.controller.pointerExited.connect(self.end_qml_pointer_cursor)
         self.controller.storageSaveFailed.connect(self._on_storage_save_failed)
+        connect_media_duplicate_feedback(self.controller, self._notifications)
 
         self.catalog_bridge = JWMediaCatalogBridge(
             self._jw_catalog_service_factory,

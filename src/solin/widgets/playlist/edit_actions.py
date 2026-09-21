@@ -17,7 +17,7 @@ from ...core.foundation.constants import (
 )
 from ...core.media.formats import MEDIA_EXTS, media_type_from_path
 from ...core.media.destinations import create_media_destination_request
-from ...core.media.identity import contains_media, partition_media_items
+from ...core.media.identity import PLAYLIST_MEDIA_OCCURRENCES, partition_media_items
 from ...core.media.insertion import MediaInsertPayload, MediaInsertResult
 from ...core.media.operations import (
     MediaOperationPresentation,
@@ -43,6 +43,7 @@ from ...core.playlists.items import (
     copy_playlist_item_for_destination,
     create_playlist_item,
     create_playlist_item_from_insert,
+    distinct_playlist_item_ids,
 )
 from ...ui.qml.media_tree.state import MediaAvailability
 from .dialogs import NameDialog
@@ -109,10 +110,11 @@ class PlaylistEditActionsMixin:
                         **({"section_id": section_id} if section_id else {}),
                     )
                 )
-                if contains_media(
+                if partition_media_items(
                     [*self._pl.get("items", []), *pending_items],
-                    candidate,
-                ):
+                    [candidate],
+                    occurrence_policy=PLAYLIST_MEDIA_OCCURRENCES,
+                ).duplicate_items:
                     skipped += 1
                     continue
                 list_id = target_list_id or self._list_id_for_section(section_id)
@@ -134,10 +136,11 @@ class PlaylistEditActionsMixin:
                     **({"section_id": section_id} if section_id else {}),
                 )
             )
-            if contains_media(
+            if partition_media_items(
                 [*self._pl.get("items", []), *new_items],
-                candidate,
-            ):
+                [candidate],
+                occurrence_policy=PLAYLIST_MEDIA_OCCURRENCES,
+            ).duplicate_items:
                 skipped += 1
                 continue
             new_items.append(candidate)
@@ -261,7 +264,11 @@ class PlaylistEditActionsMixin:
                         for current in active_playlist.get("items", [])
                         if str(current.get("id") or "") not in auto_adopted_ids
                     ]
-            if contains_media(active_playlist.get("items", []), item):
+            if partition_media_items(
+                active_playlist.get("items", []),
+                [item],
+                occurrence_policy=PLAYLIST_MEDIA_OCCURRENCES,
+            ).duplicate_items:
                 self._tree_session.remove_pending(item_id)
                 self._tree_session.refresh()
                 self._sync_playlist_chrome(emit_data_changed=False)
@@ -332,7 +339,11 @@ class PlaylistEditActionsMixin:
         pl_item_id = str(uuid.uuid4())
         pl_item = create_playlist_item_from_insert(payload, item_id=pl_item_id)
 
-        partition = partition_media_items(self._pl.get("items", []), [pl_item])
+        partition = partition_media_items(
+            self._pl.get("items", []),
+            [pl_item],
+            occurrence_policy=PLAYLIST_MEDIA_OCCURRENCES,
+        )
         if partition.duplicate_items:
             return MediaInsertResult(duplicate_items=partition.duplicate_items)
 
@@ -552,7 +563,12 @@ class PlaylistEditActionsMixin:
                 )
             norm.append(item)
         temp_id = playlist_id or f"__temp__:{uuid.uuid4()}"
-        pl = {"id": temp_id, "name": display_name, "items": norm, "_temp": True}
+        pl = {
+            "id": temp_id,
+            "name": display_name,
+            "items": distinct_playlist_item_ids([], norm),
+            "_temp": True,
+        }
         self.load_playlist(pl)
         return temp_id
 
