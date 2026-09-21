@@ -5,7 +5,7 @@ import time
 import unittest
 from pathlib import Path
 
-from PySide6.QtCore import QCoreApplication
+from PySide6.QtCore import QCoreApplication, QEvent
 
 from solin.core.jw.catalog import JWMediaCatalogCachePaths
 from solin.core.jw.catalog_service import JWMediaCatalogService
@@ -214,6 +214,8 @@ class JWMediaCatalogBridgeProgressTests(unittest.TestCase):
     def tearDown(self):
         if hasattr(self, "bridge"):
             self.bridge.cleanup()
+            self.bridge.deleteLater()
+            QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
         self._tmp.cleanup()
 
     def _catalog_service(self, parent):
