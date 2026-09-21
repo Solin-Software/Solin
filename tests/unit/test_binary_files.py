@@ -35,6 +35,18 @@ def test_write_bytes_atomic_removes_temporary_file_when_replacement_fails(
     assert list(tmp_path.glob(".certificate.cer.*")) == []
 
 
+def test_publish_bytes_immutable_never_replaces_a_different_writer(tmp_path) -> None:
+    target = tmp_path / "operations" / "immutable.json"
+
+    assert binary_files.publish_bytes_immutable(target, b"first")
+    assert not binary_files.publish_bytes_immutable(target, b"first")
+    with pytest.raises(FileExistsError):
+        binary_files.publish_bytes_immutable(target, b"second")
+
+    assert target.read_bytes() == b"first"
+    assert list(target.parent.glob(".immutable.json.*")) == []
+
+
 @pytest.mark.skipif(os.name == "nt", reason="POSIX permission bits are not enforced on Windows")
 def test_write_bytes_atomic_applies_requested_posix_mode(tmp_path) -> None:
     target = tmp_path / "private.key"

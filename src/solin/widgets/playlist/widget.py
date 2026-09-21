@@ -474,6 +474,13 @@ class PlaylistEditView(
             self._playlist_save_failure_notified = False
 
     def _schedule_manifest_save(self, folder_path: str, playlist: dict) -> None:
+        try:
+            self._watched_folder_playlist_store.stage_playlist(folder_path, playlist)
+        except (OSError, ValueError):
+            log.exception("Could not persist linked-playlist intent locally")
+            self._notifications.error(
+                self.tr("Could not save playlist changes. Retrying automatically.")
+            )
         self._manifest_state_generation += 1
         if self._wf_refresh_inflight is not None:
             self._wf_refresh_superseded = True
@@ -577,7 +584,10 @@ class PlaylistEditView(
             current_key = (
                 os.path.normcase(os.path.abspath(self._watched_path)) if self._watched_path else ""
             )
-            if is_latest and key == current_key and self._wf_refresh_pending:
+            if is_latest and key == current_key:
+                # A durable local save may still have an unpublished cloud
+                # outbox. Read its status and arm retries even if no watcher
+                # event arrives (for example while the provider locks files).
                 self._wf_refresh_pending = False
                 QTimer.singleShot(0, self.refresh_watched_folder)
         elif not is_latest:
@@ -605,14 +615,15 @@ class PlaylistEditView(
                 request.retry_index = 0
                 request.next_attempt_at = now
             else:
-                self._pending_manifest_saves.pop(key, None)
+                # Closing the error dialog must never discard accepted edits.
+                request.next_attempt_at = now + 30
         else:
             if self._warn_manifest_save_failed(request.folder_path, str(error)):
                 request.first_attempt_at = None
                 request.retry_index = 0
                 request.next_attempt_at = now
             else:
-                self._pending_manifest_saves.pop(key, None)
+                request.next_attempt_at = now + 30
 
         self._arm_manifest_save_timer()
 
@@ -1194,7 +1205,14 @@ class PlaylistEditView(
             if can_apply:
                 self._schedule_watched_folder_refresh_retry()
         elif snapshot is not None and can_apply:
-            self._reset_watched_folder_refresh_retry()
+            if snapshot.playlist.get("__sync_pending"):
+                self._schedule_watched_folder_refresh_retry()
+            else:
+                self._reset_watched_folder_refresh_retry()
+            error_message = str(snapshot.playlist.get("__sync_error") or "")
+            if error_message and error_message != getattr(self, "_wf_sync_problem", ""):
+                self._notifications.warning(self.tr("Could not update the linked folder."))
+            self._wf_sync_problem = error_message
             self._apply_watched_folder_snapshot(snapshot)
         elif snapshot is not None and key == current_key:
             self._wf_refresh_pending = True
@@ -1216,6 +1234,9 @@ class PlaylistEditView(
         for item_id in availability_changed_ids:
             self._cancel_thumbnail_requests_for_item(item_id)
         if self._watched_playlist_equivalent(pl):
+            # Causal history may advance without a visible item change.
+            if self._pl is not None and "__linked_sync" in pl:
+                self._pl["__linked_sync"] = pl["__linked_sync"]
             if availability_changed_ids:
                 self._pl = pl
                 self._wf_file_availability = availability

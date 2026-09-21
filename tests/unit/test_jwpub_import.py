@@ -51,6 +51,8 @@ def test_jwpub_reader_persists_images_and_removes_extraction_dir(
 
     image_paths = [Path(item["url"]) for item in items if item["type"] == "image"]
     assert image_paths
+    assert [item["source_item_id"] for item in items if item["type"] == "image"] == ["4"]
+    assert [item["source_item_id"] for item in items if item["type"] == "video"] == ["5"]
     assert all(path.parent == destination and path.is_file() for path in image_paths)
     assert extraction_dirs
     assert all(not path.exists() for path in extraction_dirs)

@@ -55,6 +55,7 @@ Tests are grouped under `tests/unit`, `tests/integration`, `tests/contract`, and
 - [Contributing](CONTRIBUTING.md)
 - [Building and platform requirements](docs/building.md)
 - [Local remote control](docs/remote-control.md)
+- [Linked-folder collaboration and migration](docs/linked-folder-sync.md)
 - [Translations](docs/translations.md)
 - [Development tools](docs/development-tools.md)
 - [Versioning and releases](docs/releases.md)

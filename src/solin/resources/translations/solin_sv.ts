@@ -4342,6 +4342,16 @@ Den här åtgärden kan inte ångras.</translation>
         <source>No media files found in &quot;{name}&quot;.</source>
         <translation type="vanished">Ingen mediefil hittad i &quot;{name}&quot;.</translation>
     </message>
+    <message>
+        <source>Reset synchronization</source>
+        <translation>Återställ synkronisering</translation>
+    </message>
+    <message>
+        <source>Reset synchronization for "{name}"?
+The current organization and files will be preserved. Pending changes from the previous synchronization will not be applied.</source>
+        <translation>Återställa synkroniseringen för ”{name}”?
+Den nuvarande ordningen och filerna bevaras. Väntande ändringar från den tidigare synkroniseringen tillämpas inte.</translation>
+    </message>
 </context>
 <context>
     <name>PlaylistPanel</name>
@@ -9272,6 +9282,10 @@ Klicka på ”Ladda ner” för att öppna nedladdningssidan.</translation>
         <location line="+9"/>
         <source>Delete</source>
         <translation>Ta bort</translation>
+    </message>
+    <message>
+        <source>Reset synchronization</source>
+        <translation>Återställ synkronisering</translation>
     </message>
 </context>
 <context>

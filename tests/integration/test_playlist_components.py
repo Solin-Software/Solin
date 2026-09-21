@@ -4,6 +4,7 @@ from PySide6.QtWidgets import QApplication, QMenu
 from solin.widgets.playlist.components import (
     PLAYLIST_CARD_MENU_STYLESHEET,
     playlist_card_menu_stylesheet,
+    WatchedFolderCard,
 )
 
 
@@ -31,3 +32,21 @@ def test_playlist_menu_stylesheet_is_accepted_by_qt() -> None:
 
     assert not any("Could not parse stylesheet" in message for message in messages)
     menu.deleteLater()
+
+
+def test_watched_folder_menu_exposes_sync_reset(monkeypatch):
+    from solin.widgets.playlist import components
+
+    card = WatchedFolderCard("/linked/Playlist", "Playlist", 1, None)
+    requests = []
+    card.reset_sync_req.connect(requests.append)
+
+    class InspectMenu(QMenu):
+        def exec(self, *_args):
+            action = next(action for action in self.actions() if action.text() == "Reset synchronization")
+            action.trigger()
+
+    monkeypatch.setattr(components, "QMenu", InspectMenu)
+    card._show_menu()
+    assert requests == ["/linked/Playlist"]
+    card.deleteLater()

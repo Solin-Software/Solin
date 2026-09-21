@@ -3542,6 +3542,16 @@ This action cannot be undone.</source>
 This action cannot be undone.</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Reset synchronization</source>
+        <translation>Reset synchronization</translation>
+    </message>
+    <message>
+        <source>Reset synchronization for "{name}"?
+The current organization and files will be preserved. Pending changes from the previous synchronization will not be applied.</source>
+        <translation>Reset synchronization for "{name}"?
+The current organization and files will be preserved. Pending changes from the previous synchronization will not be applied.</translation>
+    </message>
 </context>
 <context>
     <name>PlaylistPanel</name>
@@ -8062,6 +8072,10 @@ Click &apos;Download&apos; to open the download page.</translation>
         <location line="+9"/>
         <source>Delete</source>
         <translation type="unfinished">Delete</translation>
+    </message>
+    <message>
+        <source>Reset synchronization</source>
+        <translation>Reset synchronization</translation>
     </message>
 </context>
 <context>

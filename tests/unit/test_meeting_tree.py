@@ -2473,10 +2473,11 @@ class MeetingTreeControllerMeetingFolderImportTests(unittest.TestCase):
             )
             captured = {}
 
-            def fake_insert(list_id, insert_index, nodes):
+            def fake_insert(list_id, insert_index, nodes, *, on_completed):
                 captured["list_id"] = list_id
                 captured["insert_index"] = insert_index
                 captured["nodes"] = nodes
+                on_completed(nodes)
 
             def fake_record(source_data, node_ids):
                 captured["record_source"] = source_data
@@ -2906,7 +2907,7 @@ class MeetingTreeControllerMeetingFolderImportTests(unittest.TestCase):
 
             self.assertIs(record, records["old-machine-key"])
 
-    def test_remove_linked_root_media_deletes_import_record(self):
+    def test_remove_linked_root_media_retains_discovery_suppression_record(self):
         class FakeController:
             pass
 
@@ -2947,7 +2948,7 @@ class MeetingTreeControllerMeetingFolderImportTests(unittest.TestCase):
             self.assertFalse(source.exists())
             self.assertEqual(controller._nodes, [])
             self.assertEqual(controller._linked_folder_files, {})
-            self.assertEqual(controller._meeting_folder_imports, {})
+            self.assertEqual(controller._meeting_folder_imports["source-key"]["node_ids"], [])
             self.assertTrue(controller.saved)
 
     def test_remove_linked_derived_output_keeps_source_record(self):

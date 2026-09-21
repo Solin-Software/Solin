@@ -4343,6 +4343,16 @@ Hindi na ito maibabalik.</translation>
         <source>No media files found in &quot;{name}&quot;.</source>
         <translation type="vanished">Walang nakitang mga media file sa &quot;{name}&quot;.</translation>
     </message>
+    <message>
+        <source>Reset synchronization</source>
+        <translation>I-reset ang pag-sync</translation>
+    </message>
+    <message>
+        <source>Reset synchronization for "{name}"?
+The current organization and files will be preserved. Pending changes from the previous synchronization will not be applied.</source>
+        <translation>I-reset ang pag-sync para sa "{name}"?
+Pananatilihin ang kasalukuyang pagkakaayos at mga file. Hindi ilalapat ang mga nakabinbing pagbabago mula sa nakaraang pag-sync.</translation>
+    </message>
 </context>
 <context>
     <name>PlaylistPanel</name>
@@ -9273,6 +9283,10 @@ I-click ang &apos;Download&apos; para i-open ang download page.</translation>
         <location line="+9"/>
         <source>Delete</source>
         <translation>Burahin</translation>
+    </message>
+    <message>
+        <source>Reset synchronization</source>
+        <translation>I-reset ang pag-sync</translation>
     </message>
 </context>
 <context>

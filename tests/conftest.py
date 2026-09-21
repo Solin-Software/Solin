@@ -17,6 +17,18 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 _QT_APPLICATION = QApplication.instance() or QApplication([])
 
 
+@pytest.fixture(autouse=True)
+def isolated_linked_sync_state(tmp_path, monkeypatch):
+    """Never read/write the operator's durable sync history from test replicas."""
+    from solin.core.ingest.sync import journal
+    from solin.core.playlists import linked_folder
+
+    linked_folder._SERVICES.clear()
+    monkeypatch.setattr(journal, "_default_state_dir", lambda: tmp_path / "replica-state")
+    yield
+    linked_folder._SERVICES.clear()
+
+
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
     for item in items:
         try:

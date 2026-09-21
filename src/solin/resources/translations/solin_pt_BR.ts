@@ -4347,6 +4347,16 @@ Esta ação não pode ser desfeita.</translation>
         <source>No media files found in &quot;{name}&quot;.</source>
         <translation type="vanished">Nenhum arquivo de mídia encontrado em &quot;{name}&quot;.</translation>
     </message>
+    <message>
+        <source>Reset synchronization</source>
+        <translation>Reiniciar sincronização</translation>
+    </message>
+    <message>
+        <source>Reset synchronization for "{name}"?
+The current organization and files will be preserved. Pending changes from the previous synchronization will not be applied.</source>
+        <translation>Reiniciar a sincronização de "{name}"?
+A organização atual e os arquivos serão preservados. As alterações pendentes da sincronização anterior não serão aplicadas.</translation>
+    </message>
 </context>
 <context>
     <name>PlaylistPanel</name>
@@ -9294,6 +9304,10 @@ Clique em &quot;Baixar&quot; para abrir a página de download.</translation>
         <location line="+9"/>
         <source>Delete</source>
         <translation>Excluir</translation>
+    </message>
+    <message>
+        <source>Reset synchronization</source>
+        <translation>Reiniciar sincronização</translation>
     </message>
 </context>
 <context>

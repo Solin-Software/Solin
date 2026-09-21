@@ -20,6 +20,7 @@ Resultado de `parse()`:
     "name": str,                  # nome da playlist
     "items": [
         {
+            "source_item_id": str,       # stable PlaylistItem ID within this source
             "title":      str,
             "type":       "image" | "video",
             "source":     "embedded" | "jworg",
@@ -341,6 +342,7 @@ class JWLPlaylistReader:
                 self._report_progress("items", index + 1, total_items)
                 continue
 
+            entry["source_item_id"] = str(iid)
             items.append(entry)
             self._raise_if_cancelled()
             self._report_progress("items", index + 1, total_items)

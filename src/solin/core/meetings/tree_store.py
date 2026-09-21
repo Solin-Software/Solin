@@ -127,6 +127,7 @@ class MeetingTreeSnapshot:
     source_checksum: str = ""
     revision: int = 0
     is_sign_language: bool = False
+    linked_sync: dict[str, Any] = field(default_factory=dict)
 
     @property
     def media_count(self) -> int:
@@ -177,6 +178,8 @@ class MeetingTreeStore:
             raise ValueError("Meeting tree storage 'trees' must be an object")
         for record in trees.values():
             if isinstance(record, dict):
+                if "linked_sync" in record and not isinstance(record["linked_sync"], dict):
+                    raise ValueError("Meeting linked sync binding must be an object")
                 record.setdefault("revision", 0)
                 _migrate_record_metadata(record)
                 if version < 6:
@@ -394,6 +397,7 @@ class MeetingTreeStore:
         canonical_nodes: list[Node] | None = None,
         canonical_reset_generation: int | None = None,
         hidden_canonical_media: dict[str, Node] | None = None,
+        linked_sync: dict[str, Any] | None = None,
     ) -> MeetingTreeSnapshot:
         with self._lock:
             snapshot = self._save_locked(
@@ -408,6 +412,7 @@ class MeetingTreeStore:
                 canonical_nodes=canonical_nodes,
                 canonical_reset_generation=canonical_reset_generation,
                 hidden_canonical_media=hidden_canonical_media,
+                linked_sync=linked_sync,
             )
         self._publish_changed()
         return snapshot
@@ -575,6 +580,7 @@ class MeetingTreeStore:
         canonical_nodes: list[Node] | None,
         canonical_reset_generation: int | None,
         hidden_canonical_media: dict[str, Node] | None,
+        linked_sync: dict[str, Any] | None = None,
     ) -> MeetingTreeSnapshot:
         data = copy.deepcopy(self._runtime_data())
         trees = data.setdefault("trees", {})
@@ -652,6 +658,10 @@ class MeetingTreeStore:
             record["linked_folder_files"] = dict(linked_folder_files)
         if meeting_folder_imports:
             record["meeting_folder_imports"] = copy.deepcopy(meeting_folder_imports)
+        if linked_sync is not None:
+            record["linked_sync"] = copy.deepcopy(linked_sync)
+        elif isinstance(existing, dict) and isinstance(existing.get("linked_sync"), dict):
+            record["linked_sync"] = copy.deepcopy(existing["linked_sync"])
         trees[tree_key] = record
         self._write(data)
         snapshot = _snapshot_from_record(tree_key, record)
@@ -824,6 +834,7 @@ def _snapshot_from_record(
         source_checksum=str(record.get("source_checksum", "")),
         revision=max(0, _int_or_default(record.get("revision"), 0)),
         is_sign_language=key.is_sign_language,
+        linked_sync=copy.deepcopy(record.get("linked_sync", {})),
     )
 
 

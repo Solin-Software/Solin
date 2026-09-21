@@ -4343,6 +4343,16 @@ Deze actie kan niet ongedaan worden gemaakt.</translation>
         <source>No media files found in &quot;{name}&quot;.</source>
         <translation type="vanished">Geen mediabestanden gevonden in &quot;{name}&quot;.</translation>
     </message>
+    <message>
+        <source>Reset synchronization</source>
+        <translation>Synchronisatie opnieuw instellen</translation>
+    </message>
+    <message>
+        <source>Reset synchronization for "{name}"?
+The current organization and files will be preserved. Pending changes from the previous synchronization will not be applied.</source>
+        <translation>Synchronisatie voor "{name}" opnieuw instellen?
+De huidige indeling en bestanden blijven behouden. Openstaande wijzigingen van de vorige synchronisatie worden niet toegepast.</translation>
+    </message>
 </context>
 <context>
     <name>PlaylistPanel</name>
@@ -9273,6 +9283,10 @@ Klik op &apos;Downloaden&apos; om de downloadpagina te openen.</translation>
         <location line="+9"/>
         <source>Delete</source>
         <translation>Verwijderen</translation>
+    </message>
+    <message>
+        <source>Reset synchronization</source>
+        <translation>Synchronisatie opnieuw instellen</translation>
     </message>
 </context>
 <context>

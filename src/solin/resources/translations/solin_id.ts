@@ -4315,6 +4315,16 @@ Tindakan ini tidak dapat dibatalkan.</translation>
         <source>No media files found in &quot;{name}&quot;.</source>
         <translation type="vanished">Tidak ada file media yang ditemukan di &quot;{name}&quot;.</translation>
     </message>
+    <message>
+        <source>Reset synchronization</source>
+        <translation>Atur ulang sinkronisasi</translation>
+    </message>
+    <message>
+        <source>Reset synchronization for "{name}"?
+The current organization and files will be preserved. Pending changes from the previous synchronization will not be applied.</source>
+        <translation>Atur ulang sinkronisasi untuk "{name}"?
+Susunan saat ini dan file akan dipertahankan. Perubahan tertunda dari sinkronisasi sebelumnya tidak akan diterapkan.</translation>
+    </message>
 </context>
 <context>
     <name>PlaylistPanel</name>
@@ -9241,6 +9251,10 @@ Klik &apos;Unduh&apos; untuk membuka halaman unduhan.</translation>
         <location line="+9"/>
         <source>Delete</source>
         <translation>Hapus</translation>
+    </message>
+    <message>
+        <source>Reset synchronization</source>
+        <translation>Atur ulang sinkronisasi</translation>
     </message>
 </context>
 <context>

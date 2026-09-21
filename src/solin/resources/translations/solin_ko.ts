@@ -4315,6 +4315,16 @@ This action cannot be undone.</source>
         <source>No media files found in &quot;{name}&quot;.</source>
         <translation type="vanished">&quot;{name}&quot;에서 미디어 파일을 찾을 수 없습니다.</translation>
     </message>
+    <message>
+        <source>Reset synchronization</source>
+        <translation>동기화 초기화</translation>
+    </message>
+    <message>
+        <source>Reset synchronization for "{name}"?
+The current organization and files will be preserved. Pending changes from the previous synchronization will not be applied.</source>
+        <translation>"{name}"의 동기화를 초기화하시겠습니까?
+현재 구성과 파일은 유지됩니다. 이전 동기화에서 보류 중인 변경 사항은 적용되지 않습니다.</translation>
+    </message>
 </context>
 <context>
     <name>PlaylistPanel</name>
@@ -9241,6 +9251,10 @@ Click &apos;Download&apos; to open the download page.</source>
         <location line="+9"/>
         <source>Delete</source>
         <translation>삭제</translation>
+    </message>
+    <message>
+        <source>Reset synchronization</source>
+        <translation>동기화 초기화</translation>
     </message>
 </context>
 <context>

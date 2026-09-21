@@ -361,6 +361,7 @@ class PlaylistListView(QWidget):
             card.clicked.connect(self.open_watched_folder.emit)
             card.rename_req.connect(self._rename_watched_folder)
             card.delete_req.connect(self._delete_watched_folder)
+            card.reset_sync_req.connect(self._reset_watched_folder_sync)
             card.export_req.connect(self.export_watched_folder_requested.emit)
             card.setEnabled(
                 os.path.normcase(os.path.abspath(sf["path"]))
@@ -536,9 +537,10 @@ class PlaylistListView(QWidget):
         self._submit_watched_folder_mutation(
             folder_path,
             "rename_linked_playlist_folder",
-            lambda: self._watched_folder_file_store.rename_folder(
+            lambda: self._watched_folder_playlist_store.rename_folder(
                 folder_path,
                 new_name,
+                self._watched_folder_file_store,
             ),
         )
 
@@ -558,7 +560,29 @@ class PlaylistListView(QWidget):
         self._submit_watched_folder_mutation(
             folder_path,
             "delete_linked_playlist_folder",
-            lambda: self._watched_folder_file_store.delete_folder(folder_path),
+            lambda: self._watched_folder_playlist_store.delete_folder(
+                folder_path, self._watched_folder_file_store,
+            ),
+        )
+
+    def _reset_watched_folder_sync(self, folder_path: str) -> None:
+        reply = QMessageBox.question(
+            self,
+            self.tr("Reset synchronization"),
+            self.tr(
+                'Reset synchronization for "{name}"?\n'
+                "The current organization and files will be preserved. "
+                "Pending changes from the previous synchronization will not be applied."
+            ).replace("{name}", Path(folder_path).name),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        self._submit_watched_folder_mutation(
+            folder_path,
+            "reset_linked_playlist_sync",
+            lambda: self._watched_folder_playlist_store.reset_sync(folder_path),
         )
 
     def _submit_watched_folder_mutation(

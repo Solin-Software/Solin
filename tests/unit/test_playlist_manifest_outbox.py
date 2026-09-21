@@ -43,6 +43,9 @@ class _Store:
         self.saved: list[tuple[str, dict]] = []
         self.error: BaseException | None = None
 
+    def stage_playlist(self, folder_path: str, playlist: dict) -> None:
+        pass
+
     def save_playlist(self, folder_path: str, playlist: dict) -> None:
         if self.error is not None:
             error = self.error
@@ -79,7 +82,27 @@ def _outbox(store: _Store):
     controller._wf_refresh_inflight = None
     controller._wf_refresh_superseded = False
     controller._wf_refresh_pending = False
+    controller._watched_path = ""
     return controller
+
+
+def test_successful_local_publish_refreshes_to_retry_shared_outbox(monkeypatch) -> None:
+    """Local durability can succeed while cloud publication remains pending."""
+    from solin.widgets.playlist import widget
+
+    controller = _outbox(_Store())
+    controller._watched_path = "C:/linked/one"
+    refreshed = []
+    controller.refresh_watched_folder = lambda: refreshed.append(True)
+    monkeypatch.setattr(widget.QTimer, "singleShot", lambda _delay, callback: callback())
+    PlaylistEditView._schedule_manifest_save(
+        controller, controller._watched_path, {"items": []},
+    )
+    next(iter(controller._pending_manifest_saves.values())).next_attempt_at = 0
+
+    PlaylistEditView._drain_manifest_saves(controller)
+
+    assert refreshed == [True]
 
 
 def test_outbox_keeps_independent_snapshots_when_view_switches_folder() -> None:

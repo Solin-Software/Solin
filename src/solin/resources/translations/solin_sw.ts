@@ -4343,6 +4343,16 @@ Hutaweza kurudisha hatua hii.</translation>
         <source>No media files found in &quot;{name}&quot;.</source>
         <translation type="vanished">Hakuna faili za media zilizopatikana kwenye &quot;{name}&quot;.</translation>
     </message>
+    <message>
+        <source>Reset synchronization</source>
+        <translation>Weka upya usawazishaji</translation>
+    </message>
+    <message>
+        <source>Reset synchronization for "{name}"?
+The current organization and files will be preserved. Pending changes from the previous synchronization will not be applied.</source>
+        <translation>Ungependa kuweka upya usawazishaji wa "{name}"?
+Mpangilio wa sasa na faili zitahifadhiwa. Mabadiliko yanayosubiri kutoka kwenye usawazishaji uliotangulia hayatatumika.</translation>
+    </message>
 </context>
 <context>
     <name>PlaylistPanel</name>
@@ -9273,6 +9283,10 @@ Bofya &apos;Pakua&apos; ili kufungua ukurasa wa kupakua.</translation>
         <location line="+9"/>
         <source>Delete</source>
         <translation>Futa</translation>
+    </message>
+    <message>
+        <source>Reset synchronization</source>
+        <translation>Weka upya usawazishaji</translation>
     </message>
 </context>
 <context>

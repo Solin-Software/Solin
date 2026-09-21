@@ -4315,6 +4315,16 @@ This action cannot be undone.</source>
         <source>No media files found in &quot;{name}&quot;.</source>
         <translation type="vanished">「{name}」内にメディアファイルが見つかりません。</translation>
     </message>
+    <message>
+        <source>Reset synchronization</source>
+        <translation>同期をリセット</translation>
+    </message>
+    <message>
+        <source>Reset synchronization for "{name}"?
+The current organization and files will be preserved. Pending changes from the previous synchronization will not be applied.</source>
+        <translation>「{name}」の同期をリセットしますか？
+現在の配置とファイルは保持されます。以前の同期で保留中の変更は適用されません。</translation>
+    </message>
 </context>
 <context>
     <name>PlaylistPanel</name>
@@ -9241,6 +9251,10 @@ Click &apos;Download&apos; to open the download page.</source>
         <location line="+9"/>
         <source>Delete</source>
         <translation>削除</translation>
+    </message>
+    <message>
+        <source>Reset synchronization</source>
+        <translation>同期をリセット</translation>
     </message>
 </context>
 <context>

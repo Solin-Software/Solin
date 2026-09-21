@@ -223,6 +223,7 @@ class MeetingLinkedFolderSyncTests(unittest.TestCase):
                 linked_folder_files={str(media): "media"},
                 meeting_folder_imports={},
                 expected_revision=0,
+                enable=True,
                 canonical_reset_generation=3,
                 hidden_canonical_media={
                     "media:hidden": {
@@ -237,12 +238,12 @@ class MeetingLinkedFolderSyncTests(unittest.TestCase):
                     }
                 },
             )
-            raw = json.loads((folder / MANIFEST_FILE).read_text(encoding="utf-8"))
+            raw = {MEETING_TREE_KEY: json.loads((folder / ".solin_sync" / "meeting" / "snapshot.json").read_text(encoding="utf-8"))}
             saved_node = raw["meeting_tree"]["nodes"][0]
 
             self.assertEqual(record.revision, 1)
             self.assertEqual(record.canonical_reset_generation, 3)
-            self.assertEqual(raw["meeting_tree"]["schema_version"], 3)
+            self.assertEqual(raw["meeting_tree"]["schema_version"], 4)
             self.assertEqual(saved_node["media_ref"]["file_path"], "talk.mp4")
             self.assertEqual(
                 raw["meeting_tree"]["hidden_canonical_media"]["media:hidden"]["title"],
@@ -303,8 +304,9 @@ class MeetingLinkedFolderSyncTests(unittest.TestCase):
                 linked_folder_files={str(media): "media"},
                 meeting_folder_imports={},
                 expected_revision=0,
+                enable=True,
             )
-            manifest_path = folder / MANIFEST_FILE
+            manifest_path = folder / ".solin_sync" / "meeting" / "snapshot.json"
             before = manifest_path.read_text(encoding="utf-8")
 
             second = service.save_tree(
@@ -315,10 +317,11 @@ class MeetingLinkedFolderSyncTests(unittest.TestCase):
                 linked_folder_files={str(media): "media"},
                 meeting_folder_imports={},
                 expected_revision=first.revision,
+                base_snapshot=first.snapshot,
             )
 
             self.assertEqual(second.revision, first.revision)
-            self.assertEqual(second.canonical_hash, "hash-from-terminal-a")
+            self.assertEqual(second.canonical_hash, "hash-from-terminal-b")
             self.assertEqual(manifest_path.read_text(encoding="utf-8"), before)
 
     def test_manifest_import_records_are_portable_by_source_path(self):
@@ -348,9 +351,10 @@ class MeetingLinkedFolderSyncTests(unittest.TestCase):
                     },
                 },
                 expected_revision=0,
+                enable=True,
             )
 
-            raw = json.loads((folder / MANIFEST_FILE).read_text(encoding="utf-8"))
+            raw = {MEETING_TREE_KEY: json.loads((folder / ".solin_sync" / "meeting" / "snapshot.json").read_text(encoding="utf-8"))}
             imports = raw["meeting_tree"]["meeting_folder_imports"]
             self.assertEqual(list(imports), ["talk.mp4"])
             self.assertEqual(imports["talk.mp4"]["path"], "talk.mp4")
@@ -370,7 +374,16 @@ class MeetingLinkedFolderSyncTests(unittest.TestCase):
             root = Path(tmp)
             folder = root / "2026-05-25 MW"
             folder.mkdir()
-            first = service.save_tree(
+            baseline = service.save_tree(
+                folder,
+                _identity("mwb"),
+                nodes=[],
+                deleted_source_keys=set(),
+                linked_folder_files={},
+                meeting_folder_imports={},
+                enable=True,
+            )
+            service.save_tree(
                 folder,
                 _identity("mwb"),
                 nodes=[{
@@ -382,7 +395,8 @@ class MeetingLinkedFolderSyncTests(unittest.TestCase):
                 deleted_source_keys={"remote-source"},
                 linked_folder_files={},
                 meeting_folder_imports={},
-                expected_revision=0,
+                expected_revision=baseline.revision,
+                base_snapshot=baseline.snapshot,
             )
 
             merged = service.save_tree(
@@ -397,7 +411,8 @@ class MeetingLinkedFolderSyncTests(unittest.TestCase):
                 deleted_source_keys=set(),
                 linked_folder_files={},
                 meeting_folder_imports={},
-                expected_revision=first.revision - 1,
+                expected_revision=baseline.revision,
+                base_snapshot=baseline.snapshot,
             )
             self.assertEqual(
                 {node["id"] for node in merged.nodes},
@@ -413,6 +428,7 @@ class MeetingLinkedFolderSyncTests(unittest.TestCase):
                 linked_folder_files=merged.linked_folder_files,
                 meeting_folder_imports=merged.meeting_folder_imports,
                 expected_revision=merged.revision,
+                base_snapshot=merged.snapshot,
             )
             loaded = service.load_tree(str(root), _identity("mwb"))
             self.assertIsNotNone(loaded)
@@ -458,14 +474,24 @@ class MeetingLinkedFolderSyncTests(unittest.TestCase):
                 "meeting_generated": True,
                 "meeting_source_key": "section:stale",
             }
-            restored = service.save_tree(
+            baseline = service.save_tree(
+                folder,
+                _identity("mwb"),
+                nodes=[],
+                deleted_source_keys=set(),
+                linked_folder_files={},
+                meeting_folder_imports={},
+                enable=True,
+            )
+            service.save_tree(
                 folder,
                 _identity("mwb"),
                 nodes=[official, remote_manual],
                 deleted_source_keys=set(),
                 linked_folder_files={},
                 meeting_folder_imports={},
-                expected_revision=0,
+                expected_revision=baseline.revision,
+                base_snapshot=baseline.snapshot,
                 canonical_reset_generation=2,
             )
 
@@ -476,7 +502,8 @@ class MeetingLinkedFolderSyncTests(unittest.TestCase):
                 deleted_source_keys={"media:official"},
                 linked_folder_files={},
                 meeting_folder_imports={},
-                expected_revision=restored.revision - 1,
+                expected_revision=baseline.revision,
+                base_snapshot=baseline.snapshot,
                 canonical_reset_generation=1,
                 hidden_canonical_media={"media:official": official},
             )
@@ -501,14 +528,24 @@ class MeetingLinkedFolderSyncTests(unittest.TestCase):
                 "media_ref": {"file_path": ""},
                 "meeting_generated": False,
             }
-            previous = service.save_tree(
+            baseline = service.save_tree(
+                folder,
+                _identity("mwb"),
+                nodes=[],
+                deleted_source_keys=set(),
+                linked_folder_files={},
+                meeting_folder_imports={},
+                enable=True,
+            )
+            service.save_tree(
                 folder,
                 _identity("mwb"),
                 nodes=[old_manual],
                 deleted_source_keys={"media:official"},
                 linked_folder_files={},
                 meeting_folder_imports={},
-                expected_revision=0,
+                expected_revision=baseline.revision,
+                base_snapshot=baseline.snapshot,
                 canonical_reset_generation=1,
                 hidden_canonical_media={
                     "media:official": {
@@ -538,7 +575,8 @@ class MeetingLinkedFolderSyncTests(unittest.TestCase):
                 deleted_source_keys=set(),
                 linked_folder_files={},
                 meeting_folder_imports={},
-                expected_revision=previous.revision - 1,
+                expected_revision=baseline.revision,
+                base_snapshot=baseline.snapshot,
                 canonical_reset_generation=2,
             )
 
@@ -555,7 +593,16 @@ class MeetingLinkedFolderSyncTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             folder = Path(tmp) / "2026-05-25 MW"
             folder.mkdir()
-            first = service.save_tree(
+            baseline = service.save_tree(
+                folder,
+                _identity("mwb"),
+                nodes=[],
+                deleted_source_keys=set(),
+                linked_folder_files={},
+                meeting_folder_imports={},
+                enable=True,
+            )
+            service.save_tree(
                 folder,
                 _identity("mwb"),
                 nodes=[{
@@ -568,7 +615,8 @@ class MeetingLinkedFolderSyncTests(unittest.TestCase):
                 deleted_source_keys={"media:a"},
                 linked_folder_files={},
                 meeting_folder_imports={},
-                expected_revision=0,
+                expected_revision=baseline.revision,
+                base_snapshot=baseline.snapshot,
                 canonical_reset_generation=4,
                 hidden_canonical_media={
                     "media:a": {
@@ -595,7 +643,8 @@ class MeetingLinkedFolderSyncTests(unittest.TestCase):
                 deleted_source_keys={"media:b"},
                 linked_folder_files={},
                 meeting_folder_imports={},
-                expected_revision=first.revision - 1,
+                expected_revision=baseline.revision,
+                base_snapshot=baseline.snapshot,
                 canonical_reset_generation=4,
                 hidden_canonical_media={
                     "media:b": {
@@ -777,15 +826,16 @@ class MeetingLinkedFolderSyncTests(unittest.TestCase):
                 },
                 meeting_folder_imports={},
                 expected_revision=0,
+                enable=True,
             )
 
-            raw = json.loads((folder / MANIFEST_FILE).read_text(encoding="utf-8"))
+            raw = {MEETING_TREE_KEY: json.loads((folder / ".solin_sync" / "meeting" / "snapshot.json").read_text(encoding="utf-8"))}
             self.assertEqual(
                 raw["meeting_tree"]["linked_folder_files"],
                 {f"{CACHE_DIR_NAME}/page_001.jpg": "page"},
             )
 
-    def test_delete_sync_metadata_keeps_root_files(self):
+    def test_deactivate_removes_internal_state_and_keeps_visible_media(self):
         service = _linked_folder_sync()
         with tempfile.TemporaryDirectory() as tmp:
             folder = Path(tmp) / "2026-05-25 MW"
@@ -797,13 +847,14 @@ class MeetingLinkedFolderSyncTests(unittest.TestCase):
             cache.mkdir()
             (cache / "page.jpg").write_bytes(b"image")
 
-            service.delete_sync_metadata(folder)
+            service.deactivate_tree(folder, _identity("mwb"))
 
             self.assertTrue(root_file.exists())
             self.assertFalse((folder / MANIFEST_FILE).exists())
             self.assertFalse(cache.exists())
+            self.assertFalse((folder / ".solin_sync").exists())
 
-    def test_delete_sync_metadata_removes_meeting_manifest_and_cache_with_processed_state(self):
+    def test_deactivate_removes_legacy_baseline_and_converted_outputs(self):
         service = _linked_folder_sync()
         with tempfile.TemporaryDirectory() as tmp:
             folder = Path(tmp) / "2026-05-25 MW"
@@ -834,14 +885,15 @@ class MeetingLinkedFolderSyncTests(unittest.TestCase):
             cached_output = cache / "report-page_001.jpg"
             cached_output.write_bytes(b"image")
 
-            service.delete_sync_metadata(folder)
+            service.deactivate_tree(folder, _identity("mwb"))
 
             self.assertTrue(root_file.exists())
             self.assertFalse((folder / MANIFEST_FILE).exists())
             self.assertFalse(cached_output.exists())
             self.assertFalse(cache.exists())
+            self.assertIsNone(service.load_tree(str(folder.parent), _identity("mwb")))
 
-    def test_detach_cache_references_keeps_local_tree_independent_from_deleted_cache(self):
+    def test_detach_cache_references_keeps_local_tree_independent_from_shared_cache(self):
         service = _linked_folder_sync()
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -871,7 +923,7 @@ class MeetingLinkedFolderSyncTests(unittest.TestCase):
             ]
 
             detached = service.detach_cache_references(nodes, folder, durable)
-            service.delete_sync_metadata(folder)
+            service.deactivate_tree(folder, _identity("mwb"))
 
             official_path = Path(detached[0]["media_ref"]["file_path"])
             manual_path = Path(detached[1]["media_ref"]["file_path"])
@@ -941,12 +993,6 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
                 lambda record: MeetingTreeController._apply_sync_record(
                     controller,
                     record,
-                )
-            )
-            controller._pause_sync_after_save_failure = (
-                lambda message: MeetingTreeController._pause_sync_after_save_failure(
-                    controller,
-                    message,
                 )
             )
             controller._save_local_cache = lambda: local_saves.append(True)
@@ -1039,7 +1085,7 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
                 type(
                     "Discovery",
                     (),
-                    {"available": True, "folder": folder, "record": record},
+                    {"available": True, "folder": folder, "record": record, "active": True},
                 )(),
             )
 
@@ -1122,6 +1168,7 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
                     "available": True,
                     "folder": record.folder,
                     "record": record,
+                    "active": True,
                 },
             )(),
         )
@@ -1152,19 +1199,13 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
         _configure_sync_save_queue(controller)
         warnings = []
         controller._warn_sync_failed = lambda message, **_kwargs: warnings.append(message)
-        controller._pause_sync_after_save_failure = (
-            lambda message: MeetingTreeController._pause_sync_after_save_failure(
-                controller,
-                message,
-            )
-        )
 
         MeetingTreeController._save_sync_manifest(controller)
 
         self.assertTrue(controller._sync_enabled)
         self.assertEqual(controller._sync_revision, 4)
         self.assertEqual(warnings, ["manifest is unavailable"])
-        self.assertFalse(controller._pending_sync_saves)
+        self.assertTrue(controller._pending_sync_saves)
 
     def test_save_sync_manifest_retries_transient_lock_without_warning(self):
         class FakeController:
@@ -1281,19 +1322,13 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
         _configure_sync_save_queue(controller)
         warnings = []
         controller._warn_sync_failed = lambda message, **_kwargs: warnings.append(message)
-        controller._pause_sync_after_save_failure = (
-            lambda message: MeetingTreeController._pause_sync_after_save_failure(
-                controller,
-                message,
-            )
-        )
 
         MeetingTreeController._save_sync_manifest(controller)
 
         self.assertTrue(controller._sync_enabled)
         self.assertEqual(controller._sync_revision, 4)
         self.assertEqual(warnings, ["[Errno 28] No space left on device"])
-        self.assertFalse(controller._pending_sync_saves)
+        self.assertTrue(controller._pending_sync_saves)
 
     def test_enable_sync_adopts_existing_manifest_without_overwrite(self):
         class FakeController:
@@ -1408,6 +1443,7 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
                 linked_folder_files={},
                 meeting_folder_imports={},
                 expected_revision=0,
+                enable=True,
             )
             controller = FakeController()
             controller._tree_key = identity.tree_key

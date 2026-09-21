@@ -3,54 +3,79 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import json
 import os
 import shutil
+import threading
+import uuid
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass, field as dataclass_field
+from contextlib import contextmanager
+from dataclasses import dataclass, field as dataclass_field, replace
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path, PureWindowsPath
 from typing import Any
 
 from solin.core.foundation.thread_workers import CancellationFlag
 from solin.core.media.operations import MediaOperationCancelled
+from solin.core.storage.binary_files import write_bytes_atomic
 
 from solin.core.ingest.manifest import (
     CACHE_DIR_NAME,
-    MANIFEST_REPOSITORY,
     MANIFEST_FILE,
+    MANIFEST_REPOSITORY,
     ManifestError,
     cache_dir,
     from_manifest_url,
     to_manifest_url,
 )
 
+from solin.core.ingest.sync.journal import (
+    JournalError,
+    JournalReplica,
+    JournalUnavailable,
+    ReplicaSnapshot,
+)
+from solin.core.ingest.sync.activation import (
+    ActivationError,
+    ActivationStore,
+    DocumentActivation,
+)
+from solin.core.ingest.sync.tree import flatten_nodes, rebuild_nodes
+from solin.core.ingest.sync.discovery import (
+    AUXILIARY, RESOURCE, SUPPRESSED, reconcile_discoveries, record_discovery_edits,
+)
+from solin.core.ingest.sync.resources import portable_resource_key, recover_file, retire_file, resource_identity_key
+from solin.core.ingest.watched_folder_files import WatchedFolderCopyRequest, WatchedFolderFileStore
+
 from .folder_matcher import match_meeting_folder
-from .tree_merger import include_manual_meeting_nodes
 from .tree_types import Node, clean_dict, clone_nodes, iter_nodes
 
 log = logging.getLogger(__name__)
 
 MEETING_TREE_KEY = "meeting_tree"
-MEETING_TREE_SCHEMA_VERSION = 3
-MEETING_TREE_CONTENT_KEYS = (
-    "schema_version",
-    "tree_key",
-    "pub_type",
-    "monday",
-    "meeting_tag",
-    "folder_date",
-    "nodes",
-    "deleted_source_keys",
-    "canonical_reset_generation",
-    "hidden_canonical_media",
-    "meeting_folder_imports",
-    "linked_folder_files",
-)
+MEETING_TREE_SCHEMA_VERSION = 4
+_MEETING_META = "$meeting"
 MeetingWeekdayResolver = Callable[[str], int]
 
 
 class MeetingSyncError(RuntimeError):
     """Raised when meeting linked-folder sync cannot complete safely."""
+
+
+class MeetingSyncInactive(MeetingSyncError):
+    """A save belongs to a meeting sync that was explicitly deactivated."""
+
+
+class MeetingSyncPending(MeetingSyncError):
+    """Activation exists but its journal is not completely available yet."""
+
+
+class MeetingSyncCleanupPending(MeetingSyncError):
+    """Synchronization is inactive but internal files still need cleanup."""
+
+    def __init__(self, errors: tuple[str, ...]) -> None:
+        super().__init__("; ".join(errors))
+        self.errors = errors
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,6 +106,16 @@ class MeetingSyncRecord:
     revision: int
     canonical_reset_generation: int = 0
     hidden_canonical_media: dict[str, Node] = dataclass_field(default_factory=dict)
+    snapshot: ReplicaSnapshot = dataclass_field(default_factory=ReplicaSnapshot)
+    pending_count: int = 0
+    waiting_count: int = 0
+    resource_error: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class MeetingSyncDeactivation:
+    folder: Path
+    cleanup_errors: tuple[str, ...] = ()
 
 
 def meeting_tag_for_pub_type(pub_type: str) -> str:
@@ -96,6 +131,10 @@ class MeetingLinkedFolderSync:
 
     def __init__(self, weekday_for_pub_type: MeetingWeekdayResolver) -> None:
         self._weekday_for_pub_type = weekday_for_pub_type
+        self._replicas: dict[str, JournalReplica] = {}
+        self._verified_legacy: set[Path] = set()
+        self._activation_lock = threading.RLock()
+        self._activating: dict[str, int] = {}
 
     def folder_date_for(self, monday: date, pub_type: str) -> date:
         weekday = self._weekday_for_pub_type(pub_type)
@@ -106,6 +145,64 @@ class MeetingLinkedFolderSync:
     def folder_name_for(self, identity: MeetingSyncIdentity) -> str:
         folder_date = self.folder_date_for(identity.monday, identity.pub_type)
         return f"{folder_date.isoformat()} {identity.meeting_tag}"
+
+    @staticmethod
+    def activation_path(folder: Path) -> Path:
+        return ActivationStore(folder, "meeting").path
+
+    @staticmethod
+    def _folder_key(folder: Path) -> str:
+        return os.path.normcase(os.path.abspath(folder))
+
+    @staticmethod
+    def _activation_subject(identity: MeetingSyncIdentity) -> dict[str, str]:
+        return {
+            "tree_key": identity.tree_key,
+            "pub_type": identity.pub_type,
+            "monday": identity.monday.isoformat(),
+            "meeting_tag": identity.meeting_tag,
+        }
+
+    def _activation(
+        self, folder: Path, identity: MeetingSyncIdentity,
+    ) -> DocumentActivation | None:
+        try:
+            activation = ActivationStore(folder, "meeting").read()
+        except (ActivationError, OSError) as exc:
+            raise MeetingSyncPending(str(exc)) from exc
+        if activation is None:
+            return None
+        if activation.subject != self._activation_subject(identity):
+            raise MeetingSyncError("Activation marker belongs to another meeting")
+        return activation
+
+    @contextmanager
+    def _activation_publication(self, folder: Path):
+        key = self._folder_key(folder)
+        owner = threading.get_ident()
+        with self._activation_lock:
+            existing = self._activating.get(key)
+            if existing is not None and existing != owner:
+                raise MeetingSyncError("Meeting sync activation is already in progress")
+            self._activating[key] = owner
+        try:
+            yield
+        finally:
+            with self._activation_lock:
+                if self._activating.get(key) == owner:
+                    self._activating.pop(key, None)
+
+    def _require_active_publication(self, folder: Path, document_id: str) -> None:
+        key = self._folder_key(folder)
+        with self._activation_lock:
+            if self._activating.get(key) == threading.get_ident():
+                return
+        try:
+            activation = ActivationStore(folder, "meeting").read()
+        except (ActivationError, OSError) as exc:
+            raise MeetingSyncPending(str(exc)) from exc
+        if activation is None or activation.document_id != document_id:
+            raise MeetingSyncInactive("Meeting sync is not active for this document")
 
     def locate_folder(
         self,
@@ -149,136 +246,474 @@ class MeetingLinkedFolderSync:
         return folder
 
     def manifest_matches(self, folder: Path, identity: MeetingSyncIdentity) -> bool:
+        marker = self.activation_path(folder)
+        if marker.exists():
+            try:
+                return self._activation(folder, identity) is not None
+            except MeetingSyncError:
+                return True  # The marker remains authoritative while incomplete.
         try:
             block = MANIFEST_REPOSITORY.load(folder, strict=True).get(MEETING_TREE_KEY)
         except ManifestError:
             return False
         return self._block_matches(block, identity)
 
+    def _replica(self, folder: Path) -> JournalReplica:
+        key = self._folder_key(folder)
+        if key not in self._replicas:
+            self._replicas[key] = JournalReplica(
+                folder,
+                "meeting",
+                publication_guard=lambda document_id, target=folder: (
+                    self._require_active_publication(target, document_id)
+                ),
+            )
+        return self._replicas[key]
+
     def load_tree(
         self,
         watched_root: str,
         identity: MeetingSyncIdentity,
+        *,
+        cleanup_inactive: bool = True,
     ) -> MeetingSyncRecord | None:
         folder = self.locate_folder(watched_root, identity, create=False)
         if folder is None:
             return None
-        manifest = MANIFEST_REPOSITORY.load(folder, strict=True)
-        block = manifest.get(MEETING_TREE_KEY)
-        if not self._block_matches(block, identity):
-            return None
-        assert isinstance(block, dict)
-        return self._record_from_block(folder, block, identity)
+        replica = self._replica(folder)
+        activation = self._activation(folder, identity)
+        if activation is None:
+            if replica.document_id is not None or replica.has_retired_documents:
+                return self._finish_inactive_load(folder, cleanup=cleanup_inactive)
+            return self._migrate_legacy_tree(
+                folder,
+                identity,
+                replica,
+                cleanup_inactive=cleanup_inactive,
+            )
+        if replica.is_retired(activation.document_id):
+            try:
+                ActivationStore(folder, "meeting").remove(activation.document_id)
+            except (ActivationError, OSError):
+                pass
+            return self._finish_inactive_load(folder, cleanup=cleanup_inactive)
+        try:
+            replica.require_document(activation.document_id)
+            legacy_seed = self._active_legacy_seed(folder, identity)
+            snapshot = (
+                replica.read_verified_seed(legacy_seed)
+                if legacy_seed is not None
+                else replica.read()
+            )
+        except JournalUnavailable as exc:
+            raise MeetingSyncPending(str(exc)) from exc
+        except JournalError as exc:
+            raise MeetingSyncError(str(exc)) from exc
+        metadata = snapshot.entities.get(_MEETING_META, {})
+        if not metadata:
+            raise MeetingSyncPending("Activated meeting journal has not arrived yet")
+        record = self._record_from_snapshot(folder, identity, snapshot)
+        record = replace(record, resource_error=self._reconcile_resource_files(folder, snapshot))
+        self._remove_legacy_manifest(folder)
+        return record
 
-    def save_tree(
+    def _finish_inactive_load(
+        self,
+        folder: Path,
+        *,
+        cleanup: bool,
+    ) -> None:
+        if not cleanup:
+            return None
+        result = self.cleanup_inactive_tree(folder)
+        if result.cleanup_errors:
+            raise MeetingSyncCleanupPending(result.cleanup_errors)
+        return None
+
+    def _active_legacy_seed(
         self,
         folder: Path,
         identity: MeetingSyncIdentity,
+    ) -> dict[str, dict[str, Any]] | None:
+        """Return a valid local baseline that must agree with a received marker."""
+
+        if folder in self._verified_legacy or not (folder / MANIFEST_FILE).exists():
+            return None
+        try:
+            manifest = MANIFEST_REPOSITORY.load(folder, strict=True)
+        except ManifestError:
+            return None  # A partial legacy file cannot override a valid activation marker.
+        block = manifest.get(MEETING_TREE_KEY)
+        if not isinstance(block, dict) or not self._block_matches(block, identity):
+            return None
+        seed = self._entities_from_block(block)
+        for entity in seed.values():
+            ref = entity.get("media_ref", {})
+            url = str(ref.get("file_path") or entity.get("resolved_url") or "")
+            if entity.get("type") == "media" and url:
+                entity[RESOURCE] = portable_resource_key(url, folder)
+        return seed
+
+    def _migrate_legacy_tree(
+        self,
+        folder: Path,
+        identity: MeetingSyncIdentity,
+        replica: JournalReplica,
         *,
-        nodes: list[Node],
-        deleted_source_keys: set[str],
-        linked_folder_files: dict[str, str],
-        meeting_folder_imports: dict[str, dict[str, Any]],
-        expected_revision: int,
-        canonical_reset_generation: int = 0,
-        hidden_canonical_media: dict[str, Node] | None = None,
-    ) -> MeetingSyncRecord:
-        saved_record: MeetingSyncRecord | None = None
+        cleanup_inactive: bool,
+    ) -> MeetingSyncRecord | None:
+        try:
+            manifest, original = MANIFEST_REPOSITORY.load_frozen(folder, strict=True)
+        except ManifestError as exc:
+            raise MeetingSyncError(str(exc)) from exc
+        block = manifest.get(MEETING_TREE_KEY)
+        if not isinstance(block, dict) or not self._block_matches(block, identity):
+            if replica.document_id is not None:
+                replica.retire_binding()
+            return self._finish_inactive_load(folder, cleanup=cleanup_inactive)
+        version = self._int_value(block.get("schema_version"))
+        if version > MEETING_TREE_SCHEMA_VERSION:
+            raise MeetingSyncError("Unsupported meeting sync version; update every terminal.")
+        if original is None:
+            raise MeetingSyncError("Legacy meeting baseline has no original bytes.")
+        backup = (
+            folder / ".solin_sync" / "meeting" / "migration"
+            / f"{hashlib.sha256(original).hexdigest()}.json"
+        )
+        if not backup.exists():
+            write_bytes_atomic(backup, original)
+        seed = self._entities_from_block(block)
+        for entity in seed.values():
+            ref = entity.get("media_ref", {})
+            url = str(ref.get("file_path") or entity.get("resolved_url") or "")
+            if entity.get("type") == "media" and url:
+                entity[RESOURCE] = portable_resource_key(url, folder)
+        try:
+            with self._activation_publication(folder):
+                snapshot = replica.read(seed=seed)
+                document_id = snapshot.document_id
+                if document_id is None:
+                    raise MeetingSyncError("Legacy migration did not establish a document")
+                ActivationStore(folder, "meeting").publish(
+                    document_id, self._activation_subject(identity)
+                )
+                replica.require_document(document_id)
+        except (ActivationError, JournalError, OSError) as exc:
+            raise MeetingSyncError(str(exc)) from exc
+        self._verified_legacy.add(folder)
+        record = self._record_from_snapshot(folder, identity, snapshot)
+        record = replace(record, resource_error=self._reconcile_resource_files(folder, snapshot))
+        try:
+            self._write_materialization(record, identity)
+        except (OSError, ValueError):
+            log.warning("Could not cache migrated meeting materialization", exc_info=True)
+        self._remove_legacy_manifest(folder)
+        return record
 
-        def update_manifest(manifest: dict[str, Any]) -> bool:
-            nonlocal saved_record
-            existing = manifest.get(MEETING_TREE_KEY)
-            existing_revision = self._revision(existing)
-            save_nodes = clone_nodes(nodes)
-            save_deleted = set(deleted_source_keys)
-            save_linked = dict(linked_folder_files)
-            save_imports = {
-                str(key): dict(value)
-                for key, value in meeting_folder_imports.items()
-                if isinstance(value, dict)
-            }
-            save_generation = max(0, int(canonical_reset_generation or 0))
-            save_hidden_media = {
-                str(key): dict(node)
-                for key, node in (hidden_canonical_media or {}).items()
-                if key and isinstance(node, dict)
-            }
-
-            if (
-                isinstance(existing, dict)
-                and self._block_matches(existing, identity)
-                and existing_revision > expected_revision
-            ):
-                existing_record = self._record_from_block(folder, existing, identity)
-                if existing_record.canonical_reset_generation > save_generation:
-                    save_nodes = include_manual_meeting_nodes(
-                        existing_record.nodes,
-                        save_nodes,
-                    )
-                    save_deleted = set(existing_record.deleted_source_keys)
-                    save_generation = existing_record.canonical_reset_generation
-                    save_hidden_media = dict(
-                        existing_record.hidden_canonical_media
-                    )
-                elif save_generation > existing_record.canonical_reset_generation:
-                    save_nodes = include_manual_meeting_nodes(
-                        save_nodes,
-                        existing_record.nodes,
-                    )
-                else:
-                    save_nodes = self._merge_conflicting_nodes(
-                        existing_record.nodes,
-                        save_nodes,
-                    )
-                    save_deleted |= existing_record.deleted_source_keys
-                    save_hidden_media = {
-                        **existing_record.hidden_canonical_media,
-                        **save_hidden_media,
-                    }
-                save_linked = {**existing_record.linked_folder_files, **save_linked}
-                save_imports = {**existing_record.meeting_folder_imports, **save_imports}
-
-            revision = max(existing_revision, expected_revision) + 1
-            saved_block = self._block_from_tree(
-                folder,
-                identity,
-                nodes=save_nodes,
-                deleted_source_keys=save_deleted,
-                linked_folder_files=save_linked,
-                meeting_folder_imports=save_imports,
-                canonical_reset_generation=save_generation,
-                hidden_canonical_media=save_hidden_media,
-                revision=revision,
-            )
-            if (
-                isinstance(existing, dict)
-                and self._block_matches(existing, identity)
-                and self._same_tree_content(existing, saved_block)
-            ):
-                saved_record = self._record_from_block(folder, existing, identity)
-                return False
-            manifest[MEETING_TREE_KEY] = saved_block
-            saved_record = self._record_from_block(folder, saved_block, identity)
-            return True
-
-        MANIFEST_REPOSITORY.update(folder, update_manifest, strict=True)
-        assert saved_record is not None
-        return saved_record
-
-    def delete_sync_metadata(self, folder: Path) -> None:
-        # MW/WE folders are meeting-exclusive (scan_root filters them out), so
-        # disabling meeting sync intentionally removes their whole Solin state.
+    @staticmethod
+    def _remove_legacy_manifest(folder: Path) -> None:
         try:
             MANIFEST_REPOSITORY.delete(folder)
-        except ManifestError as exc:
-            raise MeetingSyncError(f"Could not remove {MANIFEST_FILE}.") from exc
+        except ManifestError:
+            log.warning("Could not remove migrated meeting manifest", exc_info=True)
 
-        cache_path = folder / CACHE_DIR_NAME
-        if cache_path.exists():
+    def resume_local_tree(
+        self, folder: Path, identity: MeetingSyncIdentity, known: ReplicaSnapshot,
+    ) -> MeetingSyncRecord:
+        """Recover accepted local operations while the linked transport is offline."""
+        replica = self._replica(folder)
+        snapshot = replica.read_local()
+        if not snapshot.operation_ids and known.operation_ids:
+            snapshot = replica.stage(known, known.entities)
+        return self._record_from_snapshot(folder, identity, snapshot)
+
+    def _reconcile_resource_files(self, folder: Path, snapshot: ReplicaSnapshot) -> str:
+        projected = reconcile_discoveries(snapshot.entities)
+        active = {
+            resource_identity_key(str(node[RESOURCE])): str(node[RESOURCE])
+            for node in projected.values() if node.get(RESOURCE) and not node.get(AUXILIARY)
+        }
+        suppressed = {
+            resource_identity_key(str(node[SUPPRESSED])): str(node[SUPPRESSED])
+            for node in projected.values() if node.get(SUPPRESSED)
+        }
+        error = ""
+        # Suppression records are the durable cleanup queue. Retrying after a
+        # restart never requires guessing from a missing filesystem entry.
+        for identity, resource in (suppressed | active).items():
+            if resource.startswith(("http://", "https://")):
+                continue
             try:
-                shutil.rmtree(cache_path)
-            except OSError:
-                log.warning("Could not remove meeting sync cache %s", cache_path, exc_info=True)
+                if identity in active:
+                    recover_file(folder, resource, document_id=snapshot.document_id)
+                else:
+                    retire_file(folder, resource, document_id=snapshot.document_id)
+            except (OSError, ValueError) as exc:
+                error = str(exc)
+                log.warning("Meeting resource reconciliation pending: %s", resource, exc_info=True)
+        return error
+
+    def _entities_from_block(
+        self, block: dict[str, Any], baseline: ReplicaSnapshot | None = None,
+    ) -> dict[str, dict[str, Any]]:
+        entities = flatten_nodes(block.get("nodes", []), (baseline or ReplicaSnapshot()).entities)
+        metadata: dict[str, Any] = {AUXILIARY: True}
+        for key in ("tree_key", "pub_type", "monday", "meeting_tag", "folder_date",
+                    "canonical_reset_generation"):
+            metadata[key] = block.get(key)
+        generation = int(block.get("canonical_reset_generation") or 0)
+        canonical = {AUXILIARY: True, "generation": generation}
+        for key in block.get("deleted_source_keys", []):
+            canonical[f"deleted:{key}"] = True
+        for key, value in block.get("hidden_canonical_media", {}).items():
+            canonical[f"hidden_canonical_media:{key}"] = value
+        entities[f"$canonical:{generation}"] = canonical
+        for entity in entities.values():
+            if entity.get("meeting_generated"):
+                entity["__sync_canonical_generation"] = generation
+        for field in ("linked_folder_files", "meeting_folder_imports"):
+            for key, value in block.get(field, {}).items():
+                metadata[f"{field}:{key}"] = value
+        entities[_MEETING_META] = metadata
+        return entities
+
+    def _record_from_snapshot(
+        self, folder: Path, identity: MeetingSyncIdentity, snapshot: ReplicaSnapshot,
+    ) -> MeetingSyncRecord:
+        projected = reconcile_discoveries(snapshot.entities)
+        metadata = dict(projected.get(_MEETING_META, {}))
+        canonical = max(
+            (value for key, value in projected.items() if key.startswith("$canonical:")),
+            key=lambda value: int(value.get("generation") or 0), default={},
+        )
+        generation = int(canonical.get("generation") or 0)
+        metadata.update(canonical)
+        metadata["canonical_reset_generation"] = generation
+        projected = {
+            key: value for key, value in projected.items()
+            if not value.get("meeting_generated") or int(value.get("__sync_canonical_generation") or 0) >= generation
+        }
+        block = {key: value for key, value in metadata.items() if ":" not in key}
+        block["nodes"] = rebuild_nodes({
+            key: value for key, value in projected.items() if not value.get(AUXILIARY)
+        })
+        block["deleted_source_keys"] = [
+            key.removeprefix("deleted:") for key, value in metadata.items()
+            if key.startswith("deleted:") and value
+        ]
+        for field in ("linked_folder_files", "meeting_folder_imports", "hidden_canonical_media"):
+            block[field] = {
+                key.removeprefix(f"{field}:"): value for key, value in metadata.items()
+                if key.startswith(f"{field}:")
+            }
+        block["revision"] = len(snapshot.operation_ids)
+        block["canonical_hash"] = identity.canonical_hash
+        record = self._record_from_block(folder, block, identity)
+        return replace(
+            record, snapshot=snapshot,
+            pending_count=self._replica(folder).pending_count,
+            waiting_count=self._replica(folder).waiting_count,
+        )
+
+    def _write_materialization(self, record: MeetingSyncRecord, identity: MeetingSyncIdentity) -> None:
+        block = self._block_from_tree(
+            record.folder, identity, nodes=record.nodes,
+            deleted_source_keys=record.deleted_source_keys,
+            linked_folder_files=record.linked_folder_files,
+            meeting_folder_imports=record.meeting_folder_imports,
+            canonical_reset_generation=record.canonical_reset_generation,
+            hidden_canonical_media=record.hidden_canonical_media,
+            revision=record.revision,
+        )
+        block["journal_token"] = record.snapshot.token
+        path = self._replica(record.folder).operations_dir.parent / "snapshot.json"
+        encoded = json.dumps(block, ensure_ascii=False, sort_keys=True).encode("utf-8")
+        if path.exists():
+            try:
+                existing = json.loads(path.read_bytes())
+                if isinstance(existing, dict) and existing.get("journal_token") == record.snapshot.token:
+                    return
+            except (OSError, ValueError):
+                pass  # Advisory snapshots may arrive partially; the journal is authoritative.
+        write_bytes_atomic(path, encoded)
+
+    def save_tree(
+        self, folder: Path, identity: MeetingSyncIdentity, *, nodes: list[Node],
+        deleted_source_keys: set[str], linked_folder_files: dict[str, str],
+        meeting_folder_imports: dict[str, dict[str, Any]], expected_revision: int = 0,
+        canonical_reset_generation: int = 0,
+        hidden_canonical_media: dict[str, Node] | None = None,
+        base_snapshot: ReplicaSnapshot | None = None,
+        stage_only: bool = False,
+        enable: bool = False,
+    ) -> MeetingSyncRecord:
+        """Persist only edits relative to the caller's actual observed state.
+
+        Numeric revisions are display metadata. Causal snapshots, including
+        tombstones archived locally, define edit intent across terminals.
+        """
+        replica = self._replica(folder)
+
+        def persist() -> MeetingSyncRecord:
+            if enable:
+                if self._activation(folder, identity) is not None:
+                    raise MeetingSyncError("Meeting sync is already active")
+                replica.reset_document()
+                base = replica.read()
+            else:
+                if not stage_only:
+                    activation = self._activation(folder, identity)
+                    if activation is None:
+                        raise MeetingSyncInactive("Meeting sync is not active")
+                    try:
+                        replica.require_document(activation.document_id)
+                    except JournalUnavailable as exc:
+                        raise MeetingSyncPending(str(exc)) from exc
+                    except JournalError as exc:
+                        raise MeetingSyncError(str(exc)) from exc
+                if base_snapshot is None:
+                    try:
+                        base = replica.read()
+                    except JournalUnavailable as exc:
+                        raise MeetingSyncPending(str(exc)) from exc
+                    except JournalError as exc:
+                        raise MeetingSyncError(str(exc)) from exc
+                else:
+                    base = base_snapshot
+            block = self._block_from_tree(
+                folder, identity, nodes=nodes, deleted_source_keys=deleted_source_keys,
+                linked_folder_files=linked_folder_files,
+                meeting_folder_imports=meeting_folder_imports,
+                canonical_reset_generation=canonical_reset_generation,
+                hidden_canonical_media=hidden_canonical_media or {}, revision=expected_revision,
+            )
+            for node in iter_nodes(block["nodes"]):
+                ref = node.get("media_ref", {})
+                url = str(ref.get("file_path") or node.get("resolved_url") or "")
+                if (
+                    node.get("type") == "media"
+                    and url
+                    and not url.startswith(("http://", "https://"))
+                ):
+                    try:
+                        if not stage_only:
+                            node[RESOURCE] = portable_resource_key(url, folder)
+                        elif not node.get(RESOURCE):
+                            node[RESOURCE] = url.replace("\\", "/")
+                    except ValueError as exc:
+                        raise MeetingSyncError(str(exc)) from exc
+            desired = record_discovery_edits(base.entities, self._entities_from_block(block, base))
+            previous_generation = int(
+                base.entities.get(_MEETING_META, {}).get("canonical_reset_generation") or 0
+            )
+            restores = {
+                key for key, value in desired.items() if value.get("meeting_generated")
+            } if canonical_reset_generation > previous_generation else set()
+            try:
+                action = replica.stage if stage_only else replica.commit
+                snapshot = action(base, desired, restore_ids=restores)
+            except JournalError as exc:
+                raise MeetingSyncError(str(exc)) from exc
+            if enable:
+                document_id = snapshot.document_id
+                if document_id is None:
+                    raise MeetingSyncError("Meeting activation has no document identity")
+                try:
+                    ActivationStore(folder, "meeting").publish(
+                        document_id, self._activation_subject(identity)
+                    )
+                    replica.require_document(document_id)
+                except (ActivationError, JournalError, OSError) as exc:
+                    replica.retire_binding(document_id, include_known=False)
+                    raise MeetingSyncError(str(exc)) from exc
+            record = self._record_from_snapshot(folder, identity, snapshot)
+            if not stage_only:
+                self._verified_legacy.add(folder)
+                record = replace(
+                    record,
+                    resource_error=self._reconcile_resource_files(folder, snapshot),
+                )
+                try:
+                    self._write_materialization(record, identity)
+                except (OSError, ValueError):
+                    log.warning("Could not cache meeting sync materialization", exc_info=True)
+            return record
+
+        if enable and not stage_only:
+            with self._activation_publication(folder):
+                return persist()
+        return persist()
+
+    def deactivate_tree(
+        self, folder: Path, identity: MeetingSyncIdentity,
+    ) -> MeetingSyncDeactivation:
+        """Remove activation first, then clean derived shared state."""
+
+        replica = self._replica(folder)
+        activation = self._activation(folder, identity)
+        try:
+            # A legacy manifest must not be able to remigrate after the
+            # activation marker disappears on another replica.
+            MANIFEST_REPOSITORY.delete(folder)
+        except ManifestError as exc:
+            raise MeetingSyncError(str(exc)) from exc
+        if activation is not None:
+            try:
+                with replica.retiring_binding(
+                    activation.document_id,
+                    include_known=False,
+                ):
+                    ActivationStore(folder, "meeting").remove(activation.document_id)
+            except (ActivationError, JournalError, OSError) as exc:
+                raise MeetingSyncError(str(exc)) from exc
+        elif replica.document_id is not None:
+            replica.retire_binding()
+
+        return self.cleanup_inactive_tree(folder)
+
+    def cleanup_inactive_tree(self, folder: Path) -> MeetingSyncDeactivation:
+        """Idempotently remove all meeting sync metadata after deactivation."""
+
+        errors: list[str] = []
+        self._ensure_inactive_cleanup(folder)
+        replica = self._replica(folder)
+        if replica.document_id is not None:
+            try:
+                replica.retire_binding()
+            except (JournalError, OSError) as exc:
+                errors.append(f"local binding: {exc}")
+                log.warning("Meeting sync retirement remains pending", exc_info=True)
+        try:
+            self._ensure_inactive_cleanup(folder)
+            MANIFEST_REPOSITORY.delete(folder)
+        except ManifestError as exc:
+            errors.append(f"{MANIFEST_FILE}: {exc}")
+            log.warning("Meeting legacy manifest cleanup remains pending", exc_info=True)
+        errors.extend(self._cleanup_inactive_tree(folder))
+        self._verified_legacy.discard(folder)
+        return MeetingSyncDeactivation(folder, tuple(errors))
+
+    @staticmethod
+    def _ensure_inactive_cleanup(folder: Path) -> None:
+        try:
+            activation = ActivationStore(folder, "meeting").read()
+        except (ActivationError, OSError) as exc:
+            raise MeetingSyncPending(str(exc)) from exc
+        if activation is not None:
+            raise MeetingSyncError("Meeting sync was activated while cleanup was pending")
+
+    def _cleanup_inactive_tree(self, folder: Path) -> tuple[str, ...]:
+        errors: list[str] = []
+        for path in (folder / CACHE_DIR_NAME, folder / ".solin_sync"):
+            if not path.exists():
+                continue
+            try:
+                self._ensure_inactive_cleanup(folder)
+                shutil.rmtree(path)
+            except OSError as exc:
+                errors.append(f"{path.name}: {exc}")
+                log.warning("Meeting sync cleanup remains pending: %s", path, exc_info=True)
+        return tuple(errors)
 
     def materialize_tree_files(
         self,
@@ -335,15 +770,7 @@ class MeetingLinkedFolderSync:
                     if node_id and field != "thumbnail_local_path":
                         linked_files.setdefault(str(dest_path), node_id)
         except BaseException:  # noqa: BLE001 - materialization transaction rollback
-            for created_path in reversed(created_paths):
-                try:
-                    created_path.unlink(missing_ok=True)
-                except OSError:
-                    log.warning(
-                        "Could not roll back meeting media copy %s",
-                        created_path,
-                        exc_info=True,
-                    )
+            self.rollback_materialized_files(folder, created_paths)
             raise
         if created_paths_out is not None:
             created_paths_out.extend(created_paths)
@@ -394,19 +821,29 @@ class MeetingLinkedFolderSync:
                 node.pop("linked_folder_source", None)
         return detached
 
-    @staticmethod
-    def rollback_materialized_files(paths: Iterable[str | Path]) -> None:
-        """Remove only artifacts recorded as newly created by materialization."""
-        failures: list[Path] = []
-        for value in reversed(tuple(paths)):
+    def rollback_materialized_files(self, folder: Path, paths: Iterable[str | Path]) -> None:
+        """Retain published bytes recoverably: another terminal may reference them."""
+        paths = tuple(paths)
+        if not paths:
+            return
+        try:
+            snapshot = self._replica(folder).read()
+        except (OSError, JournalError):
+            log.warning("Could not inspect references for cancelled meeting copy", exc_info=True)
+            return
+        active = {
+            resource_identity_key(str(entity[RESOURCE]))
+            for entity in reconcile_discoveries(snapshot.entities).values()
+            if entity.get(RESOURCE) and not entity.get(AUXILIARY)
+        }
+        for value in reversed(paths):
             path = Path(value)
             try:
-                path.unlink(missing_ok=True)
-            except OSError:
-                failures.append(path)
-        if failures:
-            joined = ", ".join(os.fspath(path) for path in failures)
-            raise MeetingSyncError(f"Could not roll back materialized files: {joined}")
+                resource = portable_resource_key(str(path), folder)
+                if resource_identity_key(resource) not in active:
+                    retire_file(folder, resource, document_id=snapshot.document_id)
+            except (OSError, ValueError):
+                log.warning("Could not archive cancelled meeting copy %s", path, exc_info=True)
 
     def _block_matches(
         self,
@@ -496,19 +933,6 @@ class MeetingLinkedFolderSync:
             "revision": revision,
         }
 
-    def _same_tree_content(
-        self,
-        existing: dict[str, Any],
-        candidate: dict[str, Any],
-    ) -> bool:
-        return self._content_fingerprint(existing) == self._content_fingerprint(candidate)
-
-    def _content_fingerprint(self, block: dict[str, Any]) -> dict[str, Any]:
-        return {
-            key: clean_dict(block.get(key))
-            for key in MEETING_TREE_CONTENT_KEYS
-        }
-
     def _portable_nodes(self, nodes: list[Node], folder: Path) -> list[Node]:
         result = clone_nodes(nodes)
         for node in iter_nodes(result):
@@ -519,7 +943,7 @@ class MeetingLinkedFolderSync:
             if node.get("resolved_url"):
                 node["resolved_url"] = to_manifest_url(str(node.get("resolved_url") or ""), folder)
             thumb = str(node.get("thumbnail_local_path") or "")
-            if thumb and self._is_inside(Path(thumb), folder):
+            if thumb and Path(thumb).is_relative_to(folder):
                 node["thumbnail_local_path"] = to_manifest_url(thumb, folder)
             else:
                 node.pop("thumbnail_local_path", None)
@@ -660,43 +1084,6 @@ class MeetingLinkedFolderSync:
         except (TypeError, ValueError):
             return 0
 
-    def _merge_conflicting_nodes(
-        self,
-        existing_nodes: list[Node],
-        incoming_nodes: list[Node],
-    ) -> list[Node]:
-        existing_by_id = {
-            self._node_identity(node): node
-            for node in existing_nodes
-            if self._node_identity(node)
-        }
-
-        def merge_level(existing_level: list[Node], incoming_level: list[Node]) -> list[Node]:
-            result = clone_nodes(incoming_level)
-            seen: set[str] = set()
-            for node in result:
-                ident = self._node_identity(node)
-                if ident:
-                    seen.add(ident)
-                existing = existing_by_id.get(ident)
-                if existing and node.get("type") in {"section", "subsection"}:
-                    node["children"] = merge_level(
-                        existing.get("children", []),
-                        node.get("children", []),
-                    )
-            for node in existing_level:
-                ident = self._node_identity(node)
-                if ident and ident not in seen:
-                    result.append(clone_nodes([node])[0])
-                    seen.add(ident)
-            return result
-
-        return merge_level(existing_nodes, incoming_nodes)
-
-    @staticmethod
-    def _node_identity(node: Node) -> str:
-        return str(node.get("id") or node.get("meeting_source_key") or "")
-
     def _local_url_fields(self, node: Node):
         ref = node.setdefault("media_ref", {})
         if isinstance(ref, dict):
@@ -774,74 +1161,15 @@ class MeetingLinkedFolderSync:
         cancellation: CancellationFlag | None = None,
         created_paths: list[Path] | None = None,
     ) -> Path:
-        if not source.is_file():
-            raise MeetingSyncError(f"File is not available: {source}")
         dest_dir.mkdir(parents=True, exist_ok=True)
-        destination = self._unique_destination(source, dest_dir)
-        if self._same_file(source, destination):
-            return destination
-        destination_existed = destination.exists()
-        temp = dest_dir / f".{destination.name}.{os.getpid()}.tmp"
         try:
-            with source.open("rb") as source_file, temp.open("xb") as target_file:
-                while chunk := source_file.read(4 * 1024 * 1024):
-                    if cancellation is not None and cancellation.is_set():
-                        raise MediaOperationCancelled("Meeting media copy cancelled")
-                    target_file.write(chunk)
-                target_file.flush()
-                os.fsync(target_file.fileno())
-            shutil.copystat(source, temp)
-            if cancellation is not None and cancellation.is_set():
-                raise MediaOperationCancelled("Meeting media copy cancelled")
-            os.replace(temp, destination)
-            if not destination_existed and created_paths is not None:
-                created_paths.append(destination)
-            return destination
-        except MediaOperationCancelled:
-            raise
+            result = WatchedFolderFileStore().copy_file_transaction(
+                WatchedFolderCopyRequest(source=source, folder=dest_dir, operation_id=uuid.uuid4().hex),
+                cancellation=cancellation,
+            )
         except OSError as exc:
             raise MeetingSyncError(f"Could not copy '{source.name}' into linked folder.") from exc
-        finally:
-            try:
-                temp.unlink(missing_ok=True)
-            except OSError:
-                log.warning("Could not remove temporary copied file %s", temp, exc_info=True)
-
-    def _unique_destination(self, source: Path, dest_dir: Path) -> Path:
-        candidate = dest_dir / source.name
-        if not candidate.exists() or self._same_file(source, candidate):
-            return candidate
-
-        digest = self._file_digest(source)[:10]
-        stem = source.stem[:80]
-        suffix = source.suffix
-        candidate = dest_dir / f"{stem}-{digest}{suffix}"
-        if not candidate.exists() or self._same_file(source, candidate):
-            return candidate
-
-        counter = 2
-        while True:
-            numbered = dest_dir / f"{stem}-{digest}-{counter}{suffix}"
-            if not numbered.exists() or self._same_file(source, numbered):
-                return numbered
-            counter += 1
-
-    def _same_file(self, left: Path, right: Path) -> bool:
-        try:
-            if left.resolve() == right.resolve():
-                return True
-            if not right.exists():
-                return False
-            if left.stat().st_size != right.stat().st_size:
-                return False
-            return self._file_digest(left) == self._file_digest(right)
-        except OSError:
-            return False
-
-    @staticmethod
-    def _file_digest(path: Path) -> str:
-        hasher = hashlib.sha256()
-        with path.open("rb") as handle:
-            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-                hasher.update(chunk)
-        return hasher.hexdigest()
+        destination = dest_dir / result.destination.relative_to(dest_dir.resolve())
+        if not result.already_present and created_paths is not None:
+            created_paths.append(destination)
+        return destination

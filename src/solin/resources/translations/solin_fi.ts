@@ -4343,6 +4343,16 @@ Tätä toimintoa ei voi peruuttaa.</translation>
         <source>No media files found in &quot;{name}&quot;.</source>
         <translation type="vanished">Mediatiedostoja ei löytynyt kansiosta &quot;{name}&quot;.</translation>
     </message>
+    <message>
+        <source>Reset synchronization</source>
+        <translation>Nollaa synkronointi</translation>
+    </message>
+    <message>
+        <source>Reset synchronization for "{name}"?
+The current organization and files will be preserved. Pending changes from the previous synchronization will not be applied.</source>
+        <translation>Nollataanko kohteen ”{name}” synkronointi?
+Nykyinen järjestys ja tiedostot säilytetään. Edellisen synkronoinnin odottavia muutoksia ei oteta käyttöön.</translation>
+    </message>
 </context>
 <context>
     <name>PlaylistPanel</name>
@@ -9273,6 +9283,10 @@ Avaa lataussivu napsauttamalla &apos;Lataa&apos;.</translation>
         <location line="+9"/>
         <source>Delete</source>
         <translation>Poista</translation>
+    </message>
+    <message>
+        <source>Reset synchronization</source>
+        <translation>Nollaa synkronointi</translation>
     </message>
 </context>
 <context>
