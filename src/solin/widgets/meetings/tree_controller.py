@@ -72,17 +72,26 @@ from ...core.foundation.resource_keys import (
 )
 from ...core.foundation.qt_threads import stop_owned_qthread
 from ...core.foundation.runtime_paths import ProfilePaths, RuntimePaths
+from ...core.foundation.thread_workers import CancellationFlag
 from ...core.i18n.meeting_sections import (
     display_meeting_section_title,
 )
 from ...core.ingest.manifest import (
+    CACHE_DIR_NAME,
     ManifestWriteError,
     cache_dir,
     retry_manifest_write,
 )
 from ...core.meetings.models import MemorialData
 from ...core.meetings.tree_migrations import migrate_publication_subsections
+from ...core.ingest.sync.journal import ReplicaSnapshot
+from ...core.ingest.sync.discovery import DISCOVERED, RESOURCE, suppressed_resources
+from ...core.ingest.sync.resources import automatic_occurrence_id, portable_resource_key, retire_file, resource_identity_key
 from ...core.meetings.linked_folder_sync import (
+    MeetingLinkedFolderSync,
+    MeetingSyncCleanupPending,
+    MeetingSyncInactive,
+    MeetingSyncPending,
     MeetingSyncRecord,
     MeetingSyncError,
     MeetingSyncIdentity,
@@ -128,9 +137,7 @@ from ...core.meetings.tree_editing import (
 )
 from ...core.meetings.tree_merger import (
     MeetingTreeMerger,
-    include_manual_meeting_nodes,
     media_identity_signature,
-    merge_persisted_meeting_trees,
 )
 from ...core.meetings.tree_store import (
     MeetingTreeOverview,
@@ -163,7 +170,6 @@ from ...ui.qml.media_tree.state import MediaAvailability
 
 if TYPE_CHECKING:
     from ...core.jw.jwpub_import_thread import JwpubImportThreadFactory
-    from ...core.meetings.linked_folder_sync import MeetingLinkedFolderSync
     from ...core.rendering.document_conversion import DocumentConversionService
 
 _BIG_INDEX = 2**31 - 1
@@ -229,6 +235,7 @@ class _PendingSyncSave:
     hidden_canonical_media: dict[str, Node]
     expected_revision: int
     next_attempt_at: float
+    snapshot: ReplicaSnapshot | None = None
     generation: int = 1
     first_attempt_at: float | None = None
     retry_index: int = 0
@@ -240,6 +247,7 @@ class _DisabledSyncState:
     hidden_canonical_media: dict[str, Node]
     linked_folder_files: dict[str, str]
     folder: Path
+    cleanup_errors: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -254,6 +262,9 @@ class _MeetingSyncDiscovery:
     available: bool
     folder: Path | None = None
     record: MeetingSyncRecord | None = None
+    active: bool = False
+    cleanup_errors: tuple[str, ...] = ()
+    detached_state: _DisabledSyncState | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -393,6 +404,7 @@ class MeetingTreeController(QObject):
         self._sync_busy_message = ""
         self._modal_operation_id = ""
         self._sync_revision = 0
+        self._sync_snapshot = ReplicaSnapshot()
         self._sync_refresh_generation = 0
         self._sync_refresh_operation_id = ""
         self._local_snapshot_generation = 0
@@ -408,6 +420,10 @@ class MeetingTreeController(QObject):
         self._sync_save_timer = QTimer(self)
         self._sync_save_timer.setSingleShot(True)
         self._sync_save_timer.timeout.connect(self._drain_sync_manifest_saves)
+        self._sync_retry_timer = QTimer(self)
+        self._sync_retry_timer.setSingleShot(True)
+        self._sync_retry_timer.timeout.connect(self._request_sync_refresh)
+        self._sync_transport_pending = False
         self._deleted_source_keys: set[str] = set()
         self._playlist_name = ""
         self._thumb_cache: dict[str, QPixmap] = {}
@@ -533,7 +549,7 @@ class MeetingTreeController(QObject):
         if not self._sync_folder:
             return False
         key = os.path.normcase(os.path.abspath(self._sync_folder))
-        return key in self._pending_sync_saves
+        return key in self._pending_sync_saves or getattr(self, "_sync_transport_pending", False)
 
     @Property(str, notify=syncStateChanged)
     def syncFolderPath(self):
@@ -689,11 +705,10 @@ class MeetingTreeController(QObject):
             self._sync_folder = os.fspath(pending_sync.folder)
             self._sync_enabled = True
             self._sync_revision = pending_sync.expected_revision
-            self._save()
+            self._sync_snapshot = pending_sync.snapshot or ReplicaSnapshot()
+            self._save_local_cache()
         else:
-            self._sync_enabled = False
-            self._sync_revision = 0
-            self._sync_folder = ""
+            MeetingTreeController._restore_local_sync_binding(self, snapshot)
             self._nodes = clone_nodes(snapshot.nodes)
         self._meeting_folder_pending_sources.clear()
         if start_media_requests:
@@ -721,36 +736,18 @@ class MeetingTreeController(QObject):
         sync_nodes, sync_deleted_source_keys = MeetingTreeController._migrate_sync_publications(
             self, sync_nodes, sync_deleted_source_keys,
         )
-        local_generation = snapshot.canonical_reset_generation
-        if sync_generation > local_generation:
-            self._deleted_source_keys = set(sync_deleted_source_keys)
-            self._canonical_reset_generation = sync_generation
-            self._hidden_canonical_media = copy.deepcopy(sync_hidden_canonical_media)
-            nodes = include_manual_meeting_nodes(sync_nodes, snapshot.nodes)
-            MeetingTreeController._prune_deleted_source_keys(self)
-            return nodes
-        if local_generation > sync_generation:
-            self._deleted_source_keys = set(snapshot.deleted_source_keys)
-            self._canonical_reset_generation = local_generation
-            self._hidden_canonical_media = copy.deepcopy(snapshot.hidden_canonical_media)
-            nodes = include_manual_meeting_nodes(snapshot.nodes, sync_nodes)
-            MeetingTreeController._prune_deleted_source_keys(self)
-            return nodes
-        self._deleted_source_keys = set(snapshot.deleted_source_keys) | set(
-            sync_deleted_source_keys
-        )
-        self._canonical_reset_generation = local_generation
-        self._hidden_canonical_media = {
-            **copy.deepcopy(snapshot.hidden_canonical_media),
-            **copy.deepcopy(sync_hidden_canonical_media),
-        }
-        nodes = merge_persisted_meeting_trees(
-            snapshot.nodes,
-            sync_nodes,
-            self._deleted_source_keys,
-        )
+        local_nodes = {str(node.get("id")): node for node in iter_nodes(snapshot.nodes)}
+        for node in iter_nodes(sync_nodes):
+            local = local_nodes.get(str(node.get("id")))
+            if local is not None and media_identity_signature(local) == media_identity_signature(node):
+                for field in ("resolved_url", "thumbnail_url", "base_duration_ticks"):
+                    if local.get(field) not in (None, ""):
+                        node[field] = copy.deepcopy(local[field])
+        self._deleted_source_keys = set(sync_deleted_source_keys)
+        self._canonical_reset_generation = sync_generation
+        self._hidden_canonical_media = copy.deepcopy(sync_hidden_canonical_media)
         MeetingTreeController._prune_deleted_source_keys(self)
-        return nodes
+        return sync_nodes
 
     def load_memorial(self, md: MemorialData) -> None:
         canonical = self._builder.build_memorial(md)
@@ -765,6 +762,7 @@ class MeetingTreeController(QObject):
         self._sync_enabled = False
         self._sync_folder = ""
         self._sync_revision = 0
+        self._sync_snapshot = ReplicaSnapshot()
         self._refresh_sync_availability()
         self._load_canonical(canonical)
 
@@ -848,10 +846,9 @@ class MeetingTreeController(QObject):
             self._sync_folder = os.fspath(pending_sync.folder)
             self._sync_enabled = True
             self._sync_revision = pending_sync.expected_revision
+            self._sync_snapshot = pending_sync.snapshot or ReplicaSnapshot()
         else:
-            self._sync_enabled = False
-            self._sync_revision = 0
-            self._sync_folder = ""
+            MeetingTreeController._restore_local_sync_binding(self, stored_snapshot)
         self._meeting_folder_pending_sources.clear()
         if saved is not None:
             migrate_publication_subsections(saved, canonical, self._deleted_source_keys)
@@ -868,6 +865,17 @@ class MeetingTreeController(QObject):
         _emit_controller_state_changed(self)
         if pending_sync is None:
             self._request_sync_refresh()
+
+    def _restore_local_sync_binding(self, stored: MeetingTreeSnapshot | None) -> None:
+        binding = stored.linked_sync if stored is not None else {}
+        snapshot = binding.get("snapshot")
+        self._sync_folder = str(binding.get("folder") or "")
+        self._sync_enabled = bool(binding.get("enabled") and self._sync_folder)
+        self._sync_snapshot = (
+            ReplicaSnapshot.from_dict(snapshot) if isinstance(snapshot, dict) else ReplicaSnapshot()
+        )
+        self._sync_revision = len(self._sync_snapshot.operation_ids)
+        self._sync_transport_pending = self._sync_enabled
 
     def _request_local_snapshot(self, canonical: list[Node]) -> None:
         self._local_snapshot_generation += 1
@@ -933,6 +941,7 @@ class MeetingTreeController(QObject):
             self._sync_enabled = False
             self._sync_folder = ""
             self._sync_revision = 0
+            self._sync_snapshot = ReplicaSnapshot()
         self.syncStateChanged.emit()
 
     def _pending_sync_save_for_identity(
@@ -957,26 +966,87 @@ class MeetingTreeController(QObject):
         if not root or identity is None or not tree_key:
             self._refresh_sync_availability()
             return
-        if self._pending_sync_save_for_identity(identity) is not None:
-            return
         self._sync_refresh_generation += 1
         generation = self._sync_refresh_generation
         if self._sync_refresh_operation_id:
             self._media_tree_runtime.operations.cancel(self._sync_refresh_operation_id)
         operation_id = f"meeting-sync-refresh:{uuid.uuid4().hex}"
         self._sync_refresh_operation_id = operation_id
+        cached_folder = self._sync_folder
+        cached_snapshot = getattr(self, "_sync_snapshot", ReplicaSnapshot())
+        cached_nodes = clone_nodes(self._nodes)
+        cached_hidden = copy.deepcopy(self._hidden_canonical_media)
 
         def run(_progress, _cancellation):
             root_path = Path(root)
             if not root_path.is_dir():
-                return _MeetingSyncDiscovery(False)
+                record = (
+                    self._sync_service.resume_local_tree(Path(cached_folder), identity, cached_snapshot)
+                    if cached_folder else None
+                )
+                return _MeetingSyncDiscovery(
+                    False,
+                    Path(cached_folder) if cached_folder else None,
+                    record,
+                    active=bool(cached_folder),
+                )
             folder = self._sync_service.locate_folder(
                 root,
                 identity,
                 create=False,
             )
-            record = self._sync_service.load_tree(root, identity)
-            return _MeetingSyncDiscovery(True, folder, record)
+            if folder is None:
+                return _MeetingSyncDiscovery(True)
+            try:
+                record = self._sync_service.load_tree(
+                    root,
+                    identity,
+                    cleanup_inactive=False,
+                )
+            except MeetingSyncCleanupPending as exc:
+                return _MeetingSyncDiscovery(
+                    True,
+                    folder,
+                    active=False,
+                    cleanup_errors=exc.errors,
+                )
+            except MeetingSyncPending:
+                return _MeetingSyncDiscovery(True, folder, active=True)
+            if record is None:
+                try:
+                    detached = MeetingTreeController._detach_sync_state(
+                        self,
+                        cached_nodes,
+                        cached_hidden,
+                        folder,
+                        MeetingTreeController._durable_detached_dir(self),
+                        _cancellation,
+                    )
+                except OSError as exc:
+                    return _MeetingSyncDiscovery(
+                        True,
+                        folder,
+                        active=False,
+                        cleanup_errors=(f"{CACHE_DIR_NAME}: {exc}",),
+                    )
+                if _cancellation.is_set():
+                    raise MediaOperationCancelled("Meeting sync refresh cancelled")
+                cleanup = self._sync_service.cleanup_inactive_tree(folder)
+                detached = _DisabledSyncState(
+                    detached.nodes,
+                    detached.hidden_canonical_media,
+                    detached.linked_folder_files,
+                    detached.folder,
+                    cleanup.cleanup_errors,
+                )
+                return _MeetingSyncDiscovery(
+                    True,
+                    folder,
+                    active=False,
+                    cleanup_errors=cleanup.cleanup_errors,
+                    detached_state=detached,
+                )
+            return _MeetingSyncDiscovery(True, folder, record, active=record is not None)
 
         def commit(value: object) -> None:
             if (
@@ -993,6 +1063,7 @@ class MeetingTreeController(QObject):
         def finished_without_result(*_args) -> None:
             if generation == self._sync_refresh_generation:
                 self._sync_refresh_operation_id = ""
+                MeetingTreeController._mark_sync_transport_pending(self)
 
         submitted = self._media_tree_runtime.operations.submit(
             MediaOperationSpec(
@@ -1020,62 +1091,90 @@ class MeetingTreeController(QObject):
 
     def _apply_sync_discovery(self, discovery: _MeetingSyncDiscovery) -> None:
         self._sync_available = discovery.available
-        if not discovery.available:
-            self._sync_enabled = False
-            self._sync_folder = ""
-            self._sync_revision = 0
-            self.syncStateChanged.emit()
+        if not discovery.available and discovery.record is None:
+            MeetingTreeController._mark_sync_transport_pending(self)
             return
-        record = discovery.record
-        if record is None:
+        if not discovery.active:
+            folder = discovery.folder or (Path(self._sync_folder) if self._sync_folder else None)
+            if folder is not None:
+                key = os.path.normcase(os.path.abspath(folder))
+                self._pending_sync_saves.pop(key, None)
             self._sync_enabled = False
+            if discovery.detached_state is not None:
+                self._nodes = discovery.detached_state.nodes
+                self._hidden_canonical_media = (
+                    discovery.detached_state.hidden_canonical_media
+                )
+                self._linked_folder_files = discovery.detached_state.linked_folder_files
             self._sync_folder = str(discovery.folder or "")
             self._sync_revision = 0
-            self.syncStateChanged.emit()
-            return
-        if self._sync_enabled and record.revision == self._sync_revision:
-            return
-
-        sync_nodes, sync_deleted = MeetingTreeController._migrate_sync_publications(
-            self, record.nodes, record.deleted_source_keys,
-        )
-        local_generation = self._canonical_reset_generation
-        remote_generation = record.canonical_reset_generation
-        if remote_generation > local_generation:
-            nodes = include_manual_meeting_nodes(sync_nodes, self._nodes)
-            self._deleted_source_keys = sync_deleted
-            self._canonical_reset_generation = remote_generation
-            self._hidden_canonical_media = copy.deepcopy(record.hidden_canonical_media)
-        elif local_generation > remote_generation:
-            nodes = include_manual_meeting_nodes(self._nodes, sync_nodes)
-        else:
-            self._deleted_source_keys |= sync_deleted
-            self._hidden_canonical_media = {
-                **self._hidden_canonical_media,
-                **copy.deepcopy(record.hidden_canonical_media),
-            }
-            nodes = merge_persisted_meeting_trees(
-                self._nodes,
-                sync_nodes,
-                self._deleted_source_keys,
+            self._sync_snapshot = ReplicaSnapshot()
+            self._sync_transport_pending = bool(discovery.cleanup_errors)
+            self._sync_busy_message = (
+                _tr("_PlaylistEditView", "Offline / Syncing")
+                if discovery.cleanup_errors else ""
             )
-        self._nodes = nodes
-        self._linked_folder_files.update(record.linked_folder_files)
-        self._meeting_folder_imports.update(copy.deepcopy(record.meeting_folder_imports))
-        self._sync_folder = str(record.folder)
-        self._sync_enabled = True
-        self._sync_revision = record.revision
-        MeetingTreeController._prune_deleted_source_keys(self)
-        MeetingTreeController._refresh_canonical_restore_state(self)
+            if discovery.cleanup_errors:
+                self._sync_retry_timer.start(2_000)
+            self._arm_sync_save_timer()
+            self._save_local_cache()
+            if self._sync_root:
+                self.inject_linked_folder_media(self._sync_root)
+            self.chromeChanged.emit()
+            self.syncStateChanged.emit()
+            _emit_controller_state_changed(self)
+            return
+        if discovery.record is None:
+            self._sync_enabled = True
+            self._sync_folder = str(discovery.folder or self._sync_folder)
+            MeetingTreeController._mark_sync_transport_pending(self)
+            self._save_local_cache()
+            return
+        pending_lookup = getattr(self, "_pending_sync_save_for_identity", None)
+        if callable(pending_lookup) and pending_lookup(self._sync_identity) is not None:
+            return  # A local intent arrived while the background read was running.
+        record = discovery.record
+        assert record is not None
+        MeetingTreeController._update_sync_transport_state(self, record)
+        previous = getattr(self, "_sync_snapshot", None)
+        if self._sync_enabled and previous is not None and record.snapshot.token == previous.token:
+            if not discovery.available:
+                MeetingTreeController._mark_sync_transport_pending(self)
+            return
+        # Pending local edits are durably staged before a refresh can start.
+        # The journal has already reconciled them; unioning cached nodes here
+        # would turn a remote deletion into a fresh local insertion.
+        MeetingTreeController._apply_sync_record(self, record)
+        if not discovery.available:
+            MeetingTreeController._mark_sync_transport_pending(self)
         self._meeting_folder_pending_sources.clear()
         self._save_local_cache()
-        self._schedule_sync_manifest_save()
         self._start_media_requests()
         self.chromeChanged.emit()
         self.syncStateChanged.emit()
         _emit_controller_state_changed(self)
 
+    def _mark_sync_transport_pending(self) -> None:
+        # Loss of transport availability does not revoke the user's sync intent
+        # or its causal base. Further edits must continue into the local outbox.
+        self._sync_transport_pending = True
+        self._sync_busy_message = _tr("_PlaylistEditView", "Offline / Syncing")
+        timer = getattr(self, "_sync_retry_timer", None)
+        if timer is not None:
+            timer.start(2_000)
+        self.syncStateChanged.emit()
+
+    def _update_sync_transport_state(self, record: MeetingSyncRecord) -> None:
+        pending = bool(record.pending_count or record.waiting_count or record.resource_error)
+        self._sync_transport_pending = pending
+        timer = getattr(self, "_sync_retry_timer", None)
+        if timer is not None:
+            timer.start(2_000) if pending else timer.stop()
+        self._sync_busy_message = _tr("_PlaylistEditView", "Offline / Syncing") if pending else ""
+        self.syncStateChanged.emit()
+
     def _apply_sync_record(self, record: MeetingSyncRecord) -> None:
+        MeetingTreeController._update_sync_transport_state(self, record)
         self._nodes, self._deleted_source_keys = MeetingTreeController._migrate_sync_publications(
             self, record.nodes, record.deleted_source_keys,
         )
@@ -1091,6 +1190,7 @@ class MeetingTreeController(QObject):
         self._sync_folder = str(record.folder)
         self._sync_enabled = True
         self._sync_revision = record.revision
+        self._sync_snapshot = record.snapshot
         MeetingTreeController._refresh_canonical_restore_state(self)
 
     def _migrate_sync_publications(
@@ -1196,6 +1296,15 @@ class MeetingTreeController(QObject):
                 source_key = str(source.get("source_key") or "")
                 if not source_key or source_key in self._meeting_folder_pending_sources:
                     continue
+                folder_path = Path(str(folder.get("path") or ""))
+                try:
+                    resource = portable_resource_key(str(source.get("path") or ""), folder_path)
+                except ValueError:
+                    log.warning("Skipping nonportable meeting source %s", source.get("name"))
+                    continue
+                snapshot = getattr(self, "_sync_snapshot", ReplicaSnapshot())
+                if resource_identity_key(resource) in suppressed_resources(snapshot.entities):
+                    continue
                 record = find_meeting_folder_import_record(
                     source,
                     self._meeting_folder_imports,
@@ -1206,7 +1315,7 @@ class MeetingTreeController(QObject):
                 ):
                     continue
 
-                if not record:
+                if source.get("kind") == "media":
                     adopted_ids = self._adopt_existing_meeting_folder_source(
                         source, str(folder.get("path") or "")
                     )
@@ -1217,7 +1326,6 @@ class MeetingTreeController(QObject):
 
                 source_with_folder = dict(source)
                 source_with_folder["folder_path"] = str(folder.get("path") or "")
-                self._remove_previous_meeting_folder_nodes(record)
                 target_list_id = self._meeting_folder_target_list_id(tree_pub_type)
                 self._import_meeting_folder_source(source_with_folder, target_list_id, 0)
                 touched = True
@@ -1260,18 +1368,6 @@ class MeetingTreeController(QObject):
             self._save()
             _emit_controller_state_changed(self)
         return adopted
-
-    def _remove_previous_meeting_folder_nodes(self, record: dict[str, Any] | None) -> None:
-        if not isinstance(record, dict):
-            return
-        removed = False
-        for node_id in list(record.get("node_ids", [])):
-            if node_id and self._replace_node(str(node_id), []):
-                removed = True
-        if removed:
-            self._save()
-            _emit_controller_state_changed(self)
-            self._emit_section_counts()
 
     def _record_meeting_folder_import(
         self,
@@ -1316,29 +1412,63 @@ class MeetingTreeController(QObject):
         ]
 
     def _insert_meeting_folder_nodes(
-        self,
-        source: dict[str, Any],
-        nodes: list[Node],
-        list_id: str,
-        insert_index: int,
+        self, source: dict[str, Any], nodes: list[Node], list_id: str, insert_index: int,
     ) -> None:
+        source_key = str(source.get("source_key") or "")
+        if source.get("_tree_key", getattr(self, "_tree_key", "")) != getattr(self, "_tree_key", ""):
+            return
         folder_path = str(source.get("folder_path") or "")
-        linked_files: dict[str, str] = {}
-        if folder_path:
-            for node in nodes:
+        previous = find_meeting_folder_import_record(source, getattr(self, "_meeting_folder_imports", {}))
+        previous_ids = list((previous or {}).get("node_ids", []))
+        resource = ""
+        if source.get("path") and folder_path:
+            resource = portable_resource_key(str(source["path"]), Path(folder_path))
+        snapshot = getattr(self, "_sync_snapshot", ReplicaSnapshot())
+        if resource and resource_identity_key(resource) in suppressed_resources(snapshot.entities):
+            self._meeting_folder_pending_sources.discard(source_key)
+            return
+        accepted_existing: list[Node] = []
+        new_nodes: list[Node] = []
+        for index, node in enumerate(nodes):
+            if folder_path:
                 node["linked_folder_source"] = folder_path
+            node_id = str(previous_ids[index]) if index < len(previous_ids) else ""
+            existing = self._find_node(node_id) if node_id and hasattr(self, "_find_node") else None
+            if existing is not None:
+                # Converted bytes change independently of title, framing and position.
+                for field in ("media_ref", "media_type", "resolved_url", "thumbnail_local_path", "thumbnail_cache_key"):
+                    if field in node:
+                        existing[field] = copy.deepcopy(node[field])
+                accepted_existing.append(existing)
+                continue
+            if node_id:
+                continue  # Removed while conversion was running.
+            if resource:
+                node["id"] = automatic_occurrence_id(f"{resource}#output:{index}")
+                node[DISCOVERED] = True
                 url = self._url_for_node(node)
-                node_id = str(node.get("id") or "")
-                if url and node_id:
-                    linked_files[url] = node_id
-        if nodes:
-            self._insert_nodes(list_id or "root", insert_index, nodes)
-        if linked_files and not getattr(self, "_sync_enabled", False):
-            self._linked_folder_files.update(linked_files)
-        self._record_meeting_folder_import(
-            source,
-            [str(node.get("id") or "") for node in nodes if node.get("id")],
-        )
+                if url and Path(url).resolve().is_relative_to(Path(folder_path).resolve()):
+                    node[RESOURCE] = portable_resource_key(url, Path(folder_path))
+            new_nodes.append(node)
+
+        def completed(accepted: list[Node] | None) -> None:
+            if accepted is None:
+                self._meeting_folder_pending_sources.discard(source_key)
+                return
+            committed = [*accepted_existing, *accepted]
+            if not getattr(self, "_sync_enabled", False):
+                for node in committed:
+                    url = self._url_for_node(node)
+                    if url and node.get("id"):
+                        self._linked_folder_files[url] = str(node["id"])
+            self._record_meeting_folder_import(
+                source, [str(node["id"]) for node in committed if node.get("id")],
+            )
+
+        if new_nodes:
+            self._insert_nodes(list_id or "root", insert_index, new_nodes, on_completed=completed)
+        else:
+            completed([])
 
     def _import_meeting_folder_source(
         self,
@@ -1351,6 +1481,7 @@ class MeetingTreeController(QObject):
         kind = str(source.get("kind") or "")
         if not source_key or not path:
             return
+        source = {**source, "_tree_key": getattr(self, "_tree_key", "")}
         self._meeting_folder_pending_sources.add(source_key)
 
         if kind == "media":
@@ -1519,6 +1650,7 @@ class MeetingTreeController(QObject):
                         linked_folder_files=current.linked_folder_files,
                         meeting_folder_imports=current.meeting_folder_imports,
                         expected_revision=current.expected_revision,
+                        base_snapshot=current.snapshot,
                         canonical_reset_generation=current.canonical_reset_generation,
                         hidden_canonical_media=current.hidden_canonical_media,
                     )
@@ -2242,6 +2374,7 @@ class MeetingTreeController(QObject):
                 linked_folder_files=linked_files,
                 meeting_folder_imports=meeting_folder_imports,
                 expected_revision=0,
+                enable=True,
                 canonical_reset_generation=canonical_generation,
                 hidden_canonical_media=hidden_media,
             )
@@ -2266,8 +2399,49 @@ class MeetingTreeController(QObject):
             failed=self._warn_sync_failed,
         )
 
+    def _detach_sync_state(
+        self,
+        nodes: list[Node],
+        hidden_media: dict[str, Node],
+        folder: Path,
+        durable_dir: Path,
+        cancellation: CancellationFlag,
+    ) -> _DisabledSyncState:
+        detached_nodes = self._sync_service.detach_cache_references(
+            nodes,
+            folder,
+            durable_dir,
+            cancellation=cancellation,
+        )
+        hidden_keys = list(hidden_media)
+        detached_hidden = self._sync_service.detach_cache_references(
+            [hidden_media[key] for key in hidden_keys],
+            folder,
+            durable_dir,
+            cancellation=cancellation,
+        )
+        hidden = {
+            key: node
+            for key, node in zip(hidden_keys, detached_hidden, strict=True)
+        }
+        linked_files: dict[str, str] = {}
+        for node in iter_nodes(detached_nodes):
+            if node.get("type") != "media" or not node.get("linked_folder_source"):
+                continue
+            node_id = str(node.get("id") or "")
+            ref = node.get("media_ref") or {}
+            url = str(node.get("resolved_url") or ref.get("file_path") or "")
+            if node_id and url:
+                linked_files[url] = node_id
+        return _DisabledSyncState(
+            detached_nodes,
+            hidden,
+            linked_files,
+            folder,
+        )
+
     def _disable_sync(self) -> None:
-        if not self._sync_folder:
+        if not self._sync_folder or self._sync_identity is None:
             return
         current_key = os.path.normcase(os.path.abspath(self._sync_folder))
         if current_key in self._pending_sync_saves:
@@ -2275,10 +2449,7 @@ class MeetingTreeController(QObject):
         reply = QMessageBox.question(
             self.parent(),
             _tr("MeetingSync", "Meeting sync"),
-            _tr(
-                "MeetingSync",
-                "Turn off sync for this meeting?\nThe folder files will be kept.",
-            ),
+            _tr("MeetingSync", "Turn off meeting sync"),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if reply != QMessageBox.StandardButton.Yes:
@@ -2290,6 +2461,7 @@ class MeetingTreeController(QObject):
         self._pending_sync_saves.pop(folder_key, None)
         self._arm_sync_save_timer()
         tree_key = self._tree_key
+        identity = self._sync_identity
         nodes = clone_nodes(self._nodes)
         hidden_media = copy.deepcopy(self._hidden_canonical_media)
         durable_dir = self._durable_detached_dir()
@@ -2297,32 +2469,22 @@ class MeetingTreeController(QObject):
 
         def run(report, cancellation):
             report(MediaOperationProgress(MediaOperationState.COPYING, stage=stage))
-            detached_nodes = self._sync_service.detach_cache_references(
+            detached = self._detach_sync_state(
                 nodes,
+                hidden_media,
                 folder,
                 durable_dir,
-                cancellation=cancellation,
-            )
-            hidden_keys = list(hidden_media)
-            detached_hidden = self._sync_service.detach_cache_references(
-                [hidden_media[key] for key in hidden_keys],
-                folder,
-                durable_dir,
-                cancellation=cancellation,
+                cancellation,
             )
             report(MediaOperationProgress(MediaOperationState.FINALIZING, stage=stage))
-            self._sync_service.delete_sync_metadata(folder)
-            hidden = {key: node for key, node in zip(hidden_keys, detached_hidden, strict=True)}
-            linked_files: dict[str, str] = {}
-            for node in iter_nodes(detached_nodes):
-                if node.get("type") != "media" or not node.get("linked_folder_source"):
-                    continue
-                node_id = str(node.get("id") or "")
-                ref = node.get("media_ref") or {}
-                url = str(node.get("resolved_url") or ref.get("file_path") or "")
-                if node_id and url:
-                    linked_files[url] = node_id
-            return _DisabledSyncState(detached_nodes, hidden, linked_files, folder)
+            deactivation = self._sync_service.deactivate_tree(folder, identity)
+            return _DisabledSyncState(
+                detached.nodes,
+                detached.hidden_canonical_media,
+                detached.linked_folder_files,
+                detached.folder,
+                deactivation.cleanup_errors,
+            )
 
         def commit(value: object) -> None:
             if not isinstance(value, _DisabledSyncState):
@@ -2334,6 +2496,14 @@ class MeetingTreeController(QObject):
             self._linked_folder_files = value.linked_folder_files
             self._sync_enabled = False
             self._sync_revision = 0
+            self._sync_snapshot = ReplicaSnapshot()
+            self._sync_transport_pending = bool(value.cleanup_errors)
+            self._sync_busy_message = (
+                _tr("_PlaylistEditView", "Offline / Syncing")
+                if value.cleanup_errors else ""
+            )
+            if value.cleanup_errors:
+                self._sync_retry_timer.start(2_000)
             self._save_local_cache()
             self._sync_folder = str(value.folder)
             if self._sync_root:
@@ -2764,31 +2934,33 @@ class MeetingTreeController(QObject):
         owner_id = self._tree_session.owner_id
         if not item_id or not owner_id:
             return
+        # The durable logical deletion is accepted before touching source bytes.
+        self._linked_folder_files.pop(file_path, None)
+        self._cleanup_meeting_folder_import_for_removed_node(
+            item_id, file_path, source_removed=False,
+        )
+        self._remember_deleted_sources(node, include_media=True)
+        if not self._replace_node(item_id, []):
+            return
+        self._save_and_emit_replace(item_id, [])
+        referenced = any(
+            other.get("type") == "media" and same_local_source(self._url_for_node(other), file_path)
+            for other in iter_nodes(self._nodes)
+        )
+        if referenced:
+            return
         operation_id = f"meeting-remove:{uuid.uuid4().hex}"
         stage = _tr("MediaDestinationDialog", "Preparing media")
 
         def run(report, _cancellation):
             report(MediaOperationProgress(MediaOperationState.FINALIZING, stage=stage))
-            return self._watched_folder_file_store.remove_file_inside(
-                file_path,
-                linked_source,
-            )
+            if getattr(self, "_sync_enabled", False):
+                return retire_file(Path(linked_source), portable_resource_key(file_path, Path(linked_source)))
+            return self._watched_folder_file_store.remove_file_inside(file_path, linked_source)
 
         def commit(value: object) -> None:
             if not isinstance(value, bool):
                 raise TypeError("Meeting media removal returned an invalid result")
-            current = self._find_node(item_id)
-            if current is None:
-                return
-            self._linked_folder_files.pop(file_path, None)
-            self._cleanup_meeting_folder_import_for_removed_node(
-                item_id,
-                file_path,
-                source_removed=value,
-            )
-            self._remember_deleted_sources(current, include_media=True)
-            if self._replace_node(item_id, []):
-                self._save_and_emit_replace(item_id, [])
 
         self._media_tree_runtime.operations.submit(
             MediaOperationSpec(
@@ -3108,6 +3280,11 @@ class MeetingTreeController(QObject):
         canonical_nodes = clone_nodes(getattr(self, "_canonical_nodes", []))
         canonical_generation = getattr(self, "_canonical_reset_generation", 0)
         hidden_media = copy.deepcopy(getattr(self, "_hidden_canonical_media", {}))
+        linked_sync = {
+            "folder": getattr(self, "_sync_folder", ""),
+            "enabled": getattr(self, "_sync_enabled", False),
+            "snapshot": getattr(self, "_sync_snapshot", ReplicaSnapshot()).to_dict(),
+        }
         storage_key = self._snapshot_storage_key(tree_key)
 
         def persist_snapshot() -> None:
@@ -3122,6 +3299,7 @@ class MeetingTreeController(QObject):
                 canonical_nodes=canonical_nodes,
                 canonical_reset_generation=canonical_generation,
                 hidden_canonical_media=hidden_media,
+                linked_sync=linked_sync,
             )
 
         generation = self._media_tree_runtime.snapshots.request(
@@ -3168,6 +3346,9 @@ class MeetingTreeController(QObject):
     def _schedule_sync_manifest_save(self, *, delay_ms: int = _SYNC_SAVE_DEBOUNCE_MS) -> None:
         if not self._sync_identity or not self._sync_folder:
             return
+        cancel_refresh = getattr(self, "_cancel_sync_refresh", None)
+        if callable(cancel_refresh):
+            cancel_refresh()
         folder = Path(self._sync_folder)
         key = os.path.normcase(os.path.abspath(folder))
         now = time.monotonic()
@@ -3186,11 +3367,27 @@ class MeetingTreeController(QObject):
             ),
             hidden_canonical_media=copy.deepcopy(getattr(self, "_hidden_canonical_media", {})),
             expected_revision=self._sync_revision,
+            snapshot=getattr(self, "_sync_snapshot", None),
             next_attempt_at=now + max(0, delay_ms) / 1000,
             generation=(previous.generation + 1) if previous else 1,
             first_attempt_at=previous.first_attempt_at if previous else None,
             retry_index=previous.retry_index if previous else 0,
         )
+        request = self._pending_sync_saves[key]
+        service = getattr(self, "_sync_service", None)
+        if isinstance(service, MeetingLinkedFolderSync):
+            staged = service.save_tree(
+                request.folder, request.identity, nodes=request.nodes,
+                deleted_source_keys=request.deleted_source_keys,
+                linked_folder_files=request.linked_folder_files,
+                meeting_folder_imports=request.meeting_folder_imports,
+                canonical_reset_generation=request.canonical_reset_generation,
+                hidden_canonical_media=request.hidden_canonical_media,
+                base_snapshot=request.snapshot, stage_only=True,
+            )
+            request.snapshot = staged.snapshot
+            request.nodes = clone_nodes(staged.nodes)
+            self._sync_snapshot = staged.snapshot
         self._arm_sync_save_timer()
         self.syncStateChanged.emit()
 
@@ -3241,6 +3438,7 @@ class MeetingTreeController(QObject):
                 linked_folder_files=request.linked_folder_files,
                 meeting_folder_imports=request.meeting_folder_imports,
                 expected_revision=request.expected_revision,
+                base_snapshot=request.snapshot,
                 canonical_reset_generation=request.canonical_reset_generation,
                 hidden_canonical_media=request.hidden_canonical_media,
             ),
@@ -3288,7 +3486,24 @@ class MeetingTreeController(QObject):
         is_latest = request.generation == generation
         if error is None and saved_record is not None:
             if is_latest:
-                self._pending_sync_saves.pop(key, None)
+                transport_pending = bool(
+                    saved_record.pending_count or saved_record.waiting_count or saved_record.resource_error
+                )
+                if transport_pending:
+                    # Keep retrying even if this meeting is no longer on screen.
+                    # The body and causal base must advance together; otherwise
+                    # a retry could delete remote nodes absent in the old body.
+                    request.nodes = clone_nodes(saved_record.nodes)
+                    request.snapshot = saved_record.snapshot
+                    request.deleted_source_keys = set(saved_record.deleted_source_keys)
+                    request.linked_folder_files = dict(saved_record.linked_folder_files)
+                    request.meeting_folder_imports = copy.deepcopy(saved_record.meeting_folder_imports)
+                    request.canonical_reset_generation = saved_record.canonical_reset_generation
+                    request.hidden_canonical_media = copy.deepcopy(saved_record.hidden_canonical_media)
+                    request.expected_revision = saved_record.revision
+                    request.next_attempt_at = now + 2.0
+                else:
+                    self._pending_sync_saves.pop(key, None)
             else:
                 request.expected_revision = saved_record.revision
                 request.next_attempt_at = now
@@ -3303,6 +3518,9 @@ class MeetingTreeController(QObject):
                 self._save_local_cache()
             elif key == current_key:
                 self._sync_revision = saved_record.revision
+        elif isinstance(error, MeetingSyncInactive):
+            self._pending_sync_saves.pop(key, None)
+            self._request_sync_refresh()
         elif not is_latest:
             request.next_attempt_at = now
         elif isinstance(error, ManifestWriteError):
@@ -3325,7 +3543,8 @@ class MeetingTreeController(QObject):
                     request.retry_index = 0
                     request.next_attempt_at = now
                 else:
-                    self._pending_sync_saves.pop(key, None)
+                    request.first_attempt_at = None
+                    request.next_attempt_at = now + 30.0
         else:
             assert error is not None
             if self._notify_sync_save_failure(error, request):
@@ -3333,7 +3552,8 @@ class MeetingTreeController(QObject):
                 request.retry_index = 0
                 request.next_attempt_at = now
             else:
-                self._pending_sync_saves.pop(key, None)
+                request.first_attempt_at = None
+                request.next_attempt_at = now + 30.0
 
         self._arm_sync_save_timer()
         self.syncStateChanged.emit()
@@ -3382,12 +3602,6 @@ class MeetingTreeController(QObject):
             )
         )
 
-    def _pause_sync_after_save_failure(self, message: str) -> None:
-        self._sync_enabled = False
-        self._sync_revision = 0
-        self.syncStateChanged.emit()
-        self._warn_sync_failed(message)
-
     def _jwpub_image_dir(self) -> str:
         if self._sync_enabled and self._sync_folder:
             return str(cache_dir(Path(self._sync_folder)))
@@ -3420,10 +3634,13 @@ class MeetingTreeController(QObject):
         nodes: list[Node],
         *,
         signal_name: str = "media",
+        on_completed: Callable[[list[Node] | None], None] | None = None,
     ) -> bool:
         kind, target_id = self._parse_list_id(list_id)
         target_children = self._children_for_target(kind, target_id)
         if target_children is None:
+            if on_completed is not None:
+                on_completed(None)
             return False
         nodes, duplicates = _partition_meeting_media_nodes(
             self._media_identity_records(),
@@ -3431,6 +3648,8 @@ class MeetingTreeController(QObject):
         )
         MeetingTreeController._emit_duplicate_media_nodes(self, duplicates)
         if not nodes:
+            if on_completed is not None:
+                on_completed([])
             return True
         index = max(0, min(insert_index, len(target_children)))
         if self._sync_enabled and self._sync_folder and nodes:
@@ -3439,13 +3658,17 @@ class MeetingTreeController(QObject):
                 index,
                 nodes,
                 signal_name=signal_name,
+                on_completed=on_completed,
             )
-        return self._commit_inserted_nodes(
+        committed = self._commit_inserted_nodes(
             list_id,
             index,
             nodes,
             signal_name=signal_name,
         )
+        if on_completed is not None:
+            on_completed(nodes if committed else None)
+        return committed
 
     def _queue_nodes_for_sync(
         self,
@@ -3454,12 +3677,15 @@ class MeetingTreeController(QObject):
         nodes: list[Node],
         *,
         signal_name: str,
+        on_completed: Callable[[list[Node] | None], None] | None = None,
     ) -> bool:
         owner_id = self._tree_session.owner_id
         sync_folder = self._sync_folder
         tree_key = self._tree_key
         session_generation = self._tree_session.generation
         if not owner_id or not sync_folder or not tree_key:
+            if on_completed is not None:
+                on_completed(None)
             return False
         operation_id = f"meeting-copy:{uuid.uuid4().hex}"
         pending_nodes = clone_nodes(nodes)
@@ -3487,7 +3713,7 @@ class MeetingTreeController(QObject):
                 created_paths_out=created_paths,
             )
             if cancellation.is_set():
-                self._sync_service.rollback_materialized_files(created_paths)
+                self._sync_service.rollback_materialized_files(Path(sync_folder), created_paths)
                 raise MediaOperationCancelled("Meeting media copy cancelled")
             return _PreparedMeetingNodes(
                 prepared,
@@ -3531,13 +3757,18 @@ class MeetingTreeController(QObject):
                 ):
                     self._linked_folder_files = previous_linked_files
                     raise RuntimeError("Meeting insertion target is no longer available")
+            if on_completed is not None:
+                on_completed(accepted_nodes)
             self._tree_session.remove_pending(operation_id)
 
         def discard(value: object | None) -> None:
+            if on_completed is not None:
+                on_completed(None)
             if not isinstance(value, _PreparedMeetingNodes):
                 return
-            self._media_tree_runtime.schedule_artifact_cleanup(
-                value.created_paths,
+            self._media_tree_runtime.snapshots.request(
+                f"meeting-copy-rollback:{uuid.uuid4().hex}",
+                lambda: self._sync_service.rollback_materialized_files(Path(sync_folder), value.created_paths),
                 conflict_key=child_folder_resource_claim(sync_folder),
             )
 
@@ -3557,6 +3788,8 @@ class MeetingTreeController(QObject):
             )
         )
         if not submitted:
+            if on_completed is not None:
+                on_completed(None)
             self._tree_session.remove_pending(operation_id)
         return submitted
 

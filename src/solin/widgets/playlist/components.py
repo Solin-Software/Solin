@@ -305,6 +305,7 @@ class WatchedFolderCard(QFrame):
     clicked = Signal(str)
     rename_req = Signal(str)
     delete_req = Signal(str)
+    reset_sync_req = Signal(str)
     export_req = Signal(str, str)  # folder_path, format
 
     def __init__(self, path: str, name: str, count: int, lang, parent=None):
@@ -435,9 +436,13 @@ class WatchedFolderCard(QFrame):
         ad.setText("  " + self.tr("Delete"))
         ad.triggered.connect(lambda: self.delete_req.emit(self._path))
 
+        reset_sync = QAction(self.tr("Reset synchronization"), menu)
+        reset_sync.triggered.connect(lambda: self.reset_sync_req.emit(self._path))
+
         menu.addAction(ar)
         menu.addMenu(export_menu)
         menu.addSeparator()
+        menu.addAction(reset_sync)
         menu.addAction(ad)
         menu.exec(self._mbtn.mapToGlobal(QPoint(0, self._mbtn.height())))
 

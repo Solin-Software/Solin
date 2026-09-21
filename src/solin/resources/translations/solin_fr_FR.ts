@@ -4343,6 +4343,16 @@ Cette action est irréversible.</translation>
         <source>No media files found in &quot;{name}&quot;.</source>
         <translation type="vanished">Aucun fichier multimédia trouvé dans « {name} ».</translation>
     </message>
+    <message>
+        <source>Reset synchronization</source>
+        <translation>Réinitialiser la synchronisation</translation>
+    </message>
+    <message>
+        <source>Reset synchronization for "{name}"?
+The current organization and files will be preserved. Pending changes from the previous synchronization will not be applied.</source>
+        <translation>Réinitialiser la synchronisation de « {name} » ?
+L’organisation actuelle et les fichiers seront conservés. Les modifications en attente de la synchronisation précédente ne seront pas appliquées.</translation>
+    </message>
 </context>
 <context>
     <name>PlaylistPanel</name>
@@ -9273,6 +9283,10 @@ Cliquez sur « Télécharger » pour ouvrir la page de téléchargement.</transl
         <location line="+9"/>
         <source>Delete</source>
         <translation>Supprimer</translation>
+    </message>
+    <message>
+        <source>Reset synchronization</source>
+        <translation>Réinitialiser la synchronisation</translation>
     </message>
 </context>
 <context>

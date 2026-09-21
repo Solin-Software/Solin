@@ -4315,6 +4315,16 @@ This action cannot be undone.</source>
         <source>No media files found in &quot;{name}&quot;.</source>
         <translation type="vanished">在“{name}”中未找到媒体文件。</translation>
     </message>
+    <message>
+        <source>Reset synchronization</source>
+        <translation>重置同步</translation>
+    </message>
+    <message>
+        <source>Reset synchronization for "{name}"?
+The current organization and files will be preserved. Pending changes from the previous synchronization will not be applied.</source>
+        <translation>是否重置“{name}”的同步？
+当前排列和文件将保留。上次同步中尚未应用的更改将不会应用。</translation>
+    </message>
 </context>
 <context>
     <name>PlaylistPanel</name>
@@ -9241,6 +9251,10 @@ Click &apos;Download&apos; to open the download page.</source>
         <location line="+9"/>
         <source>Delete</source>
         <translation>删除</translation>
+    </message>
+    <message>
+        <source>Reset synchronization</source>
+        <translation>重置同步</translation>
     </message>
 </context>
 <context>

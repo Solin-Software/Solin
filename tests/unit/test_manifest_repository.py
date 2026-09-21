@@ -159,3 +159,38 @@ def test_cleanup_retry_recovers_from_transient_manifest_lock(monkeypatch) -> Non
 
     assert retry_manifest_write(operation) == "saved"
     assert attempts == 3
+
+
+def test_frozen_load_preserves_original_encoding_and_distinguishes_missing(tmp_path) -> None:
+    repository = ManifestRepository()
+    parsed, original = repository.load_frozen(tmp_path, strict=True)
+    assert original is None
+    assert parsed == {"version": 1, "processed": {}}
+    original = b'{\r\n  "version": 1, "title": "caf\\u00e9"\r\n}\r\n'
+    (tmp_path / MANIFEST_FILE).write_bytes(original)
+    parsed, frozen = repository.load_frozen(tmp_path, strict=True)
+    assert frozen == original
+    assert parsed["title"] == "caf\u00e9"
+    assert parsed["processed"] == {}
+
+
+@pytest.mark.parametrize("contents", [b'{"partial":', b'[]', b'\xff'])
+def test_frozen_load_classifies_invalid_content_without_supplying_backup(tmp_path, contents) -> None:
+    (tmp_path / MANIFEST_FILE).write_bytes(contents)
+    repository = ManifestRepository()
+    with pytest.raises(ManifestError) as failure:
+        repository.load_frozen(tmp_path, strict=True)
+    assert failure.value.__cause__ is not None
+    assert repository.load_frozen(tmp_path) == ({"version": 1, "processed": {}}, None)
+
+
+def test_frozen_load_preserves_locked_file_error_cause(tmp_path, monkeypatch) -> None:
+    cause = PermissionError("provider holds the manifest")
+
+    def locked(_path):
+        raise cause
+
+    monkeypatch.setattr(Path, "read_bytes", locked)
+    with pytest.raises(ManifestError) as failure:
+        ManifestRepository().load_frozen(tmp_path, strict=True)
+    assert failure.value.__cause__ is cause

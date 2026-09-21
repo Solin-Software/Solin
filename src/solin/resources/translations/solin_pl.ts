@@ -4371,6 +4371,16 @@ Tej akcji nie można cofnąć.</translation>
         <source>No media files found in &quot;{name}&quot;.</source>
         <translation type="vanished">Nie znaleziono plików multimedialnych w „{name}&quot;.</translation>
     </message>
+    <message>
+        <source>Reset synchronization</source>
+        <translation>Zresetuj synchronizację</translation>
+    </message>
+    <message>
+        <source>Reset synchronization for "{name}"?
+The current organization and files will be preserved. Pending changes from the previous synchronization will not be applied.</source>
+        <translation>Zresetować synchronizację „{name}”?
+Bieżący układ i pliki zostaną zachowane. Oczekujące zmiany z poprzedniej synchronizacji nie zostaną zastosowane.</translation>
+    </message>
 </context>
 <context>
     <name>PlaylistPanel</name>
@@ -9305,6 +9315,10 @@ Kliknij „Pobierz&quot;, aby otworzyć stronę pobierania.</translation>
         <location line="+9"/>
         <source>Delete</source>
         <translation>Usuń</translation>
+    </message>
+    <message>
+        <source>Reset synchronization</source>
+        <translation>Zresetuj synchronizację</translation>
     </message>
 </context>
 <context>

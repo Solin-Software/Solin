@@ -20,7 +20,7 @@ from solin.core.media.formats import (
     VIDEO_EXTS,
     media_type_from_path,
 )
-from solin.core.media.local_source import local_source_revision_from_stat
+from solin.core.ingest.sync.resources import content_signature
 from solin.core.meetings.folder_matcher import match_meeting_folder
 
 DIRECT_MEDIA_SOURCE_EXTS: frozenset[str] = VIDEO_EXTS | AUDIO_EXTS | IMAGE_EXTS
@@ -40,15 +40,8 @@ def _source_key(path: Path) -> str:
 
 
 def _file_signature(path: Path) -> dict[str, Any]:
-    """Fast change signature used to decide whether an autoimport can be reused."""
-    revision = local_source_revision_from_stat(path.stat())
-    return {
-        "size": revision.size,
-        "mtime_ns": revision.mtime_ns,
-        "ctime_ns": revision.ctime_ns,
-        "device": revision.device,
-        "inode": revision.inode,
-    }
+    """Portable content identity, cached using strictly local stat revisions."""
+    return content_signature(path)
 
 
 def _source_kind(path: Path) -> str:

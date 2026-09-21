@@ -10,7 +10,7 @@ Responsabilidades:
   - Processar .jwpub (extrair imagens + resolver vídeos)
   - Processar .jwlplaylist (extrair embedded media + resolver URLs)
   - Observar alterações no filesystem via QFileSystemWatcher
-  - Manter manifesto de arquivos processados para evitar re-processamento
+  - Registrar importações e organização no journal compartilhado
 
 Regras de escaneamento:
   - Apenas subpastas imediatas (1 nível) da raiz são playlists
@@ -19,10 +19,11 @@ Regras de escaneamento:
   - Formatos suportados como itens: VIDEO_EXTS | AUDIO_EXTS | IMAGE_EXTS
   - .jwpub, .jwlplaylist, PDF, PPTX, DOCX são processados e seus outputs aparecem
 
-Manifesto (_solin_manifest.json):
-  - Vive dentro de cada subpasta
-  - Rastreia arquivos processados com fingerprint (size + mtime)
+Journal (.solin_sync/playlist/):
+  - Operações imutáveis preservam edições concorrentes e exclusões
+  - Rastreia arquivos processados com assinatura portável (size + sha256)
   - Lista outputs gerados e ocorrências virtuais (URLs ou mídia embutida)
+  - O manifesto antigo é importado uma vez como baseline de migração
 
 Cache (.solin_cache/):
   - Subpasta dentro de cada subpasta monitorada
@@ -34,13 +35,11 @@ import hashlib
 import json
 import logging
 import os
-import shutil
 import subprocess
 import tempfile
 import time
 import uuid
 from collections.abc import Iterable, Mapping
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
@@ -57,17 +56,23 @@ from solin.core.media.formats import (
     VIDEO_EXTS,
     media_type_from_path,
 )
-from solin.core.media.identity import PLAYLIST_MEDIA_OCCURRENCES, partition_media_items
 from solin.core.playlists.items import create_playlist_item
+from solin.core.playlists.linked_folder import (
+    STATE as LINKED_SYNC_STATE,
+    playlist_sync,
+    read_linked_manifest,
+)
+from solin.core.ingest.sync.discovery import RESOURCE, suppression_record
+from solin.core.ingest.sync.materialization import portable_playlist_url
+from solin.core.ingest.sync.resources import (
+    content_signature, portable_resource_key, resource_identity_key,
+)
 from solin.core.ingest.staging import is_watched_folder_staging_path
 from solin.core.ingest.manifest import (
     CACHE_DIR_NAME,
-    MANIFEST_REPOSITORY,
-    absolute_local_url_tail as _absolute_local_url_tail,
+    ManifestWriteError,
     cache_dir as _cache_dir,
     from_manifest_url as _from_manifest_url,
-    is_absolute_local_url as _is_absolute_local_url,
-    to_manifest_url as _to_manifest_url,
 )
 
 log = logging.getLogger(__name__)
@@ -116,46 +121,28 @@ def _commit_processed_entry(
     subfolder: Path,
     source_name: str,
     entry: dict,
+    *,
+    before_commit: Callable[[], None] | None = None,
 ) -> dict | None:
     """Merge and persist one processed entry without overwriting newer fields."""
-    previous: dict | None = None
-
-    def update_manifest(manifest: dict) -> None:
-        nonlocal previous
-        processed = manifest.setdefault("processed", {})
-        previous = processed.get(source_name)
-        if previous and entry.get("type") in WATCHED_DOC_TYPES:
-            replacements = dict(
-                zip(
-                    previous.get("outputs", []),
-                    entry.get("outputs", []),
-                    strict=False,
-                )
-            )
-            for item in manifest.get("playlist", {}).get("items", []):
-                url = item.get("url", "")
-                if not url or url.startswith(("http://", "https://")):
-                    continue
-                separator_index = max(url.rfind("/"), url.rfind("\\"))
-                basename = url[separator_index + 1:]
-                replacement = replacements.get(basename)
-                if replacement:
-                    item["url"] = url[:separator_index + 1] + replacement
-        processed[source_name] = entry
-
-    MANIFEST_REPOSITORY.update(subfolder, update_manifest, strict=True)
-    return previous
+    service = playlist_sync(subfolder)
+    with service.lock:
+        snapshot = service.read()
+        previous = service.manifest(snapshot)["processed"].get(source_name)
+        if before_commit is not None:
+            before_commit()
+        service.update_processed(snapshot, source_name, entry)
+        return previous
 
 
 def _file_fingerprint(path: Path) -> dict:
-    """Return {size, mtime} for change detection (fast, no hashing)."""
-    st = path.stat()
-    return {"size": st.st_size, "mtime": st.st_mtime}
+    """Portable content revision with a cached local filesystem invalidator."""
+    return content_signature(path)
 
 
 def _fingerprint_matches(entry: dict, fp: dict) -> bool:
     """Check if a manifest entry still matches the file on disk."""
-    return entry.get("size") == fp["size"] and entry.get("mtime") == fp["mtime"]
+    return entry.get("size") == fp["size"] and entry.get("sha256") == fp["sha256"]
 
 
 def _path_is_inside(path: str | Path, folder: str | Path) -> bool:
@@ -181,73 +168,6 @@ def _playlist_cache_references(manifest: dict) -> set[str]:
     return names
 
 
-def _safe_cache_stem(value: str) -> str:
-    stem = "".join(
-        char if char.isalnum() or char in "._-" else "_"
-        for char in value
-    ).strip("._")
-    return stem[:48] or "media"
-
-
-def _adopted_cache_path(source: Path, cache: Path) -> Path:
-    stat = source.stat()
-    fingerprint = "|".join(
-        (
-            os.path.normcase(os.path.abspath(str(source))),
-            str(stat.st_size),
-            str(stat.st_mtime_ns),
-        )
-    )
-    digest = hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()[:12]
-    return cache / f"{_safe_cache_stem(source.stem)}-{digest}{source.suffix.lower()}"
-
-
-def _copy_external_file_to_cache(source: Path, subfolder: Path) -> Path:
-    cache = _cache_dir(subfolder)
-    destination = _adopted_cache_path(source, cache)
-    if destination.exists() and destination.stat().st_size == source.stat().st_size:
-        return destination
-
-    temp_path = cache / f".{destination.name}.{uuid.uuid4().hex}.tmp"
-    try:
-        shutil.copy2(source, temp_path)
-        os.replace(temp_path, destination)
-    except OSError:
-        try:
-            temp_path.unlink(missing_ok=True)
-        except OSError:
-            log.warning("Cannot remove temporary cache copy %s", temp_path, exc_info=True)
-        raise
-    return destination
-
-
-def _portable_playlist_url(url: str, subfolder: Path) -> tuple[str, str | None]:
-    """Return (manifest_url, runtime_url) for a watched-folder playlist item."""
-
-    if not url or url.startswith(("http://", "https://")):
-        return url, None
-
-    portable = _to_manifest_url(url, subfolder)
-    if portable != url:
-        return portable, None
-
-    path = Path(url)
-    if path.is_absolute() and path.is_file():
-        if _path_is_inside(path, subfolder):
-            return _to_manifest_url(str(path), subfolder), None
-        adopted = _copy_external_file_to_cache(path, subfolder)
-        return _to_manifest_url(str(adopted), subfolder), str(adopted)
-
-    if _is_absolute_local_url(url):
-        tail = _absolute_local_url_tail(url)
-        if tail.name:
-            cache_tail = Path(CACHE_DIR_NAME) / tail.name
-            runtime_url = str(subfolder / cache_tail)
-            return cache_tail.as_posix(), runtime_url
-
-    return url, None
-
-
 # ── Escaneamento ───────────────────────────────────────────────────────────────
 
 def scan_root(folder_path: str) -> list[dict]:
@@ -268,47 +188,12 @@ def scan_root(folder_path: str) -> list[dict]:
             continue
         if is_meeting_folder(sub.name):
             continue
-        manifest = MANIFEST_REPOSITORY.load(sub)
-        items = _scan_subfolder(sub, manifest)
+        playlist = load_manifest_playlist(str(sub))
         result.append({
             "id":         _path_id(sub),
             "name":       sub.name,
             "path":       str(sub),
-            "item_count": _manifest_playlist_item_count(sub, manifest, items),
-        })
-    return result
-
-
-def scan_meeting_folders(folder_path: str) -> list[dict]:
-    """
-    Return subfolders that match the meeting naming convention
-    (``YYYY-MM-DD MW|WE``).  Each result contains:
-
-    - ``path``:        absolute path to the subfolder
-    - ``name``:        the folder name
-    - ``monday``:      ISO date string of the JW meeting week Monday
-    - ``meeting_tag``: ``"MW"`` or ``"WE"``
-    - ``items``:       list of media items (same format as scan_subfolder)
-    """
-    from solin.core.meetings.folder_matcher import match_meeting_folder
-
-    root = Path(folder_path)
-    if not root.is_dir():
-        return []
-    result = []
-    for sub in sorted(root.iterdir(), key=lambda p: p.name.lower()):
-        if not sub.is_dir() or sub.name.startswith("."):
-            continue
-        match = match_meeting_folder(sub.name)
-        if not match:
-            continue
-        items = list(partition_media_items([], scan_subfolder(str(sub))).unique_items)
-        result.append({
-            "path":        str(sub),
-            "name":        sub.name,
-            "monday":      match.monday.isoformat(),
-            "meeting_tag": match.meeting_tag,
-            "items":       items,
+            "item_count": len(playlist["items"]),
         })
     return result
 
@@ -325,7 +210,7 @@ def scan_subfolder(subfolder_path: str) -> list[dict]:
     if not sub.is_dir():
         return []
 
-    return _scan_subfolder(sub, MANIFEST_REPOSITORY.load(sub))
+    return _scan_subfolder(sub, read_linked_manifest(sub))
 
 
 def _scan_subfolder(sub: Path, manifest: dict) -> list[dict]:
@@ -335,9 +220,11 @@ def _scan_subfolder(sub: Path, manifest: dict) -> list[dict]:
 
     # Coleta todos os arquivos permitidos no cache (gerados pelo Solin)
     allowed_cache_files = set()
+    output_sources: dict[str, list[tuple[str, int]]] = {}
     for _src_name, entry in manifest.get("processed", {}).items():
-        for out_name in entry.get("outputs", []):
+        for output_index, out_name in enumerate(entry.get("outputs", [])):
             allowed_cache_files.add(out_name)
+            output_sources.setdefault(out_name, []).append((_src_name, output_index))
     allowed_cache_files.update(_playlist_cache_references(manifest))
     virtual_local_resources = {
         _manifest_resource_key(str(vi.get("url") or ""), sub)
@@ -371,7 +258,11 @@ def _scan_subfolder(sub: Path, manifest: dict) -> list[dict]:
                 ext in SCAN_EXTS
                 and _manifest_resource_key(str(f), sub) not in virtual_local_resources
             ):
-                items.append(_physical_playlist_item(f))
+                item = _physical_playlist_item(f)
+                sources = output_sources.get(f.name, [])
+                if len(sources) == 1:
+                    item["_source"], item["_source_output"] = sources[0]
+                items.append(item)
 
     # 3. Manifest-backed occurrences (remote media and embedded JWL assets).
     for src_name, entry in manifest.get("processed", {}).items():
@@ -408,66 +299,6 @@ def _scan_subfolder(sub: Path, manifest: dict) -> list[dict]:
     return items
 
 
-def _new_scanned_playlist_items(
-    saved_items: list[dict],
-    scanned_items: list[dict],
-) -> list[dict]:
-    """Reconcile physical discoveries and manifest-backed occurrences once."""
-
-    saved_ids = {
-        str(item.get("id") or "") for item in saved_items if item.get("id")
-    }
-    physical_candidates = [
-        candidate for candidate in scanned_items if not candidate.get("_virtual")
-    ]
-    new_physical = partition_media_items(
-        saved_items, physical_candidates
-    ).unique_items
-    known_ids = saved_ids | {
-        str(item.get("id") or "") for item in new_physical if item.get("id")
-    }
-    virtual_candidates: list[dict] = []
-    for candidate in scanned_items:
-        if not candidate.get("_virtual"):
-            continue
-        candidate_id = str(candidate.get("id") or "")
-        if candidate_id in known_ids:
-            continue
-        virtual_candidates.append(candidate)
-        known_ids.add(candidate_id)
-    new_virtual = partition_media_items(
-        [*saved_items, *new_physical],
-        virtual_candidates,
-        occurrence_policy=PLAYLIST_MEDIA_OCCURRENCES,
-    ).unique_items
-    selected = {id(item) for item in (*new_physical, *new_virtual)}
-    return [item for item in scanned_items if id(item) in selected]
-
-
-def _manifest_playlist_item_count(
-    subfolder: Path,
-    manifest: dict,
-    scanned_items: list[dict],
-) -> int:
-    """Count the canonical playlist plus newly discovered physical media."""
-
-    raw_items = manifest.get("playlist", {}).get("items", [])
-    saved_items: list[dict] = []
-    if isinstance(raw_items, list):
-        for raw_item in raw_items:
-            if not isinstance(raw_item, dict):
-                continue
-            runtime_item = dict(raw_item)
-            runtime_item["url"] = _from_manifest_url(
-                str(raw_item.get("url") or ""),
-                subfolder,
-            )
-            saved_items.append(runtime_item)
-
-    new_items = _new_scanned_playlist_items(saved_items, scanned_items)
-    return len(saved_items) + len(new_items)
-
-
 def get_pending_files(subfolder_path: str) -> list[str]:
     """
     Return list of processable source files that haven't been processed yet
@@ -476,7 +307,7 @@ def get_pending_files(subfolder_path: str) -> list[str]:
     sub = Path(subfolder_path)
     if not sub.is_dir():
         return []
-    manifest = MANIFEST_REPOSITORY.load(sub)
+    manifest = read_linked_manifest(sub)
     processed = manifest.get("processed", {})
     pending = []
     for f in sub.iterdir():
@@ -506,186 +337,80 @@ def get_pending_files(subfolder_path: str) -> list[str]:
     return pending
 
 
-def reconcile_manifest(subfolder_path: str) -> list[str]:
-    """
-    Remove manifest entries for source files that no longer exist on disk.
-    Deletes orphaned output files from .solin_cache/.
-    Returns list of removed source file names.
-
-    NOTE: Playlist items are intentionally preserved even when their physical
-    files are absent.  This supports cloud-sync scenarios (Dropbox, GDrive,
-    OneDrive) where a file may not yet be available on the local machine.
-    The UI layer handles the "missing" state visually without touching the
-    manifest, so both PCs share the same canonical JSON.
-    """
-    sub = Path(subfolder_path)
-    if not sub.is_dir():
-        return []
-    removed: list[str] = []
-    orphan_outputs: list[tuple[str, str]] = []
-    cache = sub / CACHE_DIR_NAME
-
-    def update_manifest(manifest: dict) -> bool:
-        processed = manifest.get("processed", {})
-        for src_name in list(processed):
-            if (sub / src_name).exists():
-                continue
-            entry = processed.pop(src_name)
-            outputs = [str(name) for name in entry.get("outputs", [])]
-            removed.append(src_name)
-            orphan_outputs.extend((src_name, name) for name in outputs)
-        return bool(removed)
-
-    MANIFEST_REPOSITORY.update(sub, update_manifest, strict=True)
-
-    for src_name, out_name in orphan_outputs:
-        out_path = cache / out_name
-        try:
-            out_path.unlink(missing_ok=True)
-        except OSError as exc:
-            log.warning("Cannot remove orphan %s: %s", out_path, exc)
-        log.info("Reconciled output for removed source %s: %s", src_name, out_name)
-
-    # Playlist items are NOT removed here — missing files are shown as
-    # "Offline / Syncing" in the UI so their position is preserved.
-
-    return removed
-
-
 def load_manifest_playlist(subfolder_path: str) -> dict:
-    """
-    Load a playlist dict from the manifest, reconciled with current files on disk.
-    New files found on disk are appended; missing files are preserved in their
-    saved position (the UI layer renders them as "Offline / Syncing").
+    """Project shared operations and adopt low-priority filesystem discoveries.
 
-    URLs stored as relative paths (or legacy absolute paths from another PC)
-    are resolved to absolute paths on this machine before returning.
-
-    Returns a standard playlist dict: {id, name, items, sections}.
+    Missing resources keep their organization. The local snapshot accompanying
+    this view is the causal baseline for subsequent user edits.
     """
     sub = Path(subfolder_path)
-    if not sub.is_dir():
-        return {"id": "", "name": "", "items": []}
+    service = playlist_sync(sub, refresh_binding=True)
+    with service.lock:
+        # Replay durably accepted edits after an application restart.
+        sub = service.folder
+        for pending in service.pending_intents():
+            try:
+                save_manifest_playlist(subfolder_path, pending)
+            except ManifestWriteError as exc:
+                if not exc.retryable:
+                    raise
+        snapshot = service.read()
+        manifest = service.manifest(snapshot)
+        scanned = _scan_subfolder(sub, manifest) if sub.is_dir() else []
+        snapshot = service.discover(snapshot, scanned)
+        service.reconcile_resources(snapshot)
+        playlist = service.manifest(snapshot)["playlist"]
+        for item in playlist.get("items", []):
+            item["url"] = _from_manifest_url(str(item.get("url") or ""), sub)
+            item.setdefault("auto_title", bool(create_playlist_item(
+                title=str(item.get("title") or ""), url=item["url"],
+                type=str(item.get("type") or _media_type(item["url"])),
+            )["auto_title"]))
+        playlist.update({"id": _path_id(sub), "name": sub.name,
+                         LINKED_SYNC_STATE: snapshot.to_dict(),
+                         "__sync_pending": bool((service.replica.document_id
+                                                 and service.replica.pending_count)
+                                                or service.replica.waiting_count
+                                                or service.resource_errors),
+                         "__sync_error": "\n".join(service.resource_errors)})
+        return playlist
 
-    reconcile_manifest(subfolder_path)
 
-    # Saved playlist from manifest
-    manifest = MANIFEST_REPOSITORY.load(sub)
-    saved_pl = manifest.get("playlist", {})
-    saved_manifest_items = saved_pl.get("items", [])
-
-    # Resolve saved URLs to absolute paths on this machine. Legacy manifests may
-    # contain machine-local paths to profile caches; adopt those into the linked
-    # folder on load so simply opening the playlist heals the shared manifest.
-    manifest_changed = False
-    saved_items = []
-    for si in saved_manifest_items:
-        raw_url = str(si.get("url") or "")
-        resolved_url = _from_manifest_url(raw_url, sub)
-        portable_url, runtime_url = _portable_playlist_url(
-            resolved_url,
-            sub,
-        )
-        if portable_url != raw_url:
-            si["url"] = portable_url
-            manifest_changed = True
-        if "auto_title" not in si:
-            si["auto_title"] = bool(
-                create_playlist_item(
-                    title=str(si.get("title") or ""),
-                    url=resolved_url,
-                    type=str(si.get("type") or _media_type(Path(resolved_url))),
-                )["auto_title"]
-            )
-            manifest_changed = True
-        runtime_item = dict(si)
-        runtime_item["url"] = (
-            runtime_url if runtime_url is not None else _from_manifest_url(portable_url, sub)
-        )
-        saved_items.append(runtime_item)
-
-    if manifest_changed:
-        healed_items = [dict(item) for item in saved_manifest_items]
-
-        def heal_manifest(latest: dict) -> None:
-            playlist = latest.setdefault("playlist", {})
-            playlist["items"] = healed_items
-
-        MANIFEST_REPOSITORY.update(sub, heal_manifest, strict=True)
-
-    # Current items from disk scan, after any load-time adoption above.
-    current_items = scan_subfolder(subfolder_path)
-    current_by_url: dict[str, dict] = {}
-    for ci in current_items:
-        url = ci.get("url", "")
-        if url:
-            current_by_url[url] = ci
-
-    # Reconcile: keep saved order for ALL items, even if file is missing.
-    # Missing files are rendered as "Offline / Syncing" by the UI.
-    reconciled = []
-    for si in saved_items:
-        url = si.get("url", "")
-        if url in current_by_url:
-            # File found via disk scan — keep saved metadata
-            merged = dict(si)
-            reconciled.append(merged)
-        elif url.startswith(("http://", "https://")):
-            # Virtual item (video URL) — always keep
-            reconciled.append(si)
-        else:
-            # Physical file not found on disk — preserve position anyway.
-            # It may be syncing via a cloud service or temporarily moved.
-            reconciled.append(si)
-
-    # Physical discoveries are resource-unique; virtual video occurrences are
-    # distinguished by node ID, even when they share one media resource.
-    reconciled.extend(_new_scanned_playlist_items(saved_items, current_items))
-
-    return {
-        "id":       _path_id(sub),
-        "name":     sub.name,
-        "items":    reconciled,
-        "sections": saved_pl.get("sections", []),
-        "markers":  saved_pl.get("markers", []),
-    }
+def stage_manifest_playlist(subfolder_path: str, playlist: dict) -> None:
+    """Accept UI intent on local durable storage before scheduling cloud I/O."""
+    service = playlist_sync(subfolder_path)
+    with service.intent_lock:
+        if Path(subfolder_path) != service.folder:
+            service.rebase_urls(playlist, Path(subfolder_path))
+        service.stage_intent(playlist)
 
 
 def save_manifest_playlist(subfolder_path: str, pl: dict) -> None:
-    """Save the playlist dict (items + sections) to the manifest.
-
-    All local URLs that live inside the subfolder are converted to portable
-    relative paths before writing, so the JSON works on any machine.
-    """
+    """Publish explicit changes relative to the view's causal baseline."""
     sub = Path(subfolder_path)
-    if not sub.is_dir():
-        return
-
-    # Deep-copy items and convert URLs to relative for portability.  Local files
-    # produced outside the linked folder (profile PDF cache, JWPUB/JWL imports)
-    # are adopted into this folder's .solin_cache before the manifest is saved.
-    portable_items = []
-    for item in pl.get("items", []):
-        pi = dict(item)
-        portable_url, runtime_url = _portable_playlist_url(
-            str(pi.get("url") or ""),
-            sub,
-        )
-        pi["url"] = portable_url
-        if runtime_url is not None:
-            item["url"] = runtime_url
-        portable_items.append(pi)
-
-    playlist = {
-        "items": portable_items,
-        "sections": pl.get("sections", []),
-        "markers": pl.get("markers", []),
-    }
-
-    def update_manifest(manifest: dict) -> None:
-        manifest["playlist"] = playlist
-
-    MANIFEST_REPOSITORY.update(sub, update_manifest, strict=True)
+    service = playlist_sync(sub)
+    with service.lock:
+        if sub != service.folder:
+            service.rebase_urls(pl, sub)
+            sub = service.folder
+        # Materialization belongs to this background path, never to UI staging.
+        for item in pl.get("items", []):
+            portable, runtime = portable_playlist_url(str(item.get("url") or ""), sub)
+            if runtime is not None:
+                item["url"] = runtime
+            item[RESOURCE] = portable_resource_key(portable, sub) if portable else ""
+        snapshot = service.save(pl)
+        service.reconcile_resources(snapshot)
+        service.acknowledge_intent(pl)
+        if service.replica.pending_count:
+            # Keep the UI worker's request alive even after switching folders.
+            # The accepted edit is already safe in the local journal outbox.
+            raise ManifestWriteError(
+                service.replica.operations_dir,
+                operation="publish",
+                retryable=True,
+                cause=OSError("Linked-folder operations are awaiting publication"),
+            )
 
 
 def _manifest_resource_key(url: str, folder: Path) -> str:
@@ -715,111 +440,38 @@ def remove_item_from_manifest(
     Returns True if something was actually cleaned up.
     """
     sub = Path(subfolder_path)
-    if not sub.is_dir():
-        return False
-
-    item_url = str(item.get("url") or "")
-    item_id = str(item.get("id") or "")
-    remaining = tuple(remaining_items)
-    resource_key = _manifest_resource_key(item_url, sub)
-    resource_still_referenced = bool(
-        resource_key
-        and any(
-            _manifest_resource_key(str(other.get("url") or ""), sub) == resource_key
-            for other in remaining
-        )
-    )
-    resolved_url = _from_manifest_url(item_url, sub) if item_url else ""
-    url_path = Path(resolved_url) if resolved_url else None
-    changed = False
-    delete_physical = bool(
-        not resource_still_referenced
-        and url_path
-        and url_path.is_file()
-        and _path_is_inside(url_path, sub)
-    )
-
-    def update_manifest(manifest: dict) -> bool:
-        nonlocal changed, resource_still_referenced
-        playlist = manifest.get("playlist", {})
-        items = playlist.get("items", [])
-        remove_index = next(
-            (
-                index
-                for index, candidate in enumerate(items)
-                if item_id and str(candidate.get("id") or "") == item_id
-            ),
-            None,
-        )
-        if remove_index is None and not item_id and item_url:
-            portable_url = _to_manifest_url(resolved_url, sub)
-            remove_index = next(
-                (
-                    index
-                    for index, candidate in enumerate(items)
-                    if str(candidate.get("url") or "") in {item_url, portable_url}
-                ),
-                None,
-            )
-        if remove_index is not None:
-            del items[remove_index]
-            changed = True
-        if resource_key:
-            resource_still_referenced = resource_still_referenced or any(
-                _manifest_resource_key(str(candidate.get("url") or ""), sub)
-                == resource_key
-                for candidate in items
-            )
-
-        processed = manifest.get("processed", {})
+    service = playlist_sync(sub)
+    with service.lock:
+        playlist = load_manifest_playlist(subfolder_path)
+        item_id = str(item.get("id") or "")
+        key = portable_resource_key(str(item.get("url") or ""), sub)
+        before = playlist["items"]
+        playlist["items"] = [candidate for candidate in before if (
+            str(candidate.get("id") or "") != item_id if item_id
+            else portable_resource_key(str(candidate.get("url") or ""), sub) != key
+        )]
+        changed = len(playlist["items"]) != len(before)
+        snapshot = service.save(playlist)
+        # A stale UI occurrence can already have been deleted remotely. Persist
+        # resource suppression as well so remaining bytes cannot reimport it.
+        if not changed and key:
+            desired = dict(snapshot.entities)
+            deletion_id, deletion = suppression_record(item_id, key)
+            desired[deletion_id] = deletion
+            snapshot = service.replica.commit(snapshot, desired)
         if item.get("_virtual") and item.get("_source"):
-            src_name = item["_source"]
-            if src_name in processed:
-                entry = processed[src_name]
-                virtual_items = entry.get("virtual_items", [])
-                virtual_index = next(
-                    (
-                        index
-                        for index, candidate in enumerate(virtual_items)
-                        if item_id and str(candidate.get("id") or "") == item_id
-                    ),
-                    None,
-                )
-                if virtual_index is None and not item_id:
-                    virtual_index = next(
-                        (
-                            index
-                            for index, candidate in enumerate(virtual_items)
-                            if _manifest_resource_key(
-                                str(candidate.get("url") or ""), sub
-                            )
-                            == resource_key
-                        ),
-                        None,
-                    )
-                if virtual_index is not None:
-                    del virtual_items[virtual_index]
-                    changed = True
-        if not resource_still_referenced and url_path:
-            target_basename = url_path.name
-            for entry in processed.values():
-                outputs = entry.get("outputs", [])
-                if target_basename in outputs:
-                    outputs.remove(target_basename)
-                    changed = True
-                    break
-
-        return changed
-
-    MANIFEST_REPOSITORY.update(sub, update_manifest, strict=True)
-    if delete_physical and not resource_still_referenced and url_path is not None:
-        try:
-            url_path.unlink(missing_ok=True)
-            changed = True
-            log.info("Removed physical file from watched folder: %s", url_path.name)
-        except OSError as exc:
-            log.warning("Cannot remove physical file %s: %s", url_path, exc)
-    return changed
+            source = str(item["_source"])
+            entry = service.manifest(snapshot)["processed"].get(source)
+            if entry:
+                entry["virtual_items"] = [candidate for candidate in entry.get("virtual_items", [])
+                                          if str(candidate.get("id") or "") != item_id]
+                snapshot = service.update_processed(snapshot, source, entry)
+        # Preserve references inserted locally but not yet published by the UI.
+        remaining_keys = {portable_resource_key(str(other.get("url") or ""), sub)
+                          for other in remaining_items}
+        if key not in remaining_keys:
+            service.reconcile_resources(snapshot)
+        return changed or bool(key)
 
 
 def _document_cache_key(doc_path: str | Path) -> str:
@@ -828,7 +480,8 @@ def _document_cache_key(doc_path: str | Path) -> str:
         char if char.isalnum() or char in "._-" else "_"
         for char in path.name
     ).strip("._")[:48]
-    digest = hashlib.sha256(path.name.encode("utf-8")).hexdigest()[:16]
+    revision = content_signature(path)["sha256"] if path.is_file() else "unavailable"
+    digest = hashlib.sha256(f"{path.name}:{revision}".encode("utf-8")).hexdigest()[:16]
     return f"{safe_name or 'document'}-{digest}"
 
 
@@ -838,11 +491,9 @@ def _page_cache_marker(doc_path: str | Path, dest_dir: str | Path) -> Path:
 
 def _page_cache_signature(doc_path: str | Path) -> dict[str, int | str]:
     path = Path(doc_path)
-    stat = path.stat()
     return {
         "source": path.name,
-        "size": stat.st_size,
-        "mtime_ns": stat.st_mtime_ns,
+        **content_signature(path),
     }
 
 
@@ -883,12 +534,15 @@ def _render_document_pages(
     *,
     progress_cb: Callable[[int, int], None] | None = None,
     before_publish: Callable[[], None] | None = None,
+    expected_signature: dict | None = None,
 ) -> list[str]:
     """Render and publish a complete page set without exposing partial output."""
     from solin.core.rendering.pdf import render_pdf_pages_sync
 
     dest_dir.mkdir(parents=True, exist_ok=True)
     source_signature = _page_cache_signature(source_path)
+    if expected_signature is not None and source_signature != expected_signature:
+        raise RuntimeError(f"Source changed during conversion: '{source_path.name}'")
     cache_key = _document_cache_key(source_path)
 
     with tempfile.TemporaryDirectory(
@@ -943,18 +597,9 @@ def _render_document_pages(
             encoding="utf-8",
         )
 
-        marker.unlink(missing_ok=True)
-        final_paths = [dest_dir / name for name in expected_names]
-        for staged_path, final_path in zip(staged_paths, final_paths, strict=True):
-            os.replace(staged_path, final_path)
-
-        expected_set = set(expected_names)
-        for stale_page in dest_dir.glob(f"{cache_key}-page_*.jpg"):
-            if stale_page.name not in expected_set:
-                stale_page.unlink(missing_ok=True)
-
+        final_paths = _publish_staged_outputs(staging_dir, dest_dir, expected_names)
         os.replace(staged_marker, marker)
-        return [str(path) for path in final_paths]
+        return final_paths
 
 
 def _publish_staged_outputs(
@@ -962,28 +607,50 @@ def _publish_staged_outputs(
     dest_dir: Path,
     output_names: list[str],
 ) -> list[str]:
-    """Publish newly generated files and roll back if any move fails."""
-    published: list[Path] = []
-    try:
-        for output_name in output_names:
-            if Path(output_name).name != output_name:
-                raise RuntimeError(f"Invalid staged output name: '{output_name}'")
-            staged_path = staging_dir / output_name
-            if not staged_path.is_file():
-                raise RuntimeError(f"Missing staged output: '{output_name}'")
-            final_path = dest_dir / output_name
-            if final_path.exists():
-                raise RuntimeError(f"Cache output already exists: '{output_name}'")
-            os.replace(staged_path, final_path)
-            published.append(final_path)
-        return [str(path) for path in published]
-    except Exception:  # noqa: BLE001 - transactional rollback must cover every failure
-        for path in published:
-            try:
-                path.unlink(missing_ok=True)
-            except OSError:
-                log.warning("Could not roll back published output %s", path, exc_info=True)
-        raise
+    """Publish immutable outputs; only a committed source record exposes them.
+
+    Keep successfully published files after failures: another replica may
+    already reference them, even when its metadata has not arrived here yet.
+    """
+    for output_name in dict.fromkeys(output_names):
+        if Path(output_name).name != output_name:
+            raise RuntimeError(f"Invalid staged output name: '{output_name}'")
+        staged_path = staging_dir / output_name
+        if not staged_path.is_file():
+            raise RuntimeError(f"Missing staged output: '{output_name}'")
+        final_path = dest_dir / output_name
+        if final_path.exists():
+            if content_signature(final_path) == content_signature(staged_path):
+                continue
+            raise RuntimeError(f"Conflicting cache output: '{output_name}'")
+        os.replace(staged_path, final_path)
+    return [str(dest_dir / name) for name in output_names]
+
+
+def _imported_occurrence_id(source: Path, item: dict, ordinals: dict[str, int]) -> str:
+    """Keep an imported occurrence stable when unrelated source items move.
+
+    Native item IDs survive resource replacement. Older readers without IDs
+    use the semantic resource plus its repetition number within that resource.
+    Titles, trims, resolved CDN URLs and global list positions are not identity.
+    """
+    native_id = item.get("source_item_id")
+    if native_id is not None:
+        identity: object = ["native", str(native_id)]
+    elif item.get("key_symbol") or item.get("doc_id"):
+        identity = ["publication", item.get("type"), item.get("key_symbol") or "",
+                    item.get("doc_id") or 0, item.get("track") or 0,
+                    item.get("issue_tag") or 0,
+                    item.get("meps_language") or item.get("language") or 0]
+    elif item.get("data"):
+        identity = ["embedded", hashlib.sha256(item["data"]).hexdigest(), item.get("type")]
+    else:
+        identity = ["resource", item.get("type"), item.get("url") or item.get("jworg_url") or ""]
+    key = json.dumps(identity, ensure_ascii=False, separators=(",", ":"))
+    ordinal = ordinals.get(key, 0)
+    ordinals[key] = ordinal + 1
+    name = json.dumps([resource_identity_key(source.name), key, ordinal], ensure_ascii=False)
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"solin:source-occurrence:{name}"))
 
 
 # ── Thread de conversão de documentos ─────────────────────────────────────────
@@ -1048,6 +715,7 @@ class WatchedFolderDocConverter(QThread):
     def _convert_lo(self, lo_path: Path, dest_dir: Path) -> list[str]:
         from solin.core.rendering.libreoffice import libreoffice_path
 
+        source_signature = _page_cache_signature(lo_path)
         soffice = libreoffice_path()
         if not soffice:
             raise RuntimeError(
@@ -1090,6 +758,7 @@ class WatchedFolderDocConverter(QThread):
                 pdf_out,
                 dest_dir,
                 progress_cb=lambda cur, tot: self.progress.emit(cur, tot),
+                expected_signature=source_signature,
             )
 
 # ── Thread de sincronização (processa arquivos pendentes) ─────────────────────
@@ -1141,8 +810,7 @@ class WatchedFolderSyncThread(QThread):
             return
 
         self._check_interrupted()
-        # Reconcile first (remove orphans)
-        reconcile_manifest(self._subfolder)
+        read_linked_manifest(sub)
         self._check_interrupted()
 
         pending = get_pending_files(self._subfolder)
@@ -1158,26 +826,24 @@ class WatchedFolderSyncThread(QThread):
             ext = fp.suffix.lower()
             self.progress.emit(fp.name, f"Processing {fp.name}…")
             outputs: list[str] = []
-            committed = False
-
             try:
-                outputs, virtuals = self._process_file(fp, cache, ext)
                 fingerprint = _file_fingerprint(fp)
-                previous = _commit_processed_entry(sub, fp.name, {
+                outputs, virtuals = self._process_file(fp, cache, ext)
+
+                def validate_conversion(source: Path = fp, expected: dict = fingerprint) -> None:
+                    self._check_interrupted()
+                    if _file_fingerprint(source) != expected:
+                        raise RuntimeError(f"Source changed during conversion: '{source.name}'")
+
+                _commit_processed_entry(sub, fp.name, {
                     "type": ext.lstrip("."),
-                    "size": fingerprint["size"],
-                    "mtime": fingerprint["mtime"],
+                    **fingerprint,
                     "outputs": [os.path.basename(o) for o in outputs],
                     "virtual_items": virtuals,
-                    "processed_at": datetime.now(timezone.utc).isoformat(),
-                })
-                committed = True
-                self._remove_replaced_outputs(cache, fp, previous, outputs)
+                }, before_commit=validate_conversion)
             except InterruptedError:
                 raise
             except Exception as exc:  # noqa: BLE001 - per-file sync fault isolation
-                if outputs and not committed:
-                    self._remove_uncommitted_outputs(cache, fp, outputs)
                 log.error("Sync failed for %s: %s", fp.name, exc)
                 self.progress.emit(fp.name, f"⚠ Error: {str(exc)[:60]}")
 
@@ -1218,6 +884,7 @@ class WatchedFolderSyncThread(QThread):
     def _process_lo(self, lo_path: Path, cache: Path) -> tuple[list[str], list[dict]]:
         from solin.core.rendering.libreoffice import libreoffice_path
 
+        source_signature = _page_cache_signature(lo_path)
         soffice = libreoffice_path()
         if not soffice:
             raise RuntimeError("LibreOffice not found")
@@ -1255,6 +922,7 @@ class WatchedFolderSyncThread(QThread):
                     tot,
                 ),
                 before_publish=self._check_interrupted,
+                expected_signature=source_signature,
             )
             return paths, []
 
@@ -1281,6 +949,7 @@ class WatchedFolderSyncThread(QThread):
             )
             outputs = []
             virtuals = []
+            ordinals: dict[str, int] = {}
             for item in items:
                 self._check_interrupted()
                 if item.get("type") == "image" and item.get("url"):
@@ -1289,10 +958,16 @@ class WatchedFolderSyncThread(QThread):
                         raise RuntimeError(
                             f"JWPUB image was not staged correctly: '{image_path.name}'"
                         )
-                    outputs.append(image_path.name)
+                    digest = content_signature(image_path)["sha256"]
+                    name = f"image_{digest}{image_path.suffix.lower()}"
+                    target = staging_dir / name
+                    if not target.exists():
+                        os.replace(image_path, target)
+                    if name not in outputs:
+                        outputs.append(name)
                 else:
                     virtuals.append({
-                        "id":            str(uuid.uuid4()),
+                        "id":            _imported_occurrence_id(jwpub_path, item, ordinals),
                         "title":         item.get("title", stem),
                         "url":           item.get("url", ""),
                         "type":          item.get("type", "video"),
@@ -1319,6 +994,7 @@ class WatchedFolderSyncThread(QThread):
             outputs = []
             virtuals = []
             embedded_assets: dict[tuple[str, bytes, str], str] = {}
+            ordinals: dict[str, int] = {}
             for raw in data.get("items", []):
                 self._check_interrupted()
                 url = raw.get("url") or raw.get("jworg_url") or ""
@@ -1330,16 +1006,15 @@ class WatchedFolderSyncThread(QThread):
                         hashlib.sha256(raw["data"]).digest(),
                         ext.lower(),
                     )
-                    fname = embedded_assets.get(asset_identity) if asset_key else None
+                    fname = embedded_assets.get(asset_identity)
                     if fname is None:
-                        fname = f"embedded_{uuid.uuid4().hex[:12]}{ext}"
+                        fname = f"embedded_{asset_identity[1].hex()}{ext.lower()}"
                         (staging_dir / fname).write_bytes(raw["data"])
                         outputs.append(fname)
-                        if asset_key:
-                            embedded_assets[asset_identity] = fname
+                        embedded_assets[asset_identity] = fname
                     url = (Path(CACHE_DIR_NAME) / fname).as_posix()
                 virtual_item = {
-                    "id":            str(uuid.uuid4()),
+                    "id":            _imported_occurrence_id(jwl_path, raw, ordinals),
                     "title":         raw.get("title", jwl_path.stem),
                     "url":           url,
                     "type":          raw.get("type", "video"),
@@ -1361,73 +1036,6 @@ class WatchedFolderSyncThread(QThread):
                 virtuals.append(virtual_item)
             self._check_interrupted()
             return _publish_staged_outputs(staging_dir, cache, outputs), virtuals
-
-    @staticmethod
-    def _remove_replaced_outputs(
-        cache: Path,
-        source_path: Path,
-        previous: dict | None,
-        current_outputs: list[str],
-    ) -> None:
-        if previous:
-            current_names = {Path(path).name for path in current_outputs}
-            for old_name in previous.get("outputs", []):
-                if old_name not in current_names:
-                    try:
-                        (cache / old_name).unlink(missing_ok=True)
-                    except OSError:
-                        log.warning(
-                            "Cannot remove replaced cache output %s",
-                            cache / old_name,
-                            exc_info=True,
-                        )
-
-        if source_path.suffix.lower() in WATCHED_DOC_EXTS:
-            legacy_marker = cache / f".{source_path.stem}.pages.json"
-            if legacy_marker != _page_cache_marker(source_path, cache):
-                try:
-                    legacy_marker.unlink(missing_ok=True)
-                except OSError:
-                    log.warning(
-                        "Cannot remove legacy page marker %s",
-                        legacy_marker,
-                        exc_info=True,
-                    )
-
-    @staticmethod
-    def _remove_uncommitted_outputs(
-        cache: Path,
-        source_path: Path,
-        outputs: list[str],
-    ) -> None:
-        manifest = MANIFEST_REPOSITORY.load(cache.parent)
-        referenced = {
-            output_name
-            for entry in manifest.get("processed", {}).values()
-            for output_name in entry.get("outputs", [])
-        }
-        for output in outputs:
-            output_path = cache / Path(output).name
-            if output_path.name in referenced:
-                continue
-            try:
-                output_path.unlink(missing_ok=True)
-            except OSError:
-                log.warning(
-                    "Cannot roll back uncommitted cache output %s",
-                    output_path,
-                    exc_info=True,
-                )
-
-        if source_path.suffix.lower() in WATCHED_DOC_EXTS:
-            try:
-                _page_cache_marker(source_path, cache).unlink(missing_ok=True)
-            except OSError:
-                log.warning(
-                    "Cannot roll back page cache marker for %s",
-                    source_path,
-                    exc_info=True,
-                )
 
     def _check_interrupted(self) -> None:
         if self.isInterruptionRequested():
@@ -1499,49 +1107,70 @@ class WatchedFolderWatcher(QObject):
         if not path or not Path(path).is_dir():
             return
 
-        # Observa raiz + cada subpasta imediata + .solin_cache de cada
         paths_to_watch = [path]
         for sub in Path(path).iterdir():
             if sub.is_dir() and not sub.name.startswith("."):
-                paths_to_watch.append(str(sub))
-                cache_sub = sub / CACHE_DIR_NAME
-                if cache_sub.is_dir():
-                    paths_to_watch.append(str(cache_sub))
+                paths_to_watch.extend(self._document_watch_paths(sub))
         self._watcher.addPaths(paths_to_watch)
 
+    @staticmethod
+    def _document_watch_paths(folder: Path) -> list[str]:
+        paths = [folder]
+        cache = folder / CACHE_DIR_NAME
+        if cache.is_dir():
+            paths.append(cache)
+        sync = folder / ".solin_sync"
+        if sync.is_dir():
+            paths.append(sync)
+            for namespace in sync.iterdir():
+                if namespace.is_dir():
+                    paths.append(namespace)
+                    if namespace.name == "resources":
+                        for entry in namespace.iterdir():
+                            if entry.is_dir():
+                                paths.append(entry)
+                                paths.extend(child for child in entry.iterdir() if child.is_dir())
+                    operations = namespace / "operations"
+                    if operations.is_dir():
+                        paths.append(operations)
+                    documents = namespace / "documents"
+                    if documents.is_dir():
+                        paths.append(documents)
+        return [str(path) for path in paths]
+
     def watch_subfolder(self, path: str) -> None:
-        """Adiciona uma subpasta específica ao watcher (caso ainda não esteja)."""
-        if path and Path(path).is_dir():
-            self._watcher.addPath(path)
-            # Also watch its cache dir
-            cache = Path(path) / CACHE_DIR_NAME
-            if cache.is_dir():
-                self._watcher.addPath(str(cache))
+        """Observe operation arrival as well as visible media and cache changes."""
+        folder = Path(path)
+        if path and folder.is_dir():
+            watched = set(self._watcher.directories())
+            missing = [entry for entry in self._document_watch_paths(folder)
+                       if entry not in watched]
+            if missing:
+                self._watcher.addPaths(missing)
+
+    def _document_folder(self, path: Path) -> Path:
+        if self._root_path:
+            try:
+                relative = path.relative_to(Path(self._root_path))
+                if relative.parts:
+                    return Path(self._root_path) / relative.parts[0]
+            except ValueError:
+                pass
+        for parent in [path, *path.parents]:
+            if parent.name in {CACHE_DIR_NAME, ".solin_sync"}:
+                return parent.parent
+        return path
 
     def _on_dir_changed(self, path: str) -> None:
         if path == self._root_path:
             self.set_root(self._root_path)
         else:
-            # If it's a .solin_cache change, emit the parent subfolder
-            p = Path(path)
-            if p.name == CACHE_DIR_NAME:
-                self.subfolder_changed.emit(str(p.parent))
-            else:
-                # Se a subpasta mudou, pode ser que o .solin_cache tenha sido
-                # recém-criado pelo sincronismo do Dropbox ou conversão local.
-                # Garantimos que ele passa a ser observado instantaneamente:
-                cache = p / CACHE_DIR_NAME
-                if cache.is_dir():
-                    self._watcher.addPath(str(cache))
-                
-                self.subfolder_changed.emit(path)
+            folder = self._document_folder(Path(path))
+            self.watch_subfolder(str(folder))
+            self.subfolder_changed.emit(str(folder))
         self.changed.emit()
 
     def _on_file_changed(self, path: str) -> None:
-        parent = Path(path).parent
-        # If file is inside .solin_cache, emit the grandparent
-        if parent.name == CACHE_DIR_NAME:
-            self.subfolder_changed.emit(str(parent.parent))
-        else:
-            self.subfolder_changed.emit(str(parent))
+        folder = self._document_folder(Path(path).parent)
+        self.subfolder_changed.emit(str(folder))
         self.changed.emit()

@@ -165,3 +165,26 @@ def test_read_jwlplaylist_reports_chunk_and_item_progress(tmp_path):
     assert ("items", 1, 1) in events
     assert any(phase == "database" and completed == total for phase, completed, total in events)
     assert any(phase == "media_bytes" and completed == total for phase, completed, total in events)
+
+
+def test_read_jwlplaylist_retains_occurrence_ids_for_repeated_media(tmp_path):
+    archive = _write_playlist_archive(
+        tmp_path,
+        """
+        CREATE TABLE PlaylistItem (PlaylistItemId INTEGER, Label TEXT, Position INTEGER);
+        CREATE TABLE IndependentMedia (
+            IndependentMediaId INTEGER, FilePath TEXT, OriginalFilename TEXT, MimeType TEXT, Hash TEXT
+        );
+        CREATE TABLE PlaylistItemIndependentMediaMap (
+            PlaylistItemId INTEGER, IndependentMediaId INTEGER, DurationTicks INTEGER
+        );
+        INSERT INTO PlaylistItem VALUES (91, 'Second', 1), (72, 'First', 0);
+        INSERT INTO IndependentMedia VALUES (1, 'video.mp4', 'video.mp4', 'video/mp4', '');
+        INSERT INTO PlaylistItemIndependentMediaMap VALUES (91, 1, 0), (72, 1, 0);
+        """,
+        entries={"video.mp4": b"video"},
+    )
+    first = read_jwlplaylist(archive)
+    second = read_jwlplaylist(archive)
+    assert [item["source_item_id"] for item in first["items"]] == ["72", "91"]
+    assert [item["source_item_id"] for item in second["items"]] == ["72", "91"]

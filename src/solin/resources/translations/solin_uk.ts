@@ -4371,6 +4371,16 @@ This action cannot be undone.</source>
         <source>No media files found in &quot;{name}&quot;.</source>
         <translation type="vanished">У &quot;{name}&quot; не знайдено медіафайлів.</translation>
     </message>
+    <message>
+        <source>Reset synchronization</source>
+        <translation>Скинути синхронізацію</translation>
+    </message>
+    <message>
+        <source>Reset synchronization for "{name}"?
+The current organization and files will be preserved. Pending changes from the previous synchronization will not be applied.</source>
+        <translation>Скинути синхронізацію для «{name}»?
+Поточне розташування та файли буде збережено. Зміни попередньої синхронізації, що очікують на застосування, не буде застосовано.</translation>
+    </message>
 </context>
 <context>
     <name>PlaylistPanel</name>
@@ -9305,6 +9315,10 @@ Click &apos;Download&apos; to open the download page.</source>
         <location line="+9"/>
         <source>Delete</source>
         <translation>Видалити</translation>
+    </message>
+    <message>
+        <source>Reset synchronization</source>
+        <translation>Скинути синхронізацію</translation>
     </message>
 </context>
 <context>

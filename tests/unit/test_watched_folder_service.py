@@ -33,7 +33,7 @@ def _write_manifest(folder: Path, payload: dict) -> None:
 
 
 def _read_manifest(folder: Path) -> dict:
-    return MANIFEST_REPOSITORY.load(folder, strict=True)
+    return watched_folder_module.read_linked_manifest(folder)
 
 
 class LocalFileAvailabilitySignatureTests(unittest.TestCase):
@@ -149,29 +149,6 @@ class MeetingFolderSourceScannerTests(unittest.TestCase):
             playlists = watched_folder_module.scan_root(str(root))
 
             self.assertEqual([playlist["name"] for playlist in playlists], ["Music"])
-
-    def test_meeting_scan_keeps_video_occurrences_unique(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            meeting = root / "2026-05-26 MW"
-            meeting.mkdir()
-            remote_url = "https://cdn.example/clip.mp4"
-            first = {"id": "first", "url": remote_url, "type": "video"}
-            second = {"id": "second", "url": remote_url, "type": "video"}
-            _write_manifest(
-                meeting,
-                {
-                    "version": 1,
-                    "processed": {
-                        "source.jwlplaylist": {"virtual_items": [first, second]}
-                    },
-                },
-            )
-
-            meetings = watched_folder_module.scan_meeting_folders(str(root))
-
-            self.assertEqual(len(meetings), 1)
-            self.assertEqual(len(meetings[0]["items"]), 1)
 
     def test_playlist_scan_counts_canonical_virtual_manifest_items(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -377,7 +354,7 @@ def test_sync_holds_child_claim_against_root_mutation(monkeypatch, tmp_path):
         sync_started.set()
         release_sync.wait(1)
 
-    monkeypatch.setattr(watched_folder_module, "reconcile_manifest", reconcile)
+    monkeypatch.setattr(watched_folder_module, "read_linked_manifest", reconcile)
     monkeypatch.setattr(watched_folder_module, "get_pending_files", lambda _folder: [])
     sync = WatchedFolderSyncThread(
         str(folder),
@@ -491,6 +468,27 @@ def test_completed_page_cache_is_reused_only_while_source_matches(
 
     source.write_bytes(b"changed-pdf")
 
+    assert watched_folder_module.pages_already_exist(source, cache) == []
+
+
+def test_libreoffice_source_change_does_not_certify_stale_pdf(monkeypatch, tmp_path):
+    from solin.core.rendering import libreoffice as libreoffice_module
+
+    _install_fake_pdf_renderer(monkeypatch)
+    source = tmp_path / "deck.pptx"
+    source.write_bytes(b"original")
+    cache = tmp_path / ".solin_cache"
+    thread = _sync_thread(tmp_path)
+    monkeypatch.setattr(libreoffice_module, "libreoffice_path", lambda: "soffice")
+
+    def convert(args):
+        (Path(args[args.index("--outdir") + 1]) / "deck.pdf").write_bytes(b"original-pdf")
+        source.write_bytes(b"replaced")
+        return watched_folder_module.subprocess.CompletedProcess(args, 0, "", "")
+
+    monkeypatch.setattr(thread, "_run_libreoffice", convert)
+    with pytest.raises(RuntimeError, match="Source changed"):
+        thread._process_lo(source, cache)
     assert watched_folder_module.pages_already_exist(source, cache) == []
 
 
@@ -859,13 +857,19 @@ def test_completed_entry_is_committed_before_cancellation(monkeypatch, tmp_path)
         "get_pending_files",
         lambda _path: [str(first), str(second)],
     )
-    interruption_checks = 0
+    cancelled = False
+    commit = watched_folder_module._commit_processed_entry
+
+    def commit_then_cancel(*args, **kwargs):
+        nonlocal cancelled
+        result = commit(*args, **kwargs)
+        cancelled = True
+        return result
 
     def interruption_requested(_self):
-        nonlocal interruption_checks
-        interruption_checks += 1
-        return interruption_checks >= 4
+        return cancelled
 
+    monkeypatch.setattr(watched_folder_module, "_commit_processed_entry", commit_then_cancel)
     monkeypatch.setattr(
         WatchedFolderSyncThread,
         "isInterruptionRequested",
@@ -888,10 +892,10 @@ def test_completed_entry_is_committed_before_cancellation(monkeypatch, tmp_path)
     assert processed == [first.name]
     assert first.name in manifest["processed"]
     assert second.name not in manifest["processed"]
-    assert manifest["playlist"] == {"items": [{"title": "keep me"}]}
+    assert [item["title"] for item in manifest["playlist"]["items"]] == ["keep me"]
 
 
-def test_manifest_commit_failure_rolls_back_new_outputs(monkeypatch, tmp_path):
+def test_manifest_commit_failure_retains_unexposed_outputs(monkeypatch, tmp_path):
     source = tmp_path / "media.jwlplaylist"
     source.write_bytes(b"playlist")
     output_name = "embedded_random.mp4"
@@ -921,8 +925,92 @@ def test_manifest_commit_failure_rolls_back_new_outputs(monkeypatch, tmp_path):
 
     thread.run()
 
-    assert not (tmp_path / ".solin_cache" / output_name).exists()
+    assert (tmp_path / ".solin_cache" / output_name).exists()
     assert source.name not in _read_manifest(tmp_path)["processed"]
+    assert watched_folder_module.scan_subfolder(str(tmp_path)) == []
+
+
+@pytest.mark.parametrize("change", ["replace", "remove", "cancel"])
+def test_conversion_revalidates_source_and_cancellation_before_commit(monkeypatch, tmp_path, change):
+    source = tmp_path / "media.jwlplaylist"
+    source.write_bytes(b"original")
+    monkeypatch.setattr(watched_folder_module, "get_pending_files", lambda _: [str(source)])
+    thread = _sync_thread(tmp_path)
+    cancelled = False
+    monkeypatch.setattr(thread, "isInterruptionRequested", lambda: cancelled)
+
+    def convert(_source, cache, _ext):
+        nonlocal cancelled
+        output = cache / "generated.mp4"
+        output.write_bytes(b"converted-original")
+        if change == "replace":
+            source.write_bytes(b"replacement")
+        elif change == "remove":
+            source.unlink()
+        else:
+            cancelled = True
+        return [str(output)], []
+
+    monkeypatch.setattr(thread, "_process_file", convert)
+    thread.run()
+    assert source.name not in _read_manifest(tmp_path)["processed"]
+
+
+def test_jwpub_image_outputs_have_portable_content_identity(monkeypatch, tmp_path):
+    from solin.core.jw.jwpub_import import JwpubPlaylistImportService
+
+    source = tmp_path / "publication.jwpub"
+    source.write_bytes(b"publication")
+    cache = tmp_path / ".solin_cache"
+    cache.mkdir()
+
+    def read(_self, request):
+        image = Path(request.dest_images_dir) / f"{uuid.uuid4().hex}.jpg"
+        image.write_bytes(b"same-image")
+        return [{"type": "image", "url": str(image)}], "publication"
+
+    monkeypatch.setattr(JwpubPlaylistImportService, "read", read)
+    thread = _sync_thread(tmp_path)
+    first, _ = thread._process_jwpub(source, cache)
+    second, _ = thread._process_jwpub(source, cache)
+    assert first == second
+    assert len(list(cache.glob("*.jpg"))) == 1
+
+
+@pytest.mark.parametrize("format_name", ["jwlplaylist", "jwpub"])
+@pytest.mark.parametrize("native_ids", [False, True])
+def test_imported_occurrence_ids_survive_unrelated_insertions(monkeypatch, tmp_path, format_name, native_ids):
+    from solin.core.jw.jwpub_import import JwpubPlaylistImportService
+    from solin.core.playlists import reader
+
+    source = tmp_path / f"media.{format_name}"
+    source.write_bytes(b"archive")
+    cache = tmp_path / ".solin_cache"
+    cache.mkdir()
+    items = [
+        {"type": "video", "url": "https://cdn.example/one.mp4", "track": 1, "key_symbol": "pub"},
+        {"type": "video", "url": "https://cdn.example/one.mp4", "track": 1, "key_symbol": "pub"},
+        {"type": "video", "url": "https://cdn.example/two.mp4", "track": 2, "key_symbol": "pub"},
+    ]
+    if native_ids:
+        for index, item in enumerate(items):
+            item["source_item_id"] = str(index)
+    monkeypatch.setattr(reader, "read_jwlplaylist", lambda *args, **kwargs: {"items": items})
+    monkeypatch.setattr(JwpubPlaylistImportService, "read", lambda *args: (items, "media"))
+    thread = _sync_thread(tmp_path)
+    process = getattr(thread, f"_process_{format_name}")
+    _, before = process(source, cache)
+    items.insert(0, {"type": "video", "url": "https://cdn.example/new.mp4"})
+    if native_ids:
+        # Resource replacement retains the identity of an explicitly identified item.
+        items[-1]["url"] = "https://cdn.example/replacement.mp4"
+        items[-1]["track"] = 3
+    else:
+        # A CDN URL revision does not change a known publication resource.
+        items[-1]["url"] = "https://another-cdn.example/two.mp4"
+    _, after = process(source, cache)
+    assert [item["id"] for item in before] == [item["id"] for item in after[1:]]
+    assert len({item["id"] for item in after}) == 4
 
 
 def test_cancelled_embedded_playlist_output_stays_in_staging(monkeypatch, tmp_path):
@@ -1025,17 +1113,9 @@ def test_linked_jwl_import_preserves_repeated_embedded_video_occurrences(
     assert len(playlist["items"]) == 2
     assert playlist["items"][0]["id"] != playlist["items"][1]["id"]
     assert playlist["items"][0]["url"] == playlist["items"][1]["url"]
-    assert watched_folder_module._manifest_playlist_item_count(
-        tmp_path,
-        _read_manifest(tmp_path),
-        watched_folder_module.scan_subfolder(str(tmp_path)),
-    ) == 2
+    assert len(watched_folder_module.load_manifest_playlist(str(tmp_path))["items"]) == 2
     watched_folder_module.save_manifest_playlist(str(tmp_path), playlist)
-    assert watched_folder_module._manifest_playlist_item_count(
-        tmp_path,
-        _read_manifest(tmp_path),
-        watched_folder_module.scan_subfolder(str(tmp_path)),
-    ) == 2
+    assert len(watched_folder_module.load_manifest_playlist(str(tmp_path))["items"]) == 2
     first, second = playlist["items"]
 
     watched_folder_module.remove_item_from_manifest(
@@ -1053,7 +1133,7 @@ def test_linked_jwl_import_preserves_repeated_embedded_video_occurrences(
     assert not Path(first["url"]).exists()
 
 
-def test_linked_scan_reconciliation_orders_virtual_occurrences_without_physical_repeat():
+def test_linked_scan_reconciliation_orders_virtual_occurrences_without_physical_repeat(tmp_path):
     saved = [{"id": "saved", "url": "clip.mp4", "type": "video"}]
     scanned = [
         {"id": "first", "url": "clip.mp4", "type": "video", "_virtual": True},
@@ -1062,9 +1142,16 @@ def test_linked_scan_reconciliation_orders_virtual_occurrences_without_physical_
         {"id": "redundant", "url": "other.mp4", "type": "video"},
     ]
 
-    additions = watched_folder_module._new_scanned_playlist_items(saved, scanned)
-
-    assert [item["id"] for item in additions] == ["first", "physical", "second"]
+    from solin.core.playlists.linked_folder import playlist_sync
+    service = playlist_sync(tmp_path)
+    initial = {"items": saved}
+    base = service.save(initial)
+    result = service.discover(base, scanned)
+    items = service.manifest(result)["playlist"]["items"]
+    assert [item["id"] for item in items if not item.get("__sync_discovered")] == [
+        "saved", "first", "second",
+    ]
+    assert [item["url"] for item in items].count("other.mp4") == 1
 
 
 if __name__ == "__main__":

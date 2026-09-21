@@ -222,18 +222,29 @@ class ManifestRepository:
     def load(self, subfolder: Path, *, strict: bool = False) -> dict[str, Any]:
         """Load and validate a manifest without mutating the filesystem."""
 
+        return self.load_frozen(subfolder, strict=strict)[0]
+
+    def load_frozen(
+        self, subfolder: Path, *, strict: bool = False,
+    ) -> tuple[dict[str, Any], bytes | None]:
+        """Return validated content and its exact bytes from one filesystem read.
+
+        Migration backups must use these bytes: a cloud provider can replace
+        the source as soon as this read finishes. Missing files return no bytes.
+        """
+
         mf = subfolder / MANIFEST_FILE
-        if not mf.exists():
-            return empty_manifest()
         try:
-            with mf.open("r", encoding="utf-8") as file:
-                data = json.load(file)
+            original = mf.read_bytes()
+            data = json.loads(original.decode("utf-8"))
             if not isinstance(data, dict):
                 raise TypeError("manifest root must be an object")
             if not isinstance(data.get("processed"), dict):
                 data["processed"] = {}
             data.setdefault("version", 1)
-            return data
+            return data, original
+        except FileNotFoundError:
+            return empty_manifest(), None
         except (
             OSError,
             UnicodeError,
@@ -244,7 +255,7 @@ class ManifestRepository:
             if strict:
                 raise ManifestError(f"Invalid linked-folder manifest: {mf}") from exc
             log.warning("Manifest corrupted in %s; will re-process", subfolder)
-            return empty_manifest()
+            return empty_manifest(), None
 
     def update(
         self,

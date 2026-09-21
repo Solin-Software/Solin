@@ -213,6 +213,7 @@ def _build_raw_items(
         if mime.startswith("image") and file_path:
             image_item = _image_item(tmp_dir, img_dest, file_path, label)
             if image_item is not None:
+                image_item["source_item_id"] = str(multimedia_id)
                 image_items.append(image_item)
         elif mime.startswith("video") or mime.startswith("audio"):
             video_row = _video_row(row, mime, label)
@@ -254,6 +255,7 @@ def _video_row(row: sqlite3.Row, mime: str, label: str) -> dict | None:
 
     issue = row["IssueTagNumber"]
     return {
+        "source_item_id": str(row["MultimediaId"]),
         "sym": key_symbol,
         "track": row["Track"] if row["Track"] is not None else 0,
         "issue": 0 if issue is None else int(issue),
@@ -291,6 +293,7 @@ def _build_video_items(
 
         items.append(
             {
+                "source_item_id": row["source_item_id"],
                 "title": title,
                 "url": url,
                 "type": row["mtype"],

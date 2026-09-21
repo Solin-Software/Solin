@@ -16,6 +16,7 @@ from solin.core.meetings.tree_store import (
     MeetingTreeSnapshot,
     MeetingTreeStore,
 )
+from solin.core.ingest.sync.journal import ReplicaSnapshot
 from solin.widgets.meetings.tree_controller import MeetingTreeController
 from solin.widgets.meetings.widget import MeetingsWidget
 
@@ -374,6 +375,82 @@ def test_controller_load_saved_tree_uses_snapshot_nodes_without_saving_canonical
     assert controller.stateChanged.calls == 1
 
 
+def test_saved_sync_binding_survives_restart_without_cloud_folder(tmp_path) -> None:
+    from solin.core.ingest.sync.journal import ReplicaSnapshot
+    binding = {
+        "folder": str(tmp_path / "missing-cloud" / "2026-05-25 MW"),
+        "enabled": True,
+        "snapshot": ReplicaSnapshot().to_dict(),
+    }
+    store_path = tmp_path / "meetings.json"
+    writer = MeetingTreeStore(store_path)
+    writer.save("mwb:2026-05-25:T:20260500", _snapshot().nodes, "hash", linked_sync=binding)
+    snapshot = MeetingTreeStore(store_path).snapshot("mwb:2026-05-25:T:20260500")
+    controller = SimpleNamespace(
+        _refresh_sync_availability=lambda: None,
+        _request_sync_refresh=lambda: None,
+        _start_media_requests=lambda: None,
+        _meeting_folder_pending_sources=set(),
+        chromeChanged=_Signal(), syncStateChanged=_Signal(), stateChanged=_Signal(),
+    )
+    MeetingTreeController.load_saved_tree(controller, snapshot)
+    assert controller._sync_enabled
+    assert controller._sync_folder == binding["folder"]
+    assert controller._sync_snapshot == ReplicaSnapshot()
+    # Metadata enrichment must not silently discard the linkage.
+    writer.save(snapshot.tree_key, snapshot.nodes, "new hash")
+    assert MeetingTreeStore(store_path).snapshot(snapshot.tree_key).linked_sync == binding
+
+
+def test_restarted_meeting_accepts_offline_edit_before_cloud_returns(tmp_path) -> None:
+    from solin.core.meetings.linked_folder_sync import MeetingLinkedFolderSync, MeetingSyncIdentity
+    folder = tmp_path / "cloud" / "2026-05-25 MW"
+    folder.mkdir(parents=True)
+    identity = MeetingSyncIdentity("mwb:2026-05-25:T:20260500", "mwb", date(2026, 5, 25))
+    args = dict(deleted_source_keys=set(), linked_folder_files={}, meeting_folder_imports={})
+    original = MeetingLinkedFolderSync(lambda _: 0)
+    initial = original.save_tree(
+        folder,
+        identity,
+        nodes=_snapshot().nodes,
+        enable=True,
+        **args,
+    )
+    store_path = tmp_path / "meetings.json"
+    MeetingTreeStore(store_path).save(identity.tree_key, initial.nodes, "hash", linked_sync={
+        "folder": str(folder), "enabled": True, "snapshot": initial.snapshot.to_dict(),
+    })
+    original.save_tree(folder, identity, nodes=[
+        *initial.nodes, {"id": "queued-before-crash", "type": "media", "children": []},
+    ], base_snapshot=initial.snapshot, stage_only=True, **args)
+    parked = tmp_path / "offline-folder"
+    assert folder.resolve().is_relative_to(tmp_path.resolve())
+    assert parked.resolve().is_relative_to(tmp_path.resolve())
+    folder.rename(parked)
+    controller = SimpleNamespace(
+        _refresh_sync_availability=lambda: None, _request_sync_refresh=lambda: None,
+        _start_media_requests=lambda: None, _meeting_folder_pending_sources=set(),
+        chromeChanged=_Signal(), syncStateChanged=_Signal(), stateChanged=_Signal(),
+    )
+    MeetingTreeController.load_saved_tree(controller, MeetingTreeStore(store_path).snapshot(identity.tree_key))
+    assert controller._sync_enabled
+    restarted = MeetingLinkedFolderSync(lambda _: 0)
+    recovered = restarted.resume_local_tree(folder, identity, controller._sync_snapshot)
+    assert {node["id"] for node in recovered.nodes} == {"media", "queued-before-crash"}
+    controller._nodes = recovered.nodes
+    controller._sync_snapshot = recovered.snapshot
+    controller._nodes[0]["title"] = "Edited offline after restart"
+    staged = restarted.save_tree(
+        folder, identity, nodes=controller._nodes, base_snapshot=controller._sync_snapshot,
+        stage_only=True, **args,
+    )
+    assert staged.pending_count
+    parked.rename(folder)
+    loaded = restarted.load_tree(str(folder.parent), identity)
+    assert loaded.nodes[0]["title"] == "Edited offline after restart"
+    assert not loaded.pending_count
+
+
 def test_controller_can_defer_media_enrichment_until_detail_is_visible() -> None:
     enrichment_calls: list[str] = []
     controller = SimpleNamespace(
@@ -497,6 +574,7 @@ def test_controller_merges_fresh_resolution_into_pending_manifest_publish() -> N
         meeting_folder_imports={},
         folder="C:/tmp/2026-05-25 MW",
         expected_revision=4,
+        snapshot=ReplicaSnapshot(),
     )
     save_events: list[str] = []
     controller = SimpleNamespace(
@@ -519,7 +597,7 @@ def test_controller_merges_fresh_resolution_into_pending_manifest_publish() -> N
 
     assert controller._nodes[0]["resolved_url"] == "https://cdn.example/fresh.mp4"
     assert controller._nodes[0]["start_trim_ticks"] == 10
-    assert save_events == ["publish", "local"]
+    assert save_events == ["local"]
 
 
 def test_automatic_download_requests_current_and_next_week_through_preparation() -> None:

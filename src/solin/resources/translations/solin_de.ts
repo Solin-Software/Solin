@@ -4343,6 +4343,16 @@ Diese Aktion kann nicht rückgängig gemacht werden.</translation>
         <source>No media files found in &quot;{name}&quot;.</source>
         <translation type="vanished">Keine Mediendateien in „{name}“ gefunden.</translation>
     </message>
+    <message>
+        <source>Reset synchronization</source>
+        <translation>Synchronisierung zurücksetzen</translation>
+    </message>
+    <message>
+        <source>Reset synchronization for "{name}"?
+The current organization and files will be preserved. Pending changes from the previous synchronization will not be applied.</source>
+        <translation>Synchronisierung für „{name}“ zurücksetzen?
+Die aktuelle Anordnung und die Dateien bleiben erhalten. Ausstehende Änderungen der vorherigen Synchronisierung werden nicht angewendet.</translation>
+    </message>
 </context>
 <context>
     <name>PlaylistPanel</name>
@@ -9273,6 +9283,10 @@ Auf „Herunterladen&quot; klicken, um die Download-Seite zu öffnen.</translati
         <location line="+9"/>
         <source>Delete</source>
         <translation>Löschen</translation>
+    </message>
+    <message>
+        <source>Reset synchronization</source>
+        <translation>Synchronisierung zurücksetzen</translation>
     </message>
 </context>
 <context>

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 import logging
+import os
+from pathlib import Path
 import threading
 from typing import Any, TypeVar
 
@@ -17,6 +19,8 @@ from solin.core.ingest.local_files import (
     LocalFileAvailabilitySignature,
     local_file_availability_signature,
 )
+from solin.core.ingest.watched_folder_files import WatchedFolderFileStore
+from solin.core.playlists.linked_folder import playlist_sync, register_playlist_sync
 
 
 _T = TypeVar("_T")
@@ -26,6 +30,7 @@ from solin.core.ingest.watched_folder import (
     load_manifest_playlist,
     remove_item_from_manifest,
     save_manifest_playlist,
+    stage_manifest_playlist,
     scan_root,
 )
 
@@ -80,6 +85,45 @@ class WatchedFolderPlaylistStore:
             child_folder_resource_claim(folder_path),
             lambda: save_manifest_playlist(folder_path, playlist),
         )
+        self._publish_changed()
+
+    def stage_playlist(self, folder_path: str, playlist: dict[str, Any]) -> None:
+        """Persist accepted user intent locally, without reading cloud files."""
+        stage_manifest_playlist(folder_path, playlist)
+
+    def reset_sync(self, folder_path: str) -> None:
+        def reset() -> None:
+            service = playlist_sync(folder_path)
+            with service.lock, service.intent_lock:
+                service.reset_document()
+        self._run_claimed(child_folder_resource_claim(folder_path), reset)
+        self._publish_changed()
+
+    def rename_folder(self, folder_path: str, new_name: str,
+                      file_store: WatchedFolderFileStore) -> str:
+        def rename() -> str:
+            service = playlist_sync(folder_path)
+            with service.lock, service.intent_lock:
+                old_folder = service.folder
+                destination = Path(file_store.rename_folder(old_folder, new_name))
+                try:
+                    service.rebind_folder(destination)
+                except BaseException:  # noqa: BLE001 - Restore the physical folder after any failed binding transaction.
+                    file_store.rename_folder(destination, old_folder.name)
+                    raise
+                register_playlist_sync(destination, service)
+                return os.fspath(destination)
+        result = self._run_claimed(child_folder_resource_claim(folder_path), rename)
+        self._publish_changed()
+        return result
+
+    def delete_folder(self, folder_path: str, file_store: WatchedFolderFileStore) -> None:
+        def delete() -> None:
+            service = playlist_sync(folder_path)
+            with service.lock, service.intent_lock:
+                with service.replica.retiring_binding():
+                    file_store.delete_folder(folder_path)
+        self._run_claimed(child_folder_resource_claim(folder_path), delete)
         self._publish_changed()
 
     def remove_item(
