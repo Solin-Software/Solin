@@ -81,7 +81,7 @@ def _domain_states():
                                        {"value": "light", "label": "Light"}],
         interfaceLanguage="pt", mediaLanguage="T", yeartextQuote="Annual text",
         yeartextReference="Isaiah 41:10", midweekTime="19:30", weekendTime="09:30",
-        mediaLanguagesError="", yeartextDirty=True, scenesRestartRequired=False,
+        mediaLanguagesError="", yeartextDirty=True,
         congregationQuery="", congregationName="", congregationSuggestions=[],
         congregationStatusKind="idle",
         congregationStatusText="Search your congregation to fill the days and times below.",

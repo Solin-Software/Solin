@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 from typing import cast
 
+import solin.main_window as main_window
 from solin.core.scenes.model import BusId
 from solin.core.scenes.recording import ProgramRecordingState, ProgramRecordingStatus
 from solin.main_window import MainWindow, _use_native_media_presentation
@@ -97,7 +98,8 @@ def _native_preview_host(*, requested: bool):
     return host, projection_bar, runtime
 
 
-def test_operator_video_output_uses_the_raw_native_bus() -> None:
+def test_operator_video_output_uses_the_raw_native_bus(monkeypatch) -> None:
+    monkeypatch.setattr(main_window, "NATIVE_SCENES_SUPPORTED", True)
     host, projection_bar, runtime = _native_preview_host(requested=True)
 
     MainWindow._reconcile_native_scene_surfaces(cast(MainWindow, host))
@@ -112,10 +114,11 @@ def test_operator_video_output_uses_the_raw_native_bus() -> None:
     )
 
 
-def test_operator_video_output_keeps_qt_fallback_without_native_routing() -> None:
+def test_operator_video_output_keeps_qt_fallback_without_native_routing(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(main_window, "NATIVE_SCENES_SUPPORTED", False)
     host, projection_bar, runtime = _native_preview_host(requested=True)
-    host.scene_runtime = None
-    host._content_frame_ingress = None
 
     MainWindow._reconcile_native_scene_surfaces(cast(MainWindow, host))
 
@@ -123,7 +126,8 @@ def test_operator_video_output_keeps_qt_fallback_without_native_routing() -> Non
     assert runtime.targets == ()
 
 
-def test_losing_native_routing_restores_the_existing_window_in_place() -> None:
+def test_losing_native_routing_restores_the_existing_window_in_place(monkeypatch) -> None:
+    monkeypatch.setattr(main_window, "NATIVE_SCENES_SUPPORTED", True)
     host, _projection_bar, runtime = _native_preview_host(requested=False)
     runtime.native_window_routing_ready = False
     restored: list[object] = []
@@ -152,7 +156,8 @@ def test_losing_native_routing_restores_the_existing_window_in_place() -> None:
     assert restored == [window]
 
 
-def test_audio_only_projection_keeps_the_native_idle_route_stable() -> None:
+def test_audio_only_projection_keeps_the_native_idle_route_stable(monkeypatch) -> None:
+    monkeypatch.setattr(main_window, "NATIVE_SCENES_SUPPORTED", True)
     host, _projection_bar, runtime = _native_preview_host(requested=False)
     restored: list[object] = []
 

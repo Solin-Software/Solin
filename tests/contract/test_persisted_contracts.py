@@ -50,7 +50,6 @@ EXPECTED_SETTINGS_KEYS = {
     "BOOTSTRAP_LANGUAGE": "bootstrap_language",
     "APP_LANGUAGE": "language",
     "APP_THEME": "theme",
-    "NATIVE_SCENES_ENABLED": "scenes/enabled",
     "TOOLBAR_HOVER_POPUPS": "toolbar/hover_popups",
     "REMOTE_CONTROL_ENABLED": "remote_control/enabled",
     "REMOTE_CONTROL_NETWORK_SELECTION": "remote_control/network_selection",

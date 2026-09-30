@@ -1,8 +1,4 @@
-from dataclasses import replace
 from types import SimpleNamespace
-
-import pytest
-from PySide6.QtGui import QImage
 
 from solin.controllers.live_integration_controller import (
     LiveIntegrationContext,
@@ -279,37 +275,3 @@ def test_live_integration_controller_uses_explicit_dependencies():
     controller = _controller(_WindowStub())
 
     assert not hasattr(controller, "_window")
-
-
-@pytest.mark.parametrize("state_type", ["camera_stream", "obs_stream"])
-@pytest.mark.parametrize("program_content_enabled", [True, False])
-def test_live_frames_reach_qt_surfaces_with_optional_program_content(
-    state_type, program_content_enabled
-):
-    window = _WindowStub()
-    window.projection_session.set_state({"type": state_type})
-    projected = []
-    previewed = []
-    surface = SimpleNamespace(
-        show_image_from_qimage=lambda frame, *, cache_pixmap: projected.append(frame)
-    )
-    window.proj_bar.update_tab_live_preview = previewed.append
-    controller = _controller(window)
-    controller._context = replace(
-        controller._context,
-        projection_windows=lambda: [surface],
-        content_frame_sink=window.content_frames.append if program_content_enabled else None,
-    )
-    frame = QImage(16, 9, QImage.Format.Format_RGB32)
-    frame.fill(0)
-    callback = (
-        controller.on_camera_frame if state_type == "camera_stream" else controller.on_obs_ndi_frame
-    )
-
-    callback(frame)
-    window.projection_session.set_state({"type": "idle"})
-    callback(frame)
-
-    assert projected == [frame]
-    assert previewed == [frame]
-    assert window.content_frames == ([frame] if program_content_enabled else [])

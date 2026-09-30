@@ -116,9 +116,6 @@ SECTIONS = (
             Setting("yeartextReference", QT_TRANSLATE_NOOP("SettingsWidget", "Bible reference:"), "input"),
             Setting("yeartextDirty", QT_TRANSLATE_NOOP("SettingsWidget", "Save changes"), "action", action="saveYeartext", secondary_action="cancelYeartext", secondary_label=QT_TRANSLATE_NOOP("SettingsWidget", "Cancel"), enabled_when="yeartextDirty"),
         )),
-        Group("scenes", QT_TRANSLATE_NOOP("SettingsWidget", "Scenes"), "general", (
-            Setting("nativeScenesEnabled", QT_TRANSLATE_NOOP("SettingsWidget", "Native scenes engine"), description=QT_TRANSLATE_NOOP("SettingsWidget", "Restart Solin to apply this change.")),
-        ), visible_when="nativeScenesAvailable"),
     )),
     Section("integrations", QT_TRANSLATE_NOOP("SettingsWidget", "Integrations"),
             QT_TRANSLATE_NOOP("SettingsWidget", "OBS, Zoom and camera"), "integrations", (

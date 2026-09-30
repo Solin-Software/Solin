@@ -20,7 +20,7 @@ from .screen_picker_overlay import ScreenPickerOverlay
 class SettingsWidget(QWidget):
     def __init__(
         self, lang_manager, screen_manager, obs_service=None, ndi_service=None, *,
-        app_settings, native_scenes_enabled, obs_settings, zoom_settings,
+        app_settings, obs_settings, zoom_settings,
         auto_share_settings, camera_settings, auto_key_settings, media_settings,
         playback_protection, meeting_schedule_settings, watched_folder_settings,
         yeartext_settings, background_song_settings, remote_control_settings,
@@ -33,7 +33,7 @@ class SettingsWidget(QWidget):
         self._closed = False
         self.general = GeneralSettings(
             lang_manager=lang_manager, screen_manager=screen_manager,
-            app_settings=app_settings, native_scenes_enabled=native_scenes_enabled,
+            app_settings=app_settings,
             media_settings=media_settings, playback_protection=playback_protection,
             meeting_schedule_settings=meeting_schedule_settings,
             watched_folder_settings=watched_folder_settings,

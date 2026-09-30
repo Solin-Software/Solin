@@ -56,6 +56,10 @@ def _default_projection_aspect_ratio() -> ProjectionAspectRatio:
     return DEFAULT_PROJECTION_ASPECT_RATIO
 
 
+def _discard_content_frame(_frame: object) -> None:
+    return
+
+
 @dataclass(frozen=True, slots=True)
 class MediaProjectionContext:
     """Dependencies for media, image, playlist, cache, and live-tab projection."""
@@ -72,7 +76,7 @@ class MediaProjectionContext:
     start_videos_paused: Callable[[], bool]
     playback_protection: Any
     projection_aspect_ratio_provider: Callable[[], Any] = _default_projection_aspect_ratio
-    content_frame_sink: Callable[[object], None] | None = None
+    content_frame_sink: Callable[[object], None] = _discard_content_frame
     camera_service: Any | None = None
 
 
@@ -462,8 +466,7 @@ class MediaProjectionController:
             else:
                 projection_window.show_image_from_pixmap(frame)
         context.projection_bar.update_tab_live_preview(frame)
-        if context.content_frame_sink is not None:
-            context.content_frame_sink(frame)
+        context.content_frame_sink(frame)
 
     def on_image_apply_transform(self, zoom: float, norm_x: float, norm_y: float) -> None:
         self._apply_image_transform(zoom, norm_x, norm_y, animate=True)
@@ -550,8 +553,7 @@ class MediaProjectionController:
         state = self._session.state
         if state.get("type") != "video" or state.get("is_audio", False):
             return
-        if context.content_frame_sink is not None:
-            context.content_frame_sink(frame)
+        context.content_frame_sink(frame)
         for projection_window in context.projection_windows():
             if getattr(projection_window, "native_output_active", False):
                 continue
@@ -817,8 +819,7 @@ class MediaProjectionController:
         if fingerprint:
             state["fingerprint"] = fingerprint
         self._session.set_state(state)
-        if context.content_frame_sink is not None:
-            context.content_frame_sink(image)
+        context.content_frame_sink(image)
         activate_options: dict[str, Any] = {
             "image_data": data,
             "keep_expanded": keep_expanded,
