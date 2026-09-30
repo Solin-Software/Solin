@@ -15,7 +15,6 @@ from solin.core.integrations.automation.obs import OBSConnectionState
 from solin.core.integrations.automation.settings import (
     AutoKeySettingsStore,
     AutoShareSettingsStore,
-    CameraSettingsStore,
     OBSSettingsStore,
     ZoomSettingsStore,
 )
@@ -35,7 +34,6 @@ class IntegrationSettings(SettingsDomain):
     zoom_enabled_toggled = Signal(bool)
     zoom_participants_toggled = Signal(bool)
     obs_stream_config_changed = Signal()
-    camera_enabled_toggled = Signal(bool)
 
     def __init__(
         self,
@@ -45,7 +43,6 @@ class IntegrationSettings(SettingsDomain):
         obs_settings: OBSSettingsStore,
         zoom_settings: ZoomSettingsStore,
         auto_share_settings: AutoShareSettingsStore,
-        camera_settings: CameraSettingsStore | None,
         auto_key_settings: AutoKeySettingsStore,
         auto_share_accessibility_trusted: Callable[[], bool],
         target_picker_factory: Callable[..., Any],
@@ -57,7 +54,6 @@ class IntegrationSettings(SettingsDomain):
         self._obs_settings = obs_settings
         self._zoom_settings = zoom_settings
         self._auto_share_settings = auto_share_settings
-        self._camera_settings = camera_settings
         self._auto_key_settings = auto_key_settings
         self._accessibility_trusted = auto_share_accessibility_trusted
         self._target_picker_factory = target_picker_factory
@@ -94,8 +90,6 @@ class IntegrationSettings(SettingsDomain):
             ndiBusy=False, ndiStatus="", ndiStatusKind="",
             zoomAvailable=sys.platform == "win32", zoomEnabled=zoom_settings.is_enabled(),
             zoomParticipants=zoom_settings.show_participants(),
-            cameraAvailable=camera_settings is not None,
-            cameraEnabled=camera_settings.is_enabled() if camera_settings else False,
             autoShareEnabled=auto_share_settings.is_enabled(),
             shareHotkey=auto_share_settings.ensure_hotkey(), shareTargetBusy=False,
             autoKeysEnabled=auto_key_settings.is_enabled(),
@@ -169,9 +163,6 @@ class IntegrationSettings(SettingsDomain):
         elif key == "zoomParticipants" and self._state["zoomAvailable"]:
             self._zoom_settings.set_show_participants(bool(value))
             self.zoom_participants_toggled.emit(bool(value))
-        elif key == "cameraEnabled" and self._camera_settings is not None:
-            self._camera_settings.set_enabled(bool(value))
-            self.camera_enabled_toggled.emit(bool(value))
         elif key == "autoShareEnabled":
             self._auto_share_settings.set_enabled(bool(value))
         elif key == "autoKeysEnabled":

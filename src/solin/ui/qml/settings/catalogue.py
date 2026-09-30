@@ -118,7 +118,7 @@ SECTIONS = (
         )),
     )),
     Section("integrations", QT_TRANSLATE_NOOP("SettingsWidget", "Integrations"),
-            QT_TRANSLATE_NOOP("SettingsWidget", "OBS, Zoom and camera"), "integrations", (
+            QT_TRANSLATE_NOOP("SettingsWidget", "OBS Studio · Zoom Meetings"), "integrations", (
         Group("obs", QT_TRANSLATE_NOOP("SettingsWidget", "OBS Studio"), "integrations", (
             Setting("obsEnabled", QT_TRANSLATE_NOOP("SettingsWidget", "OBS Studio"), description=QT_TRANSLATE_NOOP("SettingsWidget", "Automatically switches scenes during projection")),
             Setting("obsPort", QT_TRANSLATE_NOOP("SettingsWidget", "WebSocket Port"), "input", enabled_when="obsEnabled"),
@@ -135,9 +135,6 @@ SECTIONS = (
         Group("zoom", QT_TRANSLATE_NOOP("SettingsWidget", "Zoom Meetings"), "integrations", (
             Setting("zoomEnabled", QT_TRANSLATE_NOOP("SettingsWidget", "Zoom Meetings"), description=QT_TRANSLATE_NOOP("SettingsWidget", "Audio controls and attendance count during meetings.")),
         ), True, visible_when="zoomAvailable"),
-        Group("camera", QT_TRANSLATE_NOOP("SettingsWidget", "Camera"), "integrations", (
-            Setting("cameraEnabled", QT_TRANSLATE_NOOP("SettingsWidget", "Camera"), description=QT_TRANSLATE_NOOP("SettingsWidget", "Shows a camera button in the live tools toolbar.")),
-        ), visible_when="cameraAvailable"),
     )),
     Section("automations", QT_TRANSLATE_NOOP("SettingsWidget", "Automations"),
             QT_TRANSLATE_NOOP("SettingsWidget", "Sharing and shortcuts"), "automations", (

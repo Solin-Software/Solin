@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from PySide6.QtCore import QAbstractAnimation, QObject, Signal
 from PySide6.QtGui import QColor, QImage
-from PySide6.QtMultimedia import QVideoFrame
 from PySide6.QtTest import QSignalSpy, QTest
 from PySide6.QtWidgets import QApplication, QVBoxLayout
 
@@ -169,41 +168,6 @@ def test_new_projection_cancels_pending_yearly_page_fade_out():
     assert view._stack.currentIndex() != view._PAGE_IDLE_MEDIA
 
 
-def test_first_video_frame_switches_qt_projection_to_media_page():
-    """The playback pre-roll must not mark video visible before a frame exists."""
-    view = _ProjectionViewHarness()
-
-    view.begin_video()
-
-    assert view._is_showing_media is False
-
-    image = QImage(8, 8, QImage.Format.Format_RGB32)
-    image.fill(QColor("black"))
-    view.update_frame(QVideoFrame(image))
-
-    assert view._is_showing_media is True
-    assert view._stack.currentIndex() == view._PAGE_MEDIA
-
-
-def test_native_video_output_bypasses_qt_frame_materialization() -> None:
-    view = _ProjectionViewHarness()
-    image = QImage(8, 8, QImage.Format.Format_RGB32)
-    image.fill(QColor("black"))
-    view.begin_video()
-
-    view.set_native_output_active(True)
-    view.update_frame(QVideoFrame(image))
-
-    assert view.native_output_active
-    assert view._stack.currentIndex() == view._PAGE_MEDIA
-    assert view.display_label._video_frame is None
-
-    view.clear()
-    assert view.native_output_active
-    assert not view.native_video_surface.isHidden()
-    assert view._stack.currentIndex() == view._PAGE_MEDIA
-
-
 def test_new_untransformed_image_resets_zoom_before_clear_fade_finishes():
     view = _ProjectionViewHarness()
     image = QImage(160, 90, QImage.Format.Format_RGB32)
@@ -265,18 +229,3 @@ def test_native_media_output_never_runs_the_qt_media_fade() -> None:
     assert view.native_output_active
     assert not view.native_video_surface.isHidden()
     assert view._stack.currentIndex() == view._PAGE_MEDIA
-
-
-def test_first_fallback_frame_after_native_routing_loss_fades_in() -> None:
-    view = _ProjectionViewHarness()
-    image = QImage(8, 8, QImage.Format.Format_RGB32)
-    image.fill(QColor("black"))
-    view.begin_video()
-    view.set_native_output_active(True)
-
-    view.set_native_output_active(False)
-    view.update_frame(QVideoFrame(image))
-
-    assert not view.native_output_active
-    assert view._stack.currentIndex() == view._PAGE_MEDIA
-    assert view._media_anim.state() is QAbstractAnimation.State.Running

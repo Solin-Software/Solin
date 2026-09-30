@@ -11,6 +11,7 @@ from solin.core.scenes.engine import (
     FrameChannelTransport,
     FrameProducerKind,
     OutputWindowTarget,
+    scene_engine_graph_signature,
     SceneEngineHealth,
     SceneEngineSnapshot,
     SceneEngineStatus,
@@ -19,6 +20,7 @@ from solin.core.scenes.engine import (
 )
 from solin.core.scenes.model import (
     CONTENT_SOURCE_ID,
+    DELIVERY_BUSES,
     DEFAULT_CAMERA_SOURCE_ID,
     BusId,
     CameraPreset,
@@ -26,6 +28,7 @@ from solin.core.scenes.model import (
     ContentCategory,
     ImageSourceConfig,
     LocalCameraConfig,
+    NormalizedRect,
     OnvifPtzBinding,
     RtspCameraConfig,
     SCHEMA_VERSION,
@@ -42,14 +45,19 @@ from solin.core.scenes.model import (
     VideoColorRange,
     VideoColorSpace,
     VideoPixelFormat,
+    YeartextSourceConfig,
 )
 from solin.core.scenes.presets import (
     CAMERA_SCENE_ID,
     CONTENT_CAMERA_PIP_SCENE_ID,
     CONTENT_SCENE_ID,
+    DEFAULT_SCENE_ID,
     NO_SIGNAL_SCENE_ID,
+    YEARTEXT_SOURCE_ID,
     SceneSeedNames,
     create_default_scene_document,
+    create_fresh_scene_collection_document,
+    ensure_default_scene,
 )
 
 
@@ -92,7 +100,7 @@ def test_default_document_has_stable_sources_scenes_and_two_output_buses() -> No
         CONTENT_CAMERA_PIP_SCENE_ID,
         NO_SIGNAL_SCENE_ID,
     ]
-    assert {route.bus_id for route in first.outputs} == set(BusId)
+    assert {route.bus_id for route in first.outputs} == set(DELIVERY_BUSES)
     assert first.transition_policy.default == TransitionSpec(
         TransitionKind.DISSOLVE,
         350,
@@ -322,6 +330,112 @@ def test_local_camera_preserves_exact_native_fps_components_through_persistence(
     assert configuration.fps_denominator == denominator
 
 
+def test_graph_signature_ignores_geometry_and_timestamps_but_tracks_structure() -> None:
+    document = _document()
+    baseline = scene_engine_graph_signature(document)
+    scene = document.scenes[0]
+    layer = scene.layers[0]
+
+    # A real edit (via update_scene) both moves the layer AND bumps the scene's
+    # updated_at. Neither is structural — geometry is applied live and timestamps
+    # are metadata — so the signature must be unchanged (else every resize/move
+    # would force a full re-hydrate and re-open every source).
+    edited_scene = replace(
+        scene,
+        layers=(replace(layer, rect=NormalizedRect(x=0.3, y=0.3, width=0.4, height=0.4)),
+                *scene.layers[1:]),
+        updated_at="2099-12-31T23:59:59+00:00",
+    )
+    edited_document = replace(
+        document, scenes=(edited_scene, *document.scenes[1:]),
+    )
+    assert scene_engine_graph_signature(edited_document) == baseline
+
+    # A structural change (hiding a layer) DOES change the signature → rebuild.
+    hidden = replace(layer, visible=not layer.visible)
+    hidden_document = replace(
+        document,
+        scenes=(replace(scene, layers=(hidden, *scene.layers[1:])), *document.scenes[1:]),
+    )
+    assert scene_engine_graph_signature(hidden_document) != baseline
+
+
+def test_yeartext_source_config_round_trips_with_an_empty_record() -> None:
+    configuration = YeartextSourceConfig()
+    assert configuration.to_record() == {}
+    assert YeartextSourceConfig.from_record(configuration.to_record()) == configuration
+
+
+def test_yeartext_source_definition_round_trips_through_the_document_codec() -> None:
+    source = SourceDefinition(
+        id="solin.yeartext",
+        kind=SourceKind.YEARTEXT,
+        name="Year text",
+        configuration=YeartextSourceConfig(),
+    )
+    record = source.to_record()
+    assert record["type"] == "yeartext"
+    assert record["configuration"] == {}
+    assert SourceDefinition.from_record(record) == source
+
+
+def test_yeartext_source_definition_rejects_a_mismatched_configuration() -> None:
+    with pytest.raises(SceneValidationError):
+        SourceDefinition(
+            id="solin.yeartext",
+            kind=SourceKind.YEARTEXT,
+            name="Year text",
+            configuration=ImageSourceConfig(asset_id="not-yeartext"),
+        )
+
+
+def test_ensure_default_scene_heals_a_document_without_a_year_text_default() -> None:
+    # A document from before the year-text-as-a-scene feature: it has scenes but
+    # no Default (year text) scene. ensure_default_scene must add the year-text
+    # source + Default scene and make that scene the shared idle default, keeping
+    # the existing scenes. The result must be a valid document.
+    legacy = _document()
+    assert all(scene.id != DEFAULT_SCENE_ID for scene in legacy.scenes)
+
+    healed = ensure_default_scene(legacy, _names())
+
+    yeartext = healed.source(YEARTEXT_SOURCE_ID)
+    assert yeartext.kind is SourceKind.YEARTEXT
+    default_scene = healed.scene(DEFAULT_SCENE_ID)
+    assert [layer.source_id for layer in default_scene.layers] == [YEARTEXT_SOURCE_ID]
+    assert {route.default_scene_id for route in healed.outputs} == {DEFAULT_SCENE_ID}
+    # existing scenes are preserved
+    assert {scene.id for scene in legacy.scenes} <= {scene.id for scene in healed.scenes}
+    # round-trips (i.e. it validated as a real document)
+    assert SceneDocument.from_record(healed.to_record()) == healed
+
+
+def test_ensure_default_scene_is_a_no_op_when_a_default_scene_exists() -> None:
+    fresh = create_fresh_scene_collection_document(
+        _names(), document_id="fresh", created_at="2026-08-02T12:00:00+00:00"
+    )
+    assert ensure_default_scene(fresh, _names()) is fresh  # unchanged, same object
+
+
+def test_ensure_default_scene_keeps_a_user_chosen_default() -> None:
+    # If a user set a different scene as their default, the Default scene still
+    # exists, so ensure_default_scene must not override their choice.
+    fresh = create_fresh_scene_collection_document(
+        _names(), document_id="fresh", created_at="2026-08-02T12:00:00+00:00"
+    )
+    customized = replace(
+        fresh,
+        outputs=tuple(
+            replace(route, default_scene_id=CAMERA_SCENE_ID) for route in fresh.outputs
+        ),
+    )
+
+    result = ensure_default_scene(customized, _names())
+
+    assert result is customized  # no-op: Default scene present
+    assert {route.default_scene_id for route in result.outputs} == {CAMERA_SCENE_ID}
+
+
 @pytest.mark.parametrize(
     ("numerator", "denominator"),
     [
@@ -514,44 +628,25 @@ def test_schema_version_five_normalizes_legacy_destinations_to_one_program() -> 
     } == {CONTENT_SCENE_ID}
 
 
-def test_scene_document_rejects_divergent_program_destinations() -> None:
+def test_scene_document_allows_each_output_its_own_default_scene() -> None:
+    # Two independent outputs: the projection can idle on one scene while the
+    # program (virtual camera + recording) idles on another.
     document = _document()
-    media_route = document.output(BusId.MEDIA_WINDOWS)
 
-    with pytest.raises(SceneValidationError, match="Program default"):
-        replace(
-            document,
-            outputs=tuple(
-                replace(route, default_scene_id=CONTENT_SCENE_ID)
-                if route.bus_id is BusId.MEDIA_WINDOWS
-                else route
-                for route in document.outputs
-            ),
-        )
+    diverged = replace(
+        document,
+        outputs=tuple(
+            replace(route, default_scene_id=CONTENT_SCENE_ID)
+            if route.bus_id is BusId.MEDIA_WINDOWS
+            else replace(route, default_scene_id=CAMERA_SCENE_ID)
+            for route in document.outputs
+        ),
+    )
 
-    with pytest.raises(SceneValidationError, match="Program media scene"):
-        replace(
-            document,
-            automation=tuple(
-                replace(
-                    mapping,
-                    assignments=tuple(
-                        (category, CONTENT_CAMERA_PIP_SCENE_ID)
-                        for category in (
-                            ContentCategory.IMAGE,
-                            ContentCategory.VIDEO,
-                            ContentCategory.TIMER,
-                            ContentCategory.BROWSER,
-                            ContentCategory.EXTERNAL_STREAM,
-                        )
-                    ),
-                )
-                if mapping.bus_id is media_route.bus_id
-                else mapping
-                for mapping in document.automation
-            ),
-        )
-
+    assert diverged.output(BusId.MEDIA_WINDOWS).default_scene_id == CONTENT_SCENE_ID
+    assert diverged.output(BusId.VIRTUAL_CAMERA).default_scene_id == CAMERA_SCENE_ID
+    # and it survives a save/load round trip
+    assert SceneDocument.from_record(diverged.to_record()) == diverged
 
 def test_future_scene_schema_is_rejected_explicitly() -> None:
     record = _document().to_record()
@@ -798,14 +893,17 @@ def test_engine_snapshot_requires_each_bus_once_and_known_scenes() -> None:
         active_scenes=(
             (BusId.MEDIA_WINDOWS, CONTENT_SCENE_ID),
             (BusId.VIRTUAL_CAMERA, CAMERA_SCENE_ID),
+            (BusId.EDITOR, CONTENT_SCENE_ID),
         ),
         render_enabled=(
             (BusId.MEDIA_WINDOWS, False),
             (BusId.VIRTUAL_CAMERA, False),
+            (BusId.EDITOR, False),
         ),
         output_enabled=(
             (BusId.MEDIA_WINDOWS, False),
             (BusId.VIRTUAL_CAMERA, False),
+            (BusId.EDITOR, False),
         ),
     )
     assert valid.document is document
@@ -819,10 +917,12 @@ def test_engine_snapshot_requires_each_bus_once_and_known_scenes() -> None:
             render_enabled=(
                 (BusId.MEDIA_WINDOWS, False),
                 (BusId.VIRTUAL_CAMERA, False),
+                (BusId.EDITOR, False),
             ),
             output_enabled=(
                 (BusId.MEDIA_WINDOWS, False),
                 (BusId.VIRTUAL_CAMERA, False),
+                (BusId.EDITOR, False),
             ),
         )
 
@@ -865,14 +965,17 @@ def test_engine_snapshot_requires_each_bus_once_and_known_scenes() -> None:
             active_scenes=(
                 (BusId.MEDIA_WINDOWS, CONTENT_SCENE_ID),
                 (BusId.VIRTUAL_CAMERA, "missing-scene"),
+                (BusId.EDITOR, CONTENT_SCENE_ID),
             ),
             render_enabled=(
                 (BusId.MEDIA_WINDOWS, False),
                 (BusId.VIRTUAL_CAMERA, False),
+                (BusId.EDITOR, False),
             ),
             output_enabled=(
                 (BusId.MEDIA_WINDOWS, False),
                 (BusId.VIRTUAL_CAMERA, False),
+                (BusId.EDITOR, False),
             ),
         )
 
@@ -889,10 +992,12 @@ def test_engine_snapshot_requires_each_bus_once_and_known_scenes() -> None:
             render_enabled=(
                 (BusId.MEDIA_WINDOWS, False),
                 (BusId.VIRTUAL_CAMERA, False),
+                (BusId.EDITOR, False),
             ),
             output_enabled=(
                 (BusId.MEDIA_WINDOWS, False),
                 (BusId.VIRTUAL_CAMERA, False),
+                (BusId.EDITOR, False),
             ),
         )
 

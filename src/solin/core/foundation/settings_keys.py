@@ -13,6 +13,7 @@ class SettingsKey:
     APP_LANGUAGE: Final = "language"
     APP_THEME: Final = "theme"
     TOOLBAR_HOVER_POPUPS: Final = "toolbar/hover_popups"
+    SCENES_PANEL_DOCKED: Final = "toolbar/scenes_panel_docked"
     REMOTE_CONTROL_ENABLED: Final = "remote_control/enabled"
     REMOTE_CONTROL_NETWORK_SELECTION: Final = "remote_control/network_selection"
     REMOTE_CONTROL_CREDENTIALS: Final = "remote_control/credentials"

@@ -13,7 +13,7 @@ from PySide6.QtWidgets import QApplication
 
 from solin.controllers.scene_runtime_controller import SceneRuntimeController
 from solin.core.foundation.runtime_paths import ProfilePaths
-from solin.core.scenes.model import TransitionKind
+from solin.core.scenes.model import BusId, TransitionKind
 from solin.core.scenes.presets import SceneSeedNames
 from solin.core.scenes.recording import (
     AudioDevice,
@@ -166,7 +166,8 @@ def test_scenes_qml_editor_loads_with_the_real_workspace(tmp_path: Path) -> None
     assert widget._qml.rootObject() is not None
     assert widget._qml.rootObject().objectName() == "scenesEditorView"
     assert widget._qml.rootObject().findChild(QQuickItem, "scenesPreviewImage") is not None
-    assert widget.bridge.scenesModel.rowCount() == 2
+    # First-run ships Default (year text) + Camera + Content.
+    assert widget.bridge.scenesModel.rowCount() == 3
     assert widget.bridge.outputFormatLabel == "1920 × 1080"
 
     root = widget._qml.rootObject()
@@ -259,7 +260,9 @@ def test_program_recording_control_and_settings_share_the_injected_state(
     system_audio = root.findChild(QQuickItem, "scenesRecordingSystemAudio")
     choose_folder = root.findChild(QQuickItem, "scenesRecordingChooseFolder")
     audio_warning = root.findChild(QQuickItem, "scenesRecordingAudioWarning")
-    assert recording_button is not None and recording_button.isVisible()
+    assert recording_button is not None and not recording_button.isVisible()
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
+    assert _wait_until(recording_button.isVisible)
     assert recording_button.property("expanded") is True
     assert recording_popover is not None
     assert microphone is not None
@@ -300,6 +303,8 @@ def test_program_recording_control_and_settings_share_the_injected_state(
 
     recording_button.toggleRequested.emit()
     assert _wait_until(lambda: widget.bridge.recordingStatus == "idle")
+    assert widget.bridge.profileChangesBlocked
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, False)
     assert not widget.bridge.profileChangesBlocked
 
     widget.cleanup()

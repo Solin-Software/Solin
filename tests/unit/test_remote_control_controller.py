@@ -14,7 +14,6 @@ from datetime import timedelta
 
 from PIL import Image
 from PySide6.QtCore import QCoreApplication, QObject, Signal
-from PySide6.QtMultimedia import QMediaPlayer
 import pytest
 
 from solin.controllers.remote_control_controller import (
@@ -115,34 +114,27 @@ class _ProjectionSession:
         return lambda: self.listeners.remove(listener)
 
 
-class _Player:
-    def __init__(self) -> None:
-        self.state = QMediaPlayer.PlaybackState.StoppedState
-
-    def playbackState(self):
-        return self.state
-
-
 class _MediaController(QObject):
     state_changed = Signal(object)
     duration_changed = Signal(int)
     position_changed = Signal(int)
-    playback_recovery_changed = Signal(bool)
     error_occurred = Signal(str)
 
     def __init__(self) -> None:
         super().__init__()
-        self.player = _Player()
         self.duration = 0
         self.position = 0
         self.session_id = 0
-        self.is_recovering = False
+        self.is_playing = False
+        self.is_paused = False
 
     def play(self) -> None:
-        self.player.state = QMediaPlayer.PlaybackState.PlayingState
+        self.is_playing = True
+        self.is_paused = False
 
     def pause(self) -> None:
-        self.player.state = QMediaPlayer.PlaybackState.PausedState
+        self.is_playing = False
+        self.is_paused = True
 
 
 class _ProjectionBar(QObject):
@@ -907,7 +899,7 @@ def test_playback_snapshot_mirrors_desktop_queue_capabilities_and_position(
     media.session_id = 9
     media.duration = 120_000
     media.position = 23_000
-    media.player.state = QMediaPlayer.PlaybackState.PlayingState
+    media.is_playing = True
     bar.items = [
         {
             "id": "media-1",
@@ -1065,7 +1057,7 @@ def test_session_command_is_revalidated_on_main_thread_before_effect(
     session.state = {"type": "video", "title": "First media"}
     session.session_id = 1
     media.session_id = 1
-    media.player.state = QMediaPlayer.PlaybackState.PlayingState
+    media.is_playing = True
     controller._refresh_playback()
     old_session_id = controller.state.playback.playback_session_id
     assert old_session_id is not None
@@ -1081,7 +1073,7 @@ def test_session_command_is_revalidated_on_main_thread_before_effect(
 
     assert error is not None
     assert error.code is CommandErrorCode.PLAYBACK_STALE
-    assert media.player.state is QMediaPlayer.PlaybackState.PlayingState
+    assert media.is_playing is True
     controller.stop()
 
 

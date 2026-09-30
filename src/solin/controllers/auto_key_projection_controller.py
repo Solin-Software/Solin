@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtMultimedia import QMediaPlayer
-
+from ..core.media.playback_state import SolinPlaybackState
 from ..core.integrations.automation.auto_key_actions import (
     EVENT_MEDIA_ENDED,
     EVENT_MEDIA_PAUSED,
@@ -36,11 +35,11 @@ class AutoKeyProjectionController:
             or self._projection_bar.is_audio_mode()
         ):
             return
-        if state == QMediaPlayer.PlaybackState.PausedState:
+        if state == SolinPlaybackState.PAUSED:
             if not self._video_paused:
                 self._video_paused = True
                 self._dispatcher.dispatch(EVENT_MEDIA_PAUSED)
-        elif state == QMediaPlayer.PlaybackState.PlayingState:
+        elif state == SolinPlaybackState.PLAYING:
             if self._video_paused:
                 self._video_paused = False
                 self._dispatcher.dispatch(EVENT_MEDIA_RESUMED)

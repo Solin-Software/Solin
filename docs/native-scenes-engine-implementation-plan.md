@@ -1,5 +1,12 @@
 # Native scenes and virtual camera implementation plan
 
+This is the historical implementation plan for the C++ scene engine and its
+QtMultimedia playback integration. The default backend now uses a supervised
+libobs sidecar for playback and composition, including recording and audio.
+Checked items below describe the native implementation at the time of this
+plan; they do not qualify the libobs backend or its standalone delivery.
+See [Building and platform requirements](building.md) for current requirements.
+
 ## Purpose
 
 This document records the architecture, implemented scope, and remaining release work for

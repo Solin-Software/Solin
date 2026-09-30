@@ -34,6 +34,33 @@ from solin.core.profiles.application import ProfileRegistryLoadError
 from solin.bootstrap.startup_timeline import startup_timeline
 
 
+def _bind_source_credential_resolver(scene_engine, credentials) -> None:
+    """Let the engine turn a stored credential reference into a login."""
+    binder = getattr(scene_engine, "set_credential_resolver", None)
+    if not callable(binder):
+        return
+
+    def resolve(reference: str):
+        resolved = credentials.resolve(reference)
+        if resolved is None:
+            return None
+        return resolved.username, resolved.password
+
+    binder(resolve)
+
+
+def _scenes_engine_available() -> bool:
+    """True when a scene engine owns the cameras — native (Windows) or libobs.
+
+    When it does, the legacy Qt camera stack must stay off: a V4L2 device opens
+    once, so a second QCamera consumer racing libobs' ``v4l2_input`` triggers
+    "Camera is in use". Only build the legacy camera when nothing else drives it.
+    """
+    from solin.core.scenes.libobs_engine import libobs_scene_engine_selected
+
+    return NATIVE_SCENES_SUPPORTED or libobs_scene_engine_selected()
+
+
 def _build_main_window_profile_settings(profile_settings):
     from solin.controllers.main_window_profile_settings import MainWindowProfileSettings
     from solin.core.ingest.watched_folder_settings import WatchedFolderSettingsStore
@@ -72,7 +99,7 @@ def _build_main_window_profile_settings(profile_settings):
         auto_key=AutoKeySettingsStore.for_profile_settings(profile_settings),
         camera=(
             CameraSettingsStore.for_profile_settings(profile_settings)
-            if not NATIVE_SCENES_SUPPORTED
+            if not _scenes_engine_available()
             else None
         ),
         projection_playback=ProjectionPlaybackSettingsStore.for_profile_settings(profile_settings),
@@ -125,6 +152,9 @@ def _scene_seed_names():
         content_layer=translate("Content"),
         camera_layer=translate("Camera"),
         background_layer=translate("Background"),
+        yeartext_source=translate("Year text"),
+        default_scene=translate("Default"),
+        yeartext_layer=translate("Year text"),
     )
 
 
@@ -235,11 +265,9 @@ def _build_main_window_service_factories(
 
     install_id_provider = lambda: get_install_id(installation_settings)
 
+    # The legacy Qt (QtMultimedia) camera has been removed; the libobs sidecar
+    # owns camera capture/discovery, so no app-side camera service is created.
     camera_factory = None
-    if not NATIVE_SCENES_SUPPORTED:
-        from solin.core.integrations.camera import CameraService
-
-        camera_factory = CameraService
 
     def create_remote_services(parent):
         from typing import cast
@@ -372,6 +400,10 @@ def _build_main_window_runtime(
         PlaylistStoragePaths,
     )
     from solin.core.foundation.resource_lanes import ResourceLaneRegistry
+    from solin.core.scenes.libobs_engine import (
+        create_libobs_scene_engine,
+        libobs_scene_engine_selected,
+    )
     from solin.core.scenes.native_engine import create_native_scene_engine
     from solin.core.scenes.ptz_runtime import create_ptz_runtime_services
 
@@ -436,13 +468,21 @@ def _build_main_window_runtime(
     watched_folder_playlist_store = WatchedFolderPlaylistStore()
     main_window_profile_settings = _build_main_window_profile_settings(profile_settings)
     scene_workspace = _build_scene_workspace(profile_paths)
-    scene_engine = (
-        create_native_scene_engine(runtime_paths.cache_dir)
-        if NATIVE_SCENES_SUPPORTED
-        else None
-    )
+    # libobs is the default engine on this branch and runs on any platform;
+    # SOLIN_SCENE_ENGINE only opts back out to the native engine where supported.
+    if libobs_scene_engine_selected():
+        scene_engine = create_libobs_scene_engine(profile_paths.images_dir)
+    elif NATIVE_SCENES_SUPPORTED:
+        scene_engine = create_native_scene_engine(runtime_paths.cache_dir)
+    else:
+        scene_engine = None
     ptz_services = create_ptz_runtime_services(active_profile.id)
     scene_workspace.set_credential_cleaner(ptz_services.credentials.delete)
+    if scene_engine is not None:
+        # A camera's stream login lives in the keyring, not in the scene document.
+        # The engine client resolves it per hydrate and sends it beside the
+        # document, so the secret never reaches disk or the graph-signature cache.
+        _bind_source_credential_resolver(scene_engine, ptz_services.credentials)
     meeting_linked_folder_sync = MeetingLinkedFolderSync(
         _meeting_weekday_resolver(main_window_profile_settings.meeting_schedule)
     )

@@ -410,3 +410,56 @@ def test_program_content_publishes_idle_once_when_audio_replaces_visual_media() 
 
     assert epochs == [audio_idle_epoch]
     controller.close()
+
+
+def test_idle_publishes_a_transparent_frame_not_the_year_text() -> None:
+    """Idle is not content: the year text belongs to its own scene source."""
+    session = ProjectionSession()
+    frames: list[QImage] = []
+    controller = ProgramContentController(
+        session,
+        _FontManager(),
+        lambda frame: frames.append(QImage(frame)),
+        lambda: ("A yearly quotation", "Reference", "E"),
+        media_epoch_sink=lambda _epoch: None,
+        width=64,
+        height=36,
+    )
+
+    controller.refresh()
+
+    published = frames[-1]
+    assert published.size().width() == 64
+    assert all(
+        published.pixelColor(x, y).alpha() == 0
+        for x in range(0, 64, 8)
+        for y in range(0, 36, 6)
+    ), "the content source must composite away entirely while idle"
+    controller.close()
+
+
+def test_idle_blanks_the_content_channel_only_once_per_presentation() -> None:
+    session = ProjectionSession()
+    frames: list[object] = []
+    controller = ProgramContentController(
+        session,
+        _FontManager(),
+        frames.append,
+        lambda: ("", "", ""),
+        media_epoch_sink=lambda _epoch: None,
+        width=64,
+        height=36,
+    )
+
+    controller.refresh()
+    controller.refresh()
+    blanks_after_idle = len(frames)
+    controller.refresh()
+    assert len(frames) == blanks_after_idle
+
+    # Media takes the channel back, and the next idle blanks it again.
+    session.set_state({"type": "video"})
+    controller.submit_frame(object())
+    session.reset_state()
+    assert len(frames) > blanks_after_idle + 1
+    controller.close()

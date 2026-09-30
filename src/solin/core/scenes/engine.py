@@ -22,6 +22,7 @@ from solin.core.scenes.model import (
     VideoColorSpace,
     VideoPixelFormat,
 )
+from solin.core.scenes.media_control import MediaControlAction, MediaPlaybackNativeState
 from solin.core.scenes.recording import (
     AudioDeviceDiscovery,
     AudioDeviceSelection,
@@ -45,10 +46,50 @@ def scene_engine_document_record(document: SceneDocument) -> dict[str, object]:
 
 
 def scene_engine_graph_signature(document: SceneDocument) -> dict[str, object]:
-    """Return revision-independent graph state for hydration invalidation."""
+    """Return revision-independent graph state for hydration invalidation.
+
+    A layer's geometry (``rect``) is applied to the live scene item in place via
+    ``preview_layer_geometry`` — it must NOT invalidate the graph, or every
+    resize/move would force a full re-hydrate (rebuilding sources, re-opening
+    cameras, jumping the program). Strip it from the signature; structural changes
+    (sources, layer add/remove, visibility, z-order, source configuration) still
+    change the signature and trigger a rebuild. The record sent to the sidecar
+    (``scene_engine_document_record``) keeps ``rect`` for the initial layout.
+    """
 
     record = scene_engine_document_record(document)
-    record.pop("revision", None)
+    # Non-structural fields must NOT invalidate the graph. Timestamps change on
+    # every edit (update_scene bumps updated_at); layer geometry (rect/crop) is
+    # applied live via preview_layer_geometry. If either invalidated the graph, a
+    # simple resize would force a full re-hydrate (rebuilding sources, re-opening
+    # cameras). Only structural content (sources, source configs, which layers
+    # reference which sources, visibility, z-order, scene topology, outputs,
+    # automation) remains and still triggers a rebuild.
+    for key in ("revision", "created_at", "updated_at"):
+        record.pop(key, None)
+    sources = record.get("sources")
+    if isinstance(sources, list):
+        for source in sources:
+            if isinstance(source, dict):
+                source.pop("created_at", None)
+                source.pop("updated_at", None)
+    scenes = record.get("scenes")
+    if not isinstance(scenes, list):
+        return record
+    for scene in scenes:
+        if not isinstance(scene, dict):
+            continue
+        scene.pop("created_at", None)
+        scene.pop("updated_at", None)
+        layers = scene.get("layers")
+        if not isinstance(layers, list):
+            continue
+        for layer in layers:
+            if isinstance(layer, dict):
+                layer.pop("rect", None)
+                layer.pop("crop", None)
+                layer.pop("created_at", None)
+                layer.pop("updated_at", None)
     return record
 
 
@@ -301,12 +342,15 @@ class OutputWindowTarget:
     height: int
     device_pixel_ratio: float
     visible: bool = True
+    scene_id: str = ""  # render this one scene directly ("" = the composited main mix)
 
     def __post_init__(self) -> None:
         if not isinstance(self.bus_id, BusId):
             raise ValueError("Invalid window render bus")
         _identity(self.target_id, "window target id")
         _identity(self.screen_id, "screen id")
+        if self.scene_id:
+            _bounded_text(self.scene_id, 256, "window target scene id")
         _bounded_int(self.native_handle, 1, 2**64 - 1, "window native handle")
         _bounded_int(self.x, -(2**31), 2**31 - 1, "window x")
         _bounded_int(self.y, -(2**31), 2**31 - 1, "window y")
@@ -544,8 +588,17 @@ class ProgramRecordingEvent:
             raise ValueError("Invalid Program recording event")
 
 
+@dataclass(frozen=True, slots=True)
+class MediaPlaybackEvent:
+    state: MediaPlaybackNativeState
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.state, MediaPlaybackNativeState):
+            raise ValueError("Invalid media playback event")
+
+
 SceneEngineEvent: TypeAlias = (
-    SourceHealthEvent | EngineHealthEvent | ProgramRecordingEvent
+    SourceHealthEvent | EngineHealthEvent | ProgramRecordingEvent | MediaPlaybackEvent
 )
 
 
@@ -614,6 +667,14 @@ class SceneEngine(Protocol):
 
     def cancel_preparation(self, request_id: str) -> None: ...
 
+    def reload_yeartext(self) -> None:
+        """Ask the engine to re-read the year-text source image in place.
+
+        A fire-and-forget notification sent after the app re-renders the year-text
+        PNG so the change shows without a full re-hydrate. No-op on engines that
+        do not host a year-text source."""
+        ...
+
     def preview_layer_geometry(
         self,
         bus_id: BusId,
@@ -655,6 +716,18 @@ class SceneEngine(Protocol):
         deadline_ms: int,
     ) -> Future[SceneEngineAck]: ...
 
+    def set_thumbnail_egress(
+        self,
+        descriptor: FrameChannelDescriptor | None,
+        scene_ids: tuple[str, ...],
+        cell_width: int,
+        cell_height: int,
+        *,
+        request_id: str,
+        sequence: int,
+        deadline_ms: int,
+    ) -> Future[SceneEngineAck]: ...
+
     def start_program_recording(
         self,
         recording: ProgramRecordingRequest,
@@ -675,6 +748,41 @@ class SceneEngine(Protocol):
     def stop_program_recording(
         self,
         *,
+        request_id: str,
+        deadline_ms: int,
+    ) -> Future[SceneEngineAck]: ...
+
+    def open_media(
+        self,
+        path: str,
+        *,
+        is_local_file: bool,
+        autoplay: bool = True,
+        volume_percent: int = 100,
+        speed_percent: int = 100,
+        trim_start_ms: int = 0,
+        trim_end_ms: int = 0,
+        slot: int = 0,
+        request_id: str,
+        deadline_ms: int,
+    ) -> Future[SceneEngineAck]: ...
+
+    def control_media(
+        self,
+        action: MediaControlAction,
+        *,
+        position_ms: int = 0,
+        slot: int = 0,
+        request_id: str,
+        deadline_ms: int,
+    ) -> Future[SceneEngineAck]: ...
+
+    def set_media_properties(
+        self,
+        *,
+        volume_percent: int,
+        speed_percent: int,
+        slot: int = 0,
         request_id: str,
         deadline_ms: int,
     ) -> Future[SceneEngineAck]: ...

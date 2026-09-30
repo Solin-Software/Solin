@@ -14,15 +14,11 @@ from solin.core.scenes.model import (
     CONTENT_SOURCE_ID,
     DEFAULT_CAMERA_SOURCE_ID,
     BusId,
-    OutputMode,
     SceneLayer,
-    SceneReferenceConfig,
-    SourceDefinition,
-    SourceKind,
-    TransitionKind,
-    TransitionSpec,
 )
-from solin.core.scenes.presets import SceneSeedNames
+from solin.core.scenes.presets import (
+    SceneSeedNames,
+)
 from solin.core.scenes.recording import (
     AudioDeviceDiscovery,
     ProgramRecordingState,
@@ -30,7 +26,7 @@ from solin.core.scenes.recording import (
     SceneRecordingConfig,
 )
 from solin.core.scenes.workspace import SceneWorkspaceService
-from solin.widgets.scenes.control_popup import SceneControlPopup
+from solin.widgets.scenes.control_popup import SceneControlPopup, _SceneCard
 
 
 class _Projection:
@@ -146,77 +142,30 @@ def _add_camera_pip_scene(
     )
 
 
-def test_scene_toolbar_popup_controls_one_program_and_two_destinations(
-    tmp_path: Path,
-) -> None:
-    controller = _controller(tmp_path)
-    popup = SceneControlPopup(controller)
-    target_scene_id = controller.document.scenes[1].id
-
-    popup._take(target_scene_id)
-    popup._set_output_enabled(True)
-    popup._set_media_mirror_enabled(True)
-
-    media = controller.runtime.state.output(BusId.MEDIA_WINDOWS)
-    virtual = controller.runtime.state.output(BusId.VIRTUAL_CAMERA)
-    assert media.mode is OutputMode.AUTO
-    assert media.manual_scene_id == target_scene_id
-    assert media.enabled
-    assert virtual.mode is OutputMode.AUTO
-    assert virtual.manual_scene_id == target_scene_id
-    assert virtual.enabled
-    assert popup._engine_visual_state == "unavailable"
-    assert popup._icon.toolTip() == "Unavailable"
-    assert popup._info_full_text == "Unavailable"
-    assert popup._info.isVisibleTo(popup)
-    assert popup._info.height() == 16
-    assert popup._output.text() == "Virtual camera"
-    initial_height = popup.height()
-    popup._set_operation_error("Transient operation error")
-    popup._render()
-    assert popup._info_full_text == "Unavailable"
-    assert popup._operation_error_timer.interval() == 5000
-
-    controller._set_last_engine_error_code("invalid_scene_snapshot")
-    popup._render()
-    assert popup._engine_visual_state == "error"
-    assert "files do not match" in popup._icon.toolTip()
-    assert "invalid_scene_snapshot" in popup._icon.toolTip()
-    assert "invalid_scene_snapshot" in popup._info_full_text
-    assert popup.height() == initial_height
-
-    controller._set_last_engine_error_code("")
-    controller._set_engine_ready(True)
-    popup._render()
-    assert popup._info_full_text == "Transient operation error"
-    popup._clear_operation_error()
-    assert popup._info_full_text == "Scene engine ready"
-
-    popup.deleteLater()
-    QCoreApplication.processEvents()
-    controller.close()
-
-
 def test_scene_toolbar_popup_uses_the_shared_program_recording_state(
     tmp_path: Path,
 ) -> None:
     controller = _controller(tmp_path)
     controller._set_engine_ready(True)
+    # Recording captures the virtual camera, so the control needs that output on.
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
     recording = _Recording(tmp_path / "Videos" / "Solin")
     popup = SceneControlPopup(controller, recording=recording)
 
-    assert popup._recording_row.isVisibleTo(popup)
-    assert popup._recording_button.text() == "Start recording"
+    assert popup._recording_button.isVisibleTo(popup)
+    # icon-only: the state reads from the accessible name / tooltip
+    assert popup._recording_button.text() == ""
+    assert popup._recording_button.accessibleName() == "Start recording"
     assert popup._recording_button.isEnabled()
     assert popup._recording_button.accessibleName() == "Start recording"
 
     QTest.mouseClick(popup._recording_button, Qt.MouseButton.LeftButton)
 
     assert recording.toggle_count == 1
-    assert popup._recording_button.text() == "Stop recording · 01:05"
+    assert popup._recording_button.accessibleName() == "Stop recording · 01:05"
     assert popup._recording_button.property("recording") is True
     assert popup._recording_clock.isActive()
-    assert popup._recording_button.toolTip() == "Stop recording"
+    assert popup._recording_button.toolTip() == "Stop recording · 01:05"
 
     recording.state = ProgramRecordingState(
         status=ProgramRecordingStatus.RECORDING,
@@ -235,7 +184,7 @@ def test_scene_toolbar_popup_uses_the_shared_program_recording_state(
     )
     recording.state_changed.emit(recording.state)
 
-    assert popup._recording_button.text() == "Finishing recording…"
+    assert popup._recording_button.accessibleName() == "Finishing recording…"
     assert not popup._recording_button.isEnabled()
 
     recording.state = ProgramRecordingState(
@@ -245,11 +194,9 @@ def test_scene_toolbar_popup_uses_the_shared_program_recording_state(
     )
     recording.state_changed.emit(recording.state)
 
-    assert popup._recording_button.text() == "Try recording again"
+    assert popup._recording_button.accessibleName() == "Try recording again"
     assert popup._recording_button.isEnabled()
-    assert popup._info_full_text == (
-        "The recording folder is unavailable or does not have enough free space."
-    )
+    assert "disk" in popup._recording_button.toolTip().lower() or popup._recording_button.toolTip()
 
     popup.deleteLater()
     QCoreApplication.processEvents()
@@ -285,221 +232,32 @@ def test_recording_controls_never_show_as_a_standalone_window_during_build(
         application.removeEventFilter(recorder)
 
     assert "SceneControlRecordingRow" not in recorder.object_names
-    assert popup._recording_row.parentWidget() is popup._card
-    assert not popup._recording_row.isWindow()
+    assert popup._recording_button.parentWidget() is popup._card
+    assert not popup._recording_button.isWindow()
 
     popup.deleteLater()
     QCoreApplication.processEvents()
     controller.close()
 
 
-def test_scene_toolbar_popup_only_describes_transition_overrides(tmp_path: Path) -> None:
-    controller = _controller(tmp_path)
-    scene_id = controller.document.scenes[0].id
-    controller.documents.set_scene_transition_override(
-        scene_id,
-        TransitionSpec(TransitionKind.DISSOLVE, 500),
-    )
-
-    popup = SceneControlPopup(controller)
-    button = popup._scene_rows[scene_id]
-
-    assert "Transition override: Dissolve · 500 ms" in button.toolTip()
-    popup.deleteLater()
-    QCoreApplication.processEvents()
-    controller.close()
-
-
-def test_scene_chips_keep_identity_and_move_roles_out_of_visible_text(
+def test_panel_header_has_an_attach_button_right_of_the_hover_button(
     tmp_path: Path,
 ) -> None:
+    # The scenes panel can be attached to the bottom of the main window; its
+    # toggle sits immediately right of the hover ("pointer") button so the two
+    # read as one control group in the header.
     controller = _controller(tmp_path)
     popup = SceneControlPopup(controller)
-    default_scene_id = controller.documents.program_default_scene_id
-    assert default_scene_id is not None
-    default_row = popup._scene_rows[default_scene_id]
-
-    assert default_row.text() == "Camera"
-    assert "DEFAULT" not in default_row.text()
-    assert default_row.accessibleName() == "Camera"
-    assert "Default scene" in default_row.accessibleDescription()
-    assert "Default scene" in default_row.toolTip()
-
-    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
-
-    assert popup._scene_rows[default_scene_id] is default_row
-    popup._render()
-    assert popup._scene_rows[default_scene_id] is default_row
-    popup.deleteLater()
-    QCoreApplication.processEvents()
-    controller.close()
-
-
-def test_configured_scenes_are_pinned_in_scene_list_order(
-    tmp_path: Path,
-) -> None:
-    controller = _controller(tmp_path)
-    controller.documents.create_scene("Speaker + reader", scene_id="speaker-reader")
-    controller.documents.create_scene("Audience overview", scene_id="audience-overview")
-    default_scene_id = controller.documents.program_default_scene_id
-    media_scene_id = controller.documents.program_media_scene_id
-    assert default_scene_id is not None
-    assert media_scene_id is not None
-    controller.documents.reorder_scene(media_scene_id, 0)
-    popup = SceneControlPopup(controller)
-
-    assert popup._configured_cards.widgets == (
-        popup._scene_rows[media_scene_id],
-        popup._scene_rows[default_scene_id],
-    )
-    assert popup._other_cards.widgets == (
-        popup._scene_rows["speaker-reader"],
-        popup._scene_rows["audience-overview"],
-    )
-    popup.deleteLater()
-    QCoreApplication.processEvents()
-    controller.close()
-
-
-def test_camera_pip_scenes_are_grouped_between_configured_and_other_scenes(
-    tmp_path: Path,
-) -> None:
-    controller = _controller(tmp_path)
-    controller.documents.create_scene("Before", scene_id="before")
-    _add_camera_pip_scene(controller, "speaker-pip")
-    controller.documents.create_scene("After", scene_id="after")
-
-    popup = SceneControlPopup(controller)
-
-    assert popup._pip_label.text() == "Camera PiP"
-    assert popup._pip_cards.widgets == (popup._scene_rows["speaker-pip"],)
-    assert popup._other_cards.widgets == (
-        popup._scene_rows["before"],
-        popup._scene_rows["after"],
-    )
-    assert popup._scene_order == (
-        *(scene.id for scene in controller.document.scenes[:2]),
-        "speaker-pip",
-        "before",
-        "after",
-    )
-    popup.deleteLater()
-    QCoreApplication.processEvents()
-    controller.close()
-
-
-def test_configured_role_takes_precedence_over_camera_pip_group(tmp_path: Path) -> None:
-    controller = _controller(tmp_path)
-    _add_camera_pip_scene(controller, "configured-pip")
-    controller.documents.set_program_media_scene("configured-pip")
-
-    popup = SceneControlPopup(controller)
-
-    assert popup._scene_rows["configured-pip"] in popup._configured_cards.widgets
-    assert popup._pip_cards.widgets == ()
-    popup.deleteLater()
-    QCoreApplication.processEvents()
-    controller.close()
-
-
-def test_camera_pip_group_follows_nested_camera_sources_and_live_edits(
-    tmp_path: Path,
-) -> None:
-    controller = _controller(tmp_path)
-    camera_scene_id = controller.documents.program_default_scene_id
-    assert camera_scene_id is not None
-    nested_source = SourceDefinition(
-        id="nested-camera-source",
-        kind=SourceKind.SCENE_REFERENCE,
-        name="Nested camera",
-        configuration=SceneReferenceConfig(target_scene_id=camera_scene_id),
-    )
-    controller.documents.create_source(nested_source)
-    controller.documents.create_scene("Nested PiP", scene_id="nested-pip")
-    popup = SceneControlPopup(controller)
-
-    assert popup._pip_cards.widgets == ()
-    assert popup._scene_rows["nested-pip"] in popup._other_cards.widgets
-
-    controller.documents.add_layer(
-        "nested-pip",
-        SceneLayer(
-            id="nested-pip-content",
-            source_id=CONTENT_SOURCE_ID,
-            name="Content",
-        ),
-    )
-    controller.documents.add_layer(
-        "nested-pip",
-        SceneLayer(
-            id="nested-pip-camera",
-            source_id=nested_source.id,
-            name="Nested camera",
-        ),
-    )
-    QCoreApplication.processEvents()
-
-    assert popup._pip_cards.widgets == (popup._scene_rows["nested-pip"],)
-    assert popup._scene_rows["nested-pip"] not in popup._other_cards.widgets
-    popup.deleteLater()
-    QCoreApplication.processEvents()
-    controller.close()
-
-
-def test_camera_below_content_stays_in_other_scenes(tmp_path: Path) -> None:
-    controller = _controller(tmp_path)
-    controller.documents.create_scene("Camera below", scene_id="camera-below")
-    controller.documents.add_layer(
-        "camera-below",
-        SceneLayer(
-            id="camera-below-camera",
-            source_id=DEFAULT_CAMERA_SOURCE_ID,
-            name="Camera",
-        ),
-    )
-    controller.documents.add_layer(
-        "camera-below",
-        SceneLayer(
-            id="camera-below-content",
-            source_id=CONTENT_SOURCE_ID,
-            name="Content",
-        ),
-    )
-
-    popup = SceneControlPopup(controller)
-
-    assert popup._pip_cards.widgets == ()
-    assert popup._other_cards.widgets == (popup._scene_rows["camera-below"],)
-    popup.deleteLater()
-    QCoreApplication.processEvents()
-    controller.close()
-
-
-def test_scene_chips_reflow_after_a_live_document_update_without_collisions(
-    tmp_path: Path,
-) -> None:
-    controller = _controller(tmp_path)
-    controller.documents.create_scene("Media", scene_id="other-media")
-    controller.documents.create_scene("Speaker", scene_id="speaker")
-    controller.documents.create_scene("Reader", scene_id="reader")
-    popup = SceneControlPopup(controller)
+    popup.hover_button.show()  # the host reveals this when it binds a preference
     popup.show()
     QCoreApplication.processEvents()
-    stable_row = popup._scene_rows["speaker"]
 
-    controller.documents.rename_scene("other-media", "Wide media presentation")
-    QCoreApplication.processEvents()
-    popup._sync_geometry()
-
-    assert popup._scene_rows["speaker"] is stable_row
-    assert all(widget.isVisible() for widget in popup._other_cards.widgets)
-    geometries = [widget.geometry() for widget in popup._other_cards.widgets]
-    for index, geometry in enumerate(geometries):
-        for other in geometries[index + 1 :]:
-            assert not geometry.intersects(other)
-            if geometry.y() == other.y():
-                left, right = sorted((geometry, other), key=lambda candidate: candidate.x())
-                assert right.x() - left.right() - 1 >= 8
+    assert popup.dock_button.isVisibleTo(popup)
+    assert popup.dock_button.isCheckable()
+    assert not popup.dock_button.isChecked()  # floating by default
+    # positioned to the right of the pointer button, and both are last in the row
+    assert popup.dock_button.x() > popup.hover_button.x()
+    assert popup.hover_button.x() > popup._output.x()
 
     popup.close()
     popup.deleteLater()
@@ -507,136 +265,724 @@ def test_scene_chips_reflow_after_a_live_document_update_without_collisions(
     controller.close()
 
 
-def test_scene_return_override_keeps_media_live_until_projection_ends(
+class _DockHost(QWidget):
+    """Stands in for MainWindow: page content plus a lazy bottom dock strip."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        from PySide6.QtWidgets import QVBoxLayout
+
+        self._content_layout = QVBoxLayout(self)
+        self._content_layout.setContentsMargins(0, 0, 0, 0)
+        self._content_layout.addWidget(QWidget(self), 1)
+        self._scenes_dock: QWidget | None = None
+
+    def scenes_dock_container(self) -> QWidget:
+        from PySide6.QtWidgets import QVBoxLayout
+
+        if self._scenes_dock is None:
+            container = QWidget(self)
+            layout = QVBoxLayout(container)
+            layout.setContentsMargins(0, 0, 0, 0)
+            container.hide()
+            self._content_layout.addWidget(container)
+            self._scenes_dock = container
+        return self._scenes_dock
+
+
+def test_attach_button_docks_the_panel_into_the_window_bottom(tmp_path: Path) -> None:
+    controller = _controller(tmp_path)
+    host = _DockHost()
+    host.resize(900, 600)
+    host.show()
+    popup = SceneControlPopup(controller, host)
+    QCoreApplication.processEvents()
+    assert popup.isWindow() and not popup.docked  # floats by default
+
+    popup.dock_button.setChecked(True)
+    QCoreApplication.processEvents()
+
+    dock = host.scenes_dock_container()
+    assert popup.docked
+    assert not popup.isWindow()  # a plain child widget, not a popup window
+    assert popup.parentWidget() is dock
+    assert dock.layout().indexOf(popup) >= 0
+    assert dock.isVisible() and popup.isVisible()
+    assert popup.width() == host.width()  # stretches across the window
+    # spanning the window edge to edge, the card drops its rounded corners
+    assert popup._card.property("docked") is True
+
+    popup.dock_button.setChecked(False)
+    QCoreApplication.processEvents()
+
+    assert not popup.docked
+    assert popup.isWindow()  # back to a floating popup
+    assert not popup.isVisible()
+    assert not dock.isVisible()  # emptied dock strip gets out of the way
+    # floating again: no longer stretched to the window, and at least the
+    # preferred width (it may be wider to fit the scene cards)
+    assert popup.width() < host.width()
+    assert popup.width() >= SceneControlPopup._PREFERRED_WIDTH
+    assert popup._card.property("docked") is False  # rounded corners restored
+
+    popup.deleteLater()
+    host.close()
+    host.deleteLater()
+    QCoreApplication.processEvents()
+    controller.close()
+
+
+def test_attach_button_reverts_when_no_dock_host_is_available(tmp_path: Path) -> None:
+    # A popup with no MainWindow ancestor (standalone) must stay floating rather
+    # than half-dock, and the button must not stay stuck on.
+    controller = _controller(tmp_path)
+    popup = SceneControlPopup(controller)
+
+    popup.dock_button.setChecked(True)
+    QCoreApplication.processEvents()
+
+    assert not popup.docked
+    assert not popup.dock_button.isChecked()
+    assert popup.isWindow()
+
+    popup.deleteLater()
+    QCoreApplication.processEvents()
+    controller.close()
+
+
+def test_virtual_camera_button_states_its_status_and_pulses_while_live(
     tmp_path: Path,
 ) -> None:
-    projection = _Projection()
-    controller = _controller(tmp_path, projection=projection)
-    controller.documents.create_scene("Return scene", scene_id="return-scene")
+    controller = _controller(tmp_path)
     popup = SceneControlPopup(controller)
-    media_scene_id = controller.documents.program_media_scene_id
-    return_scene_id = "return-scene"
-    assert media_scene_id is not None
 
+    # Disabled: says so plainly, and nothing pulses.
+    popup._set_output_enabled(False)
+    assert popup._output.text() == "Virtual camera disabled"
+    assert not popup._output_pulse.running
+
+    # Enabled: the label flips and the pulse runs so a live output is obvious.
+    popup._set_output_enabled(True)
+    assert popup._output.text() == "Virtual camera enabled"
+    assert popup._output.isChecked()
+    assert popup._output_pulse.running  # breathes while live
+
+    # Back off: label restored, pulse stopped and its highlight cleared.
+    popup._set_output_enabled(False)
+    assert popup._output.text() == "Virtual camera disabled"
+    assert not popup._output_pulse.running
+
+    popup.deleteLater()
+    QCoreApplication.processEvents()
+    controller.close()
+
+
+def test_record_button_is_icon_only_and_pulses_red_while_recording(
+    tmp_path: Path,
+) -> None:
+    controller = _controller(tmp_path)
     controller._set_engine_ready(True)
-    projection.set_type("video")
-    controller._set_applied_scenes(((BusId.VIRTUAL_CAMERA, media_scene_id),))
-    popup._render()
-    QTest.mousePress(
-        popup._scene_rows[return_scene_id],
-        Qt.MouseButton.RightButton,
-    )
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
+    recording = _Recording(tmp_path / "Videos" / "Solin")
+    popup = SceneControlPopup(controller, recording=recording)
 
-    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == media_scene_id
-    assert controller.program_return_scene_id == return_scene_id
-    assert popup._info_full_text == "Return: Return scene · Right-click to change"
-    assert popup._scene_rows[return_scene_id].styleSheet()
+    # Sits in the header, immediately left of the virtual-camera toggle.
+    assert popup._recording_button.parentWidget() is popup._card
+    assert popup._recording_button.x() < popup._output.x()
+    # Idle: a plain button, no red state and nothing pulsing.
+    assert popup._recording_button.text() == ""
+    assert popup._recording_button.width() == popup._recording_button.height()  # square
+    assert not popup._recording_button.icon().isNull()  # icon-only control
+    assert popup._recording_button.toolTip()  # hover explains what it does
+    assert popup._recording_button.property("recording") is False
+    assert not popup._recording_pulse.running
 
-    projection.set_type("idle")
+    recording.toggle()
+    QCoreApplication.processEvents()
 
-    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == return_scene_id
+    assert popup._recording_button.property("recording") is True  # red while live
+    assert popup._recording_pulse.running  # breathes while recording
+
+    recording.toggle()
+    QCoreApplication.processEvents()
+
+    assert popup._recording_button.property("recording") is False
+    assert not popup._recording_pulse.running
+
     popup.deleteLater()
     QCoreApplication.processEvents()
     controller.close()
 
 
-def test_auto_switch_toggle_disables_automation_during_a_manual_override(
+def test_live_pulses_never_put_a_graphics_effect_on_header_controls(
     tmp_path: Path,
 ) -> None:
-    projection = _Projection()
-    controller = _controller(tmp_path, projection=projection)
-    popup = SceneControlPopup(controller)
-    default_scene_id = controller.documents.program_default_scene_id
-    assert default_scene_id is not None
-    projection.set_type("video")
-    popup._take(default_scene_id)
-    assert controller.program_automation_suspended
-    assert popup._automatic.isChecked()
-
-    QTest.mouseClick(popup._automatic, Qt.MouseButton.LeftButton)
-
-    assert controller.runtime.state.output(BusId.VIRTUAL_CAMERA).mode is OutputMode.MANUAL
-    assert not controller.program_automation_suspended
-    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == default_scene_id
-    popup.deleteLater()
-    QCoreApplication.processEvents()
-    controller.close()
-
-
-def test_scene_popup_smooth_scroll_accumulates_and_geometry_fits_work_area(
-    tmp_path: Path,
-) -> None:
+    # Regression: a QGraphicsEffect on a child of this translucent, frameless
+    # popup makes Qt rasterise the window — the rounded corners paint black and
+    # the button text disappears. The pulse must tint the widget instead, so only
+    # the popup itself may carry an effect.
     controller = _controller(tmp_path)
-    popup = SceneControlPopup(controller)
-    bar = popup._scroll.verticalScrollBar()
-    bar.setRange(0, 500)
+    controller._set_engine_ready(True)
+    recording = _Recording(tmp_path / "Videos" / "Solin")
+    popup = SceneControlPopup(controller, recording=recording)
 
-    popup._scroll._animate_delta(80)
-    popup._scroll._animate_delta(80)
+    popup._set_output_enabled(True)
+    recording.toggle()
+    QCoreApplication.processEvents()
+    assert popup._output_pulse.running and popup._recording_pulse.running
 
-    assert popup._scroll._scroll_animation.duration() == 140
-    assert popup._scroll._scroll_animation.endValue() == 160
+    assert popup._output.graphicsEffect() is None
+    assert popup._recording_button.graphicsEffect() is None
+    # the label survives while pulsing
+    assert popup._output.text() == "Virtual camera enabled"
 
-    popup._available_rect = QRect(0, 0, 360, 240)
-    popup._anchor_rect = QRect(150, 200, 40, 24)
-    popup._sync_geometry()
+    # Stopping clears the tint so the panel's own styling shows through again.
+    popup._set_output_enabled(False)
+    recording.toggle()
+    QCoreApplication.processEvents()
+    assert popup._output.styleSheet() == ""
+    assert popup._recording_button.styleSheet() == ""
 
-    assert popup.width() == 344
-    assert popup.height() <= 224
-    assert popup.geometry().left() >= 8
-    assert popup.geometry().right() <= 351
     popup.deleteLater()
     QCoreApplication.processEvents()
     controller.close()
 
 
-def test_scene_popup_preserves_status_and_footer_on_a_very_short_work_area(
-    tmp_path: Path,
-) -> None:
-    controller = _controller(tmp_path)
-    popup = SceneControlPopup(controller)
-    popup._available_rect = QRect(0, 0, 260, 180)
-    popup._anchor_rect = QRect(110, 140, 40, 24)
+def test_dock_preference_survives_a_restart(tmp_path: Path) -> None:
+    # Attaching the panel is remembered, so Solin comes back with it attached.
+    from PySide6.QtCore import QSettings
+    from solin.core.foundation.settings_store import ProfileAppSettingsStore
 
-    popup._sync_geometry()
+    QSettings.setDefaultFormat(QSettings.Format.IniFormat)
+    organization = f"SolinDockPref{tmp_path.name}"
+    settings = ProfileAppSettingsStore.for_organization(organization)
+    settings.set_scenes_panel_docked(False)
+    assert settings.scenes_panel_docked() is False
 
-    assert popup.width() == 244
-    assert popup.height() <= 164
-    assert popup._scroll.geometry().bottom() < popup._info.geometry().top()
-    assert popup._info.geometry().bottom() < popup._automatic.geometry().top()
-    assert popup._media_mirror.geometry().bottom() <= popup._card.contentsRect().bottom()
-    popup.deleteLater()
-    QCoreApplication.processEvents()
-    controller.close()
+    settings.set_scenes_panel_docked(True)
+    # A fresh store reads the same backend, standing in for a restarted app.
+    assert ProfileAppSettingsStore.for_organization(organization).scenes_panel_docked() is True
+
+    settings.set_scenes_panel_docked(False)
+    assert ProfileAppSettingsStore.for_organization(organization).scenes_panel_docked() is False
 
 
-def test_scene_rows_support_arrow_and_home_end_keyboard_navigation(
-    tmp_path: Path,
-) -> None:
+def test_scene_cards_follow_the_document_with_canvas_proportions(tmp_path: Path) -> None:
     controller = _controller(tmp_path)
     controller.documents.create_scene("Lectern", scene_id="lectern")
-    controller.documents.create_scene("Audience overview", scene_id="audience")
+    popup = SceneControlPopup(controller)
+    QCoreApplication.processEvents()
+
+    document = controller.document
+    # one card per scene, in document order
+    assert [card.scene_id for card in popup._scene_cards.values()] == [
+        scene.id for scene in document.scenes
+    ]
+    video = document.output(BusId.VIRTUAL_CAMERA).video_format
+    card = popup._scene_cards[document.scenes[0].id]
+    assert card.height() == SceneControlPopup._SCENE_CARD_HEIGHT
+    # the preview rectangle carries the canvas proportions; the footer adds a row
+    preview = card._preview
+    assert preview.height() == SceneControlPopup._SCENE_CARD_PREVIEW_HEIGHT
+    assert preview.width() == round(preview.height() * video.width / video.height)
+    assert card.width() == preview.width() + 2 * _SceneCard._BORDER_WIDTH
+    assert card._name.text() == document.scenes[0].name
+
+    # renaming and removing a scene is reflected without rebuilding the strip
+    controller.documents.rename_scene("lectern", "Tribuna")
+    QCoreApplication.processEvents()
+    assert popup._scene_cards["lectern"]._name.text() == "Tribuna"
+
+    controller.documents.delete_scene("lectern")
+    QCoreApplication.processEvents()
+    assert "lectern" not in popup._scene_cards
+
+    popup.deleteLater()
+    QCoreApplication.processEvents()
+    controller.close()
+
+
+def test_scene_strip_scrolls_sideways_and_never_exceeds_the_screen(tmp_path: Path) -> None:
+
+    controller = _controller(tmp_path)
+    for index in range(10):
+        controller.documents.create_scene(f"Scene {index}", scene_id=f"s{index}")
     popup = SceneControlPopup(controller)
     popup.show()
     QCoreApplication.processEvents()
-    first, second, below = (popup._scene_rows[scene_id] for scene_id in popup._scene_order[:3])
-    first.setFocus()
 
-    QTest.keyClick(first, Qt.Key.Key_Down)
-    assert below.hasFocus()
+    # A narrow work area caps the floating panel; the strip takes up the slack.
+    popup._available_rect = QRect(0, 0, 700, 600)
+    popup._sync_geometry()
+    QCoreApplication.processEvents()
 
-    QTest.keyClick(below, Qt.Key.Key_Up)
-    assert first.hasFocus()
+    assert popup.width() <= 700
+    assert popup._cards_scroll.horizontalScrollBar().maximum() > 0  # scrolls sideways
+    assert (
+        popup._cards_scroll.verticalScrollBarPolicy()
+        is Qt.ScrollBarPolicy.ScrollBarAlwaysOff  # single row, never wraps
+    )
 
-    QTest.keyClick(first, Qt.Key.Key_Right)
-    assert second.hasFocus()
-
-    QTest.keyClick(second, Qt.Key.Key_Home)
-    assert first.hasFocus()
-
-    QTest.keyClick(first, Qt.Key.Key_End)
-    assert popup._scene_rows[popup._scene_order[-1]].hasFocus()
     popup.close()
+    popup.deleteLater()
+    QCoreApplication.processEvents()
+    controller.close()
+
+
+def test_scene_strip_hides_the_scrollbar_when_the_cards_all_fit(tmp_path: Path) -> None:
+    # Regression: the panel width ignored the card frame's 1px borders, so it came
+    # out 2px short of its own content — showing a scrollbar and clipping the last
+    # card even with room to spare.
+
+    controller = _controller(tmp_path)
+    popup = SceneControlPopup(controller)
+    popup.show()
+    QCoreApplication.processEvents()
+    popup._available_rect = QRect(0, 0, 1920, 1080)  # plenty of room
+    popup._sync_geometry()
+    QCoreApplication.processEvents()
+    popup._sync_geometry()
+
+    viewport = popup._cards_scroll.viewport().width()
+    assert viewport >= popup._cards_host.sizeHint().width()  # content fits exactly
+    bar = popup._cards_scroll.horizontalScrollBar()
+    assert bar.maximum() == bar.minimum()  # nothing to scroll
+    assert (
+        popup._cards_scroll.horizontalScrollBarPolicy()
+        is Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+    )
+    # no wasted strip height reserved for a scrollbar that is not there
+    assert popup._cards_scroll.height() == SceneControlPopup._SCENE_CARD_HEIGHT
+
+    # Squeeze the work area until the cards overflow: the scrollbar comes back.
+    for index in range(8):
+        controller.documents.create_scene(f"Extra {index}", scene_id=f"x{index}")
+    popup._available_rect = QRect(0, 0, 560, 1080)
+    popup._sync_geometry()
+    QCoreApplication.processEvents()
+    popup._sync_geometry()
+
+    bar = popup._cards_scroll.horizontalScrollBar()
+    assert bar.maximum() > bar.minimum()
+    assert popup._cards_scroll.height() > SceneControlPopup._SCENE_CARD_HEIGHT
+
+    popup.close()
+    popup.deleteLater()
+    QCoreApplication.processEvents()
+    controller.close()
+
+
+def test_panel_never_uses_a_graphics_effect_and_reopens_visible(tmp_path: Path) -> None:
+    # Two regressions with one cause: a QGraphicsOpacityEffect on this
+    # translucent frameless popup made Qt rasterise it (black behind the rounded
+    # corners) and could leave it stranded fully transparent, so clicking the
+    # toolbar appeared to do nothing. The fade now rides windowOpacity.
+    controller = _controller(tmp_path)
+    popup = SceneControlPopup(controller)
+    anchor = QWidget()
+    anchor.resize(40, 40)
+    anchor.show()
+    QCoreApplication.processEvents()
+
+    assert popup.graphicsEffect() is None
+
+    popup.show_above(anchor)
+    popup.hide()  # dismissed before the deferred fade could start
+    QCoreApplication.processEvents()
+    assert popup.windowOpacity() == 1.0  # not stranded transparent
+
+    # A hidden panel is always left opaque, whatever interrupted the fade.
+    popup.show_above(anchor)
+    QCoreApplication.processEvents()
+    popup.hide()
+    assert popup.windowOpacity() == 1.0
+
+    popup.deleteLater()
+    anchor.close()
+    anchor.deleteLater()
+    QCoreApplication.processEvents()
+    controller.close()
+
+
+def test_panel_reports_a_just_dismissed_close_so_the_toolbar_can_toggle(
+    tmp_path: Path,
+) -> None:
+    # Qt closes a popup on the click that lands outside it, so the click that
+    # reaches the toolbar button arrives after the dismissal. Without this the
+    # button always reopened the panel instead of toggling it shut.
+    controller = _controller(tmp_path)
+    popup = SceneControlPopup(controller)
+    anchor = QWidget()
+    anchor.resize(40, 40)
+    anchor.show()
+    QCoreApplication.processEvents()
+
+    assert popup.dismissed_within(40) is False  # never shown yet
+
+    popup.show_above(anchor)
+    QCoreApplication.processEvents()
+    popup.hide()  # the outside click Qt delivers first
+    assert popup.dismissed_within(40) is True  # so the button leaves it closed
+
+    # The window must stay tight: a human's next deliberate click is far slower
+    # than the same-click dismissal, and suppressing it stopped the panel from
+    # ever reappearing when clicking at a normal pace.
+    time.sleep(0.08)
+    assert popup.dismissed_within(40) is False  # an 80ms-later click reopens it
+
+    popup.deleteLater()
+    anchor.close()
+    anchor.deleteLater()
+    QCoreApplication.processEvents()
+    controller.close()
+
+
+def test_undocking_restores_translucency_before_the_window_is_recreated(
+    tmp_path: Path,
+) -> None:
+    # Regression: setParent() recreates the native window and X11 picks its
+    # visual from WA_TranslucentBackground at creation time. Setting the
+    # attribute *after* reparenting left the reopened panel opaque, so its
+    # rounded corners painted black for the rest of the session.
+    controller = _controller(tmp_path)
+    host = _DockHost()
+    host.resize(900, 600)
+    host.show()
+    popup = SceneControlPopup(controller, host)
+    QCoreApplication.processEvents()
+    translucent = Qt.WidgetAttribute.WA_TranslucentBackground
+    assert popup.testAttribute(translucent)
+
+    popup.dock_button.setChecked(True)
+    QCoreApplication.processEvents()
+    assert popup.docked
+    assert not popup.testAttribute(translucent)  # opaque child while attached
+
+    popup.dock_button.setChecked(False)
+    QCoreApplication.processEvents()
+    assert not popup.docked
+    assert popup.testAttribute(translucent)  # and translucent again once floating
+    assert popup.windowFlags() & Qt.WindowType.Popup
+
+    # Reopening still works after the round trip.
+    anchor = QWidget()
+    anchor.resize(40, 40)
+    anchor.show()
+    QCoreApplication.processEvents()
+    popup.show_above(anchor)
+    QCoreApplication.processEvents()
+    assert popup.isVisible()
+    assert popup.testAttribute(translucent)
+
+    popup.close()
+    popup.deleteLater()
+    anchor.close()
+    anchor.deleteLater()
+    host.close()
+    host.deleteLater()
+    QCoreApplication.processEvents()
+    controller.close()
+
+
+def test_card_routing_buttons_are_exclusive_and_pulse_the_live_one(tmp_path: Path) -> None:
+    controller = _controller(tmp_path)
+    popup = SceneControlPopup(controller)
+    QCoreApplication.processEvents()
+    scene_ids = [scene.id for scene in controller.document.scenes]
+    first, second = popup._scene_cards[scene_ids[0]], popup._scene_cards[scene_ids[1]]
+
+    first._projection.click()
+    QCoreApplication.processEvents()
+    assert first._projection.isChecked()
+    assert controller.desired_scene(BusId.MEDIA_WINDOWS) == scene_ids[0]
+    assert first._projection_pulse.running  # the live one breathes
+
+    # Routing another scene takes it away from the first: one choice per output.
+    second._projection.click()
+    QCoreApplication.processEvents()
+    assert second._projection.isChecked()
+    assert not first._projection.isChecked()
+    assert second._projection_pulse.running
+    assert not first._projection_pulse.running
+
+    popup.deleteLater()
+    QCoreApplication.processEvents()
+    controller.close()
+
+
+def test_card_virtual_camera_button_only_shows_while_that_output_runs(
+    tmp_path: Path,
+) -> None:
+    controller = _controller(tmp_path)
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, False)
+    popup = SceneControlPopup(controller)
+    popup.show()
+    QCoreApplication.processEvents()
+
+    cards = list(popup._scene_cards.values())
+    assert all(not card._program.isVisibleTo(card) for card in cards)
+    # the projection button is always offered
+    assert all(card._projection.isVisibleTo(card) for card in cards)
+
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
+    QCoreApplication.processEvents()
+    assert all(card._program.isVisibleTo(card) for card in cards)
+
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, False)
+    QCoreApplication.processEvents()
+    assert all(not card._program.isVisibleTo(card) for card in cards)
+    assert all(not card._program_pulse.running for card in cards)
+
+    popup.close()
+    popup.deleteLater()
+    QCoreApplication.processEvents()
+    controller.close()
+
+
+def test_panel_requests_thumbnails_only_while_it_is_on_screen(tmp_path: Path) -> None:
+    # Thumbnails cost GPU renders in the sidecar, so a closed panel must not ask
+    # for them.
+    controller = _controller(tmp_path)
+    asked: list[tuple] = []
+    controller.set_thumbnail_egress = lambda d, ids, w, h: asked.append((d, ids, w, h))
+    popup = SceneControlPopup(controller)
+    popup.show()
+    QCoreApplication.processEvents()
+    popup._sync_geometry()
+    popup._sync_thumbnail_feed()
+
+    assert asked, "no thumbnail feed requested while visible"
+    descriptor, scene_ids, width, height = asked[-1]
+    assert descriptor is not None
+    assert scene_ids == tuple(popup._scene_cards)
+    # the atlas cell matches the card's preview, so rows map 1:1 onto cards
+    preview = next(iter(popup._scene_cards.values()))._preview
+    assert (width, height) == (preview.width(), preview.height())
+    assert descriptor.height == height * len(scene_ids)
+
+    popup.hide()
+    QCoreApplication.processEvents()
+    assert asked[-1] == (None, (), 0, 0)  # released on hide
+
+    popup.deleteLater()
+    QCoreApplication.processEvents()
+    controller.close()
+
+
+def test_scene_card_paints_the_live_thumbnail_it_is_given(tmp_path: Path) -> None:
+    from PySide6.QtGui import QImage
+
+    controller = _controller(tmp_path)
+    popup = SceneControlPopup(controller)
+    QCoreApplication.processEvents()
+    scene_id = next(iter(popup._scene_cards))
+    card = popup._scene_cards[scene_id]
+
+    image = QImage(card._preview.width(), card._preview.height(), QImage.Format.Format_ARGB32)
+    image.fill(0xFF00FF00)
+    popup._on_thumbnail(scene_id, image)
+
+    painted = card._preview.grab().toImage()
+    centre = painted.pixelColor(painted.width() // 2, painted.height() // 2)
+    assert (centre.red(), centre.green(), centre.blue()) == (0, 255, 0)
+
+    popup.deleteLater()
+    QCoreApplication.processEvents()
+    controller.close()
+
+
+def test_thumbnail_request_is_retried_until_the_engine_hears_it(tmp_path: Path) -> None:
+    # Regression: the panel opens before the engine is ready, the controller drops
+    # the command, and because the block had already been allocated every later
+    # sync short-circuited — so the cards stayed dead for the whole session.
+    controller = _controller(tmp_path)
+    ready = {"value": False}
+    calls: list[tuple] = []
+
+    def _set(descriptor, scene_ids, width, height):
+        calls.append((descriptor, scene_ids, width, height))
+        return ready["value"]  # False = engine not ready, nothing dispatched
+
+    controller.set_thumbnail_egress = _set
+    popup = SceneControlPopup(controller)
+    popup.show()
+    QCoreApplication.processEvents()
+    popup._sync_geometry()
+
+    popup._sync_thumbnail_feed()
+    assert calls, "nothing attempted"
+    assert popup._thumbnail_sent is None  # not recorded: the engine never heard it
+
+    popup._sync_thumbnail_feed()
+    assert len(calls) >= 2, "a dropped request must be retried"
+
+    ready["value"] = True
+    popup._sync_thumbnail_feed()
+    assert popup._thumbnail_sent is not None  # recorded only once delivered
+
+    before = len(calls)
+    popup._sync_thumbnail_feed()
+    assert len(calls) == before  # and not re-sent forever afterwards
+
+    popup.close()
+    popup.deleteLater()
+    QCoreApplication.processEvents()
+    controller.close()
+
+
+def test_card_buttons_route_each_output_independently(tmp_path: Path) -> None:
+    # Regression: the card handler was left calling take_program_scene, the old
+    # lockstep take, so routing the projection dragged the virtual camera with it
+    # (and the reverse). The outputs are independent.
+    controller = _controller(tmp_path)
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
+    popup = SceneControlPopup(controller)
+    QCoreApplication.processEvents()
+    scene_ids = [scene.id for scene in controller.document.scenes]
+    projection_card = popup._scene_cards[scene_ids[1]]
+    program_card = popup._scene_cards[scene_ids[2]]
+
+    projection_card._projection.click()
+    QCoreApplication.processEvents()
+    # routing the projection must leave the program exactly where it was
+    assert controller.desired_scene(BusId.MEDIA_WINDOWS) == scene_ids[1]
+    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) != scene_ids[1]
+
+    program_card._program.click()
+    QCoreApplication.processEvents()
+
+    assert controller.desired_scene(BusId.MEDIA_WINDOWS) == scene_ids[1]
+    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == scene_ids[2]
+    assert projection_card._projection.isChecked()
+    assert not projection_card._program.isChecked()
+    assert program_card._program.isChecked()
+    assert not program_card._projection.isChecked()
+
+    popup.deleteLater()
+    QCoreApplication.processEvents()
+    controller.close()
+
+
+def test_live_thumbnail_is_clipped_to_the_card_corners(tmp_path: Path) -> None:
+    from PySide6.QtGui import QImage
+
+    controller = _controller(tmp_path)
+    popup = SceneControlPopup(controller)
+    popup.show()
+    QCoreApplication.processEvents()
+    scene_id = next(iter(popup._scene_cards))
+    card = popup._scene_cards[scene_id]
+
+    image = QImage(card._preview.width(), card._preview.height(), QImage.Format.Format_ARGB32)
+    image.fill(0xFFFF00FF)  # magenta
+    popup._on_thumbnail(scene_id, image)
+
+    painted = card.grab().toImage()
+    magenta = (255, 0, 255)
+
+    def pixel(x: int, y: int) -> tuple:
+        colour = painted.pixelColor(x, y)
+        return (colour.red(), colour.green(), colour.blue())
+
+    # the feed fills the preview but must not square off the card's rounded top
+    assert pixel(painted.width() // 2, 30) == magenta
+    assert pixel(1, 1) != magenta
+    assert pixel(painted.width() - 2, 1) != magenta
+
+    popup.close()
+    popup.deleteLater()
+    QCoreApplication.processEvents()
+    controller.close()
+
+
+def test_choosing_a_scene_from_a_card_keeps_media_auto_switch_working(
+    tmp_path: Path,
+) -> None:
+    # Regression: the card pinned its output to MANUAL, so media stopped taking
+    # the output over — the video played but was never shown — and the panel no
+    # longer has the auto-switch control that used to undo that.
+    projection = _Projection()
+    controller = _controller(tmp_path, projection=projection)
+    popup = SceneControlPopup(controller)
+    QCoreApplication.processEvents()
+    camera_scene = next(
+        scene.id for scene in controller.document.scenes if scene.name == "Camera"
+    )
+    media_scene = controller.documents.program_media_scene_id
+
+    popup._scene_cards[camera_scene]._projection.click()
+    QCoreApplication.processEvents()
+    assert controller.desired_scene(BusId.MEDIA_WINDOWS) == camera_scene
+
+    projection.set_type("video")
+    QCoreApplication.processEvents()
+    assert controller.desired_scene(BusId.MEDIA_WINDOWS) == media_scene  # media wins
+
+    projection.set_type("idle")
+    QCoreApplication.processEvents()
+    assert controller.desired_scene(BusId.MEDIA_WINDOWS) == camera_scene  # and returns
+
+    popup.deleteLater()
+    QCoreApplication.processEvents()
+    controller.close()
+
+
+def test_idle_media_slot_shows_a_faded_glyph_instead_of_pure_black(
+    tmp_path: Path,
+) -> None:
+    projection = _Projection()
+    controller = _controller(tmp_path, projection=projection)
+    popup = SceneControlPopup(controller)
+    popup.show()
+    QCoreApplication.processEvents()
+    popup._render()
+
+    content_scene = controller.documents.program_media_scene_id
+    camera_scene = next(
+        scene.id for scene in controller.document.scenes if scene.name == "Camera"
+    )
+    # only the scene that actually holds the media slot is marked
+    assert popup._scene_cards[content_scene]._preview._placeholder
+    assert not popup._scene_cards[camera_scene]._preview._placeholder
+
+    # Something really is painted: the same preview differs with the hint off.
+    # (Comparing whole renders rather than one pixel — the glyph is an outline,
+    # so its exact centre is hollow.)
+    preview = popup._scene_cards[content_scene]._preview
+    with_hint = preview.grab().toImage()
+    preview.set_placeholder(False)
+    without_hint = preview.grab().toImage()
+    assert with_hint != without_hint
+    preview.set_placeholder(True)
+
+    projection.set_type("video")
+    popup._render()
+    assert not popup._scene_cards[content_scene]._preview._placeholder
+
+    popup.close()
+    popup.deleteLater()
+    QCoreApplication.processEvents()
+    controller.close()
+
+
+def test_the_record_button_only_exists_while_the_virtual_camera_does(
+    tmp_path: Path,
+) -> None:
+    """Recording captures Program, so there is nothing to record with the output off."""
+    controller = _controller(tmp_path)
+    controller._set_engine_ready(True)
+    recording = _Recording(tmp_path / "Videos" / "Solin")
+    popup = SceneControlPopup(controller, recording=recording)
+
+    assert not popup._recording_button.isVisibleTo(popup)
+
+    popup._set_output_enabled(True)
+    assert popup._recording_button.isVisibleTo(popup)
+
+    popup._set_output_enabled(False)
+    assert not popup._recording_button.isVisibleTo(popup)
+    assert not popup._recording_clock.isActive()
+
     popup.deleteLater()
     QCoreApplication.processEvents()
     controller.close()

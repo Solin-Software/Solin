@@ -1,15 +1,22 @@
+"""Cache / download-policy behaviour of the engine-routed MediaController.
+
+libobs is the only media engine now: remote URLs stream through the sidecar's
+``ffmpeg_source`` directly, an already-cached copy is preferred, and (per cache
+policy) a background download populates the cache for offline reuse. The Qt
+streaming / http->local source-swap / buffer-bar / reconnect state machine is
+gone, so only the surviving cache decisions are exercised here.
+"""
+
 from __future__ import annotations
 
-from PySide6.QtCore import QCoreApplication, QObject, Signal
-from PySide6.QtGui import QImage
-from PySide6.QtMultimedia import QMediaPlayer, QVideoFrame
+from types import SimpleNamespace
 
-import solin.core.media.playback as playback_module
+from PySide6.QtCore import QCoreApplication, QObject, Signal
+
 from solin.core.media.cache import MediaCacheManager
 from solin.core.media.playback import MediaController
 from solin.core.media.playback_request import (
     MediaPlaybackRequest,
-    MediaTrim,
     PlaybackCachePolicy,
 )
 
@@ -31,14 +38,15 @@ class _Downloader(QObject):
     finished = Signal(str)
     error = Signal(str)
 
-    def __init__(self) -> None:
+    def __init__(self, cached_path: str | None = None) -> None:
         super().__init__()
         self.started: list[tuple[str, bool]] = []
         self.cancel_count = 0
         self.cleanup_count = 0
+        self._cached_path = cached_path
 
     def get_cached_path(self, _url: str):
-        return None
+        return self._cached_path
 
     def start(self, url: str, persist: bool = True) -> None:
         self.started.append((url, persist))
@@ -50,9 +58,56 @@ class _Downloader(QObject):
         self.cleanup_count += 1
 
 
-def _controller_with_downloader(tmp_path, *, auto_download: bool):
+class _FakeExtractor(QObject):
+    """No-op stand-in so tests do not spawn the real ffprobe worker thread."""
+
+    metadata_ready = Signal(int, str, object)
+
+    def request(self, session_id: int, path: str) -> None:
+        pass
+
+    def cancel(self) -> None:
+        pass
+
+
+class _FakeRoute:
+    """Captures the transport vocabulary the controller drives."""
+
+    def __init__(self) -> None:
+        self.opened: list[tuple[str, dict]] = []
+        self.calls: list[str] = []
+
+    def open(self, path, **kwargs):
+        self.opened.append((path, kwargs))
+        self.calls.append("open")
+
+    def play(self):
+        self.calls.append("play")
+
+    def pause(self):
+        self.calls.append("pause")
+
+    def stop(self):
+        self.calls.append("stop")
+
+    def restart(self):
+        self.calls.append("restart")
+
+    def seek(self, ms):
+        self.calls.append("seek")
+
+    def close(self):
+        self.calls.append("close")
+
+    def set_properties(self, **kwargs):
+        self.calls.append("props")
+
+
+def _controller_with_downloader(
+    tmp_path, *, auto_download: bool, cached_path: str | None = None
+):
     _app()
-    downloader = _Downloader()
+    downloader = _Downloader(cached_path=cached_path)
     cache_manager = MediaCacheManager(
         tmp_path,
         downloader_factory=lambda _parent: _Downloader(),
@@ -61,39 +116,41 @@ def _controller_with_downloader(tmp_path, *, auto_download: bool):
         _MediaSettings(auto_download),
         cache_manager,
         downloader_factory=lambda _parent: downloader,
+        metadata_extractor_factory=lambda parent: _FakeExtractor(parent),
     )
-    played: list[str] = []
-    controller._play_source = played.append
-    return controller, downloader, played
+    return controller, downloader
 
 
-def _start(controller, url: str, *, temporary: bool = False) -> None:
-    policy = (
-        PlaybackCachePolicy.TEMPORARY
-        if temporary
-        else PlaybackCachePolicy.PROFILE_DEFAULT
-    )
+def _start(controller, url: str, *, policy=PlaybackCachePolicy.PROFILE_DEFAULT) -> None:
     controller.start_playback(MediaPlaybackRequest(url, cache_policy=policy))
 
 
-def test_playback_request_uses_auto_download_setting_by_default(tmp_path):
-    controller, downloader, played = _controller_with_downloader(
-        tmp_path,
-        auto_download=True,
-    )
+REMOTE = "https://cdn.example/song.mp3"
 
-    _start(controller, "https://cdn.example/song.mp3")
 
-    assert played == ["https://cdn.example/song.mp3"]
-    assert downloader.started == [("https://cdn.example/song.mp3", True)]
-    assert controller.stream_persist is True
+# ── background cache download (_maybe_cache_remote) ──────────────────────────
+
+
+def test_profile_default_with_auto_download_caches_remote_in_background(tmp_path):
+    controller, downloader = _controller_with_downloader(tmp_path, auto_download=True)
+    route = _FakeRoute()
+    controller.set_engine_media_route(route)
+
+    _start(controller, REMOTE)
+
+    # streamed through the sidecar directly (is_local_file=False)…
+    assert route.opened[0][0] == REMOTE
+    assert route.opened[0][1]["is_local_file"] is False
+    # …while the cache is populated in the background for offline reuse.
+    assert downloader.started == [(REMOTE, True)]
     controller.stop()
 
 
 def test_playback_occurrence_identity_is_scoped_to_active_request(tmp_path):
-    controller, _downloader, _played = _controller_with_downloader(
+    controller, _downloader = _controller_with_downloader(
         tmp_path, auto_download=False
     )
+    controller.set_engine_media_route(_FakeRoute())
 
     controller.start_playback(
         MediaPlaybackRequest(
@@ -110,713 +167,231 @@ def test_playback_occurrence_identity_is_scoped_to_active_request(tmp_path):
     assert controller.current_occurrence_container_id == ""
 
 
-def test_playback_request_can_force_temporary_download(tmp_path):
-    controller, downloader, played = _controller_with_downloader(
-        tmp_path,
-        auto_download=True,
-    )
+def test_stopping_rejected_playback_clears_occurrence_identity(tmp_path):
+    controller, _downloader = _controller_with_downloader(tmp_path, auto_download=False)
+    controller.start_playback(MediaPlaybackRequest(
+        REMOTE, occurrence_id="first", occurrence_container_id="playlist",
+    ))
 
-    _start(controller, "https://cdn.example/song.mp3", temporary=True)
-
-    assert played == ["https://cdn.example/song.mp3"]
-    assert downloader.started == [("https://cdn.example/song.mp3", False)]
-    assert controller.stream_persist is False
     controller.stop()
 
-
-def test_decoded_frame_gate_tracks_playback_session_trim_and_stop(tmp_path):
-    controller, _downloader, _played = _controller_with_downloader(
-        tmp_path,
-        auto_download=False,
-    )
-    states: list[tuple[int, bool]] = []
-    controller.decoded_frame_acceptance_changed.connect(
-        lambda session_id, accepting: states.append((session_id, accepting))
-    )
-
-    _start(controller, str(tmp_path / "plain.mp4"))
-    active_session = controller.session_id
-    controller._gate_output()
-    controller._trim_gate_open = True
-    controller._publish_decoded_frame_acceptance()
-    controller.stop()
-
-    assert states == [
-        (active_session, True),
-        (active_session, False),
-        (active_session, True),
-        (active_session + 1, False),
-    ]
-
-
-def test_python_frame_delivery_disconnects_and_hydrates_on_restore(tmp_path):
-    controller, _downloader, _played = _controller_with_downloader(
-        tmp_path,
-        auto_download=False,
-    )
-    frames: list[QVideoFrame] = []
-    controller.frame_ready.connect(frames.append)
-    frame = QVideoFrame(QImage(16, 16, QImage.Format.Format_ARGB32))
-
-    controller.set_python_frame_delivery_required(False)
-    controller.video_sink.setVideoFrame(frame)
-    QCoreApplication.processEvents()
-
-    assert frames == []
-    assert controller.python_frame_delivery_required is False
-
-    controller.set_python_frame_delivery_required(True)
-
-    assert len(frames) == 1
-    assert frames[0].isValid()
-    assert controller.python_frame_delivery_required is True
-
-
-def test_download_error_clears_buffer_and_reports_streaming_fallback(tmp_path):
-    controller, downloader, _played = _controller_with_downloader(
-        tmp_path,
-        auto_download=True,
-    )
-    buffer_events: list[tuple[int, int]] = []
-    failures: list[tuple[str, str, bool]] = []
-    controller.buffer_progress.connect(
-        lambda downloaded, total: buffer_events.append((downloaded, total))
-    )
-    controller.playback_download_failed.connect(
-        lambda url, message, persist: failures.append((url, message, persist))
-    )
-
-    _start(controller, "https://cdn.example/song.mp3")
-    downloader.progress.emit(50, 100)
-    downloader.error.emit("[Errno 28] No space left on device")
-
-    assert buffer_events[-2:] == [(50, 100), (0, 0)]
-    assert failures == [
-        (
-            "https://cdn.example/song.mp3",
-            "[Errno 28] No space left on device",
-            True,
-        )
-    ]
-    assert controller.current_url == "https://cdn.example/song.mp3"
-
-
-def test_local_media_plays_without_cache_download_or_streaming_fallback(tmp_path):
-    local_media = tmp_path / "local-video.mp4"
-    local_media.write_bytes(b"local")
-    controller, downloader, played = _controller_with_downloader(
-        tmp_path,
-        auto_download=True,
-    )
-    buffer_events: list[tuple[int, int]] = []
-    failures: list[tuple[str, str, bool]] = []
-    source_states: list[bool] = []
-    controller.buffer_progress.connect(
-        lambda downloaded, total: buffer_events.append((downloaded, total))
-    )
-    controller.playback_download_failed.connect(
-        lambda url, message, persist: failures.append((url, message, persist))
-    )
-    controller.playback_source_changed.connect(source_states.append)
-
-    _start(controller, str(local_media))
-    downloader.error.emit("No connection adapters were found")
-
-    assert played == [str(local_media)]
-    assert downloader.started == []
-    assert failures == []
-    assert buffer_events == [(0, 0)]
-    assert source_states == [True]
-    assert controller.current_url == str(local_media)
-    assert controller.local_path == str(local_media)
-    assert controller.stream_persist is False
-    controller.stop()
-
-
-class _ReconnectTimer:
-    def __init__(self) -> None:
-        self.started = 0
-        self.stopped = 0
-        self.intervals: list[int] = []
-
-    def setInterval(self, value: int) -> None:  # noqa: N802 - Qt-style test double
-        self.intervals.append(value)
-
-    def start(self) -> None:
-        self.started += 1
-
-    def stop(self) -> None:
-        self.stopped += 1
-
-
-class _ReconnectPlayer:
-    def __init__(self) -> None:
-        self.sources: list[str] = []
-        self.positions: list[int] = []
-        self.played = 0
-        self.paused = 0
-        self.stopped = 0
-
-    def position(self) -> int:
-        return 0
-
-    def duration(self) -> int:
-        return 120_000
-
-    def playbackState(self):
-        return QMediaPlayer.PlaybackState.StoppedState
-
-    def mediaStatus(self):
-        return QMediaPlayer.MediaStatus.LoadedMedia
-
-    def stop(self) -> None:
-        self.stopped += 1
-
-    def setSource(self, url) -> None:  # noqa: N802 - Qt-style test double
-        self.sources.append(url.toString())
-
-    def setPosition(self, position: int) -> None:  # noqa: N802 - Qt-style test double
-        self.positions.append(position)
-
-    def play(self) -> None:
-        self.played += 1
-
-    def pause(self) -> None:
-        self.paused += 1
-
-
-class _NoMediaReconnectPlayer(_ReconnectPlayer):
-    def duration(self) -> int:
-        return 0
-
-    def mediaStatus(self):
-        return QMediaPlayer.MediaStatus.NoMedia
-
-
-class _TrimPlayer(_ReconnectPlayer):
-    def __init__(self, *, seekable: bool = True) -> None:
-        super().__init__()
-        self._position = 0
-        self._seekable = seekable
-        self._state = QMediaPlayer.PlaybackState.StoppedState
-        self._source = playback_module.QUrl()
-
-    def position(self) -> int:
-        return self._position
-
-    def setPosition(self, position: int) -> None:  # noqa: N802
-        self._position = position
-        self.positions.append(position)
-
-    def setSource(self, source) -> None:  # noqa: N802
-        self._source = source
-        self.sources.append(source.toString())
-
-    def source(self):
-        return self._source
-
-    def isSeekable(self) -> bool:  # noqa: N802
-        return self._seekable
-
-    def playbackState(self):  # noqa: N802
-        return self._state
-
-    def play(self) -> None:
-        self.played += 1
-        self._state = QMediaPlayer.PlaybackState.PlayingState
-
-    def pause(self) -> None:
-        self.paused += 1
-        self._state = QMediaPlayer.PlaybackState.PausedState
-
-
-def test_trimmed_request_confirms_start_before_exposing_relative_timeline(
-    monkeypatch,
-    tmp_path,
-):
-    controller, _downloader, _played = _controller_with_downloader(
-        tmp_path,
-        auto_download=False,
-    )
-    monkeypatch.setattr(
-        playback_module.QTimer,
-        "singleShot",
-        lambda _delay, callback: callback(),
-    )
-    player = _TrimPlayer()
-    controller.player = player
-    controller._play_source = MediaController._play_source.__get__(controller)
-    durations: list[int] = []
-    positions: list[int] = []
-    controller.duration_changed.connect(durations.append)
-    controller.position_changed.connect(positions.append)
-    source = tmp_path / "bounded.mp4"
-    source.write_bytes(b"media")
-
-    controller.start_playback(
-        MediaPlaybackRequest(
-            str(source),
-            trim=MediaTrim(
-                start_trim_ticks=10_000 * 10_000,
-                end_trim_ticks=20_000 * 10_000,
-                base_duration_ticks=120_000 * 10_000,
-            ),
-        )
-    )
-
-    assert player.positions == [10_000]
-    assert durations == [90_000]
-    assert positions == [0]
-    assert controller.duration == 90_000
-    assert controller.position == 0
-    assert player.played >= 2
-
-
-def test_trimmed_duration_keeps_source_metadata_separate_from_effective_timeline(
-    tmp_path,
-):
-    controller, _downloader, _played = _controller_with_downloader(
-        tmp_path,
-        auto_download=False,
-    )
-    controller._request = MediaPlaybackRequest(
-        "clip.mp4",
-        trim=MediaTrim(
-            start_trim_ticks=10_000 * 10_000,
-            end_trim_ticks=20_000 * 10_000,
-        ),
-    )
-    controller._playback_range = controller._request.trim.resolve(120_000)
-    source_durations: list[int] = []
-    effective_durations: list[int] = []
-    controller.source_duration_changed.connect(source_durations.append)
-    controller.duration_changed.connect(effective_durations.append)
-
-    controller._on_duration(120_000)
-
-    assert source_durations == [120_000]
-    assert effective_durations == [90_000]
-
-
-def test_trimmed_request_fails_closed_when_source_is_not_seekable(
-    monkeypatch,
-    tmp_path,
-):
-    controller, _downloader, _played = _controller_with_downloader(
-        tmp_path,
-        auto_download=False,
-    )
-    monkeypatch.setattr(
-        playback_module.QTimer,
-        "singleShot",
-        lambda _delay, callback: callback(),
-    )
-    controller.player = _TrimPlayer(seekable=False)
-    controller._play_source = MediaController._play_source.__get__(controller)
-    errors: list[str] = []
-    controller.error_occurred.connect(errors.append)
-    source = tmp_path / "unseekable.mp4"
-    source.write_bytes(b"media")
-
-    controller.start_playback(
-        MediaPlaybackRequest(
-            str(source),
-            trim=MediaTrim(start_trim_ticks=10_000 * 10_000),
-        )
-    )
-
-    assert errors and "reliable seeking" in errors[-1]
+    assert controller.current_occurrence_id == ""
+    assert controller.current_occurrence_container_id == ""
     assert controller.current_url == ""
 
 
-def test_custom_end_emits_once_and_replay_returns_to_custom_start(
-    tmp_path,
-    monkeypatch,
-):
-    controller, _downloader, _played = _controller_with_downloader(
-        tmp_path,
-        auto_download=False,
-    )
-    monkeypatch.setattr(
-        "solin.core.media.playback.QTimer.singleShot",
-        lambda _delay, callback: callback(),
-    )
-    player = _TrimPlayer()
-    controller.player = player
-    controller._playback_range = MediaTrim(
-        start_trim_ticks=10_000 * 10_000,
-        end_trim_ticks=20_000 * 10_000,
-    ).resolve(120_000)
-    controller._trim_gate_open = True
-    ended: list[bool] = []
-    controller.media_ended.connect(lambda: ended.append(True))
+def test_profile_default_without_auto_download_streams_without_caching(tmp_path):
+    controller, downloader = _controller_with_downloader(tmp_path, auto_download=False)
+    route = _FakeRoute()
+    controller.set_engine_media_route(route)
 
-    controller._on_position(100_000)
-    controller._on_position(100_000)
-    controller.replay()
+    _start(controller, REMOTE)
 
-    assert ended == [True]
-    assert player.positions[-1] == 10_000
+    assert route.opened[0][1]["is_local_file"] is False
+    assert downloader.started == []
+    controller.stop()
 
 
-def test_local_handoff_restarts_unresolved_trim_preparation(
-    monkeypatch,
-    tmp_path,
-):
-    controller, _downloader, _played = _controller_with_downloader(
-        tmp_path,
-        auto_download=False,
-    )
-    monkeypatch.setattr(
-        playback_module.QTimer,
-        "singleShot",
-        lambda _delay, callback: callback(),
-    )
-    player = _TrimPlayer()
-    remote = "https://cdn.example/bounded.mp4"
-    player.setSource(playback_module.QUrl(remote))
-    controller.player = player
-    controller._request = MediaPlaybackRequest(
-        remote,
-        trim=MediaTrim(start_trim_ticks=10_000_000),
-    )
-    controller._session.begin_playback(remote)
-    calls: list[tuple[int, int]] = []
-    controller._prepare_trimmed_source = (
-        lambda session_id, generation: calls.append((session_id, generation))
-    )
-    local = tmp_path / "bounded.mp4"
-    local.write_bytes(b"media")
+def test_persistent_policy_caches_regardless_of_setting(tmp_path):
+    controller, downloader = _controller_with_downloader(tmp_path, auto_download=False)
+    controller.set_engine_media_route(_FakeRoute())
 
-    controller._switch_to_local(str(local), local_is_temp=False)
+    _start(controller, REMOTE, policy=PlaybackCachePolicy.PERSISTENT)
 
-    assert calls == [
-        (controller._session.session_id, controller._source_generation)
-    ]
-    assert controller._trim_gate_open is False
+    assert downloader.started == [(REMOTE, True)]
+    controller.stop()
 
 
-def test_reconnect_restarts_unresolved_trim_preparation(monkeypatch, tmp_path):
-    controller, _downloader, _played = _controller_with_downloader(
-        tmp_path,
-        auto_download=False,
-    )
-    monkeypatch.setattr(
-        playback_module.QTimer,
-        "singleShot",
-        lambda _delay, callback: callback(),
-    )
-    player = _TrimPlayer()
-    controller.player = player
-    remote = "https://cdn.example/bounded.mp4"
-    controller._request = MediaPlaybackRequest(
-        remote,
-        trim=MediaTrim(start_trim_ticks=10_000_000),
-    )
-    controller._session.begin_playback(remote)
-    calls: list[tuple[int, int]] = []
-    controller._prepare_trimmed_source = (
-        lambda session_id, generation: calls.append((session_id, generation))
-    )
+def test_temporary_policy_streams_without_background_cache(tmp_path):
+    controller, downloader = _controller_with_downloader(tmp_path, auto_download=True)
+    route = _FakeRoute()
+    controller.set_engine_media_route(route)
 
-    controller._restore_reconnect_position(
-        source=remote,
-        saved_pos=0,
-        reconnect_session=controller._session.session_id,
-        source_generation=controller._source_generation,
-    )
+    _start(controller, REMOTE, policy=PlaybackCachePolicy.TEMPORARY)
 
-    assert calls == [
-        (controller._session.session_id, controller._source_generation)
-    ]
+    # the sidecar streams the remote directly; a temporary policy does not spill
+    # a background copy to disk.
+    assert route.opened[0][1]["is_local_file"] is False
+    assert downloader.started == []
+    controller.stop()
 
 
-def test_network_playback_errors_keep_projection_state_and_continue_retrying(tmp_path):
-    controller, downloader, _played = _controller_with_downloader(
-        tmp_path,
-        auto_download=True,
+# ── prefer-cached-path ───────────────────────────────────────────────────────
+
+
+def test_cached_remote_prefers_local_copy(tmp_path):
+    cached = str(tmp_path / "cached-song.mp3")
+    controller, downloader = _controller_with_downloader(
+        tmp_path, auto_download=True, cached_path=cached
     )
-    reconnect_timer = _ReconnectTimer()
-    controller._reconnect_timer = reconnect_timer
+    route = _FakeRoute()
+    controller.set_engine_media_route(route)
+
+    _start(controller, REMOTE)
+
+    # an already-cached copy is played as a local file, not re-streamed…
+    assert route.opened[0][0] == cached
+    assert route.opened[0][1]["is_local_file"] is True
+    # …and no background download is kicked off.
+    assert downloader.started == []
+    assert downloader.cancel_count >= 1
+    controller.stop()
+
+
+def test_local_file_routes_local_and_never_downloads(tmp_path):
+    local_media = tmp_path / "local-video.mp4"
+    local_media.write_bytes(b"local")
+    controller, downloader = _controller_with_downloader(tmp_path, auto_download=True)
+    route = _FakeRoute()
+    controller.set_engine_media_route(route)
+    source_states: list[bool] = []
+    controller.playback_source_changed.connect(source_states.append)
+
+    _start(controller, str(local_media))
+
+    assert route.opened[0][0] == str(local_media)
+    assert route.opened[0][1]["is_local_file"] is True
+    assert downloader.started == []
+    assert downloader.cancel_count >= 1
+    assert source_states == [True]
+    assert controller.current_url == str(local_media)
+    assert controller.local_path == str(local_media)
+    controller.stop()
+
+
+# ── no engine available ──────────────────────────────────────────────────────
+
+
+def test_without_a_route_emits_engine_unavailable_and_skips_caching(tmp_path):
+    controller, downloader = _controller_with_downloader(tmp_path, auto_download=True)
     errors: list[str] = []
-    interruptions: list[tuple[str, str]] = []
     controller.error_occurred.connect(errors.append)
-    controller.playback_interrupted.connect(
-        lambda url, message: interruptions.append((url, message))
+
+    _start(controller, REMOTE)
+
+    # libobs is the only engine; with no route there is nothing to decode, so
+    # nothing is streamed or cached.
+    assert errors == ["engine_unavailable"]
+    assert downloader.started == []
+
+
+# ── the "playing offline" badge must follow the actual source ────────────────
+
+
+def test_streamed_media_does_not_claim_to_be_playing_offline(tmp_path):
+    """The badge means "playing from a local copy".
+
+    It was emitted unconditionally whenever engine playback began, so a streamed
+    item lit it too — telling the operator a network-dependent item was safe to
+    run with no connection.
+    """
+    controller, _downloader = _controller_with_downloader(tmp_path, auto_download=True)
+    controller.set_engine_media_route(_FakeRoute())
+    source_states: list[bool] = []
+    controller.playback_source_changed.connect(source_states.append)
+
+    _start(controller, REMOTE)
+
+    assert source_states == [False]
+    controller.stop()
+
+
+def test_a_cached_copy_still_reports_offline(tmp_path):
+    """A remote item already on disk plays locally, so the badge belongs."""
+    cached = tmp_path / "cached-song.mp3"
+    cached.write_bytes(b"cached")
+    controller, _downloader = _controller_with_downloader(
+        tmp_path, auto_download=True, cached_path=str(cached)
+    )
+    route = _FakeRoute()
+    controller.set_engine_media_route(route)
+    source_states: list[bool] = []
+    controller.playback_source_changed.connect(source_states.append)
+
+    _start(controller, REMOTE)
+
+    assert route.opened[0][1]["is_local_file"] is True
+    assert source_states == [True]
+    controller.stop()
+
+
+# ── the buffer bar behind the playback position ──────────────────────────────
+
+
+def test_cache_progress_is_reported_while_a_stream_plays(tmp_path):
+    """The transport draws how much is already on disk behind the position.
+
+    The handler for this survived the QtMultimedia removal but its signal did
+    not, so the buffer bar had nothing driving it.
+    """
+    controller, downloader = _controller_with_downloader(tmp_path, auto_download=True)
+    controller.set_engine_media_route(_FakeRoute())
+    reported: list[tuple[int, int]] = []
+    controller.buffer_progress.connect(lambda done, total: reported.append((done, total)))
+
+    _start(controller, REMOTE)
+    downloader.progress.emit(512, 2048)
+
+    assert reported == [(512, 2048)]
+    controller.stop()
+
+
+def test_no_buffer_is_reported_for_a_local_file(tmp_path):
+    """Nothing is downloading behind it, so a bar there would never move."""
+    local_media = tmp_path / "local.mp4"
+    local_media.write_bytes(b"local")
+    controller, downloader = _controller_with_downloader(tmp_path, auto_download=True)
+    controller.set_engine_media_route(_FakeRoute())
+    reported: list[tuple[int, int]] = []
+    controller.buffer_progress.connect(lambda done, total: reported.append((done, total)))
+
+    _start(controller, str(local_media))
+    downloader.progress.emit(512, 2048)
+
+    assert reported == []
+    controller.stop()
+
+
+def test_stopping_playback_stops_reporting_buffer(tmp_path):
+    controller, downloader = _controller_with_downloader(tmp_path, auto_download=True)
+    controller.set_engine_media_route(_FakeRoute())
+    _start(controller, REMOTE)
+    reported: list[tuple[int, int]] = []
+    controller.buffer_progress.connect(lambda done, total: reported.append((done, total)))
+
+    controller.stop()
+    downloader.progress.emit(512, 2048)
+
+    assert reported == []
+
+
+def test_a_dropped_stream_reports_recovering_not_stopped(tmp_path):
+    """The engine reports a dropped read as buffering; say so in the transport.
+
+    The reconnecting slider animation lost its emitter with QtMultimedia, so a
+    stream re-establishing itself just looked frozen.
+    """
+    from solin.core.media.playback_state import (
+        ENGINE_STATE_BUFFERING,
+        ENGINE_STATE_PLAYING,
     )
 
-    _start(controller, "https://cdn.example/song.mp3")
-    controller._on_error(None, "Error number -10054 occurred")
-    controller._on_error(None, "Error number -10054 occurred")
-    controller._on_error(None, "Error number -10054 occurred")
+    controller, _downloader = _controller_with_downloader(tmp_path, auto_download=True)
+    controller.set_engine_media_route(_FakeRoute())
+    _start(controller, REMOTE)
+    recovering: list[bool] = []
+    controller.playback_recovery_changed.connect(recovering.append)
 
-    assert reconnect_timer.started == 3
-    assert reconnect_timer.intervals == [3000, 3000, 3000]
-    assert errors == []
-    assert interruptions == [
-        ("https://cdn.example/song.mp3", "Error number -10054 occurred")
-    ]
-    assert controller.current_url == "https://cdn.example/song.mp3"
-    assert downloader.cancel_count == 0
-
-
-def test_recovery_changed_signal_wraps_remote_reconnect_state(tmp_path):
-    controller, _downloader, _played = _controller_with_downloader(
-        tmp_path,
-        auto_download=True,
+    controller.on_engine_media_state(
+        SimpleNamespace(state=ENGINE_STATE_BUFFERING, position_ms=30_000,
+                        duration_ms=140_000, path=REMOTE, error_code="")
     )
-    controller._reconnect_timer = _ReconnectTimer()
-    recovery_states: list[bool] = []
-    controller.playback_recovery_changed.connect(recovery_states.append)
-
-    _start(controller, "https://cdn.example/song.mp3")
-    controller._on_position(42_000)
-    controller._on_error(None, "Error number -10054 occurred")
-    controller._on_error(None, "Error number -10054 occurred")
-    controller._on_status(QMediaPlayer.MediaStatus.LoadedMedia)
-
-    assert recovery_states == [True, False]
-
-
-def test_reconnect_flushes_source_restores_position_and_resumes(monkeypatch, tmp_path):
-    controller, _downloader, _played = _controller_with_downloader(
-        tmp_path,
-        auto_download=True,
+    QCoreApplication.processEvents()
+    controller.on_engine_media_state(
+        SimpleNamespace(state=ENGINE_STATE_PLAYING, position_ms=30_100,
+                        duration_ms=140_000, path=REMOTE, error_code="")
     )
-    monkeypatch.setattr(
-        playback_module.QTimer,
-        "singleShot",
-        lambda _delay, callback: callback(),
-    )
-    player = _ReconnectPlayer()
+    QCoreApplication.processEvents()
 
-    _start(controller, "https://cdn.example/song.mp3")
-    controller._on_position(42_000)
-    controller.player = player
-    controller._do_reconnect()
-
-    assert player.stopped == 1
-    assert player.sources == ["", "https://cdn.example/song.mp3"]
-    assert player.positions == [42_000]
-    assert player.played == 1
-    assert player.paused == 0
-
-
-def test_reconnect_resume_respects_pause_requested_while_loading(monkeypatch, tmp_path):
-    controller, _downloader, _played = _controller_with_downloader(
-        tmp_path,
-        auto_download=True,
-    )
-    delayed_callbacks = []
-
-    def fake_single_shot(delay, callback):
-        if delay == 50:
-            callback()
-            return
-        delayed_callbacks.append(callback)
-
-    monkeypatch.setattr(playback_module.QTimer, "singleShot", fake_single_shot)
-    player = _ReconnectPlayer()
-
-    _start(controller, "https://cdn.example/song.mp3")
-    controller._on_position(42_000)
-    controller.player = player
-    controller._do_reconnect()
-    controller.pause()
-    for callback in delayed_callbacks:
-        callback()
-
-    assert player.positions == [42_000]
-    assert player.played == 0
-    assert player.paused == 2
-    assert controller._session.requested_playing is False
-
-
-def test_reconnect_no_media_status_schedules_next_remote_retry(monkeypatch, tmp_path):
-    controller, _downloader, _played = _controller_with_downloader(
-        tmp_path,
-        auto_download=True,
-    )
-    monkeypatch.setattr(
-        playback_module.QTimer,
-        "singleShot",
-        lambda _delay, callback: callback(),
-    )
-    reconnect_timer = _ReconnectTimer()
-    controller._reconnect_timer = reconnect_timer
-    player = _NoMediaReconnectPlayer()
-
-    _start(controller, "https://cdn.example/song.mp3")
-    controller.player = player
-    controller._last_playback_error = "Could not open media."
-    controller._stream_recovering = True
-
-    controller._restore_reconnect_position(
-        source="https://cdn.example/song.mp3",
-        saved_pos=42_000,
-        reconnect_session=controller._session.session_id,
-        source_generation=controller._source_generation,
-    )
-
-    assert reconnect_timer.started == 1
-    assert reconnect_timer.intervals == [3000]
-    assert player.played == 0
-    assert player.paused == 0
-    assert controller.current_url == "https://cdn.example/song.mp3"
-
-
-def test_end_of_media_after_network_error_does_not_close_projection(tmp_path):
-    controller, _downloader, _played = _controller_with_downloader(
-        tmp_path,
-        auto_download=True,
-    )
-    controller._reconnect_timer = _ReconnectTimer()
-    ended = []
-    controller.media_ended.connect(lambda: ended.append("ended"))
-
-    _start(controller, "https://cdn.example/song.mp3")
-    controller._on_position(937937)
-    controller._on_error(None, "Error number -10054 occurred")
-    controller._on_status(QMediaPlayer.MediaStatus.EndOfMedia)
-
-    assert ended == []
-    assert controller.current_url == "https://cdn.example/song.mp3"
-
-
-def test_offline_reconnect_open_failure_keeps_retrying_without_closing(tmp_path):
-    controller, _downloader, _played = _controller_with_downloader(
-        tmp_path,
-        auto_download=True,
-    )
-    reconnect_timer = _ReconnectTimer()
-    controller._reconnect_timer = reconnect_timer
-    errors: list[str] = []
-    interruptions: list[tuple[str, str]] = []
-    controller.error_occurred.connect(errors.append)
-    controller.playback_interrupted.connect(
-        lambda url, message: interruptions.append((url, message))
-    )
-
-    _start(controller, "https://akdd1.jw-cdn.org/media/video.mp4")
-    controller._on_position(42_000)
-    controller._on_error(None, "Error number -10054 occurred")
-    controller._on_position(0)
-    controller._on_error(
-        None,
-        "Could not open media. FFmpeg error description: I/O error",
-    )
-
-    assert reconnect_timer.started == 2
-    assert reconnect_timer.intervals == [3000, 3000]
-    assert errors == []
-    assert interruptions == [
-        (
-            "https://akdd1.jw-cdn.org/media/video.mp4",
-            "Error number -10054 occurred",
-        )
-    ]
-    assert controller.current_url == "https://akdd1.jw-cdn.org/media/video.mp4"
-    assert controller._last_known_position == 42_000
-
-
-def test_unknown_duration_remote_end_is_normal_completion(tmp_path):
-    controller, _downloader, _played = _controller_with_downloader(
-        tmp_path,
-        auto_download=True,
-    )
-    reconnect_timer = _ReconnectTimer()
-    controller._reconnect_timer = reconnect_timer
-    ended = []
-    interruptions: list[tuple[str, str]] = []
-    controller.media_ended.connect(lambda: ended.append("ended"))
-    controller.playback_interrupted.connect(
-        lambda url, message: interruptions.append((url, message))
-    )
-
-    _start(controller, "https://cdn.example/song.mp3")
-    controller._on_position(42_000)
-    controller._on_status(QMediaPlayer.MediaStatus.EndOfMedia)
-
-    assert ended == ["ended"]
-    assert reconnect_timer.started == 0
-    assert interruptions == []
-    assert controller._session.requested_playing is False
-
-
-def test_unexpected_remote_end_before_error_starts_recovery(tmp_path):
-    controller, _downloader, _played = _controller_with_downloader(
-        tmp_path,
-        auto_download=True,
-    )
-    reconnect_timer = _ReconnectTimer()
-    controller._reconnect_timer = reconnect_timer
-    ended = []
-    interruptions: list[tuple[str, str]] = []
-    controller.media_ended.connect(lambda: ended.append("ended"))
-    controller.playback_interrupted.connect(
-        lambda url, message: interruptions.append((url, message))
-    )
-
-    _start(controller, "https://cdn.example/song.mp3")
-    controller._on_position(42_000)
-    controller.player = _ReconnectPlayer()
-    controller._on_status(QMediaPlayer.MediaStatus.EndOfMedia)
-
-    assert ended == []
-    assert reconnect_timer.started == 1
-    assert interruptions == [
-        ("https://cdn.example/song.mp3", "The media stream was interrupted.")
-    ]
-    assert controller.current_url == "https://cdn.example/song.mp3"
-
-
-def test_network_reconnect_uses_fixed_retry_interval(tmp_path):
-    controller, _downloader, _played = _controller_with_downloader(
-        tmp_path,
-        auto_download=True,
-    )
-    reconnect_timer = _ReconnectTimer()
-    controller._reconnect_timer = reconnect_timer
-
-    _start(controller, "https://cdn.example/song.mp3")
-    for _ in range(8):
-        controller._on_error(None, "Error number -10054 occurred")
-
-    assert reconnect_timer.intervals == [3000] * 8
-
-
-def test_qt_network_error_without_message_keeps_reconnecting(tmp_path):
-    controller, _downloader, _played = _controller_with_downloader(
-        tmp_path,
-        auto_download=True,
-    )
-    controller._reconnect_timer = _ReconnectTimer()
-    errors: list[str] = []
-    interruptions: list[tuple[str, str]] = []
-    controller.error_occurred.connect(errors.append)
-    controller.playback_interrupted.connect(
-        lambda url, message: interruptions.append((url, message))
-    )
-
-    _start(controller, "https://cdn.example/song.mp3")
-    controller._on_error(QMediaPlayer.Error.NetworkError, "")
-
-    assert errors == []
-    assert interruptions == [
-        ("https://cdn.example/song.mp3", "The media stream was interrupted.")
-    ]
-    assert controller.current_url == "https://cdn.example/song.mp3"
-
-
-def test_toggle_during_stream_recovery_pauses_requested_playback(tmp_path):
-    controller, _downloader, _played = _controller_with_downloader(
-        tmp_path,
-        auto_download=True,
-    )
-    controller._reconnect_timer = _ReconnectTimer()
-
-    _start(controller, "https://cdn.example/song.mp3")
-    controller._on_error(None, "Error number -10054 occurred")
-    controller.toggle_play_pause()
-
-    assert controller._session.requested_playing is False
+    assert recovering == [True, False]
+    controller.stop()

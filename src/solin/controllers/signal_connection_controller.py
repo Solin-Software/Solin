@@ -113,7 +113,6 @@ class SignalConnectionController:
             handlers.playlist_imports.send_to_temp_playlist
         )
 
-        media_controller.frame_ready.connect(media_projection.distribute_frame)
         media_controller.state_changed.connect(handlers.auto_key_projection.on_media_state)
         media_controller.cover_art_changed.connect(projection_bar.set_cover_art)
         media_controller.title_from_metadata.connect(media_projection.on_title_from_metadata)
@@ -152,10 +151,6 @@ class SignalConnectionController:
         settings.integrations.obs_stream_config_changed.connect(
             live_integrations.refresh_obs_stream_availability
         )
-        if sources.camera_service is not None:
-            settings.integrations.camera_enabled_toggled.connect(
-                live_integrations.on_camera_settings_enabled_toggled
-            )
         settings.general.background_song_toggled.connect(
             handlers.background_song_service.set_enabled
         )

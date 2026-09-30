@@ -21,7 +21,7 @@ class SettingsWidget(QWidget):
     def __init__(
         self, lang_manager, screen_manager, obs_service=None, ndi_service=None, *,
         app_settings, obs_settings, zoom_settings,
-        auto_share_settings, camera_settings, auto_key_settings, media_settings,
+        auto_share_settings, auto_key_settings, media_settings,
         playback_protection, meeting_schedule_settings, watched_folder_settings,
         yeartext_settings, background_song_settings, remote_control_settings,
         remote_control_credentials, qr_generation_session_factory,
@@ -45,7 +45,7 @@ class SettingsWidget(QWidget):
         self.integrations = IntegrationSettings(
             obs_service=obs_service, ndi_service=ndi_service, obs_settings=obs_settings,
             zoom_settings=zoom_settings, auto_share_settings=auto_share_settings,
-            camera_settings=camera_settings, auto_key_settings=auto_key_settings,
+            auto_key_settings=auto_key_settings,
             auto_share_accessibility_trusted=auto_share_accessibility_trusted,
             target_picker_factory=ScreenPickerOverlay, parent=self,
         )

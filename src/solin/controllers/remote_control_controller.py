@@ -13,8 +13,8 @@ import time
 from typing import Any, TYPE_CHECKING
 
 from PySide6.QtCore import QObject, Qt, QTimer, Signal, Slot
-from PySide6.QtMultimedia import QMediaPlayer
 
+from ..core.media.playback_state import SolinPlaybackState
 from ..core.i18n.meeting_sections import display_meeting_section_title
 from ..core.i18n.remote_control import remote_control_localization
 from ..core.media.formats import MediaKind
@@ -518,7 +518,6 @@ class RemoteControlController(QObject):
         media.state_changed.connect(self._on_media_state)
         media.duration_changed.connect(lambda _value: self.playback_invalidated.emit())
         media.position_changed.connect(lambda _value: self.playback_invalidated.emit())
-        media.playback_recovery_changed.connect(lambda _value: self.playback_invalidated.emit())
         media.error_occurred.connect(self._on_media_error)
         dependencies.projection_bar.volume_changed.connect(
             lambda _value: self.playback_invalidated.emit()
@@ -682,11 +681,8 @@ class RemoteControlController(QObject):
             self._playback_timer.start()
 
     @Slot(object)
-    def _on_media_state(self, state: QMediaPlayer.PlaybackState) -> None:
-        if state in (
-            QMediaPlayer.PlaybackState.PlayingState,
-            QMediaPlayer.PlaybackState.PausedState,
-        ):
+    def _on_media_state(self, state) -> None:
+        if state in (SolinPlaybackState.PLAYING, SolinPlaybackState.PAUSED):
             self._last_media_error = ""
         self._refresh_playback()
 
@@ -722,17 +718,15 @@ class RemoteControlController(QObject):
         media_controller = dependencies.media_controller
         projection_bar = dependencies.projection_bar
         is_video = state_type == "video"
-        recovering = bool(getattr(media_controller, "is_recovering", False))
-        player_state = media_controller.player.playbackState()
+        media_playing = bool(media_controller.is_playing)
+        media_paused = bool(media_controller.is_paused)
         error = None
-        if is_video and recovering:
-            playback_state = PlaybackState.LOADING
-        elif is_video and self._last_media_error:
+        if is_video and self._last_media_error:
             playback_state = PlaybackState.ERROR
             error = ProjectionError("media_error", self._last_media_error)
-        elif is_video and player_state is QMediaPlayer.PlaybackState.PlayingState:
+        elif is_video and media_playing:
             playback_state = PlaybackState.PLAYING
-        elif is_video and player_state is QMediaPlayer.PlaybackState.PausedState:
+        elif is_video and media_paused:
             playback_state = PlaybackState.PAUSED
         elif is_video:
             playback_state = PlaybackState.LOADING
@@ -760,8 +754,8 @@ class RemoteControlController(QObject):
         media_kind = self._media_kind_for_state(state_type, state)
         navigation_unlocked = not dependencies.playback_protection.locked
         capabilities = PlaybackCapabilities(
-            can_pause=is_video and player_state is QMediaPlayer.PlaybackState.PlayingState,
-            can_resume=is_video and player_state is QMediaPlayer.PlaybackState.PausedState,
+            can_pause=is_video and media_playing,
+            can_resume=is_video and media_paused,
             can_seek=is_video and duration is not None and navigation_unlocked,
             can_set_volume=is_video,
             can_previous=projection_bar.can_navigate_previous(),

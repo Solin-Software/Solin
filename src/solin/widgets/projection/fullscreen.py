@@ -24,8 +24,6 @@ from PySide6.QtGui import (
     QPainter,
     QPen,
 )
-from PySide6.QtMultimedia import QMediaPlayer, QVideoFrame
-from PySide6.QtMultimediaWidgets import QVideoWidget
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -56,6 +54,7 @@ from solin.widgets.common.buffered_slider import BufferedSlider
 
 from .controls import SPEED_CHOICES, icon_button, projection_menu_style
 from .native_surface import NativeVideoSurface
+from solin.core.media.playback_state import SolinPlaybackState
 
 
 _DWM_FLUSH: Callable[[], int] | None = None
@@ -121,30 +120,21 @@ class _FullscreenChromeFrame(QFrame):
 
 
 class FullscreenVideoSurface(QWidget):
-    """GPU-first video plane with a zero-materialization Qt fallback."""
+    """Video plane hosting the sidecar-painted native surface.
+
+    The libobs sidecar renders (and letterboxes) the program into a shared native
+    window handle, so this widget only hosts the :class:`NativeVideoSurface`.
+    """
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setMouseTracking(True)
         self.setStyleSheet(f"background: {PALETTE.black};")
 
-        self._video_widget = QVideoWidget(self)
-        self._video_widget.setAspectRatioMode(
-            Qt.AspectRatioMode.KeepAspectRatio
-        )
-        self._video_widget.setAttribute(
-            Qt.WidgetAttribute.WA_TransparentForMouseEvents,
-            True,
-        )
-
         self._native_surface = NativeVideoSurface(self)
         self._native_surface.setStyleSheet(f"background: {PALETTE.black};")
         self._native_surface.set_input_target(self)
         self._native_output_active = False
-
-    @property
-    def video_widget(self) -> QVideoWidget:
-        return self._video_widget
 
     @property
     def native_video_surface(self) -> NativeVideoSurface:
@@ -160,22 +150,15 @@ class FullscreenVideoSurface(QWidget):
             return False
         self._native_output_active = active
         if active:
-            self._video_widget.videoSink().setVideoFrame(QVideoFrame())
-            self._video_widget.hide()
             self._native_surface.show()
             self._native_surface.raise_()
         else:
             self._native_surface.hide()
-            self._video_widget.show()
         return True
 
-    def set_frame(self, frame: QVideoFrame) -> None:
-        if self._native_output_active or not frame.isValid():
-            return
-        self._video_widget.videoSink().setVideoFrame(frame)
-
     def clear(self) -> None:
-        self._video_widget.videoSink().setVideoFrame(QVideoFrame())
+        # The sidecar owns the native surface's pixels; nothing to clear here.
+        pass
 
     def apply_theme(self) -> None:
         self.setStyleSheet(f"background: {PALETTE.black};")
@@ -184,12 +167,10 @@ class FullscreenVideoSurface(QWidget):
 
     def set_interaction_cursor(self, cursor: Qt.CursorShape) -> None:
         self.setCursor(cursor)
-        self._video_widget.setCursor(cursor)
         self._native_surface.set_interaction_cursor(cursor)
 
     def unset_interaction_cursor(self) -> None:
         self.unsetCursor()
-        self._video_widget.unsetCursor()
         self._native_surface.unsetCursor()
         input_overlay = self._native_surface.input_overlay
         if input_overlay is not None:
@@ -197,7 +178,6 @@ class FullscreenVideoSurface(QWidget):
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
-        self._video_widget.setGeometry(self.rect())
         self._native_surface.setGeometry(self.rect())
 
 
@@ -235,7 +215,7 @@ class FullscreenVideoOverlay(QWidget):
         self._playback_options_active = False
         self._muted = False
         self._pre_mute_volume = 0.8
-        self._playback_state = QMediaPlayer.PlaybackState.StoppedState
+        self._playback_state = SolinPlaybackState.STOPPED
         self._navigation_state = (False, False, False)
 
         self.setObjectName("AppFullscreenVideoOverlay")
@@ -507,7 +487,6 @@ class FullscreenVideoOverlay(QWidget):
             return
         self._place_on_source_screen()
         self.winId()
-        self._surface.video_widget.winId()
         self._surface.native_video_surface.winId()
         self._bind_chrome_windows()
         self._prepared = True
@@ -525,10 +504,6 @@ class FullscreenVideoOverlay(QWidget):
         self.title_label.setText(title)
         self.title_label.setToolTip(title)
 
-    def set_frame(self, frame) -> None:
-        if self.isVisible():
-            self._surface.set_frame(frame)
-
     def clear_frame(self) -> None:
         self._surface.clear()
 
@@ -545,7 +520,7 @@ class FullscreenVideoOverlay(QWidget):
 
     def set_playback_state(self, state) -> None:
         self._playback_state = state
-        playing = state == QMediaPlayer.PlaybackState.PlayingState
+        playing = state == SolinPlaybackState.PLAYING
         icon = ICON_PAUSE if playing else ICON_PLAY
         self.play_btn.setIcon(make_icon(icon, 16, PALETTE.text_primary))
 

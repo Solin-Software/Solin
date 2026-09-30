@@ -3,10 +3,12 @@ from __future__ import annotations
 from collections.abc import Callable
 from contextlib import ExitStack
 import logging
+import weakref
 from typing import Any, TYPE_CHECKING
 
 from PySide6.QtWidgets import QApplication, QVBoxLayout, QWidget
-from PySide6.QtCore import QObject, QPoint, QTimer, Signal, Slot, QEvent, Qt
+from PySide6.QtCore import QObject, QPoint, QTimer, Signal, QEvent, Qt
+from PySide6.QtGui import QImage
 
 from .controllers.auto_key_projection_controller import AutoKeyProjectionController
 from .controllers.language_controller import LanguageContext, LanguageController
@@ -64,6 +66,7 @@ from .controllers.profile_switch_controller import ProfileSwitchController
 from .controllers.program_recording_controller import ProgramRecordingController
 from .controllers.scene_runtime_controller import SceneRuntimeController
 from .controllers.content_frame_ingress_controller import ContentFrameIngressController
+from .core.scenes.libobs_engine import libobs_scene_engine_selected
 from .controllers.program_content_controller import ProgramContentController
 from .controllers.scene_frame_egress_controller import (
     SceneFrameEgressController,
@@ -116,6 +119,7 @@ from .core.projection.application import (
     projection_presentation_type,
 )
 from .core.scenes.engine import MAXIMUM_OUTPUT_WINDOW_TARGETS, OutputWindowTarget
+from .core.scenes.model import DELIVERY_BUSES
 from .core.scenes.model import BusId, CONTENT_SOURCE_ID, SceneDocument
 from .core.scenes.recording import ProgramRecordingState, ProgramRecordingStatus
 from .core.scenes.workspace import SceneWorkspaceService
@@ -162,6 +166,26 @@ def _use_native_media_presentation(
 ) -> bool:
     """Keep every media surface on the same native routing policy."""
     return native_window_routing_ready and (mirror_enabled or raw_visual)
+
+
+def _native_scene_routing_supported() -> bool:
+    """Whether the sidecar can paint scene video into shared native window handles.
+
+    True on the Windows native engine, and under the libobs engine on any platform
+    whose top-level window handles can be shared cross-process with the sidecar so
+    it can bind an ``obs_display`` to them: X11/XWayland (``xcb``) or Windows.
+    Native Wayland cannot share a window handle, so those sessions keep the
+    CPU-readback (egress) path instead of direct native painting.
+    """
+    if NATIVE_SCENES_SUPPORTED:
+        return True
+    if not libobs_scene_engine_selected():
+        return False
+    from PySide6.QtGui import QGuiApplication
+
+    return QGuiApplication.platformName() in ("xcb", "windows")
+
+
 log = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
@@ -260,6 +284,7 @@ class MainWindow(QWidget):
         self._content_layout = QVBoxLayout(self)
         self._content_layout.setContentsMargins(0, 0, 0, 0)
         self._content_layout.setSpacing(0)
+        self._scenes_dock: QWidget | None = None
         self._construction_cleanup = ExitStack()
         self._construction_cleanup.callback(self._abort_partial_resources)
         self._construction_finalized = False
@@ -315,23 +340,41 @@ class MainWindow(QWidget):
         )
         self.scene_workspace = scene_workspace
         program_output = self.scene_documents.document.output(BusId.VIRTUAL_CAMERA)
-        self._content_frame_ingress = ContentFrameIngressController(
-            self,
-            canvas_width=program_output.video_format.width,
-            canvas_height=program_output.video_format.height,
-        )
-        self._content_frame_ingress.bind_video_sink(self.media_ctrl.video_sink)
-        self._content_frame_ingress.direct_submission_changed.connect(
-            self._reconcile_python_video_frame_delivery,
-            Qt.ConnectionType.QueuedConnection,
-        )
-        self.media_ctrl.decoded_frame_acceptance_changed.connect(
-            self._content_frame_ingress.set_decoder_frame_gate
-        )
-        self._content_frame_ingress.set_decoder_frame_gate(
-            self.media_ctrl.session_id,
-            self.media_ctrl.decoded_frames_accepted,
-        )
+        if libobs_scene_engine_selected():
+            # The libobs engine consumes a cross-platform SHARED_MEMORY_BGRA
+            # channel; publish content through it and skip the D3D11 transport.
+            from .core.scenes.content_frame_publisher import SharedMemoryContentPublisher
+
+            self._content_frame_ingress = ContentFrameIngressController(
+                self,
+                canvas_width=program_output.video_format.width,
+                canvas_height=program_output.video_format.height,
+                publisher_factory=lambda width, height: SharedMemoryContentPublisher(width, height),
+                accelerated_publisher_factory=lambda width, height: None,
+            )
+        else:
+            self._content_frame_ingress = ContentFrameIngressController(
+                self,
+                canvas_width=program_output.video_format.width,
+                canvas_height=program_output.video_format.height,
+            )
+        # Fork A: with the libobs engine, local media files decode in the sidecar.
+        # Route the foreground controller through the engine and mirror its
+        # media_playback_state events back onto the controller's usual signals.
+        self._unsubscribe_media_engine = None
+        if libobs_scene_engine_selected() and scene_engine is not None:
+            from .controllers.media_engine_route import SceneEngineMediaRoute
+            from .core.scenes.media_control import MEDIA_SLOT_BACKGROUND
+
+            self.media_ctrl.set_engine_media_route(SceneEngineMediaRoute(scene_engine))
+            # The background song plays through a second, monitored-only sidecar
+            # audio slot (not composited into the scene).
+            self._background_media_controller.set_engine_media_route(
+                SceneEngineMediaRoute(scene_engine, slot=MEDIA_SLOT_BACKGROUND)
+            )
+            self._unsubscribe_media_engine = scene_engine.subscribe(
+                self._on_engine_media_event
+            )
         self._program_content = ProgramContentController(
             self.projection_session,
             self.font_manager,
@@ -339,6 +382,8 @@ class MainWindow(QWidget):
             self._current_yearly_projection_text,
             media_epoch_sink=self._content_frame_ingress.begin_presentation,
             image_transform_sink=self._content_frame_ingress.set_image_transform,
+            # Lazy: scene_runtime is constructed just after this controller.
+            yeartext_reloaded=lambda: self.scene_runtime.reload_yeartext(),
             width=program_output.video_format.width,
             height=program_output.video_format.height,
             parent=self,
@@ -425,6 +470,8 @@ class MainWindow(QWidget):
         self._media_mirror_was_enabled = self._program_mirror_enabled()
         self._native_fallback_mirror_required = False
         self._native_window_output_suppressed = False
+        # Surfaces whose geometry_changed is already wired to the reconcile.
+        self._geometry_watched_surfaces: list[weakref.ref] = []
         self._unsubscribe_native_projection_state = self.projection_session.subscribe(
             self._on_projection_state_changed_for_native
         )
@@ -432,27 +479,58 @@ class MainWindow(QWidget):
         self.destroyed.connect(
             lambda _object=None: self._unsubscribe_native_projection_state()
         )
+        if self._unsubscribe_media_engine is not None:
+            self.destroyed.connect(
+                lambda _object=None: self._unsubscribe_media_engine()
+            )
         document = self.scene_documents.document
         preview_output = document.output(BusId.MEDIA_WINDOWS)
         program_output = document.output(BusId.VIRTUAL_CAMERA)
-        self._scene_preview_egress = SceneFrameEgressController(
-            preview_output.video_format.width,
-            preview_output.video_format.height,
-            self,
-            worker_name="solin-scene-preview-egress",
-        )
+        if libobs_scene_engine_selected():
+            # The libobs sidecar composites the edited scene into a
+            # cross-platform BGRA block the app owns (see libobs_preview_egress).
+            from .controllers.shared_memory_preview_egress import (
+                SharedMemoryPreviewEgressController,
+            )
+
+            self._scene_preview_egress = SharedMemoryPreviewEgressController(
+                preview_output.video_format.width,
+                preview_output.video_format.height,
+                self,
+            )
+        else:
+            self._scene_preview_egress = SceneFrameEgressController(
+                preview_output.video_format.width,
+                preview_output.video_format.height,
+                self,
+                worker_name="solin-scene-preview-egress",
+            )
         self._scene_preview_egress.descriptor_changed.connect(
             self._on_scene_frame_egress_descriptor_changed
         )
         self._scene_preview_egress.frame_ready.connect(
             self._on_scene_preview_frame
         )
-        self._scene_program_egress = SceneVideoFrameEgressController(
-            program_output.video_format.width,
-            program_output.video_format.height,
-            self,
-            worker_name="solin-scene-program-egress",
-        )
+        if libobs_scene_engine_selected():
+            # The libobs sidecar mirrors the program main mix into a
+            # cross-platform BGRA block for the operator Program tab.
+            from .controllers.shared_memory_preview_egress import (
+                SharedMemoryPreviewEgressController,
+            )
+
+            self._scene_program_egress = SharedMemoryPreviewEgressController(
+                program_output.video_format.width,
+                program_output.video_format.height,
+                self,
+                channel_id="solin-program",
+            )
+        else:
+            self._scene_program_egress = SceneVideoFrameEgressController(
+                program_output.video_format.width,
+                program_output.video_format.height,
+                self,
+                worker_name="solin-scene-program-egress",
+            )
         self._scene_program_egress.descriptor_changed.connect(
             self._on_scene_frame_egress_descriptor_changed
         )
@@ -1043,6 +1121,7 @@ class MainWindow(QWidget):
             preview_output.video_format.width,
             preview_output.video_format.height,
         )
+        self._apply_canvas_aspect_to_video_hosts(preview_output.video_format)
         program_output = document.output(BusId.VIRTUAL_CAMERA)
         self._scene_program_egress.reconfigure(
             program_output.video_format.width,
@@ -1058,18 +1137,58 @@ class MainWindow(QWidget):
 
     def _reconcile_scene_media_egress(self) -> None:
         self.scene_runtime.set_preview_egress(self._scene_preview_egress.descriptor)
+        # Under libobs the sidecar paints projection windows directly, so the
+        # program egress only feeds the operator Program tab — demand it whenever
+        # the program is mirrored. The native engine demands it as a window
+        # fallback instead.
+        if libobs_scene_engine_selected():
+            program_required = self._program_mirror_enabled()
+        else:
+            program_required = self._native_fallback_mirror_required
         self.scene_runtime.set_program_egress(
-            self._scene_program_egress.descriptor
-            if self._native_fallback_mirror_required
-            else None
+            self._scene_program_egress.descriptor if program_required else None
         )
 
-    @staticmethod
+    def _apply_canvas_aspect_to_video_hosts(self, video_format) -> None:
+        """Tell the operator video host what aspect to inset its native surface to.
+
+        Taken from the document rather than assumed to be 16:9, so a canvas configured
+        to another format still resizes without distorting.
+        """
+        width = int(getattr(video_format, "width", 0) or 0)
+        height = int(getattr(video_format, "height", 0) or 0)
+        if width <= 0 or height <= 0:
+            return
+        projection_bar = getattr(self, "proj_bar", None)
+        video_preview = getattr(projection_bar, "video_preview", None)
+        setter = getattr(video_preview, "set_canvas_aspect", None)
+        if callable(setter):
+            setter(width / height)
+
+    def _watch_surface_geometry(self, surface) -> None:
+        """Re-reconcile window targets when ``surface`` is resized or moved (once)."""
+        signal = getattr(surface, "geometry_changed", None)
+        if signal is None:
+            return
+        watched = self._geometry_watched_surfaces
+        if any(ref() is surface for ref in watched):
+            return
+        signal.connect(self._reconcile_native_scene_surfaces)
+        watched.append(weakref.ref(surface))
+        # Drop refs to surfaces Qt has already destroyed.
+        self._geometry_watched_surfaces = [ref for ref in watched if ref() is not None]
+
     def _native_window_target(
+        self,
         surface,
         target_id: str,
         bus_id: BusId,
     ) -> OutputWindowTarget:
+        # A resized surface keeps its obs_display at the old size until a fresh target
+        # is sent, which stretches the letterboxed image into the new shape. Every
+        # surface that becomes a target watches its own geometry so the reconcile
+        # re-runs; connecting here covers all of them in one place.
+        self._watch_surface_geometry(surface)
         screen = surface.screen() or QApplication.primaryScreen()
         origin = surface.mapToGlobal(QPoint(0, 0))
         return OutputWindowTarget(
@@ -1086,6 +1205,19 @@ class MainWindow(QWidget):
 
     def _on_projection_state_changed_for_native(self) -> None:
         self._reconcile_native_scene_surfaces()
+
+    def _on_engine_media_event(self, event: object) -> None:
+        # Runs on the engine's event thread; on_engine_media_state only emits
+        # (queued) Qt signals and sets plain attributes, so this is thread-safe.
+        from .core.scenes.engine import MediaPlaybackEvent
+        from .core.scenes.media_control import MEDIA_SLOT_BACKGROUND
+
+        if not isinstance(event, MediaPlaybackEvent):
+            return
+        if getattr(event.state, "slot", 0) == MEDIA_SLOT_BACKGROUND:
+            self._background_media_controller.on_engine_media_state(event.state)
+        else:
+            self.media_ctrl.on_engine_media_state(event.state)
 
     def _on_native_content_source_health_changed(self, source_id: str) -> None:
         if source_id != CONTENT_SOURCE_ID:
@@ -1111,8 +1243,12 @@ class MainWindow(QWidget):
             "obs_stream",
             "camera_stream",
         }
+        # The projection windows render the composited main mix (the program). The
+        # program's idle scene is the Default scene (which shows the Year text), so
+        # at idle the projection shows the year text with no special-casing here;
+        # media presentations transition the program to the Content scene as usual.
         native_window_routing_ready = (
-            NATIVE_SCENES_SUPPORTED
+            _native_scene_routing_supported()
             and self.scene_runtime.native_window_routing_ready
             and not self._native_window_output_suppressed
         )
@@ -1201,32 +1337,6 @@ class MainWindow(QWidget):
         for window in raw_fallback_windows:
             self._projection_targets.restore_state_to_window(window)
         self._reconcile_scene_media_egress()
-        self._reconcile_python_video_frame_delivery()
-
-    @Slot()
-    @Slot(bool)
-    def _reconcile_python_video_frame_delivery(
-        self,
-        _direct_active: bool | None = None,
-    ) -> None:
-        """Keep Qt frame delivery only while a Qt surface actually consumes it."""
-
-        delivery_required = True
-        state = self.projection_session.state
-        if (
-            self._content_frame_ingress.direct_submission_active
-            and state.get("type") == "video"
-            and not state.get("is_audio", False)
-        ):
-            projection_bar = getattr(self, "proj_bar", None)
-            bar_requires_frames = (
-                projection_bar is None
-                or projection_bar.python_video_frame_delivery_required
-            )
-            delivery_required = bool(
-                bar_requires_frames or self._raw_projection_windows()
-            )
-        self.media_ctrl.set_python_frame_delivery_required(delivery_required)
 
     def _on_native_scene_engine_ready_changed(self, ready: bool) -> None:
         if ready:
@@ -1304,9 +1414,12 @@ class MainWindow(QWidget):
     def _on_scene_program_frame(self, frame) -> None:
         if not self._program_mirror_enabled():
             return
-        image = video_frame_to_image(frame)
-        if image.isNull():
+        # The libobs egress emits a QImage directly; the native one a VideoFrame.
+        image = frame if isinstance(frame, QImage) else video_frame_to_image(frame)
+        if image is None or image.isNull():
             return
+        # Egress feeds each window whose surface is not owned by the native
+        # renderer, including libobs fallback after native-output failure.
         for window in self.projection_session.all_windows():
             if getattr(window, "native_output_active", False):
                 continue
@@ -1329,18 +1442,15 @@ class MainWindow(QWidget):
 
     def _program_content_requested(self) -> bool:
         state = self.scene_live.state
-        return any(state.output(bus_id).enabled for bus_id in BusId)
+        return any(state.output(bus_id).enabled for bus_id in DELIVERY_BUSES)
 
     def _on_content_ingress_demand_changed(self, required: bool) -> None:
         self._content_frame_ingress.set_enabled(required)
         if not required:
             return
+        # Media video is composited by the libobs sidecar; the app only re-primes
+        # its own rendered content (text/images) here.
         self._program_content.refresh()
-        if projection_presentation_type(self.projection_session.state) != "video":
-            return
-        frame = self.media_ctrl.video_sink.videoFrame()
-        if frame.isValid():
-            self._program_content.submit_frame(frame)
 
     def _raw_projection_windows(self) -> list:
         if self._program_mirror_enabled():
@@ -1577,6 +1687,25 @@ class MainWindow(QWidget):
             raise RuntimeError("Main window content can only be installed once.")
         self._content_layout.addWidget(widget)
 
+    def scenes_dock_container(self) -> QWidget:
+        """The strip below the page content that hosts attached panels.
+
+        Created on demand (so the content-install guard above still sees an empty
+        layout) and appended last, which puts it at the bottom of the window. A
+        panel finds this by walking up its parent chain, so nothing needs to be
+        threaded through the toolbar. Stays hidden while empty.
+        """
+        if self._scenes_dock is None:
+            container = QWidget(self)
+            container.setObjectName("MainWindowBottomDock")
+            dock_layout = QVBoxLayout(container)
+            dock_layout.setContentsMargins(0, 0, 0, 0)
+            dock_layout.setSpacing(0)
+            container.hide()
+            self._content_layout.addWidget(container)
+            self._scenes_dock = container
+        return self._scenes_dock
+
     def _install_ui_resources(self, resources: MainWindowUiResources) -> None:
         self.stack = resources.stack
         self._lazy_pages = resources.lazy_pages
@@ -1615,6 +1744,9 @@ class MainWindow(QWidget):
         self._nav_buttons_by_name = resources.nav_buttons_by_name
         for attr_name, button in resources.nav_buttons_by_name.items():
             setattr(self, attr_name, button)
+        # The content widget is installed by now, so the scenes panel can claim
+        # the bottom dock strip without tripping the install-once guard.
+        self._quick_toolbar.restore_docked_scene_panel()
 
     def _apply_global_stylesheet(self, stylesheet: str) -> None:
         app = QApplication.instance()

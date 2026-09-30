@@ -2,12 +2,20 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from threading import RLock
 from typing import Any
 
-from PySide6.QtCore import QEvent, QSize, Qt, QUrl
-from PySide6.QtGui import QCursor, QDesktopServices, QImage, QShowEvent, QHideEvent
+from PySide6.QtCore import QEvent, QPoint, QRect, QSize, Qt, QUrl
+from PySide6.QtGui import (
+    QCursor,
+    QDesktopServices,
+    QGuiApplication,
+    QHideEvent,
+    QImage,
+    QShowEvent,
+)
 from PySide6.QtQuick import QQuickImageProvider
 from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtWidgets import QApplication, QFileDialog, QVBoxLayout, QWidget
@@ -49,6 +57,22 @@ class ScenePreviewImageProvider(QQuickImageProvider):
         del id_str, size, requested_size
         with self._lock:
             return self._image
+
+
+_NATIVE_EDITOR_PREVIEW_ENV = "SOLIN_NATIVE_EDITOR_PREVIEW"
+
+
+def native_editor_preview_enabled() -> bool:
+    """Whether the experimental direct-GPU editor preview is active.
+
+    Opt-in via ``SOLIN_NATIVE_EDITOR_PREVIEW=1`` and only where a native window
+    handle can be shared cross-process with the sidecar: X11/XWayland (xcb) or
+    Windows. Wayland/macOS keep the CPU-readback preview.
+    """
+    flag = os.environ.get(_NATIVE_EDITOR_PREVIEW_ENV, "").strip().lower()
+    if flag not in ("1", "true", "on", "yes"):
+        return False
+    return QGuiApplication.platformName() in ("xcb", "windows")
 
 
 class ScenesEditorWidget(QWidget):
@@ -133,6 +157,21 @@ class ScenesEditorWidget(QWidget):
         self.bridge.pointerOverrideEnded.connect(self._end_pointer_override)
         layout.addWidget(self._qml)
 
+        # Experimental direct-GPU preview: a native surface pinned over the QML
+        # canvas frame, into which the sidecar renders the selected scene directly.
+        self._controller = controller
+        self._preview_surface: Any | None = None
+        self._preview_canvas_rect = QRect()
+        self._preview_scene_id = str(getattr(controller, "preview_scene_id", "") or "")
+        if native_editor_preview_enabled() and hasattr(controller, "set_editor_preview_target"):
+            from solin.widgets.projection.native_surface import NativeVideoSurface
+
+            self._preview_surface = NativeVideoSurface(self)
+            self.bridge.canvasRectChanged.connect(self._on_preview_canvas_rect)
+            scene_changed = getattr(controller, "preview_scene_changed", None)
+            if scene_changed is not None:
+                scene_changed.connect(self._on_preview_scene)
+
     def _pick_recording_directory(self, current: str) -> str:
         return QFileDialog.getExistingDirectory(
             self,
@@ -169,13 +208,70 @@ class ScenesEditorWidget(QWidget):
         self._pointer_override_owner = ""
         QApplication.restoreOverrideCursor()
 
+    # ── direct-GPU editor preview surface ─────────────────────────────────
+
+    def _on_preview_canvas_rect(self, x: float, y: float, width: float, height: float) -> None:
+        self._preview_canvas_rect = QRect(round(x), round(y), round(width), round(height))
+        self._position_preview_surface()
+        self._update_preview_target()
+
+    def _on_preview_scene(self, scene_id: str) -> None:
+        self._preview_scene_id = scene_id or ""
+        self._update_preview_target()
+
+    def _position_preview_surface(self) -> None:
+        surface = self._preview_surface
+        if surface is None:
+            return
+        rect = self._preview_canvas_rect
+        if self.isVisible() and rect.width() > 0 and rect.height() > 0:
+            surface.setGeometry(rect)
+            surface.show()
+            surface.raise_()  # above the QML content
+        else:
+            surface.hide()
+
+    def _update_preview_target(self) -> None:
+        surface = self._preview_surface
+        if surface is None:
+            return
+        rect = self._preview_canvas_rect
+        ready = (
+            self.isVisible() and surface.isVisible()
+            and rect.width() > 0 and rect.height() > 0 and bool(self._preview_scene_id)
+        )
+        if not ready:
+            self._controller.set_editor_preview_target(None)
+            return
+        from solin.core.scenes.engine import BusId, OutputWindowTarget
+
+        origin = surface.mapToGlobal(QPoint(0, 0))
+        screen = surface.screen() or QApplication.primaryScreen()
+        self._controller.set_editor_preview_target(OutputWindowTarget(
+            bus_id=BusId.MEDIA_WINDOWS,
+            target_id="editor-preview",
+            screen_id=(screen.name() or "primary") if screen is not None else "primary",
+            native_handle=surface.native_handle,
+            x=origin.x(),
+            y=origin.y(),
+            width=max(1, rect.width()),
+            height=max(1, rect.height()),
+            device_pixel_ratio=surface.devicePixelRatioF(),
+            scene_id=self._preview_scene_id,
+        ))
+
     def showEvent(self, event: QShowEvent) -> None:  # noqa: N802
         super().showEvent(event)
         self.bridge.setActive(True)
+        self._position_preview_surface()
+        self._update_preview_target()
 
     def hideEvent(self, event: QHideEvent) -> None:  # noqa: N802
         self._release_pointer_override()
         self.bridge.setActive(False)
+        if self._preview_surface is not None:
+            self._preview_surface.hide()
+            self._controller.set_editor_preview_target(None)  # release the display
         super().hideEvent(event)
 
     def eventFilter(self, watched, event: QEvent) -> bool:  # noqa: N802
@@ -202,6 +298,11 @@ class ScenesEditorWidget(QWidget):
         if self._cleaned_up:
             return
         self._cleaned_up = True
+        if self._preview_surface is not None:
+            self._controller.set_editor_preview_target(None)  # release the sidecar display
+            self._preview_surface.hide()
+            self._preview_surface.deleteLater()
+            self._preview_surface = None
         self._release_pointer_override()
         self._pointer_cursor.reset()
         root = self._qml.rootObject()

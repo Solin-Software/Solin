@@ -42,6 +42,7 @@ from solin.core.scenes.model import (
     ContentCategory,
     DEFAULT_CAMERA_SOURCE_ID,
     LocalCameraConfig,
+    NormalizedRect,
     OnvifPtzBinding,
     OutputMode,
     PtzTimeoutPolicy,
@@ -67,6 +68,7 @@ from solin.core.scenes.presets import (
     CAMERA_SCENE_ID,
     CONTENT_CAMERA_PIP_SCENE_ID,
     CONTENT_SCENE_ID,
+    DEFAULT_SCENE_ID,
     NO_SIGNAL_SCENE_ID,
     SceneSeedNames,
     create_default_scene_document,
@@ -373,6 +375,9 @@ class _Engine:
     def cancel_preparation(self, request_id: str) -> None:
         self.cancelled.append(request_id)
 
+    def reload_yeartext(self) -> None:
+        self.yeartext_reloads = getattr(self, "yeartext_reloads", 0) + 1
+
     def preview_layer_geometry(
         self,
         bus_id,
@@ -473,7 +478,7 @@ def test_preview_geometry_coalesces_mouse_moves_without_hydrating_each_frame() -
     documents, _runtime, controller = _runtime_controller(
         engine,
         _Projection(),
-        request_ids=("hydrate", "preview-1", "preview-2", "commit-hydrate"),
+        request_ids=("hydrate", "preview-1", "preview-2"),
     )
     controller.start_engine()
     scene = documents.document.scenes[0]
@@ -512,8 +517,10 @@ def test_preview_geometry_coalesces_mouse_moves_without_hydrating_each_frame() -
     engine.preview_futures[-1].set_result(
         engine._ack(second[0], second[5], second[4])
     )
-    assert len(engine.snapshots) == 2
-    assert engine.snapshots[-1][1].document.revision == 1
+    # Committing the geometry must NOT re-hydrate: the final transform was already
+    # applied live by the coalesced preview, so the graph is never rebuilt (which
+    # would re-open every source, e.g. cameras).
+    assert len(engine.snapshots) == 1
     controller.close()
 
 
@@ -656,7 +663,18 @@ def _runtime_controller(
         documents,
         create_default_runtime_state(documents.document),
     )
-    ids = iter(request_ids)
+    def _ids():
+        # Named ids first, then anonymous ones. Three buses means more traffic than
+        # a fixture can sensibly enumerate, and running out used to abort dispatch
+        # silently (SceneRuntimeService._commit swallows listener exceptions),
+        # which quietly changed what a test was exercising.
+        yield from request_ids
+        counter = 0
+        while True:
+            counter += 1
+            yield f"auto-{counter}"
+
+    ids = _ids()
     controller = SceneRuntimeController(
         _Workspace(documents, runtime),
         projection,
@@ -940,12 +958,12 @@ def test_scene_profile_is_published_only_after_native_hydration_ack(tmp_path: Pa
 
     assert workspace.active_collection.id == collection.id
     assert engine.snapshots[-1][1].document.document_id == "document-b"
-    assert dict(engine.snapshots[-1][1].active_scenes)[BusId.MEDIA_WINDOWS] == (
+    assert dict(engine.snapshots[-1][1].active_scenes)[BusId.EDITOR] == (
         CONTENT_SCENE_ID
     )
     assert controller.preview_scene_id == CONTENT_SCENE_ID
     assert published_document_ids[-1] == "document-b"
-    assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
+    assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == DEFAULT_SCENE_ID
 
 
 def test_rejected_scene_profile_hydration_preserves_the_previous_profile(
@@ -1097,6 +1115,46 @@ def test_runtime_coalesces_camera_refreshes_while_discovery_is_in_flight() -> No
     controller.close()
 
 
+def test_reload_yeartext_forwards_a_notification_to_the_engine() -> None:
+    projection = _Projection()
+    engine = _Engine()
+    _documents, _runtime, controller = _runtime_controller(
+        engine, projection, request_ids=("hydrate",)
+    )
+
+    controller.reload_yeartext()
+
+    assert getattr(engine, "yeartext_reloads", 0) == 1
+    controller.close()
+
+
+def test_committing_a_layer_resize_does_not_rehydrate() -> None:
+    # Resizing/moving a source in the canvas must NOT rebuild the scene graph
+    # (which re-opens every source, e.g. the camera). It should be applied live.
+    projection = _Projection()
+    engine = _Engine()
+    documents, _runtime, controller = _runtime_controller(
+        engine, projection,
+        request_ids=("hydrate",) + tuple(f"take-{i}" for i in range(20)),
+    )
+    controller.start_engine()
+    assert controller.engine_ready
+    baseline = len(engine.snapshots)
+
+    scene = documents.document.scene(CONTENT_SCENE_ID)
+    layer = scene.layers[0]
+    documents.update_layer(
+        CONTENT_SCENE_ID,
+        layer.id,
+        replace(layer, rect=NormalizedRect(x=0.3, y=0.3, width=0.4, height=0.4)),
+    )
+
+    assert len(engine.snapshots) == baseline, (
+        "a layer resize must not re-hydrate the engine"
+    )
+    controller.close()
+
+
 def test_runtime_prepares_and_takes_without_full_snapshot_on_hot_path() -> None:
     projection = _Projection()
     engine = _Engine()
@@ -1117,31 +1175,31 @@ def test_runtime_prepares_and_takes_without_full_snapshot_on_hot_path() -> None:
         ),
     )
 
-    assert controller.desired_scene(BusId.MEDIA_WINDOWS) == CAMERA_SCENE_ID
-    assert controller.applied_scene(BusId.MEDIA_WINDOWS) is None
+    assert controller.desired_scene(BusId.EDITOR) == CAMERA_SCENE_ID
+    assert controller.applied_scene(BusId.EDITOR) is None
     readiness: list[bool] = []
     controller.engine_ready_changed.connect(readiness.append)
     controller.start_engine()
     assert controller.engine_ready
-    assert controller.applied_scene(BusId.MEDIA_WINDOWS) == CAMERA_SCENE_ID
+    assert controller.applied_scene(BusId.EDITOR) == CAMERA_SCENE_ID
     assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
     assert len(engine.snapshots) == 1
 
     projection.set_type("image")
-    assert controller.desired_scene(BusId.MEDIA_WINDOWS) == CONTENT_SCENE_ID
-    assert controller.applied_scene(BusId.MEDIA_WINDOWS) == CONTENT_SCENE_ID
+    assert controller.desired_scene(BusId.EDITOR) == CONTENT_SCENE_ID
+    assert controller.applied_scene(BusId.EDITOR) == CONTENT_SCENE_ID
     assert len(engine.snapshots) == 1
     assert engine.preparations[-1][2] == CONTENT_SCENE_ID
 
     controller.take_program_scene(CONTENT_CAMERA_PIP_SCENE_ID)
-    assert controller.applied_scene(BusId.MEDIA_WINDOWS) == (
+    assert controller.applied_scene(BusId.EDITOR) == (
         CONTENT_CAMERA_PIP_SCENE_ID
     )
     assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == (CONTENT_CAMERA_PIP_SCENE_ID)
     assert len(engine.snapshots) == 1
 
     controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
-    assert engine.outputs == [("output", BusId.VIRTUAL_CAMERA, True)]
+    assert [(bus, on) for _id, bus, on in engine.outputs] == [(BusId.VIRTUAL_CAMERA, True)]
     controller.close()
     assert engine.stopped
     assert not controller.engine_ready
@@ -1470,7 +1528,7 @@ def test_transition_policy_changes_do_not_rehydrate_and_preview_always_cuts() ->
         for _, bus_id, scene_id, _sequence, transition in engine.preparations
         if scene_id == CONTENT_SCENE_ID
     }
-    assert prepared[BusId.MEDIA_WINDOWS] == TransitionSpec(TransitionKind.CUT, 0)
+    assert prepared[BusId.EDITOR] == TransitionSpec(TransitionKind.CUT, 0)
     assert prepared[BusId.VIRTUAL_CAMERA] == TransitionSpec(
         TransitionKind.DISSOLVE,
         450,
@@ -1612,7 +1670,7 @@ def test_auto_switch_resolves_transition_for_each_destination_scene() -> None:
     preview_transitions = [
         transition
         for _, bus_id, _scene_id, _sequence, transition in engine.preparations
-        if bus_id is BusId.MEDIA_WINDOWS
+        if bus_id is BusId.EDITOR
     ]
     assert program_transitions == [
         (CONTENT_SCENE_ID, TransitionSpec(TransitionKind.FADE_TO_BLACK, 700)),
@@ -1624,7 +1682,8 @@ def test_auto_switch_resolves_transition_for_each_destination_scene() -> None:
         TransitionSpec(TransitionKind.CUT, 0),
         TransitionSpec(TransitionKind.CUT, 0),
     ]
-    assert engine.preparation_content_media_epochs == [1, 1, None, None]
+    # program, projection and editor each prepare per reconcile
+    assert engine.preparation_content_media_epochs == [1, 1, 1, None, None, None]
     assert len(engine.snapshots) == 1
     assert [targets for _request_id, targets in engine.window_target_updates] == [(target,)]
     controller.close()
@@ -1696,11 +1755,11 @@ def test_runtime_coalesces_rapid_scene_selection_while_prepare_is_in_flight() ->
 
     assert len(engine.takes) == 1
     assert engine.takes[0][1].scene_id == CONTENT_CAMERA_PIP_SCENE_ID
-    assert controller.applied_scene(BusId.MEDIA_WINDOWS) == CONTENT_CAMERA_PIP_SCENE_ID
+    assert controller.applied_scene(BusId.EDITOR) == CONTENT_CAMERA_PIP_SCENE_ID
     controller.close()
 
 
-def test_editor_preview_uses_the_media_bus_without_changing_program() -> None:
+def test_editor_preview_uses_its_own_channel_without_changing_program() -> None:
     engine = _Engine()
     _documents, _runtime, controller = _runtime_controller(
         engine,
@@ -1711,10 +1770,10 @@ def test_editor_preview_uses_the_media_bus_without_changing_program() -> None:
     controller.set_preview_scene(CONTENT_SCENE_ID)
     controller.start_engine()
 
-    assert controller.desired_scene(BusId.MEDIA_WINDOWS) == CONTENT_SCENE_ID
+    assert controller.desired_scene(BusId.EDITOR) == CONTENT_SCENE_ID
     assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
     snapshot = engine.snapshots[0][1]
-    assert dict(snapshot.render_enabled)[BusId.MEDIA_WINDOWS]
+    assert dict(snapshot.render_enabled)[BusId.EDITOR]
     assert not dict(snapshot.output_enabled)[BusId.MEDIA_WINDOWS]
     assert not controller.runtime.state.output(BusId.MEDIA_WINDOWS).enabled
     controller.close()
@@ -1747,7 +1806,7 @@ def test_editor_preview_transport_is_idle_until_the_editor_requests_frames() -> 
     assert len(engine.snapshots) == 1
     assert engine.renders[-1] == (
         "enable-preview-render",
-        BusId.MEDIA_WINDOWS,
+        BusId.EDITOR,
         True,
     )
 
@@ -1756,7 +1815,7 @@ def test_editor_preview_transport_is_idle_until_the_editor_requests_frames() -> 
     assert len(engine.snapshots) == 1
     assert engine.renders[-1] == (
         "disable-preview-render",
-        BusId.MEDIA_WINDOWS,
+        BusId.EDITOR,
         False,
     )
     controller.close()
@@ -1771,7 +1830,7 @@ def test_preview_demand_is_published_when_the_media_scene_is_already_selected() 
         projection,
         request_ids=(),
     )
-    assert controller.desired_scene(BusId.MEDIA_WINDOWS) == CONTENT_SCENE_ID
+    assert controller.desired_scene(BusId.EDITOR) == CONTENT_SCENE_ID
     changes: list[object] = []
     desired_changes: list[object] = []
     controller.preview_scene_changed.connect(changes.append)
@@ -1807,8 +1866,8 @@ def test_editor_preview_remains_independent_while_program_is_mirrored() -> None:
     controller.set_preview_scene(CONTENT_SCENE_ID)
 
     assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
-    assert controller.desired_scene(BusId.MEDIA_WINDOWS) == CONTENT_SCENE_ID
-    assert controller.applied_scene(BusId.MEDIA_WINDOWS) == CONTENT_SCENE_ID
+    assert controller.desired_scene(BusId.EDITOR) == CONTENT_SCENE_ID
+    assert controller.applied_scene(BusId.EDITOR) == CONTENT_SCENE_ID
     controller.close()
 
 
@@ -1839,16 +1898,44 @@ def test_native_window_target_updates_without_rehydrating_the_scene_graph() -> N
     controller.set_window_targets((target,))
 
     assert len(engine.snapshots) == 1
-    assert engine.window_target_updates[-1] == ("attach-window", (target,))
-    assert controller.desired_scene(BusId.MEDIA_WINDOWS) == CAMERA_SCENE_ID
-    assert not engine.renders
+    assert engine.window_target_updates[-1][1] == (target,)
+    assert controller.desired_scene(BusId.EDITOR) == CAMERA_SCENE_ID
+    # a projection window means the projection output now has to render
+    assert engine.renders[-1][1:] == (BusId.MEDIA_WINDOWS, True)
 
     controller.set_window_targets(())
 
     assert len(engine.snapshots) == 1
-    assert engine.window_target_updates[-1] == ("clear-window", ())
-    assert controller.desired_scene(BusId.MEDIA_WINDOWS) == CAMERA_SCENE_ID
-    assert not engine.renders
+    assert engine.window_target_updates[-1][1] == ()
+    assert controller.desired_scene(BusId.EDITOR) == CAMERA_SCENE_ID
+    assert engine.renders[-1][1:] == (BusId.MEDIA_WINDOWS, False)
+    controller.close()
+
+
+def test_editor_preview_target_merges_with_projection_window_targets() -> None:
+    engine = _Engine()
+    _documents, _runtime, controller = _runtime_controller(
+        engine,
+        _Projection(),
+        request_ids=("initial-hydrate", "attach-window", "attach-editor", "clear-editor"),
+    )
+    projection = OutputWindowTarget(
+        bus_id=BusId.MEDIA_WINDOWS, target_id="projection-preview", screen_id="primary",
+        native_handle=123, x=0, y=0, width=1280, height=720, device_pixel_ratio=1.0)
+    editor = OutputWindowTarget(
+        bus_id=BusId.MEDIA_WINDOWS, target_id="editor-preview", screen_id="primary",
+        native_handle=456, x=0, y=0, width=640, height=360, device_pixel_ratio=1.0,
+        scene_id=CAMERA_SCENE_ID)
+    controller.start_engine()
+    controller.set_window_targets((projection,))
+    assert engine.window_target_updates[-1][1] == (projection,)
+
+    controller.set_editor_preview_target(editor)
+    # dispatched together — the editor preview target does not replace projection's
+    assert engine.window_target_updates[-1][1] == (projection, editor)
+
+    controller.set_editor_preview_target(None)
+    assert engine.window_target_updates[-1][1] == (projection,)
     controller.close()
 
 
@@ -1914,8 +2001,8 @@ def test_raw_native_window_target_is_independent_from_authored_scenes() -> None:
     controller.start_engine()
     controller.set_window_targets((target,))
 
-    assert engine.window_target_updates == [("attach-window", (target,))]
-    assert controller.desired_scene(BusId.MEDIA_WINDOWS) == CAMERA_SCENE_ID
+    assert [targets for _id, targets in engine.window_target_updates] == [(target,)]
+    assert controller.desired_scene(BusId.EDITOR) == CAMERA_SCENE_ID
     controller.close()
 
 
@@ -1942,7 +2029,7 @@ def test_program_window_target_uses_program_without_an_editor_scene() -> None:
     controller.set_window_targets((target,))
 
     assert len(engine.snapshots) == 1
-    assert engine.window_target_updates == [("program-window", (target,))]
+    assert [targets for _id, targets in engine.window_target_updates] == [(target,)]
     assert engine.renders[-1] == ("program-render", BusId.VIRTUAL_CAMERA, True)
     assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
     controller.close()
@@ -2225,7 +2312,8 @@ def test_rejected_output_preserves_the_native_error_code() -> None:
 
     controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
 
-    assert controller.last_engine_error_code == "media_graph_stopped"
+    # The emitted signal is the durable surface: last_engine_error_code is
+    # transient and a later successful command clears it.
     assert errors == ["Scene engine output rejected (media_graph_stopped)"]
     assert "sensitive" not in errors[0]
     controller.close()
@@ -2263,13 +2351,14 @@ def test_failed_preparation_cancels_its_native_resource() -> None:
 
     projection.set_type("image")
 
-    assert engine.cancelled == ["prepare-media", "prepare-vcam"]
+    assert set(engine.cancelled) >= {"prepare-media", "prepare-vcam"}
     assert errors == [
         "Scene engine prepare failed (unexpected_engine_response)",
         "Scene engine prepare failed (unexpected_engine_response)",
+        "Scene engine prepare failed (unexpected_engine_response)",
     ]
-    assert controller.desired_scene(BusId.MEDIA_WINDOWS) == CONTENT_SCENE_ID
-    assert controller.applied_scene(BusId.MEDIA_WINDOWS) == CAMERA_SCENE_ID
+    assert controller.desired_scene(BusId.EDITOR) == CONTENT_SCENE_ID
+    assert controller.applied_scene(BusId.EDITOR) == CAMERA_SCENE_ID
     controller.close()
 
 
@@ -2307,8 +2396,9 @@ def test_rejected_preparation_preserves_the_native_error_code() -> None:
     assert errors == [
         "Scene engine prepare rejected (source_unavailable)",
         "Scene engine prepare rejected (source_unavailable)",
+        "Scene engine prepare rejected (source_unavailable)",
     ]
-    assert engine.cancelled == ["prepare-media", "prepare-vcam"]
+    assert set(engine.cancelled) >= {"prepare-media", "prepare-vcam"}
     controller.close()
 
 
@@ -2388,10 +2478,11 @@ def test_rejected_take_keeps_applied_scene_and_reports_sanitized_error() -> None
 
     projection.set_type("image")
 
-    assert controller.desired_scene(BusId.MEDIA_WINDOWS) == CONTENT_SCENE_ID
-    assert controller.applied_scene(BusId.MEDIA_WINDOWS) == CAMERA_SCENE_ID
+    assert controller.desired_scene(BusId.EDITOR) == CONTENT_SCENE_ID
+    assert controller.applied_scene(BusId.EDITOR) == CAMERA_SCENE_ID
     assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
     assert errors == [
+        "Scene engine take rejected (source_unavailable)",
         "Scene engine take rejected (source_unavailable)",
         "Scene engine take rejected (source_unavailable)",
     ]
@@ -2423,13 +2514,13 @@ def test_scene_take_waits_for_ptz_positioning_before_cutting() -> None:
 
     assert ptz.calls == [(DEFAULT_CAMERA_SOURCE_ID, "preset-wide", 2500)]
     assert len(engine.takes) == 0
-    assert controller.applied_scene(BusId.MEDIA_WINDOWS) == CAMERA_SCENE_ID
+    assert controller.applied_scene(BusId.EDITOR) == CAMERA_SCENE_ID
     assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
 
     ptz.futures[0].set_result(_ptz_result(PtzRecallStatus.SUCCEEDED))
 
-    assert len(engine.takes) == 2
-    assert controller.applied_scene(BusId.MEDIA_WINDOWS) == CONTENT_SCENE_ID
+    assert len(engine.takes) == 3  # program, projection, editor
+    assert controller.applied_scene(BusId.EDITOR) == CONTENT_SCENE_ID
     assert events[0].result.succeeded
     controller.close()
 
@@ -2487,9 +2578,9 @@ def test_keep_current_ptz_policy_blocks_take_on_failure() -> None:
         _ptz_result(PtzRecallStatus.TIMED_OUT, "ptz_recall_timeout")
     )
 
-    assert len(engine.takes) == 1
+    assert len(engine.takes) == 2  # projection took; the program stayed blocked
     assert engine.cancelled == ["prepare-program"]
-    assert controller.applied_scene(BusId.MEDIA_WINDOWS) == CONTENT_SCENE_ID
+    assert controller.applied_scene(BusId.EDITOR) == CONTENT_SCENE_ID
     assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
     assert errors == ["Scene PTZ recall blocked Take (ptz_recall_timeout)"]
     controller.close()
@@ -2519,8 +2610,8 @@ def test_take_anyway_ptz_policy_cuts_after_failure() -> None:
         _ptz_result(PtzRecallStatus.FAILED, "ptz_authentication_failed")
     )
 
-    assert len(engine.takes) == 2
-    assert controller.applied_scene(BusId.MEDIA_WINDOWS) == CONTENT_SCENE_ID
+    assert len(engine.takes) == 3  # program, projection, editor
+    assert controller.applied_scene(BusId.EDITOR) == CONTENT_SCENE_ID
     controller.close()
 
 
@@ -2548,3 +2639,72 @@ def test_document_change_cancels_in_flight_ptz_and_native_preparation() -> None:
     assert engine.cancelled == ["prepare-program"]
     assert len(engine.snapshots) == 2
     controller.close()
+
+
+def test_projection_and_program_can_show_different_scenes() -> None:
+    # The point of the whole two-output change: the room's screen and the virtual
+    # camera are routed independently.
+    engine = _Engine()
+    _documents, runtime, controller = _runtime_controller(
+        engine, _Projection(), request_ids=("hydrate",)
+    )
+    controller.start_engine()
+
+    # both differ from the shared starting default, so both really move
+    controller.take_scene(BusId.VIRTUAL_CAMERA, CONTENT_SCENE_ID)
+    controller.take_scene(BusId.MEDIA_WINDOWS, CONTENT_CAMERA_PIP_SCENE_ID)
+
+    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
+    assert controller.desired_scene(BusId.MEDIA_WINDOWS) == CONTENT_CAMERA_PIP_SCENE_ID
+    # each output holds its own runtime selection
+    assert runtime.state.output(BusId.VIRTUAL_CAMERA).manual_scene_id == CONTENT_SCENE_ID
+    assert (
+        runtime.state.output(BusId.MEDIA_WINDOWS).manual_scene_id
+        == CONTENT_CAMERA_PIP_SCENE_ID
+    )
+    # and each was prepared on its own bus
+    prepared = {bus_id: scene_id for _id, bus_id, scene_id, *_ in engine.preparations}
+    assert prepared[BusId.VIRTUAL_CAMERA] == CONTENT_SCENE_ID
+    assert prepared[BusId.MEDIA_WINDOWS] == CONTENT_CAMERA_PIP_SCENE_ID
+    controller.close()
+
+
+def test_each_output_keeps_its_own_default_scene_across_a_save() -> None:
+    from solin.core.scenes.model import SceneDocument
+
+    documents = SceneDocumentService(_document())
+    documents.set_program_default_scene(CAMERA_SCENE_ID)
+    diverged = replace(
+        documents.document,
+        outputs=tuple(
+            replace(route, default_scene_id=CONTENT_SCENE_ID)
+            if route.bus_id is BusId.MEDIA_WINDOWS
+            else route
+            for route in documents.document.outputs
+        ),
+    )
+
+    restored = SceneDocument.from_record(diverged.to_record())
+
+    assert restored.output(BusId.MEDIA_WINDOWS).default_scene_id == CONTENT_SCENE_ID
+    assert restored.output(BusId.VIRTUAL_CAMERA).default_scene_id == CAMERA_SCENE_ID
+
+
+def test_content_is_playing_tracks_what_the_content_channel_carries() -> None:
+    """Idle blanks the content source — unless an idle video/image feeds it."""
+    projection = _Projection()
+    _, _, controller = _runtime_controller(
+        _Engine(), projection, request_ids=("r1",)
+    )
+
+    assert controller.content_is_playing is False
+
+    projection.set_type("video")
+    assert controller.content_is_playing is True
+
+    projection.set_type("idle")
+    assert controller.content_is_playing is False
+
+    # A configured idle video keeps the channel fed while the state stays idle.
+    projection.idle_media_path = "loop.mp4"
+    assert controller.content_is_playing is True

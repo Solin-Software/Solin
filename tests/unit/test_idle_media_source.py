@@ -1,90 +1,170 @@
-"""Unit tests for IdleMediaSource.set_playing — the pause/resume + restart logic.
+"""Unit tests for the poster-based :class:`IdleMediaSource`.
 
-These exercise the *real* production method without a QApplication by
-constructing the object via ``__new__`` (skipping the Qt __init__) and injecting
-a fake player.  The QMediaPlayer enum is importable without a running app, so the
-state comparisons in the method run exactly as in production.
+QtMultimedia was removed, so the idle source no longer runs a ``QMediaPlayer``.
+An image loads directly into a :class:`QImage`; a video is represented by a
+single poster frame extracted asynchronously with ffmpeg. These tests exercise
+the real object (an offscreen ``QGuiApplication`` is enough) and drive the async
+poster path by calling :meth:`IdleMediaSource._on_poster_ready` directly.
 """
 
-from PySide6.QtMultimedia import QMediaPlayer
+import os
 
-from solin.projection import idle_source
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+from PySide6.QtCore import QBuffer, QByteArray, QIODevice
+from PySide6.QtGui import QGuiApplication, QImage
+
 from solin.projection.idle_source import IdleMediaSource
 
-_PLAYING = QMediaPlayer.PlaybackState.PlayingState
-_PAUSED = QMediaPlayer.PlaybackState.PausedState
-_STOPPED = QMediaPlayer.PlaybackState.StoppedState
+
+_APP = QGuiApplication.instance() or QGuiApplication([])
 
 
-class _FakePlayer:
-    def __init__(self, state):
-        self._state = state
-        self.positions = []
-        self.play_calls = 0
-        self.pause_calls = 0
-
-    def playbackState(self):
-        return self._state
-
-    def setPosition(self, pos):
-        self.positions.append(pos)
-
-    def play(self):
-        self.play_calls += 1
-
-    def pause(self):
-        self.pause_calls += 1
+def _png_bytes(width: int = 4, height: int = 4, color: int = 0xFF3366CC) -> bytes:
+    image = QImage(width, height, QImage.Format.Format_ARGB32)
+    image.fill(color)
+    payload = QByteArray()
+    buffer = QBuffer(payload)
+    buffer.open(QIODevice.OpenModeFlag.WriteOnly)
+    image.save(buffer, "PNG")
+    buffer.close()
+    return bytes(payload)
 
 
-def _make_source(player, *, media_type="video"):
-    src = IdleMediaSource.__new__(IdleMediaSource)  # bypass Qt construction
-    src._type = media_type
-    src._player = player
-    return src
+def test_image_media_emits_a_single_frame(tmp_path):
+    path = tmp_path / "idle.png"
+    path.write_bytes(_png_bytes())
+    source = IdleMediaSource()
+    frames: list[QImage] = []
+    source.frame_ready.connect(frames.append)
+
+    source.set_media(str(path))
+
+    assert source.media_type == "image"
+    assert len(frames) == 1
+    assert isinstance(frames[0], QImage)
+    assert not frames[0].isNull()
+    assert source.current_image is not None
 
 
-def test_default_restart_flag_is_enabled():
-    assert idle_source.IDLE_VIDEO_RESTART_ON_RESUME is True
+def test_video_media_defers_the_poster_frame(monkeypatch):
+    calls: list[tuple[str, int]] = []
+    monkeypatch.setattr(
+        IdleMediaSource,
+        "_extract_poster",
+        lambda self, path, generation: calls.append((path, generation)),
+    )
+    source = IdleMediaSource()
+    frames: list[QImage] = []
+    source.frame_ready.connect(frames.append)
+
+    source.set_media("/tmp/clip.mp4")
+
+    # Video media does not paint synchronously — the poster is extracted async.
+    assert source.media_type == "video"
+    assert frames == []
+    assert source.current_image is None
+    assert calls == [("/tmp/clip.mp4", source._generation)]
 
 
-def test_resume_restarts_from_beginning_when_enabled(monkeypatch):
-    monkeypatch.setattr(idle_source, "IDLE_VIDEO_RESTART_ON_RESUME", True)
-    player = _FakePlayer(_PAUSED)
-    _make_source(player).set_playing(True)
-    assert player.positions == [0]      # rewound
-    assert player.play_calls == 1
+def test_poster_ready_publishes_the_extracted_frame(monkeypatch):
+    monkeypatch.setattr(
+        IdleMediaSource,
+        "_extract_poster",
+        lambda self, path, generation: None,
+    )
+    source = IdleMediaSource()
+    frames: list[QImage] = []
+    source.frame_ready.connect(frames.append)
+    source.set_media("/tmp/clip.mp4")
+
+    source._on_poster_ready(source._generation, _png_bytes())
+
+    assert len(frames) == 1
+    assert not frames[0].isNull()
+    assert source.current_image is not None
 
 
-def test_resume_keeps_position_when_disabled(monkeypatch):
-    monkeypatch.setattr(idle_source, "IDLE_VIDEO_RESTART_ON_RESUME", False)
-    player = _FakePlayer(_PAUSED)
-    _make_source(player).set_playing(True)
-    assert player.positions == []       # not rewound
-    assert player.play_calls == 1
+def test_stale_poster_is_ignored(monkeypatch):
+    monkeypatch.setattr(
+        IdleMediaSource,
+        "_extract_poster",
+        lambda self, path, generation: None,
+    )
+    source = IdleMediaSource()
+    frames: list[QImage] = []
+    source.frame_ready.connect(frames.append)
+    source.set_media("/tmp/clip.mp4")
+
+    # A poster from a superseded generation must never reach the surfaces.
+    source._on_poster_ready(source._generation - 1, _png_bytes())
+
+    assert frames == []
+    assert source.current_image is None
 
 
-def test_set_playing_true_is_noop_when_already_playing():
-    player = _FakePlayer(_PLAYING)
-    _make_source(player).set_playing(True)
-    assert player.play_calls == 0
-    assert player.positions == []
+def test_empty_poster_payload_is_ignored(monkeypatch):
+    monkeypatch.setattr(
+        IdleMediaSource,
+        "_extract_poster",
+        lambda self, path, generation: None,
+    )
+    source = IdleMediaSource()
+    frames: list[QImage] = []
+    source.frame_ready.connect(frames.append)
+    source.set_media("/tmp/clip.mp4")
+
+    source._on_poster_ready(source._generation, None)
+
+    assert frames == []
+    assert source.current_image is None
 
 
-def test_set_playing_false_pauses_a_playing_video():
-    player = _FakePlayer(_PLAYING)
-    _make_source(player).set_playing(False)
-    assert player.pause_calls == 1
+def test_set_playing_is_a_noop(monkeypatch):
+    monkeypatch.setattr(
+        IdleMediaSource,
+        "_extract_poster",
+        lambda self, path, generation: None,
+    )
+    source = IdleMediaSource()
+    frames: list[QImage] = []
+    source.frame_ready.connect(frames.append)
+    source.set_media("/tmp/clip.mp4")
+
+    # There is no live decoder to gate — set_playing must do nothing.
+    source.set_playing(True)
+    source.set_playing(False)
+
+    assert frames == []
 
 
-def test_set_playing_false_is_noop_when_not_playing():
-    player = _FakePlayer(_PAUSED)
-    _make_source(player).set_playing(False)
-    assert player.pause_calls == 0
+def test_clear_forgets_the_current_media(tmp_path):
+    path = tmp_path / "idle.png"
+    path.write_bytes(_png_bytes())
+    source = IdleMediaSource()
+    source.set_media(str(path))
+    assert source.current_image is not None
+
+    source.clear()
+
+    assert source.media_type == ""
+    assert source.current_image is None
 
 
-def test_set_playing_is_noop_for_image_idle(monkeypatch):
-    monkeypatch.setattr(idle_source, "IDLE_VIDEO_RESTART_ON_RESUME", True)
-    player = _FakePlayer(_PAUSED)
-    _make_source(player, media_type="image").set_playing(True)
-    assert player.play_calls == 0
-    assert player.positions == []
+def test_cleanup_invalidates_pending_posters(monkeypatch):
+    monkeypatch.setattr(
+        IdleMediaSource,
+        "_extract_poster",
+        lambda self, path, generation: None,
+    )
+    source = IdleMediaSource()
+    frames: list[QImage] = []
+    source.frame_ready.connect(frames.append)
+    source.set_media("/tmp/clip.mp4")
+    pending_generation = source._generation
+
+    source.cleanup()
+    # A poster that finishes after cleanup belongs to an old generation.
+    source._on_poster_ready(pending_generation, _png_bytes())
+
+    assert frames == []

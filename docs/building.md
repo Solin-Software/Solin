@@ -1,8 +1,21 @@
 # Building and platform requirements
 
-The repository supports Windows x64, Intel macOS, and Linux x86_64 build
-targets. Generated files are written under `build/` or `dist/` and must not be
-committed.
+The repository has Windows x64, Intel macOS, and Linux x86_64 build recipes.
+Generated files are written under `build/` or `dist/` and must not be committed.
+
+Playback and scenes now use the supervised libobs sidecar by default. The
+`pylibobs` dependency currently supports Windows, Linux, and Apple Silicon
+macOS; its dependency marker excludes Intel macOS. The existing Intel macOS
+recipe therefore does not yet provide the default media backend.
+
+Standalone delivery still needs to migrate its sidecar launch, libobs native
+runtime staging, and checks for the removed QtMultimedia QML imports. The
+recipes below describe the existing build infrastructure and do not establish
+that the libobs application is ready for distribution.
+
+Install the `ffprobe` and `ffmpeg` command-line tools on PATH for titles,
+durations, embedded cover art, and video thumbnails. Python dependencies alone
+do not install those executables.
 
 Install the Python dependencies before invoking a build:
 
@@ -32,11 +45,13 @@ Release for camera installation and performance qualification:
 python scripts/build_native_engine.py --configuration Release
 ```
 
-The native source belongs in this repository so Python and C++ contracts change
-atomically; generated executables and DLLs do not. A source checkout therefore
-reports the scene engine as unavailable until this command succeeds. The local
-launcher discovers the resulting configuration under `build/native/` without a
-manual copy. Use the same Python environment that runs Solin, for example:
+The C++ source and DirectShow filters remain in this repository; generated
+executables and DLLs do not. Building the C++ engine is required for the optional
+Windows backend selected with `SOLIN_SCENE_ENGINE=native`, and for the DirectShow
+filters used by the Windows virtual camera. The default libobs scene engine
+does not depend on that C++ executable. The launcher discovers the optional
+native configuration under `build/native/`. Use the same Python environment
+that runs Solin, for example:
 
 ```text
 .venv\Scripts\python scripts\build_native_engine.py --configuration Release
@@ -87,7 +102,7 @@ build\native\media-engine-gstreamer\Release\solin-virtual-camera-frame-adapter-b
 
 CTest fails the Release build if any measured P95 exceeds the budget.
 
-For process-level measurements of the complete current media route, including reproducible
+For the historical QtMultimedia-to-native media route measurements, including
 fixture generation, explicit one-second CPU buckets, and provenance requirements, see
 [Native media performance measurements](native-media-performance.md).
 
@@ -116,9 +131,10 @@ The replacement smoke test requires the URL of the previously distributed DMG.
 ## Linux development
 
 The embedded SideView browser uses GTK 3, WebKitGTK 4.1, libsoup 3, and
-`pkg-config`. QtMultimedia may additionally require the distribution's VA-API,
-PipeWire, and GStreamer plugin packages. Automatic Zoom sharing from source
-requires `xdotool` and an X11/XWayland session.
+`pkg-config`. The libobs runtime needs the host's graphics and audio support.
+Linux virtual-camera output additionally needs a `v4l2loopback` device and the
+libobs `virtualcam_output` plugin. Automatic Zoom sharing from source requires
+`xdotool` and an X11/XWayland session.
 
 SideView and its native backend are installed from PyPI through the Python
 dependencies. No SideView binary is vendored in this repository.

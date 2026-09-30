@@ -49,25 +49,16 @@ class _Signal:
         self.emitted += 1
 
 
-class _AudioOutput:
-    def __init__(self):
-        self.volumes = []
-
-    def setVolume(self, volume):
-        self.volumes.append(volume)
-
-
 class _Media:
     def __init__(self):
         self.position = 0
-        self.audio_output = _AudioOutput()
-        self.deferred = []
+        self.volumes = []
         self.paused = 0
         self.seeks = []
         self.played = 0
 
-    def set_local_switch_deferred(self, deferred):
-        self.deferred.append(deferred)
+    def set_volume(self, volume):
+        self.volumes.append(volume)
 
     def pause(self):
         self.paused += 1
@@ -108,8 +99,7 @@ def test_begin_announcement_mode_mutes_locks_controls_and_starts_gate_timer():
     bar.begin_announcement_mode()
 
     assert bar._announce_state == "gate"
-    assert bar.media.deferred == [True]
-    assert bar.media.audio_output.volumes == [0.0]
+    assert bar.media.volumes == [0.0]
     assert bar.play_btn.enabled is False
     assert bar.seek_slider.enabled is False
     assert bar._announce_timer.started == 1
@@ -125,7 +115,7 @@ def test_announcement_gate_waits_for_media_time_before_pausing():
     assert bar._announce_state == "gate"
     assert bar.media.paused == 0
     assert bar._announce_timer.stopped == 0
-    assert bar.media.audio_output.volumes == [0.0]
+    assert bar.media.volumes == [0.0]
     assert bar.play_btn.enabled is False
     assert bar.seek_slider.enabled is False
 
@@ -148,9 +138,8 @@ def test_announcement_gate_pauses_unmutes_and_reenables_only_play(monkeypatch):
     assert bar._announce_state == "ready"
     assert bar._announce_timer.stopped == 1
     assert bar.media.paused == 1
-    assert bar.media.deferred == [True, False]
     assert single_shots == [80]
-    assert bar.media.audio_output.volumes == [0.0, 0.55]
+    assert bar.media.volumes == [0.0, 0.55]
     assert bar.play_btn.enabled is True
     assert bar.seek_slider.enabled is False
 
@@ -167,7 +156,7 @@ def test_announcement_gate_keeps_volume_zero_when_user_had_muted(monkeypatch):
 
     bar._on_announce_gate_expired()
 
-    assert bar.media.audio_output.volumes == [0.0, 0.0]
+    assert bar.media.volumes == [0.0, 0.0]
 
 
 def test_play_button_in_ready_state_restarts_song_and_unlocks_slider():
@@ -178,7 +167,6 @@ def test_play_button_in_ready_state_restarts_song_and_unlocks_slider():
     bar._on_play_btn_clicked()
 
     assert bar._announce_state == "off"
-    assert bar.media.deferred == [False]
     assert bar.seek_slider.enabled is True
     assert bar.media.seeks == [0]
     assert bar.media.played == 1
@@ -257,7 +245,6 @@ def test_cancel_announcement_mode_restores_volume_controls_and_deferred_switch()
 
     assert bar._announce_state == "off"
     assert bar._announce_timer.stopped == 1
-    assert bar.media.deferred == [True, False]
-    assert bar.media.audio_output.volumes == [0.0, 0.7]
+    assert bar.media.volumes == [0.0, 0.7]
     assert bar.play_btn.enabled is True
     assert bar.seek_slider.enabled is True

@@ -30,6 +30,7 @@ EXPECTED_SETTINGS_KEYS = {
     "APP_LANGUAGE": "language",
     "APP_THEME": "theme",
     "TOOLBAR_HOVER_POPUPS": "toolbar/hover_popups",
+    "SCENES_PANEL_DOCKED": "toolbar/scenes_panel_docked",
     "MEDIA_LANGUAGE_CODE": "media_language_code",
     "LEGACY_JW_LANGUAGE": "jw_language",
     "WINDOW_GEOMETRY": "geometry",

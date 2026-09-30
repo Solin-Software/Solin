@@ -21,7 +21,7 @@ from PySide6.QtCore import (
     Slot,
     Qt,
 )
-from PySide6.QtGui import QColor, QPixmap, QWheelEvent
+from PySide6.QtGui import QColor, QCursor, QPixmap, QWheelEvent
 from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtTest import QSignalSpy, QTest
 from PySide6.QtWidgets import QApplication
@@ -1877,6 +1877,10 @@ def test_playlist_tree_forwards_nested_hover_to_the_native_cursor() -> None:
     )
     root = widget.rootObject()
     assert root is not None
+    # This test emits hover signals explicitly; a pointer left by an earlier
+    # window must not emit a competing native hover during processEvents().
+    QCursor.setPos(widget.mapToGlobal(QPoint(widget.width() + 20, widget.height() + 20)))
+    QTest.qWait(10)
     controller.pointerEntered.connect(lambda: begin_qml_pointer_cursor(widget))
     controller.pointerCursorEntered.connect(
         lambda _source, shape: set_qml_pointer_cursor(widget, shape)

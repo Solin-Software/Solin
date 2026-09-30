@@ -5598,6 +5598,14 @@ A organização atual e os arquivos serão preservados. As alterações pendente
         <translation>Câmera virtual</translation>
     </message>
     <message>
+        <source>Virtual camera enabled</source>
+        <translation>Câmera virtual habilitada</translation>
+    </message>
+    <message>
+        <source>Virtual camera disabled</source>
+        <translation>Câmera virtual desabilitada</translation>
+    </message>
+    <message>
         <location line="-250"/>
         <location line="+617"/>
         <source>Auto-switch media</source>
@@ -6401,6 +6409,14 @@ A organização atual e os arquivos serão preservados. As alterações pendente
         <location line="+5"/>
         <source>New network camera…</source>
         <translation>Nova câmera IP…</translation>
+    </message>
+    <message>
+        <source>Media</source>
+        <translation>Mídia</translation>
+    </message>
+    <message>
+        <source>Year text</source>
+        <translation>Texto do ano</translation>
     </message>
     <message>
         <location line="+4"/>

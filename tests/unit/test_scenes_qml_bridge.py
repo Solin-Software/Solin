@@ -40,7 +40,12 @@ from solin.core.scenes.model import (
     TransitionKind,
     new_identity,
 )
-from solin.core.scenes.presets import CAMERA_SCENE_ID, CONTENT_SCENE_ID, SceneSeedNames
+from solin.core.scenes.presets import (
+    CAMERA_SCENE_ID,
+    CONTENT_SCENE_ID,
+    DEFAULT_SCENE_ID,
+    SceneSeedNames,
+)
 from solin.core.scenes.recording import (
     AudioDevice,
     AudioDeviceDirection,
@@ -302,6 +307,9 @@ def test_recording_bridge_projects_one_controller_and_applies_live_settings(
         recording_directory_opener=lambda path: opened.append(path) is None,
     )
 
+    # Recording captures the virtual camera, so the control follows that output.
+    assert not bridge.recordingAvailable
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
     assert bridge.recordingAvailable
     assert bridge.recordingStatus == "idle"
     assert not bridge.recordingCanToggle
@@ -394,6 +402,7 @@ def test_recording_bridge_projects_one_controller_and_applies_live_settings(
 
 def test_camera_source_health_surfaces_an_actionable_layer_warning(tmp_path: Path) -> None:
     workspace, controller, bridge, _preview_store = _bridge(tmp_path)
+    bridge.selectScene(CAMERA_SCENE_ID)  # the camera layer lives in the Camera scene
     camera_id = workspace.configured_cameras[0].id
     controller._consume_engine_event(  # noqa: SLF001 - exercise the queued event boundary
         SourceHealthEvent(
@@ -428,7 +437,10 @@ def test_camera_source_health_surfaces_an_actionable_layer_warning(tmp_path: Pat
 
 def test_bridge_persists_shared_ptz_presets_and_scene_actions(tmp_path: Path) -> None:
     workspace, controller, bridge, _preview_store = _bridge(tmp_path)
-    camera_id, layer_id = _enable_default_camera_ptz(workspace, controller)
+    camera_id, _ = _enable_default_camera_ptz(workspace, controller)
+    # The default camera layer lives in the Camera scene (scene 0 is now Default).
+    bridge.selectScene(CAMERA_SCENE_ID)
+    layer_id = controller.document.scene(CAMERA_SCENE_ID).layers[0].id
     bridge.selectLayer(layer_id)
 
     assert bridge.savePtzPreset(
@@ -509,13 +521,49 @@ def test_bridge_edits_a_scene_and_tracks_desired_separately_from_applied(
 
     scene = controller.document.scene(bridge.selectedSceneId)
     virtual = controller.runtime.state.output(BusId.VIRTUAL_CAMERA)
-    assert bridge.scenesModel.rowCount() == 3
+    # First-run ships Default + Camera + Content; the new "Custom" scene makes four.
+    assert bridge.scenesModel.rowCount() == 4
     assert len(scene.layers) == 1
     assert virtual.mode is OutputMode.AUTO
     assert virtual.manual_scene_id == scene.id
     assert bridge.selectedSceneDesired
     assert not bridge.selectedSceneLive
     assert bridge.engineStatus == "Scene engine unavailable"
+    bridge.close()
+    controller.close()
+
+
+def test_bridge_add_year_text_adds_a_full_size_layer_and_reuses_one_source(
+    tmp_path: Path,
+) -> None:
+    from solin.core.scenes.model import SourceKind
+
+    _workspace, controller, bridge, _preview_store = _bridge(tmp_path)
+    bridge.createScene("Talk")
+    talk_id = bridge.selectedSceneId
+
+    bridge.addYearText()
+
+    scene = controller.document.scene(talk_id)
+    assert len(scene.layers) == 1
+    layer = scene.layers[0]
+    source = controller.document.source(layer.source_id)
+    assert source.kind is SourceKind.YEARTEXT
+    # full-size by default
+    assert (layer.rect.x, layer.rect.y, layer.rect.width, layer.rect.height) == (
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+    )
+
+    # Adding the year text to another scene reuses the single global source.
+    bridge.createScene("Consideration")
+    bridge.addYearText()
+    yeartext_sources = [
+        s for s in controller.document.sources if s.kind is SourceKind.YEARTEXT
+    ]
+    assert len(yeartext_sources) == 1
     bridge.close()
     controller.close()
 
@@ -663,6 +711,7 @@ def test_bridge_cancels_and_invalidates_framing_without_document_mutation(
     tmp_path: Path,
 ) -> None:
     _workspace, controller, bridge, _preview_store = _bridge(tmp_path)
+    bridge.selectScene(CAMERA_SCENE_ID)  # a framable camera layer (not the year text)
     layer_id = controller.document.scene(bridge.selectedSceneId).layers[0].id
     bridge.selectLayer(layer_id)
     revision = controller.document.revision
@@ -827,19 +876,21 @@ def test_bridge_delete_requires_a_replacement_only_for_program_scene(
         notifications=notifications,
     )
     bridge.setVirtualCameraEnabled(True)
-    bridge.selectScene(CAMERA_SCENE_ID)
+    # The Default scene is the program/default role holder now, so deleting it is
+    # what requires a replacement.
+    bridge.selectScene(DEFAULT_SCENE_ID)
     assert bridge.selectedSceneRequiresReplacement
     assert not bridge.selectedSceneLive
 
-    bridge.deleteScene(CAMERA_SCENE_ID, "")
-    assert controller.document.scene(CAMERA_SCENE_ID).id == CAMERA_SCENE_ID
+    bridge.deleteScene(DEFAULT_SCENE_ID, "")
+    assert controller.document.scene(DEFAULT_SCENE_ID).id == DEFAULT_SCENE_ID
     assert notifications.errors[-1][1]["dedupe_key"] == (
         "scenes-live-delete-replacement-required"
     )
 
-    bridge.deleteScene(CAMERA_SCENE_ID, CONTENT_SCENE_ID)
+    bridge.deleteScene(DEFAULT_SCENE_ID, CONTENT_SCENE_ID)
 
-    assert all(scene.id != CAMERA_SCENE_ID for scene in controller.document.scenes)
+    assert all(scene.id != DEFAULT_SCENE_ID for scene in controller.document.scenes)
     assert {
         output.manual_scene_id for output in controller.runtime.state.outputs
     } == {CONTENT_SCENE_ID}
@@ -863,7 +914,9 @@ def test_bridge_deletes_offline_scene_without_confusing_editor_preview(
     controller.close()
 
 
-def test_bridge_invalidates_preview_on_scene_and_profile_changes(tmp_path: Path) -> None:
+def test_bridge_keeps_preview_across_scene_switch_but_invalidates_on_profile_change(
+    tmp_path: Path,
+) -> None:
     workspace, controller, bridge, preview_store = _bridge(tmp_path)
     bridge.setActive(True)
     scene_id = bridge.selectedSceneId
@@ -876,10 +929,18 @@ def test_bridge_invalidates_preview_on_scene_and_profile_changes(tmp_path: Path)
     other_scene_id = next(
         scene.id for scene in controller.document.scenes if scene.id != scene_id
     )
+    # Switching scenes must NOT blank the canvas (no blink): the last frame is
+    # retained until the newly selected scene renders its first frame.
     bridge.selectScene(other_scene_id)
-    assert not bridge.previewAvailable
+    assert bridge.previewAvailable
+    # A frame from the previously selected scene is ignored — only the newly
+    # selected scene updates the canvas.
     controller.preview_frame_changed.emit(scene_id, frame)
-    assert not bridge.previewAvailable
+    assert bridge.previewAvailable
+    other_frame = QImage(64, 36, QImage.Format.Format_ARGB32)
+    other_frame.fill(Qt.GlobalColor.green)
+    controller.preview_frame_changed.emit(other_scene_id, other_frame)
+    assert bridge.previewAvailable
 
     bridge.selectScene(scene_id)
     controller.preview_frame_changed.emit(scene_id, frame)
@@ -1346,3 +1407,178 @@ def test_bridge_disconnects_runtime_callbacks_before_qml_teardown(tmp_path: Path
 
     assert changed.count() == 0
     controller.close()
+
+
+def test_a_camera_used_by_another_scene_can_still_be_added(tmp_path: Path) -> None:
+    """One camera, many scenes: a capture device can only be opened once.
+
+    Hiding cameras that are already on air elsewhere left no way to build a second
+    scene around the same camera — creating a duplicate source for the device just
+    fails to open it.
+    """
+    workspace, controller, bridge, _preview_store = _bridge(tmp_path)
+    camera_id = workspace.configured_cameras[0].id
+
+    bridge.createScene("Stage")
+    bridge.addConfiguredCamera(camera_id)
+    stage_id = bridge.selectedSceneId
+
+    bridge.createScene("Wide")
+    offered = {camera["id"] for camera in bridge.configuredCameras}
+    assert camera_id in offered, "a camera live in another scene must stay offerable"
+
+    bridge.addConfiguredCamera(camera_id)
+
+    wide = controller.document.scene(bridge.selectedSceneId)
+    stage = controller.document.scene(stage_id)
+    assert [layer.source_id for layer in wide.layers] == [camera_id]
+    # The other scene keeps it too — one source shown by both, not a copy.
+    assert [layer.source_id for layer in stage.layers] == [camera_id]
+    assert sum(1 for s in controller.document.sources if s.id == camera_id) == 1
+    bridge.close()
+    controller.close()
+
+
+def test_a_camera_already_in_this_scene_is_not_offered_again(tmp_path: Path) -> None:
+    workspace, controller, bridge, _preview_store = _bridge(tmp_path)
+    camera_id = workspace.configured_cameras[0].id
+
+    bridge.createScene("Stage")
+    assert camera_id in {camera["id"] for camera in bridge.configuredCameras}
+
+    bridge.addConfiguredCamera(camera_id)
+
+    assert camera_id not in {camera["id"] for camera in bridge.configuredCameras}
+    bridge.close()
+    controller.close()
+
+
+def test_a_new_scene_becomes_the_one_being_edited(tmp_path: Path) -> None:
+    """Creating a scene must move the canvas to it, not just the list highlight.
+
+    The preview only renders the scene it was last pointed at, so setting the
+    selection alone left the new scene looking selected while the canvas still
+    showed the previous one.
+    """
+    _workspace, controller, bridge, _preview = _bridge(tmp_path)
+    bridge.setActive(True)
+    starting = bridge.selectedSceneId
+
+    bridge.createScene("Fresh")
+
+    created = controller.document.scenes[-1]
+    assert created.name == "Fresh"
+    assert bridge.selectedSceneId == created.id
+    assert controller.preview_scene_id == created.id != starting
+    bridge.close()
+    controller.close()
+
+
+def test_duplicating_a_scene_moves_the_canvas_to_the_copy(tmp_path: Path) -> None:
+    _workspace, controller, bridge, _preview = _bridge(tmp_path)
+    bridge.setActive(True)
+
+    bridge.duplicateScene(bridge.selectedSceneId)
+
+    copy = controller.document.scenes[-1]
+    assert bridge.selectedSceneId == copy.id
+    assert controller.preview_scene_id == copy.id
+    bridge.close()
+    controller.close()
+
+
+def test_deleting_a_scene_moves_the_canvas_to_what_replaces_it(tmp_path: Path) -> None:
+    _workspace, controller, bridge, _preview = _bridge(tmp_path)
+    bridge.setActive(True)
+    bridge.createScene("Doomed")
+    doomed = bridge.selectedSceneId
+
+    bridge.deleteScene(doomed, "")
+
+    assert bridge.selectedSceneId != doomed
+    assert controller.preview_scene_id == bridge.selectedSceneId
+    bridge.close()
+    controller.close()
+
+
+def test_the_canvas_is_not_pointed_anywhere_while_the_editor_is_inactive(
+    tmp_path: Path,
+) -> None:
+    """An off-screen editor must not claim the preview by creating a scene."""
+    _workspace, controller, bridge, _preview = _bridge(tmp_path)
+
+    bridge.createScene("Offscreen")
+
+    assert controller.preview_scene_id is None
+    bridge.close()
+    controller.close()
+
+
+def test_an_rtsp_address_without_credentials_is_not_flagged(tmp_path: Path) -> None:
+    """The vendor in-path login form must still save; only userinfo is rejected."""
+    _workspace, controller, bridge, _preview = _bridge(tmp_path)
+
+    saved = bridge.saveCamera(
+        {
+            "kind": "rtsp_camera",
+            "name": "externa",
+            "uri": (
+                "rtsp://192.168.0.100:554/user=admin_password=FrwI7MsQ"
+                "_channel=0_stream=0&protocol=unicast.sdp?real_stream"
+            ),
+        },
+        False,
+    )
+
+    assert saved is True
+    bridge.close()
+    controller.close()
+
+
+def test_a_pasted_address_with_a_login_is_split_not_rejected(tmp_path: Path) -> None:
+    """Operators paste vendor URLs carrying a login; refusing them helps nobody.
+
+    The address is persisted and printed by libobs, so the credential cannot stay
+    in it — but it can be lifted out and stored, which turns the paste into a valid
+    camera instead of an error.
+    """
+    credentials = _Credentials()
+    _workspace, controller, bridge, _preview = _bridge(
+        tmp_path, credentials=credentials
+    )
+
+    saved = bridge.saveCamera(
+        {
+            "kind": "rtsp_camera",
+            "name": "externa",
+            "uri": "rtsp://admin:hunter2@192.168.0.100:554/stream",
+        },
+        False,
+    )
+
+    assert saved is True
+    camera = controller.workspace.configured_cameras[-1]
+    assert camera.configuration.uri == "rtsp://192.168.0.100:554/stream"
+    assert "hunter2" not in camera.configuration.uri
+    assert camera.credential_ref, "the login must be stored, not discarded"
+
+
+def test_the_stored_address_never_keeps_the_login(tmp_path: Path) -> None:
+    credentials = _Credentials()
+    _workspace, controller, bridge, _preview = _bridge(
+        tmp_path, credentials=credentials
+    )
+
+    bridge.saveCamera(
+        {
+            "kind": "rtsp_camera",
+            "name": "externa",
+            "uri": "rtsp://admin:p%40ss@10.0.0.5:554/s",
+        },
+        False,
+    )
+
+    camera = controller.workspace.configured_cameras[-1]
+    assert "admin" not in camera.configuration.uri
+    assert "p%40ss" not in camera.configuration.uri
+    assert repr(camera.configuration) .count("pass") == 0

@@ -17,7 +17,6 @@ from solin.projection.window import (
 SHARED_METHODS = [
     "set_yearly_text",
     "begin_video",
-    "update_frame",
     "show_image_from_url_data",
     "show_image_from_pixmap",
     "show_image_from_qimage",

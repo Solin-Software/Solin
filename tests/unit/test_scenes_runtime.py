@@ -248,8 +248,61 @@ def test_runtime_schema_one_migrates_divergent_destinations_to_one_auto_program(
         SceneRuntimeState.from_record(state),
     ).state
 
-    assert restored.schema_version == 2
+    assert restored.schema_version == 3
     assert all(output.mode is OutputMode.AUTO for output in restored.outputs)
     assert {
         output.manual_scene_id for output in restored.outputs
     } == {CAMERA_SCENE_ID}
+
+
+def test_selecting_a_scene_restores_automation_on_a_pinned_output() -> None:
+    """A card click means "rest on this scene"; media must still take the output.
+
+    Leaving the mode alone made select_scene a no-op on an already-pinned output:
+    resolve_scene short-circuits on MANUAL, so the automation map was never read
+    and playing media never reached the screen.
+    """
+    documents, runtime = _services()
+    runtime.take_program_scene(CONTENT_CAMERA_PIP_SCENE_ID)  # pins every output
+    assert all(output.mode is OutputMode.MANUAL for output in runtime.state.outputs)
+
+    runtime.select_scene(BusId.VIRTUAL_CAMERA, CAMERA_SCENE_ID)
+
+    program = runtime.state.output(BusId.VIRTUAL_CAMERA)
+    assert program.mode is OutputMode.AUTO
+    assert program.manual_scene_id == CAMERA_SCENE_ID
+    # Idle rests on the chosen scene…
+    assert runtime.resolve_scene(BusId.VIRTUAL_CAMERA, ContentCategory.IDLE) == CAMERA_SCENE_ID
+    # …and playing media still takes it over.
+    assert runtime.resolve_scene(BusId.VIRTUAL_CAMERA, ContentCategory.VIDEO) == CONTENT_SCENE_ID
+    # The other output keeps its own pin: selecting is per-output.
+    assert runtime.state.output(BusId.MEDIA_WINDOWS).mode is OutputMode.MANUAL
+
+
+def test_taking_a_scene_still_pins_the_output_against_automation() -> None:
+    documents, runtime = _services()
+
+    runtime.take_scene(BusId.VIRTUAL_CAMERA, CAMERA_SCENE_ID)
+
+    assert runtime.state.output(BusId.VIRTUAL_CAMERA).mode is OutputMode.MANUAL
+    assert runtime.resolve_scene(BusId.VIRTUAL_CAMERA, ContentCategory.VIDEO) == CAMERA_SCENE_ID
+
+
+def test_turning_off_auto_switch_keeps_each_output_on_its_own_scene() -> None:
+    """Disabling automation pins the outputs — each to what it was showing.
+
+    Pinning them all to Program's scene threw away the projection output's
+    independent selection, which is the whole point of having two outputs.
+    """
+    documents, runtime = _services()
+    runtime.select_scene(BusId.MEDIA_WINDOWS, CAMERA_SCENE_ID)
+    runtime.select_scene(BusId.VIRTUAL_CAMERA, CONTENT_CAMERA_PIP_SCENE_ID)
+
+    runtime.set_program_automatic(False, current_scene_id=CONTENT_CAMERA_PIP_SCENE_ID)
+
+    assert all(output.mode is OutputMode.MANUAL for output in runtime.state.outputs)
+    assert runtime.state.output(BusId.MEDIA_WINDOWS).manual_scene_id == CAMERA_SCENE_ID
+    assert (
+        runtime.state.output(BusId.VIRTUAL_CAMERA).manual_scene_id
+        == CONTENT_CAMERA_PIP_SCENE_ID
+    )

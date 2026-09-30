@@ -31,6 +31,7 @@ from solin.core.scenes.engine import (
     scene_engine_graph_signature,
 )
 from solin.core.scenes.model import (
+    DELIVERY_BUSES,
     AUTOMATIC_MEDIA_CATEGORIES,
     BusId,
     ContentCategory,
@@ -73,7 +74,7 @@ from solin.core.scenes.workspace import (
 
 
 _START_DEADLINE_MS = DEFAULT_ENGINE_STARTUP_DEADLINE_MS
-_HYDRATE_DEADLINE_MS = 3000
+_HYDRATE_DEADLINE_MS = 12000
 _PREPARE_DEADLINE_MS = 1500
 _TAKE_DEADLINE_MS = 1000
 _PREVIEW_GEOMETRY_DEADLINE_MS = 500
@@ -193,6 +194,7 @@ class SceneRuntimeController(QObject):
     source_health_changed = Signal(str)
     preview_scene_changed = Signal(object)
     preview_frame_changed = Signal(str, object)
+    content_playing_changed = Signal(bool)
     preview_egress_changed = Signal(object)
     scene_profiles_changed = Signal(object)
     runtime_changed = Signal(object)
@@ -240,6 +242,11 @@ class SceneRuntimeController(QObject):
         self._program_recording_required = False
         self._preview_scene_id: str | None = None
         self._window_targets: tuple[OutputWindowTarget, ...] = ()
+        # A standalone MEDIA_WINDOWS target for the editor's direct-GPU preview,
+        # merged with the projection targets on dispatch. Independent of the
+        # projection native_presentation gate so the editor gets a GPU preview
+        # even where projection stays on the app-side path.
+        self._editor_preview_target: OutputWindowTarget | None = None
         self._local_cameras = _unavailable_local_cameras("engine_unavailable")
         self._source_health: dict[str, SourceHealthEvent] = {}
         self._local_camera_request_id = ""
@@ -247,6 +254,7 @@ class SceneRuntimeController(QObject):
         self._suspended_media_session_id: int | None = None
         self._automatic_media_scene_selection: _AutomaticMediaSceneSelection | None = None
         self._last_projection_session_id = self._projection_session_id()
+        self._last_content_playing = self.content_is_playing
         self._desired_scenes = self._resolve_desired_scenes()
         self._applied_scenes: tuple[tuple[BusId, str], ...] = ()
         self._pending: dict[BusId, _PendingTake] = {}
@@ -356,6 +364,42 @@ class SceneRuntimeController(QObject):
             ),
             None,
         )
+
+    @property
+    def program_output_enabled(self) -> bool:
+        """Whether the virtual camera — the output recording captures — is on."""
+        return self._runtime.state.output(BusId.VIRTUAL_CAMERA).enabled
+
+    @property
+    def content_is_playing(self) -> bool:
+        """Whether the content source carries anything, or is blank because idle.
+
+        Idle publishes a transparent frame, so a scene built on the content source
+        shows nothing — except when an idle video/image is configured, which keeps
+        the channel fed and still counts as content on screen.
+        """
+        if (
+            content_category_for_projection(self._projection.state)
+            in AUTOMATIC_MEDIA_CATEGORIES
+        ):
+            return True
+        return bool(getattr(self._projection, "idle_media_path", ""))
+
+    def select_scene(self, bus_id: BusId, scene_id: str) -> SceneRuntimeState:
+        """Set one output's base scene, keeping automation live for it.
+
+        Media playing still takes the output over; the chosen scene is what it
+        returns to. Pinning an output against automation is :meth:`take_scene`.
+        """
+        state = self._runtime.select_scene(bus_id, scene_id)
+        self._reconcile_desired(prepare=True)
+        return state
+
+    def take_scene(self, bus_id: BusId, scene_id: str) -> SceneRuntimeState:
+        """Route one output to a scene; the other outputs keep their own."""
+        state = self._runtime.take_scene(bus_id, scene_id)
+        self._reconcile_desired(prepare=True)
+        return state
 
     def take_program_scene(self, scene_id: str) -> SceneRuntimeState:
         self._documents.document.scene(scene_id)
@@ -550,16 +594,15 @@ class SceneRuntimeController(QObject):
         category = content_category_for_projection(self._projection.state)
         program_scene = activation.runtime.resolve_scene(BusId.VIRTUAL_CAMERA, category)
         active_scenes = (
-            (BusId.MEDIA_WINDOWS, self._profile_preview_scene_id or program_scene),
+            (BusId.MEDIA_WINDOWS, program_scene),
             (BusId.VIRTUAL_CAMERA, program_scene),
+            (BusId.EDITOR, self._profile_preview_scene_id or program_scene),
         )
-        output_enabled = tuple(
-            (
-                bus_id,
-                activation.runtime.state.output(bus_id).enabled,
-            )
-            for bus_id in BusId
-        )
+        activated = {
+            bus_id: activation.runtime.state.output(bus_id).enabled
+            for bus_id in DELIVERY_BUSES
+        }
+        output_enabled = tuple((bus_id, activated.get(bus_id, False)) for bus_id in BusId)
         preview_required = self._profile_preview_scene_id is not None
         program_required = (
             activation.runtime.state.output(BusId.VIRTUAL_CAMERA).enabled
@@ -574,14 +617,15 @@ class SceneRuntimeController(QObject):
             document=activation.documents.document,
             active_scenes=active_scenes,
             render_enabled=(
-                (BusId.MEDIA_WINDOWS, preview_required),
+                (BusId.MEDIA_WINDOWS, activated.get(BusId.MEDIA_WINDOWS, False)),
                 (BusId.VIRTUAL_CAMERA, program_required),
+                (BusId.EDITOR, preview_required),
             ),
             output_enabled=output_enabled,
             content_ingress=self._content_ingress,
             preview_egress=self._preview_egress,
             program_egress=self._program_egress,
-            window_targets=self._window_targets,
+            window_targets=self._combined_window_targets(),
         )
         context = _PendingProfileActivation(
             request_id=request_id,
@@ -649,7 +693,7 @@ class SceneRuntimeController(QObject):
 
     @Slot(object)
     def publish_preview_frame(self, image: object) -> None:
-        scene_id = self.applied_scene(BusId.MEDIA_WINDOWS)
+        scene_id = self.applied_scene(BusId.EDITOR)
         if scene_id is not None:
             self.preview_frame_changed.emit(scene_id, image)
 
@@ -665,6 +709,15 @@ class SceneRuntimeController(QObject):
         )
         self._track_future(future, "start", None)
         return future
+
+    @Slot()
+    def reload_yeartext(self) -> None:
+        """Notify the engine to re-read the year-text source image in place.
+
+        Called after the app re-renders the year-text PNG so a mid-session change
+        shows without a full re-hydrate. A no-op when no engine hosts the source."""
+        if self._engine is not None:
+            self._engine.reload_yeartext()
 
     @Slot(object)
     def set_content_ingress(self, descriptor: FrameChannelDescriptor | None) -> None:
@@ -695,6 +748,39 @@ class SceneRuntimeController(QObject):
                 self._hydrate_dirty = True
                 return
         self._hydrate_if_ready()
+
+    def set_thumbnail_egress(
+        self,
+        descriptor: FrameChannelDescriptor | None,
+        scene_ids: tuple[str, ...],
+        cell_width: int,
+        cell_height: int,
+    ) -> bool:
+        """Point the engine at the scene-card thumbnail atlas.
+
+        Returns False when there is no engine to tell yet, so the caller knows to
+        try again rather than assuming the engine heard it.
+
+        Sent as its own command rather than through the snapshot: a hydrate
+        rebuilds the whole scene graph (and reopens cameras), which is far too
+        much to pay for opening a panel.
+        """
+        if self._engine is None or not self._engine_ready:
+            return False
+        self._track_future(
+            self._engine.set_thumbnail_egress(
+                descriptor,
+                tuple(scene_ids),
+                int(cell_width),
+                int(cell_height),
+                request_id=self._request_id_factory(),
+                sequence=self._next_sequence(),
+                deadline_ms=_TAKE_DEADLINE_MS,
+            ),
+            "thumbnail_egress",
+            None,
+        )
+        return True
 
     def set_window_targets(
         self,
@@ -1046,7 +1132,15 @@ class SceneRuntimeController(QObject):
                 and runtime.manual_scene_id != default_scene_id
             ):
                 self._runtime.select_program_scene(default_scene_id)
+        self._notify_content_playing()
         self._reconcile_desired(prepare=True)
+
+    def _notify_content_playing(self) -> None:
+        playing = self.content_is_playing
+        if playing == self._last_content_playing:
+            return
+        self._last_content_playing = playing
+        self.content_playing_changed.emit(playing)
 
     def _on_engine_event(self, event: SceneEngineEvent) -> None:
         self._async_engine_event.emit(event)
@@ -1122,7 +1216,12 @@ class SceneRuntimeController(QObject):
         *,
         skip: tuple[BusId, str] | None = None,
     ) -> None:
-        """Serialize scene transactions with the live Program bus first."""
+        """Serialize scene transactions, live Program first, editor last.
+
+        Order is priority: the program feeds the virtual camera and the recording,
+        the projection feeds the room, and the editor canvas is the one nobody is
+        watching but the operator.
+        """
 
         if (
             not self._engine_ready
@@ -1131,7 +1230,7 @@ class SceneRuntimeController(QObject):
             or self._pending
         ):
             return
-        for bus_id in (BusId.VIRTUAL_CAMERA, BusId.MEDIA_WINDOWS):
+        for bus_id in (BusId.VIRTUAL_CAMERA, BusId.MEDIA_WINDOWS, BusId.EDITOR):
             desired_scene_id = self.desired_scene(bus_id)
             if skip == (bus_id, desired_scene_id):
                 continue
@@ -1228,7 +1327,7 @@ class SceneRuntimeController(QObject):
             content_ingress=self._content_ingress,
             preview_egress=self._preview_egress,
             program_egress=self._program_egress,
-            window_targets=self._window_targets,
+            window_targets=self._combined_window_targets(),
         )
         context = (request_id, snapshot)
         self._hydrate_in_flight = context
@@ -1281,6 +1380,24 @@ class SceneRuntimeController(QObject):
         )
         self._track_future(future, "preview_geometry", context)
 
+    def _combined_window_targets(self) -> tuple[OutputWindowTarget, ...]:
+        """Projection targets plus the editor preview target (if any)."""
+        if self._editor_preview_target is None:
+            return self._window_targets
+        return self._window_targets + (self._editor_preview_target,)
+
+    def set_editor_preview_target(self, target: OutputWindowTarget | None) -> None:
+        """Install (or clear) the editor's direct-GPU preview window target.
+
+        Dispatched together with the projection targets; safe to call before the
+        engine is ready (it's picked up on the next dispatch)."""
+        if target is not None and not isinstance(target, OutputWindowTarget):
+            raise TypeError("editor preview target must be an OutputWindowTarget or None")
+        if target == self._editor_preview_target:
+            return
+        self._editor_preview_target = target
+        self._dispatch_window_targets()
+
     def _dispatch_window_targets(self) -> None:
         if self._engine is None or not self._engine_ready:
             return
@@ -1288,7 +1405,7 @@ class SceneRuntimeController(QObject):
             request_id=self._request_id_factory(),
             sequence=self._next_sequence(),
             document_revision=self._engine_document_revision,
-            targets=self._window_targets,
+            targets=self._combined_window_targets(),
         )
         future = self._engine.set_window_targets(
             context.targets,
@@ -1325,9 +1442,11 @@ class SceneRuntimeController(QObject):
             document_revision=self._engine_document_revision,
         )
         self._pending[bus_id] = pending
+        # The editor canvas wants an instant cut to whatever is selected; the
+        # delivery outputs animate with the scene's own transition.
         transition = (
             TransitionSpec(TransitionKind.CUT, 0)
-            if bus_id is BusId.MEDIA_WINDOWS
+            if bus_id is BusId.EDITOR
             else self._documents.effective_transition(scene_id)
         )
         future = self._engine.prepare_scene(
@@ -1352,7 +1471,9 @@ class SceneRuntimeController(QObject):
         expected: _PendingTake,
     ) -> None:
         scene = self._documents.document.scene(preparation.scene_id)
-        if preparation.bus_id is BusId.MEDIA_WINDOWS or not scene.entry_actions:
+        # Entry actions physically move PTZ heads, so only the program take drives
+        # them — an editor selection or a projection take must never swing a camera.
+        if preparation.bus_id is not BusId.VIRTUAL_CAMERA or not scene.entry_actions:
             self._take_prepared(preparation)
             return
         document = self._documents.document
@@ -1502,6 +1623,8 @@ class SceneRuntimeController(QObject):
                 self._handle_output_ack("output", context, result)
             elif operation == "render":
                 self._handle_output_ack("render", context, result)
+            elif operation == "thumbnail_egress":
+                pass  # thumbnails are best-effort; a failure must not disturb a take
             elif operation == "window_targets":
                 self._handle_window_targets_ack(context, result)
             elif operation == "local_cameras":
@@ -2022,10 +2145,13 @@ class SceneRuntimeController(QObject):
             BusId.VIRTUAL_CAMERA,
             category,
         )
-        media_scene = self._preview_scene_id or program_scene
+        # Each delivery output resolves independently; the editor previews
+        # whatever is selected, falling back to the program when nothing is.
+        projection_scene = self._runtime.resolve_scene(BusId.MEDIA_WINDOWS, category)
         return (
-            (BusId.MEDIA_WINDOWS, media_scene),
+            (BusId.MEDIA_WINDOWS, projection_scene),
             (BusId.VIRTUAL_CAMERA, program_scene),
+            (BusId.EDITOR, self._preview_scene_id or program_scene),
         )
 
     def _projection_session_id(self) -> int:
@@ -2087,9 +2213,13 @@ class SceneRuntimeController(QObject):
             raise
 
     def _destination_enabled(self) -> tuple[tuple[BusId, bool], ...]:
-        return tuple(
-            (bus_id, self._runtime.state.output(bus_id).enabled) for bus_id in BusId
-        )
+        enabled = {
+            bus_id: self._runtime.state.output(bus_id).enabled
+            for bus_id in DELIVERY_BUSES
+        }
+        # The editor is not a delivery route: it has no runtime row and is never
+        # "enabled" as an output.
+        return tuple((bus_id, enabled.get(bus_id, False)) for bus_id in BusId)
 
     def _render_enabled(self) -> tuple[tuple[BusId, bool], ...]:
         destination = self._runtime.state
@@ -2103,9 +2233,14 @@ class SceneRuntimeController(QObject):
                 target.bus_id is BusId.VIRTUAL_CAMERA for target in self._window_targets
             )
         )
+        projection_required = destination.output(BusId.MEDIA_WINDOWS).enabled or any(
+            target.visible and target.bus_id is BusId.MEDIA_WINDOWS
+            for target in self._window_targets
+        )
         return (
-            (BusId.MEDIA_WINDOWS, preview_required),
+            (BusId.MEDIA_WINDOWS, projection_required),
             (BusId.VIRTUAL_CAMERA, program_required),
+            (BusId.EDITOR, preview_required),
         )
 
     def _content_ingress_required(self) -> bool:

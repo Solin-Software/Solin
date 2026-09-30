@@ -1,7 +1,9 @@
 # Native media performance measurements
 
-Use `scripts/benchmark_native_media_route.py` to measure the current QtMultimedia-to-native
-Program route without changing its production pipeline. The harness generates a reproducible
+This guide records measurements for the former QtMultimedia-to-native Program
+route. Its harness, `scripts/benchmark_native_media_route.py`, targets that
+removed playback adapter and cannot qualify the current libobs playback path.
+The historical harness generates a reproducible
 video fixture, records the exact scenario, samples explicit process IDs, and writes raw
 one-second buckets plus P50/P95/P99 summaries.
 

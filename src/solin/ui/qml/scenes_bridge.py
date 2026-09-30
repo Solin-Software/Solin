@@ -6,6 +6,7 @@ from collections.abc import Callable
 from concurrent.futures import Future
 from dataclasses import dataclass, replace
 import logging
+from urllib.parse import unquote, urlsplit, urlunsplit
 import math
 from pathlib import Path
 import time
@@ -64,6 +65,7 @@ from solin.core.scenes.model import (
     ViscaIpPtzBinding,
     ViscaSerialPtzBinding,
     ViscaTransport,
+    YeartextSourceConfig,
     new_identity,
 )
 from solin.core.scenes.recording import (
@@ -96,6 +98,7 @@ _SOURCE_COLORS = {
     SourceKind.IMAGE: "#8B5CF6",
     SourceKind.COLOR: "#64748B",
     SourceKind.SCENE_REFERENCE: "#F59E0B",
+    SourceKind.YEARTEXT: "#EAB308",
 }
 
 
@@ -135,12 +138,17 @@ class ScenesBridge(QObject):
     previewChanged = Signal()
     documentGenerationChanged = Signal()
     framingChanged = Signal()
+    contentIdleChanged = Signal()
     pointerCursorEntered = Signal(str, int)
     pointerCursorChanged = Signal(str, int)
     pointerCursorExited = Signal(str)
     pointerOverrideStarted = Signal(str, int)
     pointerOverrideEnded = Signal(str)
     ptzResult = Signal(str, bool, str)
+    # (x, y, width, height) of the preview canvas frame in the QQuickWidget's
+    # logical coordinates — reported by QML so a native GPU preview surface can be
+    # pinned exactly over it. (0,0,0,0) means "no canvas" (hide the surface).
+    canvasRectChanged = Signal(float, float, float, float)
 
     def __init__(
         self,
@@ -194,6 +202,7 @@ class ScenesBridge(QObject):
             (controller.preview_egress_changed, self._runtime_changed),
             (controller.local_cameras_changed, self._runtime_changed),
             (controller.source_health_changed, self._runtime_changed),
+            (controller.content_playing_changed, self._on_content_playing_changed),
         )
         for signal, handler in self._controller_connections:
             signal.connect(handler)
@@ -262,6 +271,16 @@ class ScenesBridge(QObject):
     @Property(bool, notify=previewChanged)
     def previewAvailable(self) -> bool:
         return self._preview_available
+
+    @Property(bool, notify=contentIdleChanged)
+    def contentIdle(self) -> bool:
+        """Whether the content source has nothing to show right now.
+
+        Idle publishes a transparent frame, so a content layer draws nothing. The
+        canvas marks it with a media glyph rather than leaving an empty rectangle
+        the operator cannot tell from a broken source.
+        """
+        return not self._controller.content_is_playing
 
     @Property(int, notify=documentGenerationChanged)
     def documentGeneration(self) -> int:
@@ -393,7 +412,9 @@ class ScenesBridge(QObject):
 
     @Property(bool, notify=changed)
     def recordingAvailable(self) -> bool:
-        return self._recording is not None
+        # Recording captures Program — the virtual camera's mix. With that output
+        # off there is nothing to capture, so the control goes away with it.
+        return self._recording is not None and self._controller.program_output_enabled
 
     @Property(str, notify=changed)
     def recordingStatus(self) -> str:
@@ -548,7 +569,23 @@ class ScenesBridge(QObject):
 
     @Property("QVariantList", notify=changed)  # type: ignore[arg-type]
     def configuredCameras(self) -> list[dict[str, object]]:
-        return [self._camera_choice(camera) for camera in self._controller.workspace.configured_cameras]
+        """Cameras the operator can drop into the selected scene.
+
+        A camera already used by another scene stays on the list: one source shown
+        by several scenes is exactly the point, and a capture device can only be
+        opened once, so making the operator create a second source for the same
+        device just fails to open. Only cameras already in *this* scene are hidden,
+        where a second layer would be a duplicate of itself.
+        """
+        try:
+            in_this_scene = {layer.source_id for layer in self._selected_scene().layers}
+        except Exception:  # noqa: BLE001 - a stale selection must not empty the menu
+            in_this_scene = set()
+        return [
+            self._camera_choice(camera)
+            for camera in self._controller.workspace.configured_cameras
+            if camera.id not in in_this_scene
+        ]
 
     @Property("QVariantList", notify=changed)  # type: ignore[arg-type]
     def referencedScenes(self) -> list[dict[str, object]]:
@@ -665,6 +702,12 @@ class ScenesBridge(QObject):
             self._clear_framing_session()
             self.stopAllPtz()
 
+    @Slot(float, float, float, float)
+    def reportCanvasRect(self, x: float, y: float, width: float, height: float) -> None:
+        """QML reports the preview canvas frame's geometry (in QQuickWidget logical
+        coords) so a native GPU preview surface can be pinned over it."""
+        self.canvasRectChanged.emit(float(x), float(y), float(width), float(height))
+
     @Slot(str)
     def selectScene(self, scene_id: str) -> None:
         if scene_id == self._selected_scene_id:
@@ -674,10 +717,23 @@ class ScenesBridge(QObject):
         self._selected_scene_id = scene_id
         self._selected_layer_id = ""
         self._active_guides = ()
-        self._clear_preview()
-        if self._active:
-            self._controller.set_preview_scene(scene_id)
+        # Do NOT blank the canvas here: _on_preview_frame already ignores frames
+        # from other scenes, so the last frame stays until the newly selected
+        # scene produces its first frame — a smooth cross-over instead of a blink.
+        self._preview_selected_scene()
         self._refresh_models()
+
+    def _preview_selected_scene(self) -> None:
+        """Point the editor canvas at whatever scene is selected now.
+
+        Moving ``_selected_scene_id`` only moves the highlight in the scene list;
+        the preview keeps rendering the scene it was last pointed at. Creating,
+        duplicating or deleting a scene changes the selection too, so each of those
+        has to re-point the canvas as well — otherwise the new scene looks selected
+        while the canvas still shows the old one.
+        """
+        if self._active:
+            self._controller.set_preview_scene(self._selected_scene_id)
 
     @Slot(str)
     def selectLayer(self, layer_id: str) -> None:
@@ -799,7 +855,8 @@ class ScenesBridge(QObject):
             self._selected_scene_id = document.scenes[-1].id
             self._selected_layer_id = ""
 
-        self._run_edit(create)
+        if self._run_edit(create):
+            self._preview_selected_scene()
 
     @Slot(str, str)
     def renameScene(self, scene_id: str, name: str) -> None:
@@ -817,7 +874,8 @@ class ScenesBridge(QObject):
             self._selected_scene_id = document.scenes[-1].id
             self._selected_layer_id = ""
 
-        self._run_edit(duplicate)
+        if self._run_edit(duplicate):
+            self._preview_selected_scene()
 
     @Slot(str, int)
     def reorderScene(self, scene_id: str, target_row: int) -> None:
@@ -850,7 +908,8 @@ class ScenesBridge(QObject):
             self._selected_scene_id = replacement or fallback
             self._selected_layer_id = ""
 
-        self._run_edit(delete)
+        if self._run_edit(delete):
+            self._preview_selected_scene()
 
     @Slot(str, bool)
     def setDefaultScene(self, scene_id: str, enabled: bool) -> None:
@@ -949,6 +1008,27 @@ class ScenesBridge(QObject):
     @Slot()
     def addContentSource(self) -> None:
         self._add_source_layer(CONTENT_SOURCE_ID)
+
+    @Slot()
+    def addYearText(self) -> None:
+        # The year text is a single global source (all layers show the same rendered
+        # image); reuse the document's year-text source if one exists, else create it.
+        document = self._controller.document
+        source = next(
+            (candidate for candidate in document.sources
+             if candidate.kind is SourceKind.YEARTEXT),
+            None,
+        )
+        if source is None:
+            source = SourceDefinition(
+                id=new_identity(),
+                kind=SourceKind.YEARTEXT,
+                name=self.tr("Year text"),
+                configuration=YeartextSourceConfig(),
+            )
+            if not self._run_edit(lambda: self._controller.documents.create_source(source)):
+                return
+        self._add_source_layer(source.id)
 
     @Slot(str)
     def addConfiguredCamera(self, camera_id: str) -> None:
@@ -1363,6 +1443,67 @@ class ScenesBridge(QObject):
         )
         return self._camera_draft(source)
 
+    @staticmethod
+    def _split_stream_credentials(
+        values: dict[str, object],
+    ) -> tuple[str, PtzCredentials | None]:
+        """Separate a login pasted into the RTSP address from the address itself.
+
+        Solin does not store credentials in the address — it is persisted to disk
+        and printed by libobs — but operators paste vendor URLs that carry one, and
+        rejecting the paste helps nobody. Take the login out, keep the address, and
+        hand the two back separately.
+
+        ``urlsplit`` does not percent-decode userinfo while libavformat does, so
+        decode here: a password written as ``p%40ss`` is really ``p@ss``.
+        """
+        uri = str(values.get("uri", "")).strip()
+        if str(values.get("kind", "")) != SourceKind.RTSP_CAMERA.value or not uri:
+            return uri, None
+        try:
+            parsed = urlsplit(uri)
+        except ValueError:
+            return uri, None
+        if parsed.username is None and parsed.password is None:
+            return uri, None
+        host = parsed.hostname or ""
+        if not host:
+            return uri, None
+        if ":" in host:
+            host = f"[{host}]"
+        if parsed.port:
+            host = f"{host}:{parsed.port}"
+        stripped = urlunsplit(
+            (parsed.scheme, host, parsed.path, parsed.query, parsed.fragment)
+        )
+        try:
+            harvested = PtzCredentials(
+                username=unquote(parsed.username or ""),
+                password=unquote(parsed.password or ""),
+            )
+        except ValueError:
+            return stripped, None  # half a login is not worth storing
+        return stripped, harvested
+
+    @staticmethod
+    def _stream_credentials(
+        values: dict[str, object],
+        harvested: PtzCredentials | None,
+    ) -> PtzCredentials | None:
+        """The stream login to store, from the dialog fields or the pasted address.
+
+        Typed fields win: an operator correcting a password should not be overridden
+        by whatever an old address happened to carry.
+        """
+        username = str(values.get("streamUsername", "")).strip()
+        password = str(values.get("streamPassword", ""))
+        if username or password:
+            try:
+                return PtzCredentials(username=username, password=password)
+            except ValueError as exc:
+                raise SceneValidationError("Stream credentials are incomplete") from exc
+        return harvested
+
     @Slot("QVariantMap", bool, result=bool)
     def saveCamera(self, values: dict[str, object], add_to_scene: bool) -> bool:
         source_id = str(values.get("id", ""))
@@ -1375,6 +1516,8 @@ class ScenesBridge(QObject):
             None,
         )
         created_credential_ref = ""
+        created_stream_ref = ""
+        stream_uri, harvested = self._split_stream_credentials(values)
         try:
             kind = SourceKind(str(values.get("kind", SourceKind.LOCAL_CAMERA.value)))
             ptz_binding, credentials = self._ptz_binding(values, existing)
@@ -1386,7 +1529,7 @@ class ScenesBridge(QObject):
                 )
             elif kind is SourceKind.RTSP_CAMERA:
                 configuration = RtspCameraConfig(
-                    uri=str(values.get("uri", "")).strip(),
+                    uri=stream_uri,
                     transport=RtspTransport(str(values.get("transport", "tcp"))),
                     latency_ms=_qml_int(values.get("latencyMs", 200)),
                     ptz_binding=ptz_binding,
@@ -1409,6 +1552,14 @@ class ScenesBridge(QObject):
                 camera = self._with_ptz_credential_ref(camera, created_credential_ref)
             elif bool(values.get("clearCredentials", False)):
                 camera = self._with_ptz_credential_ref(camera, "")
+            stream_credentials = self._stream_credentials(values, harvested)
+            if stream_credentials is not None:
+                if self._credentials is None:
+                    raise SceneValidationError("Protected credential storage is unavailable")
+                created_stream_ref = self._credentials.save(stream_credentials)
+                camera = replace(camera, credential_ref=created_stream_ref)
+            elif bool(values.get("clearStreamCredentials", False)):
+                camera = replace(camera, credential_ref="")
         except (SceneValidationError, ValueError, TypeError):
             log.warning("Invalid camera configuration", exc_info=True)
             self._notify_failure(
@@ -1417,6 +1568,7 @@ class ScenesBridge(QObject):
             )
             return False
         previous_ref = self._ptz_credential_ref(existing)
+        previous_stream_ref = existing.credential_ref if existing is not None else ""
         committed = self._run_edit(
             lambda: self._controller.workspace.upsert_camera(
                 camera,
@@ -1424,12 +1576,25 @@ class ScenesBridge(QObject):
             )
         )
         if not committed:
-            if created_credential_ref:
-                self._delete_credential(created_credential_ref, notify=False)
+            for orphan in (created_credential_ref, created_stream_ref):
+                if orphan:
+                    self._delete_credential(orphan, notify=False)
             return False
         current_ref = self._ptz_credential_ref(camera)
         if previous_ref and previous_ref != current_ref:
             self._delete_credential(previous_ref, notify=True)
+        if previous_stream_ref and previous_stream_ref != camera.credential_ref:
+            self._delete_credential(previous_stream_ref, notify=True)
+        if harvested is not None:
+            # Say so: the operator typed an address and got a different one back.
+            self._notify_failure(
+                self.tr(
+                    "The user name and password were moved out of the RTSP address "
+                    "and stored securely. Solin adds them again when it connects."
+                ),
+                dedupe_key="scenes-camera-address-credentials-moved",
+                warning=True,
+            )
         if existing is None and add_to_scene:
             self._add_source_layer(camera.id)
         return True
@@ -1738,6 +1903,11 @@ class ScenesBridge(QObject):
 
     def _runtime_changed(self, _value: object = None) -> None:
         self._refresh_models()
+
+    def _on_content_playing_changed(self, _playing: bool = False) -> None:
+        if self._closed:
+            return
+        self.contentIdleChanged.emit()
 
     def _on_preview_frame(self, scene_id: str, image: object) -> None:
         if (
@@ -2195,6 +2365,9 @@ class ScenesBridge(QObject):
             "ptzBaudRate": 9600,
             "ptzCameraAddress": 1,
             "hasCredentials": bool(self._ptz_credential_ref(source)),
+            "hasStreamCredentials": bool(
+                source.credential_ref if source is not None else ""
+            ),
             "keepActive": bool(
                 isinstance(configuration, (LocalCameraConfig, RtspCameraConfig))
                 and configuration.keep_active

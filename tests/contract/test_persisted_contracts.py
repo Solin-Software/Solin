@@ -51,6 +51,7 @@ EXPECTED_SETTINGS_KEYS = {
     "APP_LANGUAGE": "language",
     "APP_THEME": "theme",
     "TOOLBAR_HOVER_POPUPS": "toolbar/hover_popups",
+    "SCENES_PANEL_DOCKED": "toolbar/scenes_panel_docked",
     "REMOTE_CONTROL_ENABLED": "remote_control/enabled",
     "REMOTE_CONTROL_NETWORK_SELECTION": "remote_control/network_selection",
     "REMOTE_CONTROL_CREDENTIALS": "remote_control/credentials",

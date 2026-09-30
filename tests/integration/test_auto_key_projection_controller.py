@@ -1,6 +1,5 @@
-from PySide6.QtMultimedia import QMediaPlayer
-
 from solin.controllers.auto_key_projection_controller import AutoKeyProjectionController
+from solin.core.media.playback_state import SolinPlaybackState
 from solin.core.integrations.automation.auto_key_actions import (
     EVENT_MEDIA_ENDED,
     EVENT_MEDIA_PAUSED,
@@ -46,10 +45,10 @@ def test_media_state_dispatches_pause_and_resume_for_active_visual_video():
     controller = AutoKeyProjectionController(dispatcher, _ProjectionBarStub())
     controller.set_visual_active(True)
 
-    controller.on_media_state(QMediaPlayer.PlaybackState.PausedState)
-    controller.on_media_state(QMediaPlayer.PlaybackState.PausedState)
-    controller.on_media_state(QMediaPlayer.PlaybackState.PlayingState)
-    controller.on_media_state(QMediaPlayer.PlaybackState.PlayingState)
+    controller.on_media_state(SolinPlaybackState.PAUSED)
+    controller.on_media_state(SolinPlaybackState.PAUSED)
+    controller.on_media_state(SolinPlaybackState.PLAYING)
+    controller.on_media_state(SolinPlaybackState.PLAYING)
 
     assert dispatcher.events == [
         EVENT_MEDIA_STARTED,
@@ -63,6 +62,6 @@ def test_media_state_ignores_audio_or_inactive_projection():
     controller = AutoKeyProjectionController(dispatcher, _ProjectionBarStub(audio=True))
     controller.set_visual_active(True)
 
-    controller.on_media_state(QMediaPlayer.PlaybackState.PausedState)
+    controller.on_media_state(SolinPlaybackState.PAUSED)
 
     assert dispatcher.events == [EVENT_MEDIA_STARTED]
