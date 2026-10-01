@@ -4,7 +4,6 @@ import logging
 import time
 
 from PySide6.QtCore import (
-    QAbstractAnimation,
     QEasingCurve,
     QEvent,
     QPropertyAnimation,
@@ -13,7 +12,6 @@ from PySide6.QtCore import (
     QSize,
     Qt,
     QTimer,
-    QVariantAnimation,
     Signal,
 )
 from PySide6.QtGui import QGuiApplication, QImage, QPainter, QPainterPath
@@ -63,71 +61,6 @@ _ROUTING_BUSES = {
     "projection": BusId.MEDIA_WINDOWS,
     "program": BusId.VIRTUAL_CAMERA,
 }
-
-
-class _PulseEffect:
-    """A slow, eased highlight breathe marking a control as live.
-
-    Animates the widget's own background/border tint rather than wrapping it in a
-    ``QGraphicsOpacityEffect``: a graphics effect on a child of this translucent,
-    frameless popup makes Qt rasterise the whole window, which paints black behind
-    the rounded corners and drops the button's text. The tint is quantised to a
-    few steps so a smooth fade costs a handful of restyles per cycle, not one per
-    frame.
-    """
-
-    _STEPS = 12
-
-    def __init__(
-        self,
-        widget: QWidget,
-        color: str,
-        *,
-        duration_ms: int,
-        low: float = 0.10,
-        high: float = 0.34,
-    ) -> None:
-        self._widget = widget
-        self._color = color
-        self._low = low
-        self._high = high
-        self._last_step = -1
-        animation = QVariantAnimation(widget)
-        animation.setDuration(duration_ms)
-        animation.setStartValue(0.0)
-        animation.setKeyValueAt(0.5, 1.0)
-        animation.setEndValue(0.0)
-        animation.setEasingCurve(QEasingCurve.Type.InOutSine)
-        animation.setLoopCount(-1)
-        animation.valueChanged.connect(self._apply)
-        self._animation = animation
-
-    @property
-    def running(self) -> bool:
-        return self._animation.state() == QAbstractAnimation.State.Running
-
-    def _apply(self, value: object) -> None:
-        step = round(float(value) * self._STEPS)  # type: ignore[arg-type]
-        if step == self._last_step:
-            return
-        self._last_step = step
-        ratio = step / self._STEPS
-        background = self._low + (self._high - self._low) * ratio
-        border = 0.45 + 0.50 * ratio
-        self._widget.setStyleSheet(
-            f"background:{qss_rgba(self._color, background)};"
-            f"border-color:{qss_rgba(self._color, border)};"
-        )
-
-    def start(self) -> None:
-        if self.running:
-            return
-        self._animation.start()
-
-    def stop(self) -> None:
-        self._animation.stop()
-        self._last_step = -1
-        self._widget.setStyleSheet("")  # back to the panel's own rules
 
 
 class _ScenePreview(QFrame):
@@ -201,8 +134,8 @@ class _SceneCard(QFrame):
 
     The two buttons put this scene on the projection and on the virtual camera.
     They are radio-like across the strip — routing is a single choice per output,
-    so checking one scene unchecks the rest — and the checked one breathes, the
-    same live cue the header's virtual-camera toggle uses.
+    so checking one scene unchecks the rest. Checked buttons use the panel's
+    static active-state colors.
     """
 
     routing_requested = Signal(str, str)  # (scene_id, "projection" | "program")
@@ -216,7 +149,6 @@ class _SceneCard(QFrame):
         scene_id: str,
         name: str,
         *,
-        pulse_duration_ms: int,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -251,13 +183,6 @@ class _SceneCard(QFrame):
         footer_layout.addWidget(self._program)
         layout.addWidget(footer)
 
-        self._projection_pulse = _PulseEffect(
-            self._projection, PALETTE.accent, duration_ms=pulse_duration_ms
-        )
-        self._program_pulse = _PulseEffect(
-            self._program, PALETTE.accent, duration_ms=pulse_duration_ms
-        )
-
     def _routing_button(self, object_name: str, icon: object, role: str) -> QPushButton:
         button = QPushButton()
         button.setObjectName(object_name)
@@ -287,9 +212,9 @@ class _SceneCard(QFrame):
         self.setFixedSize(width + border, preview_height + self._FOOTER_HEIGHT + border)
 
     def set_routing(self, *, on_projection: bool, on_program: bool, program_available: bool) -> None:
-        for button, active, pulse in (
-            (self._projection, on_projection, self._projection_pulse),
-            (self._program, on_program, self._program_pulse),
+        for button, active in (
+            (self._projection, on_projection),
+            (self._program, on_program),
         ):
             button.blockSignals(True)
             button.setChecked(active)
@@ -301,11 +226,8 @@ class _SceneCard(QFrame):
                     PALETTE.accent_text if active else PALETTE.text_muted,
                 )
             )
-            pulse.start() if active else pulse.stop()
         # The virtual-camera button only means anything while that output runs.
         self._program.setVisible(program_available)
-        if not program_available:
-            self._program_pulse.stop()
 
 
 class SceneControlPopup(QWidget):
@@ -319,9 +241,6 @@ class SceneControlPopup(QWidget):
     # the header row lines up. Also pinned in the stylesheet, whose min-height
     # would otherwise win over setFixedSize and stretch it into a tall sliver.
     _RECORD_BUTTON_SIZE = 34
-    # One slow, eased fade cycle — a live indicator should read as breathing, not
-    # strobing, since it runs for a whole meeting.
-    _PULSE_DURATION_MS = 2200
     # A card is a canvas-proportioned preview plus a fixed footer row, so only
     # the preview height is chosen here; the width follows the scene's aspect.
     _SCENE_CARD_PREVIEW_HEIGHT = 78
@@ -379,17 +298,6 @@ class SceneControlPopup(QWidget):
         self._fade.finished.connect(lambda: self.setWindowOpacity(1.0))
 
         self._build_ui()
-        # Live indicators; built after the widgets they animate exist.
-        self._output_pulse = _PulseEffect(
-            self._output, PALETTE.accent, duration_ms=self._PULSE_DURATION_MS
-        )
-        self._recording_pulse = _PulseEffect(
-            self._recording_button,
-            PALETTE.danger,
-            duration_ms=self._PULSE_DURATION_MS,
-            low=0.14,
-            high=0.40,
-        )
         controller.document_changed.connect(self._render)
         controller.desired_scenes_changed.connect(self._render)
         controller.applied_scenes_changed.connect(self._render)
@@ -558,7 +466,6 @@ class SceneControlPopup(QWidget):
                 card = _SceneCard(
                     scene.id,
                     scene.name,
-                    pulse_duration_ms=self._PULSE_DURATION_MS,
                     parent=self._cards_host,
                 )
                 card.routing_requested.connect(self._on_card_routing_requested)
@@ -608,7 +515,6 @@ class SceneControlPopup(QWidget):
         # output goes off, so hiding the button never strands one running.
         if self._recording is None or not self._controller.program_output_enabled:
             self._recording_clock.stop()
-            self._sync_recording_blink(False)
             self._recording_button.hide()
             return
         state = self._recording.state
@@ -690,7 +596,6 @@ class SceneControlPopup(QWidget):
         self._recording_button.setAccessibleName(text)
         self._recording_button.setAccessibleDescription(tooltip)
         self._recording_button.show()
-        self._sync_recording_blink(is_recording)
         self._repolish(self._recording_button)
 
 
@@ -737,7 +642,6 @@ class SceneControlPopup(QWidget):
         self._output.setAccessibleName(output_text)
         self._output.setAccessibleDescription(self._output.toolTip())
         self._output.blockSignals(False)
-        self._sync_output_blink(runtime.enabled)
         self._sync_scene_cards()
         self._sync_geometry()
 
@@ -750,14 +654,6 @@ class SceneControlPopup(QWidget):
         self._icon.setAccessibleName(self.tr("Scene engine"))
         self._icon.setAccessibleDescription(description)
 
-
-    def _sync_output_blink(self, enabled: bool) -> None:
-        """Breathe the virtual-camera toggle only while the output is live."""
-        self._output_pulse.start() if enabled else self._output_pulse.stop()
-
-    def _sync_recording_blink(self, is_recording: bool) -> None:
-        """Breathe the record dot only while a recording is actually running."""
-        self._recording_pulse.start() if is_recording else self._recording_pulse.stop()
 
     @property
     def docked(self) -> bool:

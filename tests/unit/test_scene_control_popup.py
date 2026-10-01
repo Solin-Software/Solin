@@ -350,34 +350,34 @@ def test_attach_button_reverts_when_no_dock_host_is_available(tmp_path: Path) ->
     controller.close()
 
 
-def test_virtual_camera_button_states_its_status_and_pulses_while_live(
+def test_virtual_camera_button_states_its_status_with_static_live_style(
     tmp_path: Path,
 ) -> None:
     controller = _controller(tmp_path)
     popup = SceneControlPopup(controller)
 
-    # Disabled: says so plainly, and nothing pulses.
+    # Disabled: the label and checked state describe the output.
     popup._set_output_enabled(False)
     assert popup._output.text() == "Virtual camera disabled"
-    assert not popup._output_pulse.running
+    assert not popup._output.isChecked()
 
-    # Enabled: the label flips and the pulse runs so a live output is obvious.
+    # Enabled: the shared stylesheet supplies the static checked highlight.
     popup._set_output_enabled(True)
     assert popup._output.text() == "Virtual camera enabled"
     assert popup._output.isChecked()
-    assert popup._output_pulse.running  # breathes while live
+    assert popup._output.styleSheet() == ""
 
-    # Back off: label restored, pulse stopped and its highlight cleared.
+    # Back off: restore the inactive state.
     popup._set_output_enabled(False)
     assert popup._output.text() == "Virtual camera disabled"
-    assert not popup._output_pulse.running
+    assert not popup._output.isChecked()
 
     popup.deleteLater()
     QCoreApplication.processEvents()
     controller.close()
 
 
-def test_record_button_is_icon_only_and_pulses_red_while_recording(
+def test_record_button_is_icon_only_with_static_red_recording_style(
     tmp_path: Path,
 ) -> None:
     controller = _controller(tmp_path)
@@ -389,38 +389,38 @@ def test_record_button_is_icon_only_and_pulses_red_while_recording(
     # Sits in the header, immediately left of the virtual-camera toggle.
     assert popup._recording_button.parentWidget() is popup._card
     assert popup._recording_button.x() < popup._output.x()
-    # Idle: a plain button, no red state and nothing pulsing.
+    # Idle: a plain button with no recording highlight.
     assert popup._recording_button.text() == ""
     assert popup._recording_button.width() == popup._recording_button.height()  # square
     assert not popup._recording_button.icon().isNull()  # icon-only control
     assert popup._recording_button.toolTip()  # hover explains what it does
     assert popup._recording_button.property("recording") is False
-    assert not popup._recording_pulse.running
+    assert popup._recording_button.styleSheet() == ""
 
     recording.toggle()
     QCoreApplication.processEvents()
 
     assert popup._recording_button.property("recording") is True  # red while live
-    assert popup._recording_pulse.running  # breathes while recording
+    assert popup._recording_button.styleSheet() == ""
 
     recording.toggle()
     QCoreApplication.processEvents()
 
     assert popup._recording_button.property("recording") is False
-    assert not popup._recording_pulse.running
+    assert popup._recording_button.styleSheet() == ""
 
     popup.deleteLater()
     QCoreApplication.processEvents()
     controller.close()
 
 
-def test_live_pulses_never_put_a_graphics_effect_on_header_controls(
+def test_live_controls_use_static_styles_without_graphics_effects(
     tmp_path: Path,
 ) -> None:
     # Regression: a QGraphicsEffect on a child of this translucent, frameless
     # popup makes Qt rasterise the window — the rounded corners paint black and
-    # the button text disappears. The pulse must tint the widget instead, so only
-    # the popup itself may carry an effect.
+    # the button text disappears. Live controls use the panel's static stylesheet.
+    from PySide6.QtCore import QVariantAnimation
     controller = _controller(tmp_path)
     controller._set_engine_ready(True)
     recording = _Recording(tmp_path / "Videos" / "Solin")
@@ -429,14 +429,18 @@ def test_live_pulses_never_put_a_graphics_effect_on_header_controls(
     popup._set_output_enabled(True)
     recording.toggle()
     QCoreApplication.processEvents()
-    assert popup._output_pulse.running and popup._recording_pulse.running
+    assert popup._output.isChecked()
+    assert popup._recording_button.property("recording") is True
+    assert popup._output.styleSheet() == ""
+    assert popup._recording_button.styleSheet() == ""
+    assert all(animation.loopCount() != -1 for animation in popup.findChildren(QVariantAnimation))
 
     assert popup._output.graphicsEffect() is None
     assert popup._recording_button.graphicsEffect() is None
-    # the label survives while pulsing
+    # The active label remains visible.
     assert popup._output.text() == "Virtual camera enabled"
 
-    # Stopping clears the tint so the panel's own styling shows through again.
+    # Both states continue to use the panel's own stylesheet.
     popup._set_output_enabled(False)
     recording.toggle()
     QCoreApplication.processEvents()
@@ -684,7 +688,7 @@ def test_undocking_restores_translucency_before_the_window_is_recreated(
     controller.close()
 
 
-def test_card_routing_buttons_are_exclusive_and_pulse_the_live_one(tmp_path: Path) -> None:
+def test_card_routing_buttons_are_exclusive_with_static_live_style(tmp_path: Path) -> None:
     controller = _controller(tmp_path)
     popup = SceneControlPopup(controller)
     QCoreApplication.processEvents()
@@ -695,15 +699,15 @@ def test_card_routing_buttons_are_exclusive_and_pulse_the_live_one(tmp_path: Pat
     QCoreApplication.processEvents()
     assert first._projection.isChecked()
     assert controller.desired_scene(BusId.MEDIA_WINDOWS) == scene_ids[0]
-    assert first._projection_pulse.running  # the live one breathes
+    assert first._projection.styleSheet() == ""
 
     # Routing another scene takes it away from the first: one choice per output.
     second._projection.click()
     QCoreApplication.processEvents()
     assert second._projection.isChecked()
     assert not first._projection.isChecked()
-    assert second._projection_pulse.running
-    assert not first._projection_pulse.running
+    assert second._projection.styleSheet() == ""
+    assert first._projection.styleSheet() == ""
 
     popup.deleteLater()
     QCoreApplication.processEvents()
@@ -731,7 +735,7 @@ def test_card_virtual_camera_button_only_shows_while_that_output_runs(
     controller.set_output_enabled(BusId.VIRTUAL_CAMERA, False)
     QCoreApplication.processEvents()
     assert all(not card._program.isVisibleTo(card) for card in cards)
-    assert all(not card._program_pulse.running for card in cards)
+    assert all(card._program.styleSheet() == "" for card in cards)
 
     popup.close()
     popup.deleteLater()
