@@ -318,6 +318,29 @@ def test_legacy_negative_cache_is_not_treated_as_authoritative_absence(tmp_path)
     assert not result.hit
 
 
+@pytest.mark.parametrize("schema", [None, 2, 3])
+def test_pre_utf8_cache_is_reextracted_even_with_thumbnail(tmp_path, schema):
+    cache_dir = str(tmp_path / "thumbs")
+    _image_path, metadata_path = media_info_module._media_info_cache_paths(
+        cache_dir, "clip.mp4",
+    )
+    Path(metadata_path).parent.mkdir(parents=True)
+    Path(metadata_path).write_text(
+        json.dumps({
+            "schema": schema,
+            "outcome": "ready",
+            "has_thumb": True,
+            "title": "fiéis".encode("utf-8").decode("cp1252"),
+            "title_resolved": True,
+        }),
+        encoding="utf-8",
+    )
+    result = media_info_module._load_media_info_disk_cache(
+        cache_dir, "clip.mp4", load_thumbnail=False,
+    )
+    assert not result.hit
+
+
 def test_disk_cache_lookup_and_decode_run_outside_qt_thread(monkeypatch, tmp_path):
     workers = ThreadedWorkerPool()
     queue = MediaInfoQueue(tmp_path / "media", tmp_path / "thumbs", workers)

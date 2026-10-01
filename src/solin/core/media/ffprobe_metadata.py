@@ -70,7 +70,7 @@ def probe_tags(path: str) -> MediaTags:
     ]
     try:
         completed = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=_PROBE_TIMEOUT_S,
+            cmd, capture_output=True, timeout=_PROBE_TIMEOUT_S,
         )
     except (OSError, subprocess.TimeoutExpired):
         log.debug("ffprobe failed for %r", path, exc_info=True)
@@ -78,7 +78,10 @@ def probe_tags(path: str) -> MediaTags:
     if completed.returncode != 0:
         return MediaTags()
     try:
-        data = json.loads(completed.stdout or "{}")
+        # ffprobe JSON is UTF-8 regardless of the host locale. Keep both pipes
+        # binary: stderr diagnostics need not be valid text and must not crash
+        # subprocess reader threads on Windows.
+        data = json.loads(completed.stdout.decode("utf-8") or "{}")
     except ValueError:
         return MediaTags()
 

@@ -6,8 +6,8 @@ e sem download completo de arquivos remotos.
 Fontes de metadado (em ordem de prioridade):
   Áudio local   : bytes brutos do header (ID3v2/MP4 atoms/FLAC/OGG) → sem player
   Áudio remoto  : HTTP Range request (512 KB máx) → mesmos parsers de bytes
-  Vídeo local   : QMediaPlayer → QMediaMetaData (CoverArtImage + Title) → frame 5%
-  Vídeo remoto  : QMediaPlayer em streaming → mesma lógica (sem download completo)
+  Vídeo local   : ffprobe (título/duração) → ffmpeg (capa ou frame 5%)
+  Vídeo remoto  : ffprobe/ffmpeg na URL (sem download completo)
   URL qualquer  : RemotePageMetaExtractor → og:image + og:title via HTTP HEAD/GET parcial
   Fallback local: arquivo remoto completo com .done → usado após falha da origem
 
@@ -19,7 +19,7 @@ Para alimentação ao vivo (player em reprodução), use feed_live_frame() /
 feed_live_cover() na ThumbnailQueue — emitem info_ready com title="".
 
 Nota: completamente independente da API JW.org. Thumb e título são extraídos
-diretamente do stream de mídia (QMediaPlayer) ou dos metadados HTML da página.
+diretamente do stream de mídia (ffprobe/ffmpeg) ou dos metadados HTML da página.
 """
 
 from __future__ import annotations
@@ -71,7 +71,8 @@ log = logging.getLogger(__name__)
 _DEFAULT_METADATA_READ_BYTES = 512 * 1024
 _MAX_ID3_TAG_BYTES = 8 * 1024 * 1024
 _PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
-_MEDIA_INFO_CACHE_SCHEMA = 3
+# Earlier extractions could persist UTF-8 titles decoded with the Windows locale.
+_MEDIA_INFO_CACHE_SCHEMA = 4
 _SOURCE_CHANGE_RETRY_DELAYS_MS = (100, 300, 1_000)
 
 
@@ -176,21 +177,15 @@ def _load_media_info_disk_cache(
 
     schema = data.get("schema")
     outcome = data.get("outcome")
-    if schema not in {2, _MEDIA_INFO_CACHE_SCHEMA}:
-        if data.get("has_thumb") is not True:
-            return _DiskCacheResult(False, source_identity=source_identity)
-        outcome = "ready"
+    if schema != _MEDIA_INFO_CACHE_SCHEMA:
+        return _DiskCacheResult(False, source_identity=source_identity)
     if outcome not in {"ready", "absent"}:
         return _DiskCacheResult(False, source_identity=source_identity)
 
     title = data.get("title", "")
     if not isinstance(title, str):
         title = ""
-    title_resolved = (
-        data.get("title_resolved") is True
-        if schema == _MEDIA_INFO_CACHE_SCHEMA
-        else bool(title)
-    )
+    title_resolved = data.get("title_resolved") is True
     raw_duration = data.get("duration_ms", 0)
     duration_ms = (
         max(0, raw_duration)
