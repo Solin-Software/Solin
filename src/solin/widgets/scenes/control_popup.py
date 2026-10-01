@@ -46,6 +46,7 @@ from solin.ui.scene_recording_status import (
     scene_recording_audio_warning,
     scene_recording_error_summary,
 )
+from solin.widgets.common.button_feedback import ButtonSuccessFlash
 from solin.widgets.common.popup_dock_button import PopupDockButton
 from solin.widgets.common.popup_hover_button import PopupHoverButton
 
@@ -129,16 +130,29 @@ class _ScenePreview(QFrame):
         painter.end()
 
 
+class _SceneRoutingButton(QPushButton):
+    right_clicked = Signal()
+
+    def mousePressEvent(self, event) -> None:  # noqa: N802
+        if event.button() == Qt.MouseButton.RightButton:
+            self.right_clicked.emit()
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+
 class _SceneCard(QFrame):
     """A scene: a canvas-proportioned preview over a name and its routing buttons.
 
-    The two buttons put this scene on the projection and on the virtual camera.
+    Left clicks put this scene on the projection or on the virtual camera;
+    right clicks request that output's return scene after automatic media.
     They are radio-like across the strip — routing is a single choice per output,
     so checking one scene unchecks the rest. Checked buttons use the panel's
     static active-state colors.
     """
 
     routing_requested = Signal(str, str)  # (scene_id, "projection" | "program")
+    routing_return_requested = Signal(str, str)
 
     _BUTTON_SIZE = 22
     _FOOTER_HEIGHT = 30
@@ -183,8 +197,8 @@ class _SceneCard(QFrame):
         footer_layout.addWidget(self._program)
         layout.addWidget(footer)
 
-    def _routing_button(self, object_name: str, icon: object, role: str) -> QPushButton:
-        button = QPushButton()
+    def _routing_button(self, object_name: str, icon: object, role: str) -> _SceneRoutingButton:
+        button = _SceneRoutingButton()
         button.setObjectName(object_name)
         button.setCheckable(True)
         button.setFixedSize(self._BUTTON_SIZE, self._BUTTON_SIZE)
@@ -192,6 +206,9 @@ class _SceneCard(QFrame):
         button.setIcon(make_icon(_svg(icon), 13, PALETTE.text_muted))
         button.setCursor(Qt.CursorShape.PointingHandCursor)
         button.clicked.connect(lambda: self.routing_requested.emit(self.scene_id, role))
+        button.right_clicked.connect(
+            lambda: self.routing_return_requested.emit(self.scene_id, role)
+        )
         return button
 
     def set_name(self, name: str) -> None:
@@ -274,6 +291,7 @@ class SceneControlPopup(QWidget):
         self._engine_visual_state = "unavailable"
         self._hidden_at: float | None = None
         self._scene_cards: dict[str, _SceneCard] = {}
+        self._success_flash = ButtonSuccessFlash(self)
         # Live card thumbnails, requested only while the panel is on screen.
         from solin.controllers.scene_thumbnail_egress import SceneThumbnailEgressController
 
@@ -469,6 +487,7 @@ class SceneControlPopup(QWidget):
                     parent=self._cards_host,
                 )
                 card.routing_requested.connect(self._on_card_routing_requested)
+                card.routing_return_requested.connect(self._on_card_routing_return_requested)
                 self._scene_cards[scene.id] = card
                 self._cards_layout.insertWidget(index, card)
             else:
@@ -493,12 +512,30 @@ class SceneControlPopup(QWidget):
         if bus_id is None:
             return
         try:
-            # select, not take: pinning the output would stop media from ever
-            # taking it over, and the panel has no control to undo that.
+            # The session selection takes effect now; the next projection
+            # still enters the automatic media scene.
             self._controller.select_scene(bus_id, scene_id)
         except Exception:  # noqa: BLE001 - UI operation boundary
             log.exception("Could not route the scene from its card")
         self._render()
+
+    def _on_card_routing_return_requested(self, scene_id: str, role: str) -> None:
+        """Save one output's return scene, acknowledging only a successful save."""
+        bus_id = _ROUTING_BUSES.get(role)
+        if bus_id is None:
+            return
+        try:
+            if not self._controller.return_scene_override_available(bus_id):
+                return
+            self._controller.set_return_scene(bus_id, scene_id)
+        except Exception:  # noqa: BLE001 - UI operation boundary
+            log.exception("Could not set the return scene from its card")
+            return
+        self._render()
+        card = self._scene_cards.get(scene_id)
+        if card is not None:
+            button = card._projection if role == "projection" else card._program
+            self._success_flash.flash(button)
 
     def _toggle_recording(self) -> None:
         if self._recording is None:

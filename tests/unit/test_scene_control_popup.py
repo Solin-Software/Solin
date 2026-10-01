@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 import time
+from unittest.mock import Mock
+
+import pytest
 
 from PySide6.QtCore import QCoreApplication, QEvent, QObject, QRect, Signal
 from PySide6.QtCore import Qt
@@ -10,10 +13,12 @@ from PySide6.QtWidgets import QApplication, QWidget
 
 from solin.controllers.scene_runtime_controller import SceneRuntimeController
 from solin.core.foundation.runtime_paths import ProfilePaths
+from solin.core.projection.application import ProjectionSession
 from solin.core.scenes.model import (
     CONTENT_SOURCE_ID,
     DEFAULT_CAMERA_SOURCE_ID,
     BusId,
+    OutputMode,
     SceneLayer,
 )
 from solin.core.scenes.presets import (
@@ -25,7 +30,10 @@ from solin.core.scenes.recording import (
     ProgramRecordingStatus,
     SceneRecordingConfig,
 )
+from solin.core.scenes.repository import SceneRuntimeRepository
+from solin.core.scenes.runtime import SceneRuntimeState
 from solin.core.scenes.workspace import SceneWorkspaceService
+from solin.styles.theme import PALETTE
 from solin.widgets.scenes.control_popup import SceneControlPopup, _SceneCard
 
 
@@ -865,6 +873,554 @@ def test_card_buttons_route_each_output_independently(tmp_path: Path) -> None:
     popup.deleteLater()
     QCoreApplication.processEvents()
     controller.close()
+
+
+@pytest.mark.parametrize("role", ["projection", "program"])
+def test_card_right_click_requests_return_without_left_routing(role: str) -> None:
+    card = _SceneCard("camera", "Camera")
+    routed: list[tuple[str, str]] = []
+    returns: list[tuple[str, str]] = []
+    card.routing_requested.connect(lambda scene_id, role: routed.append((scene_id, role)))
+    button = card._projection if role == "projection" else card._program
+
+    try:
+        card.routing_return_requested.connect(
+            lambda scene_id, role: returns.append((scene_id, role))
+        )
+        QTest.mouseClick(button, Qt.MouseButton.RightButton)
+        QTest.mouseClick(button, Qt.MouseButton.RightButton)
+
+        assert returns == [("camera", role), ("camera", role)]
+        assert routed == []
+        assert not button.isChecked()
+
+        QTest.mouseClick(button, Qt.MouseButton.LeftButton)
+        assert routed == [("camera", role)]
+        assert button.isChecked()
+        QTest.mouseClick(button, Qt.MouseButton.RightButton)
+        assert returns == [("camera", role)] * 3
+        assert routed == [("camera", role)]
+        assert button.isChecked()
+    finally:
+        card.deleteLater()
+        QCoreApplication.processEvents()
+
+
+@pytest.mark.parametrize("docked", [False, True])
+@pytest.mark.parametrize("has_content", [False, True])
+@pytest.mark.parametrize(
+    ("role", "bus_id"),
+    [("projection", BusId.MEDIA_WINDOWS), ("program", BusId.VIRTUAL_CAMERA)],
+)
+def test_card_left_click_during_playback_returns_only_from_content_scenes(
+    tmp_path: Path, role: str, bus_id: BusId, docked: bool, has_content: bool,
+) -> None:
+    projection = _Projection()
+    controller = _controller(tmp_path, projection=projection)
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
+    camera_scene = next(scene.id for scene in controller.document.scenes if scene.name == "Camera")
+    controller.documents.create_scene("Lectern", scene_id="lectern")
+    _add_camera_pip_scene(controller, "camera-pip")
+    selected_scene = "camera-pip" if has_content else "lectern"
+    controller.select_scene(bus_id, camera_scene)
+    host = _DockHost()
+    popup = SceneControlPopup(controller, host)
+    popup.set_docked(docked)
+    card = popup._scene_cards[selected_scene]
+    button = card._projection if role == "projection" else card._program
+    projection.set_type("video")
+    return_before = controller.runtime.state.output(bus_id).manual_scene_id
+    other_bus = BusId.VIRTUAL_CAMERA if bus_id is BusId.MEDIA_WINDOWS else BusId.MEDIA_WINDOWS
+    other_before = controller.desired_scene(other_bus)
+
+    try:
+        QTest.mouseClick(button, Qt.MouseButton.LeftButton)
+
+        assert controller.desired_scene(bus_id) == selected_scene
+        assert controller.desired_scene(other_bus) == other_before
+        expected_return = return_before if has_content else selected_scene
+        assert controller.runtime.state.output(bus_id).manual_scene_id == expected_return
+        assert controller.return_scene_override_available(bus_id) is has_content
+        assert button.isChecked()
+        assert button.styleSheet() == ""
+        assert popup._scene_cards[selected_scene] is card
+
+        projection.set_type("idle")
+        assert controller.desired_scene(bus_id) == expected_return
+        assert controller.runtime.state.output(bus_id).mode is OutputMode.AUTO
+        projection.set_type("video")
+        assert controller.desired_scene(bus_id) == controller.documents.program_media_scene_id
+        assert controller.desired_scene(other_bus) == other_before
+        projection.set_type("idle")
+        assert controller.desired_scene(bus_id) == expected_return
+    finally:
+        popup.close()
+        popup.deleteLater()
+        host.deleteLater()
+        QCoreApplication.processEvents()
+        controller.close()
+
+
+@pytest.mark.parametrize("docked", [False, True])
+@pytest.mark.parametrize("override_return", [False, True])
+@pytest.mark.parametrize(
+    ("role", "bus_id"),
+    [("projection", BusId.MEDIA_WINDOWS), ("program", BusId.VIRTUAL_CAMERA)],
+)
+def test_reselecting_content_from_a_card_restores_the_session_return(
+    tmp_path: Path, role: str, bus_id: BusId, docked: bool, override_return: bool,
+) -> None:
+    projection = ProjectionSession()
+    controller = _controller(tmp_path, projection=projection)
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
+    camera_scene = next(scene.id for scene in controller.document.scenes if scene.name == "Camera")
+    controller.select_scene(bus_id, camera_scene)
+    controller.documents.create_scene("Lectern", scene_id="lectern")
+    controller.documents.create_scene("Fallback", scene_id="fallback")
+    _add_camera_pip_scene(controller, "camera-pip")
+    host = _DockHost()
+    popup = SceneControlPopup(controller, host)
+    popup.set_docked(docked)
+    content_card = popup._scene_cards["camera-pip"]
+    content_button = content_card._projection if role == "projection" else content_card._program
+    fallback_card = popup._scene_cards["fallback"]
+    fallback_button = fallback_card._projection if role == "projection" else fallback_card._program
+    lectern_card = popup._scene_cards["lectern"]
+    lectern_button = lectern_card._projection if role == "projection" else lectern_card._program
+    camera_card = popup._scene_cards[camera_scene]
+    camera_button = camera_card._projection if role == "projection" else camera_card._program
+    other_bus = BusId.VIRTUAL_CAMERA if bus_id is BusId.MEDIA_WINDOWS else BusId.MEDIA_WINDOWS
+    projection.set_state({"type": "video", "path": "clip.mp4"})
+    other_runtime = controller.runtime.state.output(other_bus)
+    other_desired = controller.desired_scene(other_bus)
+
+    try:
+        QTest.mouseClick(content_button, Qt.MouseButton.LeftButton)
+        assert controller.desired_scene(bus_id) == "camera-pip"
+        if override_return:
+            QTest.mouseClick(fallback_button, Qt.MouseButton.RightButton)
+            assert controller.desired_scene(bus_id) == "camera-pip"
+            assert PALETTE.success in fallback_button.styleSheet()
+            QTest.qWait(450)
+        return_scene = "fallback" if override_return else camera_scene
+
+        QTest.mouseClick(lectern_button, Qt.MouseButton.LeftButton)
+        assert controller.desired_scene(bus_id) == "lectern"
+        assert controller.runtime.state.output(bus_id).manual_scene_id == "lectern"
+        assert not controller.return_scene_override_available(bus_id)
+        before_runtime, before_desired = controller.runtime.state, controller.desired_scenes
+        QTest.mouseClick(camera_button, Qt.MouseButton.RightButton)
+        assert controller.runtime.state is before_runtime
+        assert controller.desired_scenes == before_desired
+        assert camera_button.styleSheet() == ""
+        assert popup._success_flash._active == {}
+        assert lectern_button.isChecked()
+
+        QTest.mouseClick(content_button, Qt.MouseButton.LeftButton)
+        assert controller.desired_scene(bus_id) == "camera-pip"
+        assert controller.runtime.state.output(bus_id).manual_scene_id == return_scene
+        assert content_button.isChecked()
+        projection.update_state(position=20, paused=True)
+        assert controller.desired_scene(bus_id) == "camera-pip"
+        assert controller.desired_scene(other_bus) == other_desired
+        assert controller.runtime.state.output(other_bus) == other_runtime
+        projection.set_state({"type": "idle"})
+        assert controller.desired_scene(bus_id) == return_scene
+        assert controller.runtime.state.output(other_bus) == other_runtime
+        assert popup._scene_cards["camera-pip"] is content_card
+    finally:
+        popup.close()
+        popup.deleteLater()
+        host.deleteLater()
+        QCoreApplication.processEvents()
+        controller.close()
+
+
+@pytest.mark.parametrize("docked", [False, True])
+@pytest.mark.parametrize(
+    ("role", "bus_id"),
+    [("projection", BusId.MEDIA_WINDOWS), ("program", BusId.VIRTUAL_CAMERA)],
+)
+def test_card_right_click_saves_only_its_output_return_and_restores_feedback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, role: str, bus_id: BusId, docked: bool,
+) -> None:
+    projection = _Projection()
+    controller = _controller(tmp_path, projection=projection)
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
+    controller.documents.create_scene("Lectern", scene_id="lectern")
+    host = _DockHost()
+    popup = SceneControlPopup(controller, host)
+    popup.set_docked(docked)
+    card = popup._scene_cards["lectern"]
+    button = card._projection if role == "projection" else card._program
+    other_button = card._program if role == "projection" else card._projection
+    button.setStyleSheet(f"QPushButton#{button.objectName()} {{ padding:0; }}")
+    original_style = button.styleSheet()
+    projection.set_type("video")
+    controller._set_applied_scenes(controller.desired_scenes)
+    before_desired, before_applied = controller.desired_scenes, controller.applied_scenes
+    before_runtime = controller.runtime.state
+    before_checked = button.isChecked()
+    other_bus = BusId.VIRTUAL_CAMERA if bus_id is BusId.MEDIA_WINDOWS else BusId.MEDIA_WINDOWS
+
+    try:
+        assert controller.return_scene_override_available(bus_id)
+        save_return = controller.set_return_scene
+        saved: list[tuple[BusId, str]] = []
+
+        def save(output: BusId, scene_id: str):
+            assert button.styleSheet() == original_style
+            state = save_return(output, scene_id)
+            saved.append((output, scene_id))
+            return state
+
+        with monkeypatch.context() as patch:
+            patch.setattr(controller, "set_return_scene", save)
+            QTest.mouseClick(button, Qt.MouseButton.RightButton)
+        assert saved == [(bus_id, "lectern")]
+        assert PALETTE.success in button.styleSheet()
+        assert other_button.styleSheet() == ""
+
+        # A second success restarts the short flash on the same live card.
+        QTest.mouseClick(button, Qt.MouseButton.RightButton)
+        assert controller.desired_scenes == before_desired
+        assert controller.applied_scenes == before_applied
+        assert controller.runtime.state.output(bus_id).manual_scene_id == "lectern"
+        assert controller.runtime.state.output(other_bus) == before_runtime.output(other_bus)
+        assert button.isChecked() == before_checked
+        assert popup._scene_cards["lectern"] is card
+        assert len(popup._success_flash._active) == 1
+
+        # Rendering and docking reuse the card while feedback is running.
+        popup.set_docked(not docked)
+        popup._render()
+        assert popup._scene_cards["lectern"] is card
+        QTest.qWait(450)
+        assert button.styleSheet() == original_style
+        assert popup._success_flash._active == {}
+
+        projection.set_type("idle")
+        assert controller.desired_scene(bus_id) == "lectern"
+        assert controller.desired_scene(other_bus) != "lectern"
+        projection.set_type("video")
+        assert controller.desired_scene(bus_id) != "lectern"
+        projection.set_type("idle")
+        assert controller.desired_scene(bus_id) == "lectern"
+    finally:
+        popup.close()
+        popup.deleteLater()
+        host.deleteLater()
+        QCoreApplication.processEvents()
+        controller.close()
+
+
+@pytest.mark.parametrize(
+    ("role", "bus_id"),
+    [("projection", BusId.MEDIA_WINDOWS), ("program", BusId.VIRTUAL_CAMERA)],
+)
+@pytest.mark.parametrize("outcome", ["denied", "save_failed", "media_scene"])
+def test_card_rejected_return_has_no_success_flash_or_routing_changes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture,
+    role: str, bus_id: BusId, outcome: str,
+) -> None:
+    projection = _Projection()
+    controller = _controller(tmp_path, projection=projection)
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
+    popup = SceneControlPopup(controller)
+    projection.set_type("video")
+    controller._set_applied_scenes(controller.desired_scenes)
+    scene_id = (
+        controller.documents.program_media_scene_id if outcome == "media_scene"
+        else next(scene.id for scene in controller.document.scenes if scene.name == "Camera")
+    )
+    card = popup._scene_cards[scene_id]
+    button = card._projection if role == "projection" else card._program
+    original_style = button.styleSheet()
+    before_desired, before_applied = controller.desired_scenes, controller.applied_scenes
+    before_runtime = controller.runtime.state
+    before_checked = button.isChecked()
+    availability_calls: list[BusId] = []
+    save_calls: list[tuple[BusId, str]] = []
+
+    def available(output: BusId) -> bool:
+        availability_calls.append(output)
+        return outcome != "denied"
+
+    def fail_save(output: BusId, target: str):
+        save_calls.append((output, target))
+        raise OSError("Return scene save failed")
+
+    if outcome != "media_scene":
+        monkeypatch.setattr(
+            popup, "_controller",
+            Mock(
+                wraps=controller,
+                return_scene_override_available=available,
+                set_return_scene=fail_save,
+            ),
+        )
+
+    try:
+        QTest.mouseClick(button, Qt.MouseButton.RightButton)
+        if outcome != "media_scene":
+            assert availability_calls == [bus_id]
+        assert save_calls == ([(bus_id, scene_id)] if outcome == "save_failed" else [])
+        assert button.styleSheet() == original_style
+        assert popup._success_flash._active == {}
+        assert controller.desired_scenes == before_desired
+        assert controller.applied_scenes == before_applied
+        assert controller.runtime.state == before_runtime
+        assert button.isChecked() == before_checked
+        if outcome != "denied":
+            assert "Could not set the return scene from its card" in caplog.text
+    finally:
+        popup.deleteLater()
+        QCoreApplication.processEvents()
+        controller.close()
+
+
+@pytest.mark.parametrize("has_content", [False, True])
+def test_disabled_projection_card_allows_return_override_only_from_content(
+    tmp_path: Path, has_content: bool,
+) -> None:
+    projection = _Projection()
+    controller = _controller(tmp_path, projection=projection)
+    controller.set_output_enabled(BusId.MEDIA_WINDOWS, False)
+    controller.documents.create_scene("Lectern", scene_id="lectern")
+    _add_camera_pip_scene(controller, "camera-pip")
+    selected_scene = "camera-pip" if has_content else "lectern"
+    popup = SceneControlPopup(controller)
+    projection.set_type("video")
+    camera_scene = next(scene.id for scene in controller.document.scenes if scene.name == "Camera")
+    button = popup._scene_cards[camera_scene]._projection
+
+    try:
+        QTest.mouseClick(popup._scene_cards[selected_scene]._projection, Qt.MouseButton.LeftButton)
+        assert controller.desired_scene(BusId.MEDIA_WINDOWS) == selected_scene
+        assert controller.applied_scenes == ()
+        assert controller.return_scene_override_available(BusId.MEDIA_WINDOWS) is has_content
+        before_runtime = controller.runtime.state
+
+        QTest.mouseClick(button, Qt.MouseButton.RightButton)
+        assert controller.desired_scene(BusId.MEDIA_WINDOWS) == selected_scene
+        if has_content:
+            assert PALETTE.success in button.styleSheet()
+        else:
+            assert button.styleSheet() == ""
+            assert popup._success_flash._active == {}
+            assert controller.runtime.state is before_runtime
+        projection.set_type("idle")
+        assert controller.desired_scene(BusId.MEDIA_WINDOWS) == (
+            camera_scene if has_content else selected_scene
+        )
+    finally:
+        popup.deleteLater()
+        QCoreApplication.processEvents()
+        controller.close()
+
+
+@pytest.mark.parametrize(
+    ("role", "bus_id"),
+    [("projection", BusId.MEDIA_WINDOWS), ("program", BusId.VIRTUAL_CAMERA)],
+)
+def test_failed_noncontent_card_take_preserves_live_media_and_saved_return(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture,
+    role: str, bus_id: BusId,
+) -> None:
+    projection = ProjectionSession()
+    controller = _controller(tmp_path, projection=projection)
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
+    camera_scene = next(scene.id for scene in controller.document.scenes if scene.name == "Camera")
+    controller.select_scene(bus_id, camera_scene)
+    controller.documents.create_scene("Lectern", scene_id="lectern")
+    _add_camera_pip_scene(controller, "camera-pip")
+    popup = SceneControlPopup(controller)
+    projection.set_state({"type": "video", "path": "clip.mp4"})
+    content_card = popup._scene_cards["camera-pip"]
+    content_button = content_card._projection if role == "projection" else content_card._program
+    QTest.mouseClick(content_button, Qt.MouseButton.LeftButton)
+    controller._set_applied_scenes(controller.desired_scenes)
+    card = popup._scene_cards["lectern"]
+    button = card._projection if role == "projection" else card._program
+    before_runtime = controller.runtime.state
+    before_desired, before_applied = controller.desired_scenes, controller.applied_scenes
+    repository = SceneRuntimeRepository(tmp_path / "saved-runtime.json")
+    repository.save(before_runtime)
+    attempts: list[SceneRuntimeState] = []
+
+    def fail_save(state: SceneRuntimeState, *, expected_revision: int | None = None) -> None:
+        attempts.append(state)
+        raise OSError("Runtime save failed")
+
+    try:
+        with monkeypatch.context() as patch:
+            patch.setattr(controller.runtime, "_store", repository)
+            patch.setattr(repository, "save", fail_save)
+            QTest.mouseClick(button, Qt.MouseButton.LeftButton)
+            assert len(attempts) == 1
+            assert attempts[0].output(bus_id).manual_scene_id == "lectern"
+            assert "Could not route the scene from its card" in caplog.text
+            assert controller.runtime.state is before_runtime
+            assert repository.load_or_create(controller.document) == before_runtime
+            assert controller.desired_scenes == before_desired
+            assert controller.applied_scenes == before_applied
+            assert not button.isChecked()
+            assert content_button.isChecked()
+            assert popup._success_flash._active == {}
+            projection.update_state(position=20, paused=True)
+            assert controller.desired_scenes == before_desired
+        projection.set_state({"type": "idle"})
+        assert controller.desired_scene(bus_id) == camera_scene
+    finally:
+        popup.deleteLater()
+        QCoreApplication.processEvents()
+        controller.close()
+
+
+def test_failed_automation_resume_preserves_temporary_card_routing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    projection = ProjectionSession()
+    controller = _controller(tmp_path, projection=projection)
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
+    _add_camera_pip_scene(controller, "camera-pip")
+    controller.documents.create_scene("Lectern", scene_id="lectern")
+    popup = SceneControlPopup(controller)
+    projection.set_state({"type": "video", "path": "clip.mp4"})
+    card = popup._scene_cards["camera-pip"]
+    QTest.mouseClick(card._program, Qt.MouseButton.LeftButton)
+    controller.take_scene(BusId.MEDIA_WINDOWS, "lectern")
+    controller._set_applied_scenes(controller.desired_scenes)
+    before_runtime = controller.runtime.state
+    before_desired, before_applied = controller.desired_scenes, controller.applied_scenes
+    repository = SceneRuntimeRepository(tmp_path / "saved-runtime.json")
+    repository.save(before_runtime)
+    attempts: list[SceneRuntimeState] = []
+
+    def fail_save(state: SceneRuntimeState, *, expected_revision: int | None = None) -> None:
+        attempts.append(state)
+        raise OSError("Runtime save failed")
+
+    try:
+        with monkeypatch.context() as patch:
+            patch.setattr(controller.runtime, "_store", repository)
+            patch.setattr(repository, "save", fail_save)
+            with pytest.raises(OSError, match="Runtime save failed"):
+                controller.resume_program_automation()
+            assert len(attempts) == 1
+            assert controller.runtime.state is before_runtime
+            assert repository.load_or_create(controller.document) == before_runtime
+            assert controller.desired_scenes == before_desired
+            assert controller.applied_scenes == before_applied
+
+            # A same-session update must still resolve the operator's live take.
+            projection.update_state(position=20, paused=True)
+            assert controller.desired_scenes == before_desired
+            assert card._program.isChecked()
+            assert popup._scene_cards["camera-pip"] is card
+    finally:
+        popup.deleteLater()
+        QCoreApplication.processEvents()
+        controller.close()
+
+
+def test_failed_automation_enable_never_persists_an_intermediate_return_base(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    projection = ProjectionSession()
+    controller = _controller(tmp_path, projection=projection)
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
+    _add_camera_pip_scene(controller, "camera-pip")
+    controller.documents.create_scene("Lectern", scene_id="lectern")
+    popup = SceneControlPopup(controller)
+    projection.set_state({"type": "video", "path": "clip.mp4"})
+    controller.take_program_scene("lectern")
+    controller.take_scene(BusId.MEDIA_WINDOWS, "camera-pip")
+    before_runtime = controller.runtime.state
+    before_desired = controller.desired_scenes
+    repository = SceneRuntimeRepository(tmp_path / "saved-runtime.json")
+    repository.save(before_runtime)
+    save = repository.save
+    attempts: list[SceneRuntimeState] = []
+
+    def reject_auto_save(
+        state: SceneRuntimeState, *, expected_revision: int | None = None,
+    ) -> None:
+        attempts.append(state)
+        if all(output.mode is OutputMode.AUTO for output in state.outputs):
+            raise OSError("Automatic mode save failed")
+        save(state, expected_revision=expected_revision)
+
+    try:
+        with monkeypatch.context() as patch:
+            patch.setattr(controller.runtime, "_store", repository)
+            patch.setattr(repository, "save", reject_auto_save)
+            with pytest.raises(OSError, match="Automatic mode save failed"):
+                controller.set_program_automatic(True)
+            assert controller.runtime.state is before_runtime
+            assert repository.load_or_create(controller.document) == before_runtime
+            assert len(attempts) == 1
+
+            projection.update_state(position=20)
+            assert controller.desired_scenes == before_desired
+            assert popup._scene_cards["camera-pip"]._projection.isChecked()
+            assert popup._scene_cards["lectern"]._program.isChecked()
+    finally:
+        popup.deleteLater()
+        QCoreApplication.processEvents()
+        controller.close()
+
+
+@pytest.mark.parametrize("stop_before_resuming", [False, True])
+def test_automatic_off_on_preserves_independent_card_returns_and_saved_bases(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stop_before_resuming: bool,
+) -> None:
+    projection = _Projection()
+    controller = _controller(tmp_path, projection=projection)
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
+    _add_camera_pip_scene(controller, "camera-pip")
+    controller.documents.create_scene("Lectern", scene_id="lectern")
+    popup = SceneControlPopup(controller)
+    projection_card = popup._scene_cards["camera-pip"]
+    program_card = popup._scene_cards["lectern"]
+    QTest.mouseClick(projection_card._projection, Qt.MouseButton.LeftButton)
+    QTest.mouseClick(program_card._program, Qt.MouseButton.LeftButton)
+    before_runtime = controller.runtime.state
+    repository = SceneRuntimeRepository(tmp_path / "saved-runtime.json")
+    repository.save(before_runtime)
+    projection.set_type("video")
+    media_desired = controller.desired_scenes
+
+    try:
+        with monkeypatch.context() as patch:
+            patch.setattr(controller.runtime, "_store", repository)
+            controller.set_program_automatic(False)
+            assert controller.desired_scenes == media_desired
+            assert all(output.mode is OutputMode.MANUAL for output in controller.runtime.state.outputs)
+            if stop_before_resuming:
+                projection.set_type("idle")
+                assert controller.desired_scenes == media_desired
+
+            controller.set_program_automatic(True)
+            if not stop_before_resuming:
+                assert controller.desired_scenes == media_desired
+            assert controller.runtime.state.outputs == before_runtime.outputs
+            restored = repository.load_or_create(controller.document)
+            assert restored == controller.runtime.state
+            assert restored.output(BusId.MEDIA_WINDOWS).manual_scene_id == "camera-pip"
+            assert restored.output(BusId.VIRTUAL_CAMERA).manual_scene_id == "lectern"
+
+            projection.set_type("idle")
+            assert controller.desired_scene(BusId.MEDIA_WINDOWS) == "camera-pip"
+            assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == "lectern"
+            assert projection_card._projection.isChecked()
+            assert program_card._program.isChecked()
+            assert popup._scene_cards["camera-pip"] is projection_card
+            assert popup._scene_cards["lectern"] is program_card
+    finally:
+        popup.deleteLater()
+        QCoreApplication.processEvents()
+        controller.close()
 
 
 def test_live_thumbnail_is_clipped_to_the_card_corners(tmp_path: Path) -> None:

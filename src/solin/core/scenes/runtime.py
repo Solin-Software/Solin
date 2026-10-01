@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 import logging
 from typing import Any, Protocol
@@ -249,24 +249,33 @@ class SceneRuntimeService:
             )
         )
 
-    def select_scene(self, bus_id: BusId, scene_id: str) -> SceneRuntimeState:
-        """Choose ONE output's base scene, with automation live on top of it.
+    def select_scene(self, bus_id: BusId, scene_id: str | None) -> SceneRuntimeState:
+        """Choose one output's return base and restore AUTO; None clears the override."""
+        return self.select_base_scenes({bus_id: scene_id}, resume_automation=True)
 
-        This is what picking a scene for an output means day to day: it is the
-        scene that output rests on, and media still takes it over while playing.
-        Use :meth:`take_scene` to pin an output and ignore automation entirely.
-
-        Selecting therefore *restores* AUTO. Leaving the mode alone made this a
-        no-op on an output that was already pinned — ``resolve_scene`` short-circuits
-        on MANUAL and never reads the automation map — so picking a scene silently
-        re-pinned the output and media stopped taking it over. Pinning is what
-        :meth:`take_scene` is for; there is no third state to preserve here.
-        """
-        self._documents.document.scene(scene_id)
-        current = self._state.output(bus_id)
+    def select_base_scenes(
+        self,
+        selections: Mapping[BusId, str | None],
+        *,
+        resume_automation: bool = False,
+    ) -> SceneRuntimeState:
+        """Update output return bases atomically; None uses the configured default."""
+        for bus_id, scene_id in selections.items():
+            if bus_id not in DELIVERY_BUSES:
+                raise SceneValidationError("Invalid runtime output bus")
+            if scene_id is not None:
+                self._documents.document.scene(scene_id)
         return self._commit(
-            self._with_output(
-                replace(current, mode=OutputMode.AUTO, manual_scene_id=scene_id)
+            replace(
+                self._state,
+                outputs=tuple(
+                    replace(
+                        output,
+                        mode=OutputMode.AUTO if resume_automation else output.mode,
+                        manual_scene_id=selections[output.bus_id] or "",
+                    ) if output.bus_id in selections else output
+                    for output in self._state.outputs
+                ),
             )
         )
 
@@ -294,80 +303,38 @@ class SceneRuntimeService:
     def select_program_scene(self, scene_id: str | None) -> SceneRuntimeState:
         """Select the Program base, or clear its override, without changing auto-switch."""
 
-        if scene_id is not None:
-            self._documents.document.scene(scene_id)
-        stored_scene_id = scene_id or ""
-        return self._commit(
-            replace(
-                self._state,
-                outputs=tuple(
-                    replace(output, manual_scene_id=stored_scene_id)
-                    for output in self._state.outputs
-                ),
-            )
-        )
+        return self.select_base_scenes({bus_id: scene_id for bus_id in DELIVERY_BUSES})
 
     def resume_program_automation(self) -> SceneRuntimeState:
-        return self._commit(
-            replace(
-                self._state,
-                outputs=tuple(
-                    replace(
-                        output,
-                        mode=OutputMode.AUTO,
-                    )
-                    for output in self._state.outputs
-                ),
-            )
+        return self.set_program_automatic(
+            True,
+            scene_ids={output.bus_id: output.manual_scene_id or None for output in self._state.outputs},
         )
 
     def set_program_automatic(
         self,
         enabled: bool,
         *,
-        current_scene_id: str,
-        automatic_base_scene_id: str | None = None,
+        scene_ids: Mapping[BusId, str | None],
     ) -> SceneRuntimeState:
+        """Commit all output modes and their selected bases or pins atomically."""
         if not isinstance(enabled, bool):
             raise SceneValidationError("Program automation state must be a boolean")
-        if enabled:
-            if automatic_base_scene_id is not None:
-                self._documents.document.scene(automatic_base_scene_id)
-            return self._commit(
-                replace(
-                    self._state,
-                    outputs=tuple(
-                        replace(
-                            output,
-                            mode=OutputMode.AUTO,
-                            manual_scene_id=(
-                                automatic_base_scene_id
-                                if automatic_base_scene_id is not None
-                                else output.manual_scene_id
-                            ),
-                        )
-                        for output in self._state.outputs
-                    ),
-                )
-            )
-        # Pin each output to *its own* scene. Routing this through
-        # take_program_scene pinned every output to Program's scene, silently
-        # discarding the projection output's independent selection — the lockstep
-        # behaviour from before the two outputs were split apart.
-        self._documents.document.scene(current_scene_id)
-        scene_ids = {scene.id for scene in self._documents.document.scenes}
+        if set(scene_ids) != set(DELIVERY_BUSES):
+            raise SceneValidationError("Selected scenes must define every output bus")
+        for scene_id in scene_ids.values():
+            if scene_id is None and not enabled:
+                raise SceneValidationError("Manual runtime mode requires a scene")
+            if scene_id is not None:
+                self._documents.document.scene(scene_id)
         return self._commit(
             replace(
                 self._state,
                 outputs=tuple(
                     replace(
                         output,
-                        mode=OutputMode.MANUAL,
-                        manual_scene_id=(
-                            output.manual_scene_id
-                            if output.manual_scene_id in scene_ids
-                            else current_scene_id
-                        ),
+                        mode=OutputMode.AUTO if enabled else OutputMode.MANUAL,
+                        manual_scene_id=scene_ids[output.bus_id] or "",
                     )
                     for output in self._state.outputs
                 ),

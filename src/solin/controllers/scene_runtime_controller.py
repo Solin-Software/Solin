@@ -254,8 +254,7 @@ class SceneRuntimeController(QObject):
         self._source_health: dict[str, SourceHealthEvent] = {}
         self._local_camera_request_id = ""
         self._local_camera_future: Future[LocalCameraDiscovery] | None = None
-        self._suspended_media_session_id: int | None = None
-        self._automatic_media_scene_selection: _AutomaticMediaSceneSelection | None = None
+        self._automatic_media_scene_selections: dict[BusId, _AutomaticMediaSceneSelection] = {}
         self._last_projection_session_id = self._projection_session_id()
         self._last_content_playing = self.content_is_playing
         self._desired_scenes = self._resolve_desired_scenes()
@@ -389,18 +388,33 @@ class SceneRuntimeController(QObject):
         return bool(getattr(self._projection, "idle_media_path", ""))
 
     def select_scene(self, bus_id: BusId, scene_id: str) -> SceneRuntimeState:
-        """Set one output's base scene, keeping automation live for it.
-
-        Media playing still takes the output over; the chosen scene is what it
-        returns to. Pinning an output against automation is :meth:`take_scene`.
-        """
-        state = self._runtime.select_scene(bus_id, scene_id)
+        """Take one output now; only content scenes return after the media session."""
+        self._documents.document.scene(scene_id)
+        previous_selections = self._automatic_media_scene_selections.copy()
+        category = content_category_for_projection(self._projection.state)
+        try:
+            if category in AUTOMATIC_MEDIA_CATEGORIES:
+                selection = self._media_session_selection(scene_id, bus_id)
+                self._automatic_media_scene_selections[bus_id] = selection
+                state = self._runtime.select_scene(
+                    bus_id,
+                    selection.return_scene_id
+                    if self._scene_keeps_media_automation(scene_id)
+                    else scene_id,
+                )
+            else:
+                self._automatic_media_scene_selections.pop(bus_id, None)
+                state = self._runtime.select_scene(bus_id, scene_id)
+        except Exception:  # noqa: BLE001 - restore transient state on write failure
+            self._automatic_media_scene_selections = previous_selections
+            raise
         self._reconcile_desired(prepare=True)
         return state
 
     def take_scene(self, bus_id: BusId, scene_id: str) -> SceneRuntimeState:
         """Route one output to a scene; the other outputs keep their own."""
         state = self._runtime.take_scene(bus_id, scene_id)
+        self._automatic_media_scene_selections.pop(bus_id, None)
         self._reconcile_desired(prepare=True)
         return state
 
@@ -415,25 +429,24 @@ class SceneRuntimeController(QObject):
             automatic_media_session and self._scene_keeps_media_automation(scene_id)
         )
         if automatic_media_session:
-            previous_suspension = self._suspended_media_session_id
-            previous_selection = self._automatic_media_scene_selection
-            selection = self._media_session_selection(scene_id)
-            self._automatic_media_scene_selection = selection
-            self._suspended_media_session_id = (
-                None if safe_media_scene else selection.projection_session_id
-            )
+            previous_suspension = self.program_automation_suspended
+            previous_selection = self._automatic_media_scene_selections.copy()
+            self._automatic_media_scene_selections = {
+                bus_id: self._media_session_selection(scene_id, bus_id)
+                for bus_id in DELIVERY_BUSES
+            }
             try:
                 if safe_media_scene:
                     state = self._runtime.state
-                    if previous_suspension == selection.projection_session_id:
-                        state = self._runtime.select_program_scene(
-                            selection.return_scene_id
-                        )
+                    if previous_suspension:
+                        state = self._runtime.select_base_scenes({
+                            bus_id: item.return_scene_id
+                            for bus_id, item in self._automatic_media_scene_selections.items()
+                        })
                 else:
                     state = self._runtime.select_program_scene(scene_id)
             except Exception:  # noqa: BLE001 - restore transient state on write failure
-                self._suspended_media_session_id = previous_suspension
-                self._automatic_media_scene_selection = previous_selection
+                self._automatic_media_scene_selections = previous_selection
                 raise
             self._reconcile_desired(prepare=True)
             return state
@@ -447,10 +460,12 @@ class SceneRuntimeController(QObject):
     def program_automation_suspended(self) -> bool:
         runtime = self._runtime.state.output(BusId.VIRTUAL_CAMERA)
         category = content_category_for_projection(self._projection.state)
+        selection = self._current_media_session_selection()
         return (
             runtime.mode is OutputMode.AUTO
             and category in AUTOMATIC_MEDIA_CATEGORIES
-            and self._suspended_media_session_id == self._projection_session_id()
+            and selection is not None
+            and not self._scene_keeps_media_automation(selection.scene_id)
         )
 
     @property
@@ -488,53 +503,87 @@ class SceneRuntimeController(QObject):
             )
         if scene_id == self._documents.program_media_scene_id:
             raise SceneValidationError("Program return scene must differ from media scene")
-        state = self._runtime.select_program_scene(scene_id)
-        selection = self._automatic_media_scene_selection
-        if (
-            selection is not None
-            and selection.projection_session_id == self._projection_session_id()
-        ):
-            self._automatic_media_scene_selection = _AutomaticMediaSceneSelection(
-                projection_session_id=selection.projection_session_id,
-                scene_id=selection.scene_id,
-                return_scene_id=scene_id,
-            )
-        return state
+        return self._set_return_scenes({bus_id: scene_id for bus_id in DELIVERY_BUSES})
+
+    def return_scene_override_available(self, bus_id: BusId) -> bool:
+        """Return whether this output is showing an automatic media composition."""
+        return (
+            self._runtime.state.output(bus_id).mode is OutputMode.AUTO
+            and content_category_for_projection(self._projection.state)
+            in AUTOMATIC_MEDIA_CATEGORIES
+            and self._scene_keeps_media_automation(self.desired_scene(bus_id))
+        )
+
+    def set_return_scene(self, bus_id: BusId, scene_id: str) -> SceneRuntimeState:
+        """Change only this output's return target, without taking it on air."""
+        self._documents.document.scene(scene_id)
+        if not self.return_scene_override_available(bus_id):
+            raise SceneValidationError("Return can only change during automatic media")
+        category = content_category_for_projection(self._projection.state)
+        if scene_id == self._documents.document.automation_for(bus_id).scene_for(category):
+            raise SceneValidationError("Return scene must differ from media scene")
+        return self._set_return_scenes({bus_id: scene_id})
+
+    def _set_return_scenes(self, selections: Mapping[BusId, str]) -> SceneRuntimeState:
+        previous_selections = self._automatic_media_scene_selections.copy()
+        for bus_id, scene_id in selections.items():
+            selection = self._current_media_session_selection(bus_id)
+            if selection is not None:
+                self._automatic_media_scene_selections[bus_id] = _AutomaticMediaSceneSelection(
+                    projection_session_id=selection.projection_session_id,
+                    scene_id=selection.scene_id,
+                    return_scene_id=scene_id,
+                )
+        try:
+            return self._runtime.select_base_scenes(selections)
+        except Exception:  # noqa: BLE001 - restore transient state on write failure
+            self._automatic_media_scene_selections = previous_selections
+            raise
 
     def resume_program_automation(self) -> SceneRuntimeState:
-        if not self._documents.program_automation_configured:
-            raise SceneValidationError(
-                "Automatic switching requires different default and media scenes"
-            )
-        self._restore_media_session_return_base()
-        state = self._runtime.resume_program_automation()
-        self._reconcile_desired(prepare=True)
-        return state
+        return self.set_program_automatic(True)
 
     def set_program_automatic(self, enabled: bool) -> SceneRuntimeState:
         if enabled and not self._documents.program_automation_configured:
             raise SceneValidationError(
                 "Automatic switching requires different default and media scenes"
             )
-        current_scene_id = self.desired_scene(BusId.VIRTUAL_CAMERA)
+        previous_selections = self._automatic_media_scene_selections.copy()
+        scene_ids: dict[BusId, str | None] = {}
+        category = content_category_for_projection(self._projection.state)
+        valid_scene_ids = {scene.id for scene in self._documents.document.scenes}
         if enabled:
-            self._restore_media_session_return_base()
+            for bus_id in DELIVERY_BUSES:
+                selection = self._current_media_session_selection(bus_id)
+                scene_id = (
+                    selection.return_scene_id if selection is not None
+                    else self._runtime.state.output(bus_id).manual_scene_id or None
+                )
+                automation = self._documents.document.automation_for(bus_id)
+                media_scene_ids = {
+                    automation.scene_for(media_category)
+                    for media_category in AUTOMATIC_MEDIA_CATEGORIES
+                }
+                if scene_id not in valid_scene_ids or scene_id in media_scene_ids:
+                    scene_id = self._documents.document.output(bus_id).default_scene_id or None
+                scene_ids[bus_id] = scene_id
+            self._automatic_media_scene_selections.clear()
         else:
-            self._suspended_media_session_id = None
-            self._automatic_media_scene_selection = None
-        media_scene_id = self._documents.program_media_scene_id
-        automatic_base_scene_id = (
-            self._documents.program_default_scene_id
-            if enabled
-            and media_scene_id
-            and self._runtime.state.output(BusId.VIRTUAL_CAMERA).manual_scene_id == media_scene_id
-            else None
-        )
-        state = self._runtime.set_program_automatic(
-            bool(enabled),
-            current_scene_id=current_scene_id,
-            automatic_base_scene_id=automatic_base_scene_id,
-        )
+            for bus_id in DELIVERY_BUSES:
+                scene_id = self.desired_scene(bus_id)
+                scene_ids[bus_id] = scene_id
+                if category in AUTOMATIC_MEDIA_CATEGORIES:
+                    self._automatic_media_scene_selections[bus_id] = self._media_session_selection(
+                        scene_id, bus_id,
+                    )
+        try:
+            state = self._runtime.set_program_automatic(
+                bool(enabled),
+                scene_ids=scene_ids,
+            )
+        except Exception:  # noqa: BLE001 - restore transient state on write failure
+            self._automatic_media_scene_selections = previous_selections
+            raise
         self._reconcile_desired(prepare=True)
         return state
 
@@ -1126,8 +1175,7 @@ class SceneRuntimeController(QObject):
         self._layer_geometry_in_flight = None
         self._queued_layer_geometry.clear()
         self._preview_scene_id = self._profile_preview_scene_id
-        self._suspended_media_session_id = None
-        self._automatic_media_scene_selection = None
+        self._automatic_media_scene_selections.clear()
         self._desired_scenes = self._resolve_desired_scenes()
         self._last_destination_enabled = self._destination_enabled()
         self._last_render_enabled = self._render_enabled()
@@ -1148,19 +1196,22 @@ class SceneRuntimeController(QObject):
         session_id = self._projection_session_id()
         if session_id != self._last_projection_session_id:
             self._last_projection_session_id = session_id
-            self._suspended_media_session_id = None
-            self._automatic_media_scene_selection = None
+            # Pinned outputs keep their return bases until automation resumes.
+            self._automatic_media_scene_selections = {
+                bus_id: selection
+                for bus_id, selection in self._automatic_media_scene_selections.items()
+                if self._runtime.state.output(bus_id).mode is OutputMode.MANUAL
+            }
             category = content_category_for_projection(self._projection.state)
-            runtime = self._runtime.state.output(BusId.VIRTUAL_CAMERA)
-            default_scene_id = self._documents.program_default_scene_id
             if (
                 not MEMORIZE_PRE_MEDIA_SCENE
-                and runtime.mode is OutputMode.AUTO
                 and category in AUTOMATIC_MEDIA_CATEGORIES
-                and default_scene_id
-                and runtime.manual_scene_id != default_scene_id
             ):
-                self._runtime.select_program_scene(default_scene_id)
+                self._runtime.select_base_scenes({
+                    bus_id: self._documents.document.output(bus_id).default_scene_id or None
+                    for bus_id in DELIVERY_BUSES
+                    if self._runtime.state.output(bus_id).mode is OutputMode.AUTO
+                })
         self._notify_content_playing()
         self._reconcile_desired(prepare=True)
 
@@ -2205,32 +2256,22 @@ class SceneRuntimeController(QObject):
 
     def _resolve_desired_scenes(self) -> tuple[tuple[BusId, str], ...]:
         category = content_category_for_projection(self._projection.state)
-        runtime = self._runtime.state.output(BusId.VIRTUAL_CAMERA)
-        if (
-            runtime.mode is OutputMode.AUTO
-            and category in AUTOMATIC_MEDIA_CATEGORIES
-            and self._suspended_media_session_id == self._projection_session_id()
-        ):
-            category = ContentCategory.IDLE
-        selection = self._automatic_media_scene_selection
-        selected_scene_id = (
-            selection.scene_id
-            if runtime.mode is OutputMode.AUTO
-            and category in AUTOMATIC_MEDIA_CATEGORIES
-            and selection is not None
-            and selection.projection_session_id == self._projection_session_id()
-            and any(scene.id == selection.scene_id for scene in self._documents.document.scenes)
-            else None
-        )
-        program_scene = selected_scene_id or self._runtime.resolve_scene(
-            BusId.VIRTUAL_CAMERA,
-            category,
-        )
-        # Each delivery output resolves independently; the editor previews
-        # whatever is selected, falling back to the program when nothing is.
-        projection_scene = self._runtime.resolve_scene(BusId.MEDIA_WINDOWS, category)
+        scene_ids = {scene.id for scene in self._documents.document.scenes}
+        resolved = {}
+        for bus_id in DELIVERY_BUSES:
+            runtime = self._runtime.state.output(bus_id)
+            selection = self._current_media_session_selection(bus_id)
+            resolved[bus_id] = (
+                selection.scene_id
+                if runtime.mode is OutputMode.AUTO
+                and category in AUTOMATIC_MEDIA_CATEGORIES
+                and selection is not None
+                and selection.scene_id in scene_ids
+                else self._runtime.resolve_scene(bus_id, category)
+            )
+        program_scene = resolved[BusId.VIRTUAL_CAMERA]
         return (
-            (BusId.MEDIA_WINDOWS, projection_scene),
+            (BusId.MEDIA_WINDOWS, resolved[BusId.MEDIA_WINDOWS]),
             (BusId.VIRTUAL_CAMERA, program_scene),
             (BusId.EDITOR, self._preview_scene_id or program_scene),
         )
@@ -2252,46 +2293,43 @@ class SceneRuntimeController(QObject):
             )
         )
 
-    def _current_media_session_selection(self) -> _AutomaticMediaSceneSelection | None:
-        selection = self._automatic_media_scene_selection
+    def _current_media_session_selection(
+        self, bus_id: BusId = BusId.VIRTUAL_CAMERA,
+    ) -> _AutomaticMediaSceneSelection | None:
+        selection = self._automatic_media_scene_selections.get(bus_id)
         return (
             selection
             if selection is not None
-            and selection.projection_session_id == self._projection_session_id()
+            and (
+                selection.projection_session_id == self._projection_session_id()
+                or self._runtime.state.output(bus_id).mode is OutputMode.MANUAL
+            )
             else None
         )
 
-    def _media_session_selection(self, scene_id: str) -> _AutomaticMediaSceneSelection:
-        current = self._current_media_session_selection()
+    def _media_session_selection(
+        self, scene_id: str, bus_id: BusId = BusId.VIRTUAL_CAMERA,
+    ) -> _AutomaticMediaSceneSelection:
+        current = self._current_media_session_selection(bus_id)
+        scene_ids = {scene.id for scene in self._documents.document.scenes}
         if current is not None:
             return _AutomaticMediaSceneSelection(
-                projection_session_id=current.projection_session_id,
+                projection_session_id=self._projection_session_id(),
                 scene_id=scene_id,
-                return_scene_id=current.return_scene_id,
+                return_scene_id=(
+                    current.return_scene_id if current.return_scene_id in scene_ids else None
+                ),
             )
-        runtime = self._runtime.state.output(BusId.VIRTUAL_CAMERA)
+        runtime = self._runtime.state.output(bus_id)
         return_scene_id = runtime.manual_scene_id or None
-        if return_scene_id == self._documents.program_media_scene_id:
+        category = content_category_for_projection(self._projection.state)
+        if return_scene_id == self._documents.document.automation_for(bus_id).scene_for(category):
             return_scene_id = None
         return _AutomaticMediaSceneSelection(
             projection_session_id=self._projection_session_id(),
             scene_id=scene_id,
             return_scene_id=return_scene_id,
         )
-
-    def _restore_media_session_return_base(self) -> None:
-        selection = self._current_media_session_selection()
-        previous_suspension = self._suspended_media_session_id
-        previous_selection = self._automatic_media_scene_selection
-        self._suspended_media_session_id = None
-        self._automatic_media_scene_selection = None
-        try:
-            if selection is not None:
-                self._runtime.select_program_scene(selection.return_scene_id)
-        except Exception:  # noqa: BLE001 - restore transient state on write failure
-            self._suspended_media_session_id = previous_suspension
-            self._automatic_media_scene_selection = previous_selection
-            raise
 
     def _destination_enabled(self) -> tuple[tuple[BusId, bool], ...]:
         enabled = {
