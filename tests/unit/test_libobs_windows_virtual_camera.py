@@ -18,6 +18,29 @@ def test_frame_file_name_matches_the_native_pattern():
     assert name == "Solin.VirtualCamera.{ABCD}.frames"
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="requires Windows file mapping and ACLs")
+def test_native_ring_mapping_is_writable_and_removed_on_close(tmp_path, monkeypatch):
+    from pathlib import Path
+
+    from solin.core.scenes import libobs_windows_virtual_camera as camera
+    from solin.core.scenes.windows_vcam_identity import current_user_sid
+
+    monkeypatch.setenv("TEMP", str(tmp_path))
+    monkeypatch.setenv("TMP", str(tmp_path))
+    # Restrict this lifecycle check to its own ring, without sweeping other producers.
+    monkeypatch.setattr(camera, "_sweep_orphaned_rings", lambda: 0)
+    ring = camera._WindowsSharedRingFile(4096, current_user_sid())
+    path = Path(ring.path)
+    try:
+        assert path.parent == tmp_path
+        assert path.stat().st_size == 4096
+        ring.buffer[:4] = b"test"
+        assert path.read_bytes()[:4] == b"test"
+    finally:
+        ring.close()
+    assert not path.exists()
+
+
 @pytest.mark.skipif(sys.platform == "win32", reason="guard is for non-Windows hosts")
 def test_orchestrator_construction_refused_off_windows():
     from solin.core.scenes.libobs_windows_virtual_camera import LibobsWindowsVirtualCamera

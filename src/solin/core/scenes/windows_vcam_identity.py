@@ -19,7 +19,12 @@ kernel32) and therefore only exercised on Windows hardware.
 from __future__ import annotations
 
 import hashlib
-import sys
+
+from solin.core.scenes.windows_vcam_api import (
+    load_windows_library,
+    require_windows,
+    windows_last_error,
+)
 
 BROKER_PIPE_PREFIX = r"\\.\pipe\Solin.VirtualCamera.FrameBroker.v3."
 
@@ -49,8 +54,8 @@ def current_user_sid() -> str:
     import ctypes
     from ctypes import wintypes
 
-    advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    advapi32 = load_windows_library("advapi32")
+    kernel32 = load_windows_library("kernel32")
 
     # argtypes/restype are REQUIRED, not cosmetic: without them ctypes marshals
     # every pointer/HANDLE as a 32-bit C int, truncating 64-bit heap addresses
@@ -82,17 +87,17 @@ def current_user_sid() -> str:
     if not advapi32.OpenProcessToken(
         kernel32.GetCurrentProcess(), TOKEN_QUERY, ctypes.byref(token)
     ):
-        raise OSError(ctypes.get_last_error(), "OpenProcessToken failed")
+        raise OSError(windows_last_error(), "OpenProcessToken failed")
     try:
         size = wintypes.DWORD(0)
         advapi32.GetTokenInformation(token, TOKEN_USER, None, 0, ctypes.byref(size))
-        if ctypes.get_last_error() != ERROR_INSUFFICIENT_BUFFER or size.value == 0:
-            raise OSError(ctypes.get_last_error(), "GetTokenInformation sizing failed")
+        if windows_last_error() != ERROR_INSUFFICIENT_BUFFER or size.value == 0:
+            raise OSError(windows_last_error(), "GetTokenInformation sizing failed")
         buffer = (ctypes.c_byte * size.value)()
         if not advapi32.GetTokenInformation(
             token, TOKEN_USER, buffer, size, ctypes.byref(size)
         ):
-            raise OSError(ctypes.get_last_error(), "GetTokenInformation failed")
+            raise OSError(windows_last_error(), "GetTokenInformation failed")
         # TOKEN_USER begins with SID_AND_ATTRIBUTES whose first member is the PSID.
         # Indexing POINTER(c_void_p) yields a bare Python int; wrap it in c_void_p
         # (with the LPVOID argtype above) so the full 64-bit pointer is passed.
@@ -101,7 +106,7 @@ def current_user_sid() -> str:
         if not advapi32.ConvertSidToStringSidW(
             ctypes.c_void_p(psid), ctypes.byref(string_sid)
         ):
-            raise OSError(ctypes.get_last_error(), "ConvertSidToStringSidW failed")
+            raise OSError(windows_last_error(), "ConvertSidToStringSidW failed")
         try:
             value = string_sid.value or ""
         finally:
@@ -118,7 +123,7 @@ def current_session_id() -> int:
     import ctypes
     from ctypes import wintypes
 
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32 = load_windows_library("kernel32")
     kernel32.GetCurrentProcessId.restype = wintypes.DWORD
     kernel32.GetCurrentProcessId.argtypes = []
     kernel32.ProcessIdToSessionId.argtypes = [
@@ -128,12 +133,11 @@ def current_session_id() -> int:
     if not kernel32.ProcessIdToSessionId(
         kernel32.GetCurrentProcessId(), ctypes.byref(session)
     ):
-        raise OSError(ctypes.get_last_error(), "ProcessIdToSessionId failed")
+        raise OSError(windows_last_error(), "ProcessIdToSessionId failed")
     return int(session.value)
 
 
 def current_user_broker_pipe_name() -> str:
     """The pipe name for this user+session. Windows only."""
-    if sys.platform != "win32":
-        raise RuntimeError("the virtual-camera broker pipe is Windows-only")
+    require_windows()
     return broker_pipe_name(current_user_sid(), current_session_id())

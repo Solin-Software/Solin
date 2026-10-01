@@ -105,7 +105,10 @@ jobs:
 
       - name: Pyright typecheck
         if: ${{ steps.filter.outputs.run_quality == 'true' }}
-        run: python scripts/typecheck.py
+        run: |
+          for platform in Linux Windows Darwin; do
+            python scripts/typecheck.py --pythonplatform "$platform"
+          done
 
       - name: Build and test native media-engine protocol
         if: ${{ steps.filter.outputs.run_quality == 'true' }}

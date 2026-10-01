@@ -20,11 +20,15 @@ from __future__ import annotations
 
 import logging
 import struct
-import sys
 import threading
 from dataclasses import dataclass
 from typing import Callable, Optional
 
+from solin.core.scenes.windows_vcam_api import (
+    load_windows_library,
+    require_windows,
+    windows_last_error,
+)
 from solin.core.scenes.windows_vcam_transport import (
     PRESENCE_MARKER,
     REQUEST_SIZE,
@@ -102,8 +106,7 @@ class WindowsVcamBroker:
     """
 
     def __init__(self, pipe_name: str, sid: str, endpoint_provider: EndpointProvider) -> None:
-        if sys.platform != "win32":
-            raise RuntimeError("the virtual-camera broker is Windows-only")
+        require_windows()
         self._pipe_name = pipe_name
         self._sid = sid
         self._endpoint_provider = endpoint_provider
@@ -195,8 +198,7 @@ class WindowsVcamBroker:
 
 def _Win32():  # noqa: N802 - factory named for the class it stands in for
     """Build the Windows syscall shim, or raise on a non-Windows host."""
-    if sys.platform != "win32":
-        raise RuntimeError("the virtual-camera broker is Windows-only")
+    require_windows()
     return _Win32Impl()
 
 
@@ -241,8 +243,8 @@ class _Win32Impl:
 
         self._ctypes = ctypes
         self._wintypes = wintypes
-        self._k32 = ctypes.WinDLL("kernel32", use_last_error=True)
-        self._a32 = ctypes.WinDLL("advapi32", use_last_error=True)
+        self._k32 = load_windows_library("kernel32")
+        self._a32 = load_windows_library("advapi32")
         self.INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value  # 0xFFFF…FFFF, unsigned
 
         HANDLE = wintypes.HANDLE
@@ -391,7 +393,7 @@ class _Win32Impl:
             overlapped.hEvent = event
             if self._k32.ConnectNamedPipe(pipe, ctypes.byref(overlapped)):
                 return True
-            error = ctypes.get_last_error()
+            error = windows_last_error()
             if error == self.ERROR_PIPE_CONNECTED:
                 return True
             if error != self.ERROR_IO_PENDING:
@@ -444,7 +446,7 @@ class _Win32Impl:
                 ok = self._k32.ReadFile(pipe, view, count - offset,
                                         ctypes.byref(transferred), ctypes.byref(overlapped))
                 if not ok:
-                    error = ctypes.get_last_error()
+                    error = windows_last_error()
                     if error != self.ERROR_IO_PENDING:
                         return None
                     if not self._wait_overlapped(pipe, overlapped, event, stop_event, timeout_ms):
@@ -473,7 +475,7 @@ class _Win32Impl:
                 ok = self._k32.WriteFile(pipe, view, total - offset,
                                          ctypes.byref(transferred), ctypes.byref(overlapped))
                 if not ok:
-                    error = ctypes.get_last_error()
+                    error = windows_last_error()
                     if error != self.ERROR_IO_PENDING:
                         return False
                     if not self._wait_overlapped(pipe, overlapped, event, stop_event, timeout_ms):
@@ -500,7 +502,7 @@ class _Win32Impl:
                 ok = self._k32.ReadFile(pipe, sentinel, 1,
                                         ctypes.byref(transferred), ctypes.byref(overlapped))
                 if not ok:
-                    error = ctypes.get_last_error()
+                    error = windows_last_error()
                     if error in (self.ERROR_BROKEN_PIPE, self.ERROR_PIPE_NOT_CONNECTED,
                                  self.ERROR_NO_DATA):
                         return
@@ -565,7 +567,7 @@ class _Win32Impl:
         try:
             size = wintypes.DWORD(0)
             self._a32.GetTokenInformation(token, self.TOKEN_USER, None, 0, ctypes.byref(size))
-            if ctypes.get_last_error() != self.ERROR_INSUFFICIENT_BUFFER or size.value == 0:
+            if windows_last_error() != self.ERROR_INSUFFICIENT_BUFFER or size.value == 0:
                 return False
             storage = (ctypes.c_byte * size.value)()
             if not self._a32.GetTokenInformation(
@@ -579,4 +581,4 @@ class _Win32Impl:
             self.close_handle(token)
 
     def _last_error(self, where: str) -> OSError:
-        return OSError(self._ctypes.get_last_error(), f"{where} failed")
+        return OSError(windows_last_error(), f"{where} failed")

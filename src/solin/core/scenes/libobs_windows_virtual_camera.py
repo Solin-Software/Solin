@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import logging
 import os
-import sys
 import tempfile
 import threading
 import time
@@ -31,6 +30,12 @@ import uuid
 from pathlib import Path
 from typing import Any, Optional
 
+from solin.core.scenes.windows_vcam_api import (
+    load_windows_library,
+    require_windows,
+    windows_file_descriptor,
+    windows_last_error,
+)
 from solin.core.scenes.windows_vcam_broker import VcamBrokerEndpoint, WindowsVcamBroker
 from solin.core.scenes.windows_vcam_identity import (
     current_user_broker_pipe_name,
@@ -63,8 +68,7 @@ class LibobsWindowsVirtualCamera:
     """Broker + NV12 producer feeding the Solin DirectShow filter (Windows only)."""
 
     def __init__(self, runtime: Any) -> None:
-        if sys.platform != "win32":
-            raise RuntimeError("the Windows virtual camera is Windows-only")
+        require_windows()
         self._runtime = runtime
         self._lock = threading.Lock()
         self._ring_file: Optional[_WindowsSharedRingFile] = None
@@ -240,9 +244,9 @@ class _WindowsSharedRingFile:
     def __init__(self, mapping_size: int, sid: str) -> None:
         import ctypes
         import mmap
-        import msvcrt
         from ctypes import wintypes
 
+        require_windows()
         self._mapping_size = mapping_size
         self._path = ""
         self._fd = -1
@@ -252,8 +256,8 @@ class _WindowsSharedRingFile:
         # abandoned ones before adding another.
         _sweep_orphaned_rings()
 
-        k32 = ctypes.WinDLL("kernel32", use_last_error=True)
-        a32 = ctypes.WinDLL("advapi32", use_last_error=True)
+        k32 = load_windows_library("kernel32")
+        a32 = load_windows_library("advapi32")
 
         GENERIC_READ = 0x80000000
         GENERIC_WRITE = 0x40000000
@@ -307,7 +311,7 @@ class _WindowsSharedRingFile:
         if not a32.ConvertStringSecurityDescriptorToSecurityDescriptorW(
             sddl, 1, ctypes.byref(descriptor), None
         ):
-            raise OSError(ctypes.get_last_error(), "frame ring security descriptor failed")
+            raise OSError(windows_last_error(), "frame ring security descriptor failed")
         attributes = SECURITY_ATTRIBUTES()
         attributes.nLength = ctypes.sizeof(SECURITY_ATTRIBUTES)
         attributes.lpSecurityDescriptor = descriptor
@@ -328,19 +332,19 @@ class _WindowsSharedRingFile:
                     handle = raw
                     self._path = path
                     break
-                error = ctypes.get_last_error()
+                error = windows_last_error()
                 if error not in (ERROR_FILE_EXISTS, ERROR_ALREADY_EXISTS):
                     raise OSError(error, "CreateFileW failed")
             if handle is None:
                 raise OSError("could not create a unique frame ring file")
 
             if not k32.SetFilePointerEx(handle, mapping_size, None, FILE_BEGIN):
-                raise OSError(ctypes.get_last_error(), "SetFilePointerEx failed")
+                raise OSError(windows_last_error(), "SetFilePointerEx failed")
             if not k32.SetEndOfFile(handle):
-                raise OSError(ctypes.get_last_error(), "SetEndOfFile failed")
+                raise OSError(windows_last_error(), "SetEndOfFile failed")
 
             # Hand the Win32 handle to the CRT; the fd (and its mmap) now own it.
-            self._fd = msvcrt.open_osfhandle(handle, os.O_RDWR)
+            self._fd = windows_file_descriptor(handle, os.O_RDWR)
             handle = None  # ownership transferred to the fd
             self._buffer = mmap.mmap(self._fd, mapping_size)
             # Tighten the on-disk DACL to read-only for the user now that our
@@ -371,12 +375,12 @@ class _WindowsSharedRingFile:
             sddl, 1, ctypes.byref(read_only), None
         ):
             log.warning("virtual camera ring: read-only DACL build failed (err %d)",
-                        ctypes.get_last_error())
+                        windows_last_error())
             return
         try:
             if not a32.SetFileSecurityW(self._path, dacl_info, read_only):
                 log.warning("virtual camera ring: DACL tighten failed (err %d)",
-                            ctypes.get_last_error())
+                            windows_last_error())
         finally:
             k32.LocalFree(read_only)
 
