@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import logging
 import threading
+from collections.abc import Callable
+from functools import partial
 from typing import Any
 
 log = logging.getLogger(__name__)
@@ -80,6 +82,7 @@ def render_source_to_bgra(
     *,
     canvas_width: int,
     canvas_height: int,
+    before_render: Callable[[], bool] | None = None,
 ) -> tuple[bytes, int] | None:
     """Render ``source`` into a ``width`` x ``height`` BGRA buffer.
 
@@ -98,6 +101,8 @@ def render_source_to_bgra(
     with _lock:
         lib.obs_enter_graphics()
         try:
+            if before_render is not None and not before_render():
+                return None
             if _texrender is None:
                 _texrender = _casts["texrender_create"](_GS_BGRA, _GS_ZS_NONE)
                 if not _texrender:
@@ -181,13 +186,18 @@ def shutdown() -> None:
             lib.obs_leave_graphics()
 
 
-def resolve_render_source_to_bgra():
+def resolve_render_source_to_bgra(*, before_render: Callable[[], bool] | None = None):
     """Return the source→BGRA renderer to use.
 
-    A ``pylibobs`` build that ships its own ``render_source_to_bgra`` wins, so this module
-    only fills the gap left by the published wheels. Resolved once per egress loop rather
-    than per frame.
+    Use the cached readback when preparation must run inside the graphics context.
+    Otherwise prefer the helper supplied by ``pylibobs`` when available. Resolve
+    once per egress loop rather than per frame.
     """
+    if before_render is not None:
+        # Preparation and readback must share the graphics mutex so a source
+        # cannot change resolution between converting its crop and rendering it.
+        return partial(render_source_to_bgra, before_render=before_render)
+
     import pylibobs
 
     return getattr(pylibobs, "render_source_to_bgra", render_source_to_bgra)

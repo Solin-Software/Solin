@@ -77,7 +77,7 @@ _START_DEADLINE_MS = DEFAULT_ENGINE_STARTUP_DEADLINE_MS
 _HYDRATE_DEADLINE_MS = 12000
 _PREPARE_DEADLINE_MS = 1500
 _TAKE_DEADLINE_MS = 1000
-_PREVIEW_GEOMETRY_DEADLINE_MS = 500
+_LAYER_GEOMETRY_DEADLINE_MS = 500
 _CAMERA_DISCOVERY_DEADLINE_MS = 3000
 
 log = logging.getLogger(__name__)
@@ -145,12 +145,14 @@ class _PendingProfileActivation:
 
 
 @dataclass(frozen=True, slots=True)
-class _PendingLayerPreview:
+class _PendingLayerGeometry:
     request_id: str
     sequence: int
     document_revision: int
     scene_id: str
     layer: SceneLayer
+    committed: bool
+    retry_count: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -229,8 +231,9 @@ class SceneRuntimeController(QObject):
         self._hydrate_dirty = False
         self._engine_document_revision = 0
         self._observed_graph_record = scene_engine_graph_signature(self._documents.document)
-        self._preview_geometry_in_flight: _PendingLayerPreview | None = None
-        self._queued_preview_geometry: tuple[str, SceneLayer, int] | None = None
+        self._observed_document = self._documents.document
+        self._layer_geometry_in_flight: _PendingLayerGeometry | None = None
+        self._queued_layer_geometry: dict[tuple[str, str], tuple[SceneLayer, bool, int]] = {}
         self._profile_activation: _PendingProfileActivation | None = None
         self._profile_preview_scene_id: str | None = None
         self._delete_after_profile_activation = ""
@@ -684,12 +687,19 @@ class SceneRuntimeController(QObject):
         )
         if authored is None or authored.source_id != layer.source_id:
             raise SceneValidationError("Preview layer does not match the scene document")
-        self._queued_preview_geometry = (
-            scene_id,
-            layer,
-            self._engine_document_revision,
+        if not authored.visible:
+            return
+        self._queue_layer_geometry(scene_id, layer, committed=False)
+        self._dispatch_layer_geometry()
+
+    def _queue_layer_geometry(
+        self, scene_id: str, layer: SceneLayer, *, committed: bool, retry_count: int = 0,
+    ) -> None:
+        key = (scene_id, layer.id)
+        previous = self._queued_layer_geometry.get(key)
+        self._queued_layer_geometry[key] = (
+            layer, committed or (previous is not None and previous[1]), retry_count,
         )
-        self._dispatch_preview_geometry()
 
     @Slot(object)
     def publish_preview_frame(self, image: object) -> None:
@@ -1045,8 +1055,8 @@ class SceneRuntimeController(QObject):
         self._hydrate_dirty = False
         self._engine_document_revision = 0
         self._failed_takes.clear()
-        self._preview_geometry_in_flight = None
-        self._queued_preview_geometry = None
+        self._layer_geometry_in_flight = None
+        self._queued_layer_geometry.clear()
         self._set_last_engine_error_code("")
         if self._applied_scenes:
             self._applied_scenes = ()
@@ -1066,12 +1076,30 @@ class SceneRuntimeController(QObject):
             self._ptz.close()
 
     def _on_document_changed(self, change: SceneDocumentChange) -> None:
+        previous_document = self._observed_document
+        self._observed_document = change.document
         graph_record = scene_engine_graph_signature(change.document)
         graph_changed = graph_record != self._observed_graph_record
         self._observed_graph_record = graph_record
         self.document_changed.emit(change.document)
         if not graph_changed:
+            previous_layers = {
+                (scene.id, layer.id): layer
+                for scene in previous_document.scenes
+                for layer in scene.layers
+            }
+            for scene in change.document.scenes:
+                for layer in scene.layers:
+                    previous = previous_layers.get((scene.id, layer.id))
+                    if layer.visible and previous is not None and (
+                        previous.rect != layer.rect or previous.crop != layer.crop
+                    ):
+                        self._queue_layer_geometry(scene.id, layer, committed=True)
+            self._dispatch_layer_geometry()
             return
+        # The next snapshot includes all commits. Discard previews for the old
+        # graph before any removed or replaced layer can reach the new graph.
+        self._queued_layer_geometry.clear()
         self._cancel_all_pending(cancel_native=self._engine_ready)
         self._reconcile_desired(prepare=False)
         self._hydrate_if_ready()
@@ -1094,8 +1122,9 @@ class SceneRuntimeController(QObject):
         self._failed_takes.clear()
         self._clear_source_health()
         self._observed_graph_record = scene_engine_graph_signature(self._documents.document)
-        self._preview_geometry_in_flight = None
-        self._queued_preview_geometry = None
+        self._observed_document = self._documents.document
+        self._layer_geometry_in_flight = None
+        self._queued_layer_geometry.clear()
         self._preview_scene_id = self._profile_preview_scene_id
         self._suspended_media_session_id = None
         self._automatic_media_scene_selection = None
@@ -1174,6 +1203,15 @@ class SceneRuntimeController(QObject):
         if health.status is SceneEngineStatus.READY:
             generation_changed = health.process_generation != self._process_generation
             was_ready = self._engine_ready
+            if generation_changed:
+                self._cancel_all_pending(cancel_native=False)
+                self._failed_takes.clear()
+                self._layer_geometry_in_flight = None
+                self._queued_layer_geometry.clear()
+                self._hydrate_in_flight = None
+                self._hydrate_dirty = False
+                self._engine_document_revision = 0
+                self._set_applied_scenes(())
             self._process_generation = health.process_generation
             self._set_engine_ready(True)
             if generation_changed or not was_ready:
@@ -1194,6 +1232,9 @@ class SceneRuntimeController(QObject):
             self._set_applied_scenes(())
             self._hydrate_in_flight = None
             self._hydrate_dirty = False
+            self._engine_document_revision = 0
+            self._layer_geometry_in_flight = None
+            self._queued_layer_geometry.clear()
             self._failed_takes.clear()
             self.operational_state_changed.emit()
 
@@ -1306,14 +1347,26 @@ class SceneRuntimeController(QObject):
         if self._pending:
             self._hydrate_dirty = True
             return
-        if (
-            self._preview_geometry_in_flight is not None
-            or self._queued_preview_geometry is not None
-        ):
+        if self._layer_geometry_in_flight is not None:
             self._hydrate_dirty = True
             return
         if self._hydrate_in_flight is not None:
-            self._hydrate_dirty = True
+            _, snapshot = self._hydrate_in_flight
+            # Runtime reconciliation can notify us on a geometry-only commit.
+            # Only graph or output changes require another snapshot; queued
+            # geometry is dispatched against the revision this snapshot applies.
+            if (
+                scene_engine_graph_signature(self._documents.document)
+                != scene_engine_graph_signature(snapshot.document)
+                or self._hydration_active_scenes() != snapshot.active_scenes
+                or self._render_enabled() != snapshot.render_enabled
+                or self._destination_enabled() != snapshot.output_enabled
+                or self._content_ingress != snapshot.content_ingress
+                or self._preview_egress != snapshot.preview_egress
+                or self._program_egress != snapshot.program_egress
+                or self._combined_window_targets() != snapshot.window_targets
+            ):
+                self._hydrate_dirty = True
             return
         request_id = self._request_id_factory()
         sequence = self._next_sequence()
@@ -1350,35 +1403,45 @@ class SceneRuntimeController(QObject):
             return self._applied_scenes
         return self._desired_scenes
 
-    def _dispatch_preview_geometry(self) -> None:
+    def _dispatch_layer_geometry(self) -> None:
         if (
             self._engine is None
             or not self._engine_ready
             or self._hydrate_in_flight is not None
-            or self._preview_geometry_in_flight is not None
-            or self._queued_preview_geometry is None
+            or self._profile_activation is not None
+            or self._hydrate_dirty
+            or not self._applied_scenes
+            or self._layer_geometry_in_flight is not None
+            or not self._queued_layer_geometry
         ):
             return
-        scene_id, layer, document_revision = self._queued_preview_geometry
-        self._queued_preview_geometry = None
-        context = _PendingLayerPreview(
+        key = next(iter(self._queued_layer_geometry))
+        scene_id, _layer_id = key
+        layer, committed, retry_count = self._queued_layer_geometry.pop(key)
+        context = _PendingLayerGeometry(
             request_id=self._request_id_factory(),
             sequence=self._next_sequence(),
-            document_revision=document_revision,
+            document_revision=self._engine_document_revision,
             scene_id=scene_id,
             layer=layer,
+            committed=committed,
+            retry_count=retry_count,
         )
-        self._preview_geometry_in_flight = context
-        future = self._engine.preview_layer_geometry(
-            BusId.MEDIA_WINDOWS,
-            scene_id,
-            layer,
-            document_revision=context.document_revision,
-            request_id=context.request_id,
-            sequence=context.sequence,
-            deadline_ms=_PREVIEW_GEOMETRY_DEADLINE_MS,
-        )
-        self._track_future(future, "preview_geometry", context)
+        self._layer_geometry_in_flight = context
+        try:
+            future = self._engine.preview_layer_geometry(
+                BusId.MEDIA_WINDOWS,
+                scene_id,
+                layer,
+                document_revision=context.document_revision,
+                request_id=context.request_id,
+                sequence=context.sequence,
+                deadline_ms=_LAYER_GEOMETRY_DEADLINE_MS,
+            )
+        except Exception as exc:  # noqa: BLE001 - engine dispatch boundary
+            self._finish_layer_geometry(context, error=exc)
+            return
+        self._track_future(future, "layer_geometry", context)
 
     def _combined_window_targets(self) -> tuple[OutputWindowTarget, ...]:
         """Projection targets plus the editor preview target (if any)."""
@@ -1586,8 +1649,8 @@ class SceneRuntimeController(QObject):
         values = _context_tuple(payload, 4, "async result")
         operation, context, result, error = values
         if error is not None:
-            if operation == "preview_geometry":
-                self._finish_preview_geometry(context, error=error)
+            if operation == "layer_geometry":
+                self._finish_layer_geometry(context, error=error)
                 return
             if operation == "profile_hydrate":
                 self._fail_profile_activation(context, error)
@@ -1631,8 +1694,8 @@ class SceneRuntimeController(QObject):
                 self._handle_local_cameras(context, result)
             elif operation == "ptz":
                 self._handle_ptz_result(context, result)
-            elif operation == "preview_geometry":
-                self._finish_preview_geometry(context, result=result)
+            elif operation == "layer_geometry":
+                self._finish_layer_geometry(context, result=result)
         except Exception as exc:  # noqa: BLE001 - untrusted engine response boundary
             self._clear_failed_pending(operation, context)
             self._report_exception(operation, exc)
@@ -1702,6 +1765,7 @@ class SceneRuntimeController(QObject):
             self._profile_preview_scene_id = None
             self._delete_after_profile_activation = ""
             self._report_rejection("profile_hydrate", ack)
+            self._dispatch_layer_geometry()
             self.operational_state_changed.emit()
             return
         self._committing_hydrated_profile = True
@@ -1734,6 +1798,7 @@ class SceneRuntimeController(QObject):
         self._delete_after_profile_activation = ""
         if not isinstance(error, CancelledError):
             self._report_exception("profile_hydrate", error)
+        self._dispatch_layer_geometry()
         self.operational_state_changed.emit()
 
     def _handle_prepared(self, context: object, result: object) -> None:
@@ -2069,32 +2134,25 @@ class SceneRuntimeController(QObject):
         self._hydrate_in_flight = None
         should_retry = self._hydrate_dirty
         self._hydrate_dirty = False
-        self._dispatch_preview_geometry()
-        if self._preview_geometry_in_flight is not None:
-            self._hydrate_dirty = should_retry
-        elif should_retry:
+        if should_retry:
             self._hydrate_if_ready()
             return
+        self._dispatch_layer_geometry()
         self.operational_state_changed.emit()
         self._schedule_next_take()
 
-    def _finish_preview_geometry(
+    def _finish_layer_geometry(
         self,
         context: object,
         *,
         result: object | None = None,
         error: object | None = None,
     ) -> None:
-        if context != self._preview_geometry_in_flight:
+        if context != self._layer_geometry_in_flight:
             return
-        self._preview_geometry_in_flight = None
-        if isinstance(context, _PendingLayerPreview):
-            if error is not None:
-                log.debug(
-                    "Scene preview geometry update failed (%s)",
-                    type(error).__name__,
-                )
-            elif result is not None:
+        self._layer_geometry_in_flight = None
+        if isinstance(context, _PendingLayerGeometry):
+            if error is None:
                 try:
                     ack = self._validated_ack(
                         result,
@@ -2103,24 +2161,47 @@ class SceneRuntimeController(QObject):
                         document_revision=context.document_revision,
                     )
                     if not ack.applied:
-                        log.debug(
-                            "Scene preview geometry update was not applied (%s)",
-                            ack.error_code or "request_rejected",
-                        )
+                        error = SceneEngineCommandRejectedError(ack.error_code or "request_rejected")
                 except Exception as exc:  # noqa: BLE001 - transient engine boundary
-                    log.debug(
-                        "Scene preview geometry acknowledgement was invalid (%s)",
-                        type(exc).__name__,
-                    )
-        self._dispatch_preview_geometry()
+                    error = exc
+            if error is not None:
+                if context.committed and not self._recover_layer_geometry(context):
+                    self._report_exception("layer_geometry", error)
+                else:
+                    log.debug("Scene layer geometry update failed (%s)", type(error).__name__)
         if (
             self._hydrate_dirty
             and self._hydrate_in_flight is None
-            and self._preview_geometry_in_flight is None
-            and self._queued_preview_geometry is None
+            and self._layer_geometry_in_flight is None
         ):
-            self._hydrate_dirty = False
             self._hydrate_if_ready()
+        else:
+            self._dispatch_layer_geometry()
+
+    def _recover_layer_geometry(self, context: _PendingLayerGeometry) -> bool:
+        if (
+            not self._engine_ready
+            or self._hydrate_dirty
+            or self._hydrate_in_flight is not None
+            or self._profile_activation is not None
+        ):
+            return False
+        key = (context.scene_id, context.layer.id)
+        queued = self._queued_layer_geometry.get(key)
+        if queued is not None:
+            # A newer value owns this layer. Preserve it and its queue position,
+            # carrying the committed update's reliability requirement forward.
+            layer, _committed, retry_count = queued
+            self._queued_layer_geometry[key] = (layer, True, retry_count)
+            return True
+        if context.retry_count >= 1:
+            return False
+        # Geometry commands are idempotent. One retry at the end of the queue
+        # recovers a lost acknowledgement without delaying other layer commits.
+        self._queue_layer_geometry(
+            context.scene_id, context.layer, committed=True, retry_count=1,
+        )
+        return True
 
     def _resolve_desired_scenes(self) -> tuple[tuple[BusId, str], ...]:
         category = content_category_for_projection(self._projection.state)

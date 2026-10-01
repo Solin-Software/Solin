@@ -40,6 +40,7 @@ from solin.core.scenes.ipc_protocol import (
     read_envelope,
     write_envelope,
 )
+from solin.core.scenes.model import SceneValidationError
 
 log = logging.getLogger(__name__)
 
@@ -295,11 +296,14 @@ class LibobsSidecarEngine:
 
         from solin.core.scenes.libobs_thumbnail_egress import LibobsThumbnailEgress
 
-        self._preview_egress = LibobsPreviewEgress(runtime)
+        self._preview_egress = LibobsPreviewEgress(
+            runtime, before_render=self._scene_graph.refresh_source_crops,
+        )
         self._thumbnail_egress = LibobsThumbnailEgress(
             runtime,
             lambda scene_id: self._scene_graph.scene_source(scene_id)
             if self._scene_graph is not None else None,
+            before_render=self._scene_graph.refresh_source_crops,
         )
         self._program_egress = LibobsProgramEgress(runtime)
         from solin.core.scenes.libobs_audio_sources import LibobsAudioMixer
@@ -799,10 +803,16 @@ class LibobsSidecarEngine:
         scene_id = str(payload.get("scene_id") or "")
         layer = payload.get("layer") or {}
         layer_id = str(layer.get("id") or "") if isinstance(layer, dict) else ""
-        rect = layer.get("rect") if isinstance(layer, dict) else None
+        if not isinstance(layer, dict):
+            return _ack(request, applied=False, error_code="invalid_layer_geometry",
+                        error_message="layer must be an object")
         # Apply the transform to the live scene item — no re-hydrate, so a resize
         # or move takes effect without rebuilding sources (the camera stays up).
-        applied = graph.apply_layer_geometry(scene_id, layer_id, rect or {})
+        try:
+            applied = graph.apply_layer_geometry(scene_id, layer_id, layer)
+        except SceneValidationError as exc:
+            return _ack(request, applied=False, error_code="invalid_layer_geometry",
+                        error_message=str(exc))
         if not applied:
             return _ack(request, applied=False, error_code="unknown_layer",
                         error_message="no such built layer")

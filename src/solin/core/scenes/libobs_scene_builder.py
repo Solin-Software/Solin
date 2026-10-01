@@ -1,22 +1,17 @@
 """Build a libobs scene graph from a ``SceneDocument`` record.
 
-This is the first compositing slice of the libobs scene engine. It translates the
-document's scenes/layers into real ``obs_scene`` objects and routes the active
-program scene onto a global output channel so it composites into the main
-texture.
-
-For now every layer is rendered as a **color placeholder** positioned by its
-normalized rect — real sources (Solin content over the data plane, cameras,
-images) arrive in later stages. That keeps this slice verifiable end-to-end (a
-composed frame is non-black and laid out per the document) without depending on
-the not-yet-built content transport.
+Translates the document's scenes and layers into ``obs_scene`` objects, applies
+their geometry, and routes the active program onto a global output channel.
 """
 
 from __future__ import annotations
 
 import logging
+from threading import RLock
 from urllib.parse import quote, urlsplit, urlunsplit
 from typing import Any, Protocol
+
+from solin.core.scenes.model import Crop, NormalizedRect
 
 log = logging.getLogger(__name__)
 
@@ -91,20 +86,24 @@ class LibobsSceneGraph:
         self._sources: list[Any] = []
         # Scene items bound to the content slot, tracked so the content source can
         # be swapped live (BGRA frame source <-> libobs-decoded media) without a
-        # full re-hydrate. Each entry: {scene, item, rect, placeholder}.
+        # full re-hydrate. Entries are shared with _layer_items so source swaps
+        # always use the latest geometry and update the live editing target.
         self._content_items: list[dict[str, Any]] = []
         self._content_source: Any = None
         # Year-text image sources built this hydrate, tracked so the app can force a
         # re-read of the rendered PNG (reload_yeartext) without a full re-hydrate.
         self._yeartext_sources: list[Any] = []
-        # Scene items keyed by (scene_id, layer_id), so a layer's geometry can be
+        # Item records keyed by (scene_id, layer_id), so a layer's geometry can be
         # updated live (obs_sceneitem transform) without rebuilding the graph.
         self._layer_items: dict[tuple[str, str], Any] = {}
         # source id -> {"username", "password"}; never persisted, see hydrate().
         self._source_credentials: dict[str, Any] = {}
-        # A live geometry edit carries only a rect, so remember what fit each layer
-        # was built with and re-apply it rather than silently reverting to contain.
-        self._layer_fit_modes: dict[tuple[str, str], str] = {}
+        # libobs crops in source pixels; the document crops in source fractions.
+        # Recompute only cropped items before rendering when asynchronous sources
+        # acquire/change dimensions. The lock keeps callbacks off released items.
+        self._crop_lock = RLock()
+        self._cropped_items: dict[int, tuple[Any, Crop, tuple[int, int]]] = {}
+        self._crop_render_callback: Any | None = None
         self._program_channel: int | None = None
         # Program transition: a transition source sits on the program channel and
         # holds the active scene; scene switches animate through take().
@@ -142,6 +141,10 @@ class LibobsSceneGraph:
         """
         self._source_credentials = dict(source_credentials or {})
         self.clear()
+        if self._crop_render_callback is None:
+            self._crop_render_callback = self._runtime.ob.add_main_render_callback(
+                self.refresh_source_crops,
+            )
         self._content_source = content_source
         ob = self._runtime.ob
         canvas = self._runtime.video
@@ -191,65 +194,112 @@ class LibobsSceneGraph:
         if owned:
             self._sources.append(source)  # released on clear (runtime owns shared cams)
         item = scene.add(source)
-        rect = layer.get("rect") or {}
-        fit_mode = _layer_fit_mode(layer)
-        self._apply_item_geometry(item, rect, canvas, ob, fit_mode)
+        self._apply_item_geometry(item, layer, canvas, ob)
+        record = {
+            "scene": scene,
+            "item": item,
+            "layer": layer,
+            "placeholder": placeholder,
+        }
         layer_id = str(layer.get("id") or "")
         if layer_id:
-            self._layer_items[(scene_id, layer_id)] = item
-            self._layer_fit_modes[(scene_id, layer_id)] = fit_mode
+            self._layer_items[(scene_id, layer_id)] = record
         if is_content:
-            self._content_items.append(
-                {
-                    "scene": scene,
-                    "item": item,
-                    "rect": rect,
-                    "fit_mode": fit_mode,
-                    "placeholder": placeholder,
-                }
-            )
+            self._content_items.append(record)
 
-    def apply_layer_geometry(self, scene_id: str, layer_id: str, rect: dict) -> bool:
+    def apply_layer_geometry(self, scene_id: str, layer_id: str, layer: dict) -> bool:
         """Update one layer's geometry on the live scene item (no rebuild).
 
         Returns ``False`` when the layer is not built in the current graph (e.g.
         a stale request after a re-hydrate), so the caller can reject it."""
-        item = self._layer_items.get((scene_id, layer_id))
-        if item is None:
+        record = self._layer_items.get((scene_id, layer_id))
+        if record is None:
             return False
         self._apply_item_geometry(
-            item,
-            rect or {},
+            record["item"],
+            layer,
             self._runtime.video,
             self._runtime.ob,
-            self._layer_fit_modes.get((scene_id, layer_id), _DEFAULT_FIT_MODE),
         )
+        record["layer"] = layer
         return True
 
     def _apply_item_geometry(
         self,
         item: Any,
-        rect: dict,
+        layer: dict,
         canvas: Any,
         ob: Any,
-        fit_mode: str = _DEFAULT_FIT_MODE,
     ) -> None:
-        # Scale the source into its normalized rect, honouring the fit the layer
-        # asked for: contain letterboxes, cover fills and crops, stretch ignores
-        # the aspect. Hardcoding SCALE_INNER letterboxed everything, so a camera
-        # asking to cover its rect sat in a box instead of filling it.
-        item.pos = (
-            float(rect.get("x", 0.0)) * canvas.width,
-            float(rect.get("y", 0.0)) * canvas.height,
+        rect = NormalizedRect.from_record(layer.get("rect") or NormalizedRect().to_record())
+        crop = Crop.from_record(layer.get("crop") or {})
+        fit_mode = _layer_fit_mode(layer).strip().lower()
+        x = rect.x * canvas.width
+        y = rect.y * canvas.height
+        width, height = (
+            max(1.0, rect.width * canvas.width),
+            max(1.0, rect.height * canvas.height),
         )
-        item.bounds = (
-            max(1.0, float(rect.get("width", 1.0)) * canvas.width),
-            max(1.0, float(rect.get("height", 1.0)) * canvas.height),
+        # Centre the anchor so rotation and negative scales preserve the
+        # document's rect instead of rotating around libobs' default top-left.
+        transform = ob.TransformInfo(
+            pos=(x + width / 2, y + height / 2),
+            bounds=(width, height),
+            bounds_type=int(_bounds_type(ob, fit_mode)),
+            bounds_alignment=_CENTER_ALIGNMENT,
+            alignment=_CENTER_ALIGNMENT,
+            scale=(-1.0 if layer.get("mirror_x", False) else 1.0,
+                   -1.0 if layer.get("mirror_y", False) else 1.0),
+            rotation=float(layer.get("rotation_degrees", 0.0)),
+            crop_to_bounds=fit_mode == "cover",
         )
-        item.bounds_type = int(_bounds_type(ob, fit_mode))
-        # Centre what is scaled inside the rect. LEFT|TOP shoved a letterboxed
-        # picture into the rect's corner and piled all the empty space on one side.
-        item.bounds_alignment = _CENTER_ALIGNMENT
+        item.defer_update_begin()
+        try:
+            item.set_transform(transform)
+            with self._crop_lock:
+                dimensions = self._set_item_crop(item, crop)
+                if crop != Crop():
+                    self._cropped_items[id(item)] = (item, crop, dimensions)
+                else:
+                    self._cropped_items.pop(id(item), None)
+        finally:
+            item.defer_update_end()
+
+    @staticmethod
+    def _set_item_crop(item: Any, crop: Crop) -> tuple[int, int]:
+        if crop == Crop():
+            item.crop = (0, 0, 0, 0)
+            return (0, 0)
+        source = item.source
+        width, height = int(source.width), int(source.height)
+        if width <= 0 or height <= 0:
+            return (width, height)
+        # Leave at least one source pixel visible even at very low resolutions.
+        left = min(round(crop.left * width), max(0, width - 1))
+        top = min(round(crop.top * height), max(0, height - 1))
+        right = min(round(crop.right * width), max(0, width - left - 1))
+        bottom = min(round(crop.bottom * height), max(0, height - top - 1))
+        item.crop = (left, top, right, bottom)
+        return (width, height)
+
+    def refresh_source_crops(self, *_canvas_size: int) -> bool:
+        """Resolve source-relative crop after source ticks and before composition."""
+        # The video thread owns libobs' graphics mutex. Never wait for an editor
+        # update which may be waiting for that mutex; retry on the next frame.
+        if not self._crop_lock.acquire(blocking=False):
+            return False
+        try:
+            for key, (item, crop, dimensions) in self._cropped_items.items():
+                source = item.source
+                current = (int(source.width), int(source.height))
+                if current != dimensions:
+                    self._cropped_items[key] = (item, crop, self._set_item_crop(item, crop))
+            return True
+        except Exception:  # noqa: BLE001 - native video callback boundary
+            log.exception("Could not refresh scene source crop")
+            return False
+        finally:
+            self._crop_lock.release()
 
     @staticmethod
     def _is_content_layer(layer: dict, sources_by_id: dict) -> bool:
@@ -440,7 +490,7 @@ class LibobsSceneGraph:
         for record in self._content_items:
             scene = record["scene"]
             old_item = record["item"]
-            rect = record["rect"]
+            layer = record["layer"]
             old_placeholder = record["placeholder"]
             try:
                 order = int(old_item.order_position)
@@ -450,18 +500,18 @@ class LibobsSceneGraph:
                 source = new_source
                 new_placeholder = None
             else:  # reverting to "no content" — stand in with a placeholder
-                source = self._create_color(ob, {"id": "content", "rect": rect}, canvas,
+                source = self._create_color(ob, layer, canvas,
                                             _PLACEHOLDER_COLOR)
                 new_placeholder = source
             new_item = scene.add(source)  # added on top; restore its z-order below
-            self._apply_item_geometry(
-                new_item, rect, canvas, ob, record.get("fit_mode", _DEFAULT_FIT_MODE)
-            )
+            self._apply_item_geometry(new_item, layer, canvas, ob)
             if order is not None:
                 try:
                     new_item.order_position = order
                 except Exception:  # noqa: BLE001 - libobs boundary
                     log.debug("content item order restore errored", exc_info=True)
+            with self._crop_lock:
+                self._cropped_items.pop(id(old_item), None)
             try:
                 old_item.remove()
             except Exception:  # noqa: BLE001 - libobs boundary
@@ -621,6 +671,8 @@ class LibobsSceneGraph:
 
     def clear(self) -> None:
         """Release the current scenes/sources (keeps the reserved channel)."""
+        with self._crop_lock:
+            self._cropped_items.clear()
         self._pending.clear()
         self._content_items = []
         self._content_source = None
@@ -654,6 +706,9 @@ class LibobsSceneGraph:
 
     def shutdown(self) -> None:
         """Release everything, including the reserved output channel."""
+        if self._crop_render_callback is not None:
+            self._runtime.ob.remove_main_render_callback(self._crop_render_callback)
+            self._crop_render_callback = None
         self.clear()
         if self._program_channel is not None:
             try:

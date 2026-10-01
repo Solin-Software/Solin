@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import logging
 import threading
+from collections.abc import Callable
 from typing import Any
 
 from solin.core.scenes.content_frame_consumer import SHARED_MEMORY_BGRA
@@ -31,8 +32,9 @@ _RENDER_INTERVAL_S = 1.0 / 30.0
 class LibobsPreviewEgress:
     """Renders the edited scene into the app's preview channel."""
 
-    def __init__(self, runtime: Any) -> None:
+    def __init__(self, runtime: Any, *, before_render: Callable[[], bool] | None = None) -> None:
         self._runtime = runtime
+        self._before_render = before_render
         self._lock = threading.Lock()
         self._writer: Any = None
         self._handle_token = ""
@@ -102,7 +104,7 @@ class LibobsPreviewEgress:
     def _loop(self) -> None:
         from solin.core.media.obs_source_render import resolve_render_source_to_bgra
 
-        render_to_bgra = resolve_render_source_to_bgra()
+        render_to_bgra = resolve_render_source_to_bgra(before_render=self._before_render)
 
         canvas = self._runtime.video
         while not self._stop.wait(_RENDER_INTERVAL_S):

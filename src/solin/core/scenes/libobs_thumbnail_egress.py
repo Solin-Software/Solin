@@ -48,8 +48,12 @@ class _ShowingLibrary(Protocol):
 class LibobsThumbnailEgress:
     """Renders one small frame per scene into a shared vertical atlas."""
 
-    def __init__(self, runtime: Any, scene_resolver: Callable[[str], Any]) -> None:
+    def __init__(
+        self, runtime: Any, scene_resolver: Callable[[str], Any],
+        *, before_render: Callable[[], bool] | None = None,
+    ) -> None:
         self._runtime = runtime
+        self._before_render = before_render
         self._scene_resolver = scene_resolver
         self._lock = threading.Lock()
         self._writer: SharedFrameChannelWriter | None = None
@@ -182,7 +186,7 @@ class LibobsThumbnailEgress:
     def _loop(self) -> None:
         from solin.core.media.obs_source_render import resolve_render_source_to_bgra
 
-        render_to_bgra = resolve_render_source_to_bgra()
+        render_to_bgra = resolve_render_source_to_bgra(before_render=self._before_render)
 
         canvas = self._runtime.video
         while not self._stop.wait(_RENDER_INTERVAL_S):

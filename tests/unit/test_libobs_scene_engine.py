@@ -16,6 +16,8 @@ import time
 import types
 from pathlib import Path
 
+import pytest
+
 from solin.core.scenes.engine import SceneEngineStatus
 from solin.core.scenes.recording import (
     AudioDeviceSelection,
@@ -305,6 +307,32 @@ class _FakeItem:
         self.bounds_alignment = 0
         self.order_position = 0
         self.removed = False
+        self._crop = (0, 0, 0, 0)
+        self.crop_updates = 0
+        self.deferred_updates = 0
+        self.crop_to_bounds = False
+        self.scale = (1.0, 1.0)
+        self.rotation = 0.0
+        self.alignment = 5
+
+    def set_transform(self, transform) -> None:
+        for name, value in vars(transform).items():
+            setattr(self, name, value)
+
+    @property
+    def crop(self):
+        return self._crop
+
+    @crop.setter
+    def crop(self, value) -> None:
+        self._crop = value
+        self.crop_updates += 1
+
+    def defer_update_begin(self) -> None:
+        self.deferred_updates += 1
+
+    def defer_update_end(self) -> None:
+        self.deferred_updates -= 1
 
     def remove(self) -> None:
         self.removed = True
@@ -337,6 +365,8 @@ class _FakeColorSource:
         self.name = name
         self.settings = dict(settings)
         self.released = 0
+        self.width = int(settings.get("width", 1920))
+        self.height = int(settings.get("height", 1080))
 
     def update(self, settings: dict) -> None:
         self.settings = dict(settings)
@@ -634,7 +664,18 @@ class _CompositingRuntime:
             enum_source_types=_enum_source_types,
             BoundsType=types.SimpleNamespace(SCALE_INNER=2, SCALE_OUTER=3, STRETCH=1),
             Alignment=types.SimpleNamespace(LEFT=1, TOP=4),
+            TransformInfo=types.SimpleNamespace,
+            add_main_render_callback=self._add_main_render_callback,
+            remove_main_render_callback=self._remove_main_render_callback,
         )
+        self.render_callbacks = []
+
+    def _add_main_render_callback(self, callback):
+        self.render_callbacks.append(callback)
+        return callback
+
+    def _remove_main_render_callback(self, callback) -> None:
+        self.render_callbacks.remove(callback)
 
     @property
     def context(self):
@@ -723,14 +764,15 @@ def test_scene_graph_builds_scenes_and_positions_visible_layers():
     scene_a = next(s for s in runtime.scenes if s.name == "solin-scene-scene-a")
     # The hidden layer (L3) is skipped; only the two visible layers are added.
     assert len(scene_a.items) == 2
-    # Full-canvas layer: placed at the origin, scaled to fill the canvas.
-    assert scene_a.items[0].pos == (0.0, 0.0)
+    # Centre anchors preserve the rect and provide the correct rotation pivot.
+    assert scene_a.items[0].pos == (960.0, 540.0)
+    assert scene_a.items[0].alignment == 0
     assert scene_a.items[0].bounds == (1920.0, 1080.0)
     assert scene_a.items[0].bounds_type == 2  # SCALE_INNER: the default fit
     assert scene_a.items[0].bounds_alignment == 0  # centred in its rect
     assert scene_a.items[0].source.settings["width"] == 1920
     # Bottom-right quadrant PiP: positioned + bounded to that quadrant.
-    assert scene_a.items[1].pos == (960.0, 540.0)
+    assert scene_a.items[1].pos == (1440.0, 810.0)
     assert scene_a.items[1].bounds == (960.0, 540.0)
     # A transition sits on the acquired channel, holding the program scene.
     transition = runtime.channels[0]
@@ -1212,6 +1254,205 @@ def test_engine_reload_yeartext_notification_rereads_the_source(tmp_path, monkey
 # ── live layer geometry (preview_layer_geometry, no re-hydrate) ──────────────
 
 
+def test_crop_survives_hydration_live_edit_and_content_replacement():
+    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+
+    runtime = _CompositingRuntime()
+    graph = LibobsSceneGraph(runtime)
+    layer = {
+        "id": "L", "source_id": "solin.content.current", "fit_mode": "cover",
+        "rect": {"x": 0.2, "y": 0.1, "width": 0.5, "height": 0.5},
+        "crop": {"left": 0.1, "top": 0.2, "right": 0.3, "bottom": 0.1},
+    }
+    source = _FakeColorSource("content", "first", {"width": 1280, "height": 720})
+    graph.hydrate({"scenes": [{"id": "s", "layers": [layer]}]}, {}, source)
+    scene = runtime.scenes[0]
+    assert scene.items[0].crop == (128, 144, 384, 72)
+    assert scene.items[0].crop_to_bounds is True
+
+    updated = dict(layer, rect={"x": 0.1, "y": 0.2, "width": 0.7, "height": 0.6},
+                   crop={"left": 0.25, "top": 0.0, "right": 0.0, "bottom": 0.25})
+    assert graph.apply_layer_geometry("s", "L", updated)
+    assert scene.items[0].crop == (320, 0, 0, 180)
+    replacement = _FakeColorSource("content", "second", {"width": 1920, "height": 1080})
+    graph.set_content_source(replacement)
+    item = scene.items[0]
+    assert item.crop == (480, 0, 0, 270)
+    assert item.pos == pytest.approx((864, 540))
+    assert item.bounds == pytest.approx((1344, 648))
+    assert graph.apply_layer_geometry("s", "L", dict(updated, crop={}))
+    assert item.crop == (0, 0, 0, 0)
+    graph.shutdown()
+
+
+def test_sidecar_does_not_discard_crop_in_live_geometry_request():
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+    engine.handle(_request("hydrate", {"document": _GEOMETRY_DOC, "active_scenes": {}}))
+    item = runtime.scenes[0].items[0]
+    ack = _ack_from_envelope(engine.handle(_request("preview_layer_geometry", {
+        "scene_id": "s1", "layer": {"id": "L1", "rect": {}, "crop": {"left": 0.25}},
+    })))
+    assert ack.applied
+    assert item.crop == (240, 0, 0, 0)
+    engine.shutdown()
+
+
+@pytest.mark.parametrize("geometry", [
+    {"crop": {"left": 0.6, "right": 0.5}},
+    {"crop": {"top": float("nan")}},
+    {"rect": {"x": 0, "y": 0, "width": 0, "height": 1}},
+])
+def test_invalid_live_crop_or_rect_is_rejected_without_mutating_the_item(geometry):
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+    engine.handle(_request("hydrate", {"document": _GEOMETRY_DOC, "active_scenes": {}}))
+    item = runtime.scenes[0].items[0]
+    before = (item.pos, item.bounds, item.crop)
+    ack = _ack_from_envelope(engine.handle(_request("preview_layer_geometry", {
+        "scene_id": "s1", "layer": {"id": "L1", **geometry},
+    })))
+    assert not ack.applied
+    assert ack.error_code == "invalid_layer_geometry"
+    assert (item.pos, item.bounds, item.crop) == before
+    engine.shutdown()
+
+
+def test_normalized_crop_tracks_late_and_changed_source_dimensions():
+    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+
+    runtime = _CompositingRuntime()
+    graph = LibobsSceneGraph(runtime)
+    source = _FakeColorSource("content", "loading", {"width": 0, "height": 0})
+    layer = {"id": "L", "source_id": "solin.content.current", "crop": {"left": 0.25}}
+    graph.hydrate({"scenes": [{"id": "s", "layers": [layer]}]}, {}, source)
+    item = runtime.scenes[0].items[0]
+    source.width, source.height = 1280, 720
+    for callback in runtime.render_callbacks:
+        callback(1920, 1080)
+    assert item.crop == (320, 0, 0, 0)
+    source.width, source.height = 640, 480
+    for callback in runtime.render_callbacks:
+        callback(1920, 1080)
+    assert item.crop == (160, 0, 0, 0)
+    updates = item.crop_updates
+    for callback in runtime.render_callbacks:
+        callback(1920, 1080)
+    assert item.crop_updates == updates
+    assert item.deferred_updates == 0
+    graph.shutdown()
+    assert runtime.render_callbacks == []
+
+
+@pytest.mark.parametrize("rotation", [0.0, 90.0, -45.0])
+def test_geometry_keeps_the_center_pivot_and_resets_mirror_and_cover(rotation):
+    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+
+    runtime = _CompositingRuntime()
+    graph = LibobsSceneGraph(runtime)
+    layer = {
+        "id": "L", "rect": {"x": 0.2, "y": 0.1, "width": 0.4, "height": 0.6},
+        "rotation_degrees": rotation, "mirror_x": True, "mirror_y": True,
+        "crop": {"left": 0.1, "right": 0.2}, "fit_mode": "cover",
+    }
+    graph.hydrate({"scenes": [{"id": "s", "layers": [layer]}]}, {})
+    item = runtime.scenes[0].items[0]
+    assert item.pos == pytest.approx((768, 432))
+    assert item.alignment == 0
+    assert item.rotation == rotation
+    assert item.scale == (-1, -1)
+    assert item.crop == (77, 0, 154, 0)
+    assert item.crop_to_bounds is True
+    assert graph.apply_layer_geometry("s", "L", dict(
+        layer, mirror_x=False, mirror_y=False, rotation_degrees=0, fit_mode="contain", crop={},
+    ))
+    assert item.scale == (1, 1)
+    assert item.rotation == 0
+    assert item.crop == (0, 0, 0, 0)
+    assert item.crop_to_bounds is False
+    graph.shutdown()
+
+
+def test_crop_rounding_leaves_a_visible_pixel_and_clear_drops_old_items():
+    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+
+    runtime = _CompositingRuntime()
+    graph = LibobsSceneGraph(runtime)
+    source = _FakeColorSource("content", "tiny", {"width": 2, "height": 2})
+    layer = {"id": "L", "source_id": "solin.content.current",
+             "crop": {"left": 0.49, "right": 0.49, "top": 0.49, "bottom": 0.49}}
+    document = {"scenes": [{"id": "s", "layers": [layer]}]}
+    graph.hydrate(document, {}, source)
+    item = runtime.scenes[0].items[0]
+    assert item.crop == (1, 1, 0, 0)
+    graph.clear()
+    updates = item.crop_updates
+    source.width, source.height = 1920, 1080
+    for callback in runtime.render_callbacks:
+        callback(1920, 1080)
+    assert item.crop_updates == updates
+    graph.hydrate(document, {}, source)
+    assert len(runtime.render_callbacks) == 1
+    graph.shutdown()
+
+
+@pytest.mark.parametrize("prepared", [True, False])
+def test_readback_prepares_geometry_inside_the_graphics_context(monkeypatch, prepared):
+    from solin.core.media import obs_source_render
+
+    calls = []
+
+    def prepare():
+        assert calls == ["enter"]
+        calls.append("prepare")
+        return prepared
+
+    def fail_allocation(*_args):
+        calls.append("allocate")
+        raise RuntimeError("synthetic allocation failure")
+
+    library = types.SimpleNamespace(
+        obs_enter_graphics=lambda: calls.append("enter"),
+        obs_leave_graphics=lambda: calls.append("leave"),
+    )
+    monkeypatch.setattr(obs_source_render, "_bind", lambda: (None, library))
+    monkeypatch.setattr(obs_source_render, "_texrender", None)
+    monkeypatch.setattr(obs_source_render, "_casts", {"texrender_create": fail_allocation})
+    render = obs_source_render.resolve_render_source_to_bgra(before_render=prepare)
+    assert render(types.SimpleNamespace(_ptr=object()), 640, 360,
+                  canvas_width=1920, canvas_height=1080) is None
+    assert calls == (["enter", "prepare", "allocate", "leave"] if prepared
+                     else ["enter", "prepare", "leave"])
+
+
+def test_crop_refresh_reports_contention_and_retries_without_blocking_graphics():
+    from threading import Thread
+
+    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+
+    runtime = _CompositingRuntime()
+    graph = LibobsSceneGraph(runtime)
+    source = _FakeColorSource("content", "loading", {"width": 0, "height": 0})
+    layer = {"id": "L", "source_id": "solin.content.current", "crop": {"left": 0.25}}
+    graph.hydrate({"scenes": [{"id": "s", "layers": [layer]}]}, {}, source)
+    try:
+        source.width, source.height = 1280, 720
+        results = []
+        with graph._crop_lock:
+            worker = Thread(target=lambda: results.append(graph.refresh_source_crops()), daemon=True)
+            worker.start()
+            worker.join(timeout=1)
+            assert not worker.is_alive()
+            assert results == [False]
+            assert runtime.scenes[0].items[0].crop == (0, 0, 0, 0)
+        assert graph.refresh_source_crops() is True
+        assert runtime.scenes[0].items[0].crop == (320, 0, 0, 0)
+    finally:
+        graph.shutdown()
+
+
 _GEOMETRY_DOC = {
     "scenes": [
         {"id": "s1", "layers": [
@@ -1233,7 +1474,7 @@ def test_apply_layer_geometry_updates_the_live_item_without_rebuild():
     before = (item.pos, item.bounds)
 
     assert graph.apply_layer_geometry(
-        "s1", "L1", {"x": 0.25, "y": 0.25, "width": 1.0, "height": 1.0}
+        "s1", "L1", {"rect": {"x": 0.25, "y": 0.25, "width": 1.0, "height": 1.0}}
     ) is True
     assert (item.pos, item.bounds) != before  # transformed in place
     assert scene.items[0] is item  # same item — not rebuilt

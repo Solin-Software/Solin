@@ -4,6 +4,7 @@ from collections.abc import Callable
 from concurrent.futures import CancelledError, Future
 from dataclasses import replace
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -25,6 +26,7 @@ from solin.core.scenes.engine import (
     LocalCameraProbeStatus,
     LocalVideoFormat,
     OutputWindowTarget,
+    SceneEngine,
     SceneEngineAck,
     SceneEngineCapabilities,
     SceneEngineEvent,
@@ -40,6 +42,7 @@ from solin.core.scenes.model import (
     CameraPreset,
     CameraMediaType,
     ContentCategory,
+    Crop,
     DEFAULT_CAMERA_SOURCE_ID,
     LocalCameraConfig,
     NormalizedRect,
@@ -63,7 +66,10 @@ from solin.core.scenes.ptz import (
     PtzRecallStatus,
 )
 from solin.core.scenes.ipc_protocol import PROTOCOL_VERSION
-from solin.core.scenes.process_engine import SceneEngineCommandRejectedError
+from solin.core.scenes.process_engine import (
+    SceneEngineCommandRejectedError,
+    SceneEngineRequestTimeoutError,
+)
 from solin.core.scenes.presets import (
     CAMERA_SCENE_ID,
     CONTENT_CAMERA_PIP_SCENE_ID,
@@ -460,6 +466,470 @@ def _failed(error: BaseException):
     future = Future()
     future.set_exception(error)
     return future
+
+
+class _PendingGeometryEngine(_Engine):
+    def __init__(self, *, defer_hydration: bool = False) -> None:
+        super().__init__()
+        self.defer_hydration = defer_hydration
+        self.hydration_futures: list[Future[SceneEngineAck]] = []
+        self.geometry_futures: list[Future[SceneEngineAck]] = []
+
+    def hydrate(self, snapshot, *, request_id, deadline_ms):
+        completed = super().hydrate(snapshot, request_id=request_id, deadline_ms=deadline_ms)
+        if not self.defer_hydration:
+            return completed
+        future: Future[SceneEngineAck] = Future()
+        self.hydration_futures.append(future)
+        return future
+
+    def finish_hydration(self, index: int) -> None:
+        request_id, snapshot = self.snapshots[index]
+        self.hydration_futures[index].set_result(
+            self._ack(request_id, snapshot.sequence, snapshot.document.revision)
+        )
+
+    def preview_layer_geometry(self, *args, **kwargs):
+        super().preview_layer_geometry(*args, **kwargs)
+        future: Future[SceneEngineAck] = Future()
+        self.geometry_futures.append(future)
+        return future
+
+    def finish_geometry(self, index: int) -> None:
+        request_id, _bus, _scene, _layer, revision, sequence = self.preview_geometries[index]
+        self.geometry_futures[index].set_result(self._ack(request_id, sequence, revision))
+
+
+@pytest.mark.parametrize("geometry", ["rect", "crop"])
+@pytest.mark.parametrize(
+    ("scene_id", "layer_id"),
+    [(scene.id, layer.id) for scene in _document().scenes for layer in scene.layers],
+)
+def test_committed_geometry_reaches_every_layer_without_preview_or_rehydrate(
+    scene_id: str, layer_id: str, geometry: str,
+) -> None:
+    engine = _Engine()
+    documents, _runtime, controller = _runtime_controller(
+        engine, _Projection(), request_ids=("hydrate", "committed-geometry"),
+    )
+    controller.start_engine()
+    layer = next(layer for layer in documents.document.scene(scene_id).layers if layer.id == layer_id)
+    updated = replace(layer, **{
+        geometry: NormalizedRect(x=0.2, y=0.1, width=0.5, height=0.6)
+        if geometry == "rect" else Crop(left=0.1, bottom=0.2),
+    })
+
+    documents.update_layer(scene_id, layer_id, updated)
+    documents.undo()
+    documents.redo()
+
+    assert [item[3] for item in engine.preview_geometries] == [updated, layer, updated]
+    assert all(item[2] == scene_id for item in engine.preview_geometries)
+    assert all(item[4] == engine.snapshots[0][1].document.revision for item in engine.preview_geometries)
+    assert len(engine.snapshots) == 1
+    controller.close()
+
+
+def test_batch_geometry_commit_undo_redo_sends_all_layers() -> None:
+    engine = _Engine()
+    documents, _runtime, controller = _runtime_controller(
+        engine, _Projection(), request_ids=("hydrate",),
+    )
+    controller.start_engine()
+    scene = documents.document.scene(CONTENT_CAMERA_PIP_SCENE_ID)
+    updated_layers = tuple(
+        replace(layer, crop=Crop(left=0.1), rect=NormalizedRect(width=0.7, height=0.8))
+        for layer in scene.layers
+    )
+
+    documents.update_scene(scene.id, replace(scene, layers=updated_layers))
+    documents.undo()
+    documents.redo()
+
+    assert [item[3] for item in engine.preview_geometries] == list(
+        updated_layers + scene.layers + updated_layers
+    )
+    assert len(engine.snapshots) == 1
+    controller.close()
+
+
+@pytest.mark.parametrize("geometry", ["rect", "crop"])
+def test_hidden_geometry_waits_until_visibility_hydrates_the_authored_layout(geometry: str) -> None:
+    engine = _Engine()
+    documents, _runtime, controller = _runtime_controller(
+        engine, _Projection(), request_ids=("hydrate",),
+    )
+    errors: list[str] = []
+    controller.engine_error.connect(errors.append)
+    controller.start_engine()
+    scene = documents.document.scene(CONTENT_CAMERA_PIP_SCENE_ID)
+    hidden = replace(scene.layers[0], visible=False)
+    documents.update_layer(scene.id, hidden.id, hidden)
+    baseline = len(engine.snapshots)
+    updated = replace(hidden, **{
+        geometry: NormalizedRect(width=0.7, height=0.8)
+        if geometry == "rect" else Crop(left=0.1),
+    })
+
+    documents.update_layer(scene.id, hidden.id, updated)
+    documents.undo()
+    documents.redo()
+    controller.preview_layer_geometry(scene.id, updated)
+
+    assert engine.preview_geometries == []
+    assert len(engine.snapshots) == baseline
+    assert errors == []
+    revealed = replace(updated, visible=True)
+    documents.update_layer(scene.id, hidden.id, revealed)
+    assert len(engine.snapshots) == baseline + 1
+    assert engine.snapshots[-1][1].document.scene(scene.id).layers[0] == revealed
+    controller.close()
+
+
+def test_batch_geometry_history_sends_only_visible_layers() -> None:
+    engine = _Engine()
+    documents, _runtime, controller = _runtime_controller(
+        engine, _Projection(), request_ids=("hydrate",),
+    )
+    controller.start_engine()
+    scene = documents.document.scene(CONTENT_CAMERA_PIP_SCENE_ID)
+    documents.update_layer(scene.id, scene.layers[0].id, replace(scene.layers[0], visible=False))
+    scene = documents.document.scene(scene.id)
+    baseline = len(engine.snapshots)
+    updated = tuple(replace(layer, crop=Crop(left=0.2)) for layer in scene.layers)
+
+    documents.update_scene(scene.id, replace(scene, layers=updated))
+    documents.undo()
+    documents.redo()
+
+    assert [item[3] for item in engine.preview_geometries] == [
+        updated[1], scene.layers[1], updated[1],
+    ]
+    assert len(engine.snapshots) == baseline
+    controller.close()
+
+
+def test_geometry_queue_preserves_other_layer_commits_and_latest_mouse_move() -> None:
+    engine = _PendingGeometryEngine()
+    documents, _runtime, controller = _runtime_controller(
+        engine, _Projection(), request_ids=("hydrate",),
+    )
+    controller.start_engine()
+    scene = documents.document.scene(CONTENT_CAMERA_PIP_SCENE_ID)
+    first, second = scene.layers[:2]
+    controller.preview_layer_geometry(scene.id, replace(first, rect=replace(first.rect, x=0.1)))
+    committed = replace(second, crop=Crop(left=0.2))
+    documents.update_layer(scene.id, second.id, committed)
+    controller.preview_layer_geometry(scene.id, replace(first, rect=replace(first.rect, x=0.2)))
+    latest = replace(first, rect=replace(first.rect, x=0.3))
+    controller.preview_layer_geometry(scene.id, latest)
+    documents.update_layer(scene.id, first.id, latest)
+
+    engine.finish_geometry(0)
+    assert engine.preview_geometries[1][3] == committed
+    engine.finish_geometry(1)
+    assert engine.preview_geometries[2][3] == latest
+    engine.finish_geometry(2)
+    assert len(engine.preview_geometries) == 3
+    assert len(engine.snapshots) == 1
+    controller.close()
+
+
+def test_batch_undo_during_pending_geometry_keeps_all_layer_restorations() -> None:
+    engine = _PendingGeometryEngine()
+    documents, _runtime, controller = _runtime_controller(
+        engine, _Projection(), request_ids=("hydrate",),
+    )
+    controller.start_engine()
+    scene = documents.document.scene(CONTENT_CAMERA_PIP_SCENE_ID)
+    documents.update_scene(
+        scene.id,
+        replace(scene, layers=tuple(replace(layer, crop=Crop(left=0.2)) for layer in scene.layers)),
+    )
+
+    documents.undo()
+    engine.finish_geometry(0)
+    engine.finish_geometry(1)
+    engine.finish_geometry(2)
+
+    restored = {item[3].id: item[3] for item in engine.preview_geometries}
+    assert restored == {layer.id: layer for layer in scene.layers}
+    assert len(engine.preview_geometries) == 3
+    assert len(engine.snapshots) == 1
+    controller.close()
+
+
+@pytest.mark.parametrize("graph_changes", [False, True])
+def test_geometry_waits_for_hydration_and_uses_the_applied_revision(graph_changes: bool) -> None:
+    engine = _PendingGeometryEngine(defer_hydration=True)
+    documents, _runtime, controller = _runtime_controller(
+        engine, _Projection(), request_ids=("hydrate",),
+    )
+    controller.start_engine()
+    scene = documents.document.scene(CONTENT_CAMERA_PIP_SCENE_ID)
+    first, second = scene.layers[:2]
+    if graph_changes:
+        documents.rename_scene(scene.id, "Renamed scene")
+    committed = replace(first, crop=Crop(left=0.2))
+    documents.update_layer(scene.id, first.id, committed)
+    preview = replace(second, rect=replace(second.rect, x=0.3))
+    controller.preview_layer_geometry(scene.id, preview)
+
+    assert engine.preview_geometries == []
+    engine.finish_hydration(0)
+    if graph_changes:
+        assert engine.preview_geometries == []
+        assert len(engine.snapshots) == 2
+        engine.finish_hydration(1)
+    revision = engine.snapshots[-1][1].document.revision
+    assert engine.preview_geometries[0][3:5] == (committed, revision)
+    engine.finish_geometry(0)
+    assert engine.preview_geometries[1][3:5] == (preview, revision)
+    engine.finish_geometry(1)
+    assert len(engine.snapshots) == (2 if graph_changes else 1)
+    controller.close()
+
+
+def test_graph_hydration_supersedes_queued_geometry_for_deleted_layers() -> None:
+    engine = _PendingGeometryEngine()
+    documents, _runtime, controller = _runtime_controller(
+        engine, _Projection(), request_ids=("hydrate",),
+    )
+    controller.start_engine()
+    scene = documents.document.scene(CONTENT_CAMERA_PIP_SCENE_ID)
+    first, second = scene.layers[:2]
+    controller.preview_layer_geometry(scene.id, replace(first, crop=Crop(left=0.1)))
+    controller.preview_layer_geometry(scene.id, replace(first, crop=Crop(left=0.2)))
+    committed = replace(second, crop=Crop(left=0.3))
+    documents.update_layer(scene.id, second.id, committed)
+    documents.delete_layer(scene.id, first.id)
+    latest = replace(committed, crop=Crop(left=0.4))
+    documents.update_layer(scene.id, second.id, latest)
+
+    assert len(engine.snapshots) == 1
+    engine.finish_geometry(0)
+
+    assert len(engine.snapshots) == 2
+    assert engine.snapshots[-1][1].document.scene(scene.id).layers == (latest,)
+    assert engine.preview_geometries[1][3] == latest
+    assert engine.preview_geometries[1][4] == engine.snapshots[-1][1].document.revision
+    engine.finish_geometry(1)
+    assert len(engine.preview_geometries) == 2
+    controller.close()
+
+
+@pytest.mark.parametrize("emit_failure", [False, True])
+def test_restart_hydrates_commits_and_ignores_old_geometry_completion(emit_failure: bool) -> None:
+    engine = _PendingGeometryEngine()
+    documents, _runtime, controller = _runtime_controller(
+        engine, _Projection(), request_ids=("hydrate",),
+    )
+    errors: list[str] = []
+    controller.engine_error.connect(errors.append)
+    controller.start_engine()
+    scene = documents.document.scene(CONTENT_CAMERA_PIP_SCENE_ID)
+    first, second = scene.layers[:2]
+    committed = replace(first, crop=Crop(left=0.1))
+    documents.update_layer(scene.id, first.id, committed)
+    other_commit = replace(second, crop=Crop(left=0.2))
+    documents.update_layer(scene.id, second.id, other_commit)
+    if emit_failure:
+        engine.emit_health(SceneEngineStatus.FAILED)
+    engine.generation = "engine-generation-2"
+    engine.emit_health(SceneEngineStatus.READY)
+
+    assert len(engine.snapshots) == 2
+    assert engine.snapshots[-1][1].document.scene(scene.id).layers == (committed, other_commit)
+    assert len(engine.preview_geometries) == 1
+    latest = replace(other_commit, crop=Crop(left=0.3))
+    documents.update_layer(scene.id, second.id, latest)
+    engine.geometry_futures[0].set_exception(RuntimeError("stale sensitive error"))
+    assert errors == []
+    engine.finish_geometry(1)
+    assert len(engine.preview_geometries) == 2
+    assert engine.preview_geometries[1][3] == latest
+    controller.close()
+
+
+@pytest.mark.parametrize("failure", ["rejected", "exception", "invalid", "cancelled", "timeout"])
+@pytest.mark.parametrize("committed", [False, True])
+def test_geometry_failure_reports_commits_and_continues_other_layers(
+    failure: str, committed: bool,
+) -> None:
+    engine = _PendingGeometryEngine()
+    documents, _runtime, controller = _runtime_controller(
+        engine, _Projection(), request_ids=("hydrate",),
+    )
+    errors: list[str] = []
+    controller.engine_error.connect(errors.append)
+    controller.start_engine()
+    scene = documents.document.scene(CONTENT_CAMERA_PIP_SCENE_ID)
+    first, second = scene.layers[:2]
+    updated = replace(first, crop=Crop(left=0.1))
+    if committed:
+        documents.update_layer(scene.id, first.id, updated)
+    else:
+        controller.preview_layer_geometry(scene.id, updated)
+    other_commit = replace(second, crop=Crop(left=0.2))
+    documents.update_layer(scene.id, second.id, other_commit)
+    def fail_geometry(index: int) -> None:
+        request_id, _bus, _scene, _layer, revision, sequence = engine.preview_geometries[index]
+        ack = engine._ack(request_id, sequence, revision)
+        future = engine.geometry_futures[index]
+        if failure == "rejected":
+            future.set_result(
+                replace(ack, applied=False, error_code="unknown_layer", error_message="sensitive detail")
+            )
+        elif failure == "invalid":
+            future.set_result(replace(ack, document_revision=revision + 1))
+        elif failure == "cancelled":
+            future.cancel()
+        elif failure == "timeout":
+            future.set_exception(SceneEngineRequestTimeoutError("sensitive detail"))
+        else:
+            future.set_exception(RuntimeError("sensitive detail"))
+
+    fail_geometry(0)
+    assert errors == []
+    assert engine.preview_geometries[1][3] == other_commit
+    engine.finish_geometry(1)
+    if committed:
+        assert engine.preview_geometries[2][3] == updated
+        fail_geometry(2)
+    assert len(errors) == (1 if committed else 0)
+    assert all("sensitive" not in error for error in errors)
+    if errors:
+        assert controller.last_engine_error_code == (
+            "unknown_layer" if failure == "rejected" else
+            "engine_request_timed_out" if failure == "timeout" else
+            "unexpected_engine_response"
+        )
+    assert len(engine.preview_geometries) == (3 if committed else 2)
+    assert len(engine.snapshots) == 1
+    controller.close()
+
+
+def test_synchronous_geometry_dispatch_failure_does_not_wedge_the_queue() -> None:
+    class _RaisingGeometryEngine(_Engine):
+        def preview_layer_geometry(self, *args, **kwargs):
+            if not self.preview_geometries:
+                super().preview_layer_geometry(*args, **kwargs)
+                raise SceneEngineCommandRejectedError("unknown_layer")
+            return super().preview_layer_geometry(*args, **kwargs)
+
+    engine = _RaisingGeometryEngine()
+    documents, _runtime, controller = _runtime_controller(
+        engine, _Projection(), request_ids=("hydrate",),
+    )
+    errors: list[str] = []
+    controller.engine_error.connect(errors.append)
+    controller.start_engine()
+    scene = documents.document.scene(CONTENT_CAMERA_PIP_SCENE_ID)
+    updated = replace(scene, layers=tuple(replace(layer, crop=Crop(left=0.1)) for layer in scene.layers))
+
+    documents.update_scene(scene.id, updated)
+
+    assert [item[3] for item in engine.preview_geometries] == [*updated.layers, updated.layers[0]]
+    assert errors == []
+    assert len(engine.snapshots) == 1
+    controller.close()
+
+
+@pytest.mark.parametrize("recovers", [False, True])
+def test_committed_geometry_failure_retries_once_without_starving_other_layers(recovers: bool) -> None:
+    engine = _PendingGeometryEngine()
+    documents, _runtime, controller = _runtime_controller(
+        engine, _Projection(), request_ids=("hydrate",),
+    )
+    errors: list[str] = []
+    controller.engine_error.connect(errors.append)
+    controller.start_engine()
+    scene = documents.document.scene(CONTENT_CAMERA_PIP_SCENE_ID)
+    first, second = scene.layers[:2]
+    committed = replace(first, crop=Crop(left=0.1))
+    other = replace(second, crop=Crop(left=0.2))
+    documents.update_layer(scene.id, first.id, committed)
+    documents.update_layer(scene.id, second.id, other)
+
+    engine.geometry_futures[0].set_exception(SceneEngineRequestTimeoutError("sensitive detail"))
+    assert engine.preview_geometries[1][3] == other
+    engine.finish_geometry(1)
+    assert [item[3] for item in engine.preview_geometries] == [committed, other, committed]
+    assert errors == []
+    if recovers:
+        engine.finish_geometry(2)
+        assert controller.last_engine_error_code == ""
+    else:
+        engine.geometry_futures[2].set_exception(SceneEngineRequestTimeoutError("sensitive detail"))
+        assert errors == ["Scene engine layer_geometry failed (engine_request_timed_out)"]
+    assert len(engine.preview_geometries) == 3
+    assert len(engine.snapshots) == 1
+    controller.close()
+
+
+def test_failed_commit_does_not_replay_geometry_superseded_by_a_newer_commit() -> None:
+    engine = _PendingGeometryEngine()
+    documents, _runtime, controller = _runtime_controller(
+        engine, _Projection(), request_ids=("hydrate",),
+    )
+    errors: list[str] = []
+    controller.engine_error.connect(errors.append)
+    controller.start_engine()
+    scene = documents.document.scene(CONTENT_SCENE_ID)
+    first = replace(scene.layers[0], crop=Crop(left=0.1))
+    latest = replace(first, crop=Crop(left=0.2))
+    documents.update_layer(scene.id, first.id, first)
+    documents.update_layer(scene.id, first.id, latest)
+
+    engine.geometry_futures[0].set_exception(SceneEngineRequestTimeoutError("timeout"))
+    engine.finish_geometry(1)
+
+    assert [item[3] for item in engine.preview_geometries] == [first, latest]
+    assert errors == []
+    assert len(engine.snapshots) == 1
+    controller.close()
+
+
+@pytest.mark.parametrize("outcome", ["applied", "rejected", "failed"])
+def test_profile_hydration_holds_geometry_until_the_profile_outcome(
+    tmp_path: Path, outcome: str,
+) -> None:
+    workspace, collection = _real_workspace(tmp_path)
+    engine = _PendingGeometryEngine()
+    ids = iter(("hydrate", "profile", "geometry", "new-geometry"))
+    controller = SceneRuntimeController(
+        workspace, _Projection(), engine=cast(SceneEngine, engine),
+        request_id_factory=lambda: next(ids), session_id="test-session",
+    )
+    controller.start_engine()
+    engine.defer_hydration = True
+    controller.activate_scene_profile(collection.id)
+    scene = controller.document.scene(CONTENT_SCENE_ID)
+    committed = replace(scene.layers[0], crop=Crop(left=0.1))
+    controller.documents.update_layer(scene.id, committed.id, committed)
+    assert engine.preview_geometries == []
+    request_id, snapshot = engine.snapshots[-1]
+    ack = engine._ack(request_id, snapshot.sequence, snapshot.document.revision)
+    if outcome == "failed":
+        engine.hydration_futures[0].set_exception(SceneEngineRequestTimeoutError("timeout"))
+    else:
+        engine.hydration_futures[0].set_result(
+            ack if outcome == "applied" else replace(ack, applied=False, error_code="unknown_layer")
+        )
+
+    if outcome == "applied":
+        assert engine.preview_geometries == []
+        assert workspace.active_collection.id == collection.id
+        new_scene = controller.document.scene(CONTENT_SCENE_ID)
+        latest = replace(new_scene.layers[0], crop=Crop(left=0.2))
+        controller.documents.update_layer(new_scene.id, latest.id, latest)
+        assert engine.preview_geometries[0][3] == latest
+    else:
+        assert engine.preview_geometries[0][3] == committed
+        assert engine.preview_geometries[0][4] == engine.snapshots[0][1].document.revision
+    engine.finish_geometry(0)
+    assert len(engine.snapshots) == 2
+    controller.close()
 
 
 def test_preview_geometry_coalesces_mouse_moves_without_hydrating_each_frame() -> None:
