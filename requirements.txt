@@ -24,7 +24,7 @@ packaging==26.0
 pillow==12.1.1
 pycparser==3.0
 pyobjc-framework-Quartz; sys_platform == "darwin"
-pylibobs==0.1.2; sys_platform != "darwin" or platform_machine == "arm64"
+pylibobs==0.1.2
 PySide6==6.11.1
 PySide6_Addons==6.11.1
 PySide6_Essentials==6.11.1

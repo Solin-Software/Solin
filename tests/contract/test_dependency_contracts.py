@@ -6,7 +6,9 @@ from importlib.metadata import version
 from pathlib import Path
 
 import pylibobs
+import pytest
 import sideview
+from packaging.markers import default_environment
 from packaging.requirements import Requirement
 from packaging.utils import canonicalize_name
 from packaging.version import Version
@@ -82,13 +84,43 @@ def test_installed_sideview_distribution_provides_the_native_backend():
 def test_pylibobs_is_a_pinned_runtime_dependency():
     """libobs is the only media engine on this branch, so pin its binding.
 
-    Compared as a parsed requirement rather than a literal: the two manifests
-    quote the environment marker differently.
+    Keep the manifests and the Intel wheel bootstrap on the same binding release.
     """
     pinned = _locked_requirements().get(canonicalize_name("pylibobs"))
 
     assert pinned is not None, "pylibobs is missing from requirements.txt"
     assert str(pinned.specifier) == f"=={PYLIBOBS_VERSION}"
+    from scripts.build_pylibobs_macos import PYLIBOBS_VERSION as intel_binding_version
+
+    assert Version(intel_binding_version) == PYLIBOBS_VERSION
+
+
+@pytest.mark.parametrize(
+    ("system", "architecture"),
+    [("darwin", "x86_64"), ("darwin", "arm64"), ("win32", "AMD64"), ("linux", "x86_64")],
+)
+def test_scene_engine_dependency_is_selected_on_every_supported_platform(system, architecture):
+    requirement = _locked_requirements()[canonicalize_name("pylibobs")]
+    environment = default_environment() | {"sys_platform": system, "platform_machine": architecture}
+    assert requirement.marker is None or requirement.marker.evaluate(environment)
+
+
+def test_macos_intel_installation_contains_the_native_media_backend():
+    if platform.system() != "Darwin" or platform.machine().lower() != "x86_64":
+        return
+    from pylibobs._ffi import ffi, get_lib
+    from pylibobs._lib import get_bundled_modules
+
+    root = Path(pylibobs.__file__).resolve().parent / "_libs" / "macos" / "x86_64"
+    assert (root / "Frameworks" / "libobs.dylib").is_file()
+    assert (root / "Frameworks" / "libobs-opengl.dylib").is_file()
+    assert (root / "data" / "libobs" / "default.effect").is_file()
+    modules = {name: (Path(binary), Path(data)) for name, binary, data in get_bundled_modules()}
+    for name in ("obs-ffmpeg", "image-source", "mac-capture", "mac-avcapture", "mac-virtualcam"):
+        assert name in modules
+        assert modules[name][0].is_file()
+        assert modules[name][1].is_dir()
+    assert ffi.string(get_lib().obs_get_version_string()).decode("utf-8") == "32.1.2"
 
 
 def test_installed_pylibobs_provides_the_scene_engine_entry_points():

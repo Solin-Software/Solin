@@ -3,9 +3,6 @@
 The repository has Windows x64, Intel macOS, and Linux x86_64 build recipes.
 Generated files are written under `build/` or `dist/` and must not be committed.
 
-The published `pylibobs` dependency excludes Intel macOS. The Intel macOS recipe
-does not yet provide the default media backend.
-
 Playback and scenes use the supervised libobs sidecar. Source runs launch its
 Python module; standalone builds launch the Solin executable with
 `--scene-engine-sidecar`, before importing the GUI or opening a profile.
@@ -28,7 +25,8 @@ Install the `ffprobe` and `ffmpeg` command-line tools on PATH for titles,
 durations, embedded cover art, and video thumbnails. Python dependencies alone
 do not install those executables.
 
-Install the Python dependencies before invoking a build:
+Install the Python dependencies before invoking a build. On Intel macOS, use the
+[macOS binding bootstrap](#macos) below. On other platforms:
 
 ```text
 python -m pip install -r requirements-dev.txt
@@ -136,6 +134,21 @@ the workflow produces checksums.
 The `Build Solin macOS` workflow is the maintained delivery recipe. It runs on
 Intel macOS, builds the application with Nuitka, creates a DMG, and validates
 both packaged startup and replacement of a previous application when requested.
+
+Published `pylibobs` wheels provide the runtime on Windows, Linux and Apple Silicon
+macOS. On Intel macOS, bootstrap a local `pylibobs==0.1.2` wheel against the official
+OBS 32.1.2 Intel runtime before installing requirements:
+
+```text
+python -m pip install setuptools==80.10.2 wheel==0.46.3 cffi==2.0.0
+python scripts/build_pylibobs_macos.py --output-dir .pip-wheels
+python -m pip install --find-links .pip-wheels -r requirements-dev.txt
+python -m pip install --no-deps -e .
+```
+
+The helper verifies the downloads, target architecture and native initialization.
+It leaves other hosts unchanged. The workflow uses the local wheel during its
+binary dependency download and runs the same packaged runtime qualification.
 
 The replacement smoke test requires the URL of the previously distributed DMG.
 
