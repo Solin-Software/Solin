@@ -17,6 +17,7 @@ from solin.core.scenes.engine import (
     EngineHealthEvent,
     FrameChannelDescriptor,
     LocalCameraDiscovery,
+    MediaPlaybackEvent,
     OutputWindowTarget,
     ProgramRecordingEvent,
     SceneEngine,
@@ -1228,12 +1229,12 @@ class SceneRuntimeController(QObject):
     def _consume_engine_event(self, event: object) -> None:
         if not isinstance(
             event,
-            (EngineHealthEvent, SourceHealthEvent, ProgramRecordingEvent),
+            (EngineHealthEvent, SourceHealthEvent, ProgramRecordingEvent, MediaPlaybackEvent),
         ):
             self._report_exception("event", RuntimeError("Invalid scene engine event"))
             return
         self.engine_event.emit(event)
-        if isinstance(event, ProgramRecordingEvent):
+        if isinstance(event, (ProgramRecordingEvent, MediaPlaybackEvent)):
             return
         if isinstance(event, SourceHealthEvent):
             previous = self._source_health.get(event.source_id)

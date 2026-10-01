@@ -25,6 +25,7 @@ from solin.core.scenes.engine import (
     LocalCameraProbe,
     LocalCameraProbeStatus,
     LocalVideoFormat,
+    MediaPlaybackEvent,
     OutputWindowTarget,
     SceneEngine,
     SceneEngineAck,
@@ -74,6 +75,7 @@ from solin.core.scenes.process_engine import (
     SceneEngineCommandRejectedError,
     SceneEngineRequestTimeoutError,
 )
+from solin.core.scenes.media_control import MediaPlaybackNativeState, MediaPlaybackState
 from solin.core.scenes.presets import (
     CAMERA_SCENE_ID,
     CONTENT_CAMERA_PIP_SCENE_ID,
@@ -1340,6 +1342,46 @@ def test_projection_categories_are_explicit_and_unknown_types_fail_safe() -> Non
     assert content_category_for_projection({"type": "removed_projection_type"}) is (
         ContentCategory.EXTERNAL_STREAM
     )
+
+
+@pytest.mark.parametrize("state", list(MediaPlaybackState))
+@pytest.mark.parametrize("slot", [0, 1])
+def test_playback_events_are_forwarded_without_changing_engine_health(state, slot) -> None:
+    engine = _Engine()
+    _documents, runtime, controller = _runtime_controller(
+        engine, _Projection(), request_ids=(),
+    )
+    try:
+        controller.start_engine()
+        assert engine.listener is not None
+        source_health = SourceHealthEvent(
+            source_id=DEFAULT_CAMERA_SOURCE_ID,
+            status=SourceHealthStatus.FAILED,
+            error_code="local_camera_stream_failed",
+        )
+        engine.listener(source_health)
+        events: list[SceneEngineEvent] = []
+        readiness: list[bool] = []
+        controller.engine_event.connect(events.append)
+        controller.engine_ready_changed.connect(readiness.append)
+        snapshot_count = len(engine.snapshots)
+        event = MediaPlaybackEvent(MediaPlaybackNativeState(
+            state=state, position_ms=1200, duration_ms=5000,
+            error_code="media_open_failed" if state is MediaPlaybackState.ERROR else "",
+            slot=slot,
+        ))
+
+        engine.listener(event)
+
+        assert controller.last_engine_error_code == ""
+        assert events == [event]
+        assert controller.engine_ready
+        assert readiness == []
+        assert len(engine.snapshots) == snapshot_count
+        assert controller.source_health(DEFAULT_CAMERA_SOURCE_ID) == source_health
+    finally:
+        controller.close()
+        runtime.close()
 
 
 def test_source_health_is_retained_until_ready_or_stopped() -> None:
