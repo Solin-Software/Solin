@@ -28,8 +28,8 @@ env:
 
 jobs:
   build:
-    name: Ubuntu 22.04 x64
-    runs-on: ubuntu-22.04
+    name: Ubuntu 24.04 x64
+    runs-on: ubuntu-24.04
     timeout-minutes: 180
 
     steps:
@@ -40,12 +40,17 @@ jobs:
         shell: bash
         run: |
           sudo apt-get update
+          mapfile -t libobs_packages < <(bash scripts/build_solin.sh --print-native-packages)
           sudo apt-get install --yes --no-install-recommends \
+            "${libobs_packages[@]}" \
             binutils \
             build-essential \
             ccache \
             cmake \
             desktop-file-utils \
+            curl \
+            dpkg \
+            ffmpeg \
             shared-mime-info \
             patchelf \
             appstream \
@@ -58,8 +63,6 @@ jobs:
             libwebkit2gtk-4.1-dev \
             libsoup-3.0-0 \
             libjavascriptcoregtk-4.1-0 \
-            libva2 \
-            libva-drm2 \
             libva-x11-2 \
             pipewire-bin \
             gstreamer1.0-plugins-bad \

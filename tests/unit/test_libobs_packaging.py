@@ -294,6 +294,119 @@ def test_linux_host_mux_copy_uses_the_private_runtime_and_checks_its_dependencie
     ]
 
 
+def test_linux_staging_supplies_the_helper_omitted_from_the_published_wheel(
+    tmp_path, monkeypatch,
+):
+    package, app = tmp_path / "installed", tmp_path / "application"
+    source = _runtime(package, "linux")
+    (source / "obs-ffmpeg-mux").unlink()
+    helper = tmp_path / "official-obs/obs-ffmpeg-mux"
+    _touch(helper, b"official pinned helper")
+    _touch(app / "Solin.bin")
+    _touch(tmp_path / "LICENSE")
+    monkeypatch.setattr(packaging, "_relocate_linux", lambda _root, **_kwargs: None)
+    destination = packaging.stage_runtime(
+        package_dir=package, application_dir=app, target_platform="linux",
+        architecture="x86_64", license_files=[tmp_path / "LICENSE"],
+        linux_mux_helper=helper,
+    )
+    assert (destination / "obs-ffmpeg-mux").read_bytes() == helper.read_bytes()
+    assert (app / "obs-ffmpeg-mux").read_bytes() == helper.read_bytes()
+    assert not (source / "obs-ffmpeg-mux").exists()
+
+
+def test_external_linux_helper_cannot_override_another_platform(tmp_path):
+    root = _runtime(tmp_path, "windows")
+    with pytest.raises(packaging.LibobsPackagingError, match="only supported for Linux"):
+        packaging.validate_runtime(root, "windows", linux_mux_helper=tmp_path / "helper")
+
+
+def test_linux_dependency_closure_is_bundled_with_notices_but_keeps_host_graphics(
+    tmp_path, monkeypatch,
+):
+    root, system = tmp_path / "runtime", tmp_path / "system"
+    core, codec, codec_dependency = root / "libobs.so.0", system / "libavcodec.so.60", system / "libx264.so.164"
+    for library in (core, codec, codec_dependency, system / "libc.so.6", system / "libGL.so.1"):
+        _touch(library, b"\x7fELF" + library.name.encode())
+    notices, commands = [], []
+
+    def dependencies(binary):
+        if binary == core:
+            return {"libavcodec.so.60": codec, "libc.so.6": system / "libc.so.6", "libGL.so.1": system / "libGL.so.1"}
+        if binary.name == codec.name:
+            return {"libx264.so.164": codec_dependency}
+        return {}
+
+    monkeypatch.setattr(packaging, "_linux_linked_libraries", dependencies)
+    monkeypatch.setattr(packaging, "_copy_linux_dependency_notice", lambda library, _root: notices.append(library))
+    monkeypatch.setattr(packaging.subprocess, "run", lambda command, **_kwargs: commands.append(command))
+    packaging._relocate_linux(root)
+    assert (root / codec.name).read_bytes() == codec.read_bytes()
+    assert (root / codec_dependency.name).read_bytes() == codec_dependency.read_bytes()
+    assert not (root / "libc.so.6").exists() and not (root / "libGL.so.1").exists()
+    assert notices == [codec, codec_dependency]
+    assert {command[-1] for command in commands} == {str(core), str(root / codec.name), str(root / codec_dependency.name)}
+
+
+@pytest.mark.parametrize(
+    ("stdout", "stderr"),
+    [(b"libavcodec.so.60 => not found\n", b""), (b"", b"version GLIBC_2.38 not found\n")],
+)
+def test_linux_dependency_probe_rejects_missing_libraries_and_incompatible_abi(
+    monkeypatch, stdout, stderr,
+):
+    monkeypatch.setattr(
+        packaging.subprocess, "run",
+        lambda command, **_kwargs: subprocess.CompletedProcess(command, 0, stdout, stderr),
+    )
+    with pytest.raises(packaging.LibobsPackagingError, match="Unresolved libobs dependencies"):
+        packaging._linux_linked_libraries(Path("libobs.so.0"))
+
+
+def test_linux_dependency_notices_follow_the_owning_distribution_package(tmp_path, monkeypatch):
+    documents = tmp_path / "doc"
+    _touch(documents / "libavcodec60/copyright", b"FFmpeg redistribution notice")
+    monkeypatch.setattr(packaging, "_LINUX_DOCUMENTATION_ROOT", documents)
+    monkeypatch.setattr(
+        packaging.subprocess, "run",
+        lambda command, **_kwargs: subprocess.CompletedProcess(
+            command, 0, b"libavcodec60:amd64: /usr/lib/libavcodec.so.60\n", b"",
+        ),
+    )
+    root = tmp_path / "runtime"
+    packaging._copy_linux_dependency_notice(Path("/usr/lib/libavcodec.so.60"), root)
+    assert (root / "licenses/system/libavcodec60/copyright").read_bytes() == b"FFmpeg redistribution notice"
+
+
+def test_linux_host_mux_cannot_silently_use_unbundled_ffmpeg(tmp_path, monkeypatch):
+    helper = tmp_path / "obs-ffmpeg-mux"
+    monkeypatch.setattr(packaging, "_linux_linked_libraries", lambda _binary: {"libavcodec.so.60": tmp_path / "system/libavcodec.so.60"})
+    monkeypatch.setattr(packaging.subprocess, "run", lambda _command, **_kwargs: None)
+    with pytest.raises(packaging.LibobsPackagingError, match="was not bundled"):
+        packaging._relocate_linux(tmp_path / "runtime", binaries=[helper])
+
+
+def test_linux_dependency_notices_accept_pre_usr_merge_package_records(tmp_path, monkeypatch):
+    documents = tmp_path / "doc"
+    _touch(documents / "libgcc-s1/copyright", b"GCC runtime notice")
+    monkeypatch.setattr(packaging, "_LINUX_DOCUMENTATION_ROOT", documents)
+    searched = []
+
+    def query(command, **_kwargs):
+        searched.append(command[-1])
+        found = command[-1] == "/lib/x86_64-linux-gnu/libgcc_s.so.1"
+        return subprocess.CompletedProcess(
+            command, 0 if found else 1,
+            b"libgcc-s1:amd64: /lib/x86_64-linux-gnu/libgcc_s.so.1\n" if found else b"", b"",
+        )
+
+    monkeypatch.setattr(packaging.subprocess, "run", query)
+    root = tmp_path / "runtime"
+    packaging._copy_linux_dependency_notice(Path("/usr/lib/x86_64-linux-gnu/libgcc_s.so.1"), root)
+    assert searched == ["/usr/lib/x86_64-linux-gnu/libgcc_s.so.1", "/lib/x86_64-linux-gnu/libgcc_s.so.1"]
+    assert (root / "licenses/system/libgcc-s1/copyright").read_bytes() == b"GCC runtime notice"
+
+
 def _mock_sidecar(
     monkeypatch, payload=None, returncode=0, corrupt=False, rejected=None, decoded=True
 ):

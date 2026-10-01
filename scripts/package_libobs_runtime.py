@@ -41,6 +41,15 @@ _WINDOWS_HELPERS = (
     "obs-nvenc-test.exe",
     "obs-qsv-test.exe",
 )
+# Keep the C runtime and hardware-facing loader stack supplied by the host.
+# Other linked libraries, including FFmpeg, belong to the private runtime.
+_LINUX_HOST_LIBRARIES = frozenset({
+    "libc.so.6", "libm.so.6", "libdl.so.2", "librt.so.1", "libpthread.so.0",
+    "libutil.so.1", "libresolv.so.2", "libGL.so.1", "libEGL.so.1",
+    "libGLX.so.0", "libGLdispatch.so.0", "libOpenGL.so.0", "libglapi.so.0",
+    "libgbm.so.1", "libvulkan.so.1", "libva.so.2", "libva-drm.so.2", "libva-x11.so.2",
+})
+_LINUX_DOCUMENTATION_ROOT = Path("/usr/share/doc")
 
 
 def _mux_helper(root: Path, target_platform: str) -> Path:
@@ -59,7 +68,9 @@ def _require_file(path: Path) -> None:
         raise LibobsPackagingError(f"Required libobs runtime file is missing or empty: {path}")
 
 
-def validate_runtime(root: Path, target_platform: str) -> None:
+def validate_runtime(
+    root: Path, target_platform: str, *, linux_mux_helper: Path | None = None,
+) -> None:
     """Validate resources loaded dynamically, beyond Nuitka's import graph."""
     if target_platform == "windows":
         libraries = ("obs.dll", "libobs-d3d11.dll")
@@ -72,7 +83,9 @@ def validate_runtime(root: Path, target_platform: str) -> None:
         suffix = ".dylib"
     else:
         raise LibobsPackagingError(f"Unsupported libobs platform: {target_platform}")
-    _require_file(_mux_helper(root, target_platform))
+    if linux_mux_helper is not None and target_platform != "linux":
+        raise LibobsPackagingError("An external mux helper is only supported for Linux.")
+    _require_file(linux_mux_helper if linux_mux_helper is not None else _mux_helper(root, target_platform))
     for name in libraries:
         _require_file(root / name)
     for name in ("obs-ffmpeg", "image-source", "obs-transitions"):
@@ -102,20 +115,85 @@ def _native_files(root: Path) -> list[Path]:
     return result
 
 
+def _linux_linked_libraries(binary: Path) -> dict[str, Path]:
+    environment = dict(os.environ)
+    environment.pop("LD_LIBRARY_PATH", None)
+    environment.pop("LD_PRELOAD", None)
+    result = subprocess.run(
+        ["ldd", str(binary)], check=True, capture_output=True, env=environment,
+    )
+    if b"not found" in result.stdout or b"not found" in result.stderr:
+        raise LibobsPackagingError(
+            f"Unresolved libobs dependencies in {binary}: "
+            + (result.stdout + result.stderr).decode("utf-8", errors="replace")
+        )
+    libraries = {}
+    for line in result.stdout.decode("utf-8").splitlines():
+        fields = line.split()
+        if len(fields) >= 3 and fields[1] == "=>" and fields[2].startswith("/"):
+            name = fields[0]
+            if Path(name).name != name:
+                raise LibobsPackagingError(f"Invalid shared-library name: {name}")
+            libraries[name] = Path(fields[2]).resolve()
+    return libraries
+
+
+def _copy_linux_dependency_notice(library: Path, root: Path) -> None:
+    """Preserve the distribution's copyright notice for each bundled dependency."""
+    candidates = [library.as_posix()]
+    # Older package records may retain /lib paths on a merged-/usr host.
+    if candidates[0].startswith("/usr/lib/"):
+        candidates.append(candidates[0].removeprefix("/usr"))
+    owner = []
+    for candidate in candidates:
+        result = subprocess.run(
+            ["dpkg-query", "--search", candidate], check=False, capture_output=True,
+        )
+        if result.returncode == 0:
+            owner = result.stdout.decode("utf-8").splitlines()
+            break
+    if not owner or ": " not in owner[0]:
+        raise LibobsPackagingError(f"No distribution package owns {library}")
+    package = owner[0].split(": ", 1)[0].split(":", 1)[0]
+    if not package or Path(package).name != package:
+        raise LibobsPackagingError(f"Invalid dependency package name: {package}")
+    notice = _LINUX_DOCUMENTATION_ROOT / package / "copyright"
+    _require_file(notice)
+    destination = root / "licenses" / "system" / package / "copyright"
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(notice, destination)
+
+
 def _relocate_linux(root: Path, *, binaries: Sequence[Path] | None = None) -> None:
-    for binary in _native_files(root) if binaries is None else binaries:
+    """Stage the resolved ELF closure while retaining host C/graphics libraries."""
+    pending = list(_native_files(root) if binaries is None else binaries)
+    visited = set()
+    while pending:
+        binary = pending.pop()
+        if binary in visited:
+            continue
+        visited.add(binary)
         relative = os.path.relpath(root, binary.parent).replace(os.sep, "/")
         subprocess.run(
             ["patchelf", "--set-rpath", f"$ORIGIN:$ORIGIN/{relative}", str(binary)],
             check=True,
             capture_output=True,
         )
-        result = subprocess.run(["ldd", str(binary)], check=True, capture_output=True)
-        if b"not found" in result.stdout:
-            raise LibobsPackagingError(
-                f"Unresolved libobs dependencies in {binary}: "
-                + result.stdout.decode("utf-8", errors="replace")
-            )
+        libraries = _linux_linked_libraries(binary)
+        for name, library in libraries.items():
+            if name in _LINUX_HOST_LIBRARIES or name.startswith(("libdrm", "libnss_")):
+                continue
+            if library.is_relative_to(root.resolve()):
+                continue
+            if binaries is not None:
+                raise LibobsPackagingError(f"Mux helper dependency was not bundled: {name}")
+            destination = root / name
+            if destination.exists():
+                raise LibobsPackagingError(f"Conflicting private libobs dependency: {name}")
+            _require_file(library)
+            shutil.copy2(library, destination)
+            _copy_linux_dependency_notice(library, root)
+            pending.append(destination)
 
 
 def _relocate_macos(root: Path, *, binaries: Sequence[Path] | None = None) -> None:
@@ -234,10 +312,11 @@ def stage_runtime(
     target_platform: str,
     architecture: str,
     license_files: Sequence[Path],
+    linux_mux_helper: Path | None = None,
 ) -> Path:
     """Copy one installed target without leaving references to the build machine."""
     source = package_dir / "_libs" / target_platform / architecture
-    validate_runtime(source, target_platform)
+    validate_runtime(source, target_platform, linux_mux_helper=linux_mux_helper)
     if not application_dir.is_dir():
         raise LibobsPackagingError(f"Application directory does not exist: {application_dir}")
     if not license_files:
@@ -255,6 +334,8 @@ def stage_runtime(
     with tempfile.TemporaryDirectory(prefix=".libobs-stage-", dir=application_dir) as directory:
         staging = Path(directory) / architecture
         shutil.copytree(source, staging, symlinks=False)
+        if linux_mux_helper is not None:
+            shutil.copy2(linux_mux_helper, staging / "obs-ffmpeg-mux")
         if target_platform == "linux":
             _relocate_linux(staging)
         elif target_platform == "macos":
@@ -544,6 +625,7 @@ def main(arguments: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--application-dir", type=Path, required=True)
     parser.add_argument("--executable", type=Path, required=True)
+    parser.add_argument("--linux-mux-helper", type=Path)
     options = parser.parse_args(arguments)
     try:
         import pylibobs
@@ -568,6 +650,7 @@ def main(arguments: Sequence[str] | None = None) -> int:
             target_platform=target,
             architecture=architecture,
             license_files=licenses,
+            linux_mux_helper=options.linux_mux_helper,
         )
         verify_packaged_sidecar(options.executable)
     except (ImportError, OSError, LibobsPackagingError, subprocess.SubprocessError) as error:

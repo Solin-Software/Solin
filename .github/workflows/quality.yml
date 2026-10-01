@@ -61,17 +61,18 @@ jobs:
       - name: Validate locales
         run: python3 scripts/check_locales.py
 
-      - name: Install Qt and SideView build dependencies
+      - name: Install Qt, SideView and libobs dependencies
         if: ${{ steps.filter.outputs.run_quality == 'true' }}
         run: |
           sudo apt-get update
+          mapfile -t libobs_packages < <(bash scripts/build_solin.sh --print-native-packages)
           sudo apt-get install --no-install-recommends -y \
+            "${libobs_packages[@]}" \
             cmake \
-            libegl1 \
+            ffmpeg \
             libgl1 \
             libgtk-3-dev \
             libopengl0 \
-            libpulse0 \
             libwebkit2gtk-4.1-dev \
             libxcb-cursor0 \
             libxkbcommon-x11-0 \

@@ -154,6 +154,14 @@ The replacement smoke test requires the URL of the previously distributed DMG.
 
 ## Linux development
 
+Ubuntu 24.04 x86_64 is the reference Linux platform for development, CI and
+AppImage builds. Ubuntu 22.04 is unsupported by this delivery recipe. The pinned
+`pylibobs==0.1.2` Linux wheel is tagged `manylinux_2_31_x86_64`, but its ELF
+version requirements reach `GLIBC_2.34`. Its native dependency set from Ubuntu
+24.04 raises the minimum further: `libsrt.so.1.5`, `librist.so.4`,
+`libx264.so.164` and `libvpl.so.2` require `GLIBC_2.38`. Ubuntu 24.04 provides
+glibc 2.39. The wheel tag alone does not establish distribution compatibility.
+
 The embedded SideView browser uses GTK 3, WebKitGTK 4.1, libsoup 3, and
 `pkg-config`. The libobs runtime needs the host's graphics and audio support.
 Linux virtual-camera output additionally needs a `v4l2loopback` device and the
@@ -162,6 +170,18 @@ libobs `virtualcam_output` plugin. Automatic Zoom sharing from source requires
 
 SideView and its native backend are installed from PyPI through the Python
 dependencies. No SideView binary is vendored in this repository.
+
+Install the native dependencies from the Ubuntu 24.04 archive before installing
+the Python requirements. The build script supplies the same explicit libobs
+package list used by both CI workflows; apt resolves its transitive dependencies:
+
+```bash
+mapfile -t libobs_packages < <(bash scripts/build_solin.sh --print-native-packages)
+sudo apt-get update
+sudo apt-get install --no-install-recommends "${libobs_packages[@]}" \
+    binutils build-essential curl dpkg patchelf pkg-config xdotool ffmpeg \
+    libgtk-3-dev libwebkit2gtk-4.1-dev libxcb-cursor0 libxkbcommon-x11-0 xauth xvfb
+```
 
 On a Wayland desktop, run Solin through XWayland when the embedded native view
 is needed:
@@ -172,20 +192,31 @@ QT_QPA_PLATFORM=xcb python main.py
 
 ## Linux standalone and AppImage
 
-Linux builds must run on Linux or WSL 2. The standalone build entry point is:
+Linux builds must run on Ubuntu 24.04 x86_64 or its WSL 2 distribution, with
+Python 3.13 or newer and the native dependencies above. The standalone build
+entry point is:
 
 ```text
 python -m pip install nuitka ordered-set zstandard
-bash scripts/build_solin.sh
+xvfb-run --auto-servernum bash scripts/build_solin.sh
 ```
 
 Set `SOLIN_PYTHON` only when the desired interpreter is not discoverable through
 the environment or repository-local environment.
 
+The script downloads the official `OBS-Studio-32.1.2-Ubuntu-24.04-x86_64.deb`,
+verifies SHA-256
+`a3bb1b0176604dad9e22710e057f0fdd76e8afb600e0e1914c30464ae49908e8`,
+and reuses only a verified archive in the build's dependency cache. It extracts
+the missing `usr/local/bin/obs-ffmpeg-mux` with `dpkg-deb` and passes it to runtime
+staging. This supplies the wheel's matching recording helper without installing
+the OBS application or using a third-party apt repository. The temporary
+extraction is removed when the build exits.
+
 The AppImage entry point is:
 
 ```text
-bash scripts/package_solin_appimage.sh
+xvfb-run --auto-servernum bash scripts/package_solin_appimage.sh
 ```
 
 From Windows, the WSL wrapper can run the complete build:
@@ -194,12 +225,19 @@ From Windows, the WSL wrapper can run the complete build:
 scripts\build_solin_appimage.bat
 ```
 
+The wrapper defaults to `Ubuntu-24.04` and runs full builds under Xvfb. Install
+that WSL distribution and its dependencies first; `SOLIN_WSL_DISTRO` or
+`-Distribution` selects another compatible distribution explicitly.
+
 Pass `--skip-standalone` to the wrapper when `build/linux/main.dist` is already
 current. The resulting AppImage and SHA-256 file are written to `dist/`.
 
 The AppImage packages the application and its Python/Qt dependencies while
 using the host distribution's security-maintained WebKitGTK stack. Its Zoom
-automation remains limited to X11/XWayland.
+automation remains limited to X11/XWayland. AppImage packaging does not lower
+the native glibc requirements or establish support for Ubuntu 22.04. Native
+Linux rendering, decoding and packaging qualification are gated by the Ubuntu
+24.04 workflow; Windows tests do not establish those results.
 
 ## Build workflows
 
