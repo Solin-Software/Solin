@@ -52,6 +52,43 @@ class ObsRuntimeError(RuntimeError):
     """Raised when the libobs runtime cannot be started or is unavailable."""
 
 
+@dataclass(slots=True)
+class _OwnedX11Display:
+    """X11 connection owned by the libobs runtime sidecar."""
+
+    library: Any
+    pointer: int
+
+    @classmethod
+    def open(cls) -> "_OwnedX11Display | None":
+        import ctypes
+        import ctypes.util
+
+        path = ctypes.util.find_library("X11")
+        if not path:
+            return None
+        try:
+            x11 = ctypes.CDLL(path)
+        except OSError:
+            return None
+        x11.XOpenDisplay.argtypes = [ctypes.c_char_p]
+        x11.XOpenDisplay.restype = ctypes.c_void_p
+        x11.XCloseDisplay.argtypes = [ctypes.c_void_p]
+        x11.XCloseDisplay.restype = ctypes.c_int
+        pointer = x11.XOpenDisplay(None)
+        if not pointer:
+            return None
+        return cls(library=x11, pointer=int(pointer))
+
+    def close(self) -> None:
+        if not self.pointer:
+            return
+        import ctypes
+
+        self.library.XCloseDisplay(ctypes.c_void_p(self.pointer))
+        self.pointer = 0
+
+
 def libobs_available() -> bool:
     """Return ``True`` when the ``pylibobs`` package can be imported."""
     try:
@@ -206,6 +243,7 @@ class ObsRuntime:
         self._video = ObsVideoConfig()
         self._used_channels: set[int] = set()
         self._monitoring_device: tuple[str, str] | None = None
+        self._owned_x11_display: _OwnedX11Display | None = None
         # ONE shared capture source per camera device — a V4L2 device can't be
         # opened twice, so the projector and the virtual camera reference the same
         # source (see :meth:`camera_source`).
@@ -378,12 +416,13 @@ class ObsRuntime:
             self._video = ObsVideoConfig(width, height, fps)
             try:
                 context = ob.OBSContext(locale=locale)
+                # libobs requires the Unix platform display to be configured
+                # before obs_startup(). OBS Studio does the same in OBSInit().
+                # The sidecar has no QGuiApplication, so it owns an X11
+                # connection when there is no Qt display to share.
+                nix_display_configured = self._configure_nix_platform()
                 context.startup()
                 graphics_module = _graphics_module_path()
-
-                # Preferred fix: share Qt's X display so libobs' EGL reuses the
-                # toolkit connection (one EGLDisplay → no context collision).
-                shared_display = self._configure_nix_platform()
 
                 def _init_video(ctx=context, gm=graphics_module):
                     if gm is not None:
@@ -391,7 +430,7 @@ class ObsRuntime:
                     else:
                         ctx.set_video(width, height, fps_num=fps)
 
-                if shared_display:
+                if nix_display_configured:
                     _init_video()
                 else:
                     # Fallback (no shared display): release any current Qt GL
@@ -407,6 +446,7 @@ class ObsRuntime:
                         ctx.shutdown()
                 except Exception:  # noqa: BLE001 - teardown must not mask the root cause
                     log.warning("libobs teardown after failed startup errored", exc_info=True)
+                self._release_owned_x11_display()
                 raise ObsRuntimeError(f"Failed to start libobs runtime: {exc}") from exc
 
             self._context = context
@@ -439,33 +479,49 @@ class ObsRuntime:
                 log.warning("libobs context shutdown errored", exc_info=True)
             finally:
                 self._context = None
+                self._release_owned_x11_display()
 
     # ── Linux X display sharing ───────────────────────────────────────────
 
     def _configure_nix_platform(self) -> bool:
-        """Share Qt's X display with libobs on Linux/X11; returns True on success.
+        """Configure libobs' Linux/X11 display before ``obs_startup``.
 
-        For this to actually merge the two EGLDisplays the app must run Qt on
-        EGL (``QT_XCB_GL_INTEGRATION=xcb_egl``, set at startup). A False return
-        (non-Linux, Wayland, no display) means the caller uses the GL-release
-        fallback instead.
+        The app process shares Qt's native X display. The supervised sidecar has
+        no Qt application, so it opens and owns a connection to ``$DISPLAY``.
+        A False return (non-Linux/BSD or no X display) leaves the caller on the
+        GL-context-release fallback.
         """
-        import sys
-
         if not (sys.platform.startswith("linux") or "bsd" in sys.platform):
             return False
         display = qt_x_display()
+        display_owner = "Qt"
         if not display:
-            return False
+            owned_display = _OwnedX11Display.open()
+            if owned_display is None:
+                return False
+            self._owned_x11_display = owned_display
+            display = owned_display.pointer
+            display_owner = "sidecar"
         ob = self.ob
         try:
-            ob.set_nix_platform(ob.NixPlatform.X11_EGL)
             ob.set_nix_platform_display(display)
+            ob.set_nix_platform(ob.NixPlatform.X11_EGL)
         except Exception:  # noqa: BLE001 - optional libobs API boundary
+            self._release_owned_x11_display()
             log.debug("Could not configure libobs nix platform", exc_info=True)
             return False
-        log.info("libobs sharing Qt X display (0x%x) via EGL", display)
+        log.info("libobs using %s X display (0x%x) via EGL", display_owner, display)
         return True
+
+    def _release_owned_x11_display(self) -> None:
+        display = self._owned_x11_display
+        if display is None:
+            return
+        self._owned_x11_display = None
+        try:
+            display.close()
+        except Exception:  # noqa: BLE001 - native teardown must not escape
+            log.debug("Could not close the libobs X11 display", exc_info=True)
 
     # ── Audio monitoring (speakers) ───────────────────────────────────────
 
