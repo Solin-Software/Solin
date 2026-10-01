@@ -35,6 +35,7 @@ _GS_CLEAR_COLOR = 1
 # gs_blend_type: GS_BLEND_ZERO, GS_BLEND_ONE, ...
 _GS_BLEND_ZERO = 0
 _GS_BLEND_ONE = 1
+_GS_BLEND_INVSRCALPHA = 5
 
 _lock = threading.Lock()
 _texrender: Any = None
@@ -83,11 +84,14 @@ def render_source_to_bgra(
     canvas_width: int,
     canvas_height: int,
     before_render: Callable[[], bool] | None = None,
+    opaque_background: bool = False,
 ) -> tuple[bytes, int] | None:
     """Render ``source`` into a ``width`` x ``height`` BGRA buffer.
 
     Returns ``(data, stride)`` where ``stride`` is the mapped row pitch in bytes (which the
     driver may pad beyond ``width * 4``), or ``None`` when the frame could not be rendered.
+    Source alpha is preserved by default. ``opaque_background`` composites against
+    opaque black for final scene previews, including uncovered canvas regions.
     """
     pointer = getattr(source, "_ptr", None)
     if pointer is None or width <= 0 or height <= 0:
@@ -115,16 +119,22 @@ def render_source_to_bgra(
             try:
                 # struct vec4 is opaque in pylibobs's cdef, so the four floats are
                 # allocated directly and reinterpreted — vec4 is exactly float[4].
-                clear_color = ffi.cast("struct vec4 *", ffi.new("float[4]"))
+                clear_components = ffi.new(
+                    "float[4]", [0.0, 0.0, 0.0, 1.0 if opaque_background else 0.0],
+                )
+                clear_color = ffi.cast("struct vec4 *", clear_components)
                 lib.gs_clear(_GS_CLEAR_COLOR, clear_color, 0.0, 0)
                 # Span the canvas coordinate space so the scene scales into the target.
                 lib.gs_ortho(
                     0.0, float(canvas_width), 0.0, float(canvas_height), -100.0, 100.0
                 )
-                # Straight copy: the source already carries composited alpha, and letting
-                # it blend against the cleared target would darken semi-transparent pixels.
+                # Copy raw sources unchanged. A composited scene carries premultiplied
+                # alpha, so flatten it over black without multiplying alpha twice.
                 lib.gs_blend_state_push()
-                lib.gs_blend_function(_GS_BLEND_ONE, _GS_BLEND_ZERO)
+                lib.gs_blend_function(
+                    _GS_BLEND_ONE,
+                    _GS_BLEND_INVSRCALPHA if opaque_background else _GS_BLEND_ZERO,
+                )
                 try:
                     lib.obs_source_video_render(pointer)
                 finally:
@@ -186,17 +196,23 @@ def shutdown() -> None:
             lib.obs_leave_graphics()
 
 
-def resolve_render_source_to_bgra(*, before_render: Callable[[], bool] | None = None):
+def resolve_render_source_to_bgra(
+    *, before_render: Callable[[], bool] | None = None, opaque_background: bool = False,
+):
     """Return the source→BGRA renderer to use.
 
-    Use the cached readback when preparation must run inside the graphics context.
+    Use the cached readback for an explicit background or when preparation must run
+    inside the graphics context.
     Otherwise prefer the helper supplied by ``pylibobs`` when available. Resolve
     once per egress loop rather than per frame.
     """
-    if before_render is not None:
+    if before_render is not None or opaque_background:
         # Preparation and readback must share the graphics mutex so a source
         # cannot change resolution between converting its crop and rendering it.
-        return partial(render_source_to_bgra, before_render=before_render)
+        return partial(
+            render_source_to_bgra, before_render=before_render,
+            opaque_background=opaque_background,
+        )
 
     import pylibobs
 

@@ -412,6 +412,53 @@ def test_return_to_cached_content_never_publishes_the_previous_presentation(
         engine.stop()
 
 
+def test_native_readback_preserves_source_alpha_and_flattens_scene_background() -> None:
+    from solin.core.media.obs_runtime import ObsRuntime
+    from solin.core.media.obs_source_render import (
+        render_source_to_bgra, resolve_render_source_to_bgra, shutdown,
+    )
+
+    runtime = ObsRuntime()
+    source = scene = None
+    try:
+        runtime.ensure_started(width=64, height=64)
+        source = runtime.ob.Source.create("color_source_v3", "alpha-readback", {
+            "width": 32, "height": 64, "color": 0x800000FF,
+        })
+        scene = runtime.ob.Scene.create("alpha-readback-scene")
+        scene.add(source)
+
+        def pixels(renderer, subject):
+            frame = renderer(subject, 64, 64, canvas_width=64, canvas_height=64)
+            assert frame is not None
+            data, stride = frame
+            return (data[32 * stride + 16 * 4:32 * stride + 17 * 4],
+                    data[32 * stride + 48 * 4:32 * stride + 49 * 4])
+
+        raw_center, raw_background = pixels(render_source_to_bgra, source)
+        assert raw_center == bytes((0, 0, 255, 128))
+        assert raw_background == bytes((0, 0, 0, 0))
+
+        scene_source = scene.as_source()
+        scene_center, scene_background = pixels(render_source_to_bgra, scene_source)
+        assert scene_center[3] == 128
+        assert scene_background == bytes((0, 0, 0, 0))
+
+        opaque_renderer = resolve_render_source_to_bgra(opaque_background=True)
+        opaque_center, opaque_background = pixels(opaque_renderer, scene_source)
+        # Flatten the scene once: premultiplied color must not darken a second time.
+        assert opaque_center[:3] == scene_center[:3]
+        assert opaque_center[3] == 255
+        assert opaque_background == bytes((0, 0, 0, 255))
+    finally:
+        if scene is not None:
+            scene.release()
+        if source is not None:
+            source.release()
+        shutdown()
+        runtime.shutdown()
+
+
 def test_actual_size_content_reaches_composed_libobs_output() -> None:
     engine = create_libobs_scene_engine()
 

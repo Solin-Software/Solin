@@ -1,8 +1,8 @@
 """Preview egress for the scene-engine sidecar (libobs → app editor canvas).
 
-The editor shows a live composite of the scene being edited (the MEDIA_WINDOWS
-bus), which may differ from the live Program. This renders that scene off-screen
-to BGRA via :func:`pylibobs.render_source_to_bgra` and writes it into the
+The editor shows a live composite of the scene being edited (the EDITOR bus),
+which may differ from the live Program. This renders that scene off-screen
+over opaque black to BGRA via ``obs_source_render`` and writes it into the
 cross-platform ``SHARED_MEMORY_BGRA`` block the app created and reads
 (``SharedMemoryPreviewEgressController``). The app advertises the block's
 ``handle_token`` in the hydrate ``preview_egress`` descriptor; the sidecar
@@ -104,7 +104,9 @@ class LibobsPreviewEgress:
     def _loop(self) -> None:
         from solin.core.media.obs_source_render import resolve_render_source_to_bgra
 
-        render_to_bgra = resolve_render_source_to_bgra(before_render=self._before_render)
+        render_to_bgra = resolve_render_source_to_bgra(
+            before_render=self._before_render, opaque_background=True,
+        )
 
         canvas = self._runtime.video
         while not self._stop.wait(_RENDER_INTERVAL_S):

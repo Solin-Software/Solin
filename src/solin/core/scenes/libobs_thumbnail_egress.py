@@ -186,7 +186,9 @@ class LibobsThumbnailEgress:
     def _loop(self) -> None:
         from solin.core.media.obs_source_render import resolve_render_source_to_bgra
 
-        render_to_bgra = resolve_render_source_to_bgra(before_render=self._before_render)
+        render_to_bgra = resolve_render_source_to_bgra(
+            before_render=self._before_render, opaque_background=True,
+        )
 
         canvas = self._runtime.video
         while not self._stop.wait(_RENDER_INTERVAL_S):
