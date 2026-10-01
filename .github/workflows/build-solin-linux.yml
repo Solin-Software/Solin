@@ -117,7 +117,7 @@ jobs:
         run: |
           python -m ruff check .
           python scripts/typecheck.py
-          python -m pytest
+          xvfb-run --auto-servernum python -m pytest
 
       - name: Read app version
         id: version
@@ -135,7 +135,7 @@ jobs:
         shell: bash
         env:
           SOLIN_BUILD_DIR: ${{ github.workspace }}/build/linux
-        run: SOLIN_PYTHON="$(command -v python)" bash scripts/build_solin.sh
+        run: xvfb-run --auto-servernum env SOLIN_PYTHON="$(command -v python)" bash scripts/build_solin.sh
 
       - name: Validate Linux packaging scripts
         shell: bash

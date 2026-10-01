@@ -1,0 +1,581 @@
+"""Stage the installed libobs runtime and qualify the packaged sidecar."""
+
+from __future__ import annotations
+
+import argparse
+import base64
+import importlib.metadata
+import io
+import os
+import platform
+import shutil
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+import uuid
+import wave
+from collections.abc import Callable, Sequence
+from pathlib import Path
+
+from solin.core.foundation.constants import LIBOBS_SIDECAR_ARGUMENT
+from solin.core.scenes.content_frame_channel import SharedFrameChannelReader
+from solin.core.scenes.ipc_protocol import (
+    SceneIpcEnvelope,
+    SceneIpcError,
+    encode_envelope,
+    read_envelope,
+)
+
+
+class LibobsPackagingError(RuntimeError):
+    """The private runtime or packaged process did not meet its contract."""
+
+
+_PLATFORMS = {"win32": "windows", "linux": "linux", "darwin": "macos"}
+_ARCHITECTURES = {"amd64": "x86_64", "x86_64": "x86_64", "aarch64": "arm64", "arm64": "arm64"}
+_WINDOWS_HELPERS = (
+    "obs-ffmpeg-mux.exe",
+    "obs-amf-test.exe",
+    "obs-nvenc-test.exe",
+    "obs-qsv-test.exe",
+)
+
+
+def _mux_helper(root: Path, target_platform: str) -> Path:
+    name = "obs-ffmpeg-mux.exe" if target_platform == "windows" else "obs-ffmpeg-mux"
+    direct = root / name
+    if direct.is_file():
+        return direct
+    candidates = [path for path in root.rglob(name) if path.is_file()]
+    if len(candidates) != 1:
+        raise LibobsPackagingError(f"Required libobs mux helper is missing or ambiguous: {direct}")
+    return candidates[0]
+
+
+def _require_file(path: Path) -> None:
+    if not path.is_file() or path.stat().st_size == 0:
+        raise LibobsPackagingError(f"Required libobs runtime file is missing or empty: {path}")
+
+
+def validate_runtime(root: Path, target_platform: str) -> None:
+    """Validate resources loaded dynamically, beyond Nuitka's import graph."""
+    if target_platform == "windows":
+        libraries = ("obs.dll", "libobs-d3d11.dll")
+        suffix = ".dll"
+    elif target_platform == "linux":
+        libraries = ("libobs.so.0", "libobs-opengl.so")
+        suffix = ".so"
+    elif target_platform == "macos":
+        libraries = ("Frameworks/libobs.dylib", "Frameworks/libobs-opengl.dylib")
+        suffix = ".dylib"
+    else:
+        raise LibobsPackagingError(f"Unsupported libobs platform: {target_platform}")
+    _require_file(_mux_helper(root, target_platform))
+    for name in libraries:
+        _require_file(root / name)
+    for name in ("obs-ffmpeg", "image-source", "obs-transitions"):
+        _require_file(root / "obs-plugins" / f"{name}{suffix}")
+    _require_file(root / "data" / "libobs" / "default.effect")
+    _require_file(root / "data" / "obs-plugins" / "obs-ffmpeg" / "locale" / "en-US.ini")
+
+
+def _native_files(root: Path) -> list[Path]:
+    result: list[Path] = []
+    for path in sorted(root.rglob("*")):
+        if path.is_file():
+            with path.open("rb") as stream:
+                magic = stream.read(4)
+            if magic in (
+                b"\x7fELF",
+                b"\xcf\xfa\xed\xfe",
+                b"\xfe\xed\xfa\xcf",
+                b"\xce\xfa\xed\xfe",
+                b"\xfe\xed\xfa\xce",
+                b"\xca\xfe\xba\xbe",
+                b"\xbe\xba\xfe\xca",
+                b"\xca\xfe\xba\xbf",
+                b"\xbf\xba\xfe\xca",
+            ):
+                result.append(path)
+    return result
+
+
+def _relocate_linux(root: Path, *, binaries: Sequence[Path] | None = None) -> None:
+    for binary in _native_files(root) if binaries is None else binaries:
+        relative = os.path.relpath(root, binary.parent).replace(os.sep, "/")
+        subprocess.run(
+            ["patchelf", "--set-rpath", f"$ORIGIN:$ORIGIN/{relative}", str(binary)],
+            check=True,
+            capture_output=True,
+        )
+        result = subprocess.run(["ldd", str(binary)], check=True, capture_output=True)
+        if b"not found" in result.stdout:
+            raise LibobsPackagingError(
+                f"Unresolved libobs dependencies in {binary}: "
+                + result.stdout.decode("utf-8", errors="replace")
+            )
+
+
+def _relocate_macos(root: Path, *, binaries: Sequence[Path] | None = None) -> None:
+    """Resolve OBS's framework paths relative to each staged Mach-O loader."""
+    inventory = _native_files(root)
+    for binary in inventory if binaries is None else binaries:
+        output = subprocess.run(
+            ["otool", "-L", str(binary)],
+            check=True,
+            capture_output=True,
+        ).stdout.decode("utf-8")
+        for line in output.splitlines()[1:]:
+            dependency = line.strip().split(" (", 1)[0]
+            if dependency.startswith(("/System/Library/", "/usr/lib/")):
+                continue
+            if dependency.startswith("@loader_path/"):
+                target = (binary.parent / dependency.removeprefix("@loader_path/")).resolve()
+            elif "/Frameworks/" in dependency:
+                target = root / "Frameworks" / dependency.split("/Frameworks/", 1)[1]
+            else:
+                target = root / "Frameworks" / dependency.removeprefix("@rpath/")
+            if not target.is_file():
+                candidates = [p for p in inventory if p.name == Path(dependency).name]
+                if len(candidates) != 1:
+                    raise LibobsPackagingError(
+                        f"Unresolved libobs dependency: {binary} -> {dependency}"
+                    )
+                target = candidates[0]
+            target = target.resolve()
+            if not target.is_relative_to(root.resolve()):
+                raise LibobsPackagingError(f"libobs dependency escapes its bundle: {dependency}")
+            if target == binary.resolve():  # the dylib's own install name
+                continue
+            relative = os.path.relpath(target, binary.parent).replace(os.sep, "/")
+            subprocess.run(
+                [
+                    "install_name_tool",
+                    "-change",
+                    dependency,
+                    f"@loader_path/{relative}",
+                    str(binary),
+                ],
+                check=True,
+                capture_output=True,
+            )
+        # A mux helper copied next to the host must not retain the wheel-root
+        # @loader_path/Frameworks search path. Normalize LC_RPATH as well as imports.
+        load_commands = subprocess.run(
+            ["otool", "-l", str(binary)],
+            check=True,
+            capture_output=True,
+        ).stdout.decode("utf-8")
+        paths = [
+            line.strip()[5:].split(" (offset", 1)[0]
+            for line in load_commands.splitlines()
+            if line.strip().startswith("path ") and " (offset" in line
+        ]
+        relative = os.path.relpath(root / "Frameworks", binary.parent).replace(os.sep, "/")
+        rpath = "@loader_path" if relative == "." else f"@loader_path/{relative}"
+        for previous in paths:
+            if previous != rpath:
+                subprocess.run(
+                    ["install_name_tool", "-delete_rpath", previous, str(binary)],
+                    check=True,
+                    capture_output=True,
+                )
+        if rpath not in paths:
+            subprocess.run(
+                ["install_name_tool", "-add_rpath", rpath, str(binary)],
+                check=True,
+                capture_output=True,
+            )
+        subprocess.run(
+            ["codesign", "--force", "--sign", "-", str(binary)], check=True, capture_output=True
+        )
+
+
+def _retry_windows_sharing(operation: Callable[[], None]) -> None:
+    """Bound retries for transient Windows handles; propagate other filesystem errors."""
+    for delay in (0.05, 0.1, 0.2, 0.4, 0.8, None):
+        try:
+            operation()
+            return
+        except PermissionError as error:
+            if os.name != "nt" or error.winerror not in (5, 32, 33) or delay is None:
+                raise
+            time.sleep(delay)
+
+
+def _publish_runtime(staging: Path, destination: Path) -> None:
+    """Replace the complete runtime, restoring the previous payload on publish failure."""
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    backup = destination.with_name(f".{destination.name}-{uuid.uuid4().hex}.backup")
+    had_destination = destination.exists()
+    if had_destination:
+        _retry_windows_sharing(lambda: os.replace(destination, backup))
+    try:
+        _retry_windows_sharing(lambda: os.replace(staging, destination))
+    except OSError:
+        if had_destination:
+            try:
+                _retry_windows_sharing(lambda: os.replace(backup, destination))
+            except OSError as error:
+                raise LibobsPackagingError(
+                    f"Runtime replacement and rollback failed; previous runtime remains at {backup}"
+                ) from error
+        raise
+    if had_destination:
+        _retry_windows_sharing(lambda: shutil.rmtree(backup))
+
+
+def stage_runtime(
+    *,
+    package_dir: Path,
+    application_dir: Path,
+    target_platform: str,
+    architecture: str,
+    license_files: Sequence[Path],
+) -> Path:
+    """Copy one installed target without leaving references to the build machine."""
+    source = package_dir / "_libs" / target_platform / architecture
+    validate_runtime(source, target_platform)
+    if not application_dir.is_dir():
+        raise LibobsPackagingError(f"Application directory does not exist: {application_dir}")
+    if not license_files:
+        raise LibobsPackagingError("The installed pylibobs distribution has no license notice.")
+    for notice in license_files:
+        _require_file(notice)
+    destination = application_dir / "pylibobs" / "_libs" / target_platform / architecture
+    if not destination.resolve().is_relative_to(application_dir.resolve()):
+        raise LibobsPackagingError("The runtime destination must stay inside the application.")
+    if source.resolve() == destination.resolve() or application_dir.resolve().is_relative_to(
+        source.resolve()
+    ):
+        raise LibobsPackagingError("The runtime source must be outside the destination.")
+    # Stage fresh files so a repeated build cannot retain plugins from an older runtime.
+    with tempfile.TemporaryDirectory(prefix=".libobs-stage-", dir=application_dir) as directory:
+        staging = Path(directory) / architecture
+        shutil.copytree(source, staging, symlinks=False)
+        if target_platform == "linux":
+            _relocate_linux(staging)
+        elif target_platform == "macos":
+            _relocate_macos(staging)
+        validate_runtime(staging, target_platform)
+        _publish_runtime(staging, destination)
+    notices = application_dir / "licenses" / "pylibobs"
+    notices.mkdir(parents=True, exist_ok=True)
+    for index, notice in enumerate(license_files):
+        shutil.copy2(notice, notices / f"{index}-{notice.name}")
+    if target_platform == "windows":
+        # OBS locates these via the host executable, including read-only installs.
+        for name in _WINDOWS_HELPERS:
+            helper = (
+                _mux_helper(destination, target_platform)
+                if name == "obs-ffmpeg-mux.exe"
+                else destination / name
+            )
+            if helper.is_file():
+                shutil.copy2(helper, application_dir / name)
+    else:
+        # obs-ffmpeg resolves its mux process next to the host executable on all
+        # platforms. Relocate the copy against the private runtime, not a system OBS.
+        helper = application_dir / "obs-ffmpeg-mux"
+        shutil.copy2(_mux_helper(destination, target_platform), helper)
+        helper.chmod(helper.stat().st_mode | 0o111)
+        if target_platform == "macos":
+            _relocate_macos(destination, binaries=[helper])
+        else:
+            _relocate_linux(destination, binaries=[helper])
+    return destination
+
+
+def _smoke_png() -> bytes:
+    """A verified 2×2 opaque white RGB PNG, generated once with Pillow."""
+    return base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAE0lEQVR4nGP8//8/AwMDEwMYAAAkBgMBXaJOiAAAAABJRU5ErkJggg=="
+    )
+
+
+def _decoded_media_event(response: SceneIpcEnvelope, path: str) -> bool:
+    payload = response.payload
+    return (
+        response.message_type == "media_playback_state"
+        and payload.get("path") == path
+        and type(payload.get("slot")) is int
+        and payload["slot"] == 0
+        and type(payload.get("state")) is int
+        and payload["state"] in (1, 6)
+        and type(payload.get("duration_ms")) is int
+        and payload["duration_ms"] > 0
+        and type(payload.get("position_ms")) is int
+        and payload["position_ms"] > 0
+        and not payload.get("error_code")
+    )
+
+
+def _run_preview_smoke(
+    command: list[str],
+    *,
+    requests: Sequence[SceneIpcEnvelope],
+    timeout: float,
+    env: dict[str, str],
+    cwd: Path,
+) -> subprocess.CompletedProcess[bytes]:
+    """Keep IPC open until image pixels and decoded media progress are confirmed."""
+    preview = SharedFrameChannelReader(None, 32, 18, create=True)
+    try:
+        requests[1].payload["preview_egress"] = {
+            "transport": "shared_memory_bgra",
+            "handle_token": preview.name,
+            "width": 32,
+            "height": 18,
+        }
+        requests[1].payload["render_enabled"] = {"editor": True}
+        with (
+            tempfile.TemporaryFile() as errors,
+            subprocess.Popen(
+                command,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=errors,
+                env=env,
+                cwd=cwd,
+            ) as process,
+        ):
+            assert process.stdin is not None and process.stdout is not None
+            output: list[bytes] = []
+            protocol_errors: list[SceneIpcError] = []
+            rejected = threading.Event()
+            decoded = threading.Event()
+            media_path = str(requests[2].payload["path"])
+
+            def read_protocol() -> None:
+                try:
+                    while response := read_envelope(process.stdout):
+                        output.append(encode_envelope(response))
+                        if _decoded_media_event(response, media_path):
+                            decoded.set()
+                        if response.message_type == "error" or (
+                            response.message_type == "ack"
+                            and response.payload.get("applied") is not True
+                        ):
+                            rejected.set()
+                except SceneIpcError as error:
+                    protocol_errors.append(error)
+
+            output_reader = threading.Thread(target=read_protocol)
+            output_reader.start()
+            deadline = time.monotonic() + timeout
+            rendered = False
+            try:
+                process.stdin.write(b"".join(encode_envelope(request) for request in requests))
+                process.stdin.flush()
+                while process.poll() is None and time.monotonic() < deadline:
+                    frame = preview.read_latest()
+                    if frame is not None and (frame.width, frame.height) == (32, 18):
+                        offset = (frame.height // 2) * frame.stride + (frame.width // 2) * 4
+                        if frame.data[offset : offset + 4] == b"\xff\xff\xff\xff":
+                            rendered = True
+                    if (rendered and decoded.is_set()) or rejected.is_set() or protocol_errors:
+                        break
+                    time.sleep(0.01)
+                process.stdin.close()
+                process.wait(timeout=max(5.0, deadline - time.monotonic()))
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait(timeout=5)
+                output_reader.join(timeout=5)
+            errors.seek(0)
+            diagnostics = errors.read()
+            if protocol_errors:
+                raise LibobsPackagingError(f"Invalid packaged sidecar IPC: {protocol_errors[0]}")
+            if not rendered:
+                raise LibobsPackagingError(
+                    "Packaged compositor did not render the decoded smoke image:\n"
+                    + diagnostics.decode("utf-8", errors="replace")[-16000:]
+                )
+            if not decoded.is_set():
+                raise LibobsPackagingError(
+                    "Packaged media source did not decode the smoke WAV:\n"
+                    + diagnostics.decode("utf-8", errors="replace")[-16000:]
+                )
+            return subprocess.CompletedProcess(
+                command, process.returncode, b"".join(output), diagnostics
+            )
+    finally:
+        preview.close()
+        preview.unlink()
+
+
+def verify_packaged_sidecar(executable: Path, *, timeout: float = 45.0) -> None:
+    """Exercise binary IPC, native startup, heartbeat and orderly EOF shutdown."""
+    _require_file(executable)
+    deadline = int((time.monotonic() + timeout) * 1000)
+    environment = os.environ.copy()
+    for name in (
+        "PYTHONPATH",
+        "PYTHONHOME",
+        "LIBOBS_PATH",
+        "OBS_DATA_PATH",
+        "SOLIN_LIBOBS_SIDECAR_NO_RUNTIME",
+    ):
+        environment.pop(name, None)
+    with tempfile.TemporaryDirectory(prefix="solin-libobs-smoke-") as directory:
+        isolated = Path(directory)
+        for name in (
+            "APPDATA",
+            "LOCALAPPDATA",
+            "HOME",
+            "XDG_CONFIG_HOME",
+            "XDG_DATA_HOME",
+            "XDG_CACHE_HOME",
+        ):
+            location = isolated / name
+            location.mkdir()
+            environment[name] = str(location)
+        image = isolated / "smoke.png"
+        image.write_bytes(_smoke_png())
+        media = isolated / "smoke.wav"
+        with wave.open(str(media), "wb") as stream:
+            stream.setnchannels(1)
+            stream.setsampwidth(2)
+            stream.setframerate(44100)
+            stream.writeframes(b"\0\0" * 88200)
+        environment["SOLIN_SCENE_IMAGES_DIR"] = str(isolated)
+        payloads = (
+            ("hello", {}),
+            (
+                "hydrate",
+                {
+                    "document": {
+                        "sources": [
+                            {
+                                "id": "smoke-image",
+                                "type": "image",
+                                "configuration": {"asset_id": image.name},
+                            }
+                        ],
+                        "scenes": [
+                            {
+                                "id": "smoke-scene",
+                                "layers": [
+                                    {
+                                        "id": "smoke-layer",
+                                        "source_id": "smoke-image",
+                                        "visible": True,
+                                    },
+                                ],
+                            }
+                        ],
+                    },
+                    "active_scenes": {
+                        "virtual_camera": "smoke-scene",
+                        "media_windows": "smoke-scene",
+                        "editor": "smoke-scene",
+                    },
+                },
+            ),
+            (
+                "open_media",
+                {"path": str(media), "is_local_file": True, "autoplay": True, "volume_percent": 0},
+            ),
+            ("ping", {}),
+        )
+        requests = [
+            SceneIpcEnvelope(
+                message_type=kind,
+                request_id=kind,
+                session_id="packaged-smoke",
+                process_generation="packaged-smoke",
+                sequence=index,
+                document_revision=0,
+                deadline_monotonic_ms=deadline,
+                payload=payload,
+            )
+            for index, (kind, payload) in enumerate(payloads, start=1)
+        ]
+        result = _run_preview_smoke(
+            [str(executable.resolve()), LIBOBS_SIDECAR_ARGUMENT],
+            requests=requests,
+            timeout=timeout,
+            env=environment,
+            cwd=isolated,
+        )
+    diagnostics = result.stderr.decode("utf-8", errors="replace")[-16000:]
+    if result.returncode:
+        raise LibobsPackagingError(
+            f"Packaged sidecar exited with {result.returncode}:\n{diagnostics}"
+        )
+    responses: dict[str, SceneIpcEnvelope] = {}
+    media_decoded = False
+    stream = io.BytesIO(result.stdout)
+    try:
+        while response := read_envelope(stream):
+            responses[response.request_id] = response
+            media_decoded = media_decoded or _decoded_media_event(response, str(media))
+    except SceneIpcError as error:
+        raise LibobsPackagingError(
+            f"Invalid packaged sidecar IPC: {error}\n{diagnostics}"
+        ) from error
+    for request, expected in zip(requests, ("hello_ack", "ack", "ack", "heartbeat"), strict=True):
+        response = responses.get(request.request_id)
+        if response is None or response.message_type != expected:
+            raise LibobsPackagingError(f"Missing packaged sidecar {expected}:\n{diagnostics}")
+        if (response.session_id, response.process_generation, response.sequence) != (
+            request.session_id,
+            request.process_generation,
+            request.sequence,
+        ):
+            raise LibobsPackagingError("Packaged sidecar response correlation mismatch.")
+        if expected == "ack" and response.payload.get("applied") is not True:
+            raise LibobsPackagingError(
+                f"Packaged sidecar rejected {request.message_type}: "
+                f"{response.payload}\n{diagnostics}"
+            )
+    if responses["hello"].payload.get("hardware_compositing") is not True:
+        raise LibobsPackagingError(f"Packaged libobs runtime failed to initialize:\n{diagnostics}")
+    if not media_decoded:
+        raise LibobsPackagingError(
+            f"Packaged media source did not decode the smoke WAV:\n{diagnostics}"
+        )
+
+
+def main(arguments: Sequence[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--application-dir", type=Path, required=True)
+    parser.add_argument("--executable", type=Path, required=True)
+    options = parser.parse_args(arguments)
+    try:
+        import pylibobs
+
+        if not pylibobs.__file__:
+            raise LibobsPackagingError("The installed pylibobs package has no filesystem location.")
+        target = _PLATFORMS.get(sys.platform)
+        architecture = _ARCHITECTURES.get(platform.machine().lower())
+        if target is None or architecture is None:
+            raise LibobsPackagingError(
+                f"Unsupported libobs target: {sys.platform}/{platform.machine()}"
+            )
+        distribution = importlib.metadata.distribution("pylibobs")
+        licenses = [
+            Path(distribution.locate_file(path))
+            for path in distribution.files or ()
+            if ".dist-info/licenses/" in str(path).replace("\\", "/")
+        ]
+        destination = stage_runtime(
+            package_dir=Path(pylibobs.__file__).resolve().parent,
+            application_dir=options.application_dir,
+            target_platform=target,
+            architecture=architecture,
+            license_files=licenses,
+        )
+        verify_packaged_sidecar(options.executable)
+    except (ImportError, OSError, LibobsPackagingError, subprocess.SubprocessError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+    print(f"Packaged and verified libobs runtime: {destination}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -69,3 +69,33 @@ def test_linux_build_uses_shared_script_and_xcb_launcher():
     assert "runs-on: ubuntu-22.04" in workflow
     assert "scripts/package_solin_appimage.sh" in workflow
     assert "*.AppImage.sha256" in workflow
+
+
+def test_every_standalone_build_includes_and_qualifies_the_libobs_runtime():
+    for relative in (
+        "scripts/build_solin.bat", "scripts/build_solin.sh",
+        ".github/workflows/build-solin-windows.yml", ".github/workflows/build-solin-macos.yml",
+    ):
+        recipe = _read(relative)
+        assert "--include-package=pylibobs" in recipe
+        assert "package_libobs_runtime.py" in recipe
+        assert "--application-dir" in recipe and "--executable" in recipe
+        assert "QtMultimedia" not in recipe
+
+
+def test_macos_qualifies_final_library_layout_before_signing_and_disk_image():
+    workflow = _read(".github/workflows/build-solin-macos.yml")
+    qualify = workflow.index("- name: Stage and qualify packaged libobs runtime")
+    assert workflow.index("- name: Normalize macOS Qt QML runtime links") < qualify
+    assert workflow.index("- name: Verify compiled QML deployment") < qualify
+    assert qualify < workflow.index("- name: Ad-hoc sign app bundle")
+    assert qualify < workflow.index("- name: Create DMG")
+
+
+def test_linux_ci_provides_a_graphics_session_for_libobs_build_qualification():
+    assert 'xvfb-run --auto-servernum env SOLIN_PYTHON="$(command -v python)" bash scripts/build_solin.sh' in _read(".github/workflows/build-solin-linux.yml")
+    assert "xvfb-run --auto-servernum python -m pytest" in _read(".github/workflows/build-solin-linux.yml")
+    quality = _read(".github/workflows/quality.yml")
+    assert "            xauth" in quality and "            xvfb" in quality
+    assert "xvfb-run --auto-servernum python -m pytest tests/contract tests/integration tests/e2e" in quality
+    assert "xvfb-run --auto-servernum python -m pytest tests/unit" in quality

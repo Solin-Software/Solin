@@ -3187,6 +3187,17 @@ def test_factory_targets_the_sidecar_module():
     assert config.gstreamer_registry_path is None
 
 
+def test_compiled_factory_launches_the_application_sidecar_role(monkeypatch):
+    from solin.core.scenes import libobs_engine
+    from solin.core.foundation.constants import LIBOBS_SIDECAR_ARGUMENT
+
+    monkeypatch.setattr(libobs_engine, "IS_DEV", False)
+    monkeypatch.setattr(sys, "executable", str(Path("build/main.dist/Solin.exe").resolve()))
+    config = create_libobs_scene_engine()._config
+    assert config.executable == Path(sys.executable)
+    assert config.arguments == (LIBOBS_SIDECAR_ARGUMENT,)
+
+
 def test_factory_is_resilient_to_transient_engine_stalls():
     # The sidecar handles IPC (incl. heartbeats) on one thread, so a heavy hydrate
     # under load can briefly delay a heartbeat. The engine must tolerate that

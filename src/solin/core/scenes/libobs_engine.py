@@ -13,6 +13,7 @@ import os
 import sys
 from pathlib import Path
 
+from solin.core.foundation.constants import IS_DEV, LIBOBS_SIDECAR_ARGUMENT
 from solin.core.scenes.process_engine import (
     SceneEngineProcessConfig,
     SubprocessSceneEngine,
@@ -37,7 +38,8 @@ def libobs_scene_engine_selected() -> bool:
 def create_libobs_scene_engine(images_dir: Path | None = None) -> SubprocessSceneEngine:
     """Build a supervised libobs scene engine.
 
-    Launches ``<python> -m solin.core.scenes.libobs_sidecar`` under the same
+    Source runs launch ``<python> -m solin.core.scenes.libobs_sidecar``; compiled
+    runs launch the application executable in its dedicated sidecar role. Both use
     ``SubprocessSceneEngine`` client that drives the native engine, so all of the
     supervision / heartbeat / restart / protocol machinery is shared. No
     GStreamer runtime is configured (libobs is self-contained via pylibobs).
@@ -59,7 +61,7 @@ def create_libobs_scene_engine(images_dir: Path | None = None) -> SubprocessScen
     return SubprocessSceneEngine(
         SceneEngineProcessConfig(
             executable=Path(sys.executable),
-            arguments=("-m", _SIDECAR_MODULE),
+            arguments=("-m", _SIDECAR_MODULE) if IS_DEV else (LIBOBS_SIDECAR_ARGUMENT,),
             # Resilience: the sidecar handles IPC (incl. heartbeats) on one thread,
             # so a heavy hydrate under load — many outputs + a flaky camera
             # saturating the single obs graphics thread — can briefly delay a

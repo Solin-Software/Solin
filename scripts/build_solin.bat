@@ -132,6 +132,7 @@ if %ERRORLEVEL% NEQ 0 (
     --include-package=solin.styles ^
     --include-package=solin.widgets ^
     --include-package=sideview ^
+    --include-package=pylibobs ^
 	--include-module=websocket ^
 	--include-module=websocket._core ^
 	--include-module=websocket._app ^
@@ -150,7 +151,7 @@ if %ERRORLEVEL% NEQ 0 (
     --include-data-files="%PROJECT_ROOT%src\solin\resources\translations\*.qm=solin/resources/translations/" ^
     --include-data-files="%SIDEVIEW_NATIVE_DLL%=sideview/sideview_native.dll" ^
     --enable-plugin=pyside6 ^
-    --include-qt-plugins=platforms,styles,imageformats,multimedia,position ^
+    --include-qt-plugins=platforms,styles,imageformats,position ^
     "%MAIN_SCRIPT%"
 
 if %ERRORLEVEL% NEQ 0 (
@@ -230,12 +231,6 @@ if not exist "%DIST%\PySide6\qml\QtQml\qmldir" (
     exit /b 1
 )
 
-if not exist "%DIST%\PySide6\qml\QtMultimedia\quickmultimediaplugin.dll" (
-    echo  [ERRO] Plugin QML QtMultimedia nao foi empacotado.
-    pause
-    exit /b 1
-)
-
 if not exist "%DIST%\PySide6\qml\QtQuick\Layouts\qquicklayoutsplugin.dll" (
     echo  [ERRO] Plugin QML qquicklayoutsplugin.dll nao foi empacotado.
     pause
@@ -302,19 +297,15 @@ if not exist "%DIST%\Qt6QuickTemplates2.dll" (
     exit /b 1
 )
 
-if not exist "%DIST%\Qt6Multimedia.dll" (
-    echo  [ERRO] Qt6Multimedia.dll nao foi empacotado.
-    pause
-    exit /b 1
-)
-
-if not exist "%DIST%\Qt6MultimediaQuick.dll" (
-    echo  [ERRO] Qt6MultimediaQuick.dll nao foi empacotado.
-    pause
-    exit /b 1
-)
-
 echo  [OK] QML do app empacotado somente como cache .qmlc
+
+"%PYTHON%" "%PROJECT_ROOT%scripts\package_libobs_runtime.py" ^
+    --application-dir "%DIST%" ^
+    --executable "%DIST%\Solin.exe"
+if %ERRORLEVEL% NEQ 0 (
+    echo  [ERRO] Empacotamento ou inicializacao do libobs falhou.
+    exit /b %ERRORLEVEL%
+)
 
 "%PYTHON%" "%PROJECT_ROOT%scripts\package_native_engine_windows.py" ^
     --gstreamer-root "%PROJECT_ROOT%build\dependencies\gstreamer\msvc_x86_64" ^

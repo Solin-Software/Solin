@@ -75,6 +75,8 @@ jobs:
             libwebkit2gtk-4.1-dev \
             libxcb-cursor0 \
             libxkbcommon-x11-0 \
+            xauth \
+            xvfb \
             pkg-config
 
       - name: Set up Python ${{ env.PYTHON_VERSION }}
@@ -113,8 +115,8 @@ jobs:
 
       - name: Pytest application suites
         if: ${{ steps.filter.outputs.run_quality == 'true' }}
-        run: python -m pytest tests/contract tests/integration tests/e2e
+        run: xvfb-run --auto-servernum python -m pytest tests/contract tests/integration tests/e2e
 
       - name: Pytest unit suite
         if: ${{ steps.filter.outputs.run_quality == 'true' }}
-        run: python -m pytest tests/unit
+        run: xvfb-run --auto-servernum python -m pytest tests/unit

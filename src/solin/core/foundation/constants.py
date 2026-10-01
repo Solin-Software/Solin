@@ -19,6 +19,7 @@ import sys
 from solin.version import VERSION
 
 IS_DEV: bool = "__compiled__" not in globals()
+LIBOBS_SIDECAR_ARGUMENT: str = "--scene-engine-sidecar"
 
 # ── Identidade Qt / QSettings ─────────────────────────────────────────────────
 # Em desenvolvimento, usa outro namespace para nao misturar registros, dados

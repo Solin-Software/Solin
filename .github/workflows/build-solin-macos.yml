@@ -181,6 +181,7 @@ jobs:
             --include-package=solin.styles \
             --include-package=solin.widgets \
             --include-package=sideview \
+            --include-package=pylibobs \
             --include-module=websocket \
             --include-module=websocket._core \
             --include-module=websocket._app \
@@ -196,7 +197,7 @@ jobs:
             --include-data-files="src/solin/resources/translations/*.qm=solin/resources/translations/" \
             --include-data-files="${SIDEVIEW_DYLIB}=sideview/libsideview_native.dylib" \
             --enable-plugin=pyside6 \
-            --include-qt-plugins=platforms,styles,imageformats,multimedia,position \
+            --include-qt-plugins=platforms,styles,imageformats,position \
             main.py
 
       - name: Rename bundle
@@ -272,7 +273,7 @@ jobs:
               -o -path "*/PySide6/qml/QtQuick/Controls/Basic/*.dylib" \
               -o -path "*/PySide6/qml/QtQuick/Templates/*.dylib" \
               -o -path "*/PySide6/qml/QtQml/*.dylib" \
-              -o -path "*/PySide6/qml/QtMultimedia/*.dylib" \) \
+              \) \
               -type f
           )
           while IFS= read -r binary; do runtime_binaries+=("$binary"); done < <(
@@ -329,10 +330,6 @@ jobs:
           fi
           if ! find "$BUNDLE" -path "*/PySide6/qml/QtQml/qmldir" -print -quit | grep -q .; then
             echo "::error::QtQml QML runtime was not packaged in the app bundle."
-            exit 1
-          fi
-          if ! find "$BUNDLE" -path "*/PySide6/qml/QtMultimedia/*quickmultimediaplugin*" -print -quit | grep -q .; then
-            echo "::error::QtMultimedia QML plugin was not packaged in the app bundle."
             exit 1
           fi
           if ! find "$BUNDLE" \( -path "*/PySide6/qml/QtQuick/Layouts/*qquicklayoutsplugin*.dylib" -o -path "*/PySide6/qml/QtQuick/Layouts/*qquicklayoutsplugin*.so" \) -print -quit | grep -q .; then
@@ -399,14 +396,6 @@ jobs:
             echo "::error::QtQuickTemplates2 runtime library was not packaged in Contents/MacOS."
             exit 1
           fi
-          if ! test -f "$BUNDLE/Contents/MacOS/QtMultimedia"; then
-            echo "::error::QtMultimedia runtime library was not packaged in Contents/MacOS."
-            exit 1
-          fi
-          if ! test -f "$BUNDLE/Contents/MacOS/QtMultimediaQuick"; then
-            echo "::error::QtMultimediaQuick runtime library was not packaged in Contents/MacOS."
-            exit 1
-          fi
           runtime_binaries=()
           while IFS= read -r binary; do runtime_binaries+=("$binary"); done < <(
             find "$BUNDLE" \
@@ -416,7 +405,7 @@ jobs:
               -o -path "*/PySide6/qml/QtQuick/Controls/Basic/*qtquickcontrols2basicstyleplugin*.dylib" \
               -o -path "*/PySide6/qml/QtQuick/Templates/*qtquicktemplates2plugin*.dylib" \
               -o -path "*/PySide6/qml/QtQml/*.dylib" \
-              -o -path "*/PySide6/qml/QtMultimedia/*.dylib" \) \
+              \) \
               -type f
           )
           while IFS= read -r binary; do runtime_binaries+=("$binary"); done < <(
@@ -434,6 +423,15 @@ jobs:
             exit 1
           fi
           echo "App QML packaged as compiled .qmlc cache only."
+
+      - name: Stage and qualify packaged libobs runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUNDLE="${BUILD_DIR}/${APP_NAME}.app"
+          python scripts/package_libobs_runtime.py \
+            --application-dir "$BUNDLE/Contents/MacOS" \
+            --executable "$BUNDLE/Contents/MacOS/main"
 
       - name: Ad-hoc sign app bundle
         shell: bash

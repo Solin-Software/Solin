@@ -3,15 +3,26 @@
 The repository has Windows x64, Intel macOS, and Linux x86_64 build recipes.
 Generated files are written under `build/` or `dist/` and must not be committed.
 
-Playback and scenes now use the supervised libobs sidecar by default. The
-`pylibobs` dependency currently supports Windows, Linux, and Apple Silicon
-macOS; its dependency marker excludes Intel macOS. The existing Intel macOS
-recipe therefore does not yet provide the default media backend.
+The published `pylibobs` dependency excludes Intel macOS. The Intel macOS recipe
+does not yet provide the default media backend.
 
-Standalone delivery still needs to migrate its sidecar launch, libobs native
-runtime staging, and checks for the removed QtMultimedia QML imports. The
-recipes below describe the existing build infrastructure and do not establish
-that the libobs application is ready for distribution.
+Playback and scenes use the supervised libobs sidecar. Source runs launch its
+Python module; standalone builds launch the Solin executable with
+`--scene-engine-sidecar`, before importing the GUI or opening a profile.
+Each build includes the `pylibobs` Python modules and stages the installed native
+runtime under `pylibobs/_libs/<platform>/<architecture>`, including its plugins,
+shader resources, dependencies and redistribution notices. Builds also stage
+the OBS mux helper beside Solin so recording works in read-only installations;
+Windows additionally stages the native encoder probe helpers.
+
+Builds run `scripts/package_libobs_runtime.py` before producing release artifacts.
+It validates the runtime files, adjusts private library paths on Linux/macOS and
+requires a real packaged IPC handshake, decoded image pixels through preview
+egress, media playback progress, heartbeat and clean shutdown. Runtime startup
+or missing-plugin failures fail the
+build. Linux qualification needs a graphics session; CI uses Xvfb. macOS
+qualification runs in the macOS workflow and cannot be established by Windows
+tests alone.
 
 Install the `ffprobe` and `ffmpeg` command-line tools on PATH for titles,
 durations, embedded cover art, and video thumbnails. Python dependencies alone

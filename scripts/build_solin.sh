@@ -134,6 +134,7 @@ fi
     --include-package=solin.styles \
     --include-package=solin.widgets \
     --include-package=sideview \
+    --include-package=pylibobs \
     --include-module=websocket \
     --include-module=websocket._core \
     --include-module=websocket._app \
@@ -148,7 +149,7 @@ fi
     "${qml_binary_args[@]}" \
     --include-data-files="src/solin/resources/translations/*.qm=solin/resources/translations/" \
     --enable-plugin=pyside6 \
-    --include-qt-plugins=platforms,platformthemes,imageformats,multimedia,position,xcbglintegrations \
+    --include-qt-plugins=platforms,platformthemes,imageformats,position,xcbglintegrations \
     main.py
 
 [[ -x "${DIST_DIR}/Solin.bin" ]] || fail "Nuitka did not produce ${DIST_DIR}/Solin.bin."
@@ -172,8 +173,6 @@ find "${DIST_DIR}/solin/qml/Solin" -maxdepth 1 -name '*.qml' -print -quit | grep
     "Raw app QML source remained in the standalone distribution."
 [[ -f "${DIST_DIR}/PySide6/qml/QtQuick/qmldir" ]] || fail "QtQuick QML runtime is missing."
 [[ -f "${DIST_DIR}/PySide6/qml/QtQml/qmldir" ]] || fail "QtQml QML runtime is missing."
-[[ -f "${DIST_DIR}/PySide6/qml/QtMultimedia/libquickmultimediaplugin.so" ]] || fail \
-    "QtMultimedia QML plugin is missing."
 [[ -f "${DIST_DIR}/PySide6/qml/QtQuick/Controls/libqtquickcontrols2plugin.so" ]] || fail \
     "QtQuick Controls QML plugin is missing."
 
@@ -270,6 +269,10 @@ if ldd "${DIST_DIR}/sideview/libsideview_native.so" | grep -q 'not found'; then
     ldd "${DIST_DIR}/sideview/libsideview_native.so" >&2
     fail "The packaged SideView backend has unresolved shared-library dependencies."
 fi
+
+"${PYTHON}" scripts/package_libobs_runtime.py \
+    --application-dir "${DIST_DIR}" \
+    --executable "${DIST_DIR}/Solin.bin"
 
 if [[ "${WORK_ROOT}" != "${OUTPUT_ROOT}" ]]; then
     rm -rf "${FINAL_DIST_DIR}"

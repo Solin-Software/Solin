@@ -36,7 +36,7 @@ Playback and scenes use a supervised libobs sidecar through `pylibobs`.
 Install `ffprobe` and `ffmpeg` on PATH for metadata, cover art, and thumbnails.
 Linux also needs native libraries for the embedded SideView browser. See
 [Building and platform requirements](docs/building.md) for platform support and
-the remaining standalone delivery requirements.
+standalone runtime qualification.
 
 ## Quality checks
 
