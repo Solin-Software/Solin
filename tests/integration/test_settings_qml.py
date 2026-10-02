@@ -81,7 +81,7 @@ def _domain_states():
                                        {"value": "light", "label": "Light"}],
         interfaceLanguage="pt", mediaLanguage="T", yeartextQuote="Annual text",
         yeartextReference="Isaiah 41:10", midweekTime="19:30", weekendTime="09:30",
-        mediaLanguagesError="", yeartextDirty=True, scenesRestartRequired=False,
+        mediaLanguagesError="", yeartextDirty=True,
         congregationQuery="", congregationName="", congregationSuggestions=[],
         congregationStatusKind="idle",
         congregationStatusText="Search your congregation to fill the days and times below.",
@@ -509,6 +509,18 @@ def test_remote_page_has_no_manual_network_refresh_action(create_view):
         for group in view.navigation.currentSection["groups"]
         for row in group["rows"]
     )
+
+
+@pytest.mark.parametrize("width", [360, 1280])
+def test_integrations_have_no_camera_fallback_control_or_search_result(create_view, width):
+    view = create_view(width=width)
+    view.navigation.openSection("integrations", "", "")
+    _settle()
+    assert _find(view.root, "setting_cameraEnabled") is None
+    assert _find(view.root, "group_camera") is None
+    view.navigation.search("camera")
+    assert view.navigation.results == []
+    assert view.warnings == []
 
 
 def test_remote_setup_reserves_scrollbar_gutter_and_scrolls_with_mouse_drag(create_view):

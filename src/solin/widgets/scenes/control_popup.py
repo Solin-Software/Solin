@@ -4,20 +4,19 @@ import logging
 import time
 
 from PySide6.QtCore import (
-    QAbstractAnimation,
     QEasingCurve,
     QEvent,
-    QObject,
     QPropertyAnimation,
     QRect,
+    QRectF,
+    QSize,
     Qt,
     QTimer,
     Signal,
 )
-from PySide6.QtGui import QGuiApplication, QKeyEvent, QWheelEvent
+from PySide6.QtGui import QGuiApplication, QImage, QPainter, QPainterPath
 from PySide6.QtWidgets import (
     QFrame,
-    QGraphicsOpacityEffect,
     QHBoxLayout,
     QLabel,
     QPushButton,
@@ -29,13 +28,16 @@ from PySide6.QtWidgets import (
 
 from solin.controllers.scene_runtime_controller import SceneRuntimeController
 from solin.controllers.program_recording_controller import ProgramRecordingController
-from solin.core.scenes.composition import SceneComposition, analyze_scene_compositions
-from solin.core.scenes.model import BusId, OutputMode, TransitionKind, TransitionSpec
+from solin.core.scenes.composition import scene_uses_content_source
+from solin.core.scenes.model import BusId
 from solin.core.scenes.recording import ProgramRecordingStatus
 from solin.styles.icons import (
+    ICON_CAMERA,
     ICON_CLAPPERBOARD,
     ICON_REC_CIRCLE,
     ICON_REC_STOP,
+    ICON_SCREEN,
+    ICON_VIDEO,
     make_icon,
 )
 from solin.styles.theme import PALETTE, qss_rgba
@@ -45,149 +47,204 @@ from solin.ui.scene_recording_status import (
     scene_recording_error_summary,
 )
 from solin.widgets.common.button_feedback import ButtonSuccessFlash
-from solin.widgets.common.flow_container import FlowContainer
+from solin.widgets.common.popup_dock_button import PopupDockButton
 from solin.widgets.common.popup_hover_button import PopupHoverButton
 
 
 log = logging.getLogger(__name__)
 
+# Qt's QWIDGETSIZE_MAX — clears a fixed size set with setFixedWidth/Height.
+_MAX_WIDGET_SIZE = 16_777_215
 
-class _SmoothScrollArea(QScrollArea):
-    """Per-pixel viewport with accumulated, bounded mouse-wheel easing."""
+# A card button routes its scene to exactly one output. Projection and program are
+# independent: routing one must never move the other.
+_ROUTING_BUSES = {
+    "projection": BusId.MEDIA_WINDOWS,
+    "program": BusId.VIRTUAL_CAMERA,
+}
 
-    _WHEEL_DISTANCE = 54
-    _DURATION_MS = 140
+
+class _ScenePreview(QFrame):
+    """The card's thumbnail area: paints the scene's live frame when there is one."""
+
+    _CORNER_RADIUS = 9  # matches the card's radius minus its 1px border
+    _PLACEHOLDER_SIZE = 26
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        bar = self.verticalScrollBar()
-        bar.setSingleStep(18)
-        self._scroll_animation = QPropertyAnimation(bar, b"value", self)
-        self._scroll_animation.setDuration(self._DURATION_MS)
-        self._scroll_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._image: QImage | None = None
+        self._placeholder = False
 
-    def wheelEvent(self, event: QWheelEvent) -> None:  # noqa: N802
-        bar = self.verticalScrollBar()
-        pixel_delta = event.pixelDelta().y()
-        if pixel_delta:
-            self._scroll_animation.stop()
-            bar.setValue(bar.value() - pixel_delta)
-            event.accept()
+    def set_image(self, image: QImage | None) -> None:
+        self._image = image if image is not None and not image.isNull() else None
+        self.update()
+
+    def set_placeholder(self, visible: bool) -> None:
+        """Mark the scene's media slot as waiting rather than simply black."""
+        if self._placeholder == visible:
             return
-        angle_delta = event.angleDelta().y()
-        if not angle_delta or bar.maximum() <= bar.minimum():
-            super().wheelEvent(event)
+        self._placeholder = visible
+        self.update()
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        super().paintEvent(event)  # keeps the stylesheet background/rounding
+        image = self._image
+        if image is None:
+            self._paint_placeholder()
             return
-        self._animate_delta(round(-(angle_delta / 120) * self._WHEEL_DISTANCE))
-        event.accept()
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        # Clip to the card's own rounded top corners: a plain rectangular draw
+        # squares them off and the feed looks pasted on top of the card rather
+        # than set into it.
+        path = QPainterPath()
+        rect = QRectF(self.rect())
+        radius = float(self._CORNER_RADIUS)
+        path.moveTo(rect.left(), rect.bottom())
+        path.lineTo(rect.left(), rect.top() + radius)
+        path.quadTo(rect.left(), rect.top(), rect.left() + radius, rect.top())
+        path.lineTo(rect.right() - radius, rect.top())
+        path.quadTo(rect.right(), rect.top(), rect.right(), rect.top() + radius)
+        path.lineTo(rect.right(), rect.bottom())
+        path.closeSubpath()
+        painter.setClipPath(path)
+        painter.drawImage(rect, image)
+        painter.end()
+        self._paint_placeholder()
 
-    def _animate_delta(self, delta: int) -> None:
-        bar = self.verticalScrollBar()
-        target = bar.value()
-        if self._scroll_animation.state() is QAbstractAnimation.State.Running:
-            end_value = self._scroll_animation.endValue()
-            if isinstance(end_value, int):
-                target = end_value
-        target = max(bar.minimum(), min(target + delta, bar.maximum()))
-        self._scroll_animation.stop()
-        self._scroll_animation.setStartValue(bar.value())
-        self._scroll_animation.setEndValue(target)
-        self._scroll_animation.start()
-
-
-class _SceneChipButton(QPushButton):
-    """Stable, compact scene chip with native return behavior."""
-
-    return_requested = Signal(str)
-    _MIN_WIDTH = 68
-    _MAX_WIDTH = 248
-
-    def __init__(self, scene_id: str, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self.scene_id = scene_id
-        self._return_enabled = False
-        self.setObjectName("SceneControlScene")
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-        self.setFixedHeight(32)
-
-    def update_state(
-        self,
-        *,
-        name: str,
-        applied: bool,
-        desired: bool,
-        is_default: bool,
-        is_media: bool,
-        is_return: bool,
-        return_enabled: bool,
-        transition_tooltip: str,
-        live_text: str,
-        selected_text: str,
-        default_text: str,
-        media_text: str,
-        return_text: str,
-        return_hint: str,
-    ) -> None:
-        roles = []
-        if is_default:
-            roles.append(default_text)
-        if is_media:
-            roles.append(media_text)
-        self._return_enabled = return_enabled and not is_media
-        natural_width = self.fontMetrics().horizontalAdvance(name) + 24
-        width = max(self._MIN_WIDTH, min(natural_width, self._MAX_WIDTH))
-        self.setFixedWidth(width)
-        self.setText(
-            self.fontMetrics().elidedText(
-                name,
-                Qt.TextElideMode.ElideRight,
-                width - 22,
-            )
+    def _paint_placeholder(self) -> None:
+        """A faint media glyph so an empty media slot reads as waiting, not broken."""
+        if not self._placeholder:
+            return
+        side = min(self._PLACEHOLDER_SIZE, self.width() // 3, self.height() // 2)
+        if side < 8:
+            return
+        icon = make_icon(_svg(ICON_VIDEO), side, PALETTE.text_muted)
+        painter = QPainter(self)
+        painter.setOpacity(0.35)  # subtle: a hint, not a badge
+        painter.drawPixmap(
+            (self.width() - side) // 2, (self.height() - side) // 2,
+            icon.pixmap(side, side),
         )
-        self.setProperty("applied", applied)
-        self.setProperty("desired", desired)
-        self.setProperty("returnTarget", is_return)
-        description = [*roles]
-        if applied:
-            description.append(live_text)
-        elif desired:
-            description.append(selected_text)
-        if is_return:
-            description.append(return_text)
-        self.setAccessibleName(name)
-        self.setAccessibleDescription(", ".join(description))
-        tooltips = [name] if self.text() != name else []
-        tooltips.extend(roles)
-        tooltips.extend(
-            value
-            for value in (
-                transition_tooltip,
-                return_hint if self._return_enabled else "",
-            )
-            if value
-        )
-        self.setToolTip("\n".join(tooltips))
-        self.style().unpolish(self)
-        self.style().polish(self)
+        painter.end()
+
+
+class _SceneRoutingButton(QPushButton):
+    right_clicked = Signal()
 
     def mousePressEvent(self, event) -> None:  # noqa: N802
-        if event.button() is Qt.MouseButton.RightButton and self._return_enabled:
-            self.return_requested.emit(self.scene_id)
+        if event.button() == Qt.MouseButton.RightButton:
+            self.right_clicked.emit()
             event.accept()
             return
         super().mousePressEvent(event)
 
-    def keyPressEvent(self, event: QKeyEvent) -> None:  # noqa: N802
-        return_shortcut = event.key() is Qt.Key.Key_Menu or (
-            event.key() is Qt.Key.Key_F10
-            and bool(event.modifiers() & Qt.KeyboardModifier.ShiftModifier)
+
+class _SceneCard(QFrame):
+    """A scene: a canvas-proportioned preview over a name and its routing buttons.
+
+    Left clicks put this scene on the projection or on the virtual camera;
+    right clicks request that output's return scene after automatic media.
+    They are radio-like across the strip — routing is a single choice per output,
+    so checking one scene unchecks the rest. Checked buttons use the panel's
+    static active-state colors.
+    """
+
+    routing_requested = Signal(str, str)  # (scene_id, "projection" | "program")
+    routing_return_requested = Signal(str, str)
+
+    _BUTTON_SIZE = 22
+    _FOOTER_HEIGHT = 30
+    _BORDER_WIDTH = 1
+
+    def __init__(
+        self,
+        scene_id: str,
+        name: str,
+        *,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.scene_id = scene_id
+        self.setObjectName("SceneCard")
+        layout = QVBoxLayout(self)
+        # Inset by the card's own 1px border, or the preview paints straight over
+        # it and the card looks borderless down its sides.
+        layout.setContentsMargins(
+            self._BORDER_WIDTH, self._BORDER_WIDTH, self._BORDER_WIDTH, self._BORDER_WIDTH
         )
-        if return_shortcut and self._return_enabled:
-            self.return_requested.emit(self.scene_id)
-            event.accept()
-            return
-        super().keyPressEvent(event)
+        layout.setSpacing(0)
+
+        self._preview = _ScenePreview()
+        self._preview.setObjectName("SceneCardPreview")
+        layout.addWidget(self._preview)
+
+        footer = QWidget()
+        footer.setObjectName("SceneCardFooter")
+        footer.setFixedHeight(self._FOOTER_HEIGHT)
+        footer_layout = QHBoxLayout(footer)
+        footer_layout.setContentsMargins(7, 0, 0, 0)
+        footer_layout.setSpacing(3)
+        self._name = QLabel(name)
+        self._name.setObjectName("SceneCardName")
+        footer_layout.addWidget(self._name, 1)
+        self._projection = self._routing_button(
+            "SceneCardProjection", ICON_SCREEN, "projection"
+        )
+        footer_layout.addWidget(self._projection)
+        self._program = self._routing_button("SceneCardProgram", ICON_CAMERA, "program")
+        footer_layout.addWidget(self._program)
+        layout.addWidget(footer)
+
+    def _routing_button(self, object_name: str, icon: object, role: str) -> _SceneRoutingButton:
+        button = _SceneRoutingButton()
+        button.setObjectName(object_name)
+        button.setCheckable(True)
+        button.setFixedSize(self._BUTTON_SIZE, self._BUTTON_SIZE)
+        button.setIconSize(QSize(13, 13))
+        button.setIcon(make_icon(_svg(icon), 13, PALETTE.text_muted))
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
+        button.clicked.connect(lambda: self.routing_requested.emit(self.scene_id, role))
+        button.right_clicked.connect(
+            lambda: self.routing_return_requested.emit(self.scene_id, role)
+        )
+        return button
+
+    def set_name(self, name: str) -> None:
+        if self._name.text() != name:
+            self._name.setText(name)
+
+    def set_thumbnail(self, image: QImage | None) -> None:
+        self._preview.set_image(image)
+
+    def set_content_placeholder(self, visible: bool) -> None:
+        self._preview.set_placeholder(visible)
+
+    def set_canvas_aspect(self, preview_height: int, aspect: float) -> None:
+        """Keep the preview at the scene's proportions; the footer adds its own row."""
+        width = max(1, round(preview_height * aspect))
+        self._preview.setFixedSize(width, preview_height)
+        border = self._BORDER_WIDTH * 2
+        self.setFixedSize(width + border, preview_height + self._FOOTER_HEIGHT + border)
+
+    def set_routing(self, *, on_projection: bool, on_program: bool, program_available: bool) -> None:
+        for button, active in (
+            (self._projection, on_projection),
+            (self._program, on_program),
+        ):
+            button.blockSignals(True)
+            button.setChecked(active)
+            button.blockSignals(False)
+            button.setIcon(
+                make_icon(
+                    _svg(ICON_SCREEN if button is self._projection else ICON_CAMERA),
+                    13,
+                    PALETTE.accent_text if active else PALETTE.text_muted,
+                )
+            )
+        # The virtual-camera button only means anything while that output runs.
+        self._program.setVisible(program_available)
 
 
 class SceneControlPopup(QWidget):
@@ -195,11 +252,23 @@ class SceneControlPopup(QWidget):
 
     _PREFERRED_WIDTH = 420
     _MIN_WIDTH = 340
-    _MAX_SCENE_VIEWPORT_HEIGHT = 330
-    _MIN_SCENE_VIEWPORT_HEIGHT = 56
     _SCREEN_MARGIN = 8
     _ANCHOR_GAP = 10
-    _OPERATION_ERROR_DURATION_MS = 5000
+    # Square icon button; matches the sibling text buttons' 34px outer height so
+    # the header row lines up. Also pinned in the stylesheet, whose min-height
+    # would otherwise win over setFixedSize and stretch it into a tall sliver.
+    _RECORD_BUTTON_SIZE = 34
+    # A card is a canvas-proportioned preview plus a fixed footer row, so only
+    # the preview height is chosen here; the width follows the scene's aspect.
+    _SCENE_CARD_PREVIEW_HEIGHT = 78
+    _SCENE_CARD_HEIGHT = (
+        _SCENE_CARD_PREVIEW_HEIGHT
+        + _SceneCard._FOOTER_HEIGHT
+        + 2 * _SceneCard._BORDER_WIDTH  # the card's own border, or the strip clips it
+    )
+    _SCENE_CARD_SPACING = 8
+    _SCENE_CARD_SCROLLBAR_ALLOWANCE = 12
+    _SCENE_CARD_EDGE_PAD = 2
 
     def __init__(
         self,
@@ -214,36 +283,37 @@ class SceneControlPopup(QWidget):
         self.setFixedWidth(self._PREFERRED_WIDTH)
         self._controller = controller
         self._recording = recording
+        self._floating_parent = parent
+        self._docked = False
+        self._hover_button_visible = False
         self._anchor_rect: QRect | None = None
         self._available_rect: QRect | None = None
-        self._operation_error = ""
-        self._info_full_text = ""
         self._engine_visual_state = "unavailable"
-        self._operation_error_timer = QTimer(self)
-        self._operation_error_timer.setSingleShot(True)
-        self._operation_error_timer.setInterval(self._OPERATION_ERROR_DURATION_MS)
-        self._operation_error_timer.timeout.connect(self._clear_operation_error)
+        self._hidden_at: float | None = None
+        self._scene_cards: dict[str, _SceneCard] = {}
+        self._success_flash = ButtonSuccessFlash(self)
+        # Live card thumbnails, requested only while the panel is on screen.
+        from solin.controllers.scene_thumbnail_egress import SceneThumbnailEgressController
+
+        self._thumbnails = SceneThumbnailEgressController(parent=self)
+        self._thumbnails.thumbnail_ready.connect(self._on_thumbnail)
+        # What the engine was actually told. Allocating the block is not the same
+        # as the engine hearing about it: the panel can open before the engine is
+        # ready, and that request has to be retried rather than assumed delivered.
+        self._thumbnail_sent: tuple | None = None
         self._recording_clock = QTimer(self)
         self._recording_clock.setInterval(1000)
         self._recording_clock.timeout.connect(self._render_recording)
-        self._success_flash = ButtonSuccessFlash(self)
-        self._scene_rows: dict[str, _SceneChipButton] = {}
-        self._scene_order: tuple[str, ...] = ()
-        self._scene_layout_signature: tuple[
-            tuple[str, ...],
-            tuple[str, ...],
-            tuple[str, ...],
-        ] | None = None
-        self._composition_document_key: tuple[str, int] | None = None
-        self._scene_compositions: dict[str, SceneComposition] = {}
 
-        opacity = QGraphicsOpacityEffect(self)
-        opacity.setOpacity(1.0)
-        self.setGraphicsEffect(opacity)
-        self._opacity = opacity
-        self._fade = QPropertyAnimation(opacity, b"opacity", self)
+        # Fade the window itself, never a QGraphicsOpacityEffect: an effect on
+        # this translucent frameless popup makes Qt rasterise it, which paints
+        # black behind the rounded corners and can strand the panel fully
+        # transparent. windowOpacity is ignored outright where unsupported, so
+        # the worst case is no animation rather than an invisible panel.
+        self._fade = QPropertyAnimation(self, b"windowOpacity", self)
         self._fade.setDuration(160)
         self._fade.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._fade.finished.connect(lambda: self.setWindowOpacity(1.0))
 
         self._build_ui()
         controller.document_changed.connect(self._render)
@@ -276,6 +346,16 @@ class SceneControlPopup(QWidget):
         self._title.setObjectName("SceneControlTitle")
         header.addWidget(self._title)
         header.addStretch()
+        # Icon-only record control; its state lives in the tooltip/accessible name.
+        self._recording_button = QPushButton()
+        self._recording_button.setObjectName("SceneControlRecording")
+        self._recording_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._recording_button.setFixedSize(
+            self._RECORD_BUTTON_SIZE, self._RECORD_BUTTON_SIZE
+        )
+        self._recording_button.setIconSize(QSize(15, 15))
+        self._recording_button.clicked.connect(self._toggle_recording)
+        header.addWidget(self._recording_button)
         self._output = QPushButton()
         self._output.setObjectName("SceneOutputToggle")
         self._output.setCheckable(True)
@@ -283,103 +363,196 @@ class SceneControlPopup(QWidget):
         header.addWidget(self._output)
         self.hover_button = PopupHoverButton(self._card)
         header.addWidget(self.hover_button)
+        self.dock_button = PopupDockButton(self._card)
+        self.dock_button.toggled.connect(self.set_docked)
+        header.addWidget(self.dock_button)
         layout.addLayout(header)
 
-        self._scroll = _SmoothScrollArea()
-        self._scroll.setObjectName("SceneControlScroll")
-        self._scroll.setWidgetResizable(True)
-        self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self._scroll.setFrameShape(QFrame.Shape.NoFrame)
-        self._list = QWidget()
-        self._list.setObjectName("SceneControlList")
-        self._list_layout = QVBoxLayout(self._list)
-        self._list_layout.setContentsMargins(0, 0, 0, 0)
-        self._list_layout.setSpacing(7)
-        self._configured_label = QLabel(self.tr("Configured"))
-        self._configured_label.setObjectName("SceneControlSectionLabel")
-        self._list_layout.addWidget(self._configured_label)
-        self._configured_cards = FlowContainer(
-            horizontal_spacing=8,
-            vertical_spacing=6,
+        # One horizontal strip of scene cards. It scrolls sideways rather than
+        # wrapping, so the panel keeps a single predictable row however many
+        # scenes exist.
+        self._cards_scroll = QScrollArea()
+        self._cards_scroll.setObjectName("SceneCardStrip")
+        self._cards_scroll.setWidgetResizable(True)
+        self._cards_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self._cards_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._cards_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self._cards_host = QWidget()
+        self._cards_host.setObjectName("SceneCardStripHost")
+        self._cards_layout = QHBoxLayout(self._cards_host)
+        # A hair of room on the right so the last card's border is not clipped
+        # by the viewport edge (sizeHint counts it, so the panel grows to suit).
+        self._cards_layout.setContentsMargins(0, 0, self._SCENE_CARD_EDGE_PAD, 0)
+        self._cards_layout.setSpacing(self._SCENE_CARD_SPACING)
+        self._cards_layout.addStretch()  # keeps the cards left-aligned
+        self._cards_scroll.setWidget(self._cards_host)
+        self._cards_scroll.setFixedHeight(
+            self._SCENE_CARD_HEIGHT + self._SCENE_CARD_SCROLLBAR_ALLOWANCE
         )
-        self._configured_cards.setObjectName("SceneControlCardGrid")
-        self._list_layout.addWidget(self._configured_cards)
-        self._pip_label = QLabel(self.tr("Camera PiP"))
-        self._pip_label.setObjectName("SceneControlSectionLabel")
-        self._list_layout.addWidget(self._pip_label)
-        self._pip_cards = FlowContainer(
-            horizontal_spacing=8,
-            vertical_spacing=6,
-        )
-        self._pip_cards.setObjectName("SceneControlCardGrid")
-        self._list_layout.addWidget(self._pip_cards)
-        self._other_label = QLabel(self.tr("Other scenes"))
-        self._other_label.setObjectName("SceneControlSectionLabel")
-        self._list_layout.addWidget(self._other_label)
-        self._other_cards = FlowContainer(
-            horizontal_spacing=8,
-            vertical_spacing=6,
-        )
-        self._other_cards.setObjectName("SceneControlCardGrid")
-        self._list_layout.addWidget(self._other_cards)
-        self._scroll.setWidget(self._list)
-        self._scroll.setMaximumHeight(self._MAX_SCENE_VIEWPORT_HEIGHT)
-        layout.addWidget(self._scroll)
-
-        self._info = QLabel()
-        self._info.setObjectName("SceneControlInfo")
-        self._info.setFixedHeight(16)
-        layout.addWidget(self._info)
-
-        separator = QFrame()
-        separator.setObjectName("SceneControlSeparator")
-        separator.setFrameShape(QFrame.Shape.HLine)
-        separator.setFixedHeight(1)
-        layout.addWidget(separator)
-
-        self._recording_row = QWidget()
-        self._recording_row.setObjectName("SceneControlRecordingRow")
-        recording_layout = QHBoxLayout(self._recording_row)
-        recording_layout.setContentsMargins(0, 0, 0, 0)
-        recording_layout.setSpacing(0)
-        self._recording_button = QPushButton()
-        self._recording_button.setObjectName("SceneControlRecording")
-        self._recording_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._recording_button.clicked.connect(self._toggle_recording)
-        recording_layout.addWidget(self._recording_button, 1)
-        layout.addWidget(self._recording_row)
-
-        footer = QHBoxLayout()
-        footer.setSpacing(8)
-        self._automatic = QPushButton(self.tr("Auto-switch media"))
-        self._automatic.setCheckable(True)
-        self._automatic.setObjectName("SceneControlAutomatic")
-        self._automatic.clicked.connect(self._set_automatic)
-        footer.addWidget(self._automatic, 1)
-        self._media_mirror = QPushButton(self.tr("Media windows"))
-        self._media_mirror.setCheckable(True)
-        self._media_mirror.setObjectName("SceneControlMediaWindows")
-        self._media_mirror.clicked.connect(self._set_media_mirror_enabled)
-        self._media_mirror.setToolTip(self.tr("Show in media windows"))
-        footer.addWidget(self._media_mirror, 1)
-        layout.addLayout(footer)
+        layout.addWidget(self._cards_scroll)
         root.addWidget(self._card)
+
+    def _card_strip_chrome(self) -> int:
+        """Pixels the panel spends around the card strip's viewport.
+
+        Measured from the live widgets rather than assumed: the card's contents
+        margins *and* its 1px frame border both eat into the viewport, and
+        missing the border made the panel 2px too narrow, which showed a
+        scrollbar (and clipped a card) when everything actually fitted.
+        """
+        viewport_width = self._cards_scroll.viewport().width()
+        if viewport_width > 0 and self.width() > viewport_width:
+            return self.width() - viewport_width
+        card_layout = self._card.layout()
+        margins = card_layout.contentsMargins() if card_layout is not None else None
+        base = margins.left() + margins.right() if margins is not None else 0
+        return base + 2 * self._card.frameWidth()
+
+    def _sync_card_strip_height(self, content_width: int, viewport_width: int) -> None:
+        """Only reserve room for the scrollbar when the cards actually overflow."""
+        overflows = content_width > max(0, viewport_width)
+        height = self._SCENE_CARD_HEIGHT + (
+            self._SCENE_CARD_SCROLLBAR_ALLOWANCE if overflows else 0
+        )
+        self._cards_scroll.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded
+            if overflows
+            else Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        if self._cards_scroll.height() != height:
+            self._cards_scroll.setFixedHeight(height)
+
+    def _on_thumbnail(self, scene_id: str, image: QImage) -> None:
+        card = self._scene_cards.get(scene_id)
+        if card is not None:
+            card.set_thumbnail(image)
+
+    def _sync_thumbnail_feed(self) -> None:
+        """Ask the engine for thumbnails of exactly the cards now on screen."""
+        on_screen = self.isVisible() and bool(self._scene_cards)
+        scene_ids = tuple(self._scene_cards) if on_screen else ()
+        cell = (
+            self._scene_cards[scene_ids[0]]._preview.size() if scene_ids else None
+        )
+        if not scene_ids or cell is None or cell.width() <= 0:
+            if self._thumbnail_sent is not None or self._thumbnails.descriptor is not None:
+                self._thumbnails.stop()
+                self._controller.set_thumbnail_egress(None, (), 0, 0)
+                self._thumbnail_sent = None
+            return
+        width, height = cell.width(), cell.height()
+        self._thumbnails.reconfigure(scene_ids, width, height)  # no-op if unchanged
+        descriptor = self._thumbnails.descriptor
+        if descriptor is None:
+            return
+        desired = (descriptor, scene_ids, width, height)
+        if desired == self._thumbnail_sent:
+            return
+        if self._controller.set_thumbnail_egress(descriptor, scene_ids, width, height):
+            self._thumbnail_sent = desired
+
+    def _sync_scene_cards(self) -> None:
+        """Match one card per scene, in document order, reusing existing cards."""
+        document = self._controller.document
+        scenes = document.scenes
+        video = document.output(BusId.VIRTUAL_CAMERA).video_format
+        aspect = (video.width / video.height) if video.height else 16 / 9
+
+        for scene_id in tuple(self._scene_cards):
+            if all(scene.id != scene_id for scene in scenes):
+                card = self._scene_cards.pop(scene_id)
+                self._cards_layout.removeWidget(card)
+                card.deleteLater()
+
+        # Routing is one choice per output, so deriving "checked" from the routed
+        # scene makes the buttons mutually exclusive across the strip for free.
+        # Track the *desired* scene, not the applied one: the button has to answer
+        # the click immediately rather than waiting for the engine to confirm (and
+        # with no engine attached, applied is never set at all).
+        projection_scene = self._controller.desired_scene(BusId.MEDIA_WINDOWS)
+        program_scene = self._controller.desired_scene(BusId.VIRTUAL_CAMERA)
+        program_available = self._controller.runtime.state.output(
+            BusId.VIRTUAL_CAMERA
+        ).enabled
+        # A scene whose media slot is empty renders black; mark those so the card
+        # reads as "waiting for media" rather than broken.
+        content_idle = not self._controller.content_is_playing
+
+        for index, scene in enumerate(scenes):
+            card = self._scene_cards.get(scene.id)
+            if card is None:
+                card = _SceneCard(
+                    scene.id,
+                    scene.name,
+                    parent=self._cards_host,
+                )
+                card.routing_requested.connect(self._on_card_routing_requested)
+                card.routing_return_requested.connect(self._on_card_routing_return_requested)
+                self._scene_cards[scene.id] = card
+                self._cards_layout.insertWidget(index, card)
+            else:
+                card.set_name(scene.name)
+                if self._cards_layout.indexOf(card) != index:
+                    self._cards_layout.removeWidget(card)
+                    self._cards_layout.insertWidget(index, card)
+            card.set_canvas_aspect(self._SCENE_CARD_PREVIEW_HEIGHT, aspect)
+            card.set_content_placeholder(
+                content_idle and scene_uses_content_source(document, scene.id)
+            )
+            card.set_routing(
+                on_projection=scene.id == projection_scene,
+                on_program=scene.id == program_scene,
+                program_available=program_available,
+            )
+        self._sync_thumbnail_feed()
+
+    def _on_card_routing_requested(self, scene_id: str, role: str) -> None:
+        """Route a scene to one output, leaving the other where it is."""
+        bus_id = _ROUTING_BUSES.get(role)
+        if bus_id is None:
+            return
+        try:
+            # The session selection takes effect now; the next projection
+            # still enters the automatic media scene.
+            self._controller.select_scene(bus_id, scene_id)
+        except Exception:  # noqa: BLE001 - UI operation boundary
+            log.exception("Could not route the scene from its card")
+        self._render()
+
+    def _on_card_routing_return_requested(self, scene_id: str, role: str) -> None:
+        """Save one output's return scene, acknowledging only a successful save."""
+        bus_id = _ROUTING_BUSES.get(role)
+        if bus_id is None:
+            return
+        try:
+            if not self._controller.return_scene_override_available(bus_id):
+                return
+            self._controller.set_return_scene(bus_id, scene_id)
+        except Exception:  # noqa: BLE001 - UI operation boundary
+            log.exception("Could not set the return scene from its card")
+            return
+        self._render()
+        card = self._scene_cards.get(scene_id)
+        if card is not None:
+            button = card._projection if role == "projection" else card._program
+            self._success_flash.flash(button)
 
     def _toggle_recording(self) -> None:
         if self._recording is None:
             return
         try:
             self._recording.toggle()
-            self._set_operation_error("")
         except Exception:  # noqa: BLE001 - recording controller boundary
             log.exception("Could not toggle Program recording")
-            self._set_operation_error(self.tr("The recording state could not be changed."))
         self._render()
 
     def _render_recording(self) -> None:
-        if self._recording is None:
+        # Recording captures the virtual camera's mix, so the control only exists
+        # while that output does. The controller stops a live recording when the
+        # output goes off, so hiding the button never strands one running.
+        if self._recording is None or not self._controller.program_output_enabled:
             self._recording_clock.stop()
-            self._recording_row.hide()
+            self._recording_button.hide()
             return
         state = self._recording.state
         status = state.status
@@ -419,7 +592,8 @@ class SceneControlPopup(QWidget):
                 )
                 if value
             )
-            tooltip = "\n".join((self.tr("Stop recording"), *audio_warnings))
+            # Icon-only: the elapsed time lives in the tooltip now.
+            tooltip = "\n".join((text, *audio_warnings))
         elif status is ProgramRecordingStatus.STARTING:
             text = self.tr("Starting recording…")
             icon = ICON_REC_CIRCLE
@@ -436,7 +610,6 @@ class SceneControlPopup(QWidget):
             text = self.tr("Start recording")
             icon = ICON_REC_CIRCLE
             tooltip = self.tr("Start recording the live output")
-        self._recording_button.setText(text)
         self._recording_button.setIcon(make_icon(_svg(icon), 15, PALETTE.danger))
         self._recording_button.setEnabled(
             status is ProgramRecordingStatus.RECORDING
@@ -459,78 +632,21 @@ class SceneControlPopup(QWidget):
         self._recording_button.setToolTip(tooltip)
         self._recording_button.setAccessibleName(text)
         self._recording_button.setAccessibleDescription(tooltip)
-        self._recording_row.show()
+        self._recording_button.show()
         self._repolish(self._recording_button)
 
-    def _take(self, scene_id: str) -> None:
-        try:
-            self._controller.take_program_scene(scene_id)
-            self._set_operation_error("")
-        except Exception:  # noqa: BLE001 - UI operation boundary
-            log.exception("Could not select the requested scene")
-            self._set_operation_error(self.tr("The scene could not be selected."))
-        self._render()
-
-    def _set_return_scene(self, scene_id: str) -> None:
-        succeeded = False
-        try:
-            self._controller.set_program_return_scene(scene_id)
-            self._set_operation_error("")
-            succeeded = True
-        except Exception:  # noqa: BLE001 - UI operation boundary
-            log.exception("Could not update the Program return scene")
-            self._set_operation_error(
-                self.tr("The return scene could not be changed."),
-            )
-        self._render()
-        if succeeded:
-            self._success_flash.flash(self._scene_rows[scene_id])
-
-    def _set_automatic(self, enabled: bool) -> None:
-        try:
-            self._controller.set_program_automatic(bool(enabled))
-            self._set_operation_error("")
-        except Exception:  # noqa: BLE001 - UI operation boundary
-            log.exception("Could not update automatic scene switching")
-            self._set_operation_error(self.tr("Automatic switching could not be updated."))
-        self._render()
 
     def _set_output_enabled(self, checked: bool) -> None:
         try:
             self._controller.set_output_enabled(BusId.VIRTUAL_CAMERA, bool(checked))
-            self._set_operation_error("")
         except Exception:  # noqa: BLE001 - UI operation boundary
             log.exception("Could not update the scene output state")
-            self._set_operation_error(self.tr("The output state could not be changed."))
         self._render()
 
-    def _set_media_mirror_enabled(self, checked: bool) -> None:
-        try:
-            self._controller.set_output_enabled(BusId.MEDIA_WINDOWS, bool(checked))
-            self._set_operation_error("")
-        except Exception:  # noqa: BLE001 - UI operation boundary
-            log.exception("Could not update the media-window mirror state")
-            self._set_operation_error(self.tr("The media-window mirror could not be changed."))
-        self._render()
-
-    def _set_operation_error(self, text: str) -> None:
-        self._operation_error_timer.stop()
-        self._operation_error = text
-        if text:
-            self._operation_error_timer.start()
-
-    def _clear_operation_error(self) -> None:
-        if not self._operation_error:
-            return
-        self._operation_error = ""
-        self._render()
 
     def _render(self, _value: object = None) -> None:
         self._render_recording()
         runtime = self._controller.runtime.state.output(BusId.VIRTUAL_CAMERA)
-        mirror = self._controller.runtime.state.output(BusId.MEDIA_WINDOWS)
-        desired = self._controller.desired_scene(BusId.VIRTUAL_CAMERA)
-        applied = self._controller.applied_scene(BusId.VIRTUAL_CAMERA)
         engine_state = "unavailable"
 
         if self._controller.hydration_in_progress:
@@ -551,174 +667,21 @@ class SceneControlPopup(QWidget):
             engine_text = self.tr("Unavailable")
         self._set_engine_visual(engine_state, engine_text)
 
-        default_scene_id = self._controller.documents.program_default_scene_id
-        media_scene_id = self._controller.documents.program_media_scene_id
-        return_scene_id = self._controller.program_return_scene_id
-        return_override_available = self._controller.program_return_override_available
-        self._sync_scene_rows(
-            desired=desired,
-            applied=applied,
-            default_scene_id=default_scene_id,
-            media_scene_id=media_scene_id,
-            return_scene_id=return_scene_id,
-            return_override_available=return_override_available,
-        )
-
-        if (
-            self._recording is not None
-            and self._recording.state.status is ProgramRecordingStatus.FAILED
-        ):
-            state = self._recording.state
-            info_text = scene_recording_error_summary(state.error_code)
-        elif engine_state != "ready":
-            info_text = engine_text
-        elif self._operation_error:
-            info_text = self._operation_error
-        elif self._controller.program_automation_suspended:
-            info_text = self.tr("Auto-switch paused for this media session")
-        elif return_override_available and return_scene_id:
-            return_name = self._controller.document.scene(return_scene_id).name
-            info_text = self.tr("Return: %1 · Right-click to change").replace("%1", return_name)
-        else:
-            info_text = self.tr("Scene engine ready")
-        self._set_info_text(info_text)
-
-        self._automatic.blockSignals(True)
-        self._automatic.setChecked(runtime.mode is OutputMode.AUTO)
-        self._automatic.setProperty("suspended", self._controller.program_automation_suspended)
-        automation_configured = self._controller.documents.program_automation_configured
-        self._automatic.setEnabled(automation_configured)
-        self._automatic.setToolTip(
-            self.tr("Paused for this media session after a manual scene change.")
-            if self._controller.program_automation_suspended
-            else ""
-            if automation_configured
-            else self.tr("Choose different default and media scenes first.")
-        )
-        self._repolish(self._automatic)
-        self._automatic.blockSignals(False)
         self._output.blockSignals(True)
         self._output.setChecked(runtime.enabled)
-        self._output.setText(self.tr("Virtual camera"))
+        output_text = (
+            self.tr("Virtual camera enabled")
+            if runtime.enabled
+            else self.tr("Virtual camera disabled")
+        )
+        self._output.setText(output_text)
         self._output.setToolTip(self.tr("Output on") if runtime.enabled else self.tr("Output off"))
-        self._output.setAccessibleName(self.tr("Virtual camera"))
+        self._output.setAccessibleName(output_text)
         self._output.setAccessibleDescription(self._output.toolTip())
         self._output.blockSignals(False)
-        self._media_mirror.blockSignals(True)
-        self._media_mirror.setChecked(mirror.enabled)
-        self._media_mirror.blockSignals(False)
+        self._sync_scene_cards()
         self._sync_geometry()
 
-    def _sync_scene_rows(
-        self,
-        *,
-        desired: str,
-        applied: str | None,
-        default_scene_id: str | None,
-        media_scene_id: str | None,
-        return_scene_id: str,
-        return_override_available: bool,
-    ) -> None:
-        document = self._controller.document
-        scenes = document.scenes
-        source_order = tuple(scene.id for scene in scenes)
-        configured_ids = {
-            scene_id
-            for scene_id in (default_scene_id, media_scene_id)
-            if scene_id is not None and scene_id in source_order
-        }
-        configured_order = tuple(
-            scene_id for scene_id in source_order if scene_id in configured_ids
-        )
-        composition_document_key = (document.document_id, document.revision)
-        if composition_document_key != self._composition_document_key:
-            self._scene_compositions = analyze_scene_compositions(document)
-            self._composition_document_key = composition_document_key
-        pip_order = tuple(
-            scene_id
-            for scene_id in source_order
-            if scene_id not in configured_ids
-            and self._scene_compositions[scene_id].has_camera_over_content
-        )
-        pip_ids = set(pip_order)
-        other_order = tuple(
-            scene_id
-            for scene_id in source_order
-            if scene_id not in configured_ids and scene_id not in pip_ids
-        )
-        layout_signature = (configured_order, pip_order, other_order)
-        if layout_signature != self._scene_layout_signature:
-            scroll_value = self._scroll.verticalScrollBar().value()
-            self._configured_cards.clear_items(delete=False)
-            self._pip_cards.clear_items(delete=False)
-            self._other_cards.clear_items(delete=False)
-            for removed_id in set(self._scene_rows) - set(source_order):
-                self._scene_rows.pop(removed_id).deleteLater()
-            for scene in scenes:
-                if scene.id in self._scene_rows:
-                    continue
-                row = _SceneChipButton(scene.id, self._list)
-                row.installEventFilter(self)
-                row.clicked.connect(lambda _checked=False, scene_id=scene.id: self._take(scene_id))
-                row.return_requested.connect(self._set_return_scene)
-                self._scene_rows[scene.id] = row
-
-            for scene_id in configured_order:
-                self._configured_cards.add_widget(self._scene_rows[scene_id])
-            for scene_id in pip_order:
-                self._pip_cards.add_widget(self._scene_rows[scene_id])
-            for scene_id in other_order:
-                self._other_cards.add_widget(self._scene_rows[scene_id])
-            has_configured = bool(configured_order)
-            has_pip = bool(pip_order)
-            has_other = bool(other_order)
-            self._configured_label.setVisible(has_configured)
-            self._configured_cards.setVisible(has_configured)
-            self._pip_label.setVisible(has_pip)
-            self._pip_cards.setVisible(has_pip)
-            self._other_label.setVisible(has_other)
-            self._other_cards.setVisible(has_other)
-            self._scene_order = configured_order + pip_order + other_order
-            self._scene_layout_signature = layout_signature
-            QTimer.singleShot(
-                0,
-                lambda value=scroll_value: self._scroll.verticalScrollBar().setValue(value),
-            )
-
-        for scene in scenes:
-            override = self._controller.document.transition_policy.override_for(scene.id)
-            transition_tooltip = (
-                ""
-                if override is None
-                else self.tr("Transition override: %1").replace(
-                    "%1", self._transition_label(override)
-                )
-            )
-            self._scene_rows[scene.id].update_state(
-                name=scene.name,
-                applied=scene.id == applied,
-                desired=scene.id == desired,
-                is_default=scene.id == default_scene_id,
-                is_media=scene.id == media_scene_id,
-                is_return=return_override_available and scene.id == return_scene_id,
-                return_enabled=return_override_available,
-                transition_tooltip=transition_tooltip,
-                live_text=self.tr("LIVE"),
-                selected_text=self.tr("SELECTED"),
-                default_text=self.tr("Default scene"),
-                media_text=self.tr("Media scene"),
-                return_text=self.tr("Return scene"),
-                return_hint=self.tr("Right-click to return here when media ends."),
-            )
-
-    def _transition_label(self, spec: TransitionSpec) -> str:
-        labels = {
-            TransitionKind.CUT: self.tr("Cut"),
-            TransitionKind.DISSOLVE: self.tr("Dissolve"),
-            TransitionKind.FADE_TO_BLACK: self.tr("Fade through black"),
-        }
-        label = labels[spec.kind]
-        return label if spec.kind is TransitionKind.CUT else f"{label} · {spec.duration_ms} ms"
 
     def _set_engine_visual(self, state: str, description: str) -> None:
         self._engine_visual_state = state
@@ -728,20 +691,101 @@ class SceneControlPopup(QWidget):
         self._icon.setAccessibleName(self.tr("Scene engine"))
         self._icon.setAccessibleDescription(description)
 
-    def _set_info_text(self, text: str) -> None:
-        self._info_full_text = text
-        available_width = max(1, self._info.width())
-        visible_text = self._info.fontMetrics().elidedText(
-            text,
-            Qt.TextElideMode.ElideRight,
-            available_width,
-        )
-        self._info.setText(visible_text)
-        self._info.setToolTip(text if visible_text != text else "")
-        self._info.setAccessibleName(self.tr("Scene status"))
-        self._info.setAccessibleDescription(text)
+
+    @property
+    def docked(self) -> bool:
+        """True while the panel is attached to the bottom of the main window."""
+        return self._docked
+
+    def _dock_host(self) -> QWidget | None:
+        """The container to attach to, found by walking up the parent chain.
+
+        Any ancestor exposing ``scenes_dock_container()`` (the main window) can
+        host the panel, so the toolbar in between needs no wiring.
+        """
+        widget: QWidget | None = self._floating_parent
+        while widget is not None:
+            provider = getattr(widget, "scenes_dock_container", None)
+            if callable(provider):
+                try:
+                    host = provider()
+                    return host if isinstance(host, QWidget) else None
+                except Exception:  # noqa: BLE001 - a bad host must not break the toggle
+                    log.exception("Could not resolve the scenes dock container")
+                    return None
+            widget = widget.parentWidget()
+        return None
+
+    def set_docked(self, docked: bool) -> None:
+        """Attach the panel to the window bottom, or return it to floating."""
+        docked = bool(docked)
+        if docked == self._docked:
+            return
+        if docked:
+            host = self._dock_host()
+            layout = host.layout() if host is not None else None
+            if host is None or layout is None:
+                # Nothing can host it (e.g. a standalone popup in a test): stay
+                # floating and put the button back rather than half-docking.
+                self.dock_button.setChecked(False)
+                return
+            self._fade.stop()
+            self.setWindowOpacity(1.0)
+            self._docked = True
+            # "Open on hover" only means something for a popup that opens; an
+            # attached panel is always on screen. Remember whether the host had
+            # revealed the control so detaching restores exactly that.
+            self._hover_button_visible = self.hover_button.isVisibleTo(self)
+            self.hover_button.hide()
+            # A docked panel is an ordinary child widget: drop the popup window
+            # flags (which also close it on outside clicks) and the fixed popup
+            # width so it can stretch across the window.
+            # Set the translucency attribute *before* reparenting: setParent
+            # recreates the native window, and the platform picks the window's
+            # visual from this attribute at creation time (see the undock path).
+            self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
+            self.setParent(host, Qt.WindowType.Widget)
+            self.setMinimumWidth(self._MIN_WIDTH)
+            self.setMaximumWidth(_MAX_WIDGET_SIZE)
+            self.setMinimumHeight(0)
+            self.setMaximumHeight(_MAX_WIDGET_SIZE)
+            self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+            layout.addWidget(self)
+            host.show()
+            self.show()
+        else:
+            self._docked = False
+            if self._hover_button_visible:
+                self.hover_button.show()
+            host = self.parentWidget()
+            host_layout = host.layout() if host is not None else None
+            if host_layout is not None:
+                host_layout.removeWidget(self)
+            # Restore translucency *before* reparenting. setParent recreates the
+            # native window, and X11 only gives it a 32-bit ARGB visual when this
+            # attribute is already set — setting it afterwards left the window
+            # opaque, so the rounded corners painted black for the rest of the
+            # session. destroy() drops the stale handle so show() builds a fresh
+            # one with the right visual.
+            self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+            self.destroy()
+            self.setParent(
+                self._floating_parent,
+                Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint,
+            )
+            self.setFixedWidth(self._PREFERRED_WIDTH)
+            self.hide()
+            if host is not None and host_layout is not None and not host_layout.count():
+                host.hide()
+        # Docked the card spans the window edge to edge, so its rounded corners
+        # would cut into that edge — square them off while attached.
+        self._card.setProperty("docked", self._docked)
+        self._repolish(self._card)
+        self._render()
 
     def show_above(self, anchor: QWidget) -> None:
+        if self._docked:
+            return  # already attached to the window; nothing to pop up
         top_left = anchor.mapToGlobal(anchor.rect().topLeft())
         self._anchor_rect = QRect(top_left.x(), top_left.y(), anchor.width(), anchor.height())
         screen = (
@@ -749,13 +793,17 @@ class SceneControlPopup(QWidget):
         )
         self._available_rect = screen.availableGeometry() if screen is not None else None
         self._fade.stop()
-        self._opacity.setOpacity(0.0)
+        self.setWindowOpacity(0.0)
         self._render()
         self.show()
         QTimer.singleShot(0, self._finish_show)
 
     def _finish_show(self) -> None:
         if not self.isVisible():
+            # Dismissed before the fade could start (a click straight back on the
+            # toolbar does this). Reset the opacity we pre-set, or the panel would
+            # be fully transparent the next time it opens.
+            self.setWindowOpacity(1.0)
             return
         self._sync_geometry()
         self.raise_()
@@ -764,7 +812,62 @@ class SceneControlPopup(QWidget):
         self._fade.setEndValue(1.0)
         self._fade.start()
 
+    def _sync_docked_geometry(self) -> None:
+        """Lay out for the window-bottom dock: fill the width, never reposition.
+
+        The floating path sizes against the screen and moves the popup next to its
+        anchor; docked, the layout owns both position and width, so this only has
+        to let the layouts settle at the new width.
+        """
+        self.ensurePolished()
+        self._sync_card_strip_height(
+            self._cards_host.sizeHint().width(),
+            self.width() - self._card_strip_chrome(),
+        )
+        card_layout = self._card.layout()
+        if card_layout is not None:
+            card_layout.activate()
+        root_layout = self.layout()
+        if root_layout is not None:
+            root_layout.activate()
+
+    def showEvent(self, event) -> None:  # noqa: N802
+        super().showEvent(event)
+        self._sync_thumbnail_feed()
+
+    def hideEvent(self, event) -> None:  # noqa: N802
+        # Whatever interrupted the fade, a hidden panel must never stay
+        # transparent — the next open has to be visible.
+        self._fade.stop()
+        self.setWindowOpacity(1.0)
+        self._hidden_at = time.monotonic()
+        if not self._docked:
+            # Nobody is looking: stop paying for thumbnail renders.
+            self._thumbnails.stop()
+            self._controller.set_thumbnail_egress(None, (), 0, 0)
+        super().hideEvent(event)
+
+    def dismissed_within(self, milliseconds: int) -> bool:
+        """Whether the panel closed in the last ``milliseconds``.
+
+        Qt closes a popup on the click that lands outside it, so a click on the
+        toolbar button that opened it arrives *after* the dismissal. A host uses
+        this to tell that click apart from a fresh one and toggle closed instead
+        of immediately reopening.
+        """
+        if self._hidden_at is None:
+            return False
+        return (time.monotonic() - self._hidden_at) * 1000 < milliseconds
+
+    def resizeEvent(self, event) -> None:  # noqa: N802
+        super().resizeEvent(event)
+        if self._docked and event.oldSize().width() != event.size().width():
+            self._sync_docked_geometry()
+
     def _sync_geometry(self) -> None:
+        if self._docked:
+            self._sync_docked_geometry()
+            return
         self.ensurePolished()
         available = (
             self._available_rect.adjusted(
@@ -776,40 +879,17 @@ class SceneControlPopup(QWidget):
             if self._available_rect is not None
             else None
         )
-        width = self._PREFERRED_WIDTH
+        # Grow to show as many scene cards as fit; the screen is the ceiling and
+        # the strip scrolls sideways for whatever is left over.
+        chrome = self._card_strip_chrome()
+        content_width = self._cards_host.sizeHint().width()
+        width = max(self._PREFERRED_WIDTH, content_width + chrome)
         if available is not None:
             width = max(self._MIN_WIDTH, min(width, available.width()))
-            width = min(width, available.width())
         self.setFixedWidth(width)
+        self._sync_card_strip_height(content_width, width - chrome)
 
         card_layout = self._card.layout()
-        card_margins = card_layout.contentsMargins() if card_layout is not None else None
-        content_width = width - (
-            card_margins.left() + card_margins.right() if card_margins is not None else 0
-        )
-        self._info.setFixedWidth(content_width)
-        self._set_info_text(self._info_full_text)
-        for flow in (self._configured_cards, self._pip_cards, self._other_cards):
-            if not flow.isVisible():
-                continue
-            flow.setFixedSize(
-                content_width,
-                max(32, flow.heightForWidth(content_width)),
-            )
-            # Chip widths can change without resizing the container (rename,
-            # language change, or document refresh), so resizeEvent alone is
-            # not a sufficient layout trigger.
-            flow.relayout()
-        self._list_layout.activate()
-        content_height = max(
-            self._MIN_SCENE_VIEWPORT_HEIGHT,
-            self._list_layout.sizeHint().height(),
-        )
-        preferred_viewport_height = min(
-            content_height,
-            self._MAX_SCENE_VIEWPORT_HEIGHT,
-        )
-        self._scroll.setFixedHeight(preferred_viewport_height)
         if card_layout is not None:
             card_layout.activate()
         root_layout = self.layout()
@@ -828,26 +908,6 @@ class SceneControlPopup(QWidget):
                 available.bottom() - self._anchor_rect.bottom() - self._ANCHOR_GAP,
             )
             place_above = preferred_height <= space_above or space_above >= space_below
-            side_capacity = space_above if place_above else space_below
-            if preferred_height > side_capacity:
-                chrome_height = preferred_height - preferred_viewport_height
-                height_capacity = side_capacity
-                if side_capacity < chrome_height + self._MIN_SCENE_VIEWPORT_HEIGHT:
-                    # On an exceptionally short work area no side of the anchor
-                    # can contain the popup. Preserve the fixed header/status/
-                    # footer and let the clamped popup overlap the anchor instead
-                    # of letting Qt overlap its own children.
-                    height_capacity = available.height()
-                viewport_height = max(
-                    1,
-                    min(preferred_viewport_height, height_capacity - chrome_height),
-                )
-                self._scroll.setFixedHeight(viewport_height)
-                if card_layout is not None:
-                    card_layout.activate()
-                if root_layout is not None:
-                    root_layout.activate()
-                preferred_height = max(1, self.sizeHint().height())
             preferred_height = min(preferred_height, available.height())
         self.setFixedHeight(preferred_height)
 
@@ -864,113 +924,44 @@ class SceneControlPopup(QWidget):
 
     def apply_theme(self) -> None:
         self.hover_button.apply_theme()
+        self.dock_button.apply_theme()
         self._set_engine_visual(self._engine_visual_state, self._icon.toolTip())
         self.setStyleSheet(
             f"""
             QFrame#SceneControlCard {{ background:{PALETTE.surface}; border:1px solid {PALETTE.border}; border-radius:14px; }}
+            QFrame#SceneControlCard[docked="true"] {{ border-radius:0; border-left:none; border-right:none; border-bottom:none; }}
             QWidget {{ background:transparent; color:{PALETTE.text_secondary}; }}
             QLabel#SceneControlTitle {{ color:{PALETTE.text_faint}; font-size:13px; font-weight:650; }}
-            QLabel#SceneControlSectionLabel {{ color:{PALETTE.text_muted}; font-size:10px; font-weight:600; padding:1px 4px 0 4px; }}
-            QWidget#SceneControlCardGrid {{ background:transparent; }}
             QPushButton {{ min-height:32px; padding:0 11px; border:1px solid {PALETTE.border}; border-radius:8px; background:{PALETTE.surface_card}; color:{PALETTE.text_secondary}; font-weight:550; }}
             QPushButton:hover {{ background:{PALETTE.surface_hover}; border-color:{PALETTE.border_strong}; color:{PALETTE.text_primary}; }}
             QPushButton:focus {{ border-color:{PALETTE.accent_alt}; }}
             QPushButton:pressed {{ background:{PALETTE.surface_alt}; }}
             QPushButton#SceneOutputToggle {{ min-width:84px; }}
-            QPushButton#SceneOutputToggle:checked, QPushButton#SceneControlAutomatic:checked, QPushButton#SceneControlMediaWindows:checked {{ background:{qss_rgba(PALETTE.accent, 0.10)}; border-color:{qss_rgba(PALETTE.accent, 0.42)}; color:{PALETTE.accent_text}; }}
-            QPushButton#SceneControlRecording {{ min-width:180px; color:{PALETTE.danger}; border-color:{qss_rgba(PALETTE.danger, 0.38)}; }}
-            QPushButton#SceneControlRecording:hover {{ background:{qss_rgba(PALETTE.danger, 0.10)}; border-color:{qss_rgba(PALETTE.danger, 0.62)}; color:{PALETTE.danger}; }}
-            QPushButton#SceneControlRecording[recording="true"] {{ background:{qss_rgba(PALETTE.danger, 0.10)}; border-color:{qss_rgba(PALETTE.danger, 0.58)}; color:{PALETTE.danger}; }}
-            QPushButton#SceneControlAutomatic[suspended="true"] {{ background:{PALETTE.warning_surface}; border-color:{PALETTE.warning_border}; color:{PALETTE.warning_text}; }}
-            QPushButton#SceneControlScene {{ min-height:32px; padding:0 10px; background:{qss_rgba(PALETTE.surface, 0.60)}; border:1px solid {qss_rgba(PALETTE.border, 0.60)}; border-radius:8px; color:{PALETTE.text_muted}; font-size:12px; font-weight:400; text-align:center; }}
-            QPushButton#SceneControlScene:hover {{ background:{PALETTE.surface_hover}; border-color:{qss_rgba(PALETTE.accent, 0.35)}; color:{PALETTE.text_secondary}; }}
-            QPushButton#SceneControlScene:focus {{ border-color:{PALETTE.accent_alt}; color:{PALETTE.text_primary}; }}
-            QPushButton#SceneControlScene[desired="true"] {{ background:{qss_rgba(PALETTE.accent, 0.08)}; border-color:{qss_rgba(PALETTE.accent, 0.30)}; color:{PALETTE.accent_text}; }}
-            QPushButton#SceneControlScene[applied="true"] {{ background:{qss_rgba(PALETTE.accent, 0.12)}; border-color:{qss_rgba(PALETTE.accent, 0.40)}; color:{PALETTE.accent_hover}; font-weight:600; }}
+            QPushButton#SceneOutputToggle:checked {{ background:{qss_rgba(PALETTE.accent, 0.10)}; border-color:{qss_rgba(PALETTE.accent, 0.42)}; color:{PALETTE.accent_text}; }}
+            QPushButton#SceneControlRecording {{ min-width:{self._RECORD_BUTTON_SIZE - 2}px; max-width:{self._RECORD_BUTTON_SIZE - 2}px; min-height:{self._RECORD_BUTTON_SIZE - 2}px; max-height:{self._RECORD_BUTTON_SIZE - 2}px; padding:0; }}
+            QPushButton#SceneControlRecording:hover {{ background:{qss_rgba(PALETTE.danger, 0.10)}; border-color:{qss_rgba(PALETTE.danger, 0.62)}; }}
+            QPushButton#SceneControlRecording[recording="true"] {{ background:{qss_rgba(PALETTE.danger, 0.18)}; border-color:{qss_rgba(PALETTE.danger, 0.70)}; }}
             QPushButton:disabled {{ color:{PALETTE.text_faint}; border-color:{PALETTE.border_muted}; }}
-            QLabel#SceneControlInfo {{ color:{PALETTE.text_muted}; font-size:10px; padding:0 2px; }}
-            QFrame#SceneControlSeparator {{ background:{PALETTE.border_muted}; border:none; }}
-            QScrollArea#SceneControlScroll {{ border:none; background:transparent; }}
-            QWidget#SceneControlList {{ background:transparent; }}
-            QScrollBar:vertical {{ width:5px; margin-left:2px; background:transparent; }}
-            QScrollBar::handle:vertical {{ background:{PALETTE.border}; border-radius:2px; min-height:24px; }}
-            QScrollBar::handle:vertical:hover {{ background:{PALETTE.text_dim}; }}
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height:0; }}
-            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background:transparent; }}
+            QScrollArea#SceneCardStrip {{ border:none; background:transparent; }}
+            QWidget#SceneCardStripHost {{ background:transparent; }}
+            QFrame#SceneCard {{ background:{qss_rgba(PALETTE.border, 0.75)}; border:none; border-radius:10px; }}
+            QFrame#SceneCardPreview {{ background:{qss_rgba(PALETTE.surface_alt, 0.95)}; border:none; border-top-left-radius:9px; border-top-right-radius:9px; }}
+            QWidget#SceneCardFooter {{ background:{PALETTE.surface}; border-bottom-left-radius:9px; border-bottom-right-radius:9px; }}
+            QLabel#SceneCardName {{ background:transparent; color:{PALETTE.text_secondary}; font-size:11px; font-weight:550; }}
+            QPushButton#SceneCardProjection, QPushButton#SceneCardProgram {{ min-width:{_SceneCard._BUTTON_SIZE}px; max-width:{_SceneCard._BUTTON_SIZE}px; min-height:{_SceneCard._BUTTON_SIZE}px; max-height:{_SceneCard._BUTTON_SIZE}px; padding:0; border-radius:7px; background:transparent; border:1px solid transparent; }}
+            QPushButton#SceneCardProjection:hover, QPushButton#SceneCardProgram:hover {{ background:{PALETTE.surface_hover}; border-color:{PALETTE.border_strong}; }}
+            QPushButton#SceneCardProjection:checked, QPushButton#SceneCardProgram:checked {{ background:{qss_rgba(PALETTE.accent, 0.14)}; border-color:{qss_rgba(PALETTE.accent, 0.50)}; }}
+            QScrollBar:horizontal {{ height:5px; margin-top:3px; background:transparent; }}
+            QScrollBar::handle:horizontal {{ background:{PALETTE.border}; border-radius:2px; min-width:24px; }}
+            QScrollBar::handle:horizontal:hover {{ background:{PALETTE.text_dim}; }}
+            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width:0; }}
+            QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {{ background:transparent; }}
             """
         )
 
-    def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802
-        if isinstance(watched, _SceneChipButton):
-            if event.type() == QEvent.Type.FocusIn:
-                self._scroll.ensureWidgetVisible(watched, 0, 8)
-            elif event.type() == QEvent.Type.KeyPress and isinstance(event, QKeyEvent):
-                key = event.key()
-                target_scene_id: str | None = None
-                if key in (Qt.Key.Key_Up, Qt.Key.Key_Down):
-                    target_scene_id = self._vertical_scene_neighbor(
-                        watched,
-                        direction=-1 if key == Qt.Key.Key_Up else 1,
-                    )
-                elif watched.scene_id in self._scene_order:
-                    current = self._scene_order.index(watched.scene_id)
-                    if key == Qt.Key.Key_Left:
-                        target = max(0, current - 1)
-                    elif key == Qt.Key.Key_Right:
-                        target = min(current + 1, len(self._scene_order) - 1)
-                    elif key == Qt.Key.Key_Home:
-                        target = 0
-                    elif key == Qt.Key.Key_End:
-                        target = len(self._scene_order) - 1
-                    else:
-                        target = current
-                    if target != current or key in (
-                        Qt.Key.Key_Home,
-                        Qt.Key.Key_End,
-                    ):
-                        target_scene_id = self._scene_order[target]
-                if target_scene_id is not None:
-                    self._scene_rows[target_scene_id].setFocus(Qt.FocusReason.ShortcutFocusReason)
-                    event.accept()
-                    return True
-        return super().eventFilter(watched, event)
-
-    def _vertical_scene_neighbor(
-        self,
-        current: _SceneChipButton,
-        *,
-        direction: int,
-    ) -> str | None:
-        origin = current.mapTo(self._list, current.rect().center())
-        candidates: list[tuple[int, int, int, str]] = []
-        for order, scene_id in enumerate(self._scene_order):
-            widget = self._scene_rows[scene_id]
-            if widget is current or not widget.isVisible() or not widget.isEnabled():
-                continue
-            center = widget.mapTo(self._list, widget.rect().center())
-            vertical_delta = center.y() - origin.y()
-            if vertical_delta * direction <= 0:
-                continue
-            candidates.append(
-                (
-                    abs(vertical_delta),
-                    abs(center.x() - origin.x()),
-                    order,
-                    scene_id,
-                )
-            )
-        return min(candidates)[3] if candidates else None
-
     def changeEvent(self, event: QEvent) -> None:  # noqa: N802
         if event.type() == QEvent.Type.LanguageChange:
-            self._set_operation_error("")
             self._title.setText(self.tr("Solin scenes"))
-            self._configured_label.setText(self.tr("Configured"))
-            self._pip_label.setText(self.tr("Camera PiP"))
-            self._other_label.setText(self.tr("Other scenes"))
-            self._automatic.setText(self.tr("Auto-switch media"))
-            self._media_mirror.setText(self.tr("Media windows"))
-            self._media_mirror.setToolTip(self.tr("Show in media windows"))
             self._render()
         super().changeEvent(event)
 

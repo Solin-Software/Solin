@@ -7,7 +7,6 @@ from datetime import datetime
 from PySide6.QtCore import Property, QCoreApplication, QT_TRANSLATE_NOOP, Signal, Slot
 from PySide6.QtWidgets import QFileDialog
 
-from solin.core.foundation.constants import NATIVE_SCENES_SUPPORTED
 from solin.core.i18n.meeting_schedule import (
     meeting_not_configured_label,
     meeting_weekday_names,
@@ -66,7 +65,7 @@ class GeneralSettings(SettingsDomain):
     theme_changed = Signal(str)
 
     def __init__(
-        self, *, lang_manager, screen_manager, app_settings, native_scenes_enabled,
+        self, *, lang_manager, screen_manager, app_settings,
         media_settings, playback_protection, meeting_schedule_settings,
         watched_folder_settings, yeartext_settings, background_song_settings,
         yeartext_service_factory, congregation_lookup_factory,
@@ -76,7 +75,6 @@ class GeneralSettings(SettingsDomain):
         self.lang = lang_manager
         self._screens = screen_manager
         self._app_settings = app_settings
-        self._native_scenes_enabled = native_scenes_enabled
         self._media_settings = media_settings
         self._playback_protection = playback_protection
         self._meeting_schedule_settings = meeting_schedule_settings
@@ -122,9 +120,6 @@ class GeneralSettings(SettingsDomain):
             startVideosPaused=media_settings.start_videos_paused(),
             playbackProtection=playback_protection.enabled,
             backgroundSongEnabled=background_song_settings.is_enabled(),
-            nativeScenesAvailable=NATIVE_SCENES_SUPPORTED,
-            nativeScenesEnabled=app_settings.native_scenes_enabled(),
-            scenesRestartRequired=app_settings.native_scenes_enabled() != native_scenes_enabled,
             mediaLanguagesError="",
             congregationQuery="", congregationName="", congregationSuggestions=[],
             congregationStatusKind="idle", congregationStatusText="",
@@ -188,9 +183,6 @@ class GeneralSettings(SettingsDomain):
     def refresh_runtime(self) -> None:
         if self._closed:
             return
-        scenes_enabled = self._app_settings.native_scenes_enabled()
-        self.publish(nativeScenesEnabled=scenes_enabled,
-                     scenesRestartRequired=scenes_enabled != self._native_scenes_enabled)
         primary = self._screens.primary_screen()
         screens = ([primary] if primary is not None else []) + list(self._screens.secondary_screens())
         self.publish(screens=[{
@@ -228,10 +220,6 @@ class GeneralSettings(SettingsDomain):
                 self.meetings_auto_download_toggled.emit(enabled)
             elif key == "backgroundSongEnabled":
                 self.background_song_toggled.emit(enabled)
-        elif key == "nativeScenesEnabled" and NATIVE_SCENES_SUPPORTED:
-            self._app_settings.set_native_scenes_enabled(bool(value))
-            self.publish(nativeScenesEnabled=bool(value),
-                         scenesRestartRequired=bool(value) != self._native_scenes_enabled)
         elif key == "themeId":
             if value not in {theme.id for theme in available_themes()}:
                 return

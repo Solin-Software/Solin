@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 
 from PySide6.QtCore import QTimer
-from PySide6.QtGui import QImage, QPixmap
+from PySide6.QtGui import QPixmap
 
 from solin.core.foundation.constants import ORDER_NEXT, ORDER_OFF, ORDER_RANDOM
 from solin.core.media.download_storage import completed_cached_path
@@ -337,46 +337,40 @@ class ProjectionPlaylistMixin:
             self._live_thumb_timer.start(3_000)
 
     def _do_live_thumb_capture(self):
-        if self._live_thumb_captured:
+        # Best-effort fallback for the currently-playing local file when the ffprobe
+        # thumbnail queue produced nothing. libobs decodes the media, so the cover /
+        # frame is read out of band with ffprobe/ffmpeg (local files only — a remote
+        # probe would stall the GUI thread).
+        if self._live_thumb_captured or self._mode != "video":
             return
-        if self._mode != "video":
+        path = self.media.local_path
+        if not path or path.startswith(("http://", "https://", "rtsp://", "rtmp://")):
             return
+
+        from solin.core.media import ffprobe_metadata as fm
 
         idx = self._playlist_index
-
-        from PySide6.QtMultimedia import QMediaMetaData
-
-        meta = self.media.player.metaData()
-        for key in (QMediaMetaData.Key.CoverArtImage, QMediaMetaData.Key.ThumbnailImage):
-            value = meta.value(key)
-            if value is None:
-                continue
-            pixmap = None
-            if isinstance(value, QImage) and not value.isNull():
-                pixmap = QPixmap.fromImage(value)
-            elif isinstance(value, QPixmap) and not value.isNull():
-                pixmap = value
-            if pixmap:
-                self._live_thumb_captured = True
-                self._thumb_queue.invalidate(idx)
-                self._thumb_queue.feed_live_cover(idx, pixmap)
-                self.playlist_panel.set_thumbnail(idx, pixmap)
-                return
-
-        if self._is_audio:
+        tags = fm.probe_tags(path)
+        image = None
+        is_cover = tags.cover_stream_index >= 0
+        if is_cover:
+            image = fm.extract_cover(path, tags.cover_stream_index)
+        if not image and not self._is_audio:
+            at_ms = int((self.media.duration or tags.duration_ms) * 0.05) or 1000
+            image = fm.extract_thumbnail(path, at_ms)
+        if not image:
             return
-
-        frame = self.media.video_sink.videoFrame()
-        if not frame.isValid():
-            return
-        img = frame.toImage()
-        if img.isNull():
+        pixmap = QPixmap()
+        pixmap.loadFromData(image)
+        if pixmap.isNull():
             return
 
         self._live_thumb_captured = True
-        pixmap = QPixmap.fromImage(img)
         self._thumb_queue.invalidate(idx)
-        if self._thumb_queue.feed_live_frame(idx, pixmap):
+        if is_cover:
+            self._thumb_queue.feed_live_cover(idx, pixmap)
+            self.playlist_panel.set_thumbnail(idx, pixmap)
+        elif self._thumb_queue.feed_live_frame(idx, pixmap):
             self.playlist_panel.set_thumbnail(idx, pixmap)
 
     def _redraw_current_preview(self):

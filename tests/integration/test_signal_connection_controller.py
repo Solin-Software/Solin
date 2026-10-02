@@ -87,7 +87,6 @@ class _WindowStub:
 
         self.media_ctrl = _signal_namespace(
             "media_ctrl",
-            "frame_ready",
             "state_changed",
             "cover_art_changed",
             "title_from_metadata",
@@ -253,7 +252,7 @@ def test_connect_signals_wires_expected_signal_graph():
     controller.connect_signals()
 
     total_connections = sum(len(signal.connected) for signal in _Signal.registry)
-    assert total_connections == 53
+    assert total_connections == 52
     assert window.library_widget.project_media_signal.connected == [
         controller._project_library_media
     ]
@@ -332,9 +331,6 @@ def test_optional_camera_and_theme_consumers_connect_to_settings_domains():
     controller.connect_signals()
 
     assert window.settings_widget.general.theme_changed.connected == [apply_theme]
-    assert window.settings_widget.integrations.camera_enabled_toggled.connected == [
-        window._live_integrations.on_camera_settings_enabled_toggled
-    ]
     assert camera.frame_ready.connected == [window._live_integrations.on_camera_frame]
     assert camera.error.connected == [window._live_integrations.on_camera_error]
     assert camera.stopped.connected == [window._live_integrations.on_camera_stopped]

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 import logging
 from typing import Any, Protocol
@@ -8,6 +8,7 @@ from typing import Any, Protocol
 from solin.core.scenes.application import SceneDocumentChange, SceneDocumentService
 from solin.core.scenes.model import (
     AUTOMATIC_MEDIA_CATEGORIES,
+    DELIVERY_BUSES,
     BusId,
     ContentCategory,
     OutputMode,
@@ -83,7 +84,7 @@ class SceneRuntimeState:
     document_id: str
     revision: int
     outputs: tuple[OutputRuntimeState, ...]
-    schema_version: int = 2
+    schema_version: int = 3
 
     def __post_init__(self) -> None:
         if not isinstance(self.document_id, str) or not self.document_id:
@@ -94,18 +95,17 @@ class SceneRuntimeState:
             or self.revision < 0
         ):
             raise SceneValidationError("Invalid runtime revision")
-        if self.schema_version != 2:
+        if self.schema_version != 3:
             raise SceneValidationError("Unsupported runtime schema version")
         if not isinstance(self.outputs, tuple) or not all(
             isinstance(output, OutputRuntimeState) for output in self.outputs
         ):
             raise SceneValidationError("Runtime outputs must be an immutable tuple")
         buses = tuple(output.bus_id for output in self.outputs)
-        if len(buses) != len(BusId) or set(buses) != set(BusId):
+        if len(buses) != len(DELIVERY_BUSES) or set(buses) != set(DELIVERY_BUSES):
             raise SceneValidationError("Runtime state must define every output bus once")
-        program_selections = {(output.mode, output.manual_scene_id) for output in self.outputs}
-        if len(program_selections) != 1:
-            raise SceneValidationError("Runtime destinations must share one Program selection")
+        # Each delivery output keeps its own selection, so the projection and the
+        # program can sit on different scenes.
 
     def output(self, bus_id: BusId) -> OutputRuntimeState:
         return next(output for output in self.outputs if output.bus_id is bus_id)
@@ -156,7 +156,7 @@ class SceneRuntimeState:
         revision = data.get("revision")
         document_id = data.get("document_id")
         outputs = data.get("outputs")
-        if schema_version not in {1, 2}:
+        if schema_version not in {1, 2, 3}:
             raise SceneValidationError("Unsupported runtime schema version")
         if (
             not isinstance(document_id, str)
@@ -189,7 +189,7 @@ class SceneRuntimeState:
             document_id=document_id,
             revision=revision,
             outputs=restored_outputs,
-            schema_version=2,
+            schema_version=3,
         )
 
 
@@ -239,7 +239,52 @@ class SceneRuntimeService:
 
         return unsubscribe
 
+    def take_scene(self, bus_id: BusId, scene_id: str) -> SceneRuntimeState:
+        """Route ONE output to ``scene_id``, leaving the others where they are."""
+        self._documents.document.scene(scene_id)
+        current = self._state.output(bus_id)
+        return self._commit(
+            self._with_output(
+                replace(current, mode=OutputMode.MANUAL, manual_scene_id=scene_id)
+            )
+        )
+
+    def select_scene(self, bus_id: BusId, scene_id: str | None) -> SceneRuntimeState:
+        """Choose one output's return base and restore AUTO; None clears the override."""
+        return self.select_base_scenes({bus_id: scene_id}, resume_automation=True)
+
+    def select_base_scenes(
+        self,
+        selections: Mapping[BusId, str | None],
+        *,
+        resume_automation: bool = False,
+    ) -> SceneRuntimeState:
+        """Update output return bases atomically; None uses the configured default."""
+        for bus_id, scene_id in selections.items():
+            if bus_id not in DELIVERY_BUSES:
+                raise SceneValidationError("Invalid runtime output bus")
+            if scene_id is not None:
+                self._documents.document.scene(scene_id)
+        return self._commit(
+            replace(
+                self._state,
+                outputs=tuple(
+                    replace(
+                        output,
+                        mode=OutputMode.AUTO if resume_automation else output.mode,
+                        manual_scene_id=selections[output.bus_id] or "",
+                    ) if output.bus_id in selections else output
+                    for output in self._state.outputs
+                ),
+            )
+        )
+
     def take_program_scene(self, scene_id: str) -> SceneRuntimeState:
+        """Route every delivery output to ``scene_id`` (the old lockstep take).
+
+        Still used where a single scene really is meant for everything — deleting
+        the live scene, for instance.
+        """
         self._documents.document.scene(scene_id)
         return self._commit(
             replace(
@@ -258,63 +303,43 @@ class SceneRuntimeService:
     def select_program_scene(self, scene_id: str | None) -> SceneRuntimeState:
         """Select the Program base, or clear its override, without changing auto-switch."""
 
-        if scene_id is not None:
-            self._documents.document.scene(scene_id)
-        stored_scene_id = scene_id or ""
-        return self._commit(
-            replace(
-                self._state,
-                outputs=tuple(
-                    replace(output, manual_scene_id=stored_scene_id)
-                    for output in self._state.outputs
-                ),
-            )
-        )
+        return self.select_base_scenes({bus_id: scene_id for bus_id in DELIVERY_BUSES})
 
     def resume_program_automation(self) -> SceneRuntimeState:
-        return self._commit(
-            replace(
-                self._state,
-                outputs=tuple(
-                    replace(
-                        output,
-                        mode=OutputMode.AUTO,
-                    )
-                    for output in self._state.outputs
-                ),
-            )
+        return self.set_program_automatic(
+            True,
+            scene_ids={output.bus_id: output.manual_scene_id or None for output in self._state.outputs},
         )
 
     def set_program_automatic(
         self,
         enabled: bool,
         *,
-        current_scene_id: str,
-        automatic_base_scene_id: str | None = None,
+        scene_ids: Mapping[BusId, str | None],
     ) -> SceneRuntimeState:
+        """Commit all output modes and their selected bases or pins atomically."""
         if not isinstance(enabled, bool):
             raise SceneValidationError("Program automation state must be a boolean")
-        if enabled:
-            if automatic_base_scene_id is not None:
-                self._documents.document.scene(automatic_base_scene_id)
-            return self._commit(
-                replace(
-                    self._state,
-                    outputs=tuple(
-                        replace(
-                            output,
-                            mode=OutputMode.AUTO,
-                            manual_scene_id=(
-                                automatic_base_scene_id
-                                if automatic_base_scene_id is not None
-                                else output.manual_scene_id
-                            ),
-                        )
-                        for output in self._state.outputs
-                    ),
-                )
+        if set(scene_ids) != set(DELIVERY_BUSES):
+            raise SceneValidationError("Selected scenes must define every output bus")
+        for scene_id in scene_ids.values():
+            if scene_id is None and not enabled:
+                raise SceneValidationError("Manual runtime mode requires a scene")
+            if scene_id is not None:
+                self._documents.document.scene(scene_id)
+        return self._commit(
+            replace(
+                self._state,
+                outputs=tuple(
+                    replace(
+                        output,
+                        mode=OutputMode.AUTO if enabled else OutputMode.MANUAL,
+                        manual_scene_id=scene_ids[output.bus_id] or "",
+                    )
+                    for output in self._state.outputs
+                ),
             )
-        return self.take_program_scene(current_scene_id)
+        )
 
     def set_output_enabled(self, bus_id: BusId, enabled: bool) -> SceneRuntimeState:
         if not isinstance(enabled, bool):

@@ -1,5 +1,3 @@
-import pytest
-
 from PySide6.QtCore import QDateTime
 
 from solin.controllers.timer_projection_controller import (
@@ -255,11 +253,8 @@ def test_automatic_timer_rejects_a_target_that_has_already_been_reached():
     assert window.proj_bar.timers == []
 
 
-@pytest.mark.parametrize("program_content_enabled", [True, False])
-def test_timer_update_and_blink_are_broadcast_to_all_projection_windows(program_content_enabled):
+def test_timer_update_and_blink_are_broadcast_to_all_projection_windows():
     window = _WindowStub()
-    if not program_content_enabled:
-        window.program_content = None
     controller = _controller(window)
     window.projection_session.set_state({"type": "timer", "title": "Timer"})
 
@@ -274,7 +269,6 @@ def test_timer_update_and_blink_are_broadcast_to_all_projection_windows(program_
         [True],
         [True],
     ]
-    assert window.timer_blinks == ([True] if program_content_enabled else [])
     assert window.projection_session.state == {
         "type": "timer",
         "title": "Timer",

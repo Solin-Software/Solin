@@ -137,21 +137,17 @@ class CongregationLookup(QObject):
 
 
 @pytest.fixture
-def setup(request, monkeypatch):
+def setup():
     store = SettingsStore.for_namespace(f"qml_settings_{uuid4().hex}", "tests")
     language = LanguageManager()
     yeartext = YeartextService()
     congregation_lookup = CongregationLookup()
     protection = Protection()
     screens = Screens()
-    options = getattr(request, "param", {})
-    if "scenes_supported" in options:
-        monkeypatch.setattr(general_module, "NATIVE_SCENES_SUPPORTED", options["scenes_supported"])
     app_settings = ProfileAppSettingsStore(store)
-    app_settings.set_native_scenes_enabled(options.get("saved_scenes", True))
     settings = GeneralSettings(
         lang_manager=language, screen_manager=screens,
-        app_settings=app_settings, native_scenes_enabled=options.get("session_scenes", True),
+        app_settings=app_settings,
         media_settings=MediaSettingsStore(store), playback_protection=protection,
         meeting_schedule_settings=MeetingScheduleSettingsStore(store),
         watched_folder_settings=WatchedFolderSettingsStore(store),
@@ -388,38 +384,6 @@ def test_no_monitor_is_a_valid_runtime_state(setup):
     assert setup.settings.state["screens"] == []
 
 
-@pytest.mark.parametrize("setup", [
-    {"saved_scenes": False, "session_scenes": True, "scenes_supported": True},
-    {"saved_scenes": True, "session_scenes": False, "scenes_supported": True},
-], indirect=True)
-def test_scenes_changes_are_reversible_without_changing_current_session(setup):
-    settings = setup.settings
-    store = ProfileAppSettingsStore(setup.store)
-    session_value = not store.native_scenes_enabled()
-    assert settings.state["scenesRestartRequired"] is True
-
-    settings.setValue("nativeScenesEnabled", session_value)
-    assert store.native_scenes_enabled() is session_value
-    assert settings.state["nativeScenesEnabled"] is session_value
-    assert settings.state["scenesRestartRequired"] is False
-
-    settings.setValue("nativeScenesEnabled", not session_value)
-    settings.refresh_language()
-    settings.refresh_runtime()
-    assert store.native_scenes_enabled() is not session_value
-    assert settings.state["scenesRestartRequired"] is True
-
-
-@pytest.mark.parametrize("setup", [{"scenes_supported": False}], indirect=True)
-def test_unsupported_scenes_cannot_change_persisted_setting(setup):
-    before = ProfileAppSettingsStore(setup.store).native_scenes_enabled()
-    setup.settings.setValue("nativeScenesEnabled", not before)
-    setup.settings.refresh_language()
-    assert setup.settings.state["nativeScenesAvailable"] is False
-    assert ProfileAppSettingsStore(setup.store).native_scenes_enabled() is before
-    assert setup.settings.state["nativeScenesEnabled"] is before
-
-
 def test_theme_selection_and_refresh_preserve_runtime_and_unsaved_draft(setup, monkeypatch):
     settings = setup.settings
     monkeypatch.setattr(general_module, "current_theme", lambda: SimpleNamespace(id="dark"))
@@ -475,10 +439,3 @@ def test_cached_yeartext_is_published_without_network_start(setup):
     assert emissions == [("Cached text", "Reference", "T")]
     assert setup.settings.state["yeartextQuote"] == "Cached text"
     assert setup.settings.get_yearly_text() == ("Cached text", "Reference")
-
-
-def test_refresh_reads_scenes_store_changes_before_page_open(setup):
-    ProfileAppSettingsStore(setup.store).set_native_scenes_enabled(False)
-    setup.settings.refresh_runtime()
-    assert setup.settings.state["nativeScenesEnabled"] is False
-    assert setup.settings.state["scenesRestartRequired"] is True

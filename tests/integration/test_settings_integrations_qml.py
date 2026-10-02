@@ -16,7 +16,6 @@ from solin.core.integrations.automation.obs import OBSConnectionState
 from solin.core.integrations.automation.settings import (
     AutoKeySettingsStore,
     AutoShareSettingsStore,
-    CameraSettingsStore,
     OBSSettingsStore,
     ZoomSettingsStore,
 )
@@ -65,16 +64,15 @@ def setup_domain():
     zoom.set_show_participants(False)
     share = AutoShareSettingsStore(settings)
     keys = AutoKeySettingsStore(settings)
-    camera = CameraSettingsStore(settings)
     obs_service, ndi = _Obs(), _Ndi()
     domain = IntegrationSettings(
         obs_service=obs_service, ndi_service=ndi, obs_settings=obs,
-        zoom_settings=zoom, auto_share_settings=share, camera_settings=camera,
+        zoom_settings=zoom, auto_share_settings=share,
         auto_key_settings=keys, auto_share_accessibility_trusted=lambda: False,
         target_picker_factory=lambda **_kwargs: None,
     )
     yield SimpleNamespace(domain=domain, obs=obs, zoom=zoom, share=share, keys=keys,
-                          camera=camera, service=obs_service, ndi=ndi)
+                          service=obs_service, ndi=ndi)
     domain.cleanup()
     settings.clear()
 
@@ -94,6 +92,15 @@ def test_runtime_is_ready_without_instantiating_qml_and_preserves_scenes(setup_d
     assert "Incorrect password" in ctx.domain.state["obsStatus"]
     ctx.domain.refresh_language()
     assert "Incorrect password" in ctx.domain.state["obsStatus"]
+
+
+def test_integration_settings_do_not_offer_removed_camera_workflow(setup_domain):
+    ctx = setup_domain
+    assert "cameraAvailable" not in ctx.domain.state
+    assert "cameraEnabled" not in ctx.domain.state
+    ctx.domain.setValue("cameraEnabled", True)
+    assert "cameraEnabled" not in ctx.domain.state
+    assert ctx.domain.state["feedbackKind"] == "error"
 
 
 def test_obs_debounce_preserves_password_and_reconnects_once(setup_domain):
@@ -291,13 +298,14 @@ def test_platform_permissions_and_zoom_initialization_once(setup_domain, monkeyp
     monkeypatch.setattr(integrations.sys, "platform", platform)
     domain = IntegrationSettings(
         obs_service=None, ndi_service=None, obs_settings=ctx.obs,
-        zoom_settings=ctx.zoom, auto_share_settings=ctx.share, camera_settings=None,
+        zoom_settings=ctx.zoom, auto_share_settings=ctx.share,
         auto_key_settings=ctx.keys, auto_share_accessibility_trusted=lambda: False,
         target_picker_factory=lambda **_kwargs: None,
     )
     try:
         assert domain.state["zoomAvailable"] is (platform == "win32")
-        assert domain.state["cameraAvailable"] is False
+        assert "cameraAvailable" not in domain.state
+        assert "cameraEnabled" not in domain.state
         assert domain.state["accessibilityRequired"] is (platform == "darwin")
         assert domain.state["accessibilityTrusted"] is (platform != "darwin")
         assert ctx.zoom.show_participants() is (platform == "win32")

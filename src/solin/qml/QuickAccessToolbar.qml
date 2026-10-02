@@ -230,10 +230,10 @@ Item {
                 activeFocusOnTab: visible
                 Accessible.role: Accessible.Button
                 Accessible.name: bridge.scenesTooltip
-                Accessible.onPressAction: bridge.onScenesClicked()
-                Keys.onSpacePressed: bridge.onScenesClicked()
-                Keys.onReturnPressed: bridge.onScenesClicked()
-                Keys.onEnterPressed: bridge.onScenesClicked()
+                Accessible.onPressAction: bridge.onScenesClicked(false)
+                Keys.onSpacePressed: bridge.onScenesClicked(false)
+                Keys.onReturnPressed: bridge.onScenesClicked(false)
+                Keys.onEnterPressed: bridge.onScenesClicked(false)
 
                 Rectangle {
                     anchors.fill: parent; radius: 15
@@ -266,7 +266,7 @@ Item {
                     hoverEnabled: true
                     onEntered: root.beginButtonHover(scenesMA, bridge.scenesTooltip, "scenes")
                     onExited: root.endButtonHover(scenesMA)
-                    onClicked: bridge.onScenesClicked()
+                    onClicked: bridge.onScenesClicked(true)
                 }
             }
 

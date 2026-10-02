@@ -7,7 +7,7 @@ param(
 $ErrorActionPreference = "Stop"
 $ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 if ([string]::IsNullOrWhiteSpace($Distribution)) {
-    $Distribution = "Ubuntu-22.04"
+    $Distribution = "Ubuntu-24.04"
 }
 
 Write-Host "Building Solin AppImage with WSL distribution $Distribution..."
@@ -21,7 +21,10 @@ if ($SkipStandalone) {
         "bash", "scripts/package_solin_appimage.sh"
     )
 } else {
-    $WslArguments += @("bash", "scripts/package_solin_appimage.sh")
+    $WslArguments += @(
+        "xvfb-run", "--auto-servernum",
+        "bash", "scripts/package_solin_appimage.sh"
+    )
 }
 
 & wsl.exe @WslArguments

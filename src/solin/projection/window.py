@@ -23,7 +23,6 @@ from PySide6.QtGui import (
     QPainter,
     QPixmap,
 )
-from PySide6.QtMultimedia import QVideoFrame
 from PySide6.QtWidgets import (
     QGraphicsOpacityEffect,
     QStackedLayout,
@@ -234,9 +233,7 @@ class VideoDisplayWidget(QWidget):
         super().__init__(parent)
         self.setStyleSheet("background-color: black;")
 
-        # ── video state ───────────────────────────────────────────────────
-        self._video_frame: QVideoFrame | None = None
-        self._video_image: QImage | None = None
+        # ── paint state ───────────────────────────────────────────────────
         self._paint_pending: bool = False
 
         # ── image (static) state ─────────────────────────────────────────
@@ -256,16 +253,6 @@ class VideoDisplayWidget(QWidget):
 
     # ── public API ────────────────────────────────────────────────────────
 
-    def set_video_frame(self, frame: QVideoFrame) -> None:
-        """Accept a new video frame (called up to 60× per second)."""
-        if not frame.isValid():
-            return
-        self._video_frame = frame
-        self._mode = "video"
-        if not self._paint_pending:
-            self._paint_pending = True
-            self.update()
-
     def set_image(
         self,
         image: QImage,
@@ -273,8 +260,6 @@ class VideoDisplayWidget(QWidget):
         initial_transform: ImageTransform | None = None,
     ) -> None:
         """Display a static QImage (replaces any active video)."""
-        self._video_frame = None
-        self._video_image = None
         self._static_image = image
         self._mode = "image"
         self._cached_src_size = QSize()
@@ -290,8 +275,6 @@ class VideoDisplayWidget(QWidget):
 
     def clear(self) -> None:
         """Go black — clear any displayed content."""
-        self._video_frame = None
-        self._video_image = None
         self._static_image = None
         self._mode = "black"
         # Reset transform without animation
@@ -379,17 +362,9 @@ class VideoDisplayWidget(QWidget):
             return
 
         # ── Resolve image to draw ─────────────────────────────────────────
-        if self._mode == "video":
-            if self._video_frame is not None:
-                img = self._video_frame.toImage()
-                if not img.isNull():
-                    if img.format() != QImage.Format.Format_ARGB32_Premultiplied:
-                        img = img.convertToFormat(QImage.Format.Format_ARGB32_Premultiplied)
-                    self._video_image = img
-                self._video_frame = None
-            img_to_draw = self._video_image
-        else:
-            img_to_draw = self._static_image
+        # Video is composited by the libobs sidecar into the native surface; this
+        # widget only paints static images (idle screen, projected pictures).
+        img_to_draw = self._static_image
 
         if img_to_draw is None or img_to_draw.isNull():
             painter.end()
@@ -669,26 +644,6 @@ class BaseProjectionView(QWidget):
     def native_output_active(self) -> bool:
         """Whether the native renderer owns this projection surface."""
         return self._native_output_active
-
-    @Slot(QVideoFrame)
-    def update_frame(self, frame: QVideoFrame) -> None:
-        """Receive a video frame and display it."""
-        # Reject frames when we are not expecting video — this is the primary
-        # defence against residual pipeline frames arriving after clear() is
-        # called (e.g. when switching from video to audio).
-        if not self._accept_video_frames:
-            return
-        # Pass the raw QVideoFrame — VideoDisplayWidget handles throttle + conversion
-        if not frame.isValid():
-            return
-        if self._native_output_active:
-            return
-        self.display_label.set_video_frame(frame)
-
-        if not self._is_showing_media or self._fallback_media_entry_pending:
-            self._is_showing_media = True
-            self._fallback_media_entry_pending = False
-            self._start_media_fade_in()
 
     def show_image_from_url_data(
         self,

@@ -14,7 +14,13 @@ from solin.core.scenes.engine import (
     SceneEngineStatus,
 )
 from solin.core.scenes.ipc_protocol import PROTOCOL_VERSION
-from solin.core.scenes.model import BusId, TransitionKind, TransitionSpec
+from solin.core.scenes.model import (
+    DELIVERY_BUSES,
+    BusId,
+    SceneDocument,
+    TransitionKind,
+    TransitionSpec,
+)
 from solin.core.scenes.presets import SceneSeedNames, create_default_scene_document
 from solin.core.scenes.process_engine import (
     SceneEngineCommandRejectedError,
@@ -70,15 +76,21 @@ def _engine(mode: str = "normal", *arguments: str) -> SubprocessSceneEngine:
     )
 
 
-def _snapshot(sequence: int = 1) -> SceneEngineSnapshot:
-    document = _document()
+def _snapshot(
+    sequence: int = 1,
+    *,
+    document: SceneDocument | None = None,
+    enabled: bool = True,
+) -> SceneEngineSnapshot:
+    document = document or _document()
+    active_scenes = tuple((route.bus_id, route.default_scene_id) for route in document.outputs)
     return SceneEngineSnapshot(
         session_id="integration-session",
         sequence=sequence,
         document=document,
-        active_scenes=tuple((route.bus_id, route.default_scene_id) for route in document.outputs),
-        render_enabled=tuple((bus_id, True) for bus_id in BusId),
-        output_enabled=tuple((bus_id, True) for bus_id in BusId),
+        active_scenes=active_scenes + ((BusId.EDITOR, active_scenes[0][1]),),
+        render_enabled=tuple((bus_id, enabled) for bus_id in BusId),
+        output_enabled=tuple((bus_id, enabled and bus_id in DELIVERY_BUSES) for bus_id in BusId),
     )
 
 
@@ -115,9 +127,9 @@ def test_subprocess_engine_executes_the_scene_command_lifecycle() -> None:
     engine = _engine()
     recording_events: list[ProgramRecordingEvent] = []
     engine.subscribe(
-        lambda event: recording_events.append(event)
-        if isinstance(event, ProgramRecordingEvent)
-        else None
+        lambda event: (
+            recording_events.append(event) if isinstance(event, ProgramRecordingEvent) else None
+        )
     )
     capabilities = engine.start(session_id="integration-session", deadline_ms=2000).result(3)
     assert capabilities.protocol_version == PROTOCOL_VERSION
@@ -342,14 +354,7 @@ def test_rejected_hydration_does_not_advance_the_applied_document_revision() -> 
     engine = _engine("reject_hydrate")
     engine.start(session_id="integration-session", deadline_ms=2000).result(3)
     document = _document().with_revision(7)
-    snapshot = SceneEngineSnapshot(
-        session_id="integration-session",
-        sequence=1,
-        document=document,
-        active_scenes=tuple((route.bus_id, route.default_scene_id) for route in document.outputs),
-        render_enabled=tuple((bus_id, False) for bus_id in BusId),
-        output_enabled=tuple((bus_id, False) for bus_id in BusId),
-    )
+    snapshot = _snapshot(document=document, enabled=False)
 
     rejected = engine.hydrate(
         snapshot,
@@ -389,12 +394,16 @@ def test_subprocess_engine_returns_a_typed_transition_fallback() -> None:
     assert preparation.transition == TransitionSpec(TransitionKind.CUT, 0)
     assert preparation.fallback_applied
     assert preparation.fallback_reason == "transition_pipeline_unavailable"
-    assert engine.take_prepared(
-        preparation,
-        request_id="take-1",
-        sequence=3,
-        deadline_ms=1000,
-    ).result(2).applied
+    assert (
+        engine.take_prepared(
+            preparation,
+            request_id="take-1",
+            sequence=3,
+            deadline_ms=1000,
+        )
+        .result(2)
+        .applied
+    )
     engine.stop()
 
 
@@ -405,21 +414,16 @@ def test_hydrating_another_document_replaces_the_command_revision() -> None:
     newer_profile = replace(_document(), document_id="newer-profile", revision=0)
 
     for sequence, document in enumerate((older_profile, newer_profile), start=1):
-        snapshot = SceneEngineSnapshot(
-            session_id="integration-session",
-            sequence=sequence,
-            document=document,
-            active_scenes=tuple(
-                (route.bus_id, route.default_scene_id) for route in document.outputs
-            ),
-            render_enabled=tuple((bus_id, True) for bus_id in BusId),
-            output_enabled=tuple((bus_id, True) for bus_id in BusId),
+        snapshot = _snapshot(sequence, document=document)
+        assert (
+            engine.hydrate(
+                snapshot,
+                request_id=f"hydrate-profile-{sequence}",
+                deadline_ms=1000,
+            )
+            .result(2)
+            .applied
         )
-        assert engine.hydrate(
-            snapshot,
-            request_id=f"hydrate-profile-{sequence}",
-            deadline_ms=1000,
-        ).result(2).applied
 
     output = engine.set_output_enabled(
         BusId.VIRTUAL_CAMERA,

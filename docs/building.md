@@ -1,10 +1,32 @@
 # Building and platform requirements
 
-The repository supports Windows x64, Intel macOS, and Linux x86_64 build
-targets. Generated files are written under `build/` or `dist/` and must not be
-committed.
+The repository has Windows x64, Intel macOS, and Linux x86_64 build recipes.
+Generated files are written under `build/` or `dist/` and must not be committed.
 
-Install the Python dependencies before invoking a build:
+Playback and scenes use the supervised libobs sidecar. Source runs launch its
+Python module; standalone builds launch the Solin executable with
+`--scene-engine-sidecar`, before importing the GUI or opening a profile.
+Each build includes the `pylibobs` Python modules and stages the installed native
+runtime under `pylibobs/_libs/<platform>/<architecture>`, including its plugins,
+shader resources, dependencies and redistribution notices. Builds also stage
+the OBS mux helper beside Solin so recording works in read-only installations;
+Windows additionally stages the native encoder probe helpers.
+
+Builds run `scripts/package_libobs_runtime.py` before producing release artifacts.
+It validates the runtime files, adjusts private library paths on Linux/macOS and
+requires a real packaged IPC handshake, decoded image pixels through preview
+egress, media playback progress, heartbeat and clean shutdown. Runtime startup
+or missing-plugin failures fail the
+build. Linux qualification needs a graphics session; CI uses Xvfb. macOS
+qualification runs in the macOS workflow and cannot be established by Windows
+tests alone.
+
+Install the `ffprobe` and `ffmpeg` command-line tools on PATH for titles,
+durations, embedded cover art, and video thumbnails. Python dependencies alone
+do not install those executables.
+
+Install the Python dependencies before invoking a build. On Intel macOS, use the
+[macOS binding bootstrap](#macos) below. On other platforms:
 
 ```text
 python -m pip install -r requirements-dev.txt
@@ -32,11 +54,13 @@ Release for camera installation and performance qualification:
 python scripts/build_native_engine.py --configuration Release
 ```
 
-The native source belongs in this repository so Python and C++ contracts change
-atomically; generated executables and DLLs do not. A source checkout therefore
-reports the scene engine as unavailable until this command succeeds. The local
-launcher discovers the resulting configuration under `build/native/` without a
-manual copy. Use the same Python environment that runs Solin, for example:
+The C++ source and DirectShow filters remain in this repository; generated
+executables and DLLs do not. Building the C++ engine is required for the optional
+Windows backend selected with `SOLIN_SCENE_ENGINE=native`, and for the DirectShow
+filters used by the Windows virtual camera. The default libobs scene engine
+does not depend on that C++ executable. The launcher discovers the optional
+native configuration under `build/native/`. Use the same Python environment
+that runs Solin, for example:
 
 ```text
 .venv\Scripts\python scripts\build_native_engine.py --configuration Release
@@ -87,7 +111,7 @@ build\native\media-engine-gstreamer\Release\solin-virtual-camera-frame-adapter-b
 
 CTest fails the Release build if any measured P95 exceeds the budget.
 
-For process-level measurements of the complete current media route, including reproducible
+For the historical QtMultimedia-to-native media route measurements, including
 fixture generation, explicit one-second CPU buckets, and provenance requirements, see
 [Native media performance measurements](native-media-performance.md).
 
@@ -111,17 +135,53 @@ The `Build Solin macOS` workflow is the maintained delivery recipe. It runs on
 Intel macOS, builds the application with Nuitka, creates a DMG, and validates
 both packaged startup and replacement of a previous application when requested.
 
+Published `pylibobs` wheels provide the runtime on Windows, Linux and Apple Silicon
+macOS. On Intel macOS, bootstrap a local `pylibobs==0.1.2` wheel against the official
+OBS 32.1.2 Intel runtime before installing requirements:
+
+```text
+python -m pip install setuptools==80.10.2 wheel==0.46.3 cffi==2.0.0
+python scripts/build_pylibobs_macos.py --output-dir .pip-wheels
+python -m pip install --find-links .pip-wheels -r requirements-dev.txt
+python -m pip install --no-deps -e .
+```
+
+The helper verifies the downloads, target architecture and native initialization.
+It leaves other hosts unchanged. The workflow uses the local wheel during its
+binary dependency download and runs the same packaged runtime qualification.
+
 The replacement smoke test requires the URL of the previously distributed DMG.
 
 ## Linux development
 
+Ubuntu 24.04 x86_64 is the reference Linux platform for development, CI and
+AppImage builds. Ubuntu 22.04 is unsupported by this delivery recipe. The pinned
+`pylibobs==0.1.2` Linux wheel is tagged `manylinux_2_31_x86_64`, but its ELF
+version requirements reach `GLIBC_2.34`. Its native dependency set from Ubuntu
+24.04 raises the minimum further: `libsrt.so.1.5`, `librist.so.4`,
+`libx264.so.164` and `libvpl.so.2` require `GLIBC_2.38`. Ubuntu 24.04 provides
+glibc 2.39. The wheel tag alone does not establish distribution compatibility.
+
 The embedded SideView browser uses GTK 3, WebKitGTK 4.1, libsoup 3, and
-`pkg-config`. QtMultimedia may additionally require the distribution's VA-API,
-PipeWire, and GStreamer plugin packages. Automatic Zoom sharing from source
-requires `xdotool` and an X11/XWayland session.
+`pkg-config`. The libobs runtime needs the host's graphics and audio support.
+Linux virtual-camera output additionally needs a `v4l2loopback` device and the
+libobs `virtualcam_output` plugin. Automatic Zoom sharing from source requires
+`xdotool` and an X11/XWayland session.
 
 SideView and its native backend are installed from PyPI through the Python
 dependencies. No SideView binary is vendored in this repository.
+
+Install the native dependencies from the Ubuntu 24.04 archive before installing
+the Python requirements. The build script supplies the same explicit libobs
+package list used by both CI workflows; apt resolves its transitive dependencies:
+
+```bash
+mapfile -t libobs_packages < <(bash scripts/build_solin.sh --print-native-packages)
+sudo apt-get update
+sudo apt-get install --no-install-recommends "${libobs_packages[@]}" \
+    binutils build-essential curl dpkg patchelf pkg-config xdotool ffmpeg \
+    libgtk-3-dev libwebkit2gtk-4.1-dev libxcb-cursor0 libxkbcommon-x11-0 xauth xvfb
+```
 
 On a Wayland desktop, run Solin through XWayland when the embedded native view
 is needed:
@@ -132,20 +192,31 @@ QT_QPA_PLATFORM=xcb python main.py
 
 ## Linux standalone and AppImage
 
-Linux builds must run on Linux or WSL 2. The standalone build entry point is:
+Linux builds must run on Ubuntu 24.04 x86_64 or its WSL 2 distribution, with
+Python 3.13 or newer and the native dependencies above. The standalone build
+entry point is:
 
 ```text
 python -m pip install nuitka ordered-set zstandard
-bash scripts/build_solin.sh
+xvfb-run --auto-servernum bash scripts/build_solin.sh
 ```
 
 Set `SOLIN_PYTHON` only when the desired interpreter is not discoverable through
 the environment or repository-local environment.
 
+The script downloads the official `OBS-Studio-32.1.2-Ubuntu-24.04-x86_64.deb`,
+verifies SHA-256
+`a3bb1b0176604dad9e22710e057f0fdd76e8afb600e0e1914c30464ae49908e8`,
+and reuses only a verified archive in the build's dependency cache. It extracts
+the missing `usr/local/bin/obs-ffmpeg-mux` with `dpkg-deb` and passes it to runtime
+staging. This supplies the wheel's matching recording helper without installing
+the OBS application or using a third-party apt repository. The temporary
+extraction is removed when the build exits.
+
 The AppImage entry point is:
 
 ```text
-bash scripts/package_solin_appimage.sh
+xvfb-run --auto-servernum bash scripts/package_solin_appimage.sh
 ```
 
 From Windows, the WSL wrapper can run the complete build:
@@ -154,12 +225,19 @@ From Windows, the WSL wrapper can run the complete build:
 scripts\build_solin_appimage.bat
 ```
 
+The wrapper defaults to `Ubuntu-24.04` and runs full builds under Xvfb. Install
+that WSL distribution and its dependencies first; `SOLIN_WSL_DISTRO` or
+`-Distribution` selects another compatible distribution explicitly.
+
 Pass `--skip-standalone` to the wrapper when `build/linux/main.dist` is already
 current. The resulting AppImage and SHA-256 file are written to `dist/`.
 
 The AppImage packages the application and its Python/Qt dependencies while
 using the host distribution's security-maintained WebKitGTK stack. Its Zoom
-automation remains limited to X11/XWayland.
+automation remains limited to X11/XWayland. AppImage packaging does not lower
+the native glibc requirements or establish support for Ubuntu 22.04. Native
+Linux rendering, decoding and packaging qualification are gated by the Ubuntu
+24.04 workflow; Windows tests do not establish those results.
 
 ## Build workflows
 

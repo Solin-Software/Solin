@@ -67,8 +67,8 @@ class ProjectionWindowContext:
     sync_projection_integrations: Callable[[], None]
     sync_obs_scene: Callable[[bool], None]
     yearly_text: Callable[[], tuple[str, str, str]]
-    content_frame_sink: Callable[[object], None] | None
-    refresh_program_content: Callable[[], None] | None
+    content_frame_sink: Callable[[object], None]
+    refresh_program_content: Callable[[], None]
     set_projection_screen_count: Callable[[int], None]
     set_toolbar_screen_count: Callable[[int], None]
     monitor_popup: Callable[[], Any | None]
@@ -181,8 +181,7 @@ class ProjectionWindowController:
         if not self._context.program_mirror_enabled():
             for win in self.all_windows():
                 win.update_idle_image(image)
-        if self._context.content_frame_sink is not None:
-            self._context.content_frame_sink(image)
+        self._context.content_frame_sink(image)
 
     def _on_idle_visibility_changed(self, _visible: bool) -> None:
         """A surface showed/hid its idle page — re-evaluate decoder playback."""
@@ -336,8 +335,7 @@ class ProjectionWindowController:
         popup = self._context.monitor_popup()
         if popup is not None:
             popup._sync_idle_ui(path)
-        if self._context.refresh_program_content is not None:
-            self._context.refresh_program_content()
+        self._context.refresh_program_content()
 
     def on_floating_toggle(self, make_active: bool) -> None:
         if make_active:

@@ -17,8 +17,10 @@ It brings the operational parts of a meeting into one desktop workflow:
 Solin requires Python 3.13 or newer. Use an isolated Python environment when
 possible, with whichever environment manager is appropriate for the platform.
 
-Install the locked development environment and the application in editable
-mode:
+On Intel macOS, first follow the
+[macOS binding bootstrap](docs/building.md#macos), which builds the required local
+libobs wheel before installing dependencies. On other platforms, install the
+locked development environment and the application in editable mode:
 
 ```text
 python -m pip install -r requirements-dev.txt
@@ -32,8 +34,11 @@ launcher:
 python main.py
 ```
 
-Linux needs additional native libraries for QtMultimedia and the embedded
-SideView browser. See [Building and platform requirements](docs/building.md).
+Playback and scenes use a supervised libobs sidecar through `pylibobs`.
+Install `ffprobe` and `ffmpeg` on PATH for metadata, cover art, and thumbnails.
+Linux also needs native libraries for the embedded SideView browser. See
+[Building and platform requirements](docs/building.md) for platform support and
+standalone runtime qualification.
 
 ## Quality checks
 

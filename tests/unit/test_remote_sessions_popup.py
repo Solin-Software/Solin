@@ -63,13 +63,13 @@ def test_quick_toolbar_bridge_exposes_remote_state_without_secret_material() -> 
 def test_quick_toolbar_bridge_exposes_solin_scenes_independently_from_obs() -> None:
     bridge = QuickToolbarBridge()
     clicks: list[bool] = []
-    bridge.scenesClicked.connect(lambda: clicks.append(True))
+    bridge.scenesClicked.connect(lambda pointer: clicks.append(pointer))
 
     bridge.set_scenes_visible(True)
     bridge.set_scenes_icon_color("#388bfd")
     bridge.set_scenes_recording(True)
     bridge.set_scenes_tooltip("Solin scenes · engine ready")
-    bridge.onScenesClicked()
+    bridge.onScenesClicked(True)
 
     assert bridge.scenesVisible is True
     assert bridge.scenesIconColor == "388bfd"

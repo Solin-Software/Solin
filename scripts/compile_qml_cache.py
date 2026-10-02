@@ -38,15 +38,12 @@ DEFAULT_QT_QML_MODULES = [
     "QtQuick/Effects",
     "QtQuick/Layouts",
     "QtQuick/Templates",
-    "QtMultimedia",
 ]
 MACOS_QT_RUNTIME_FRAMEWORKS = [
     "QtCore.framework",
     "QtDBus.framework",
     "QtGui.framework",
     "QtNetwork.framework",
-    "QtMultimedia.framework",
-    "QtMultimediaQuick.framework",
     "QtOpenGL.framework",
     "QtQml.framework",
     "QtQmlMeta.framework",

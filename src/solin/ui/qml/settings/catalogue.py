@@ -116,12 +116,9 @@ SECTIONS = (
             Setting("yeartextReference", QT_TRANSLATE_NOOP("SettingsWidget", "Bible reference:"), "input"),
             Setting("yeartextDirty", QT_TRANSLATE_NOOP("SettingsWidget", "Save changes"), "action", action="saveYeartext", secondary_action="cancelYeartext", secondary_label=QT_TRANSLATE_NOOP("SettingsWidget", "Cancel"), enabled_when="yeartextDirty"),
         )),
-        Group("scenes", QT_TRANSLATE_NOOP("SettingsWidget", "Scenes"), "general", (
-            Setting("nativeScenesEnabled", QT_TRANSLATE_NOOP("SettingsWidget", "Native scenes engine"), description=QT_TRANSLATE_NOOP("SettingsWidget", "Restart Solin to apply this change.")),
-        ), visible_when="nativeScenesAvailable"),
     )),
     Section("integrations", QT_TRANSLATE_NOOP("SettingsWidget", "Integrations"),
-            QT_TRANSLATE_NOOP("SettingsWidget", "OBS, Zoom and camera"), "integrations", (
+            QT_TRANSLATE_NOOP("SettingsWidget", "OBS Studio · Zoom Meetings"), "integrations", (
         Group("obs", QT_TRANSLATE_NOOP("SettingsWidget", "OBS Studio"), "integrations", (
             Setting("obsEnabled", QT_TRANSLATE_NOOP("SettingsWidget", "OBS Studio"), description=QT_TRANSLATE_NOOP("SettingsWidget", "Automatically switches scenes during projection")),
             Setting("obsPort", QT_TRANSLATE_NOOP("SettingsWidget", "WebSocket Port"), "input", enabled_when="obsEnabled"),
@@ -138,9 +135,6 @@ SECTIONS = (
         Group("zoom", QT_TRANSLATE_NOOP("SettingsWidget", "Zoom Meetings"), "integrations", (
             Setting("zoomEnabled", QT_TRANSLATE_NOOP("SettingsWidget", "Zoom Meetings"), description=QT_TRANSLATE_NOOP("SettingsWidget", "Audio controls and attendance count during meetings.")),
         ), True, visible_when="zoomAvailable"),
-        Group("camera", QT_TRANSLATE_NOOP("SettingsWidget", "Camera"), "integrations", (
-            Setting("cameraEnabled", QT_TRANSLATE_NOOP("SettingsWidget", "Camera"), description=QT_TRANSLATE_NOOP("SettingsWidget", "Shows a camera button in the live tools toolbar.")),
-        ), visible_when="cameraAvailable"),
     )),
     Section("automations", QT_TRANSLATE_NOOP("SettingsWidget", "Automations"),
             QT_TRANSLATE_NOOP("SettingsWidget", "Sharing and shortcuts"), "automations", (

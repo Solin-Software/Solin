@@ -34,13 +34,34 @@ from solin.core.profiles.application import ProfileRegistryLoadError
 from solin.bootstrap.startup_timeline import startup_timeline
 
 
-def _native_scenes_enabled(app_settings) -> bool:
-    return NATIVE_SCENES_SUPPORTED and app_settings.native_scenes_enabled()
+def _bind_source_credential_resolver(scene_engine, credentials) -> None:
+    """Let the engine turn a stored credential reference into a login."""
+    binder = getattr(scene_engine, "set_credential_resolver", None)
+    if not callable(binder):
+        return
+
+    def resolve(reference: str):
+        resolved = credentials.resolve(reference)
+        if resolved is None:
+            return None
+        return resolved.username, resolved.password
+
+    binder(resolve)
 
 
-def _build_main_window_profile_settings(
-    profile_settings, *, app_settings, native_scenes_enabled: bool
-):
+def _scenes_engine_available() -> bool:
+    """True when a scene engine owns the cameras — native (Windows) or libobs.
+
+    When it does, the legacy Qt camera stack must stay off: a V4L2 device opens
+    once, so a second QCamera consumer racing libobs' ``v4l2_input`` triggers
+    "Camera is in use". Only build the legacy camera when nothing else drives it.
+    """
+    from solin.core.scenes.libobs_engine import libobs_scene_engine_selected
+
+    return NATIVE_SCENES_SUPPORTED or libobs_scene_engine_selected()
+
+
+def _build_main_window_profile_settings(profile_settings):
     from solin.controllers.main_window_profile_settings import MainWindowProfileSettings
     from solin.core.ingest.watched_folder_settings import WatchedFolderSettingsStore
     from solin.core.integrations.automation.settings import (
@@ -69,7 +90,7 @@ def _build_main_window_profile_settings(
     from solin.core.windowing.settings import WindowGeometrySettingsStore
 
     return MainWindowProfileSettings(
-        app=app_settings,
+        app=profile_settings.app_settings(),
         media=MediaSettingsStore.for_profile_settings(profile_settings),
         browser=BrowserSettingsStore.for_profile_settings(profile_settings),
         obs=OBSSettingsStore.for_profile_settings(profile_settings),
@@ -78,7 +99,7 @@ def _build_main_window_profile_settings(
         auto_key=AutoKeySettingsStore.for_profile_settings(profile_settings),
         camera=(
             CameraSettingsStore.for_profile_settings(profile_settings)
-            if not native_scenes_enabled
+            if not _scenes_engine_available()
             else None
         ),
         projection_playback=ProjectionPlaybackSettingsStore.for_profile_settings(profile_settings),
@@ -91,9 +112,9 @@ def _build_main_window_profile_settings(
         window_geometry=WindowGeometrySettingsStore.for_profile_settings(profile_settings),
         notification=NotificationSettingsStore.for_profile_settings(profile_settings),
         talk_theme=TalkThemeSettingsStore.for_profile_settings(profile_settings),
-        remote_control=RemoteControlSettingsStore.create(app_settings),
+        remote_control=RemoteControlSettingsStore.create(profile_settings.app_settings()),
         remote_control_credentials=RemoteControlCredentialsStore.create(
-            app_settings
+            profile_settings.app_settings()
         ),
     )
 
@@ -131,6 +152,9 @@ def _scene_seed_names():
         content_layer=translate("Content"),
         camera_layer=translate("Camera"),
         background_layer=translate("Background"),
+        yeartext_source=translate("Year text"),
+        default_scene=translate("Default"),
+        yeartext_layer=translate("Year text"),
     )
 
 
@@ -152,9 +176,7 @@ def _import_main_window_class():
     return MainWindow
 
 
-def _prepare_profile_main_window(
-    profile_paths, cancellation=None, *, native_scenes_enabled: bool
-):
+def _prepare_profile_main_window(profile_paths, cancellation=None):
     """Prepare code and fail-closed housekeeping before profile UI is mutable."""
 
     main_window_class = _import_main_window_class()
@@ -185,9 +207,8 @@ def _prepare_profile_main_window(
     # async-load error boundary so the UI cannot mutate unsupported/corrupt data.
     playlist_repository.migrate_strict()
     meeting_tree_store.migrate_strict()
-    if native_scenes_enabled:
-        scene_workspace = _build_scene_workspace(profile_paths)
-        scene_workspace.close()
+    scene_workspace = _build_scene_workspace(profile_paths)
+    scene_workspace.close()
 
     try:
         maintenance = ProfileMaintenanceService(
@@ -244,11 +265,9 @@ def _build_main_window_service_factories(
 
     install_id_provider = lambda: get_install_id(installation_settings)
 
+    # The legacy Qt (QtMultimedia) camera has been removed; the libobs sidecar
+    # owns camera capture/discovery, so no app-side camera service is created.
     camera_factory = None
-    if profile_settings.camera is not None:
-        from solin.core.integrations.camera import CameraService
-
-        camera_factory = CameraService
 
     def create_remote_services(parent):
         from typing import cast
@@ -353,7 +372,6 @@ def _build_main_window_runtime(
     *,
     talk_theme_output_settings,
     window_host,
-    native_scenes_enabled: bool,
     main_window_class=None,
 ):
     """Build application content for an already visible native window host."""
@@ -382,6 +400,10 @@ def _build_main_window_runtime(
         PlaylistStoragePaths,
     )
     from solin.core.foundation.resource_lanes import ResourceLaneRegistry
+    from solin.core.scenes.libobs_engine import (
+        create_libobs_scene_engine,
+        libobs_scene_engine_selected,
+    )
     from solin.core.scenes.native_engine import create_native_scene_engine
     from solin.core.scenes.ptz_runtime import create_ptz_runtime_services
 
@@ -444,25 +466,23 @@ def _build_main_window_runtime(
     )
     watched_folder_file_store = WatchedFolderFileStore()
     watched_folder_playlist_store = WatchedFolderPlaylistStore()
-    app_settings = profile_settings.app_settings()
-    main_window_profile_settings = _build_main_window_profile_settings(
-        profile_settings,
-        app_settings=app_settings,
-        native_scenes_enabled=native_scenes_enabled,
-    )
-    scene_workspace = (
-        _build_scene_workspace(profile_paths) if native_scenes_enabled else None
-    )
-    scene_engine = (
-        create_native_scene_engine(runtime_paths.cache_dir)
-        if native_scenes_enabled
-        else None
-    )
-    ptz_services = (
-        create_ptz_runtime_services(active_profile.id) if native_scenes_enabled else None
-    )
-    if ptz_services is not None and scene_workspace is not None:
-        scene_workspace.set_credential_cleaner(ptz_services.credentials.delete)
+    main_window_profile_settings = _build_main_window_profile_settings(profile_settings)
+    scene_workspace = _build_scene_workspace(profile_paths)
+    # libobs is the default engine on this branch and runs on any platform;
+    # SOLIN_SCENE_ENGINE only opts back out to the native engine where supported.
+    if libobs_scene_engine_selected():
+        scene_engine = create_libobs_scene_engine(profile_paths.images_dir)
+    elif NATIVE_SCENES_SUPPORTED:
+        scene_engine = create_native_scene_engine(runtime_paths.cache_dir)
+    else:
+        scene_engine = None
+    ptz_services = create_ptz_runtime_services(active_profile.id)
+    scene_workspace.set_credential_cleaner(ptz_services.credentials.delete)
+    if scene_engine is not None:
+        # A camera's stream login lives in the keyring, not in the scene document.
+        # The engine client resolves it per hydrate and sends it beside the
+        # document, so the secret never reaches disk or the graph-signature cache.
+        _bind_source_credential_resolver(scene_engine, ptz_services.credentials)
     meeting_linked_folder_sync = MeetingLinkedFolderSync(
         _meeting_weekday_resolver(main_window_profile_settings.meeting_schedule)
     )
@@ -524,15 +544,13 @@ def _build_main_window_runtime(
             talk_theme_output_settings=talk_theme_output_settings,
             scene_workspace=scene_workspace,
             scene_engine=scene_engine,
-            ptz_executor=ptz_services.executor if ptz_services is not None else None,
-            ptz_credentials=ptz_services.credentials if ptz_services is not None else None,
+            ptz_executor=ptz_services.executor,
+            ptz_credentials=ptz_services.credentials,
             window_host=window_host,
         )
     except Exception:  # noqa: BLE001 - transactional startup rollback boundary
-        if ptz_services is not None:
-            ptz_services.executor.close()
-        if scene_workspace is not None:
-            scene_workspace.close()
+        ptz_services.executor.close()
+        scene_workspace.close()
         window_host.abort_runtime_construction()
         for controller in (media_controller, background_media_controller):
             stop = getattr(controller, "stop", None)
@@ -607,10 +625,7 @@ def _launch_profile_window(
         raise RuntimeError(f"Profile disappeared during startup: {profile_id}")
 
     lang_manager.activate_profile(profile_context.settings)
-    app_settings = profile_context.settings.app_settings()
-    # Snapshot before asynchronous preparation; Settings only changes the next launch.
-    native_scenes_enabled = _native_scenes_enabled(app_settings)
-    theme = activate_theme(app_settings.app_theme_id())
+    theme = activate_theme(profile_context.settings.app_settings().app_theme_id())
     apply_application_palette(container.app, theme)
     container.app.setStyleSheet(app_stylesheet(theme))
     startup_timeline().mark("profile_ready")
@@ -654,7 +669,6 @@ def _launch_profile_window(
             active_profile,
             talk_theme_output_settings=container.talk_theme_output_settings,
             window_host=window,
-            native_scenes_enabled=native_scenes_enabled,
             main_window_class=main_window_class,
         )
         window.install_runtime(runtime)
@@ -690,7 +704,6 @@ def _launch_profile_window(
             lambda: _prepare_profile_main_window(
                 profile_context.paths,
                 startup_cancellation,
-                native_scenes_enabled=native_scenes_enabled,
             ),
             install_main_window,
             window,

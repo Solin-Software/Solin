@@ -124,7 +124,7 @@ template <typename Callback> void expect_rejected(Callback&& callback, const cha
     return {
         {"document",
          {
-             {"schema_version", 9U},
+             {"schema_version", 10U},
              {"document_id", "document-1"},
              {"revision", 7U},
              {"sources", std::move(sources)},
@@ -154,6 +154,18 @@ void test_valid_snapshot_is_normalized_into_typed_graph_state() {
     expect(local.device_id == "camera://stable-id", "stable camera identity is retained");
     expect(local.fps_numerator == 30'000U && local.fps_denominator == 1'001U,
            "exact rational camera rate is retained");
+}
+
+void test_unsupported_schema_versions_are_rejected() {
+    for (const auto version : {9U, 11U}) {
+        auto payload = valid_payload();
+        payload["document"]["schema_version"] = version;
+        expect_rejected(
+            [&payload] {
+                static_cast<void>(solin::media_engine::parse_scene_hydration_snapshot(payload, 7U));
+            },
+            "older and future scene schemas are rejected at the native boundary");
+    }
 }
 
 void test_program_default_role_may_be_unassigned() {
@@ -368,6 +380,7 @@ void test_local_camera_rejects_invalid_native_frame_rates() {
 
 int main() {
     test_valid_snapshot_is_normalized_into_typed_graph_state();
+    test_unsupported_schema_versions_are_rejected();
     test_program_default_role_may_be_unassigned();
     test_unknown_nested_fields_are_rejected();
     test_unicode_names_use_character_limits_instead_of_wire_byte_limits();

@@ -2,7 +2,9 @@
 
 ## Before starting
 
-Use Python 3.13 or newer and install the locked development dependencies:
+Use Python 3.13 or newer. On Intel macOS, first follow the
+[macOS binding bootstrap](docs/building.md#macos) before installing dependencies.
+On other platforms, install the locked development dependencies:
 
 ```text
 python -m pip install -r requirements-dev.txt

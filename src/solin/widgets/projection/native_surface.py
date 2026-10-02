@@ -5,7 +5,7 @@ import logging
 import sys
 import weakref
 
-from PySide6.QtCore import QPointF, Qt, QTimer
+from PySide6.QtCore import QPointF, Qt, QTimer, Signal
 from PySide6.QtGui import QMouseEvent
 from PySide6.QtWidgets import QApplication, QWidget
 
@@ -141,8 +141,23 @@ class _NativeVideoInputOverlay(QWidget):
 class NativeVideoSurface(QWidget):
     """Stable native host for a platform video presenter."""
 
+    #: Emitted after this surface's size or position on screen changes.
+    #:
+    #: The engine renders into this window through an ``obs_display`` sized when the
+    #: window target was last sent. Nothing re-sends that target on its own, so without
+    #: this signal a resized surface keeps an ``obs_display`` at the old dimensions and
+    #: the letterboxed image is stretched into the new shape. Coalesced, because a
+    #: window drag emits a resize per frame.
+    geometry_changed = Signal()
+
+    _GEOMETRY_SETTLE_MS = 50
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self._geometry_timer = QTimer(self)
+        self._geometry_timer.setSingleShot(True)
+        self._geometry_timer.setInterval(self._GEOMETRY_SETTLE_MS)
+        self._geometry_timer.timeout.connect(self.geometry_changed)
         self.setAttribute(Qt.WidgetAttribute.WA_NativeWindow, True)
         self.setAttribute(Qt.WidgetAttribute.WA_DontCreateNativeAncestors, True)
         self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
@@ -174,14 +189,25 @@ class NativeVideoSurface(QWidget):
         if self._input_overlay is not None:
             self._input_overlay.setCursor(cursor)
 
+    def _schedule_geometry_changed(self) -> None:
+        self._geometry_timer.start()
+
     def resizeEvent(self, event) -> None:  # type: ignore[override]
         super().resizeEvent(event)
         if self._input_overlay is not None:
             self._input_overlay.setGeometry(self.rect())
             self._input_overlay.raise_()
+        self._schedule_geometry_changed()
+
+    def moveEvent(self, event) -> None:  # type: ignore[override]
+        # The target carries x/y as well, and moving between screens can change the
+        # device pixel ratio, so a move must refresh the target too.
+        super().moveEvent(event)
+        self._schedule_geometry_changed()
 
     def showEvent(self, event) -> None:  # type: ignore[override]
         super().showEvent(event)
         if self._input_overlay is not None:
             self._input_overlay.setGeometry(self.rect())
             self._input_overlay.raise_()
+        self._schedule_geometry_changed()

@@ -32,6 +32,7 @@ from solin.core.scenes.presets import (
     CONTENT_SCENE_ID,
     SceneSeedNames,
     create_fresh_scene_collection_document,
+    ensure_default_scene,
 )
 from solin.core.scenes.repository import (
     SceneCollectionCatalogRepository,
@@ -383,7 +384,7 @@ class SceneWorkspaceService:
         if collection_id == self._catalog.active_collection_id:
             raise SceneWorkspaceOperationError("Scene profile is already active")
         repository = self._document_repository(collection_id)
-        document = self._materialize_resources(self._load_recovering(repository))
+        document = self._load_document_for_use(repository)
         documents = SceneDocumentService(document, store=repository)
         base_runtime = create_default_runtime_state(document)
         runtime_state = self._preserved_runtime_state(
@@ -581,8 +582,8 @@ class SceneWorkspaceService:
         )
         credential_refs = tuple(
             reference
-            for reference in (self._camera_credential_ref(camera) for camera in removed)
-            if reference
+            for camera in removed
+            for reference in self._camera_credential_refs(camera)
         )
         pending_credentials = tuple(
             dict.fromkeys(
@@ -749,7 +750,7 @@ class SceneWorkspaceService:
         SceneRuntimePersistenceQueue,
     ]:
         repository = self._document_repository(collection_id)
-        document = self._materialize_resources(self._load_recovering(repository))
+        document = self._load_document_for_use(repository)
         documents = SceneDocumentService(document, store=repository)
         runtime_state = self._runtime_repository.load_or_create(document)
         if previous_runtime is not None:
@@ -771,6 +772,21 @@ class SceneWorkspaceService:
             documents,
             SceneRuntimeService(documents, runtime_state, store=persistence),
             persistence,
+        )
+
+    def _load_document_for_use(
+        self,
+        repository: SceneDocumentRepository | SceneCollectionDocumentRepository,
+    ) -> SceneDocument:
+        """Load a collection document ready to drive a live SceneDocumentService.
+
+        Materializes the shared camera resources, then self-heals collections
+        saved before the year-text-as-a-scene feature by adding the Default (year
+        text) scene as the idle default when it is missing.
+        """
+        return ensure_default_scene(
+            self._materialize_resources(self._load_recovering(repository)),
+            self._seed_names,
         )
 
     def _materialize_resources(self, document: SceneDocument) -> SceneDocument:
@@ -958,13 +974,24 @@ class SceneWorkspaceService:
             log.exception("Could not collect orphaned shared scene cameras")
 
     @staticmethod
-    def _camera_credential_ref(camera: SourceDefinition) -> str:
+    def _camera_credential_refs(camera: SourceDefinition) -> tuple[str, ...]:
+        """Every vault entry this camera owns, so deleting it strands nothing.
+
+        A camera can hold two independent logins: the PTZ account on its binding
+        and the stream account on the source itself. They are routinely different,
+        and harvesting only the first left the other in the keyring forever with
+        nothing left to reference it.
+        """
+        references: list[str] = []
+        stream_ref = camera.credential_ref
+        if isinstance(stream_ref, str) and stream_ref:
+            references.append(stream_ref)
         configuration = camera.configuration
-        if not isinstance(configuration, (LocalCameraConfig, RtspCameraConfig)):
-            return ""
-        binding = configuration.ptz_binding
-        credential_ref = getattr(binding, "credential_ref", "")
-        return credential_ref if isinstance(credential_ref, str) else ""
+        if isinstance(configuration, (LocalCameraConfig, RtspCameraConfig)):
+            ptz_ref = getattr(configuration.ptz_binding, "credential_ref", "")
+            if isinstance(ptz_ref, str) and ptz_ref:
+                references.append(ptz_ref)
+        return tuple(references)
 
     def _publish(self, kind: SceneWorkspaceChangeKind) -> None:
         change = SceneWorkspaceChange(

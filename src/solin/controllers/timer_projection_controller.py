@@ -32,7 +32,7 @@ class TimerProjectionContext:
     ndi_service: Any
     projection_windows: Callable[[], list[Any]]
     playback_protection: Any
-    program_content: Any | None
+    program_content: Any
     camera_service: Any | None = None
 
 
@@ -130,8 +130,7 @@ class TimerProjectionController:
             projection_window.update_timer(remaining, total)
 
     def on_timer_blink_proj(self, on: bool) -> None:
-        if self._context.program_content is not None:
-            self._context.program_content.set_timer_blink(on)
+        self._context.program_content.set_timer_blink(on)
         for projection_window in self._context.projection_windows():
             projection_window.set_timer_blink(on)
 

@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import random
+import re
 import subprocess
 import sys
 import threading
@@ -26,6 +27,7 @@ from solin.core.scenes.engine import (
     LocalCameraProbe,
     LocalCameraProbeStatus,
     LocalVideoFormat,
+    MediaPlaybackEvent,
     OutputWindowTarget,
     SceneEngineAck,
     SceneEngineCapabilities,
@@ -39,6 +41,12 @@ from solin.core.scenes.engine import (
     SourceHealthEvent,
     SourceHealthStatus,
     scene_engine_document_record,
+)
+from solin.core.scenes.media_control import (
+    MAXIMUM_MEDIA_PATH_LENGTH,
+    MediaControlAction,
+    MediaPlaybackNativeState,
+    MediaPlaybackState,
 )
 from solin.core.scenes.recording import (
     MAXIMUM_AUDIO_DEVICES,
@@ -138,8 +146,32 @@ _PROGRAM_RECORDING_STATE_FIELDS = frozenset(
         "frame_feed_p95_ns",
     }
 )
+_MEDIA_PLAYBACK_STATE_FIELDS = frozenset(
+    {"state", "position_ms", "duration_ms", "path", "error_code", "slot"}
+)
 _T = TypeVar("_T")
 log = logging.getLogger(__name__)
+
+# The sidecar's stdout is dup2'd onto its stderr, so every line libobs and its
+# plugins print is re-emitted into Solin's rotating log — the log users attach to
+# bug reports. Camera and media URLs routinely carry credentials: ffmpeg_source
+# dumps its `input` setting on update, media-playback prints the whole URL when a
+# stream fails to open, and some camera firmware wants the login inside the path.
+# Redact before any of it is written, so this covers plugins Solin does not own.
+_USERINFO_IN_URL = re.compile(r"(?P<scheme>\b[a-z][a-z0-9+.-]*://)[^/\s@]*:[^/\s@]*@")
+# No leading \b: camera firmware writes the login inside the path as
+# "user=admin_password=hunter2", where the character before "password" is an
+# underscore — a word character, so a boundary never matches there.
+_SECRET_ASSIGNMENT = re.compile(
+    r"(?i)(password|passwd|pwd|secret|token|auth)=[^\s&'\"]+"
+)
+
+
+def redact_secrets(message: str) -> str:
+    """Mask credentials in a line before it reaches the log file."""
+    redacted = _USERINFO_IN_URL.sub(lambda m: m.group("scheme") + "***@", message)
+    return _SECRET_ASSIGNMENT.sub(lambda m: m.group(1) + "=***", redacted)
+
 
 
 class SceneEngineProcessError(RuntimeError):
@@ -341,6 +373,8 @@ class SubprocessSceneEngine:
         self._request_count = 0
         self._timeout_count = 0
         self._rejected_count = 0
+        # Resolves a source credential reference to a login at hydrate time.
+        self._credential_resolver: Callable[[str], tuple[str, str] | None] | None = None
         self._protocol_error_count = 0
         self._process: subprocess.Popen[bytes] | None = None
         self._supervisor: threading.Thread | None = None
@@ -445,6 +479,39 @@ class SubprocessSceneEngine:
             self._supervisor.start()
             return future
 
+    def set_credential_resolver(
+        self,
+        resolver: Callable[[str], tuple[str, str] | None] | None,
+    ) -> None:
+        """Supply the reader that turns a credential reference into a login.
+
+        The engine client resolves references itself so the secret never enters the
+        document record — that record is persisted to disk and kept in a long-lived
+        graph-signature cache. Resolved values travel only on the sidecar's
+        anonymous stdin pipe, and only for as long as a hydrate takes.
+        """
+        self._credential_resolver = resolver
+
+    def _source_credentials_record(self, document: object) -> dict[str, object]:
+        resolver = self._credential_resolver
+        if resolver is None:
+            return {}
+        record: dict[str, object] = {}
+        for source in getattr(document, "sources", ()) or ():
+            reference = getattr(source, "credential_ref", "")
+            if not reference:
+                continue
+            try:
+                resolved = resolver(reference)
+            except Exception:  # noqa: BLE001 - a vault failure must not block hydrate
+                log.warning("Could not resolve a source credential", exc_info=True)
+                continue
+            if not resolved:
+                continue
+            username, password = resolved
+            record[source.id] = {"username": username, "password": password}
+        return record
+
     def hydrate(
         self,
         snapshot: SceneEngineSnapshot,
@@ -472,6 +539,9 @@ class SubprocessSceneEngine:
                 _window_target_record(target) for target in snapshot.window_targets
             ],
         }
+        credentials = self._source_credentials_record(snapshot.document)
+        if credentials:
+            payload["source_credentials"] = credentials
         return self._request(
             message_type="hydrate",
             expected_message_type="ack",
@@ -608,6 +678,9 @@ class SubprocessSceneEngine:
             payload={"cancelled_request_id": request_id},
         )
 
+    def reload_yeartext(self) -> None:
+        self._notify(message_type="reload_yeartext", payload={})
+
     def preview_layer_geometry(
         self,
         bus_id: BusId,
@@ -691,6 +764,41 @@ class SubprocessSceneEngine:
             document_revision=document_revision,
             deadline_ms=deadline_ms,
             payload={"bus_id": bus_id.value, "enabled": enabled},
+            converter=_ack_from_envelope,
+        )
+
+    def set_thumbnail_egress(
+        self,
+        descriptor: FrameChannelDescriptor | None,
+        scene_ids: tuple[str, ...],
+        cell_width: int,
+        cell_height: int,
+        *,
+        request_id: str,
+        sequence: int,
+        deadline_ms: int,
+    ) -> Future[SceneEngineAck]:
+        if descriptor is not None and not isinstance(descriptor, FrameChannelDescriptor):
+            return _failed_future(TypeError("Invalid thumbnail egress descriptor"))
+        if not isinstance(scene_ids, tuple) or not all(
+            isinstance(scene_id, str) and scene_id for scene_id in scene_ids
+        ):
+            return _failed_future(TypeError("Invalid thumbnail scene ids"))
+        with self._lock:
+            document_revision = self._document_revision
+        return self._request(
+            message_type="set_thumbnail_egress",
+            expected_message_type="ack",
+            request_id=request_id,
+            sequence=sequence,
+            document_revision=document_revision,
+            deadline_ms=deadline_ms,
+            payload={
+                "thumbnail_egress": _frame_channel_record(descriptor),
+                "scene_ids": list(scene_ids),
+                "cell_width": int(cell_width),
+                "cell_height": int(cell_height),
+            },
             converter=_ack_from_envelope,
         )
 
@@ -803,6 +911,98 @@ class SubprocessSceneEngine:
             document_revision=document_revision,
             deadline_ms=deadline_ms,
             payload={},
+            converter=_ack_from_envelope,
+        )
+
+    def open_media(
+        self,
+        path: str,
+        *,
+        is_local_file: bool,
+        autoplay: bool = True,
+        volume_percent: int = 100,
+        speed_percent: int = 100,
+        trim_start_ms: int = 0,
+        trim_end_ms: int = 0,
+        slot: int = 0,
+        request_id: str,
+        deadline_ms: int,
+    ) -> Future[SceneEngineAck]:
+        if not isinstance(path, str) or not path:
+            return _failed_future(ValueError("Media path is required"))
+        with self._lock:
+            document_revision = self._document_revision
+        return self._request(
+            message_type="open_media",
+            expected_message_type="ack",
+            request_id=request_id,
+            sequence=0,
+            document_revision=document_revision,
+            deadline_ms=deadline_ms,
+            payload={
+                "path": path,
+                "is_local_file": bool(is_local_file),
+                "autoplay": bool(autoplay),
+                "volume_percent": int(volume_percent),
+                "speed_percent": int(speed_percent),
+                "trim_start_ms": int(trim_start_ms),
+                "trim_end_ms": int(trim_end_ms),
+                "slot": int(slot),
+            },
+            converter=_ack_from_envelope,
+        )
+
+    def control_media(
+        self,
+        action: MediaControlAction,
+        *,
+        position_ms: int = 0,
+        slot: int = 0,
+        request_id: str,
+        deadline_ms: int,
+    ) -> Future[SceneEngineAck]:
+        if not isinstance(action, MediaControlAction):
+            return _failed_future(TypeError("Invalid media control action"))
+        with self._lock:
+            document_revision = self._document_revision
+        return self._request(
+            message_type="control_media",
+            expected_message_type="ack",
+            request_id=request_id,
+            sequence=0,
+            document_revision=document_revision,
+            deadline_ms=deadline_ms,
+            payload={
+                "action": action.value,
+                "position_ms": int(position_ms),
+                "slot": int(slot),
+            },
+            converter=_ack_from_envelope,
+        )
+
+    def set_media_properties(
+        self,
+        *,
+        volume_percent: int,
+        speed_percent: int,
+        slot: int = 0,
+        request_id: str,
+        deadline_ms: int,
+    ) -> Future[SceneEngineAck]:
+        with self._lock:
+            document_revision = self._document_revision
+        return self._request(
+            message_type="set_media_properties",
+            expected_message_type="ack",
+            request_id=request_id,
+            sequence=0,
+            document_revision=document_revision,
+            deadline_ms=deadline_ms,
+            payload={
+                "volume_percent": int(volume_percent),
+                "speed_percent": int(speed_percent),
+                "slot": int(slot),
+            },
             converter=_ack_from_envelope,
         )
 
@@ -1039,7 +1239,7 @@ class SubprocessSceneEngine:
             while raw_line := stream.readline(8192):
                 message = raw_line.decode("utf-8", errors="replace").strip()
                 if message:
-                    log.warning("Native scene engine: %s", message)
+                    log.warning("Native scene engine: %s", redact_secrets(message))
         except OSError:
             pass
 
@@ -1052,7 +1252,11 @@ class SubprocessSceneEngine:
             ):
                 return
             self._last_received_monotonic = self._monotonic()
-            if envelope.message_type in {"source_health", "program_recording_state"}:
+            if envelope.message_type in {
+                "source_health",
+                "program_recording_state",
+                "media_playback_state",
+            }:
                 pending = None
             else:
                 pending = self._pending.pop(envelope.request_id, None)
@@ -1061,6 +1265,9 @@ class SubprocessSceneEngine:
             return
         if envelope.message_type == "program_recording_state":
             self._emit_event(_program_recording_event_from_envelope(envelope))
+            return
+        if envelope.message_type == "media_playback_state":
+            self._emit_event(_media_playback_event_from_envelope(envelope))
             return
         if pending is None:
             return
@@ -1809,6 +2016,33 @@ def _program_recording_event_from_envelope(
     )
 
 
+def _media_playback_event_from_envelope(
+    envelope: SceneIpcEnvelope,
+) -> MediaPlaybackEvent:
+    payload = require_payload_fields(
+        envelope.payload,
+        _MEDIA_PLAYBACK_STATE_FIELDS,
+        message_type="Media playback state",
+    )
+    raw_state = require_non_negative_int(payload["state"], "Media playback state")
+    try:
+        state = MediaPlaybackState(raw_state)
+    except ValueError as exc:
+        raise SceneIpcMessageError("Invalid media playback state") from exc
+    slot = payload.get("slot", 0)
+    slot = int(slot) if isinstance(slot, int) and not isinstance(slot, bool) else 0
+    return MediaPlaybackEvent(
+        MediaPlaybackNativeState(
+            state=state,
+            position_ms=require_non_negative_int(payload["position_ms"], "Media position"),
+            duration_ms=require_non_negative_int(payload["duration_ms"], "Media duration"),
+            path=require_text(payload["path"], "Media path", maximum=MAXIMUM_MEDIA_PATH_LENGTH),
+            error_code=require_text(payload["error_code"], "Media error code", maximum=128),
+            slot=slot,
+        )
+    )
+
+
 def _frame_channel_record(descriptor: FrameChannelDescriptor | None) -> object:
     if descriptor is None:
         return None
@@ -1838,6 +2072,7 @@ def _window_target_record(target: OutputWindowTarget) -> dict[str, object]:
         "height": target.height,
         "device_pixel_ratio": target.device_pixel_ratio,
         "visible": target.visible,
+        "scene_id": target.scene_id,
     }
 
 

@@ -19,6 +19,7 @@ import sys
 from solin.version import VERSION
 
 IS_DEV: bool = "__compiled__" not in globals()
+LIBOBS_SIDECAR_ARGUMENT: str = "--scene-engine-sidecar"
 
 # ── Identidade Qt / QSettings ─────────────────────────────────────────────────
 # Em desenvolvimento, usa outro namespace para nao misturar registros, dados
@@ -63,15 +64,9 @@ else:
     APP_PLATFORM: str = sys.platform
 
 # The complete native scenes feature is currently qualified only on Windows.
-# Startup combines this platform capability with the profile's preference;
-# unsupported platforms always use the classic Qt projection and camera workflow.
+# This capability is the single source of truth for exposing its UI, starting
+# its engine, and selecting the legacy Qt camera workflow on other platforms.
 NATIVE_SCENES_SUPPORTED: bool = APP_PLATFORM == "windows"
-
-# The accelerated Qt decoder ingress intentionally crosses Qt's private ABI.
-# Keep it independently switchable from the native scenes feature so a bridge
-# compatibility issue can fall back to the public QVideoFrame/SHM route without
-# disabling the engine or changing playback policy.
-NATIVE_QT_MEDIA_BRIDGE_ENABLED: bool = NATIVE_SCENES_SUPPORTED
 
 # ── Arquivos temporários de stream (cache OFF) ─────────────────────────────────
 # Prefixo obrigatório em todo tempfile e lockfile gerado pelo Solin.

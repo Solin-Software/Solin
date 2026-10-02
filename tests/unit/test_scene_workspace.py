@@ -25,6 +25,8 @@ from solin.core.scenes.model import (
 from solin.core.scenes.presets import (
     CAMERA_SCENE_ID,
     CONTENT_SCENE_ID,
+    DEFAULT_SCENE_ID,
+    YEARTEXT_SOURCE_ID,
     SceneSeedNames,
     create_default_scene_document,
 )
@@ -78,6 +80,7 @@ def test_fresh_workspace_has_one_minimal_profile_and_internal_fallback(tmp_path:
     assert workspace.active_collection.id == DEFAULT_SCENE_COLLECTION_ID
     assert workspace.active_collection.name == "Profile 1"
     assert [scene.id for scene in workspace.documents.document.scenes] == [
+        DEFAULT_SCENE_ID,
         CAMERA_SCENE_ID,
         CONTENT_SCENE_ID,
     ]
@@ -85,31 +88,71 @@ def test_fresh_workspace_has_one_minimal_profile_and_internal_fallback(tmp_path:
         CONTENT_SOURCE_ID,
         DEFAULT_CAMERA_SOURCE_ID,
         NO_SIGNAL_SOURCE_ID,
+        YEARTEXT_SOURCE_ID,
     }
-    assert workspace.documents.program_default_scene_id == CAMERA_SCENE_ID
+    assert workspace.documents.program_default_scene_id == DEFAULT_SCENE_ID
     assert workspace.documents.program_media_scene_id == CONTENT_SCENE_ID
     assert (
         paths.scene_profiles_dir / f"{DEFAULT_SCENE_COLLECTION_ID}.backup.json"
     ).exists()
 
 
-def test_legacy_document_is_migrated_integrally_and_idempotently(tmp_path: Path) -> None:
+def test_fresh_workspace_default_scene_holds_the_year_text_source(tmp_path: Path) -> None:
+    # First run: the Default scene (the idle fallback) shows the year text, so the
+    # projection and virtual camera both fall back to it when nothing else plays.
+    from solin.core.scenes.model import SourceKind
+
+    workspace = SceneWorkspaceService(_paths(tmp_path), seed_names=_names())
+    document = workspace.documents.document
+
+    yeartext_sources = [
+        source for source in document.sources if source.kind is SourceKind.YEARTEXT
+    ]
+    assert [source.id for source in yeartext_sources] == [YEARTEXT_SOURCE_ID]
+
+    default_scene = document.scene(DEFAULT_SCENE_ID)
+    assert [layer.source_id for layer in default_scene.layers] == [YEARTEXT_SOURCE_ID]
+    # The Default scene is the shared idle fallback for every output bus.
+    assert {route.default_scene_id for route in document.outputs} == {DEFAULT_SCENE_ID}
+
+
+def test_legacy_document_gains_the_year_text_default_scene_on_load(tmp_path: Path) -> None:
+    # A collection saved before the year-text-as-a-scene feature has no Default
+    # scene, so its idle projection would have no year text after upgrading. On
+    # load it is self-healed: the year-text source + Default scene are added and
+    # the Default scene becomes the shared idle default, while the legacy scenes,
+    # sources, and document identity are preserved.
     paths = _paths(tmp_path)
     legacy = create_default_scene_document(
         _names(),
         document_id="legacy-document",
         created_at="2026-08-10T12:00:00+00:00",
     )
+    assert all(scene.id != DEFAULT_SCENE_ID for scene in legacy.scenes)  # precondition
+    assert all(source.id != YEARTEXT_SOURCE_ID for source in legacy.sources)
     SceneDocumentRepository(paths.scenes_file, seed_factory=lambda: legacy).save(legacy)
 
     first = SceneWorkspaceService(paths, seed_names=_names())
-    first_document = first.documents.document
+    healed = first.documents.document
     first.close()
-    second = SceneWorkspaceService(paths, seed_names=_names())
 
-    assert first_document == legacy
-    assert second.documents.document == legacy
-    assert paths.scenes_file.exists()
+    yeartext_sources = [s for s in healed.sources if s.kind is SourceKind.YEARTEXT]
+    assert [s.id for s in yeartext_sources] == [YEARTEXT_SOURCE_ID]
+    default_scene = healed.scene(DEFAULT_SCENE_ID)
+    assert [layer.source_id for layer in default_scene.layers] == [YEARTEXT_SOURCE_ID]
+    assert {route.default_scene_id for route in healed.outputs} == {DEFAULT_SCENE_ID}
+    # Legacy scenes + identity survive; nothing was dropped.
+    assert healed.document_id == "legacy-document"
+    assert {scene.id for scene in legacy.scenes} <= {scene.id for scene in healed.scenes}
+
+    # Idempotent: reloading heals to the same structure — no duplicate Default
+    # scene or year-text source.
+    second = SceneWorkspaceService(paths, seed_names=_names())
+    reloaded = second.documents.document
+    assert [s.id for s in reloaded.scenes] == [s.id for s in healed.scenes]
+    assert sum(s.kind is SourceKind.YEARTEXT for s in reloaded.sources) == 1
+    assert sum(scene.id == DEFAULT_SCENE_ID for scene in reloaded.scenes) == 1
+    assert {route.default_scene_id for route in reloaded.outputs} == {DEFAULT_SCENE_ID}
     assert len(second.catalog.collections) == 1
 
 
@@ -380,7 +423,7 @@ def test_runtime_controller_rebinds_to_the_activated_scene_profile(tmp_path: Pat
     assert controller.runtime is workspace.runtime
     assert controller.document.document_id == "document-b"
     assert controller.documents.can_undo is False
-    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
+    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == DEFAULT_SCENE_ID
 
 
 def test_camera_configuration_is_shared_between_scene_profiles(tmp_path: Path) -> None:

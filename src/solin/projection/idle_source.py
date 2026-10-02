@@ -1,85 +1,63 @@
 """
-IdleMediaSource — a single, shared decoder for the custom idle screen.
+IdleMediaSource — a single, shared source for the custom idle screen.
 
-Why this exists
-───────────────
-The idle screen (custom image or looping video) is shown simultaneously on
-every projection surface: each secondary-monitor :class:`ProjectionWindow` and
-the on-screen :class:`FloatingPreviewWindow`.
+The idle screen (custom image or video) is shown simultaneously on every
+projection surface: each secondary-monitor :class:`ProjectionWindow` and the
+on-screen :class:`FloatingPreviewWindow`. It decodes/loads **once** and hands the
+resulting :class:`QImage` to every surface to paint (implicitly shared, painted on
+the GUI thread), so the surfaces share a single frame buffer.
 
-Historically every surface owned its *own* ``QMediaPlayer`` and decoded the
-same idle video independently.  With N surfaces that meant N independent
-decoders of the same file, which caused two concrete bugs:
+libobs is the only media engine and QtMultimedia has been removed, so this no
+longer runs a ``QMediaPlayer``:
 
-  1. **De-sync** — each player started/looped on its own clock, so the monitors
-     drifted out of step (unlike normal video projection, which is frame-locked
-     because it shares one decoder).
-  2. **CPU / memory blow-up** — N simultaneous decoders + N format conversions
-     per frame pushed CPU past 10 % and intermittently exhausted image memory
-     (``QImage: out of memory``).
-
-This class fixes both at the root by mirroring the normal-video pipeline
-(:class:`solin.core.media.playback.MediaController` → ``distribute_frame``): decode
-**once**, convert **once**, then hand the resulting :class:`QImage` to every
-surface to paint.  Because :class:`QImage` is implicitly shared and all painting
-happens on the GUI thread, the N surfaces share a single frame buffer.
+- an **image** loads directly into a :class:`QImage`;
+- a **video** is represented by a single poster frame extracted with ffmpeg
+  (``ffprobe``/``ffmpeg``) — animated idle video is not decoded here. Full looping
+  idle video belongs in the sidecar's idle scene (a follow-up).
 
 Lifecycle
 ─────────
-- ``set_media(path)``  → load an image (emit one frame) or start a looping,
-  muted video (emit a frame per decoded frame).
-- ``clear()``         → stop and go idle.
-- ``cleanup()``       → release the player before shutdown.
-- ``current_image``   → the most recent frame, so a surface created *after*
-  playback began (hot-plugged monitor, floating-window respawn) can paint the
-  correct frame immediately instead of flashing black until the next frame.
+- ``set_media(path)``  → load an image / extract a video poster (emit one frame).
+- ``set_playing(bool)``→ no-op (there is no live decoder to gate).
+- ``clear()``         → forget the current media.
+- ``cleanup()``       → release resources before shutdown.
+- ``current_image``   → the most recent frame, so a surface created *after* the
+  idle began can paint the correct frame immediately.
 """
 
 from __future__ import annotations
 
-from PySide6.QtCore import QObject, Signal, Slot, QUrl
-from PySide6.QtGui import QImage
-from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput, QVideoSink, QVideoFrame
+import logging
+import threading
 
+import shiboken6
+from PySide6.QtCore import QObject, Signal, Slot
+from PySide6.QtGui import QImage
+
+from ..core.media import ffprobe_metadata
 from ..core.media.formats import media_type_from_path
 
-_TARGET_FORMAT = QImage.Format.Format_ARGB32_Premultiplied
+log = logging.getLogger(__name__)
 
-#: When True, an idle video that was paused (because nothing was showing it)
-#: restarts from the beginning the next time it becomes visible — every
-#: appearance of the idle screen begins the loop fresh, which looks more
-#: deliberate.  When False the video simply resumes from where it was paused.
-IDLE_VIDEO_RESTART_ON_RESUME = True
+_TARGET_FORMAT = QImage.Format.Format_ARGB32_Premultiplied
+_POSTER_AT_MS = 1000
 
 
 class IdleMediaSource(QObject):
-    """Single decoder + frame fan-out for the custom idle screen.
-
-    Emits :attr:`frame_ready` with a ready-to-paint :class:`QImage` — once for a
-    static image, and continuously for a looping video.
-    """
+    """Single image/poster source + frame fan-out for the custom idle screen."""
 
     #: A new frame is ready for every idle surface to paint.
     frame_ready = Signal(QImage)
+    #: Internal: (generation, image_bytes|None) hopped from the poster worker.
+    _poster_ready = Signal(int, object)
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
-
         self._path: str = ""
         self._type: str = ""              # 'image' | 'video' | ''
         self._image: QImage | None = None  # last/static frame for late joiners
-
-        # Idle media is always silent.
-        self._audio_output = QAudioOutput()
-        self._audio_output.setVolume(0.0)
-
-        self._video_sink = QVideoSink(self)
-        self._video_sink.videoFrameChanged.connect(self._on_video_frame)
-
-        self._player = QMediaPlayer(self)
-        self._player.setAudioOutput(self._audio_output)
-        self._player.setVideoSink(self._video_sink)
-        self._player.setLoops(QMediaPlayer.Loops.Infinite)
+        self._generation = 0
+        self._poster_ready.connect(self._on_poster_ready)
 
     # ── Read-only state ────────────────────────────────────────────────────
 
@@ -90,14 +68,14 @@ class IdleMediaSource(QObject):
 
     @property
     def current_image(self) -> QImage | None:
-        """Most recent decoded frame, or None — for immediate paint on new surfaces."""
+        """Most recent frame, or None — for immediate paint on new surfaces."""
         return self._image
 
     # ── Public API ─────────────────────────────────────────────────────────
 
     def set_media(self, path: str) -> None:
-        """Load an image (emit one frame) or start a looping muted video."""
-        self._stop_player()
+        """Load an image or extract a video poster (emit one frame)."""
+        self._generation += 1
         self._path = path
         self._type = media_type_from_path(path)
         self._image = None
@@ -111,65 +89,53 @@ class IdleMediaSource(QObject):
                 img = img.convertToFormat(_TARGET_FORMAT)
             self._image = img
             self.frame_ready.emit(img)
-
         elif self._type == "video":
-            self._player.setSource(QUrl.fromLocalFile(path))
-            # Playback is started by the owner via set_playing() according to
-            # whether any surface is actually showing the idle screen — so the
-            # decoder stays paused (zero CPU) while a clip/image/timer plays.
+            self._extract_poster(path, self._generation)
 
     def set_playing(self, playing: bool) -> None:
-        """Play or pause the shared video decoder.
-
-        No-op for images (there is no decoder to run).  The owner calls this as
-        the idle screen becomes visible/hidden across the surfaces, so a custom
-        idle video is decoded only while it is actually on screen somewhere.
-        """
-        if self._type != "video":
-            return
-        state = self._player.playbackState()
-        if playing:
-            if state != QMediaPlayer.PlaybackState.PlayingState:
-                if IDLE_VIDEO_RESTART_ON_RESUME:
-                    # Rewind so the loop starts fresh each time the idle reappears.
-                    self._player.setPosition(0)
-                self._player.play()
-        elif state == QMediaPlayer.PlaybackState.PlayingState:
-            self._player.pause()
+        """No-op — there is no live idle decoder (poster/image only)."""
+        del playing
 
     def clear(self) -> None:
-        """Stop any playback and forget the current media."""
-        self._stop_player()
+        """Forget the current media."""
+        self._generation += 1
         self._path = ""
         self._type = ""
         self._image = None
 
     def cleanup(self) -> None:
-        """Release media resources — call before application shutdown."""
-        self._stop_player()
+        """Release resources — call before application shutdown."""
+        self._generation += 1
 
-    # ── Video frame slot ───────────────────────────────────────────────────
+    # ── Poster extraction (ffmpeg, off the GUI thread) ─────────────────────
 
-    @Slot(QVideoFrame)
-    def _on_video_frame(self, frame: QVideoFrame) -> None:
-        """Convert a decoded video frame to a paint-ready QImage and fan it out.
+    def _extract_poster(self, path: str, generation: int) -> None:
+        def _work() -> None:
+            image_bytes = None
+            try:
+                tags = ffprobe_metadata.probe_tags(path)
+                at_ms = min(_POSTER_AT_MS, max(0, tags.duration_ms // 10))
+                image_bytes = ffprobe_metadata.extract_thumbnail(path, at_ms)
+            except Exception:  # noqa: BLE001 - poster extraction boundary
+                log.debug("idle poster extraction failed for %s", path, exc_info=True)
+            if not shiboken6.isValid(self):
+                return  # idle source deleted before the worker finished
+            try:
+                self._poster_ready.emit(generation, image_bytes)
+            except RuntimeError:
+                pass
 
-        Conversion happens here exactly once; the same QImage is then shared by
-        every idle surface (implicitly shared, read-only on the GUI thread).
-        """
-        if self._type != "video" or not frame.isValid():
+        threading.Thread(target=_work, name="solin-idle-poster", daemon=True).start()
+
+    @Slot(int, object)
+    def _on_poster_ready(self, generation: int, image_bytes) -> None:
+        if generation != self._generation or not image_bytes:
             return
-        img = frame.toImage()  # toImage() already returns a detached QImage
+        img = QImage()
+        img.loadFromData(image_bytes)
         if img.isNull():
             return
         if img.format() != _TARGET_FORMAT:
             img = img.convertToFormat(_TARGET_FORMAT)
         self._image = img
         self.frame_ready.emit(img)
-
-    # ── Internals ──────────────────────────────────────────────────────────
-
-    def _stop_player(self) -> None:
-        if self._player.playbackState() != QMediaPlayer.PlaybackState.StoppedState:
-            self._player.stop()
-        self._player.setSource(QUrl())

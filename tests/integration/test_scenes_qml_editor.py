@@ -4,8 +4,8 @@ from dataclasses import replace
 from pathlib import Path
 import time
 
-from PySide6.QtCore import QCoreApplication, QObject, QPoint, QPointF, Qt, Signal
-from PySide6.QtGui import QColor
+from PySide6.QtCore import QCoreApplication, QEvent, QObject, QPoint, QPointF, Qt, Signal
+from PySide6.QtGui import QColor, QMouseEvent
 from PySide6.QtQuick import QQuickItem
 from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtTest import QTest
@@ -13,7 +13,7 @@ from PySide6.QtWidgets import QApplication
 
 from solin.controllers.scene_runtime_controller import SceneRuntimeController
 from solin.core.foundation.runtime_paths import ProfilePaths
-from solin.core.scenes.model import TransitionKind
+from solin.core.scenes.model import BusId, NormalizedRect, TransitionKind
 from solin.core.scenes.presets import SceneSeedNames
 from solin.core.scenes.recording import (
     AudioDevice,
@@ -166,7 +166,8 @@ def test_scenes_qml_editor_loads_with_the_real_workspace(tmp_path: Path) -> None
     assert widget._qml.rootObject() is not None
     assert widget._qml.rootObject().objectName() == "scenesEditorView"
     assert widget._qml.rootObject().findChild(QQuickItem, "scenesPreviewImage") is not None
-    assert widget.bridge.scenesModel.rowCount() == 2
+    # First-run ships Default (year text) + Camera + Content.
+    assert widget.bridge.scenesModel.rowCount() == 3
     assert widget.bridge.outputFormatLabel == "1920 × 1080"
 
     root = widget._qml.rootObject()
@@ -259,7 +260,9 @@ def test_program_recording_control_and_settings_share_the_injected_state(
     system_audio = root.findChild(QQuickItem, "scenesRecordingSystemAudio")
     choose_folder = root.findChild(QQuickItem, "scenesRecordingChooseFolder")
     audio_warning = root.findChild(QQuickItem, "scenesRecordingAudioWarning")
-    assert recording_button is not None and recording_button.isVisible()
+    assert recording_button is not None and not recording_button.isVisible()
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
+    assert _wait_until(recording_button.isVisible)
     assert recording_button.property("expanded") is True
     assert recording_popover is not None
     assert microphone is not None
@@ -300,6 +303,8 @@ def test_program_recording_control_and_settings_share_the_injected_state(
 
     recording_button.toggleRequested.emit()
     assert _wait_until(lambda: widget.bridge.recordingStatus == "idle")
+    assert widget.bridge.profileChangesBlocked
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, False)
     assert not widget.bridge.profileChangesBlocked
 
     widget.cleanup()
@@ -398,6 +403,60 @@ def test_canvas_framing_shortcuts_overlay_and_responsive_actions(tmp_path: Path)
     widget.deleteLater()
     QCoreApplication.processEvents()
     controller.close()
+
+
+def test_alt_handle_drag_crops_and_framing_keyboard_commits_the_crop(tmp_path: Path) -> None:
+    workspace = SceneWorkspaceService(_profile_paths(tmp_path), seed_names=_seed_names())
+    controller = SceneRuntimeController(workspace, _Projection())
+    widget = ScenesEditorWidget(controller)
+    widget.resize(1280, 760)
+    widget.show()
+    assert _wait_until(lambda: widget._qml.status() is QQuickWidget.Status.Ready)
+    try:
+        scene = next(scene for scene in controller.document.scenes if scene.name == "Camera")
+        layer = scene.layers[0]
+        controller.documents.update_layer(
+            scene.id, layer.id,
+            replace(layer, rect=NormalizedRect(x=0.2, y=0.2, width=0.6, height=0.6)),
+        )
+        widget.bridge.selectScene(scene.id)
+        widget.bridge.selectLayer(layer.id)
+        QCoreApplication.processEvents()
+        root = widget._qml.rootObject()
+        layer_item = _find_quick_item(root, f"scenesCanvasLayer-{layer.id}")
+        assert layer_item is not None
+        center = layer_item.mapToScene(QPointF(layer_item.width() / 2, layer_item.height() / 2))
+        QTest.mouseClick(widget._qml, Qt.MouseButton.LeftButton, pos=center.toPoint())
+        start = layer_item.mapToScene(QPointF(0, layer_item.height() / 2))
+        end = start + QPointF(40, 0)
+        for event_type, point, button, buttons in (
+            (QEvent.Type.MouseButtonPress, start, Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton),
+            (QEvent.Type.MouseMove, end, Qt.MouseButton.NoButton, Qt.MouseButton.LeftButton),
+            (QEvent.Type.MouseButtonRelease, end, Qt.MouseButton.LeftButton, Qt.MouseButton.NoButton),
+        ):
+            QCoreApplication.sendEvent(widget._qml, QMouseEvent(
+                event_type, point, point, button, buttons, Qt.KeyboardModifier.AltModifier,
+            ))
+            QCoreApplication.processEvents()
+        cropped = controller.document.scene(scene.id).layers[0]
+        assert cropped.crop.left > 0
+        assert cropped.crop.right == 0
+        assert cropped.rect.x > 0.2
+        assert cropped.rect.width < 0.6
+        QTest.keyClick(widget._qml, Qt.Key.Key_F)
+        assert widget.bridge.framingActive
+        QTest.keyClick(widget._qml, Qt.Key.Key_Right, Qt.KeyboardModifier.ShiftModifier)
+        QTest.keyClick(widget._qml, Qt.Key.Key_Return)
+        QCoreApplication.processEvents()
+        assert not widget.bridge.framingActive
+        framed = controller.document.scene(scene.id).layers[0]
+        assert framed.rect == NormalizedRect()
+        assert framed.crop != cropped.crop
+    finally:
+        widget.cleanup()
+        widget.deleteLater()
+        QCoreApplication.processEvents()
+        controller.close()
 
 
 def test_responsive_drawer_toggle_reflects_the_drawer_state(tmp_path: Path) -> None:

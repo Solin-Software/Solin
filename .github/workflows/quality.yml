@@ -61,20 +61,23 @@ jobs:
       - name: Validate locales
         run: python3 scripts/check_locales.py
 
-      - name: Install Qt and SideView build dependencies
+      - name: Install Qt, SideView and libobs dependencies
         if: ${{ steps.filter.outputs.run_quality == 'true' }}
         run: |
           sudo apt-get update
+          mapfile -t libobs_packages < <(bash scripts/build_solin.sh --print-native-packages)
           sudo apt-get install --no-install-recommends -y \
+            "${libobs_packages[@]}" \
             cmake \
-            libegl1 \
+            ffmpeg \
             libgl1 \
             libgtk-3-dev \
             libopengl0 \
-            libpulse0 \
             libwebkit2gtk-4.1-dev \
             libxcb-cursor0 \
             libxkbcommon-x11-0 \
+            xauth \
+            xvfb \
             pkg-config
 
       - name: Set up Python ${{ env.PYTHON_VERSION }}
@@ -102,7 +105,10 @@ jobs:
 
       - name: Pyright typecheck
         if: ${{ steps.filter.outputs.run_quality == 'true' }}
-        run: python scripts/typecheck.py
+        run: |
+          for platform in Linux Windows Darwin; do
+            python scripts/typecheck.py --pythonplatform "$platform"
+          done
 
       - name: Build and test native media-engine protocol
         if: ${{ steps.filter.outputs.run_quality == 'true' }}
@@ -113,8 +119,8 @@ jobs:
 
       - name: Pytest application suites
         if: ${{ steps.filter.outputs.run_quality == 'true' }}
-        run: python -m pytest tests/contract tests/integration tests/e2e
+        run: xvfb-run --auto-servernum python -m pytest tests/contract tests/integration tests/e2e
 
       - name: Pytest unit suite
         if: ${{ steps.filter.outputs.run_quality == 'true' }}
-        run: python -m pytest tests/unit
+        run: xvfb-run --auto-servernum python -m pytest tests/unit

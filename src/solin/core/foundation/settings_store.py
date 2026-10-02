@@ -138,12 +138,6 @@ class ProfileAppSettingsStore:
     def set_app_theme_id(self, theme_id: str) -> None:
         self.settings.set_value(SettingsKey.APP_THEME, str(theme_id or "").strip())
 
-    def native_scenes_enabled(self) -> bool:
-        return bool(self.settings.value(SettingsKey.NATIVE_SCENES_ENABLED, True, bool))
-
-    def set_native_scenes_enabled(self, enabled: bool) -> None:
-        self.settings.set_value(SettingsKey.NATIVE_SCENES_ENABLED, bool(enabled))
-
     def hover_popup_ids(self) -> frozenset[str]:
         value = self.settings.value(SettingsKey.TOOLBAR_HOVER_POPUPS, [])
         if not isinstance(value, (list, tuple)):
@@ -157,3 +151,14 @@ class ProfileAppSettingsStore:
         else:
             popup_ids.discard(popup_id)
         self.settings.set_value(SettingsKey.TOOLBAR_HOVER_POPUPS, sorted(popup_ids))
+
+    def scenes_panel_docked(self) -> bool:
+        """Whether the scenes panel was left attached to the window bottom."""
+        value = self.settings.value(SettingsKey.SCENES_PANEL_DOCKED, False)
+        if isinstance(value, bool):
+            return value
+        # QSettings round-trips booleans as strings on some backends.
+        return str(value).strip().lower() in ("1", "true", "yes", "on")
+
+    def set_scenes_panel_docked(self, docked: bool) -> None:
+        self.settings.set_value(SettingsKey.SCENES_PANEL_DOCKED, bool(docked))

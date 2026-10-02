@@ -16,7 +16,20 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ..core.foundation.constants import NATIVE_SCENES_SUPPORTED
 from ..core.meetings.preparation import MeetingPreparationService
+from ..core.scenes.libobs_engine import libobs_scene_engine_selected
+
+
+def _scenes_ui_enabled() -> bool:
+    """Whether to expose the Scenes UI: any platform once a scene engine backs it.
+
+    The native engine ships only on Windows (``NATIVE_SCENES_SUPPORTED``), but the
+    libobs sidecar engine runs on every platform when ``SOLIN_SCENE_ENGINE=libobs``
+    is selected — matching exactly when bootstrap actually creates a scene engine,
+    so the UI never appears without an engine behind it.
+    """
+    return NATIVE_SCENES_SUPPORTED or libobs_scene_engine_selected()
 from ..styles.icons import (
     ICON_CLAPPERBOARD,
     ICON_MENU,
@@ -182,7 +195,7 @@ class MainWindowUiResources:
     talk_theme_widget: DeferredTalkThemeWidget
     playlist_widget: PlaylistWidget
     meetings_widget: MeetingsWidget
-    scenes_widget: DeferredScenesWidget | None
+    scenes_widget: DeferredScenesWidget
     quick_toolbar: QuickAccessToolbar
     sidebar_title_label: QLabel
     sidebar_subtitle_label: QLabel
@@ -200,7 +213,7 @@ class _PageResources:
     talk_theme_widget: DeferredTalkThemeWidget
     playlist_widget: PlaylistWidget
     meetings_widget: MeetingsWidget
-    scenes_widget: DeferredScenesWidget | None
+    scenes_widget: DeferredScenesWidget
 
 
 @dataclass(frozen=True, slots=True)
@@ -261,16 +274,16 @@ class MainWindowUiController:
         self._browser_image_fetch_service_factory = browser_image_fetch_service_factory
 
     @classmethod
-    def nav_button_specs(cls, *, scenes_enabled: bool) -> tuple[tuple[str, str, str, int], ...]:
-        if scenes_enabled:
+    def nav_button_specs(cls) -> tuple[tuple[str, str, str, int], ...]:
+        if _scenes_ui_enabled():
             return cls._NAV_BUTTON_SPECS
         return tuple(
             spec for spec in cls._NAV_BUTTON_SPECS if spec[0] != "nav_scenes_btn"
         )
 
     @classmethod
-    def sidebar_layout_order(cls, *, scenes_enabled: bool) -> tuple[str, ...]:
-        if scenes_enabled:
+    def sidebar_layout_order(cls) -> tuple[str, ...]:
+        if _scenes_ui_enabled():
             return cls._SIDEBAR_LAYOUT_ORDER
         return tuple(
             name for name in cls._SIDEBAR_LAYOUT_ORDER if name != "nav_scenes_btn"
@@ -354,7 +367,7 @@ class MainWindowUiController:
             int(MainPage.SETTINGS): pages.settings_widget.qml_load_handle,
             int(MainPage.PLAYLISTS): pages.playlist_widget.preparation_handle,
         }
-        if pages.scenes_widget is not None:
+        if _scenes_ui_enabled():
             on_demand_tasks[int(MainPage.SCENES)] = pages.scenes_widget.preparation_handle
         preparation = UiPreparationCoordinator(
             {
@@ -460,11 +473,9 @@ class MainWindowUiController:
             obs_service=context.obs_service,
             ndi_service=context.ndi_service,
             app_settings=context.app_settings,
-            native_scenes_enabled=context.scene_runtime is not None,
             obs_settings=context.obs_settings,
             zoom_settings=context.zoom_settings,
             auto_share_settings=context.auto_share_settings,
-            camera_settings=context.camera_settings,
             auto_key_settings=context.auto_key_settings,
             media_settings=context.media_settings,
             playback_protection=context.playback_protection,
@@ -564,16 +575,12 @@ class MainWindowUiController:
             parent=context.parent,
         )
         timeline.mark("page_meetings_constructed")
-        scenes_widget = (
-            DeferredScenesWidget(
-                context.scene_runtime,
-                recording=context.program_recording,
-                credentials=context.ptz_credentials,
-                notifications=context.notifications,
-                parent=context.parent,
-            )
-            if context.scene_runtime is not None
-            else None
+        scenes_widget = DeferredScenesWidget(
+            context.scene_runtime,
+            recording=context.program_recording,
+            credentials=context.ptz_credentials,
+            notifications=context.notifications,
+            parent=context.parent,
         )
         timeline.mark("page_scenes_constructed")
         meetings_widget.set_watched_folder(watched_folder)
@@ -589,7 +596,7 @@ class MainWindowUiController:
         stack.addWidget(settings_widget)
         stack.addWidget(playlist_widget)
         stack.addWidget(lazy_pages.placeholder())
-        stack.addWidget(scenes_widget if scenes_widget is not None else lazy_pages.placeholder())
+        stack.addWidget(scenes_widget)
 
         return _PageResources(
             library_widget=library_widget,
@@ -643,9 +650,7 @@ class MainWindowUiController:
         layout.addSpacing(8)
         layout.addWidget(self._separator())
         layout.addSpacing(4)
-        for attr_name in self.sidebar_layout_order(
-            scenes_enabled=context.scene_runtime is not None
-        ):
+        for attr_name in self.sidebar_layout_order():
             layout.addWidget(nav_buttons_by_name[attr_name])
         layout.addStretch()
         layout.addWidget(nav_buttons_by_name["nav_settings_btn"])
@@ -720,8 +725,10 @@ class MainWindowUiController:
             obs_settings=context.obs_settings,
             app_settings=context.app_settings,
             background_song_service=context.background_song_service,
-            scene_runtime=context.scene_runtime,
-            program_recording=context.program_recording,
+            scene_runtime=(context.scene_runtime if _scenes_ui_enabled() else None),
+            program_recording=(
+                context.program_recording if _scenes_ui_enabled() else None
+            ),
             camera_service=context.camera_service,
             camera_settings=context.camera_settings,
         )
@@ -729,16 +736,6 @@ class MainWindowUiController:
         toolbar.obs_scene_change.connect(handlers.quick_obs_scene_change)
         toolbar.obs_return_scene_change.connect(handlers.quick_obs_return_scene_change)
         toolbar.obs_stream_requested.connect(handlers.project_obs_stream)
-        if (
-            context.camera_service is not None
-            and context.camera_settings is not None
-            and handlers.project_camera_stream is not None
-            and handlers.camera_selection_changed is not None
-        ):
-            toolbar.obs_camera_stream_requested.connect(handlers.project_camera_stream)
-            toolbar.camera_stream_requested.connect(handlers.project_camera_stream)
-            toolbar.camera_selection_changed.connect(handlers.camera_selection_changed)
-            toolbar.set_camera_enabled(bool(settings_widget.integrations.state["cameraEnabled"]))
         toolbar.show()
         toolbar.reposition()
         navigation.update_quick_toolbar_browser_style()
@@ -812,9 +809,7 @@ class MainWindowUiController:
     ) -> tuple[dict[str, SidebarButton], list[SidebarButton]]:
         nav_buttons_by_name: dict[str, SidebarButton] = {}
         nav_buttons: list[SidebarButton] = []
-        for attr_name, icon, label, page_index in self.nav_button_specs(
-            scenes_enabled=self._context.scene_runtime is not None
-        ):
+        for attr_name, icon, label, page_index in self.nav_button_specs():
             button = SidebarButton(icon, self._context.translate(label))
             button.clicked.connect(
                 lambda _checked=False, index=page_index: navigation.switch_page(index)

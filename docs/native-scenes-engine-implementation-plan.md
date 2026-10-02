@@ -1,5 +1,12 @@
 # Native scenes and virtual camera implementation plan
 
+This is the historical implementation plan for the C++ scene engine and its
+QtMultimedia playback integration. The default backend now uses a supervised
+libobs sidecar for playback and composition, including recording and audio.
+Checked items below describe the native implementation at the time of this
+plan; they do not qualify the libobs backend or its standalone delivery.
+See [Building and platform requirements](building.md) for current requirements.
+
 ## Purpose
 
 This document records the architecture, implemented scope, and remaining release work for
@@ -109,11 +116,21 @@ toggle. Automation is available only when the two roles exist and refer to diffe
 While projected content is active, automation selects the media scene; when projection stops,
 it restores the previous Program base scene, or the configured default when previous-scene
 memory is disabled. The toolbar exposes that return target while the automatic media scene is
-live, and right-clicking another scene overrides the return without taking it immediately. A
-manual Take during active content suspends automation only for that projection session. The
-content end performs an automatic return only while Program is still on the configured media
-scene; a manual Take is therefore never overwritten. The next session resumes automatically.
+live, and right-clicking another scene overrides the return without taking it immediately.
+Scene-editor Takes of a composition containing projected content retain the return base;
+a Take without projected content makes the selected scene the new base and suspends
+automatic media for that presentation session. The next session resumes automatically.
 Editing history never rewinds Program or destination-enabled state.
+
+The Solin Scenes control panel routes the monitor and virtual camera independently.
+During automatic media, a left click immediately selects the live scene for that output.
+A composition containing projected content retains the session's return base; a scene
+without projected content stays selected after the presentation ends. Selecting a content
+composition again restores the saved return base. While showing a content composition,
+a right click changes only that output's return base and briefly flashes green after
+acceptance. The popup and docked panel share this behavior; ordinary active buttons keep
+static colors. A new presentation
+session enters the automatic media scene again.
 
 Each Scene profile owns one default Program transition and optional per-scene overrides.
 New Scene profiles default to Dissolve at 350 ms; migrated profiles preserve their persisted

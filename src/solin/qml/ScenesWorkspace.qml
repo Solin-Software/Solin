@@ -796,10 +796,11 @@ Item {
         ScenesMenuSeparator { theme: root.theme }
         ScenesMenuItem {
             theme: root.theme
-            text: root.contextSceneDefault
-                ? qsTr("Remove default") : qsTr("Set as default")
-            onTriggered: root.bridge.setDefaultScene(
-                root.contextSceneId, !root.contextSceneDefault)
+            // There is always exactly one default scene, so it can only be moved to
+            // another scene, never removed. The current default shows it as disabled.
+            text: qsTr("Set as default")
+            enabled: !root.contextSceneDefault
+            onTriggered: root.bridge.setDefaultScene(root.contextSceneId, true)
         }
         ScenesMenuItem {
             theme: root.theme
@@ -965,13 +966,17 @@ Item {
             border.width: 1
             border.color: root.borderColor
         }
+        // The picker creates new sources — the year text, a camera, the Solin media
+        // slot — and re-uses cameras that already exist. Other scenes and sources
+        // already in THIS scene stay out of it.
         ScenesMenuItem {
             theme: root.theme
-            text: qsTr("Projected Solin content")
-            onTriggered: root.bridge.addContentSource()
+            text: qsTr("Year text")
+            onTriggered: root.bridge.addYearText()
         }
-        ScenesMenuSeparator { theme: root.theme }
-        ScenesMenuItem { theme: root.theme; text: qsTr("Cameras"); section: true; enabled: false }
+        // A camera already used by another scene belongs here: the device can only
+        // be opened once, so the operator has to re-use the source rather than
+        // create a second one for the same camera.
         Repeater {
             model: root.bridge ? root.bridge.configuredCameras : []
             ScenesMenuItem {
@@ -991,16 +996,10 @@ Item {
             text: qsTr("New network camera…")
             onTriggered: cameraDialog.openForCamera("rtsp_camera")
         }
-        ScenesMenuSeparator { theme: root.theme }
-        ScenesMenuItem { theme: root.theme; text: qsTr("Existing scenes"); section: true; enabled: false }
-        Repeater {
-            model: root.bridge ? root.bridge.referencedScenes : []
-            ScenesMenuItem {
-                required property var modelData
-                theme: root.theme
-                text: modelData.name
-                onTriggered: root.bridge.addSceneReference(modelData.id)
-            }
+        ScenesMenuItem {
+            theme: root.theme
+            text: qsTr("Media")
+            onTriggered: root.bridge.addContentSource()
         }
     }
 

@@ -23,6 +23,61 @@ fail() {
     exit 1
 }
 
+# Direct DT_NEEDED providers for the pinned pylibobs Linux wheel and OBS mux.
+# Apt supplies their transitive dependencies from the same Ubuntu archive.
+libobs_runtime_packages=(
+    libasound2t64
+    libavcodec60
+    libavdevice60
+    libavformat60
+    libavutil58
+    libc6
+    libcurl4t64
+    libdrm2
+    libegl1
+    libfontconfig1
+    libfreetype6
+    libgcc-s1
+    libglib2.0-0t64
+    libjansson4
+    libmbedcrypto7t64
+    libmbedtls14t64
+    libmbedx509-1t64
+    libpci3
+    libpipewire-0.3-0t64
+    libpulse0
+    librist4
+    libspeexdsp1
+    libsrt1.5-openssl
+    libstdc++6
+    libswresample4
+    libswscale7
+    libudev1
+    libuuid1
+    libv4l-0t64
+    libva-drm2
+    libva2
+    libvpl2
+    libwayland-client0
+    libwayland-egl1
+    libx11-6
+    libx11-xcb1
+    libx264-164
+    libxcb-composite0
+    libxcb-randr0
+    libxcb-shm0
+    libxcb-xfixes0
+    libxcb-xinerama0
+    libxcb1
+    libxkbcommon0
+    zlib1g
+)
+if [[ "${1:-}" == "--print-native-packages" && "$#" == 1 ]]; then
+    printf '%s\n' "${libobs_runtime_packages[@]}"
+    exit 0
+fi
+[[ "$#" == 0 ]] || fail "Usage: $0 [--print-native-packages]"
+
 resolve_linked_library() {
     local binary="$1"
     local library_name="$2"
@@ -65,6 +120,7 @@ PYTHON="$(resolve_python)"
 cd "${PROJECT_ROOT}"
 
 "${PYTHON}" - <<'PY'
+import platform
 import sys
 
 if sys.version_info < (3, 13):
@@ -72,12 +128,51 @@ if sys.version_info < (3, 13):
         f"Solin requires Python 3.13 or newer; found {sys.version.split()[0]}. "
         "Set SOLIN_PYTHON to a compatible Linux interpreter."
     )
+if platform.machine() != "x86_64":
+    raise SystemExit("Solin Linux builds require x86_64.")
+libc, version = platform.libc_ver()
+if libc != "glibc" or tuple(map(int, version.split("."))) < (2, 38):
+    raise SystemExit(
+        "The Ubuntu 24.04 libobs dependency runtime requires glibc 2.38 or newer. "
+        "Use Ubuntu 24.04 x86_64 (including WSL 2). Ubuntu 22.04 is unsupported."
+    )
 PY
 
-for command_name in gcc patchelf readelf; do
+for command_name in curl dpkg-deb gcc patchelf readelf sha256sum; do
     command -v "${command_name}" >/dev/null || fail \
-        "${command_name} is required. On Ubuntu run: sudo apt install binutils build-essential patchelf"
+        "${command_name} is required. On Ubuntu run: sudo apt install binutils build-essential curl dpkg patchelf"
 done
+
+# The published Linux wheel omits usr/local/bin/obs-ffmpeg-mux. Extract the
+# matching official release without installing OBS or changing apt sources.
+OBS_RUNTIME_VERSION="32.1.2"
+OBS_RUNTIME_SHA256="a3bb1b0176604dad9e22710e057f0fdd76e8afb600e0e1914c30464ae49908e8"
+OBS_RUNTIME_NAME="OBS-Studio-${OBS_RUNTIME_VERSION}-Ubuntu-24.04-x86_64.deb"
+OBS_RUNTIME_URL="https://github.com/obsproject/obs-studio/releases/download/${OBS_RUNTIME_VERSION}/${OBS_RUNTIME_NAME}"
+OBS_CACHE_ROOT="${WORK_ROOT}/dependencies/libobs"
+OBS_RUNTIME_ARCHIVE="${OBS_CACHE_ROOT}/${OBS_RUNTIME_NAME}"
+mkdir -p "${OBS_CACHE_ROOT}"
+if [[ ! -f "${OBS_RUNTIME_ARCHIVE}" ]] || ! printf '%s  %s\n' \
+    "${OBS_RUNTIME_SHA256}" "${OBS_RUNTIME_ARCHIVE}" | sha256sum --check --status; then
+    OBS_DOWNLOAD="$(mktemp "${OBS_CACHE_ROOT}/.obs-download.XXXXXX")"
+    if ! curl --fail --location --retry 3 --retry-delay 2 \
+        --output "${OBS_DOWNLOAD}" "${OBS_RUNTIME_URL}"; then
+        rm -f -- "${OBS_DOWNLOAD}"
+        fail "Failed to download the pinned OBS runtime."
+    fi
+    if ! printf '%s  %s\n' "${OBS_RUNTIME_SHA256}" "${OBS_DOWNLOAD}" \
+        | sha256sum --check --status; then
+        rm -f -- "${OBS_DOWNLOAD}"
+        fail "Checksum verification failed for ${OBS_RUNTIME_URL}"
+    fi
+    mv -f -- "${OBS_DOWNLOAD}" "${OBS_RUNTIME_ARCHIVE}"
+fi
+OBS_EXTRACT_ROOT="$(mktemp -d "${OBS_CACHE_ROOT}/.obs-extract.XXXXXX")"
+trap 'rm -rf -- "${OBS_EXTRACT_ROOT}"' EXIT
+dpkg-deb --extract "${OBS_RUNTIME_ARCHIVE}" "${OBS_EXTRACT_ROOT}"
+LINUX_MUX_HELPER="${OBS_EXTRACT_ROOT}/usr/local/bin/obs-ffmpeg-mux"
+[[ -s "${LINUX_MUX_HELPER}" && -x "${LINUX_MUX_HELPER}" ]] || fail \
+    "The pinned OBS runtime is missing its executable mux helper."
 
 XDOTOOL_SOURCE="$(command -v xdotool || true)"
 [[ -n "${XDOTOOL_SOURCE}" ]] || fail \
@@ -134,6 +229,7 @@ fi
     --include-package=solin.styles \
     --include-package=solin.widgets \
     --include-package=sideview \
+    --include-package=pylibobs \
     --include-module=websocket \
     --include-module=websocket._core \
     --include-module=websocket._app \
@@ -148,7 +244,7 @@ fi
     "${qml_binary_args[@]}" \
     --include-data-files="src/solin/resources/translations/*.qm=solin/resources/translations/" \
     --enable-plugin=pyside6 \
-    --include-qt-plugins=platforms,platformthemes,imageformats,multimedia,position,xcbglintegrations \
+    --include-qt-plugins=platforms,platformthemes,imageformats,position,xcbglintegrations \
     main.py
 
 [[ -x "${DIST_DIR}/Solin.bin" ]] || fail "Nuitka did not produce ${DIST_DIR}/Solin.bin."
@@ -172,8 +268,6 @@ find "${DIST_DIR}/solin/qml/Solin" -maxdepth 1 -name '*.qml' -print -quit | grep
     "Raw app QML source remained in the standalone distribution."
 [[ -f "${DIST_DIR}/PySide6/qml/QtQuick/qmldir" ]] || fail "QtQuick QML runtime is missing."
 [[ -f "${DIST_DIR}/PySide6/qml/QtQml/qmldir" ]] || fail "QtQml QML runtime is missing."
-[[ -f "${DIST_DIR}/PySide6/qml/QtMultimedia/libquickmultimediaplugin.so" ]] || fail \
-    "QtMultimedia QML plugin is missing."
 [[ -f "${DIST_DIR}/PySide6/qml/QtQuick/Controls/libqtquickcontrols2plugin.so" ]] || fail \
     "QtQuick Controls QML plugin is missing."
 
@@ -270,6 +364,11 @@ if ldd "${DIST_DIR}/sideview/libsideview_native.so" | grep -q 'not found'; then
     ldd "${DIST_DIR}/sideview/libsideview_native.so" >&2
     fail "The packaged SideView backend has unresolved shared-library dependencies."
 fi
+
+"${PYTHON}" scripts/package_libobs_runtime.py \
+    --application-dir "${DIST_DIR}" \
+    --executable "${DIST_DIR}/Solin.bin" \
+    --linux-mux-helper "${LINUX_MUX_HELPER}"
 
 if [[ "${WORK_ROOT}" != "${OUTPUT_ROOT}" ]]; then
     rm -rf "${FINAL_DIST_DIR}"

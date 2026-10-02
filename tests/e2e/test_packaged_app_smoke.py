@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from scripts.package_libobs_runtime import verify_packaged_sidecar
 from tests.e2e._packaged_app import (
     assert_process_survives_startup,
     cleanup_solin_test_registry,
@@ -15,6 +16,13 @@ from tests.e2e._packaged_app import (
 
 
 pytestmark = pytest.mark.e2e
+
+
+def test_packaged_sidecar_initializes_native_runtime_and_required_sources() -> None:
+    executable = path_from_env(
+        "SOLIN_PACKAGED_EXE", purpose="packaged libobs runtime smoke tests",
+    )
+    verify_packaged_sidecar(executable)
 
 
 def test_packaged_app_survives_startup_window() -> None:

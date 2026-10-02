@@ -5,7 +5,7 @@ import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
-from PySide6.QtCore import QObject, QPoint, QPointF, QSize, Qt
+from PySide6.QtCore import QCoreApplication, QEvent, QObject, QPoint, QPointF, QSize, Qt
 from PySide6.QtGui import QColor, QPixmap
 from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtTest import QTest
@@ -44,8 +44,21 @@ def _visible_texts(item, *, parent_visible: bool = True) -> list[str]:
     return values
 
 
+@pytest.fixture
+def qml_widget():
+    widget = QQuickWidget()
+    try:
+        yield widget
+    finally:
+        # close() hides the widget; dispose its engine on the GUI thread before
+        # Python's cycle collector can tear down the QML object graph out of order.
+        widget.close()
+        widget.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+
 @pytest.mark.parametrize("size", [(635, 600), (1200, 760)])
-def test_library_qml_loads_catalog_and_downloads_sections(tmp_path, size) -> None:
+def test_library_qml_loads_catalog_and_downloads_sections(tmp_path, size, qml_widget) -> None:
     cache_manager = MediaCacheManager(
         tmp_path,
         downloader_factory=lambda _parent: None,
@@ -87,7 +100,7 @@ def test_library_qml_loads_catalog_and_downloads_sections(tmp_path, size) -> Non
         download_all_tooltip="Download all",
     )
 
-    widget = QQuickWidget()
+    widget = qml_widget
     widget.resize(*size)
     configure_qml_host(
         widget,

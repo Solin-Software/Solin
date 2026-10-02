@@ -57,9 +57,6 @@ class MediaPlaybackNotificationController(QObject):
         if self._started:
             return
         self._media_controller.error_occurred.connect(self.on_playback_error)
-        self._media_controller.playback_interrupted.connect(
-            self.on_playback_interrupted
-        )
         self._started = True
 
     def stop(self) -> None:
@@ -67,12 +64,6 @@ class MediaPlaybackNotificationController(QObject):
             return
         try:
             self._media_controller.error_occurred.disconnect(self.on_playback_error)
-        except (RuntimeError, TypeError):
-            pass
-        try:
-            self._media_controller.playback_interrupted.disconnect(
-                self.on_playback_interrupted
-            )
         except (RuntimeError, TypeError):
             pass
         self._started = False

@@ -67,11 +67,13 @@ def _paths(tmp_path: Path) -> ProfilePaths:
 
 class _Runtime(QObject):
     engine_capabilities_changed = Signal(object)
+    runtime_changed = Signal(object)
 
     def __init__(self) -> None:
         super().__init__()
         self.engine_ready = True
         self.native_window_routing_ready = True
+        self.program_output_enabled = True
         self.document = create_default_scene_document(
             _names(),
             document_id="recording-document",
@@ -535,3 +537,31 @@ def test_scene_profile_catalog_v1_migrates_to_recording_defaults(tmp_path: Path)
     assert persisted["schema_version"] == 2
     assert persisted["revision"] == 7
     assert persisted["collections"][0]["recording"]["output_directory"] == ""
+
+
+def test_disabling_the_virtual_camera_stops_and_saves_the_recording(
+    tmp_path: Path,
+) -> None:
+    """Recording captures Program; switching that output off has to finalise it."""
+    controller, _workspace, runtime, _engine, paths = _controller(tmp_path)
+    controller.start()
+    assert controller.state.status is ProgramRecordingStatus.RECORDING
+
+    runtime.program_output_enabled = False
+    runtime.runtime_changed.emit(None)
+
+    assert controller.state.status is ProgramRecordingStatus.IDLE
+    assert runtime.demands == [True, False]
+    # A clean stop retires the recovery journal; a stalled one would leave it.
+    assert not paths.scene_recording_journal_file.exists()
+
+
+def test_runtime_changes_leave_a_live_recording_alone_while_the_output_is_on(
+    tmp_path: Path,
+) -> None:
+    controller, _workspace, runtime, _engine, _paths = _controller(tmp_path)
+    controller.start()
+
+    runtime.runtime_changed.emit(None)
+
+    assert controller.state.status is ProgramRecordingStatus.RECORDING

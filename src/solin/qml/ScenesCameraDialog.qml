@@ -16,6 +16,8 @@ Dialog {
     property bool formatSelectionChanged: false
     property string ptzProtocol: ""
     property bool hasCredentials: false
+    property bool hasStreamCredentials: false
+    property bool clearStreamCredentials: false
     property bool clearCredentials: false
     property bool addToScene: true
 
@@ -76,6 +78,10 @@ Dialog {
         serialBaud.currentIndex = [9600, 19200, 38400, 115200].indexOf(draft.ptzBaudRate || 9600)
         serialAddress.value = draft.ptzCameraAddress || 1
         hasCredentials = draft.hasCredentials === true
+        hasStreamCredentials = draft.hasStreamCredentials === true
+        clearStreamCredentials = false
+        streamUsernameField.text = ""
+        streamPasswordField.text = ""
         clearCredentials = false
         usernameField.text = ""
         passwordField.text = ""
@@ -115,6 +121,9 @@ Dialog {
             ptzProtocol: ["", "onvif", "visca_ip", "visca_serial"][ptzCombo.currentIndex],
             ptzEndpoint: onvifEndpoint.text.trim(),
             ptzProfileToken: onvifProfileToken.text.trim(),
+            streamUsername: streamUsernameField.text.trim(),
+            streamPassword: streamPasswordField.text,
+            clearStreamCredentials: root.clearStreamCredentials,
             ptzUsername: usernameField.text.trim(),
             ptzPassword: passwordField.text,
             clearCredentials: clearCredentials,
@@ -235,6 +244,40 @@ Dialog {
 
                     FieldLabel { visible: root.cameraKind === "rtsp_camera"; text: qsTr("Network buffer") }
                     ScenesSpinBox { id: latencyField; theme: root.theme; visible: root.cameraKind === "rtsp_camera"; Layout.fillWidth: true; from: 0; to: 10000 }
+
+                    // The stream login. Kept out of the address, which is written to
+                    // disk and printed by the engine; stored in the system keyring
+                    // and put back only when connecting. Separate from the PTZ login
+                    // below: the two accounts are routinely different.
+                    FieldLabel { visible: root.cameraKind === "rtsp_camera"; text: qsTr("Stream user name") }
+                    StyledField {
+                        id: streamUsernameField
+                        visible: root.cameraKind === "rtsp_camera"
+                        Layout.fillWidth: true
+                        placeholderText: root.hasStreamCredentials
+                            ? qsTr("Leave blank to keep saved credentials")
+                            : qsTr("Only if the camera asks for one")
+                    }
+
+                    FieldLabel { visible: root.cameraKind === "rtsp_camera"; text: qsTr("Stream password") }
+                    StyledField {
+                        id: streamPasswordField
+                        visible: root.cameraKind === "rtsp_camera"
+                        Layout.fillWidth: true
+                        echoMode: TextInput.Password
+                        placeholderText: root.hasStreamCredentials
+                            ? qsTr("Leave blank to keep saved credentials")
+                            : ""
+                    }
+
+                    FieldLabel { visible: root.cameraKind === "rtsp_camera" && root.hasStreamCredentials; text: "" }
+                    ScenesCheckBox {
+                        theme: root.theme
+                        visible: root.cameraKind === "rtsp_camera" && root.hasStreamCredentials
+                        text: qsTr("Remove saved stream credentials")
+                        checked: root.clearStreamCredentials
+                        onToggled: root.clearStreamCredentials = checked
+                    }
                 }
                 Text {
                     Layout.fillWidth: true

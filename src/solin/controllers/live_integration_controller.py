@@ -60,7 +60,7 @@ class LiveIntegrationContext:
     quick_toolbar: Callable[[], Any | None]
     projection_windows: Callable[[], list[Any]]
     playback_protection: Any
-    content_frame_sink: Callable[[object], None] | None = None
+    content_frame_sink: Callable[[object], None]
     platform: str = sys.platform
     camera_settings: Any | None = None
     camera_service: Any | None = None
@@ -332,8 +332,7 @@ class LiveIntegrationController:
             if hasattr(window, "show_image_from_qimage"):
                 window.show_image_from_qimage(frame, cache_pixmap=False)
         context.projection_bar.update_tab_live_preview(frame)
-        if context.content_frame_sink is not None:
-            context.content_frame_sink(frame)
+        context.content_frame_sink(frame)
 
     def on_camera_error(self, message: str) -> None:
         if self._session.state_type != "camera_stream":
@@ -358,8 +357,7 @@ class LiveIntegrationController:
             if hasattr(win, "show_image_from_qimage"):
                 win.show_image_from_qimage(frame, cache_pixmap=False)
         context.projection_bar.update_tab_live_preview(frame)
-        if context.content_frame_sink is not None:
-            context.content_frame_sink(frame)
+        context.content_frame_sink(frame)
 
     def on_obs_ndi_error(self, message: str) -> None:
         if self._session.state_type == "obs_stream":

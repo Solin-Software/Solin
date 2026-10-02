@@ -48,7 +48,7 @@ class QuickToolbarBridge(QObject):
     monitorClicked = Signal()
     backgroundSongClicked = Signal()
     obsClicked = Signal()
-    scenesClicked = Signal()
+    scenesClicked = Signal(bool)
     zoomClicked = Signal()
     cameraClicked = Signal()
     remoteControlClicked = Signal()
@@ -256,9 +256,9 @@ class QuickToolbarBridge(QObject):
     def onObsClicked(self) -> None:  # noqa: N802
         self.obsClicked.emit()
 
-    @Slot()
-    def onScenesClicked(self) -> None:  # noqa: N802
-        self.scenesClicked.emit()
+    @Slot(bool)
+    def onScenesClicked(self, pointer_activation: bool) -> None:  # noqa: N802
+        self.scenesClicked.emit(pointer_activation)
 
     @Slot()
     def onZoomClicked(self) -> None:  # noqa: N802

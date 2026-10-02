@@ -4,9 +4,8 @@ import logging
 import threading
 from typing import Protocol
 
-from PySide6.QtCore import QObject, QSize, Signal
+from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QImage
-from PySide6.QtMultimedia import QVideoFrame, QVideoFrameFormat
 
 from solin.core.scenes.engine import FrameChannelDescriptor
 from solin.core.scenes.frame_channel import (
@@ -214,39 +213,16 @@ class SceneVideoFrameEgressController(_SceneFrameEgressController):
 
 
 def video_frame_to_image(frame: VideoFrame) -> QImage:
-    """Convert a transported frame on the receiving Qt thread."""
+    """Convert a transported frame on the receiving Qt thread.
 
+    Under the libobs engine the egress delivers BGRA frames (or ``QImage``
+    directly), so only BGRA is converted here. NV12 was produced only by the
+    legacy native (Windows/D3D11) egress, which required QtMultimedia to convert;
+    with QtMultimedia removed it is no longer supported and yields a blank image.
+    """
     if frame.pixel_format is VideoPixelFormat.BGRA:
         return _bgra_frame_image(frame)
-    if frame.pixel_format is not VideoPixelFormat.NV12:
-        return QImage()
-    frame_format = QVideoFrameFormat(
-        QSize(frame.width, frame.height),
-        QVideoFrameFormat.PixelFormat.Format_NV12,
-    )
-    frame_format.setColorSpace(QVideoFrameFormat.ColorSpace.ColorSpace_BT709)
-    frame_format.setColorRange(QVideoFrameFormat.ColorRange.ColorRange_Video)
-    video_frame = QVideoFrame(frame_format)
-    if not video_frame.map(QVideoFrame.MapMode.WriteOnly):
-        return QImage()
-    try:
-        source = memoryview(frame.pixels)
-        y_size = frame.width * frame.height
-        for plane, rows, source_offset in (
-            (0, frame.height, 0),
-            (1, frame.height // 2, y_size),
-        ):
-            target = video_frame.bits(plane)
-            target_stride = video_frame.bytesPerLine(plane)
-            for row in range(rows):
-                row_start = source_offset + row * frame.width
-                target_start = row * target_stride
-                target[target_start : target_start + frame.width] = source[
-                    row_start : row_start + frame.width
-                ]
-    finally:
-        video_frame.unmap()
-    return video_frame.toImage()
+    return QImage()
 
 
 def _bgra_frame_image(frame: VideoFrame) -> QImage:
