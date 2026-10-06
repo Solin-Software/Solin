@@ -17,11 +17,12 @@ cantos recortados ficam genuinamente transparentes (não pretos).
 
 Segurança
 ─────────
-- Só roda no macOS (``sys.platform == "darwin"``).
-- Toda a ponte ObjC é embrulhada em ``try/except`` e nunca propaga exceção.
-  Pior caso = no-op → o widget continua um retângulo de cantos retos (a base
-  garantida do modo sólido), nunca um crash nativo. Isso respeita o alerta
-  documentado em ``solin.ui.titlebar`` para builds Nuitka standalone.
+- Só roda no macOS com o plugin Qt Cocoa ativo. Backends headless como
+  ``offscreen`` não possuem um ``NSView`` válido por trás de ``winId()``.
+- Falhas Python/ObjC representadas como exceções viram no-op. O guard do
+  backend acontece antes de interpretar ``winId()`` como ``NSView`` porque um
+  ponteiro nativo inválido pode abortar o processo antes de Python conseguir
+  transformar a falha em exceção.
 - Em qualquer outra plataforma é um no-op silencioso (nem importa pyobjc).
 
 Uso
@@ -35,6 +36,7 @@ from __future__ import annotations
 import sys
 import logging
 
+from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QWidget
 
 log = logging.getLogger(__name__)
@@ -65,6 +67,9 @@ def apply_corner_radius(
     macOS). Nunca levanta exceção.
     """
     if sys.platform != "darwin":
+        return False
+    application = QGuiApplication.instance()
+    if application is None or application.platformName() != "cocoa":
         return False
 
     try:

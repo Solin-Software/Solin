@@ -1,8 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from contextlib import contextmanager, ExitStack
 import json
 from pathlib import Path
+import subprocess
+import sys
+from textwrap import dedent
+from threading import Event
+from types import SimpleNamespace
 
 import pytest
 
@@ -37,7 +43,6 @@ from solin.core.scenes.workspace import (
     SceneWorkspaceBusyError,
     SceneWorkspaceChangeKind,
     SceneWorkspaceOperationError,
-    SceneWorkspaceService,
 )
 
 
@@ -73,9 +78,229 @@ class _Projection:
         return lambda: None
 
 
-def test_fresh_workspace_has_one_minimal_profile_and_internal_fallback(tmp_path: Path) -> None:
+@contextmanager
+def _workspace_cleanup_scope(tmp_path: Path):
+    from tests.conftest import scene_workspace_factory
+
+    with ExitStack() as finalizers:
+        request = SimpleNamespace(addfinalizer=finalizers.callback)
+        create = scene_workspace_factory.__wrapped__(request, tmp_path)
+        yield create
+
+
+def test_workspace_factory_cleans_owned_writers_after_an_assertion(tmp_path: Path) -> None:
+    with pytest.raises(AssertionError, match="simulated assertion failure"):
+        with _workspace_cleanup_scope(tmp_path) as create:
+            first = create(_paths(tmp_path, "first"), seed_names=_names())
+            second = create(_paths(tmp_path, "second"), seed_names=_names())
+            first.runtime.set_output_enabled(BusId.MEDIA_WINDOWS, True)
+            second.runtime.set_output_enabled(BusId.MEDIA_WINDOWS, True)
+            raise AssertionError("simulated assertion failure")
+
+    for workspace in (first, second):
+        assert workspace._runtime_persistence.flush(timeout_seconds=0)
+        assert not workspace._runtime_persistence._thread.is_alive()
+
+
+def test_workspace_factory_finalizes_failed_setup_before_temporary_storage(tmp_path: Path) -> None:
+    report = tmp_path / "teardown.json"
+    test_file = tmp_path / "test_failed_setup.py"
+    test_file.write_text(
+        dedent(f"""
+            import json
+            from pathlib import Path
+            import pytest
+            from tests.conftest import scene_workspace_factory
+            from solin.core.scenes.model import BusId
+            from tests.unit.test_scene_workspace import _names, _paths
+
+            queues = []
+
+            @pytest.fixture
+            def tmp_path(tmp_path_factory):
+                path = tmp_path_factory.mktemp("owned-storage")
+                yield path
+                state = {{
+                    "storage_exists": path.exists(),
+                    "flushed": all(queue.flush(0) for queue in queues),
+                    "writers_stopped": all(not queue._thread.is_alive() for queue in queues),
+                }}
+                Path({str(report)!r}).write_text(json.dumps(state), encoding="utf-8")
+                assert len(queues) == 1
+                assert all(state.values())
+
+            @pytest.fixture
+            def failed_setup(scene_workspace_factory, tmp_path):
+                workspace = scene_workspace_factory(_paths(tmp_path), seed_names=_names())
+                queues.append(workspace._runtime_persistence)
+                workspace.runtime.set_output_enabled(BusId.MEDIA_WINDOWS, True)
+                raise RuntimeError("simulated fixture setup failure")
+
+            def test_failed_setup(failed_setup):
+                pass
+            """),
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            str(test_file),
+            "-q",
+            f"--confcutdir={tmp_path}",
+            f"--basetemp={tmp_path / 'child-tmp'}",
+            "-o",
+            "tmp_path_retention_policy=all",
+        ],
+        cwd=Path(__file__).resolve().parents[2],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "simulated fixture setup failure" in result.stdout
+    assert "1 error" in result.stdout, result.stdout + result.stderr
+    assert json.loads(report.read_text(encoding="utf-8")) == {
+        "storage_exists": True,
+        "flushed": True,
+        "writers_stopped": True,
+    }
+
+
+def test_workspace_factory_drains_every_writer_when_one_close_raises(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    with pytest.raises(RuntimeError, match="simulated runtime close failure"):
+        with _workspace_cleanup_scope(tmp_path) as create:
+            first = create(_paths(tmp_path, "first"), seed_names=_names())
+            second = create(_paths(tmp_path, "second"), seed_names=_names())
+            original_close = second.runtime.close
+
+            def fail_close() -> None:
+                original_close()
+                raise RuntimeError("simulated runtime close failure")
+
+            monkeypatch.setattr(second.runtime, "close", fail_close)
+            first.runtime.set_output_enabled(BusId.MEDIA_WINDOWS, True)
+            second.runtime.set_output_enabled(BusId.MEDIA_WINDOWS, True)
+
+    for workspace in (first, second):
+        assert workspace._runtime_persistence.flush(timeout_seconds=0)
+        assert not workspace._runtime_persistence._thread.is_alive()
+
+
+def test_workspace_factory_does_not_close_a_controllers_workspace_twice(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    close_calls = []
+    with _workspace_cleanup_scope(tmp_path) as create:
+        workspace = create(_paths(tmp_path), seed_names=_names())
+        original_close = workspace.close
+
+        def count_close() -> None:
+            close_calls.append(workspace)
+            original_close()
+
+        monkeypatch.setattr(workspace, "close", count_close)
+        controller = SceneRuntimeController(workspace, _Projection())
+        controller.close()
+
+    assert close_calls == [workspace]
+    assert not workspace._runtime_persistence._thread.is_alive()
+
+
+def test_workspace_factory_joins_a_writer_after_early_controller_close_times_out(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    entered = Event()
+    release = Event()
+    queue = None
+    join_calls = []
+    try:
+        with _workspace_cleanup_scope(tmp_path) as create:
+            workspace = create(_paths(tmp_path), seed_names=_names())
+            queue = workspace._runtime_persistence
+            original_save = queue._repository.save
+            original_close = queue.close
+            original_join = queue._thread.join
+
+            def save(state, *, expected_revision=None) -> None:
+                entered.set()
+                assert release.wait(5), "test did not release its owned writer"
+                original_save(state, expected_revision=expected_revision)
+
+            monkeypatch.setattr(queue._repository, "save", save)
+            monkeypatch.setattr(queue, "close", lambda: original_close(timeout_seconds=0))
+            controller = SceneRuntimeController(workspace, _Projection())
+            workspace.runtime.set_output_enabled(BusId.MEDIA_WINDOWS, True)
+            assert entered.wait(2)
+            controller.close()
+            assert queue._closing and queue._thread.is_alive()
+
+            def join(timeout=None) -> None:
+                join_calls.append(timeout)
+                release.set()
+                original_join(timeout)
+
+            monkeypatch.setattr(queue._thread, "join", join)
+
+        assert join_calls == [2.0]
+        assert queue.flush(timeout_seconds=0)
+        assert not queue._thread.is_alive()
+    finally:
+        release.set()
+        if queue is not None:
+            queue._thread.join(2)
+            assert not queue._thread.is_alive()
+
+
+@pytest.mark.parametrize("failure", ["write_error", "blocked_writer"])
+def test_workspace_factory_reports_unsaved_state_and_a_still_live_owned_writer(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: str,
+) -> None:
+    entered = Event()
+    release = Event()
+    queue = None
+    try:
+        with pytest.raises(AssertionError, match="flushed=False") as caught:
+            with _workspace_cleanup_scope(tmp_path) as create:
+                workspace = create(_paths(tmp_path), seed_names=_names())
+                queue = workspace._runtime_persistence
+                original_save = queue._repository.save
+                original_close = queue.close
+
+                def save(state, *, expected_revision=None) -> None:
+                    entered.set()
+                    if failure == "write_error":
+                        raise OSError("simulated persistence failure")
+                    if not release.wait(5):
+                        raise TimeoutError("test did not release its owned writer")
+                    original_save(state, expected_revision=expected_revision)
+
+                monkeypatch.setattr(queue._repository, "save", save)
+                monkeypatch.setattr(queue, "close", lambda: original_close(timeout_seconds=0.05))
+                workspace.runtime.set_output_enabled(BusId.MEDIA_WINDOWS, True)
+                assert entered.wait(2), "owned writer did not enter the storage call"
+
+        if failure == "blocked_writer":
+            assert "writer_stopped=False" in str(caught.value)
+    finally:
+        release.set()
+        if queue is not None:
+            queue._thread.join(2)
+            assert not queue._thread.is_alive()
+
+
+def test_fresh_workspace_has_one_minimal_profile_and_internal_fallback(scene_workspace_factory, tmp_path: Path) -> None:
     paths = _paths(tmp_path)
-    workspace = SceneWorkspaceService(paths, seed_names=_names())
+    workspace = scene_workspace_factory(paths, seed_names=_names())
 
     assert workspace.active_collection.id == DEFAULT_SCENE_COLLECTION_ID
     assert workspace.active_collection.name == "Profile 1"
@@ -97,12 +322,12 @@ def test_fresh_workspace_has_one_minimal_profile_and_internal_fallback(tmp_path:
     ).exists()
 
 
-def test_fresh_workspace_default_scene_holds_the_year_text_source(tmp_path: Path) -> None:
+def test_fresh_workspace_default_scene_holds_the_year_text_source(scene_workspace_factory, tmp_path: Path) -> None:
     # First run: the Default scene (the idle fallback) shows the year text, so the
     # projection and virtual camera both fall back to it when nothing else plays.
     from solin.core.scenes.model import SourceKind
 
-    workspace = SceneWorkspaceService(_paths(tmp_path), seed_names=_names())
+    workspace = scene_workspace_factory(_paths(tmp_path), seed_names=_names())
     document = workspace.documents.document
 
     yeartext_sources = [
@@ -116,7 +341,7 @@ def test_fresh_workspace_default_scene_holds_the_year_text_source(tmp_path: Path
     assert {route.default_scene_id for route in document.outputs} == {DEFAULT_SCENE_ID}
 
 
-def test_legacy_document_gains_the_year_text_default_scene_on_load(tmp_path: Path) -> None:
+def test_legacy_document_gains_the_year_text_default_scene_on_load(scene_workspace_factory, tmp_path: Path) -> None:
     # A collection saved before the year-text-as-a-scene feature has no Default
     # scene, so its idle projection would have no year text after upgrading. On
     # load it is self-healed: the year-text source + Default scene are added and
@@ -132,7 +357,7 @@ def test_legacy_document_gains_the_year_text_default_scene_on_load(tmp_path: Pat
     assert all(source.id != YEARTEXT_SOURCE_ID for source in legacy.sources)
     SceneDocumentRepository(paths.scenes_file, seed_factory=lambda: legacy).save(legacy)
 
-    first = SceneWorkspaceService(paths, seed_names=_names())
+    first = scene_workspace_factory(paths, seed_names=_names())
     healed = first.documents.document
     first.close()
 
@@ -147,7 +372,7 @@ def test_legacy_document_gains_the_year_text_default_scene_on_load(tmp_path: Pat
 
     # Idempotent: reloading heals to the same structure — no duplicate Default
     # scene or year-text source.
-    second = SceneWorkspaceService(paths, seed_names=_names())
+    second = scene_workspace_factory(paths, seed_names=_names())
     reloaded = second.documents.document
     assert [s.id for s in reloaded.scenes] == [s.id for s in healed.scenes]
     assert sum(s.kind is SourceKind.YEARTEXT for s in reloaded.sources) == 1
@@ -157,6 +382,7 @@ def test_legacy_document_gains_the_year_text_default_scene_on_load(tmp_path: Pat
 
 
 def test_legacy_backup_is_migrated_and_normalized_to_shared_camera_refs(
+    scene_workspace_factory,
     tmp_path: Path,
 ) -> None:
     paths = _paths(tmp_path)
@@ -172,7 +398,7 @@ def test_legacy_backup_is_migrated_and_normalized_to_shared_camera_refs(
     legacy_repository.save(legacy)
     legacy_repository.initialize_backup(replace(legacy, revision=1))
 
-    SceneWorkspaceService(paths, seed_names=_names())
+    scene_workspace_factory(paths, seed_names=_names())
 
     raw_backup = json.loads(
         (
@@ -192,15 +418,15 @@ def test_legacy_backup_is_migrated_and_normalized_to_shared_camera_refs(
     }
 
 
-def test_corrupt_active_profile_recovers_from_its_backup(tmp_path: Path) -> None:
+def test_corrupt_active_profile_recovers_from_its_backup(scene_workspace_factory, tmp_path: Path) -> None:
     paths = _paths(tmp_path)
-    workspace = SceneWorkspaceService(paths, seed_names=_names())
+    workspace = scene_workspace_factory(paths, seed_names=_names())
     expected_document = workspace.documents.document
     workspace.close()
     primary = paths.scene_profiles_dir / f"{DEFAULT_SCENE_COLLECTION_ID}.json"
     primary.write_text("{not-json", encoding="utf-8")
 
-    recovered = SceneWorkspaceService(paths, seed_names=_names())
+    recovered = scene_workspace_factory(paths, seed_names=_names())
 
     assert recovered.documents.document == expected_document
     assert json.loads(primary.read_text(encoding="utf-8"))["document_id"] == (
@@ -208,10 +434,10 @@ def test_corrupt_active_profile_recovers_from_its_backup(tmp_path: Path) -> None
     )
 
 
-def test_profile_mutations_are_persisted_before_publication(tmp_path: Path) -> None:
+def test_profile_mutations_are_persisted_before_publication(scene_workspace_factory, tmp_path: Path) -> None:
     paths = _paths(tmp_path)
     identities = iter(("default-document", "collection-b", "document-b"))
-    workspace = SceneWorkspaceService(
+    workspace = scene_workspace_factory(
         paths,
         seed_names=_names(),
         identity_factory=lambda: next(identities),
@@ -238,12 +464,13 @@ def test_profile_mutations_are_persisted_before_publication(tmp_path: Path) -> N
 
 
 def test_failed_profile_creation_removes_unpublished_document(
+    scene_workspace_factory,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     identities = iter(("default-document", "collection-b", "document-b"))
     paths = _paths(tmp_path)
-    workspace = SceneWorkspaceService(
+    workspace = scene_workspace_factory(
         paths,
         seed_names=_names(),
         identity_factory=lambda: next(identities),
@@ -264,9 +491,9 @@ def test_failed_profile_creation_removes_unpublished_document(
     ]
 
 
-def test_scene_profiles_preserve_output_preferences_when_switching(tmp_path: Path) -> None:
+def test_scene_profiles_preserve_output_preferences_when_switching(scene_workspace_factory, tmp_path: Path) -> None:
     identities = iter(("default-document", "collection-b", "document-b"))
-    workspace = SceneWorkspaceService(
+    workspace = scene_workspace_factory(
         _paths(tmp_path),
         seed_names=_names(),
         identity_factory=lambda: next(identities),
@@ -281,10 +508,11 @@ def test_scene_profiles_preserve_output_preferences_when_switching(tmp_path: Pat
 
 
 def test_scene_profiles_keep_independent_program_transition_policies(
+    scene_workspace_factory,
     tmp_path: Path,
 ) -> None:
     identities = iter(("default-document", "collection-b", "document-b"))
-    workspace = SceneWorkspaceService(
+    workspace = scene_workspace_factory(
         _paths(tmp_path),
         seed_names=_names(),
         identity_factory=lambda: next(identities),
@@ -306,11 +534,12 @@ def test_scene_profiles_keep_independent_program_transition_policies(
 
 
 def test_activation_commit_failure_rolls_back_catalog_and_runtime(
+    scene_workspace_factory,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     identities = iter(("default-document", "collection-b", "document-b"))
-    workspace = SceneWorkspaceService(
+    workspace = scene_workspace_factory(
         _paths(tmp_path),
         seed_names=_names(),
         identity_factory=lambda: next(identities),
@@ -345,11 +574,11 @@ def test_activation_commit_failure_rolls_back_catalog_and_runtime(
     workspace.runtime.set_output_enabled(BusId.MEDIA_WINDOWS, False)
 
 
-def test_virtual_camera_blocks_create_switch_and_delete_but_not_rename(tmp_path: Path) -> None:
+def test_virtual_camera_blocks_create_switch_and_delete_but_not_rename(scene_workspace_factory, tmp_path: Path) -> None:
     identities = iter(
         ("default-document", "collection-b", "document-b", "collection-c", "document-c")
     )
-    workspace = SceneWorkspaceService(
+    workspace = scene_workspace_factory(
         _paths(tmp_path),
         seed_names=_names(),
         identity_factory=lambda: next(identities),
@@ -368,10 +597,10 @@ def test_virtual_camera_blocks_create_switch_and_delete_but_not_rename(tmp_path:
     assert renamed.name == "Main auditorium"
 
 
-def test_delete_active_requires_and_activates_replacement_first(tmp_path: Path) -> None:
+def test_delete_active_requires_and_activates_replacement_first(scene_workspace_factory, tmp_path: Path) -> None:
     identities = iter(("default-document", "collection-b", "document-b"))
     paths = _paths(tmp_path)
-    workspace = SceneWorkspaceService(
+    workspace = scene_workspace_factory(
         paths,
         seed_names=_names(),
         identity_factory=lambda: next(identities),
@@ -393,9 +622,9 @@ def test_delete_active_requires_and_activates_replacement_first(tmp_path: Path) 
         workspace.delete_collection(DEFAULT_SCENE_COLLECTION_ID)
 
 
-def test_scene_profile_names_are_unique_ignoring_case_and_whitespace(tmp_path: Path) -> None:
+def test_scene_profile_names_are_unique_ignoring_case_and_whitespace(scene_workspace_factory, tmp_path: Path) -> None:
     identities = iter(("default-document", "collection-b", "document-b"))
-    workspace = SceneWorkspaceService(
+    workspace = scene_workspace_factory(
         _paths(tmp_path),
         seed_names=_names(),
         identity_factory=lambda: next(identities),
@@ -406,9 +635,11 @@ def test_scene_profile_names_are_unique_ignoring_case_and_whitespace(tmp_path: P
         workspace.create_collection("  main   auditorium  ")
 
 
-def test_runtime_controller_rebinds_to_the_activated_scene_profile(tmp_path: Path) -> None:
+def test_runtime_controller_rebinds_to_the_activated_scene_profile(
+    request, scene_workspace_factory, tmp_path: Path
+) -> None:
     identities = iter(("default-document", "collection-b", "document-b"))
-    workspace = SceneWorkspaceService(
+    workspace = scene_workspace_factory(
         _paths(tmp_path),
         seed_names=_names(),
         identity_factory=lambda: next(identities),
@@ -416,6 +647,7 @@ def test_runtime_controller_rebinds_to_the_activated_scene_profile(tmp_path: Pat
     workspace.documents.create_scene("Temporary edit")
     created = workspace.create_collection("Auditorium")
     controller = SceneRuntimeController(workspace, _Projection())
+    request.addfinalizer(controller.close)
 
     workspace.activate_collection(created.id)
 
@@ -426,10 +658,10 @@ def test_runtime_controller_rebinds_to_the_activated_scene_profile(tmp_path: Pat
     assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == DEFAULT_SCENE_ID
 
 
-def test_camera_configuration_is_shared_between_scene_profiles(tmp_path: Path) -> None:
+def test_camera_configuration_is_shared_between_scene_profiles(scene_workspace_factory, tmp_path: Path) -> None:
     identities = iter(("default-document", "collection-b", "document-b"))
     paths = _paths(tmp_path)
-    workspace = SceneWorkspaceService(
+    workspace = scene_workspace_factory(
         paths,
         seed_names=_names(),
         identity_factory=lambda: next(identities),
@@ -459,9 +691,9 @@ def test_camera_configuration_is_shared_between_scene_profiles(tmp_path: Path) -
     }
 
 
-def test_shared_cameras_are_isolated_between_general_solin_profiles(tmp_path: Path) -> None:
-    first = SceneWorkspaceService(_paths(tmp_path, "first"), seed_names=_names())
-    second = SceneWorkspaceService(_paths(tmp_path, "second"), seed_names=_names())
+def test_shared_cameras_are_isolated_between_general_solin_profiles(scene_workspace_factory, tmp_path: Path) -> None:
+    first = scene_workspace_factory(_paths(tmp_path, "first"), seed_names=_names())
+    second = scene_workspace_factory(_paths(tmp_path, "second"), seed_names=_names())
     first_camera = first.documents.document.source(DEFAULT_CAMERA_SOURCE_ID)
 
     first.upsert_camera(
@@ -477,10 +709,11 @@ def test_shared_cameras_are_isolated_between_general_solin_profiles(tmp_path: Pa
 
 
 def test_orphaned_camera_cleanup_waits_for_backup_and_retries_credentials(
+    scene_workspace_factory,
     tmp_path: Path,
 ) -> None:
     paths = _paths(tmp_path)
-    workspace = SceneWorkspaceService(paths, seed_names=_names())
+    workspace = scene_workspace_factory(paths, seed_names=_names())
     camera = workspace.documents.document.source(DEFAULT_CAMERA_SOURCE_ID)
     workspace.upsert_camera(
         replace(
@@ -508,7 +741,7 @@ def test_orphaned_camera_cleanup_waits_for_backup_and_retries_credentials(
     assert workspace.configured_cameras
     workspace.close()
 
-    restarted = SceneWorkspaceService(paths, seed_names=_names())
+    restarted = scene_workspace_factory(paths, seed_names=_names())
 
     def unavailable_vault(_reference: str) -> None:
         raise OSError("vault unavailable")
@@ -523,7 +756,7 @@ def test_orphaned_camera_cleanup_waits_for_backup_and_retries_credentials(
     restarted.close()
 
     deleted_credentials: list[str] = []
-    recovered = SceneWorkspaceService(paths, seed_names=_names())
+    recovered = scene_workspace_factory(paths, seed_names=_names())
     recovered.set_credential_cleaner(deleted_credentials.append)
 
     assert deleted_credentials == ["ptz-0123456789abcdef0123456789abcdef"]
@@ -531,10 +764,11 @@ def test_orphaned_camera_cleanup_waits_for_backup_and_retries_credentials(
 
 
 def test_ptz_presets_are_shared_while_scene_actions_remain_collection_local(
+    scene_workspace_factory,
     tmp_path: Path,
 ) -> None:
     identities = iter(("default-document", "collection-b", "document-b"))
-    workspace = SceneWorkspaceService(
+    workspace = scene_workspace_factory(
         _paths(tmp_path),
         seed_names=_names(),
         identity_factory=lambda: next(identities),
@@ -565,9 +799,9 @@ def test_ptz_presets_are_shared_while_scene_actions_remain_collection_local(
     assert all(not scene.entry_actions for scene in workspace.documents.document.scenes)
 
 
-def test_deleting_scene_profile_collects_its_unreferenced_camera(tmp_path: Path) -> None:
+def test_deleting_scene_profile_collects_its_unreferenced_camera(scene_workspace_factory, tmp_path: Path) -> None:
     identities = iter(("default-document", "collection-b", "document-b"))
-    workspace = SceneWorkspaceService(
+    workspace = scene_workspace_factory(
         _paths(tmp_path),
         seed_names=_names(),
         identity_factory=lambda: next(identities),
@@ -590,9 +824,9 @@ def test_deleting_scene_profile_collects_its_unreferenced_camera(tmp_path: Path)
     )
 
 
-def test_new_scene_profile_uses_the_configured_camera_identity(tmp_path: Path) -> None:
+def test_new_scene_profile_uses_the_configured_camera_identity(scene_workspace_factory, tmp_path: Path) -> None:
     identities = iter(("default-document", "collection-b", "document-b"))
-    workspace = SceneWorkspaceService(
+    workspace = scene_workspace_factory(
         _paths(tmp_path),
         seed_names=_names(),
         identity_factory=lambda: next(identities),

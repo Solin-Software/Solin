@@ -1,4 +1,4 @@
-"""Solin release version in YY.RELEASE.PATCH.REVISION form."""
+"""Canonical CalVer (YY.RELEASE.PATCH, optionally followed by bN)."""
 
-VERSION = "26.31.1.0"
+VERSION = "26.31.1"
 __version__ = VERSION

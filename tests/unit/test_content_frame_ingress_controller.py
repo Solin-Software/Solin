@@ -3,6 +3,9 @@ from __future__ import annotations
 import threading
 import time
 from collections.abc import Buffer
+from concurrent.futures import ThreadPoolExecutor
+
+import pytest
 
 from PySide6.QtCore import QCoreApplication, Qt
 from PySide6.QtGui import QColor, QImage
@@ -18,6 +21,18 @@ from solin.core.scenes.engine import (
 )
 from solin.core.scenes.model import VideoColorRange, VideoColorSpace, VideoPixelFormat
 from solin.core.projection.image_framing import ImageTransform
+
+
+def test_ingress_rejects_worker_construction_before_acquiring_resources() -> None:
+    calls = []
+    with ThreadPoolExecutor(max_workers=1) as workers:
+        result = workers.submit(
+            ContentFrameIngressController,
+            publisher_factory=lambda *args: calls.append(args),
+        )
+        with pytest.raises(RuntimeError, match="created on the main Qt thread"):
+            result.result(timeout=2)
+    assert calls == []
 
 
 class _Publisher:

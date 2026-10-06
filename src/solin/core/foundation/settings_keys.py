@@ -7,7 +7,9 @@ from typing import Final
 
 class SettingsKey:
     INSTALL_ID: Final = "install_id"
-    PENDING_PATCH_CLEANUP: Final = "pending_patch_cleanup"
+    LEGACY_PENDING_PATCH_CLEANUP: Final = "pending_patch_cleanup"
+    PENDING_UPDATE_CLEANUP: Final = "updates/pending_cleanup"
+    UPDATE_CHANNEL: Final = "updates/channel"
     LAST_ACTIVE_PROFILE: Final = "last_active_profile"
     BOOTSTRAP_LANGUAGE: Final = "bootstrap_language"
     APP_LANGUAGE: Final = "language"

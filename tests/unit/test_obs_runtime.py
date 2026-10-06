@@ -1,10 +1,53 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+import weakref
 
 import pytest
 
 from solin.core.media import obs_runtime
+
+
+@pytest.mark.parametrize("audio_failure", [False, True])
+def test_graphics_buffer_is_retained_through_context_shutdown(monkeypatch, audio_failure):
+    events = []
+    runtime = _runtime_with_fake_libobs(monkeypatch, events)
+    context = runtime.ob.OBSContext()
+    owner_ref = None
+
+    class GraphicsBuffer:
+        pass
+
+    def initialize_video(*args, **kwargs):
+        nonlocal owner_ref
+        owner = GraphicsBuffer()
+        owner_ref = weakref.ref(owner)
+        return owner
+
+    def audio():
+        assert owner_ref is not None and owner_ref() is not None
+        if audio_failure:
+            raise RuntimeError("audio failed")
+
+    def shutdown():
+        assert owner_ref is not None and owner_ref() is not None
+        events.append("shutdown-with-buffer")
+
+    monkeypatch.setattr(obs_runtime, "set_video_compat", initialize_video)
+    monkeypatch.setattr(runtime, "_configure_nix_platform", lambda: False)
+    monkeypatch.setattr(context, "set_audio", audio)
+    monkeypatch.setattr(context, "shutdown", shutdown)
+    if audio_failure:
+        with pytest.raises(obs_runtime.ObsRuntimeError, match="audio failed"):
+            runtime.ensure_started(width=320, height=180, fps=30)
+    else:
+        runtime.ensure_started(width=320, height=180, fps=30)
+        assert runtime._graphics_module_owner is owner_ref()
+        runtime.shutdown()
+
+    assert events[-1] == "shutdown-with-buffer"
+    assert runtime._graphics_module_owner is None
+    assert owner_ref is not None and owner_ref() is None
 
 
 class _FakeContext:

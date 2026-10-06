@@ -37,7 +37,7 @@ from solin.core.scenes.recording import (
     ProgramRecordingStatus,
 )
 from solin.core.scenes.repository import SceneCollectionCatalogRepository
-from solin.core.scenes.workspace import SceneWorkspaceBusyError, SceneWorkspaceService
+from solin.core.scenes.workspace import SceneWorkspaceBusyError
 
 
 def _names() -> SceneSeedNames:
@@ -176,43 +176,50 @@ def _completed(value):
     return future
 
 
-def _controller(tmp_path: Path, *, minimum_free_bytes: int = 0):
-    paths = _paths(tmp_path)
-    workspace = SceneWorkspaceService(paths, seed_names=_names())
-    runtime = _Runtime()
-    engine = _Engine()
-    identities = (f"request-{index}" for index in range(100))
-    recordings = tmp_path / "recordings"
-    controller = ProgramRecordingController(
-        workspace,
-        runtime,  # type: ignore[arg-type]
-        engine=engine,  # type: ignore[arg-type]
-        profile_paths=paths,
-        request_id_factory=lambda: next(identities),
-        monotonic=lambda: 100.0,
-        now=lambda: datetime(2026, 8, 28, 14, 30, 15),
-        default_directory_resolver=lambda: recordings,
-        minimum_free_bytes=minimum_free_bytes,
-    )
-    runtime.engine_capabilities_changed.emit(
-        SceneEngineCapabilities(
-            protocol_version=PROTOCOL_VERSION,
-            process_generation="generation",
-            local_cameras=True,
-            rtsp_cameras=True,
-            hardware_compositing=True,
-            virtual_camera=True,
-            d3d11_shared_textures=True,
-            program_recording=True,
-            audio_input_capture=True,
-            system_audio_capture=True,
+@pytest.fixture
+def recording_controller_factory(request, scene_workspace_factory, tmp_path):
+    def create(*, minimum_free_bytes: int = 0):
+        paths = _paths(tmp_path)
+        workspace = scene_workspace_factory(paths, seed_names=_names())
+        runtime = _Runtime()
+        engine = _Engine()
+        identities = (f"request-{index}" for index in range(100))
+        recordings = tmp_path / "recordings"
+        controller = ProgramRecordingController(
+            workspace,
+            runtime,  # type: ignore[arg-type]
+            engine=engine,  # type: ignore[arg-type]
+            profile_paths=paths,
+            request_id_factory=lambda: next(identities),
+            monotonic=lambda: 100.0,
+            now=lambda: datetime(2026, 8, 28, 14, 30, 15),
+            default_directory_resolver=lambda: recordings,
+            minimum_free_bytes=minimum_free_bytes,
         )
-    )
-    return controller, workspace, runtime, engine, paths
+        request.addfinalizer(lambda: None if controller._closed else controller.close())
+        runtime.engine_capabilities_changed.emit(
+            SceneEngineCapabilities(
+                protocol_version=PROTOCOL_VERSION,
+                process_generation="generation",
+                local_cameras=True,
+                rtsp_cameras=True,
+                hardware_compositing=True,
+                virtual_camera=True,
+                d3d11_shared_textures=True,
+                program_recording=True,
+                audio_input_capture=True,
+                system_audio_capture=True,
+            )
+        )
+        return controller, workspace, runtime, engine, paths
+
+    return create
 
 
-def test_controller_starts_and_stops_once_with_one_render_demand(tmp_path: Path) -> None:
-    controller, _workspace, runtime, engine, paths = _controller(tmp_path)
+def test_controller_starts_and_stops_once_with_one_render_demand(
+    recording_controller_factory,
+) -> None:
+    controller, _workspace, runtime, engine, paths = recording_controller_factory()
     observed = []
     controller.state_changed.connect(observed.append)
 
@@ -240,9 +247,9 @@ def test_controller_starts_and_stops_once_with_one_render_demand(tmp_path: Path)
 
 
 def test_controller_rejects_start_when_native_recording_is_unsupported(
-    tmp_path: Path,
+    recording_controller_factory,
 ) -> None:
-    controller, _workspace, runtime, engine, paths = _controller(tmp_path)
+    controller, _workspace, runtime, engine, paths = recording_controller_factory()
     runtime.engine_capabilities_changed.emit(
         SceneEngineCapabilities(
             protocol_version=PROTOCOL_VERSION,
@@ -267,9 +274,9 @@ def test_controller_rejects_start_when_native_recording_is_unsupported(
 
 
 def test_controller_rejects_video_format_beyond_native_encoder_budget(
-    tmp_path: Path,
+    recording_controller_factory,
 ) -> None:
-    controller, _workspace, runtime, engine, paths = _controller(tmp_path)
+    controller, _workspace, runtime, engine, paths = recording_controller_factory()
     document = runtime.document
     output = document.output(document.outputs[1].bus_id)
     runtime.document = replace(
@@ -294,9 +301,9 @@ def test_controller_rejects_video_format_beyond_native_encoder_budget(
 
 
 def test_render_demand_is_rolled_back_when_enabling_program_raises(
-    tmp_path: Path,
+    recording_controller_factory,
 ) -> None:
-    controller, _workspace, runtime, engine, paths = _controller(tmp_path)
+    controller, _workspace, runtime, engine, paths = recording_controller_factory()
 
     def set_required(required: bool) -> None:
         runtime.demands.append(required)
@@ -313,8 +320,10 @@ def test_render_demand_is_rolled_back_when_enabling_program_raises(
     assert not paths.scene_recording_journal_file.exists()
 
 
-def test_audio_changes_persist_and_apply_atomically_while_recording(tmp_path: Path) -> None:
-    controller, workspace, _runtime, engine, _paths = _controller(tmp_path)
+def test_audio_changes_persist_and_apply_atomically_while_recording(
+    recording_controller_factory,
+) -> None:
+    controller, workspace, _runtime, engine, _paths = recording_controller_factory()
     controller.start()
     microphone = AudioDeviceSelection(
         AudioSelectionMode.DEVICE,
@@ -332,16 +341,16 @@ def test_audio_changes_persist_and_apply_atomically_while_recording(tmp_path: Pa
     assert applied == (microphone, AudioDeviceSelection())
 
 
-def test_busy_controller_blocks_scene_profile_lifecycle(tmp_path: Path) -> None:
-    controller, workspace, _runtime, _engine, _paths = _controller(tmp_path)
+def test_busy_controller_blocks_scene_profile_lifecycle(recording_controller_factory) -> None:
+    controller, workspace, _runtime, _engine, _paths = recording_controller_factory()
     controller.start()
 
     with pytest.raises(SceneWorkspaceBusyError, match="Stop recording"):
         workspace.create_collection("Auditorium")
 
 
-def test_native_audio_warning_does_not_interrupt_recording(tmp_path: Path) -> None:
-    controller, _workspace, _runtime, engine, _paths = _controller(tmp_path)
+def test_native_audio_warning_does_not_interrupt_recording(recording_controller_factory) -> None:
+    controller, _workspace, _runtime, engine, _paths = recording_controller_factory()
     controller.start()
     output_path = controller.state.output_path
     assert output_path is not None
@@ -367,9 +376,11 @@ def test_native_audio_warning_does_not_interrupt_recording(tmp_path: Path) -> No
 
 
 def test_engine_failure_preserves_partial_and_journal_for_next_startup(
+    request,
+    recording_controller_factory,
     tmp_path: Path,
 ) -> None:
-    controller, workspace, _runtime, engine, paths = _controller(tmp_path)
+    controller, workspace, _runtime, engine, paths = recording_controller_factory()
     controller.start()
     final_path = controller.state.output_path
     assert final_path is not None
@@ -389,6 +400,7 @@ def test_engine_failure_preserves_partial_and_journal_for_next_startup(
         profile_paths=paths,
         default_directory_resolver=lambda: tmp_path / "recordings",
     )
+    request.addfinalizer(replacement.close)
     assert replacement.state.status is ProgramRecordingStatus.FAILED
     assert replacement.state.output_path == staging_path
     assert staging_path.exists()
@@ -410,9 +422,8 @@ def test_default_directory_and_filename_collision_are_deterministic(tmp_path: Pa
     assert second.name == "Solin 2026-08-28 14-30-15 (2).mp4"
 
 
-def test_low_disk_preflight_fails_before_creating_a_journal(tmp_path: Path) -> None:
-    controller, _workspace, runtime, engine, paths = _controller(
-        tmp_path,
+def test_low_disk_preflight_fails_before_creating_a_journal(recording_controller_factory) -> None:
+    controller, _workspace, runtime, engine, paths = recording_controller_factory(
         minimum_free_bytes=2**63,
     )
 
@@ -426,7 +437,7 @@ def test_low_disk_preflight_fails_before_creating_a_journal(tmp_path: Path) -> N
 
 
 def test_unwritable_recording_directory_fails_before_native_start(
-    tmp_path: Path,
+    recording_controller_factory,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def deny_write(*_args, **_kwargs):
@@ -436,7 +447,7 @@ def test_unwritable_recording_directory_fails_before_native_start(
         "solin.controllers.program_recording_controller.tempfile.NamedTemporaryFile",
         deny_write,
     )
-    controller, _workspace, runtime, engine, paths = _controller(tmp_path)
+    controller, _workspace, runtime, engine, paths = recording_controller_factory()
 
     assert controller.start() is None
     assert controller.state.status is ProgramRecordingStatus.FAILED
@@ -446,8 +457,10 @@ def test_unwritable_recording_directory_fails_before_native_start(
     assert not paths.scene_recording_journal_file.exists()
 
 
-def test_forced_shutdown_finalizes_before_releasing_the_scene_runtime(tmp_path: Path) -> None:
-    controller, _workspace, runtime, engine, paths = _controller(tmp_path)
+def test_forced_shutdown_finalizes_before_releasing_the_scene_runtime(
+    recording_controller_factory,
+) -> None:
+    controller, _workspace, runtime, engine, paths = recording_controller_factory()
     controller.start()
     final_path = controller.state.output_path
     assert final_path is not None
@@ -461,9 +474,9 @@ def test_forced_shutdown_finalizes_before_releasing_the_scene_runtime(tmp_path: 
 
 
 def test_failed_recording_drops_recovery_journal_after_native_finalization(
-    tmp_path: Path,
+    recording_controller_factory,
 ) -> None:
-    controller, _workspace, _runtime, engine, paths = _controller(tmp_path)
+    controller, _workspace, _runtime, engine, paths = recording_controller_factory()
     controller.start()
     output_path = controller.state.output_path
     assert output_path is not None
@@ -489,9 +502,9 @@ def test_failed_recording_drops_recovery_journal_after_native_finalization(
     assert not paths.scene_recording_journal_file.exists()
 
 
-def test_recording_configuration_is_independent_per_scene_profile(tmp_path: Path) -> None:
+def test_recording_configuration_is_independent_per_scene_profile(scene_workspace_factory, tmp_path: Path) -> None:
     paths = _paths(tmp_path)
-    workspace = SceneWorkspaceService(paths, seed_names=_names())
+    workspace = scene_workspace_factory(paths, seed_names=_names())
     first_id = workspace.active_collection.id
     first_directory = str((tmp_path / "first-recordings").resolve())
     second_directory = str((tmp_path / "second-recordings").resolve())
@@ -508,7 +521,7 @@ def test_recording_configuration_is_independent_per_scene_profile(tmp_path: Path
     workspace.activate_collection(first_id)
 
     assert workspace.active_collection.recording.output_directory == first_directory
-    reloaded = SceneWorkspaceService(paths, seed_names=_names())
+    reloaded = scene_workspace_factory(paths, seed_names=_names())
     assert reloaded.catalog.collection(first_id).recording.output_directory == first_directory
     assert reloaded.catalog.collection(second.id).recording.output_directory == second_directory
 
@@ -540,10 +553,10 @@ def test_scene_profile_catalog_v1_migrates_to_recording_defaults(tmp_path: Path)
 
 
 def test_disabling_the_virtual_camera_stops_and_saves_the_recording(
-    tmp_path: Path,
+    recording_controller_factory,
 ) -> None:
     """Recording captures Program; switching that output off has to finalise it."""
-    controller, _workspace, runtime, _engine, paths = _controller(tmp_path)
+    controller, _workspace, runtime, _engine, paths = recording_controller_factory()
     controller.start()
     assert controller.state.status is ProgramRecordingStatus.RECORDING
 
@@ -557,9 +570,9 @@ def test_disabling_the_virtual_camera_stops_and_saves_the_recording(
 
 
 def test_runtime_changes_leave_a_live_recording_alone_while_the_output_is_on(
-    tmp_path: Path,
+    recording_controller_factory,
 ) -> None:
-    controller, _workspace, runtime, _engine, _paths = _controller(tmp_path)
+    controller, _workspace, runtime, _engine, _paths = recording_controller_factory()
     controller.start()
 
     runtime.runtime_changed.emit(None)

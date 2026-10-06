@@ -1571,12 +1571,20 @@ def test_remote_policies_have_no_framework_or_network_dependencies():
 
     for path in paths:
         for node in _imports(path):
-            roots = (
-                [alias.name.split(".", 1)[0] for alias in node.names]
+            modules = (
+                [alias.name for alias in node.names]
                 if isinstance(node, ast.Import)
-                else [(node.module or "").split(".", 1)[0]]
+                else [node.module or ""]
             )
-            if any(root in {"PySide6", "solin"} for root in roots):
+            if any(
+                module == "PySide6"
+                or module.startswith("PySide6.")
+                or (
+                    (module == "solin" or module.startswith("solin."))
+                    and not module.startswith("solin.core.releases")
+                )
+                for module in modules
+            ):
                 violations.append(_display(path, node))
 
     assert violations == []
@@ -1670,28 +1678,26 @@ def test_install_identity_receives_installation_settings_store():
     assert "get_install_id(settings" in source
 
 
-def test_remote_workers_receive_install_id_provider():
-    for path in (
-        PROJECT_ROOT / "src" / "solin" / "core" / "remote" / "notifications.py",
-        PROJECT_ROOT / "src" / "solin" / "core" / "remote" / "updates.py",
-    ):
-        source = path.read_text(encoding="utf-8")
-
-        assert "get_install_id" not in source
-        assert "install_id_provider" in source
-        assert "_install_id_provider" in source
+def test_notification_worker_receives_install_id_provider_but_updates_do_not():
+    remote = PROJECT_ROOT / "src" / "solin" / "core" / "remote"
+    notifications = (remote / "notifications.py").read_text(encoding="utf-8")
+    updates = (remote / "updates.py").read_text(encoding="utf-8")
+    assert "get_install_id" not in notifications
+    assert "_install_id_provider" in notifications
+    assert "install_id_provider" not in updates
+    assert "get_install_id" not in updates
 
 
-def test_patch_installer_receives_installation_settings_store():
-    path = PROJECT_ROOT / "src" / "solin" / "core" / "remote" / "patch_installer.py"
+def test_update_installer_receives_installation_settings_store():
+    path = PROJECT_ROOT / "src" / "solin" / "core" / "remote" / "update_installer.py"
     source = path.read_text(encoding="utf-8")
 
     assert "InstallationSettingsStore" not in source
-    assert "InstallationSettingsStore.create" not in source
-    assert "class PatchCleanupSettings(Protocol)" in source
-    assert "cleanup_pending_patch(settings" in source
-    assert "save_pending_patch_cleanup(" in source
-    assert "settings: PatchCleanupSettings" in source
+    assert "class UpdateCleanupSettings(Protocol)" in source
+    assert "cleanup_pending_update(settings" in source
+    assert "settings: UpdateCleanupSettings" in source
+    assert "QApplication.quit" not in source
+    assert "QSettings(" not in source
 
 
 def test_main_window_receives_profile_settings_from_bootstrap_composition():
@@ -1722,9 +1728,9 @@ def test_main_window_receives_long_lived_service_factories_from_bootstrap():
         "RemoteNotificationQueue",
         "UpdateService",
         "UpdateDialog",
-        "PatchDownloadWorker",
-        "save_pending_patch_cleanup",
-        "launch_patch_installer",
+        "UpdateDownloadWorker",
+        "UpdateInstaller",
+        "cleanup_pending_update",
         "InstallationSettingsStore",
         "get_install_id",
     ):

@@ -49,7 +49,7 @@ QSETTINGS_PROFILE_SCOPED_APPS: tuple[str, ...] = (
 )
 
 # ── Versão do aplicativo ────────────────────────────────────────────────────────
-# Formato: YY.RELEASE.PATCH.REVISION.
+# Public CalVer; native package metadata is derived by core.releases.version.
 APP_VERSION: str = VERSION
 
 # Identificador estável enviado às APIs do Solin. Não use sys.platform cru no
@@ -142,26 +142,6 @@ VIDEO_QUALITY_ORDER: tuple[str, ...] = (
     "240p",
     "180p",
 )
-
-# ── Endpoint de verificação de atualização ──────────────────────────────────────
-# GET → JSON:
-# {
-#   "setup": {"version": "X.Y.Z.W", "url": "https://solinav.com/v1/download/win/setup?v=...&id=..."},
-#   "patch": {"version": "X.Y.Z.W", "url": "https://solinav.com/v1/download/win/patch?v=...&id=...",
-#             "min_version": "X.Y.Z.W"}
-# }
-#
-# O worker envia: ?v=<APP_VERSION>&id=<install_id>&platform=windows
-#   v        → versão atual do app (para upsert AppInstance no servidor)
-#   id       → UUID anônimo de install_id.py (para métricas, não identifica pessoas)
-#   platform → plataforma (para expansão futura a macOS/Linux)
-#
-# O servidor embute from_version + install_id nas URLs de download retornadas,
-# de forma que o clique no download registra métricas completas automaticamente.
-if IS_DEV:
-    UPDATE_CHECK_URL: str = "http://localhost:5000/v1/version"
-else:
-    UPDATE_CHECK_URL: str = "https://solinav.vercel.app/v1/version"
 
 # Delay (ms) após a janela principal para checar atualizações (após notificações).
 UPDATE_CHECK_DELAY_MS: int = 5000

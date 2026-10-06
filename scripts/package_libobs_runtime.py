@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import argparse
 import base64
+import filecmp
 import importlib.metadata
 import io
 import os
 import platform
+import plistlib
 import shutil
 import subprocess
 import sys
@@ -18,6 +20,7 @@ import uuid
 import wave
 from collections.abc import Callable, Sequence
 from pathlib import Path
+from xml.parsers.expat import ExpatError
 
 from solin.core.foundation.constants import LIBOBS_SIDECAR_ARGUMENT
 from solin.core.scenes.content_frame_channel import SharedFrameChannelReader
@@ -50,6 +53,11 @@ _LINUX_HOST_LIBRARIES = frozenset({
     "libgbm.so.1", "libvulkan.so.1", "libva.so.2", "libva-drm.so.2", "libva-x11.so.2",
 })
 _LINUX_DOCUMENTATION_ROOT = Path("/usr/share/doc")
+# Effects loaded by OBS 32.1.2's graphics initialization, including OpenGL.
+_MACOS_LIBOBS_EFFECTS = (
+    "default", "default_rect", "opaque", "solid", "repeat", "format_conversion",
+    "bicubic_scale", "lanczos_scale", "area", "bilinear_lowres_scale", "premultiplied_alpha",
+)
 
 
 def _mux_helper(root: Path, target_platform: str) -> Path:
@@ -68,6 +76,108 @@ def _require_file(path: Path) -> None:
         raise LibobsPackagingError(f"Required libobs runtime file is missing or empty: {path}")
 
 
+def _validate_macos_links(root: Path) -> None:
+    """Only preserve relative, live links contained in this relocatable runtime."""
+    resolved_root = root.resolve()
+    for path in root.rglob("*"):
+        if not path.is_symlink():
+            continue
+        try:
+            target = path.resolve(strict=True)
+        except OSError as exc:
+            raise LibobsPackagingError(f"Invalid libobs runtime link: {path}") from exc
+        if not target.is_relative_to(resolved_root):
+            raise LibobsPackagingError(f"libobs runtime link escapes its bundle: {path}")
+        if path.readlink().is_absolute():
+            raise LibobsPackagingError(f"libobs runtime link must be relative: {path}")
+        if target.is_dir() and path.parent.resolve().is_relative_to(target):
+            raise LibobsPackagingError(f"Cyclic libobs runtime directory link: {path}")
+
+
+def _framework_alias_matches(alias: Path, canonical: Path) -> bool:
+    """Accept intact links or identical copies produced by wheel installation."""
+    if alias.is_symlink():
+        return alias.resolve() == canonical.resolve()
+    if alias.is_dir() and canonical.is_dir():
+        names = {path.name for path in canonical.iterdir()}
+        return names == {path.name for path in alias.iterdir()} and all(
+            _framework_alias_matches(alias / name, canonical / name) for name in names
+        )
+    return alias.is_file() and canonical.is_file() and filecmp.cmp(
+        alias, canonical, shallow=False,
+    )
+
+
+def _macos_framework_aliases(root: Path) -> list[tuple[Path, Path, str]]:
+    """Validate the pinned single-version frameworks and describe their aliases."""
+    aliases: list[tuple[Path, Path, str]] = []
+    for framework in sorted((root / "Frameworks").glob("*.framework")):
+        versions = framework / "Versions"
+        candidates = (
+            [path for path in versions.iterdir() if path.name != "Current"]
+            if versions.is_dir() else []
+        )
+        if len(candidates) != 1 or not candidates[0].is_dir() or candidates[0].is_symlink():
+            raise LibobsPackagingError(f"Expected one canonical framework version: {framework}")
+        version = candidates[0]
+        metadata_path = version / "Resources" / "Info.plist"
+        _require_file(metadata_path)
+        try:
+            with metadata_path.open("rb") as stream:
+                metadata = plistlib.load(stream)
+        except (plistlib.InvalidFileException, ValueError, ExpatError) as exc:
+            raise LibobsPackagingError(f"Invalid framework metadata: {metadata_path}") from exc
+        if not isinstance(metadata, dict):
+            raise LibobsPackagingError(f"Invalid framework metadata: {metadata_path}")
+        executable = metadata.get("CFBundleExecutable")
+        identifier = metadata.get("CFBundleIdentifier")
+        if (
+            not isinstance(executable, str)
+            or not executable
+            or executable in {".", ".."}
+            or "/" in executable
+            or "\\" in executable
+            or not isinstance(identifier, str)
+            or not identifier
+            or metadata.get("CFBundlePackageType") != "FMWK"
+        ):
+            raise LibobsPackagingError(f"Invalid framework metadata: {metadata_path}")
+        _require_file(version / executable)
+        if framework.name == "libobs.framework":
+            if (
+                version.name != "A"
+                or executable != "libobs"
+                or identifier != "com.obsproject.libobs"
+            ):
+                raise LibobsPackagingError(f"Unexpected pinned libobs framework metadata: {metadata_path}")
+            for effect in _MACOS_LIBOBS_EFFECTS:
+                _require_file(version / "Resources" / f"{effect}.effect")
+        framework_aliases = [(versions / "Current", version, version.name)]
+        framework_aliases.extend(
+            (framework / name, version / name, f"Versions/Current/{name}")
+            for name in (executable, "Resources", "Headers", "Modules")
+            if (version / name).exists()
+        )
+        for alias, canonical, relative in framework_aliases:
+            if (alias.exists() or alias.is_symlink()) and not _framework_alias_matches(alias, canonical):
+                raise LibobsPackagingError(f"Conflicting framework alias: {alias}")
+            aliases.append((alias, canonical, relative))
+    return aliases
+
+
+def _normalize_macos_frameworks(root: Path) -> None:
+    """Rebuild wheel-expanded aliases in staging without changing the installation."""
+    _validate_macos_links(root)
+    for alias, canonical, relative in _macos_framework_aliases(root):
+        if alias.is_symlink():
+            continue
+        if alias.is_dir():
+            shutil.rmtree(alias)
+        else:
+            alias.unlink(missing_ok=True)
+        alias.symlink_to(relative, target_is_directory=canonical.is_dir())
+
+
 def validate_runtime(
     root: Path, target_platform: str, *, linux_mux_helper: Path | None = None,
 ) -> None:
@@ -79,7 +189,12 @@ def validate_runtime(
         libraries = ("libobs.so.0", "libobs-opengl.so")
         suffix = ".so"
     elif target_platform == "macos":
-        libraries = ("Frameworks/libobs.dylib", "Frameworks/libobs-opengl.dylib")
+        _validate_macos_links(root)
+        _macos_framework_aliases(root)
+        libraries = (
+            "Frameworks/libobs.framework/Versions/A/libobs",
+            "Frameworks/libobs-opengl.dylib",
+        )
         suffix = ".dylib"
     else:
         raise LibobsPackagingError(f"Unsupported libobs platform: {target_platform}")
@@ -96,8 +211,13 @@ def validate_runtime(
 
 def _native_files(root: Path) -> list[Path]:
     result: list[Path] = []
+    visited: set[Path] = set()
     for path in sorted(root.rglob("*")):
         if path.is_file():
+            path = path.resolve()
+            if path in visited:
+                continue
+            visited.add(path)
             with path.open("rb") as stream:
                 magic = stream.read(4)
             if magic in (
@@ -199,7 +319,11 @@ def _relocate_linux(root: Path, *, binaries: Sequence[Path] | None = None) -> No
 def _relocate_macos(root: Path, *, binaries: Sequence[Path] | None = None) -> None:
     """Resolve OBS's framework paths relative to each staged Mach-O loader."""
     inventory = _native_files(root)
-    for binary in inventory if binaries is None else binaries:
+    targets = (
+        inventory if binaries is None
+        else list(dict.fromkeys(path.resolve() for path in binaries))
+    )
+    for binary in targets:
         output = subprocess.run(
             ["otool", "-L", str(binary)],
             check=True,
@@ -333,12 +457,13 @@ def stage_runtime(
     # Stage fresh files so a repeated build cannot retain plugins from an older runtime.
     with tempfile.TemporaryDirectory(prefix=".libobs-stage-", dir=application_dir) as directory:
         staging = Path(directory) / architecture
-        shutil.copytree(source, staging, symlinks=False)
+        shutil.copytree(source, staging, symlinks=target_platform == "macos")
         if linux_mux_helper is not None:
             shutil.copy2(linux_mux_helper, staging / "obs-ffmpeg-mux")
         if target_platform == "linux":
             _relocate_linux(staging)
         elif target_platform == "macos":
+            _normalize_macos_frameworks(staging)
             _relocate_macos(staging)
         validate_runtime(staging, target_platform)
         _publish_runtime(staging, destination)

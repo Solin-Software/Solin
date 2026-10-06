@@ -629,26 +629,38 @@ def test_logout_revokes_every_websocket_using_that_session(tmp_path: Path) -> No
                 "Origin": _ORIGIN,
                 "Cookie": f"{SESSION_COOKIE_NAME}={token}",
             }
-            websocket = await harness.client.ws_connect(
-                "/remote/api/ws",
-                headers=session_headers,
-            )
-            await websocket.receive_json()
+            websockets = []
+            for _ in range(2):
+                websocket = await harness.client.ws_connect(
+                    "/remote/api/ws",
+                    headers=session_headers,
+                )
+                websockets.append(websocket)
+                await websocket.receive_json()
 
-            logout = await harness.client.post(
-                "/remote/api/logout",
-                headers={
-                    **session_headers,
-                    "X-CSRF-Token": payload["csrfToken"],
-                },
-            )
-            revoked = await websocket.receive_json()
-            closed = await websocket.receive()
+            async def receive_revocation(websocket) -> None:
+                revoked = await websocket.receive_json()
+                closed = await websocket.receive()
+                assert revoked["type"] == "session.revoked"
+                assert revoked["payload"] == {"reason": "signed_out"}
+                assert closed.type.name == "CLOSE"
+                assert closed.data == 4401
+                assert websocket.close_code == 4401
+                assert websocket.exception() is None
 
-            assert logout.status == 200
-            assert revoked["type"] == "session.revoked"
-            assert closed.type.name in {"CLOSE", "CLOSED"}
-            assert websocket.close_code == 4401
+            # Receive concurrently with logout so each client can answer the
+            # close frame while its transport is still open.
+            async with asyncio.TaskGroup() as group:
+                for websocket in websockets:
+                    group.create_task(receive_revocation(websocket))
+                logout = await harness.client.post(
+                    "/remote/api/logout",
+                    headers={
+                        **session_headers,
+                        "X-CSRF-Token": payload["csrfToken"],
+                    },
+                )
+                assert logout.status == 200
             bootstrap = await harness.client.get(
                 "/remote/api/bootstrap",
                 headers={

@@ -664,11 +664,11 @@ Item {
                     var shape = Number(cursorShape)
                     if (shouldRegister
                             && (!nativeCursorRegistered || registeredCursorShape !== shape)) {
-                        root.bridge.beginPointer(shape)
+                        root.bridge.beginPointer(objectName, shape)
                         nativeCursorRegistered = true
                         registeredCursorShape = shape
                     } else if (!shouldRegister && nativeCursorRegistered) {
-                        root.bridge.endPointer()
+                        root.bridge.endPointer(objectName)
                         nativeCursorRegistered = false
                         registeredCursorShape = -1
                     }
@@ -681,7 +681,7 @@ Item {
                 onCursorShapeChanged: syncNativeCursor()
                 Component.onDestruction: {
                     if (nativeCursorRegistered && root.bridge !== null)
-                        root.bridge.endPointer()
+                        root.bridge.endPointer(objectName)
                 }
 
                 onPressed: function(mouse) {

@@ -86,7 +86,7 @@ def test_notification_worker_uses_injected_install_id_provider(monkeypatch) -> N
 
     assert captured["params"] == {
         "id": "install-1",
-        "v": notifications_module.APP_VERSION,
+        "v": notifications_module._notification_version(),
         "platform": notifications_module.APP_PLATFORM,
         "lang": "T",
     }

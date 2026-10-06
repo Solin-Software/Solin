@@ -201,6 +201,9 @@ class RemoteSessionsPopup(QWidget):
         self._fade = QPropertyAnimation(opacity, b"opacity", self)
         self._fade.setDuration(180)
         self._fade.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._show_timer = QTimer(self)
+        self._show_timer.setSingleShot(True)
+        self._show_timer.timeout.connect(self._finish_show)
         self._activity_timer = QTimer(self)
         self._activity_timer.setInterval(30_000)
         self._activity_timer.timeout.connect(self._refresh_activity_labels)
@@ -370,7 +373,7 @@ class RemoteSessionsPopup(QWidget):
         self.ensurePolished()
         self._sync_geometry()
         self.show()
-        QTimer.singleShot(0, self._finish_show)
+        self._show_timer.start(0)
 
     def _finish_show(self) -> None:
         if not self.isVisible():
@@ -591,6 +594,9 @@ class RemoteSessionsPopup(QWidget):
         super().showEvent(event)
 
     def hideEvent(self, event: QEvent) -> None:
+        self._show_timer.stop()
+        self._fade.stop()
+        self._opacity.setOpacity(1.0)
         self._activity_timer.stop()
         super().hideEvent(event)
 

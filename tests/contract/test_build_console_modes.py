@@ -68,7 +68,7 @@ def test_linux_build_uses_shared_script_and_xcb_launcher():
     assert "xdotool" in workflow
     assert "runs-on: ubuntu-24.04" in workflow
     assert "scripts/package_solin_appimage.sh" in workflow
-    assert "*.AppImage.sha256" in workflow
+    assert "dist/Solin-${{ env.APP_VERSION }}-linux-x86_64.AppImage" in workflow
 
 
 def test_every_standalone_build_includes_and_qualifies_the_libobs_runtime():
@@ -102,8 +102,9 @@ def test_macos_qualifies_final_library_layout_before_signing_and_disk_image():
 
 def test_linux_ci_provides_a_graphics_session_for_libobs_build_qualification():
     assert 'xvfb-run --auto-servernum env SOLIN_PYTHON="$(command -v python)" bash scripts/build_solin.sh' in _read(".github/workflows/build-solin-linux.yml")
-    assert "xvfb-run --auto-servernum python -m pytest" in _read(".github/workflows/build-solin-linux.yml")
     quality = _read(".github/workflows/quality.yml")
+    assert "mapfile -t libobs_packages < <(bash scripts/build_solin.sh --print-native-packages)" in quality
+    assert '"${libobs_packages[@]}"' in quality
     assert "            xauth" in quality and "            xvfb" in quality
     assert "xvfb-run --auto-servernum python -m pytest tests/contract tests/integration tests/e2e" in quality
     assert "xvfb-run --auto-servernum python -m pytest tests/unit" in quality

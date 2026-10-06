@@ -98,14 +98,14 @@ def test_threaded_build_returns_to_the_coordinators_qt_thread() -> None:
     coordinator = SnapshotBuildCoordinator(workers, worker_name="test")
     loop = QEventLoop()
     build_threads: list[int] = []
-    callback_threads: list[QThread] = []
+    callback_threads: list[bool] = []
 
     def build() -> MediaTreeSnapshot:
         build_threads.append(threading.get_ident())
         return MediaTreeSnapshot.create("playlist:test", 1)
 
     def ready(_result: object) -> None:
-        callback_threads.append(QThread.currentThread())
+        callback_threads.append(QThread.isMainThread())
         loop.quit()
 
     coordinator.snapshotReady.connect(ready)
@@ -125,7 +125,7 @@ def test_threaded_build_returns_to_the_coordinators_qt_thread() -> None:
         workers.shutdown()
 
     assert build_threads and build_threads[0] != threading.get_ident()
-    assert callback_threads == [coordinator.thread()]
+    assert callback_threads == [True]
 
 
 def test_deleting_a_closed_coordinator_cannot_race_an_inflight_worker() -> None:

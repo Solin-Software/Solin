@@ -844,11 +844,11 @@ class LibobsSidecarEngine:
                         error_message="the libobs runtime is not running")
         try:
             payload = request.payload
-            self._reconcile_content_ingress(payload.get("content_ingress"))
             # Stop the preview render on the old (about-to-be-released) scenes
             # before rebuilding — the egress renders a borrowed scene source.
             if self._preview_egress is not None:
                 self._preview_egress.set_scene_source(None)
+            self._reconcile_content_ingress(payload.get("content_ingress"))
             # Thumbnail show refs point at borrowed scene sources that this rebuild
             # is about to destroy; drop them first and retake them afterwards.
             thumbnails = self._thumbnail_egress
@@ -863,6 +863,18 @@ class LibobsSidecarEngine:
 
             output = self._window_output
             rebuild_guard = output.hydrate_lock if output is not None else nullcontext()
+
+            def configure_outputs() -> None:
+                # Neither graph generation is routed to the main Program here,
+                # and the preview has no borrowed source. Projection can retain
+                # its old scene refs; the rebuild guard protects per-scene draws.
+                # OBS registration takes the video-mix mutex, so configure before
+                # activating the new main Program.
+                if self._program_egress is not None:
+                    self._program_egress.configure(payload.get("program_egress"))
+                if self._preview_egress is not None:
+                    self._preview_egress.configure(payload.get("preview_egress"))
+
             with rebuild_guard:
                 graph.hydrate(
                     _payload_object(payload.get("document") or {}),
@@ -872,17 +884,15 @@ class LibobsSidecarEngine:
                     # record is persisted and cached, and a password must be in
                     # neither. Absent on older payloads, hence the default.
                     _payload_object(payload.get("source_credentials") or {}),
+                    before_activate=configure_outputs,
                 )
             if thumbnails is not None:
                 thumbnails.resume()
             self._reconcile_projection(active_scenes)
-            self._reconcile_preview_egress(
-                payload.get("preview_egress"),
+            self._reconcile_preview_source(
                 active_scenes,
                 _payload_object(payload.get("render_enabled") or {}),
             )
-            if self._program_egress is not None:
-                self._program_egress.configure(payload.get("program_egress"))
             # Hydrate is the full-state sync. After a restart the sidecar is fresh
             # and holds no window displays, while the app's window-target cache
             # still equals the recomputed targets and so never re-dispatches. Re-
@@ -938,9 +948,8 @@ class LibobsSidecarEngine:
         source = graph.scene_source(scene_id) if scene_id else None
         route.set_scene(scene_id, source)
 
-    def _reconcile_preview_egress(
+    def _reconcile_preview_source(
         self,
-        descriptor: object,
         active_scenes: Mapping[str, object],
         render_enabled: Mapping[str, object] | None = None,
     ) -> None:
@@ -948,7 +957,6 @@ class LibobsSidecarEngine:
         graph = self._scene_graph
         if egress is None or graph is None:
             return
-        egress.configure(descriptor)  # attach/detach the writer to the app's block
         # The editor previews the MEDIA_WINDOWS (edit) bus scene.
         preview_scene_id = (
             active_scenes.get("editor")

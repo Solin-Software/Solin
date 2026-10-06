@@ -2,7 +2,7 @@
 
 ## Before starting
 
-Use Python 3.13 or newer. On Intel macOS, first follow the
+Use Python 3.13 or newer. On macOS, first follow the
 [macOS binding bootstrap](docs/building.md#macos) before installing dependencies.
 On other platforms, install the locked development dependencies:
 
@@ -40,6 +40,16 @@ python scripts/check_locales.py
 Run focused tests while developing, then run the complete applicable suite
 before requesting review. Packaged-app and installer tests are run when their
 platform or delivery contract changes.
+
+Pull requests run application tests on Windows, Linux, Intel macOS, and Apple
+Silicon. Native protocol tests and benchmarks run on the Linux reference runner;
+Windows builds also qualify the native camera components. Lint, locale validation,
+release-note validation, and workflow validation run once. Branch protection should require the aggregate
+`Quality Gate` result.
+
+Release preparation is a separate pull request. Use an explicit
+`python scripts/release.py prepare <intent>` command and review its version and
+English notes; do not create or move a release tag from an unreviewed commit.
 
 ## Repository hygiene
 

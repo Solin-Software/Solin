@@ -31,6 +31,7 @@ log = logging.getLogger(__name__)
 
 _VIDEO_FORMAT_BGRA = 7  # enum video_format (matches pylibobs VideoFormat.BGRA)
 _OBS_SOURCE_VIDEO = 1 << 0  # obs_source_info.output_flags bit
+_OBS_SOURCE_FRAME_LINEAR_ALPHA = 1 << 0
 _FRAME_SOURCE_ID = "solin_frame_source"
 
 # pylibobs declares ``struct obs_source_frame`` as opaque (forward-declared), so
@@ -94,6 +95,16 @@ def _is_real_frame_source(source) -> bool:
         log.debug("could not read frame source output flags", exc_info=True)
         return True
     return bool(flags & _OBS_SOURCE_VIDEO)
+
+
+def _is_opaque_bgra(data: bytes, width: int, height: int, stride: int) -> bool:
+    """Inspect visible alpha bytes only, excluding row padding and spare capacity."""
+    if stride == width * 4:
+        return bytes(data[3:width * height * 4:4]).count(255) == width * height
+    return all(
+        bytes(data[row + 3:row + width * 4:4]).count(255) == width
+        for row in range(0, height * stride, stride)
+    )
 
 
 def create_frame_source(runtime, name: str = "solin-frame-source"):
@@ -169,12 +180,14 @@ class ObsFrameSource:
     ) -> bool:
         """Output one raw BGRA frame. No Qt — used by the sidecar consumer.
 
-        ``reset`` uploads the first frame of a presentation synchronously, retiring
-        the async queue and its old GPU texture before a prepared scene can use it.
+        ``reset`` clears the async queue and uploads the first frame of a
+        presentation synchronously before a prepared scene can use it.
         Subsequent frames use the low-latency async path. libobs copies the bytes.
         """
         source = self._source
         if source is None or not data or width <= 0 or height <= 0:
+            return False
+        if stride < width * 4 or len(data) < (height - 1) * stride + width * 4:
             return False
         from pylibobs._ffi import ffi, get_lib, is_alive  # type: ignore[import-not-found]
 
@@ -189,6 +202,12 @@ class ObsFrameSource:
         frame.format = _VIDEO_FORMAT_BGRA
         frame.full_range = True
         frame.timestamp = time.monotonic_ns()
+        # With opaque alpha the blending spaces are equivalent. Declare linear
+        # alpha to avoid OBS's redundant nonlinear color round trip per pixel;
+        # frames containing transparency retain their nonlinear alpha semantics.
+        frame.flags = _OBS_SOURCE_FRAME_LINEAR_ALPHA if _is_opaque_bgra(
+            data, width, height, stride,
+        ) else 0
         # Pass the struct to libobs by address (pylibobs's opaque ptr type).
         frame_ptr = ffi.cast("struct obs_source_frame *", int(_frame_ffi.cast("uintptr_t", frame)))
         try:

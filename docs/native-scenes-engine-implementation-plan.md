@@ -626,9 +626,7 @@ These are regression guards, not optional refinements:
 - Nuitka/Inno builds invoke the same native build, stage the private runtime, fail when the
   sidecar or either filter DLL is absent, and register the camera in the application's
   selected per-user or machine-wide installation scope.
-- Distributed Windows releases require Authenticode. The workflow signs and verifies the app,
-  native sidecar, both filter DLLs, Inno embedded uninstaller, and final installer. Explicitly
-  unsigned workflow runs are diagnostic artifacts and carry an `unsigned-diagnostic` suffix.
+- Windows distribution currently follows the existing unsigned release model.
 
 ## Performance and reliability budgets
 
@@ -924,8 +922,6 @@ without freezing the consumer, leaking registrations, or requiring Solin restart
   supported camera and RTSP codecs.
 - [x] Package the sidecar and virtual-camera component with control and broker protocol
   compatibility checks; keep unsigned diagnostic builds possible.
-- [x] Add Authenticode signing and verification gates for distributed Windows binaries and
-  the installer; diagnostic workflow runs may explicitly remain unsigned.
 - [x] Complete threat review for IPC, credential handling, device identifiers, and COM
   registration.
 - [ ] Update user documentation only after each capability is actually available.

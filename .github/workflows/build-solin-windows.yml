@@ -1,6 +1,14 @@
 name: Build Solin Windows
 
 on:
+  workflow_call:
+    inputs:
+      release:
+        type: boolean
+        default: true
+      retention_days:
+        type: number
+        default: 5
   workflow_dispatch:
     inputs:
       retention_days:
@@ -13,16 +21,6 @@ on:
         required: true
         type: boolean
         default: true
-      sign_windows_artifacts:
-        description: Sign binaries and installer (required for distribution)
-        required: true
-        type: boolean
-        default: true
-      previous_windows_installer_url:
-        description: Previously distributed installer used for upgrade smoke
-        required: false
-        type: string
-
 permissions:
   contents: read
 
@@ -31,6 +29,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  SOLIN_E2E_STRICT: "1"
   APP_NAME: Solin
   PYTHON_VERSION: "3.13.12"
   BUILD_DIR: build
@@ -48,30 +47,30 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Python ${{ env.PYTHON_VERSION }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Cache pip packages
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~\AppData\Local\pip\Cache
-          key: ${{ runner.os }}-pip-${{ env.PYTHON_VERSION }}-${{ hashFiles('requirements.txt', 'requirements-dev.txt') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-pip-${{ env.PYTHON_VERSION }}-${{ hashFiles('requirements.txt', 'requirements-dev.txt', 'requirements-build.txt') }}
           restore-keys: |
-            ${{ runner.os }}-pip-${{ env.PYTHON_VERSION }}-
-            ${{ runner.os }}-pip-
+            ${{ runner.os }}-${{ runner.arch }}-pip-${{ env.PYTHON_VERSION }}-
+            ${{ runner.os }}-${{ runner.arch }}-pip-
 
       - name: Cache Nuitka compilation cache
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~\AppData\Local\Nuitka
-          key: ${{ runner.os }}-nuitka-${{ env.PYTHON_VERSION }}-${{ hashFiles('**/*.py') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-nuitka-${{ env.PYTHON_VERSION }}-${{ hashFiles('**/*.py') }}
           restore-keys: |
-            ${{ runner.os }}-nuitka-${{ env.PYTHON_VERSION }}-
-            ${{ runner.os }}-nuitka-
+            ${{ runner.os }}-${{ runner.arch }}-nuitka-${{ env.PYTHON_VERSION }}-
+            ${{ runner.os }}-${{ runner.arch }}-nuitka-
 
       - name: Install Python dependencies
         shell: pwsh
@@ -79,23 +78,20 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
           pip install --no-deps -e .
-          pip install --upgrade nuitka ordered-set zstandard
+          pip install -r requirements-build.txt
 
-      - name: Quality gate
-        shell: pwsh
-        run: |
-          python -m ruff check .
-          python scripts/typecheck.py
-          python -m pytest
+      - name: Read app version
+        id: version
+        run: python scripts/release.py metadata --github-output
 
       - name: Cache pinned GStreamer installer
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: build/downloads/gstreamer-1.0-msvc-x86_64-*.exe
           key: gstreamer-msvc-x86_64-${{ hashFiles('scripts/install_gstreamer_windows.ps1') }}
 
       - name: Cache pinned Qt bridge SDK archives
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: build/downloads/qt-bridge-sdk
           key: qt-bridge-sdk-6.11.1-${{ hashFiles('scripts/install_qt_bridge_sdk_windows.ps1') }}
@@ -106,24 +102,7 @@ jobs:
 
       - name: Install Inno Setup
         shell: pwsh
-        run: choco install innosetup --yes --no-progress
-
-      - name: Read and verify app version
-        id: version
-        shell: pwsh
-        run: |
-          $versionPath = "src\solin\version.py"
-          $versionSource = Get-Content $versionPath -Raw
-          if ($versionSource -notmatch '__version__\s*=\s*"([^"]+)"') {
-            throw "__version__ was not found in $versionPath"
-          }
-          $version = $Matches[1]
-          if ($version -notmatch '^\d+\.\d+\.\d+\.\d+$') {
-            throw "Version must use YY.RELEASE.PATCH.REVISION format. Got: $version"
-          }
-          "APP_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          "app_version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-          Write-Host "APP_VERSION=$version"
+        run: choco install innosetup --version=6.5.4 --yes --no-progress --allow-downgrade
 
       - name: Verify required build inputs
         shell: pwsh
@@ -171,8 +150,8 @@ jobs:
             --windows-icon-from-ico="src\solin\resources\assets\icon.ico" `
             --windows-console-mode=attach `
             --assume-yes-for-downloads `
-            --windows-file-version="$env:APP_VERSION" `
-            --windows-product-version="$env:APP_VERSION" `
+            --windows-file-version="$env:WINDOWS_VERSION" `
+            --windows-product-version="$env:WINDOWS_VERSION" `
             --windows-product-name="$env:PRODUCT_NAME" `
             --windows-company-name="$env:COMPANY_NAME" `
             --windows-file-description="$env:FILE_DESCRIPTION" `
@@ -329,68 +308,8 @@ jobs:
           }
           Write-Host "App QML packaged as compiled .qmlc cache only."
 
-      - name: Sign packaged Windows binaries
-        if: ${{ inputs.sign_windows_artifacts }}
-        shell: pwsh
-        env:
-          SOLIN_SIGNING_CERTIFICATE_BASE64: ${{ secrets.SOLIN_SIGNING_CERTIFICATE_BASE64 }}
-          SOLIN_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.SOLIN_SIGNING_CERTIFICATE_PASSWORD }}
-        run: |
-          if ([string]::IsNullOrWhiteSpace($env:SOLIN_SIGNING_CERTIFICATE_BASE64) -or
-              [string]::IsNullOrWhiteSpace($env:SOLIN_SIGNING_CERTIFICATE_PASSWORD)) {
-            throw "Windows signing was requested, but the signing certificate secrets are unavailable."
-          }
-          $certificate = Join-Path $env:RUNNER_TEMP "solin-windows-signing.pfx"
-          [IO.File]::WriteAllBytes(
-            $certificate,
-            [Convert]::FromBase64String($env:SOLIN_SIGNING_CERTIFICATE_BASE64)
-          )
-          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" |
-            Sort-Object FullName -Descending |
-            Select-Object -First 1 -ExpandProperty FullName
-          if ([string]::IsNullOrWhiteSpace($signtool)) {
-            throw "signtool.exe was not found."
-          }
-          $signingWrapper = Join-Path $env:RUNNER_TEMP "solin-inno-sign.ps1"
-          @'
-          param([Parameter(Mandatory = $true)][string] $Target)
-          & $env:SOLIN_SIGNTOOL_EXE sign /f $env:SOLIN_SIGNING_CERTIFICATE_PATH /p $env:SOLIN_SIGNING_CERTIFICATE_PASSWORD /fd SHA256 /td SHA256 /tr https://timestamp.digicert.com $Target
-          exit $LASTEXITCODE
-          '@ | Set-Content -LiteralPath $signingWrapper -Encoding ascii
-          "SOLIN_SIGNING_CERTIFICATE_PATH=$certificate" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          "SOLIN_SIGNTOOL_EXE=$signtool" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          "SOLIN_INNO_SIGN_WRAPPER=$signingWrapper" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          $targets = @(
-            "$env:BUILD_DIR\main.dist\Solin.exe",
-            "$env:BUILD_DIR\main.dist\native\media-engine\solin-media-engine.exe",
-            "$env:BUILD_DIR\main.dist\native\media-engine\virtual-camera\x64\solin-virtual-camera.dll",
-            "$env:BUILD_DIR\main.dist\native\media-engine\virtual-camera\x86\solin-virtual-camera.dll"
-          )
-          foreach ($target in $targets) {
-            & $signtool sign /f $certificate /p $env:SOLIN_SIGNING_CERTIFICATE_PASSWORD /fd SHA256 /td SHA256 /tr https://timestamp.digicert.com $target
-            if ($LASTEXITCODE -ne 0) { throw "Signing failed: $target" }
-            & $signtool verify /pa /v $target
-            if ($LASTEXITCODE -ne 0) { throw "Signature verification failed: $target" }
-          }
-
-      - name: Package standalone zip
-        shell: pwsh
-        env:
-          SOLIN_SIGN_WINDOWS_ARTIFACTS: ${{ inputs.sign_windows_artifacts }}
-        run: |
-          New-Item -ItemType Directory -Force -Path $env:DIST_DIR | Out-Null
-          $suffix = if ($env:SOLIN_SIGN_WINDOWS_ARTIFACTS -eq "true") { "" } else { "-unsigned-diagnostic" }
-          $zip = "$env:DIST_DIR\$env:APP_NAME-$env:APP_VERSION-windows-standalone$suffix.zip"
-          Compress-Archive -Path "$env:BUILD_DIR\main.dist\*" -DestinationPath $zip -Force
-          Get-FileHash $zip -Algorithm SHA256 |
-            ForEach-Object { "$($_.Hash.ToLowerInvariant())  $(Split-Path $_.Path -Leaf)" } |
-            Set-Content "$env:DIST_DIR\SHA256SUMS-windows.txt"
-
       - name: Build full installer with Inno Setup
         shell: pwsh
-        env:
-          SOLIN_SIGN_WINDOWS_ARTIFACTS: ${{ inputs.sign_windows_artifacts }}
-          SOLIN_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.SOLIN_SIGNING_CERTIFICATE_PASSWORD }}
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) {
@@ -399,17 +318,7 @@ jobs:
 
           Push-Location "packaging\windows\installer"
           try {
-            $arguments = @("/DMyAppVersion=$env:APP_VERSION")
-            if ($env:SOLIN_SIGN_WINDOWS_ARTIFACTS -eq "true") {
-              if (-not (Test-Path -LiteralPath $env:SOLIN_INNO_SIGN_WRAPPER)) {
-                throw "The Inno Setup signing wrapper is unavailable."
-              }
-              $arguments += "/DMySignToolName=solinsign"
-              $arguments += "/Ssolinsign=powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File `$q$env:SOLIN_INNO_SIGN_WRAPPER`$q `$f"
-            }
-            else {
-              $arguments += "/DMyArtifactSuffix=-unsigned-diagnostic"
-            }
+            $arguments = @("/DMyAppVersion=$env:APP_VERSION", "/DMyWindowsVersion=$env:WINDOWS_VERSION")
             & $iscc @arguments setup.iss
             if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed." }
           }
@@ -417,38 +326,20 @@ jobs:
             Pop-Location
           }
 
-      - name: Verify signed Windows installer
-        if: ${{ inputs.sign_windows_artifacts }}
-        shell: pwsh
-        run: |
-          $installer = Get-Item "build\installer_output\Solin_Setup_*.exe"
-          & $env:SOLIN_SIGNTOOL_EXE verify /pa /v $installer.FullName
-          if ($LASTEXITCODE -ne 0) { throw "Installer signature verification failed." }
-
       - name: Build DirectShow rollback-injection installer
-        if: ${{ inputs.run_release_smoke_tests }}
+        if: ${{ (inputs.release || inputs.run_release_smoke_tests) }}
         shell: pwsh
-        env:
-          SOLIN_SIGN_WINDOWS_ARTIFACTS: ${{ inputs.sign_windows_artifacts }}
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-          $suffix = if ($env:SOLIN_SIGN_WINDOWS_ARTIFACTS -eq "true") {
-            "-rollback-injection"
-          }
-          else {
-            "-rollback-injection-unsigned-diagnostic"
-          }
+          $suffix = "-rollback-injection"
           Push-Location "packaging\windows\installer"
           try {
             $arguments = @(
               "/DMyAppVersion=$env:APP_VERSION",
+              "/DMyWindowsVersion=$env:WINDOWS_VERSION",
               "/DMyArtifactSuffix=$suffix",
               "/DMyVirtualCameraForceX86RegistrationFailure=1"
             )
-            if ($env:SOLIN_SIGN_WINDOWS_ARTIFACTS -eq "true") {
-              $arguments += "/DMySignToolName=solinsign"
-              $arguments += "/Ssolinsign=powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File `$q$env:SOLIN_INNO_SIGN_WRAPPER`$q `$f"
-            }
             & $iscc @arguments setup.iss
             if ($LASTEXITCODE -ne 0) {
               throw "Rollback-injection installer compilation failed."
@@ -457,22 +348,17 @@ jobs:
           finally {
             Pop-Location
           }
-          $rollbackInstaller = Get-Item "build\installer_output\Solin_Setup_*$suffix.exe"
+          $rollbackInstaller = Get-Item "build\installer_output\Solin-*-windows-x86_64$suffix.exe"
           $rollbackDirectory = New-Item -ItemType Directory -Force -Path "build\rollback-test"
           $rollbackTarget = Join-Path $rollbackDirectory.FullName $rollbackInstaller.Name
           Move-Item -LiteralPath $rollbackInstaller.FullName -Destination $rollbackTarget -Force
           "SOLIN_ROLLBACK_INSTALLER=$rollbackTarget" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
-      # Patch installers are intentionally not built here. packaging/windows/installer/patch.iss expects
-      # scripts/diff_release.py needs an explicit OLD dist directory plus
-      # the newly built dist. A GitHub runner does not naturally have the previous
-      # release's dist, so producing a patch here would be misleading.
-
       - name: Locate newly built Windows installer
-        if: ${{ inputs.run_release_smoke_tests }}
+        if: ${{ (inputs.release || inputs.run_release_smoke_tests) }}
         shell: pwsh
         run: |
-          $installers = @(Get-ChildItem "build\installer_output" -Filter "Solin_Setup_*.exe" -File)
+          $installers = @(Get-ChildItem "build\installer_output" -Filter "Solin-*-windows-x86_64*.exe" -File)
           if ($installers.Count -ne 1) {
             $found = $installers | ForEach-Object { $_.FullName }
             throw "Expected exactly one newly built installer, found $($installers.Count): $found"
@@ -480,44 +366,16 @@ jobs:
           "SOLIN_NEW_INSTALLER=$($installers[0].FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           Write-Host "SOLIN_NEW_INSTALLER=$($installers[0].FullName)"
 
-      - name: Download previous Windows installer
-        if: ${{ inputs.run_release_smoke_tests }}
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
-          $url = "${{ inputs.previous_windows_installer_url }}"
-          if ([string]::IsNullOrWhiteSpace($url)) {
-            throw "previous_windows_installer_url must not be empty when release smoke tests are enabled."
-          }
-
-          $outDir = Join-Path $env:BUILD_DIR "previous-installer"
-          New-Item -ItemType Directory -Force -Path $outDir | Out-Null
-          $oldInstaller = Join-Path $outDir "Solin_Setup_previous.exe"
-          $ProgressPreference = "SilentlyContinue"
-
-          for ($attempt = 1; $attempt -le 3; $attempt++) {
-            try {
-              Write-Host "Downloading previous installer (attempt $attempt): $url"
-              Invoke-WebRequest -Uri $url -OutFile $oldInstaller -MaximumRedirection 5
-              break
-            }
-            catch {
-              if ($attempt -eq 3) {
-                throw
-              }
-              Start-Sleep -Seconds (5 * $attempt)
-            }
-          }
-
-          $file = Get-Item $oldInstaller
-          if ($file.Length -le 0) {
-            throw "Downloaded previous installer is empty: $oldInstaller"
-          }
-          "SOLIN_OLD_INSTALLER=$oldInstaller" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          Write-Host "Downloaded previous installer: $oldInstaller ($($file.Length) bytes)"
+      - name: Download verified predecessor
+        if: ${{ inputs.release || inputs.run_release_smoke_tests }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOLIN_TRANSITION_WINDOWS_URL: ${{ vars.SOLIN_TRANSITION_WINDOWS_URL }}
+          SOLIN_TRANSITION_WINDOWS_SHA256: ${{ vars.SOLIN_TRANSITION_WINDOWS_SHA256 }}
+        run: python scripts/release.py download-predecessor --platform windows --architecture x86_64 --output build/previous-installer/Solin.exe --github-env SOLIN_OLD_INSTALLER
 
       - name: Run full-installer upgrade smoke
-        if: ${{ inputs.run_release_smoke_tests }}
+        if: ${{ (inputs.release || inputs.run_release_smoke_tests) }}
         shell: pwsh
         env:
           SOLIN_E2E_ALLOW_INSTALLER_MUTATION: "1"
@@ -529,7 +387,7 @@ jobs:
           python -m pytest tests\e2e\test_installer_upgrade_smoke.py -q
 
       - name: Run packaged startup smoke
-        if: ${{ inputs.run_release_smoke_tests }}
+        if: ${{ (inputs.release || inputs.run_release_smoke_tests) }}
         shell: pwsh
         env:
           SOLIN_PACKAGED_EXE: 'build\main.dist\Solin.exe'
@@ -540,41 +398,16 @@ jobs:
       - name: Collect installer artifacts
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path "$env:DIST_DIR\installers" | Out-Null
-          Copy-Item "build\installer_output\Solin_Setup_*.exe" "$env:DIST_DIR\installers\" -Force
+          New-Item -ItemType Directory -Force -Path $env:DIST_DIR | Out-Null
+          $installers = @(Get-ChildItem "build/installer_output" -Filter "Solin-*-windows-x86_64*.exe" -File)
+          if ($installers.Count -ne 1) { throw "Expected exactly one full installer." }
+          Copy-Item -LiteralPath $installers[0].FullName -Destination "$env:DIST_DIR/Solin-$env:APP_VERSION-windows-x86_64.exe"
 
-          Get-FileHash "$env:DIST_DIR\installers\*.exe" -Algorithm SHA256 |
-            ForEach-Object { "$($_.Hash.ToLowerInvariant())  $(Split-Path $_.Path -Leaf)" } |
-            Set-Content "$env:DIST_DIR\installers\SHA256SUMS.txt"
-
-          Get-ChildItem "$env:DIST_DIR" -Recurse | Select-Object FullName, Length
-
-      - name: Remove temporary signing certificate
-        if: ${{ always() && inputs.sign_windows_artifacts }}
-        shell: pwsh
-        run: |
-          $certificate = Join-Path $env:RUNNER_TEMP "solin-windows-signing.pfx"
-          if (Test-Path -LiteralPath $certificate) {
-            Remove-Item -LiteralPath $certificate -Force
-          }
-          if (Test-Path -LiteralPath $env:SOLIN_INNO_SIGN_WRAPPER) {
-            Remove-Item -LiteralPath $env:SOLIN_INNO_SIGN_WRAPPER -Force
-          }
-
-      - name: Upload Windows standalone
-        uses: actions/upload-artifact@v4
+      - name: Upload Windows packages
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: Solin-${{ steps.version.outputs.app_version }}-${{ inputs.sign_windows_artifacts && 'windows-standalone' || 'windows-standalone-unsigned-diagnostic' }}
+          name: release-windows-x86_64
           path: |
-            dist/*windows-standalone*.zip
-            dist/SHA256SUMS-windows.txt
-          if-no-files-found: error
-          retention-days: ${{ inputs.retention_days }}
-
-      - name: Upload Windows installers
-        uses: actions/upload-artifact@v4
-        with:
-          name: Solin-${{ steps.version.outputs.app_version }}-${{ inputs.sign_windows_artifacts && 'windows-installers' || 'windows-installers-unsigned-diagnostic' }}
-          path: dist/installers/*
+            dist/Solin-${{ env.APP_VERSION }}-windows-x86_64.exe
           if-no-files-found: error
           retention-days: ${{ inputs.retention_days }}

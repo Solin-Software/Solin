@@ -54,10 +54,9 @@ def test_playlist_file_icons_are_multiresolution_and_reproducible():
 
 def test_windows_installers_register_native_playlist_without_forcing_user_choice():
     setup = _read("packaging/windows/installer/setup.iss")
-    patch = _read("packaging/windows/installer/patch.iss")
     workflow = _read(".github/workflows/build-solin-windows.yml")
 
-    for installer in (setup, patch):
+    for installer in (setup,):
         assert "ChangesAssociations=yes" in installer
         assert '"application/vnd.solin.playlist+zip"' in installer
         assert '"Solin.Playlist"' in installer
@@ -69,10 +68,6 @@ def test_windows_installers_register_native_playlist_without_forcing_user_choice
         assert "Software\\Classes\\.solinplaylist\"; ValueType: string; ValueName: \"\"" not in installer
         assert ".jwlplaylist" not in installer.lower()
 
-    assert "Root: HKCU" in patch
-    assert "Check: IsPatchUserInstall" in patch
-    assert "Root: HKLM" in patch
-    assert "Check: IsPatchMachineInstall" in patch
     assert '"packaging\\windows\\installer\\setup.iss"' in workflow
 
 

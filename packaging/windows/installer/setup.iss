@@ -14,7 +14,7 @@
 ;    Profile-scoped QSettings:
 ;      HKCU\Software\Solin_<profile_id>\...
 ;
-;  INSTALLER KEYS (read by patch.iss):
+;  INSTALLER KEYS (read by the updater):
 ;    HKA = HKLM if admin / HKCU if per-user
 ;    HKA\Software\Solin\Solin
 ;      InstallPath   REG_SZ  — install directory
@@ -27,7 +27,7 @@
 ;                --output-dir=build --output-filename=Solin main.py
 ;       (output directory must be named "main.dist" — or adjust MyDistDir below)
 ;    2. The executable must be "Solin.exe" inside MyDistDir.
-;    3. Compile with ISCC.exe /DMyAppVersion=<version> setup.iss.
+;    3. Compile with ISCC.exe /DMyAppVersion=<display-version> /DMyWindowsVersion=<numeric-version> setup.iss.
 ; =============================================================================
 
 #define MyAppName        "Solin"
@@ -43,14 +43,6 @@
 #endif
 
 #ifndef MyAppVersion
-  #define MyAppVersion GetFileVersion(MyDistDir + "\" + MyAppExeName)
-#endif
-
-#if MyAppVersion == ""
-  #error MyAppVersion was not supplied and could not be read from build\main.dist\Solin.exe.
-#endif
-
-#ifndef MyAppVersion
   #error MyAppVersion must be supplied by the build pipeline.
 #endif
 
@@ -58,7 +50,10 @@
   #define MyArtifactSuffix ""
 #endif
 
-#define MyVirtualCameraVersion MyAppVersion
+#ifndef MyWindowsVersion
+  #error MyWindowsVersion must be supplied by the build pipeline.
+#endif
+#define MyVirtualCameraVersion MyWindowsVersion
 
 ; =============================================================================
 [Setup]
@@ -78,7 +73,7 @@ UninstallDisplayName={#MyAppName}
 ; ── Mutex: blocks installation while app is running ──────────────────────────
 AppMutex={#MyAppMutex}
 
-; ── Directory: resolved at runtime via [Code] ─────────────────────────────────
+; Directory resolved at runtime.
 ; IsAdminInstallMode() → {autopf}\Solin   (install for all users)
 ;                     → {localappdata}\Solin  (install for current user only)
 DefaultDirName={code:GetDefaultInstallDir}
@@ -89,26 +84,18 @@ AllowNoIcons=yes
 ; "lowest" = installs without elevation by default (per-user, %LocalAppData%)
 ; User can optionally install for all via "dialog" which adds an extra page.
 PrivilegesRequired=lowest
-PrivilegesRequiredOverridesAllowed=dialog
+PrivilegesRequiredOverridesAllowed=commandline dialog
 
 ; ── Close running app automatically ──────────────────────────────────────────
-CloseApplications=yes
+CloseApplications=no
 CloseApplicationsFilter=*{#MyAppExeName}*
 RestartApplications=no
 
 ; ── Output ────────────────────────────────────────────────────────────────────
-#define MySetupFileVersion \
-    Copy(MyAppVersion, 1, RPos(".", MyAppVersion) - 1)
-    
 OutputDir=..\..\..\build\installer_output
-OutputBaseFilename=Solin_Setup_{#MySetupFileVersion}{#MyArtifactSuffix}
+OutputBaseFilename=Solin-{#MyAppVersion}-windows-x86_64{#MyArtifactSuffix}
 SetupIconFile=..\..\..\src\solin\resources\assets\icon.ico
 WizardStyle=modern
-
-#ifdef MySignToolName
-SignTool={#MySignToolName}
-SignedUninstaller=yes
-#endif
 
 ; ── Define o ícone no Painel de Controle (Adicionar/Remover Programas) ──
 UninstallDisplayIcon={app}\{#MyAppExeName}
@@ -126,11 +113,12 @@ LZMAUseSeparateProcess=yes
 ShowLanguageDialog=auto
 
 ; ── Versioning ────────────────────────────────────────────────────────────────
-VersionInfoVersion={#MyAppVersion}
+VersionInfoVersion={#MyWindowsVersion}
 VersionInfoCompany={#MyAppPublisher}
 VersionInfoDescription={#MyAppName} Installer
 VersionInfoProductName={#MyAppName}
-VersionInfoProductVersion={#MyAppVersion}
+VersionInfoProductVersion={#MyWindowsVersion}
+VersionInfoProductTextVersion={#MyAppVersion}
 
 RestartIfNeededByRun=no
 ChangesAssociations=yes
@@ -185,7 +173,7 @@ Name: "{autostartup}\{#MyAppName}";     Filename: "{app}\{#MyAppExeName}"; Tasks
 ; =============================================================================
 [Registry]
 ; ── HKA = HKLM if admin, HKCU if per-user ────────────────────────────────────
-; These keys are read by patch.iss to locate the existing installation.
+; These keys identify the installation directory and scope.
 Root: HKA; Subkey: "{#MyRegSubkey}"; ValueType: string; ValueName: "InstallPath";  ValueData: "{app}";                   Flags: uninsdeletekey
 Root: HKA; Subkey: "{#MyRegSubkey}"; ValueType: string; ValueName: "Version";      ValueData: "{#MyAppVersion}";         Flags: uninsdeletevalue
 Root: HKA; Subkey: "{#MyRegSubkey}"; ValueType: string; ValueName: "InstallScope"; ValueData: "{code:GetInstallScope}";  Flags: uninsdeletevalue
@@ -242,9 +230,11 @@ Root: HKA; Subkey: "Software\RegisteredApplications"; ValueType: string; ValueNa
 
 ; =============================================================================
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent runasoriginaluser; Check: not IsUpdateMode
 
 ; =============================================================================
+Filename: "{app}\{#MyAppExeName}"; Flags: nowait runasoriginaluser; Check: IsUpdateMode
+
 [Code]
 (*
   ============================================================================
@@ -253,7 +243,7 @@ Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChang
   Covers:
     1. Dynamic DefaultDirName (admin → Program Files / user → LocalAppData)
     2. InstallScope → "machine" | "user" written to registry
-    3. Detect app running before install → graceful close with TerminateProcess fallback
+    3. Detect app running before install → graceful close without terminating the process
     4. Ensure Microsoft Edge WebView2 Runtime is available when needed
     5. Uninstaller: close app, clean runtime files, registry, temp files
   ============================================================================
@@ -270,9 +260,6 @@ function GetWindowThreadProcessId(hWnd: HWND; var lpdwProcessId: DWORD): DWORD;
 
 function OpenProcess(dwDesiredAccess: DWORD; bInheritHandle: BOOL; dwProcessId: DWORD): THandle;
   external 'OpenProcess@kernel32.dll stdcall';
-
-function TerminateProcess(hProcess: THandle; uExitCode: UINT): BOOL;
-  external 'TerminateProcess@kernel32.dll stdcall';
 
 function CloseHandle(hObject: THandle): BOOL;
   external 'CloseHandle@kernel32.dll stdcall';
@@ -325,8 +312,9 @@ function DispatchMessage(const lpMsg: TMsg): LongInt;
   external 'DispatchMessageW@user32.dll stdcall';
 
 const
-  WM_CLOSE          = $0010;
-  PROCESS_TERMINATE = $0001;
+  WM_CLOSE = $0010;
+  SYNCHRONIZE = $00100000;
+  EVENT_MODIFY_STATE = $0002;
   SEE_MASK_NOCLOSEPROCESS = $00000040;
   WAIT_TIMEOUT = $00000102;
   WAIT_FAILED = $FFFFFFFF;
@@ -442,74 +430,108 @@ begin
             CheckForMutexes('{#MyAppMutex}');
 end;
 
-procedure ForceCloseApp();
-var
-  hWnd:    HWND;
-  Elapsed: Integer;
-  PID:     DWORD;
-  hProc:   THandle;
-begin
-  hWnd := FindWindowEx(0, 0, '', '{#MyAppName}');
-  if hWnd <> 0 then
-  begin
-    PostMessage(hWnd, WM_CLOSE, 0, 0);
-    Elapsed := 0;
-    while (Elapsed < 5000) and IsAppRunning() do
-    begin
-      Sleep(300);
-      Elapsed := Elapsed + 300;
-    end;
+function OpenEvent(dwDesiredAccess: DWORD; bInheritHandle: BOOL; lpName: String): THandle;
+  external 'OpenEventW@kernel32.dll stdcall';
+function SetEvent(hEvent: THandle): BOOL;
+  external 'SetEvent@kernel32.dll stdcall';
 
-    if IsAppRunning() then
-    begin
-      hWnd := FindWindowEx(0, 0, '', '{#MyAppName}');
-      if hWnd <> 0 then
-      begin
-        PID := 0;
-        GetWindowThreadProcessId(hWnd, PID);
-        if PID <> 0 then
-        begin
-          hProc := OpenProcess(PROCESS_TERMINATE, False, PID);
-          if hProc <> 0 then
-          begin
-            TerminateProcess(hProc, 0);
-            CloseHandle(hProc);
-          end;
-        end;
-      end;
-      Sleep(800);
-    end;
+function IsUpdateMode(): Boolean;
+begin
+  Result := ExpandConstant('{param:SOLINUPDATE|}') <> '';
+end;
+
+procedure RequestCloseApp();
+var
+  Window: HWND;
+  PID: DWORD;
+  ProcessHandle: THandle;
+begin
+  Window := FindWindowEx(0, 0, '', '{#MyAppName}');
+  if Window = 0 then Exit;
+  PID := 0;
+  GetWindowThreadProcessId(Window, PID);
+  ProcessHandle := OpenProcess(SYNCHRONIZE, False, PID);
+  if ProcessHandle = 0 then Exit;
+  try
+    PostMessage(Window, WM_CLOSE, 0, 0);
+    WaitForSingleObject(ProcessHandle, 30000);
+  finally
+    CloseHandle(ProcessHandle);
   end;
 end;
 
-// ── InitializeSetup ───────────────────────────────────────────────────────────
-
-function InitializeSetup(): Boolean;
+function ConfirmCloseRunningSolin(): Boolean;
 begin
   Result := True;
+  if not IsAppRunning() then Exit;
+  if MsgBox(
+    'Solin is currently running.' + #13#10 +
+    'It must be closed before continuing.' + #13#10#13#10 +
+    'Close it and continue?',
+    mbConfirmation, MB_YESNO or MB_DEFBUTTON1
+  ) <> IDYES then
+  begin
+    Result := False;
+    Exit;
+  end;
+  RequestCloseApp();
   if IsAppRunning() then
   begin
-    if MsgBox(
-      'Solin is currently running.' + #13#10 +
-      'It will be closed to proceed with the installation.' + #13#10#13#10 +
-      'Do you want to continue?',
-      mbConfirmation, MB_YESNO or MB_DEFBUTTON1
-    ) = IDYES then
-    begin
-      ForceCloseApp();
-      if IsAppRunning() then
-      begin
-        MsgBox(
-          'Could not close Solin.' + #13#10 +
-          'Please close it manually and try again.',
-          mbError, MB_OK
-        );
-        Result := False;
-      end;
-    end
-    else
-      Result := False;
+    MsgBox(
+      'Could not close Solin. Please close it manually and try again.',
+      mbError, MB_OK
+    );
+    Result := False;
   end;
+end;
+
+function InitializeSetup(): Boolean;
+var
+  Token, InstallPath, Scope: String;
+  RootKey, PID, I, Elapsed: Integer;
+  ReadyEvent, CancelEvent, ParentProcess: THandle;
+  WaitResult: DWORD;
+begin
+  Result := False;
+  if IsUpdateMode() then
+  begin
+    Token := ExpandConstant('{param:SOLINUPDATE|}');
+    if Length(Token) <> 32 then Exit;
+    for I := 1 to Length(Token) do
+      if Pos(Token[I], '0123456789abcdef') = 0 then Exit;
+    PID := StrToIntDef(ExpandConstant('{param:SOLINPID|0}'), 0);
+    if PID <= 0 then Exit;
+    if IsAdminInstallMode() then begin RootKey := HKLM64; Scope := 'machine'; end
+    else begin RootKey := HKCU64; Scope := 'user'; end;
+    InstallPath := '';
+    if not RegQueryStringValue(RootKey, '{#MyRegSubkey}', 'InstallPath', InstallPath) then Exit;
+    if CompareText(RemoveBackslashUnlessRoot(InstallPath),
+       RemoveBackslashUnlessRoot(ExpandConstant('{param:DIR|}'))) <> 0 then Exit;
+    if not FileExists(InstallPath + '\{#MyAppExeName}') then Exit;
+    InstallPath := '';
+    if not RegQueryStringValue(RootKey, '{#MyRegSubkey}', 'InstallScope', InstallPath) then Exit;
+    if InstallPath <> Scope then Exit;
+    ReadyEvent := OpenEvent(EVENT_MODIFY_STATE, False, 'Local\SolinUpdateReady-' + Token);
+    CancelEvent := OpenEvent(SYNCHRONIZE, False, 'Local\SolinUpdateCancel-' + Token);
+    ParentProcess := OpenProcess(SYNCHRONIZE, False, PID);
+    try
+      if (ReadyEvent = 0) or (CancelEvent = 0) or (ParentProcess = 0) then Exit;
+      if not SetEvent(ReadyEvent) then Exit;
+      Elapsed := 0;
+      repeat
+        if WaitForSingleObject(CancelEvent, 0) = 0 then Exit;
+        WaitResult := WaitForSingleObject(ParentProcess, 100);
+        Elapsed := Elapsed + 100;
+      until (WaitResult <> WAIT_TIMEOUT) or (Elapsed >= 120000);
+      Result := WaitResult = 0;
+    finally
+      if ReadyEvent <> 0 then CloseHandle(ReadyEvent);
+      if CancelEvent <> 0 then CloseHandle(CancelEvent);
+      if ParentProcess <> 0 then CloseHandle(ParentProcess);
+    end;
+    Exit;
+  end;
+  Result := ConfirmCloseRunningSolin();
 end;
 
 // ── Microsoft Edge WebView2 Runtime ──────────────────────────────────────────
@@ -612,8 +634,6 @@ begin
     WizardForm.StatusLabel.Caption := OriginalStatus;
     WizardForm.Refresh();
   end;
-
-  Sleep(1000);
 
   if not IsWebView2RuntimeInstalled() then
   begin

@@ -17,7 +17,7 @@ It brings the operational parts of a meeting into one desktop workflow:
 Solin requires Python 3.13 or newer. Use an isolated Python environment when
 possible, with whichever environment manager is appropriate for the platform.
 
-On Intel macOS, first follow the
+On macOS, first follow the
 [macOS binding bootstrap](docs/building.md#macos), which builds the required local
 libobs wheel before installing dependencies. On other platforms, install the
 locked development environment and the application in editable mode:
@@ -64,6 +64,7 @@ Tests are grouped under `tests/unit`, `tests/integration`, `tests/contract`, and
 - [Translations](docs/translations.md)
 - [Development tools](docs/development-tools.md)
 - [Versioning and releases](docs/releases.md)
+- [Release notes](docs/release-notes/README.md)
 - [Architecture decision records](docs/adr/README.md)
 
 The remote-control implementation contract lives beside its static resources in

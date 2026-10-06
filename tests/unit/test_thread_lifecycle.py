@@ -3,8 +3,9 @@ from __future__ import annotations
 import threading
 import time
 
-from PySide6.QtCore import QCoreApplication
+from PySide6.QtCore import QCoreApplication, QThread
 
+from solin.core.ingest import wifi_server
 from solin.core.ingest.wifi_server import WifiReceiveServer
 from solin.core.foundation.thread_workers import ThreadedWorkerPool
 from solin.core.integrations.automation.obs import OBSWebSocketService
@@ -17,6 +18,7 @@ from solin.core.media.cache import MediaCacheManager
 from solin.core.jw.songs import JWSongsStore
 from solin.core.jw.languages import JWLanguageService
 from solin.core.rendering.fonts import FontManager
+from tests._http import LoopbackHTTPServer
 
 
 def _app() -> QCoreApplication:
@@ -122,14 +124,14 @@ def test_downloader_ignores_results_from_replaced_job(monkeypatch, tmp_path):
 
 
 def test_media_cache_notification_from_python_thread_runs_on_qt_thread(tmp_path):
-    app = _app()
+    _app()
     manager = MediaCacheManager(
         tmp_path,
         downloader_factory=lambda _parent: None,
     )
     callback_threads = []
     manager.cache_changed.connect(
-        lambda _url: callback_threads.append(QCoreApplication.instance().thread())
+        lambda _url: callback_threads.append(QThread.isMainThread())
     )
 
     worker = threading.Thread(
@@ -140,7 +142,7 @@ def test_media_cache_notification_from_python_thread_runs_on_qt_thread(tmp_path)
     worker.join()
 
     assert _wait_until(lambda: len(callback_threads) == 1)
-    assert callback_threads == [app.thread()]
+    assert callback_threads == [True]
 
 
 def test_threaded_worker_pool_drains_workers_on_shutdown():
@@ -385,8 +387,13 @@ def test_obs_restart_waits_for_previous_worker(monkeypatch):
     assert generations[1] > generations[0]
 
 
-def test_wifi_server_reports_stopped_after_threads_exit(tmp_path):
+def test_wifi_server_reports_stopped_after_threads_exit(monkeypatch, tmp_path):
     _app()
+    monkeypatch.setattr(wifi_server, "get_local_ip", lambda: "127.0.0.1")
+    monkeypatch.setattr(
+        wifi_server, "HTTPServer",
+        lambda address, handler: LoopbackHTTPServer(handler, port=address[1]),
+    )
     service = WifiReceiveServer(embedded_dir=tmp_path)
     stopped: list[bool] = []
     service.server_stopped.connect(lambda: stopped.append(True))

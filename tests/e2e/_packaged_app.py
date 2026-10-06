@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -49,6 +50,7 @@ def isolated_app_env(temp_root: Path) -> dict[str, str]:
         path.mkdir(parents=True, exist_ok=True)
 
     env = os.environ.copy()
+    env["QT_QPA_PLATFORM"] = {"win32": "windows", "darwin": "cocoa"}.get(sys.platform, "xcb")
     env["APPDATA"] = str(temp_root / "AppData" / "Roaming")
     env["LOCALAPPDATA"] = str(temp_root / "AppData" / "Local")
     env["HOME"] = str(home_dir)

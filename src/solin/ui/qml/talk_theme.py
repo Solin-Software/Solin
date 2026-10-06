@@ -402,11 +402,11 @@ class TalkThemeEditorWidget(QWidget):
         if callable(callback):
             callback()
 
-    def _begin_pointer(self, cursor_shape: int) -> None:
-        self._qml_pointer_cursor.enter_shaped("talk-theme-canvas", cursor_shape)
+    def _begin_pointer(self, cursor_source: str, cursor_shape: int) -> None:
+        self._qml_pointer_cursor.enter_shaped(cursor_source, cursor_shape)
 
-    def _end_pointer(self) -> None:
-        self._qml_pointer_cursor.exit_shaped("talk-theme-canvas")
+    def _end_pointer(self, cursor_source: str) -> None:
+        self._qml_pointer_cursor.exit_shaped(cursor_source)
 
     def eventFilter(self, obj: QObject, event: QEvent) -> bool:
         if obj is getattr(self, "_qml", None) and event.type() == QEvent.Type.Leave:

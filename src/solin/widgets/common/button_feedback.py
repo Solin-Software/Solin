@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QEasingCurve, QObject, QVariantAnimation
+from PySide6.QtCore import QEasingCurve, QObject, QVariantAnimation, Slot
 from PySide6.QtWidgets import QPushButton
+from shiboken6 import getCppPointer
 
 from solin.styles.theme import PALETTE, qss_rgba
 
@@ -16,7 +17,7 @@ class ButtonSuccessFlash(QObject):
         self._tracked_buttons: set[int] = set()
 
     def flash(self, button: QPushButton) -> None:
-        button_id = id(button)
+        button_id = getCppPointer(button)[0]
         previous = self._active.pop(button_id, None)
         if previous is not None:
             previous_animation, previous_style = previous
@@ -30,7 +31,7 @@ class ButtonSuccessFlash(QObject):
         original_style = button.styleSheet()
         if button_id not in self._tracked_buttons:
             self._tracked_buttons.add(button_id)
-            button.destroyed.connect(lambda _obj=None, key=button_id: self._button_destroyed(key))
+            button.destroyed.connect(self._button_destroyed)
         object_name = button.objectName()
         selector = f"QPushButton#{object_name}" if object_name else "QPushButton"
         animation = QVariantAnimation(self)
@@ -78,7 +79,11 @@ class ButtonSuccessFlash(QObject):
         apply(1.0)
         animation.start()
 
-    def _button_destroyed(self, button_id: int) -> None:
+    @Slot(QObject)
+    def _button_destroyed(self, button: QObject) -> None:
+        # destroyed() may supply a different Python wrapper for the same native
+        # object. The slot's QObject receiver also disconnects on its destruction.
+        button_id = getCppPointer(button)[0]
         self._tracked_buttons.discard(button_id)
         current = self._active.pop(button_id, None)
         if current is None:

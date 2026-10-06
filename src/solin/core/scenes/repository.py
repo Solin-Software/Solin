@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import threading
 import time
@@ -710,7 +711,7 @@ class SceneRuntimeRepository:
 
 
 class SceneRuntimePersistenceQueue:
-    """Serialize and coalesce live-state writes away from the caller thread."""
+    """Coalesce live writes, retry storage I/O, and stop on permanent failures."""
 
     def __init__(
         self,
@@ -719,8 +720,8 @@ class SceneRuntimePersistenceQueue:
         *,
         retry_delay_seconds: float = 0.05,
     ) -> None:
-        if retry_delay_seconds <= 0:
-            raise ValueError("Runtime persistence retry delay must be positive")
+        if not math.isfinite(retry_delay_seconds) or retry_delay_seconds <= 0:
+            raise ValueError("Runtime persistence retry delay must be finite and positive")
         self._repository = repository
         self._document_id = initial_state.document_id
         self._accepted_state = initial_state
@@ -729,6 +730,8 @@ class SceneRuntimePersistenceQueue:
         self._inflight = False
         self._closing = False
         self._closed = False
+        self._failed = False
+        self._close_deadline: float | None = None
         self._last_error: Exception | None = None
         self._retry_delay_seconds = retry_delay_seconds
         self._condition = threading.Condition()
@@ -751,6 +754,8 @@ class SceneRuntimePersistenceQueue:
         expected_revision: int | None = None,
     ) -> None:
         with self._condition:
+            if self._failed:
+                raise SceneRepositoryError("Scene runtime persistence failed") from self._last_error
             if self._closing or self._closed:
                 raise SceneRepositoryError("Scene runtime persistence is closed")
             if state.document_id != self._document_id:
@@ -772,8 +777,9 @@ class SceneRuntimePersistenceQueue:
             self._condition.notify_all()
 
     def flush(self, timeout_seconds: float = 2.0) -> bool:
-        if timeout_seconds < 0:
-            raise ValueError("Runtime persistence timeout cannot be negative")
+        """Wait for accepted writes; return immediately if persistence has stopped."""
+        if not math.isfinite(timeout_seconds) or timeout_seconds < 0:
+            raise ValueError("Runtime persistence timeout must be finite and nonnegative")
         deadline = time.monotonic() + timeout_seconds
         with self._condition:
             while (
@@ -781,6 +787,8 @@ class SceneRuntimePersistenceQueue:
                 or self._pending is not None
                 or self._inflight
             ):
+                if self._failed or self._closed:
+                    return False
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     return False
@@ -788,28 +796,47 @@ class SceneRuntimePersistenceQueue:
             return True
 
     def close(self, timeout_seconds: float = 2.0) -> bool:
-        deadline = time.monotonic() + max(0.0, timeout_seconds)
-        flushed = self.flush(max(0.0, deadline - time.monotonic()))
+        """Reject new writes, drain until the deadline, and join the worker.
+
+        An in-flight storage call cannot be cancelled. If it outlasts the deadline,
+        return False and let it finish without starting another write. Unsaved
+        accepted state remains available in the queue, but closing is irreversible.
+        """
+        if not math.isfinite(timeout_seconds) or timeout_seconds < 0:
+            raise ValueError("Runtime persistence timeout must be finite and nonnegative")
+        deadline = time.monotonic() + timeout_seconds
         with self._condition:
-            self._closing = True
-            if not flushed:
-                self._pending = None
+            if not self._closing:
+                self._closing = True
+                self._close_deadline = deadline
             self._condition.notify_all()
         self._thread.join(max(0.0, deadline - time.monotonic()))
         with self._condition:
-            self._closed = not self._thread.is_alive()
+            stopped = not self._thread.is_alive()
+            flushed = (
+                not self._failed
+                and self._persisted_revision == self._accepted_state.revision
+                and self._pending is None
+                and not self._inflight
+            )
         if not flushed:
-            log.warning("Timed out while flushing scene runtime persistence")
-        if not self._closed:
+            log.warning("Scene runtime persistence closed with unsaved state")
+        if not stopped:
             log.warning("Scene runtime persistence worker did not stop within its deadline")
-        return flushed and self._closed
+        return flushed and stopped
 
     def _run(self) -> None:
         while True:
             with self._condition:
                 while self._pending is None and not self._closing:
                     self._condition.wait()
-                if self._closing:
+                if self._closing and (
+                    self._pending is None
+                    or (
+                        self._close_deadline is not None
+                        and time.monotonic() >= self._close_deadline
+                    )
+                ):
                     self._closed = True
                     self._condition.notify_all()
                     return
@@ -823,22 +850,36 @@ class SceneRuntimePersistenceQueue:
                     state,
                     expected_revision=expected_revision,
                 )
-            except Exception as exc:  # noqa: BLE001 - durable storage boundary
+            except Exception as exc:  # noqa: BLE001 - record worker failure; retry only storage I/O
+                storage_error = (
+                    exc.__cause__ if isinstance(exc, SceneRepositoryCorruptError) else exc
+                )
+                # Reads wrap I/O errors and invalid data in the same repository error.
+                recoverable = isinstance(storage_error, OSError)
                 with self._condition:
                     self._inflight = False
                     self._last_error = exc
-                    if (
-                        not self._closing
-                        and (
-                            self._pending is None
-                            or self._pending.revision < state.revision
-                        )
-                    ):
+                    if self._pending is None or self._pending.revision < state.revision:
                         self._pending = state
+                    self._failed = not recoverable
                     self._condition.notify_all()
-                    if not self._closing:
-                        self._condition.wait(self._retry_delay_seconds)
+                if not recoverable:
+                    log.warning("Scene runtime persistence failed permanently", exc_info=exc)
+                    with self._condition:
+                        self._closed = True
+                        self._condition.notify_all()
+                    return
                 log.warning("Could not persist scene runtime state; retrying", exc_info=exc)
+                retry_deadline = time.monotonic() + self._retry_delay_seconds
+                with self._condition:
+                    while True:
+                        deadline = retry_deadline
+                        if self._close_deadline is not None:
+                            deadline = min(deadline, self._close_deadline)
+                        remaining = deadline - time.monotonic()
+                        if remaining <= 0:
+                            break
+                        self._condition.wait(remaining)
                 continue
             with self._condition:
                 self._persisted_revision = state.revision

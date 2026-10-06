@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from dataclasses import replace
 import threading
+import time
 
 import pytest
 
+from solin.core.scenes import repository as scene_repository
 from solin.core.scenes.application import SceneDocumentService
 from solin.core.scenes.model import BusId, ContentCategory, OutputMode, SceneDocument, SceneValidationError
 from solin.core.scenes.presets import (
@@ -15,6 +17,9 @@ from solin.core.scenes.presets import (
     create_default_scene_document,
 )
 from solin.core.scenes.repository import (
+    SceneRepositoryCorruptError,
+    SceneRepositoryError,
+    SceneRevisionConflictError,
     SceneRuntimePersistenceQueue,
     SceneRuntimeRepository,
 )
@@ -179,37 +184,50 @@ def test_runtime_repository_persists_only_small_live_state(tmp_path) -> None:
     assert repository.path.stat().st_size < 4096
 
 
+class _GatedRuntimeRepository:
+    def __init__(self, failure: Exception | None = None) -> None:
+        self.started = threading.Event()
+        self.release = threading.Event()
+        self.saved: list[SceneRuntimeState] = []
+        self.attempts = 0
+        self.failure = failure
+
+    def save(self, state, *, expected_revision=None) -> None:
+        assert expected_revision == (self.saved[-1].revision if self.saved else 0)
+        self.attempts += 1
+        self.started.set()
+        assert self.release.wait(5)
+        if self.failure is not None:
+            raise self.failure
+        self.saved.append(state)
+
+
 def test_runtime_persistence_queue_coalesces_without_blocking_the_caller() -> None:
-    class _BlockingRepository:
-        def __init__(self) -> None:
-            self.started = threading.Event()
-            self.release = threading.Event()
-            self.saved: list[SceneRuntimeState] = []
-
-        def save(self, state, *, expected_revision=None) -> None:
-            assert expected_revision == (self.saved[-1].revision if self.saved else 0)
-            self.started.set()
-            assert self.release.wait(2)
-            self.saved.append(state)
-
     initial = create_default_runtime_state(_document())
-    repository = _BlockingRepository()
+    repository = _GatedRuntimeRepository()
     queue = SceneRuntimePersistenceQueue(repository, initial)
     first = replace(initial, revision=1)
     latest = replace(initial, revision=2)
 
-    queue.save(first, expected_revision=0)
-    assert repository.started.wait(1)
-    queue.save(latest, expected_revision=1)
-    assert repository.saved == []
+    try:
+        queue.save(first, expected_revision=0)
+        assert repository.started.wait(1)
+        queue.save(latest, expected_revision=1)
+        assert repository.saved == []
 
-    repository.release.set()
-    assert queue.flush()
-    assert repository.saved[-1] == latest
-    assert queue.close()
+        repository.release.set()
+        assert queue.flush()
+        assert repository.saved[-1] == latest
+        assert queue.close()
+    finally:
+        repository.release.set()
+        queue.close()
+        queue._thread.join(1)
+        assert not queue._thread.is_alive()
 
 
-def test_runtime_persistence_queue_retries_a_transient_storage_failure() -> None:
+@pytest.mark.parametrize("drain", ["flush", "close"])
+def test_runtime_persistence_queue_retries_a_transient_storage_failure(drain) -> None:
     class _FlakyRepository:
         def __init__(self) -> None:
             self.attempts = 0
@@ -231,13 +249,297 @@ def test_runtime_persistence_queue_retries_a_transient_storage_failure() -> None
     )
     updated = replace(initial, revision=1)
 
-    queue.save(updated, expected_revision=0)
+    try:
+        queue.save(updated, expected_revision=0)
 
-    assert queue.flush()
-    assert repository.attempts == 2
-    assert repository.saved == updated
-    assert queue.last_error is None
-    assert queue.close()
+        assert getattr(queue, drain)()
+        assert repository.attempts == 2
+        assert repository.saved == updated
+        assert queue.last_error is None
+        assert queue.close()
+    finally:
+        queue.close()
+        queue._thread.join(1)
+        assert not queue._thread.is_alive()
+
+
+@pytest.mark.parametrize("external_change", ["deleted", "revision", "corrupt"])
+def test_runtime_persistence_queue_stops_on_permanent_storage_failure(
+    tmp_path, external_change
+) -> None:
+    class _CountingRepository(SceneRuntimeRepository):
+        attempts = 0
+
+        def save(self, state, *, expected_revision=None) -> None:
+            self.attempts += 1
+            super().save(state, expected_revision=expected_revision)
+
+    document = _document()
+    repository = _CountingRepository(tmp_path / "scenes_runtime.json")
+    initial = replace(repository.load_or_create(document), revision=1)
+    repository.save(initial, expected_revision=0)
+    repository.attempts = 0
+    queue = SceneRuntimePersistenceQueue(repository, initial, retry_delay_seconds=0.001)
+    documents = SceneDocumentService(document)
+    runtime = SceneRuntimeService(documents, initial, store=queue)
+    try:
+        if external_change == "deleted":
+            repository.path.unlink()
+            error_type = SceneRevisionConflictError
+            expected_bytes = None
+        elif external_change == "revision":
+            repository.save(replace(initial, revision=2), expected_revision=1)
+            repository.attempts = 0
+            error_type = SceneRevisionConflictError
+            expected_bytes = repository.path.read_bytes()
+        else:
+            expected_bytes = b"invalid runtime JSON"
+            repository.path.write_bytes(expected_bytes)
+            error_type = SceneRepositoryCorruptError
+
+        accepted = runtime.take_program_scene(CONTENT_CAMERA_PIP_SCENE_ID)
+        with queue._condition:
+            assert queue._condition.wait_for(lambda: queue.last_error is not None, timeout=1)
+        error = queue.last_error
+        assert isinstance(error, error_type)
+
+        started = time.monotonic()
+        assert not queue.flush(timeout_seconds=1)
+        assert time.monotonic() - started < 0.3
+        with pytest.raises(SceneRepositoryError) as rejected:
+            runtime.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
+        assert rejected.value.__cause__ is error
+        assert runtime.state is accepted
+        with pytest.raises(SceneRepositoryError):
+            queue.save(accepted, expected_revision=accepted.revision)
+
+        started = time.monotonic()
+        assert not queue.close(timeout_seconds=1)
+        assert time.monotonic() - started < 0.3
+        assert not queue._thread.is_alive()
+        assert not queue.close(timeout_seconds=0)
+        assert queue.last_error is error
+        assert repository.attempts == 1
+        if expected_bytes is None:
+            assert not repository.path.exists()
+        else:
+            assert repository.path.read_bytes() == expected_bytes
+    finally:
+        runtime.close()
+        queue.close()
+        queue._thread.join(1)
+        assert not queue._thread.is_alive()
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        RuntimeError("unexpected failure"),
+        ValueError("invalid state"),
+        SceneRevisionConflictError("external revision"),
+        SceneRepositoryCorruptError("runtime.json"),
+    ],
+)
+def test_runtime_persistence_queue_preserves_latest_state_after_terminal_failure(error) -> None:
+    initial = create_default_runtime_state(_document())
+    repository = _GatedRuntimeRepository(error)
+    queue = SceneRuntimePersistenceQueue(repository, initial, retry_delay_seconds=0.001)
+    latest = replace(initial, revision=2)
+    try:
+        queue.save(replace(initial, revision=1), expected_revision=0)
+        assert repository.started.wait(1)
+        queue.save(latest, expected_revision=1)
+        repository.release.set()
+        assert not queue.flush(1)
+        assert not queue.close(1)
+        assert not queue._thread.is_alive()
+        assert queue.last_error is error
+        assert queue._accepted_state is latest
+        assert queue._pending is latest
+        assert queue._persisted_revision == 0
+        assert not queue._inflight
+        assert repository.attempts == 1
+    finally:
+        repository.release.set()
+        queue.close()
+        queue._thread.join(1)
+        assert not queue._thread.is_alive()
+
+
+def test_runtime_persistence_queue_recovers_wrapped_read_failure_and_coalesces(
+    tmp_path, monkeypatch
+) -> None:
+    document = _document()
+    repository = SceneRuntimeRepository(tmp_path / "scenes_runtime.json")
+    initial = repository.load_or_create(document)
+    read_record = scene_repository._read_json_record
+    started = threading.Event()
+    release = threading.Event()
+    reads = 0
+
+    def flaky_read(path, *, maximum_bytes):
+        nonlocal reads
+        reads += 1
+        if reads == 1:
+            started.set()
+            assert release.wait(5)
+            raise OSError("temporary read failure")
+        return read_record(path, maximum_bytes=maximum_bytes)
+
+    monkeypatch.setattr(scene_repository, "_read_json_record", flaky_read)
+    queue = SceneRuntimePersistenceQueue(repository, initial, retry_delay_seconds=0.001)
+    latest = replace(initial, revision=3)
+    try:
+        queue.save(replace(initial, revision=1), expected_revision=0)
+        assert started.wait(1)
+        queue.save(replace(initial, revision=2), expected_revision=1)
+        queue.save(latest, expected_revision=2)
+        release.set()
+        assert queue.flush()
+        assert reads == 2
+        assert repository.load_or_create(document) == latest
+        assert queue.last_error is None
+        assert queue.close()
+    finally:
+        release.set()
+        queue.close()
+        queue._thread.join(1)
+        assert not queue._thread.is_alive()
+
+
+def test_runtime_persistence_queue_close_seals_admission_and_drains_accepted_writes() -> None:
+    initial = create_default_runtime_state(_document())
+    repository = _GatedRuntimeRepository()
+    queue = SceneRuntimePersistenceQueue(repository, initial)
+    latest = replace(initial, revision=2)
+    results: list[bool] = []
+    closer = threading.Thread(target=lambda: results.append(queue.close(1)))
+    try:
+        queue.save(replace(initial, revision=1), expected_revision=0)
+        assert repository.started.wait(1)
+        queue.save(latest, expected_revision=1)
+        closer.start()
+        with queue._condition:
+            assert queue._condition.wait_for(lambda: queue._closing, timeout=1)
+        with pytest.raises(SceneRepositoryError, match="closed"):
+            queue.save(latest, expected_revision=2)
+        repository.release.set()
+        closer.join(1)
+        assert not closer.is_alive()
+        assert results == [True]
+        assert [state.revision for state in repository.saved] == [1, 2]
+        assert not queue._thread.is_alive()
+        assert queue.flush(0)
+        assert queue.close(0)
+    finally:
+        repository.release.set()
+        if closer.ident is not None:
+            closer.join(2)
+        queue.close()
+        queue._thread.join(1)
+        assert not closer.is_alive()
+        assert not queue._thread.is_alive()
+
+
+@pytest.mark.parametrize("failure", [None, OSError("temporary failure")])
+def test_runtime_persistence_queue_timeout_preserves_inflight_and_stops_later_writes(
+    failure,
+) -> None:
+    initial = create_default_runtime_state(_document())
+    repository = _GatedRuntimeRepository(failure)
+    queue = SceneRuntimePersistenceQueue(repository, initial)
+    first = replace(initial, revision=1)
+    latest = replace(initial, revision=2)
+    try:
+        queue.save(first, expected_revision=0)
+        assert repository.started.wait(1)
+        started = time.monotonic()
+        assert not queue.flush(0.01)
+        assert time.monotonic() - started < 0.3
+        queue.save(latest, expected_revision=1)
+        started = time.monotonic()
+        assert not queue.close(0.01)
+        assert time.monotonic() - started < 0.3
+        assert queue._thread.is_alive()
+        assert queue._inflight
+        assert queue._pending is latest
+        with pytest.raises(SceneRepositoryError, match="closed"):
+            queue.save(replace(initial, revision=3), expected_revision=2)
+
+        repository.release.set()
+        assert not queue.close(1)
+        assert not queue._thread.is_alive()
+        assert not queue._inflight
+        assert queue._accepted_state is latest
+        assert queue._pending is latest
+        assert repository.attempts == 1
+        assert repository.saved == ([first] if failure is None else [])
+        assert queue.last_error is failure
+        started = time.monotonic()
+        assert not queue.flush(1)
+        assert time.monotonic() - started < 0.3
+    finally:
+        repository.release.set()
+        queue.close()
+        queue._thread.join(1)
+        assert not queue._thread.is_alive()
+
+
+def test_runtime_persistence_queue_close_interrupts_long_retry_backoff() -> None:
+    initial = create_default_runtime_state(_document())
+    failure = OSError("storage unavailable")
+    repository = _GatedRuntimeRepository(failure)
+    queue = SceneRuntimePersistenceQueue(repository, initial, retry_delay_seconds=60)
+    latest = replace(initial, revision=2)
+    try:
+        queue.save(replace(initial, revision=1), expected_revision=0)
+        repository.release.set()
+        with queue._condition:
+            assert queue._condition.wait_for(lambda: queue.last_error is failure, timeout=1)
+            # A new save must coalesce without bypassing the retry delay.
+            queue.save(latest, expected_revision=1)
+        started = time.monotonic()
+        assert not queue.close(0.02)
+        assert time.monotonic() - started < 0.3
+        queue._thread.join(1)
+        assert not queue._thread.is_alive()
+        assert repository.attempts == 1
+        assert queue.last_error is failure
+        assert queue._pending is latest
+        started = time.monotonic()
+        assert not queue.flush(1)
+        assert time.monotonic() - started < 0.3
+    finally:
+        repository.release.set()
+        queue.close()
+        queue._thread.join(1)
+        assert not queue._thread.is_alive()
+
+
+@pytest.mark.parametrize("delay", [0, -1, float("nan"), float("inf")])
+def test_runtime_persistence_queue_rejects_invalid_retry_delays(delay) -> None:
+    with pytest.raises(ValueError, match="finite and positive"):
+        SceneRuntimePersistenceQueue(
+            None, create_default_runtime_state(_document()), retry_delay_seconds=delay
+        )
+
+
+@pytest.mark.parametrize("timeout", [-1, float("nan"), float("inf")])
+def test_runtime_persistence_queue_rejects_invalid_timeouts_without_closing(timeout) -> None:
+    initial = create_default_runtime_state(_document())
+    queue = SceneRuntimePersistenceQueue(None, initial)
+    try:
+        with pytest.raises(ValueError, match="finite and nonnegative"):
+            queue.flush(timeout)
+        with pytest.raises(ValueError, match="finite and nonnegative"):
+            queue.close(timeout)
+        queue.save(initial, expected_revision=0)
+        assert queue.flush(0)
+        assert queue.close()
+    finally:
+        queue.close()
+        queue._thread.join(1)
+        assert not queue._thread.is_alive()
 
 
 def test_runtime_repository_recovers_a_stale_manual_scene_after_offline_edit(

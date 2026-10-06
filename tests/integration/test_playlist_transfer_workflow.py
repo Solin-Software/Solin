@@ -128,16 +128,15 @@ def test_transfer_controller_commits_on_ui_thread_without_blocking() -> None:
         parent=parent,
         notifications=notifications,
     )
-    ui_thread = _APP.thread()
     observations: list[tuple[str, object]] = []
 
     def runner(progress, _cancellation):
         progress(PlaylistTransferProgress("Working", completed=1, total=2))
-        observations.append(("worker", QThread.currentThread() == ui_thread))
+        observations.append(("worker", QThread.isMainThread()))
         return "done"
 
     def completed(result):
-        observations.append(("commit", (result, parent.thread() == ui_thread)))
+        observations.append(("commit", (result, QThread.isMainThread())))
 
     assert controller.submit(
         PlaylistTransferJob(

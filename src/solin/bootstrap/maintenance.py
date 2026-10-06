@@ -36,9 +36,12 @@ class DeferredApplicationMaintenance:
                 cleanup_incomplete_cache,
                 cleanup_orphan_temps,
             )
-            from solin.core.remote.patch_installer import cleanup_pending_patch
+            from solin.core.remote.update_installer import cleanup_pending_update
 
-            cleanup_pending_patch(self._installation_settings)
+            self._installation_settings.clean_legacy_update_download()
+            cleanup_pending_update(
+                self._installation_settings, directory=self._runtime_paths.cache_dir / "updates",
+            )
             cleanup_orphan_temps()
             cleanup_incomplete_cache(self._runtime_paths.media_cache_dir)
         except Exception:  # noqa: BLE001 - best-effort maintenance boundary

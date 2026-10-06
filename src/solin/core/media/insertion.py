@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, NamedTuple
 
 from solin.core.jw.identifiers import MEPS_FROM_LANG
 
@@ -26,8 +26,7 @@ def _int_or_zero(value: Any) -> int:
         return 0
 
 
-@dataclass(frozen=True, slots=True)
-class MediaInsertPayload:
+class MediaInsertPayload(NamedTuple):
     """Normalized media selected by a picker before destination projection."""
 
     title: str
@@ -58,33 +57,31 @@ class MediaInsertPayload:
         key_symbol = str(get("pub") or get("key_symbol") or "")
         doc_id = _int_or_zero(get("docid") or get("doc_id"))
         jw_media_id = str(get("jw_media_id") or "")
-        source = str(get("source") or "").lower()
+        jw_identity_authoritative = bool(
+            get("jw_identity_authoritative") or key_symbol or doc_id or jw_media_id
+        )
+        if not jw_identity_authoritative:
+            source = str(get("source") or "").lower()
+            jw_identity_authoritative = source in _JW_SOURCES or source.startswith("category:")
         duration_seconds = get("duration_seconds")
         return cls(
-            title=str(get("title") or get("label") or "").strip(),
-            source_url=str(get("download_url") or get("url") or get("jworg_url") or ""),
-            media_type=media_type,
-            base_duration_ticks=normalize_duration_ticks(
+            str(get("title") or get("label") or "").strip(),
+            str(get("download_url") or get("url") or get("jworg_url") or ""),
+            media_type,
+            normalize_duration_ticks(
                 ticks=(get("base_duration_ticks") or get("duration_ticks")),
                 seconds=(duration_seconds if duration_seconds is not None else get("duration")),
             ),
-            thumbnail_url=str(get("thumbnail_url") or ""),
-            thumbnail_path=str(get("thumbnail_path") or ""),
-            key_symbol=key_symbol,
-            track=_int_or_zero(get("track")),
-            issue_tag=_int_or_zero(get("issue") or get("issue_tag")),
-            doc_id=doc_id,
-            meps_language=meps_language,
-            language=language,
-            jw_media_id=jw_media_id,
-            jw_identity_authoritative=bool(
-                get("jw_identity_authoritative")
-                or key_symbol
-                or doc_id
-                or jw_media_id
-                or source in _JW_SOURCES
-                or source.startswith("category:")
-            ),
+            str(get("thumbnail_url") or ""),
+            str(get("thumbnail_path") or ""),
+            key_symbol,
+            _int_or_zero(get("track")),
+            _int_or_zero(get("issue") or get("issue_tag")),
+            doc_id,
+            meps_language,
+            language,
+            jw_media_id,
+            jw_identity_authoritative,
         )
 
     def to_identity_mapping(self) -> dict[str, Any]:

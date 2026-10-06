@@ -49,6 +49,9 @@ class ContentFrameConsumer:
         self._frame_source: Any | None = None
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()
+        # Native uploads can wait for the graphics context. Keep their resource
+        # lifetime separate from the condition used for IPC deadlines.
+        self._pump_lock = threading.Lock()
         self._condition = threading.Condition()
         self._media_epoch: int | None = None
 
@@ -62,7 +65,15 @@ class ContentFrameConsumer:
         return self._frame_source.source if self._frame_source is not None else None
 
     def start(self) -> bool:
-        """Open the channel + frame source and start pumping. False if unusable."""
+        """Open the channel and start pumping. False if unusable or stopped."""
+        with self._pump_lock:
+            if self._stop.is_set():
+                return False
+            if self._thread is not None:
+                return True
+            return self._start()
+
+    def _start(self) -> bool:
         from solin.core.scenes.content_frame_channel import SharedFrameChannelReader
 
         token = self.handle_token
@@ -88,24 +99,29 @@ class ContentFrameConsumer:
 
     def pump_once(self) -> bool:
         """Deliver the newest frame to libobs. True if a frame was pushed."""
-        reader = self._reader
-        frame_source = self._frame_source
-        if reader is None or frame_source is None:
-            return False
-        frame = reader.read_latest()
-        if frame is None:
-            return False
-        with self._condition:
-            if self._media_epoch is not None and frame.media_epoch < self._media_epoch:
+        with self._pump_lock:
+            reader = self._reader
+            frame_source = self._frame_source
+            if self._stop.is_set() or reader is None or frame_source is None:
+                return False
+            frame = reader.read_latest()
+            if frame is None:
+                return False
+            with self._condition:
+                previous_epoch = self._media_epoch
+            if previous_epoch is not None and frame.media_epoch < previous_epoch:
                 return False
             if not frame_source.push_bgra(
                 frame.data, frame.width, frame.height, frame.stride,
-                reset=frame.media_epoch != self._media_epoch,
+                reset=frame.media_epoch != previous_epoch,
             ):
                 return False
-            self._media_epoch = frame.media_epoch
-            self._condition.notify_all()
-            return True
+            with self._condition:
+                if self._stop.is_set():
+                    return False
+                self._media_epoch = frame.media_epoch
+                self._condition.notify_all()
+                return True
 
     def wait_for_epoch(self, media_epoch: int, *, deadline: float) -> bool:
         """Wait for the requested presentation's first GPU upload, within the IPC deadline."""
@@ -130,9 +146,16 @@ class ContentFrameConsumer:
         self._stop.set()
         with self._condition:
             self._condition.notify_all()
-        thread, self._thread = self._thread, None
+        thread = self._thread
         if thread is not None:
-            thread.join(timeout=1.0)
+            thread.join()
+        # Also drain explicit pump_once callers before freeing borrowed native
+        # resources. A timeout cannot make an unfinished native upload safe.
+        with self._pump_lock:
+            self._thread = None
+            self._dispose()
+
+    def _dispose(self) -> None:
         frame_source, self._frame_source = self._frame_source, None
         if frame_source is not None:
             try:

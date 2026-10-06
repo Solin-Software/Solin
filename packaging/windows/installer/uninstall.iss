@@ -1,5 +1,4 @@
-// Shared uninstall lifecycle for full and patch installers. Inno runs the
-// Pascal script from the most recent installation, so both must include it.
+// Uninstall lifecycle for the full installer.
 // Registry entries owned by [Registry] are removed by the scoped uninstall log.
 
 procedure DeleteTempFiles(const Dir: String);
@@ -78,28 +77,7 @@ begin
 
     usAppMutexCheck:
     begin
-      if IsAppRunning() then
-      begin
-        if MsgBox(
-          'Solin is currently running.' + #13#10 +
-          'It must be closed before uninstalling.' + #13#10#13#10 +
-          'Close it and continue?',
-          mbConfirmation, MB_YESNO or MB_DEFBUTTON1
-        ) = IDYES then
-        begin
-          ForceCloseApp();
-          if IsAppRunning() then
-          begin
-            MsgBox(
-              'Could not close Solin. Please close it manually and try again.',
-              mbError, MB_OK
-            );
-            Abort();
-          end;
-        end
-        else
-          Abort();
-      end;
+      if not ConfirmCloseRunningSolin() then Abort();
     end;
 
     usUninstall:

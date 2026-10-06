@@ -1427,6 +1427,61 @@ def test_readback_prepares_geometry_inside_the_graphics_context(monkeypatch, pre
                      else ["enter", "prepare", "leave"])
 
 
+def test_readback_cannot_invert_a_native_callback_and_competing_graphics_owner():
+    import subprocess
+    import textwrap
+
+    # A subprocess bounds a broken lock order without leaving blocked threads in
+    # the test runner. libobs's graphics mutex is recursive on its owning thread.
+    script = textwrap.dedent("""
+        import threading
+        from types import SimpleNamespace
+        from solin.core.media import obs_source_render as rendering
+
+        graphics = threading.RLock()
+        held = threading.Event()
+        contender = threading.Event()
+        callback_done = threading.Event()
+        worker_done = threading.Event()
+
+        def enter():
+            if threading.current_thread().name == 'competing-readback':
+                contender.set()
+            graphics.acquire()
+
+        library = SimpleNamespace(obs_enter_graphics=enter, obs_leave_graphics=graphics.release)
+        rendering._bind = lambda: (None, library)
+        rendering._texrender = None
+        rendering._casts = {'texrender_create': lambda *_args: None}
+        source = SimpleNamespace(_ptr=object())
+
+        def render():
+            rendering.render_source_to_bgra(source, 16, 16, canvas_width=16, canvas_height=16)
+
+        def callback():
+            with graphics:
+                held.set()
+                assert contender.wait(2)
+                render()
+            callback_done.set()
+
+        def worker():
+            assert held.wait(2)
+            render()
+            worker_done.set()
+
+        threading.Thread(target=callback, daemon=True, name='native-render-callback').start()
+        threading.Thread(target=worker, daemon=True, name='competing-readback').start()
+        assert callback_done.wait(2), 'Readback lock inverts native graphics ownership'
+        assert worker_done.wait(2)
+    """)
+    result = subprocess.run(
+        [sys.executable, "-c", script], cwd=Path(__file__).resolve().parents[2],
+        capture_output=True, text=True, timeout=10, check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_crop_refresh_reports_contention_and_retries_without_blocking_graphics():
     from threading import Thread
 
@@ -2872,6 +2927,181 @@ def test_engine_hydrate_configures_program_egress():
         "program_egress": descriptor,
     }))
     assert fake.configured[-1] == descriptor
+
+
+@pytest.mark.parametrize(
+    ("failed_output", "retry"),
+    [(None, False), ("program", False), ("preview", False),
+     ("program", True), ("preview", True)],
+)
+def test_engine_rehydrate_configures_outputs_with_program_detached(
+    request, monkeypatch, failed_output, retry,
+):
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+
+    def close_engine():
+        engine.shutdown()
+        assert all(scene.released == 1 for scene in runtime.scenes)
+        assert all(source.released == 1 for source in runtime.sources)
+        assert all(transition.released == 1 for transition in runtime.transitions)
+
+    request.addfinalizer(close_engine)
+    engine.handle(_request("hello"))
+    payload = {
+        "document": _MEDIA_DOC,
+        "active_scenes": {"virtual_camera": "s1", "editor": "s1"},
+        "render_enabled": {"editor": True},
+    }
+    assert _ack_from_envelope(engine.handle(_request("hydrate", payload))).applied
+    assert runtime.channels
+    old_scenes = tuple(runtime.scenes)
+    old_sources = tuple(runtime.sources)
+    events = []
+
+    class RebuildGuard:
+        held = False
+
+        def __enter__(self):
+            self.held = True
+
+        def __exit__(self, *_exc):
+            self.held = False
+
+    guard = RebuildGuard()
+    output = _RecordingWindowOutput()
+    output.hydrate_lock = guard
+    engine._window_output = output
+
+    class Thumbnails:
+        suspended = False
+
+        def suspend(self):
+            self.suspended = True
+            events.append("suspend")
+
+        def resume(self):
+            self.suspended = False
+            events.append("resume")
+
+        def shutdown(self):
+            pass
+
+    thumbnails = Thumbnails()
+    engine._thumbnail_egress = thumbnails
+
+    class Egress(_FakePreviewEgress):
+        def __init__(self, name):
+            super().__init__()
+            self.name = name
+
+        def configure(self, descriptor):
+            assert runtime.channels == {}, "The previous Program is still active"
+            assert all(scene.released == 1 for scene in old_scenes)
+            assert all(source.released == 1 for source in old_sources)
+            assert guard.held and thumbnails.suspended
+            assert preview.sources[-1] is None
+            events.append(self.name)
+            if self.name == failed_output:
+                raise RuntimeError("Output configuration failed")
+            super().configure(descriptor)
+
+    preview = Egress("preview")
+    program = Egress("program")
+    engine._preview_egress = preview
+    engine._program_egress = program
+    set_channel = runtime.set_channel_source
+
+    def record_channel(channel, source):
+        events.append("clear" if source is None else "activate")
+        set_channel(channel, source)
+
+    monkeypatch.setattr(runtime, "set_channel_source", record_channel)
+    descriptor = {"transport": "shared_memory_bgra", "handle_token": "replacement",
+                  "width": 320, "height": 180}
+    ack = _ack_from_envelope(engine.handle(_request("hydrate", {
+        **payload, "program_egress": descriptor, "preview_egress": descriptor,
+    })))
+
+    if failed_output is not None:
+        assert not ack.applied and ack.error_code == "hydrate_failed"
+        assert runtime.channels == {}
+        assert preview.sources == [None] and preview.enabled == []
+        assert not guard.held and not thumbnails.suspended
+        configured = ["program"] if failed_output == "program" else ["program", "preview"]
+        assert events == ["suspend", "clear", *configured, "resume"]
+        failed_scenes = tuple(runtime.scenes[len(old_scenes):])
+        failed_sources = tuple(runtime.sources[len(old_sources):])
+        assert failed_scenes and all(scene.released == 0 for scene in failed_scenes)
+        if not retry:
+            return  # The finalizer must also release a failed graph without retry.
+        events.clear()
+        failed_output = None
+        ack = _ack_from_envelope(engine.handle(_request("hydrate", {
+            **payload, "program_egress": descriptor, "preview_egress": descriptor,
+        })))
+        assert all(scene.released == 1 for scene in failed_scenes)
+        assert all(source.released == 1 for source in failed_sources)
+
+    assert ack.applied
+    assert events == ["suspend", "clear", "program", "preview", "activate", "resume"]
+    assert preview.sources[-1] == "scene-source:solin-scene-s1"
+    assert preview.enabled[-1] is True
+    assert runtime.channels and not guard.held and not thumbnails.suspended
+
+
+def test_scene_graph_rehydrate_keeps_old_resources_if_program_detachment_fails(request, monkeypatch):
+    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+
+    runtime = _CompositingRuntime()
+    graph = LibobsSceneGraph(runtime)
+    request.addfinalizer(graph.shutdown)
+    graph.hydrate(_DOCUMENT, {"virtual_camera": "scene-a"})
+    old_channels = dict(runtime.channels)
+    old_scenes = tuple(runtime.scenes)
+    old_sources = tuple(runtime.sources)
+    old_transition = runtime.transitions[-1]
+    set_channel = runtime.set_channel_source
+    calls = []
+
+    def fail_detachment(channel, source):
+        if source is None:
+            raise RuntimeError("Program detachment failed")
+        set_channel(channel, source)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(runtime, "set_channel_source", fail_detachment)
+        with pytest.raises(RuntimeError, match="Program detachment failed"):
+            graph.hydrate(
+                _DOCUMENT, {"virtual_camera": "scene-a"},
+                before_activate=lambda: calls.append("configure"),
+            )
+        assert calls == []
+        assert runtime.channels == old_channels
+        assert all(scene.released == 0 for scene in old_scenes)
+        assert all(source.released == 0 for source in old_sources)
+        assert old_transition.released == 0
+
+
+def test_scene_graph_does_not_run_activation_hook_when_build_fails(request, monkeypatch):
+    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+
+    runtime = _CompositingRuntime()
+    graph = LibobsSceneGraph(runtime)
+    request.addfinalizer(graph.shutdown)
+    graph.hydrate(_DOCUMENT, {"virtual_camera": "scene-a"})
+    calls = []
+
+    def fail_layer(*_args):
+        raise RuntimeError("Layer construction failed")
+
+    monkeypatch.setattr(graph, "_add_layer", fail_layer)
+    with pytest.raises(RuntimeError, match="Layer construction failed"):
+        graph.hydrate(
+            _DOCUMENT, {"virtual_camera": "scene-a"},
+            before_activate=lambda: calls.append("activate"),
+        )
+    assert calls == [] and runtime.channels == {}
 
 
 def test_engine_shutdown_stops_program_egress():

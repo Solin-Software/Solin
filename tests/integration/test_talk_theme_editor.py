@@ -7,12 +7,15 @@ import subprocess
 import sys
 from time import monotonic, sleep
 
+import pytest
+
 from PySide6.QtCore import (
     Q_ARG,
     QMetaObject,
     QObject,
     QPoint,
     QPointF,
+    QSize,
     QTranslator,
     Qt,
     qInstallMessageHandler,
@@ -40,6 +43,7 @@ from solin.core.talk_theme.repository import TalkThemeAssetStore, TalkThemeRepos
 from solin.styles.theme import app_stylesheet
 from solin.ui.dialogs.talk_theme_color import TalkThemeColorDialog
 from solin.ui.qml.talk_theme import TalkThemeBridge, TalkThemeEditorWidget
+from tests._qt import dispose_widget, mouse_move, mouse_press, mouse_release, show_and_activate, wait_until
 
 
 _APP = QApplication.instance() or QApplication([])
@@ -475,7 +479,7 @@ def test_layer_crud_reorder_and_delete_clear_peer_snap_references(tmp_path) -> N
     bridge.close()
 
 
-def test_layer_panel_reorder_previews_ghost_and_destination_slot(tmp_path) -> None:
+def test_layer_panel_reorder_previews_ghost_and_destination_slot(tmp_path, request) -> None:
     widget = TalkThemeEditorWidget(
         None,
         profile_paths=_profile_paths(tmp_path),
@@ -484,8 +488,17 @@ def test_layer_panel_reorder_previews_ghost_and_destination_slot(tmp_path) -> No
         settings=_CustomColorSettings(),
         output_settings=_OutputSettings(),
     )
-    widget.resize(1400, 900)
-    widget.show()
+    def close_widget() -> None:
+        try:
+            widget.cleanup()
+        finally:
+            dispose_widget(widget)
+
+    request.addfinalizer(close_widget)
+    # Match the child editor viewport used by the application. A standalone
+    # decorated Cocoa window is constrained to the runner's screen height.
+    widget.setWindowFlag(Qt.WindowType.FramelessWindowHint)
+    show_and_activate(widget, size=QSize(1400, 900))
     assert _wait_until(lambda: widget._qml.status() is QQuickWidget.Status.Ready)
     root = widget._qml.rootObject()
     assert root is not None
@@ -533,19 +546,21 @@ def test_layer_panel_reorder_previews_ghost_and_destination_slot(tmp_path) -> No
     start = grip.mapToScene(QPointF(grip.width() / 2, grip.height() / 2)).toPoint()
     destination = QPoint(start.x(), start.y() + 45)
 
-    QTest.mousePress(widget._qml, Qt.MouseButton.LeftButton, pos=start)
-    QTest.mouseMove(widget._qml, destination, delay=20)
-
-    assert _wait_until(lambda: ghost.isVisible() and placeholder.isVisible())
-    assert abs(ghost.mapToScene(QPointF()).y() - (first_y_before + 45)) < 2
-    assert abs(placeholder.mapToScene(QPointF()).y() - second_y_before) < 2
-    QTest.qWait(180)
-    assert float(first_row.property("opacity")) < 0.1
-    assert second_row.mapToScene(QPointF()).y() < second_y_before - 40
-    assert str(widget.bridge.layersModel.get(0)["id"]) == first_id
-    assert len(widget.bridge._undo) == undo_count
-
-    QTest.mouseRelease(widget._qml, Qt.MouseButton.LeftButton, pos=destination)
+    mouse_press(widget._qml, Qt.MouseButton.LeftButton, pos=start)
+    try:
+        mouse_move(widget._qml, destination, delay=20)
+        wait_until(lambda: ghost.isVisible() and placeholder.isVisible(), description="layer reorder preview")
+        assert abs(ghost.mapToScene(QPointF()).y() - (first_y_before + 45)) < 2
+        assert abs(placeholder.mapToScene(QPointF()).y() - second_y_before) < 2
+        wait_until(
+            lambda: float(first_row.property("opacity")) < 0.1
+            and second_row.mapToScene(QPointF()).y() < second_y_before - 40,
+            description="layer reorder destination animation",
+        )
+        assert str(widget.bridge.layersModel.get(0)["id"]) == first_id
+        assert len(widget.bridge._undo) == undo_count
+    finally:
+        mouse_release(widget._qml, Qt.MouseButton.LeftButton, pos=destination)
 
     assert _wait_until(lambda: not ghost.isVisible() and not placeholder.isVisible())
     assert str(widget.bridge.layersModel.get(0)["id"]) == second_id
@@ -553,8 +568,6 @@ def test_layer_panel_reorder_previews_ghost_and_destination_slot(tmp_path) -> No
     assert len(widget.bridge._undo) == undo_count + 1
     widget.bridge.undo()
     assert str(widget.bridge.layersModel.get(0)["id"]) == first_id
-    widget.cleanup()
-    widget.close()
 
 
 def test_selection_is_transient_and_empty_selection_clears_guides(tmp_path) -> None:
@@ -1502,39 +1515,53 @@ def test_text_and_background_colors_use_the_same_picker_component(tmp_path) -> N
         settings=_CustomColorSettings(),
         output_settings=_OutputSettings(),
     )
-    widget.resize(1200, 760)
-    widget.show()
-    assert _wait_until(lambda: widget._qml.status() is QQuickWidget.Status.Ready)
+    try:
+        widget.resize(1200, 760)
+        widget.show()
+        assert _wait_until(lambda: widget._qml.status() is QQuickWidget.Status.Ready)
+        root = widget._qml.rootObject()
+        assert root is not None
+        inspector = next(
+            candidate
+            for candidate in root.findChildren(QObject, "talkThemeInspector")
+            if isinstance(candidate, QQuickItem) and candidate.isVisible()
+        )
+        layer_id = str(widget.bridge.layersModel.get(0)["id"])
+        widget.bridge.selectLayer(layer_id)
+        text_picker = inspector.findChild(QObject, "talkThemeTextColorPicker")
+        background_picker = inspector.findChild(QObject, "talkThemeBackgroundColorPicker")
+        assert isinstance(text_picker, QQuickItem)
+        assert isinstance(background_picker, QQuickItem)
 
-    root = widget._qml.rootObject()
-    assert root is not None
-    inspector = next(
-        candidate
-        for candidate in root.findChildren(QObject, "talkThemeInspector")
-        if isinstance(candidate, QQuickItem) and candidate.isVisible()
-    )
-    layer_id = str(widget.bridge.layersModel.get(0)["id"])
-    widget.bridge.selectLayer(layer_id)
-    inspector.setProperty("currentTab", "text")
-    QTest.qWait(50)
-    text_picker = inspector.findChild(QObject, "talkThemeTextColorPicker")
-    background_picker = inspector.findChild(
-        QObject,
-        "talkThemeBackgroundColorPicker",
-    )
-    assert isinstance(text_picker, QQuickItem)
-    assert isinstance(background_picker, QQuickItem)
-    assert text_picker.isVisible()
+        def visible_picker_size(tab: str, picker: QQuickItem) -> tuple[float, float]:
+            inspector.setProperty("currentTab", tab)
+            # Hidden ColumnLayouts retain old geometry. Measure each component
+            # only after its visible layout fills the inspector with 16 px margins.
+            wait_until(
+                lambda: (
+                    picker.isVisible()
+                    and picker.parentItem().width() == inspector.width()
+                    and picker.width() == inspector.width() - 32
+                    and picker.height() == 42
+                ),
+                description=lambda: (
+                    f"{tab} color picker layout: host={widget.size()}, "
+                    f"qml={widget._qml.size()}, root={(root.width(), root.height())}, "
+                    f"inspector={inspector.width()}, parent={picker.parentItem().width()}, "
+                    f"picker={(picker.width(), picker.height())}, visible={picker.isVisible()}"
+                ),
+            )
+            return picker.width(), picker.height()
 
-    inspector.setProperty("currentTab", "background")
-    QTest.qWait(50)
-
-    assert background_picker.isVisible()
-    assert text_picker.metaObject().className() == background_picker.metaObject().className()
-    assert text_picker.width() == background_picker.width()
-    assert text_picker.height() == background_picker.height()
-    widget.cleanup()
-    widget.close()
+        text_size = visible_picker_size("text", text_picker)
+        background_size = visible_picker_size("background", background_picker)
+        assert text_picker.metaObject().className() == background_picker.metaObject().className()
+        assert text_size == background_size
+    finally:
+        try:
+            widget.cleanup()
+        finally:
+            dispose_widget(widget)
 
 
 def test_pending_inline_edit_is_committed_before_close_decides_dirty_state(tmp_path) -> None:
@@ -1578,7 +1605,8 @@ def test_pending_inline_edit_is_committed_before_close_decides_dirty_state(tmp_p
     widget.close()
 
 
-def test_builtin_label_enter_inserts_a_line_break_and_control_enter_commits(tmp_path) -> None:
+@pytest.fixture
+def editor(tmp_path, request):
     widget = TalkThemeEditorWidget(
         None,
         profile_paths=_profile_paths(tmp_path),
@@ -1587,8 +1615,34 @@ def test_builtin_label_enter_inserts_a_line_break_and_control_enter_commits(tmp_
         settings=_CustomColorSettings(),
         output_settings=_OutputSettings(),
     )
+    request.addfinalizer(lambda: dispose_widget(widget))
+    request.addfinalizer(widget.cleanup)
+    widget.setWindowFlag(Qt.WindowType.FramelessWindowHint)
     widget.resize(1200, 760)
-    widget.show()
+    return widget
+
+
+@pytest.fixture
+def active_editor(editor):
+    show_and_activate(editor)
+    return editor
+
+
+def test_layer_cursor_entry_survives_previous_layer_exit(editor) -> None:
+    widget = editor
+    bridge = widget.bridge
+    bridge.beginPointer("previous-layer", Qt.CursorShape.OpenHandCursor.value)
+    bridge.beginPointer("current-layer", Qt.CursorShape.IBeamCursor.value)
+    bridge.endPointer("previous-layer")
+    assert widget._qml.cursor().shape() == Qt.CursorShape.IBeamCursor
+    assert widget._qml.quickWindow().cursor().shape() == Qt.CursorShape.IBeamCursor
+    bridge.endPointer("current-layer")
+    assert widget._qml.cursor().shape() == Qt.CursorShape.ArrowCursor
+    assert widget._qml.quickWindow().cursor().shape() == Qt.CursorShape.ArrowCursor
+
+
+def test_builtin_label_enter_inserts_a_line_break_and_control_enter_commits(active_editor) -> None:
+    widget = active_editor
     assert _wait_until(lambda: widget._qml.status() is QQuickWidget.Status.Ready)
     root = widget._qml.rootObject()
     assert root is not None
@@ -1610,7 +1664,7 @@ def test_builtin_label_enter_inserts_a_line_break_and_control_enter_commits(tmp_
     pointer_point = layer_pointer.mapToScene(
         QPointF(layer_pointer.width() / 2, layer_pointer.height() / 2)
     ).toPoint()
-    QTest.mouseMove(widget._qml, pointer_point)
+    mouse_move(widget._qml, pointer_point)
     assert _wait_until(lambda: bool(layer_pointer.property("containsMouse")))
     assert _wait_until(
         lambda: widget._qml.quickWindow().cursor().shape()
@@ -1668,8 +1722,6 @@ def test_builtin_label_enter_inserts_a_line_break_and_control_enter_commits(tmp_
     assert restored_layer is not None
     assert restored_layer.text == original_text
     assert restored_layer.y == original_layer.y
-    widget.cleanup()
-    widget.close()
 
 
 def test_inspector_text_edit_preserves_the_rendered_layer_center(tmp_path) -> None:
@@ -1947,18 +1999,10 @@ def test_background_adjustment_owns_drags_above_visible_text_layers(tmp_path) ->
 
 
 def test_responsive_navigation_uses_an_animated_drawer_and_single_mobile_tabs(
-    tmp_path,
+    editor,
 ) -> None:
-    widget = TalkThemeEditorWidget(
-        None,
-        profile_paths=_profile_paths(tmp_path),
-        notifications=_Notifications(),
-        projection_session=ProjectionSession(),
-        settings=_CustomColorSettings(),
-        output_settings=_OutputSettings(),
-    )
-    widget.resize(1000, 760)
-    widget.show()
+    widget = editor
+    show_and_activate(widget, size=QSize(1000, 760))
     assert _wait_until(lambda: widget._qml.status() is QQuickWidget.Status.Ready)
     root = widget._qml.rootObject()
     assert root is not None
@@ -1974,13 +2018,32 @@ def test_responsive_navigation_uses_an_animated_drawer_and_single_mobile_tabs(
     assert isinstance(toggle, QQuickItem)
     assert isinstance(toggle_icon, QQuickItem)
     assert isinstance(mobile_navigation, QQuickItem)
-    QTest.qWait(220)
+    outside_toggle = QPoint(widget._qml.width() - 20, widget._qml.height() - 20)
+    mouse_move(widget._qml, outside_toggle)
+    wait_until(lambda: drawer.x() < -drawer.width(), description="closed navigation drawer")
+    wait_until(
+        lambda: QColor(toggle.property("color")).alpha() == 0,
+        description="closed navigation toggle without hover",
+    )
     closed_x = drawer.x()
     closed_toggle_color = QColor(toggle.property("color"))
     assert closed_x < -drawer.width()
     assert not mobile_navigation.isVisible()
     assert closed_toggle_color.alpha() == 0
     assert "panel-left" in str(toggle_icon.property("source"))
+
+    toggle_center = toggle.mapToScene(QPointF(toggle.width() / 2, toggle.height() / 2)).toPoint()
+    mouse_move(widget._qml, toggle_center)
+    wait_until(
+        lambda: QColor(toggle.property("color")).alpha() == 255,
+        description="closed navigation toggle hover color",
+    )
+    assert workspace.property("drawerOpen") is False
+    mouse_move(widget._qml, outside_toggle)
+    wait_until(
+        lambda: QColor(toggle.property("color")).alpha() == 0,
+        description="navigation toggle hover exit",
+    )
 
     workspace.setProperty("drawerOpen", True)
     assert _wait_until(lambda: closed_x < drawer.x() < -1, timeout=0.16)
@@ -2034,8 +2097,6 @@ def test_responsive_navigation_uses_an_animated_drawer_and_single_mobile_tabs(
     )
     assert isinstance(inspector_navigation, QQuickItem)
     assert not inspector_navigation.isVisible()
-    widget.cleanup()
-    widget.close()
 
 
 def test_editor_cleanup_does_not_leave_qml_lifecycle_errors(tmp_path) -> None:

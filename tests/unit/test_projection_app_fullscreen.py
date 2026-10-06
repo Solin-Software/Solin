@@ -1,6 +1,8 @@
 import os
 from types import SimpleNamespace
 
+import pytest
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtCore import QCoreApplication, QEvent, Qt
@@ -12,6 +14,29 @@ from solin.widgets.projection.fullscreen import FullscreenVideoOverlay
 
 
 _APP = QApplication.instance() or QApplication([])
+
+
+@pytest.fixture
+def own_widget(request):
+    def own(widget: QWidget) -> QWidget:
+        if isinstance(widget, FullscreenVideoOverlay):
+            # Owner destruction schedules deletion of its parentless chrome.
+            for frame in (widget._title_bar, widget._controls):
+                request.addfinalizer(
+                    lambda frame=frame: QCoreApplication.sendPostedEvents(
+                        frame, QEvent.Type.DeferredDelete
+                    )
+                )
+
+        def delete_widget() -> None:
+            widget.deleteLater()
+            QCoreApplication.sendPostedEvents(widget, QEvent.Type.DeferredDelete)
+
+        request.addfinalizer(delete_widget)
+        request.addfinalizer(widget.close)
+        return widget
+
+    return own
 
 
 def test_active_projection_bar_surface_owns_click_cursor():
@@ -200,8 +225,8 @@ def test_fullscreen_selects_native_presenter_before_showing_its_window(
     assert events == [("native", True), ("show", None)]
 
 
-def test_video_preview_creates_native_surface_only_when_route_is_enabled():
-    preview = projection_bar._ThemedVideoPreview()
+def test_video_preview_creates_native_surface_only_when_route_is_enabled(own_widget):
+    preview = own_widget(projection_bar._ThemedVideoPreview())
     preview.resize(1000, 800)
 
     assert preview.native_surface is None
@@ -214,7 +239,7 @@ def test_video_preview_creates_native_surface_only_when_route_is_enabled():
     # The sidecar's obs_display is only resized when a fresh window target reaches
     # it, so during a live window drag its size lags; a surface that can only ever
     # have the canvas aspect turns that stale display into a uniform scale instead
-    # of a distortion. 1000x800 is wider than 16:9, so the fit is width-bound and
+    # of a distortion. 1000x800 is narrower than 16:9, so the fit is width-bound and
     # centred vertically: 1000 / (16/9) = 562, offset (800 - 562) // 2 = 119.
     assert preview.native_surface.geometry().getRect() == (0, 119, 1000, 562)
     assert preview.native_surface.cursor().shape() == Qt.CursorShape.ArrowCursor
@@ -224,18 +249,16 @@ def test_video_preview_creates_native_surface_only_when_route_is_enabled():
         == Qt.CursorShape.ArrowCursor
     )
 
-    # Each further case uses a fresh preview sized before the surface is created:
-    # a hidden widget gets no resizeEvent, and show() would build a real native
-    # window (WA_NativeWindow plus layered-window calls), which a bare test cannot do.
+    # Each further case sizes a fresh preview before enabling its native route.
 
     # Narrower than the canvas: the fit is width-bound and centred vertically.
-    narrow = projection_bar._ThemedVideoPreview()
+    narrow = own_widget(projection_bar._ThemedVideoPreview())
     narrow.resize(600, 800)
     narrow.set_native_output_active(True)
     assert narrow.native_surface.geometry().getRect() == (0, 231, 600, 338)
 
     # The aspect follows the document's canvas rather than an assumed 16:9.
-    four_by_three = projection_bar._ThemedVideoPreview()
+    four_by_three = own_widget(projection_bar._ThemedVideoPreview())
     four_by_three.set_canvas_aspect(4 / 3)
     four_by_three.resize(1200, 600)
     four_by_three.set_native_output_active(True)
@@ -410,12 +433,14 @@ def test_fullscreen_controls_mirror_announcement_enabled_state():
     assert overlay.seek_enabled == [False]
 
 
-def test_fullscreen_overlay_uses_parent_translator_and_original_control_order():
-    source = QWidget()
-    overlay = FullscreenVideoOverlay(
-        source_widget=source,
-        translate=lambda text: f"pt:{text}",
-        parent=source,
+def test_fullscreen_overlay_uses_parent_translator_and_original_control_order(own_widget):
+    source = own_widget(QWidget())
+    overlay = own_widget(
+        FullscreenVideoOverlay(
+            source_widget=source,
+            translate=lambda text: f"pt:{text}",
+            parent=source,
+        )
     )
 
     assert overlay.play_btn.toolTip() == "pt:Pause/Resume"
@@ -455,8 +480,8 @@ def test_fullscreen_overlay_uses_parent_translator_and_original_control_order():
     ]
 
 
-def test_fullscreen_chrome_is_not_shown_from_the_owner_show_event(monkeypatch):
-    overlay = FullscreenVideoOverlay(source_widget=None)
+def test_fullscreen_chrome_is_not_shown_from_the_owner_show_event(monkeypatch, own_widget):
+    overlay = own_widget(FullscreenVideoOverlay(source_widget=None))
     calls: list[str] = []
     monkeypatch.setattr(
         overlay,
@@ -469,8 +494,12 @@ def test_fullscreen_chrome_is_not_shown_from_the_owner_show_event(monkeypatch):
     assert calls == []
 
 
-def test_fullscreen_exit_hides_chrome_before_hiding_its_owner(monkeypatch):
-    overlay = FullscreenVideoOverlay(source_widget=None)
+def test_fullscreen_exit_hides_chrome_before_hiding_its_owner(
+    monkeypatch, own_widget, request
+):
+    overlay = own_widget(FullscreenVideoOverlay(source_widget=None))
+    # Restore window methods before the owner's registered cleanup runs.
+    request.addfinalizer(monkeypatch.undo)
     order: list[str] = []
     monkeypatch.setattr(
         overlay._title_bar,

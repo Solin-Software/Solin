@@ -3,7 +3,12 @@ from __future__ import annotations
 import threading
 import time
 
-from PySide6.QtCore import QCoreApplication, QTimer
+from concurrent.futures import ThreadPoolExecutor
+import gc
+
+import pytest
+import shiboken6
+from PySide6.QtCore import QCoreApplication, QEvent, QThread, QTimer
 
 from solin.controllers.media_operation_coordinator import MediaOperationCoordinator
 from solin.core.media.operations import (
@@ -15,6 +20,42 @@ from solin.core.media.operations import (
 
 
 _APP = QCoreApplication.instance() or QCoreApplication([])
+
+
+def test_destroying_coordinator_preserves_the_application_thread() -> None:
+    main_thread = QThread.currentThread()
+    coordinator = MediaOperationCoordinator()
+    coordinator.shutdown()
+    coordinator.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    del coordinator
+    gc.collect()
+
+    assert shiboken6.isValid(main_thread)
+    assert main_thread.isCurrentThread()
+    assert QCoreApplication.eventDispatcher() is not None
+
+
+def test_coordinator_rejects_submission_from_a_worker() -> None:
+    coordinator = MediaOperationCoordinator()
+    try:
+        with ThreadPoolExecutor(max_workers=1) as workers:
+            result = workers.submit(
+                coordinator.submit, _spec("foreign-thread", "test", lambda *_args: None)
+            )
+            with pytest.raises(RuntimeError, match="Qt thread"):
+                result.result(timeout=2)
+        assert coordinator.active_count == 0
+        assert coordinator.queued_count == 0
+    finally:
+        coordinator.shutdown()
+
+
+def test_coordinator_rejects_construction_from_a_worker() -> None:
+    with ThreadPoolExecutor(max_workers=1) as workers:
+        result = workers.submit(MediaOperationCoordinator)
+        with pytest.raises(RuntimeError, match="created on the main Qt thread"):
+            result.result(timeout=2)
 
 
 def _wait_until(predicate, timeout: float = 3.0) -> None:

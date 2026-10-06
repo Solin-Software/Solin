@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from contextlib import ExitStack
+from types import SimpleNamespace
 from concurrent.futures import Future
 from dataclasses import replace
 from pathlib import Path
@@ -240,35 +242,101 @@ def _seed_names() -> SceneSeedNames:
     )
 
 
-def _bridge(
+@pytest.fixture
+def scene_bridge_factory(request, scene_workspace_factory, tmp_path):
+    def create(
+        *,
+        notifications=None,
+        credentials=None,
+        ptz=None,
+        recording=None,
+        recording_directory_picker=None,
+        recording_directory_opener=None,
+    ) -> tuple[SceneWorkspaceService, SceneRuntimeController, ScenesBridge, _PreviewStore]:
+        cleanup = ExitStack()
+        request.addfinalizer(cleanup.close)
+        paths = ProfilePaths.from_roots(
+            data_dir=tmp_path / "data",
+            cache_dir=tmp_path / "cache",
+            profile_id="qml-scenes-bridge-test",
+        )
+        paths.ensure_dirs()
+        workspace = scene_workspace_factory(paths, seed_names=_seed_names())
+        controller = SceneRuntimeController(workspace, _Projection(), ptz=ptz)
+        cleanup.callback(controller.close)
+        preview_store = _PreviewStore()
+        bridge = ScenesBridge(
+            controller,
+            preview_store=preview_store,
+            recording=recording,
+            notifications=notifications,
+            credentials=credentials,
+            recording_directory_picker=recording_directory_picker,
+            recording_directory_opener=recording_directory_opener,
+        )
+
+        def close_bridge() -> None:
+            if not bridge._closed:
+                bridge.close()
+
+        cleanup.callback(close_bridge)
+        return workspace, controller, bridge, preview_store
+
+    return create
+
+
+@pytest.mark.parametrize("failure", ["setup", "assertion", "bridge_close"])
+def test_bridge_factory_closes_dependencies_when_setup_or_teardown_fails(
     tmp_path: Path,
-    *,
-    notifications=None,
-    credentials=None,
-    ptz=None,
-    recording=None,
-    recording_directory_picker=None,
-    recording_directory_opener=None,
-) -> tuple[SceneWorkspaceService, SceneRuntimeController, ScenesBridge, _PreviewStore]:
-    paths = ProfilePaths.from_roots(
-        data_dir=tmp_path / "data",
-        cache_dir=tmp_path / "cache",
-        profile_id="qml-scenes-bridge-test",
-    )
-    paths.ensure_dirs()
-    workspace = SceneWorkspaceService(paths, seed_names=_seed_names())
-    controller = SceneRuntimeController(workspace, _Projection(), ptz=ptz)
-    preview_store = _PreviewStore()
-    bridge = ScenesBridge(
-        controller,
-        preview_store=preview_store,
-        recording=recording,
-        notifications=notifications,
-        credentials=credentials,
-        recording_directory_picker=recording_directory_picker,
-        recording_directory_opener=recording_directory_opener,
-    )
-    return workspace, controller, bridge, preview_store
+    monkeypatch: pytest.MonkeyPatch,
+    failure: str,
+) -> None:
+    from tests.conftest import scene_workspace_factory
+
+    workspaces = []
+    closed_controllers = []
+    original_controller = SceneRuntimeController
+
+    def controller_factory(*args, **kwargs):
+        controller = original_controller(*args, **kwargs)
+        original_close = controller.close
+
+        def close() -> None:
+            closed_controllers.append(controller)
+            original_close()
+
+        monkeypatch.setattr(controller, "close", close)
+        return controller
+
+    monkeypatch.setattr(__name__ + ".SceneRuntimeController", controller_factory)
+
+    with pytest.raises(RuntimeError, match="simulated bridge failure"):
+        with ExitStack() as workspace_finalizers, ExitStack() as finalizers:
+            request = SimpleNamespace(addfinalizer=finalizers.callback)
+            workspace_request = SimpleNamespace(addfinalizer=workspace_finalizers.callback)
+            create_workspace = scene_workspace_factory.__wrapped__(workspace_request, tmp_path)
+
+            def capture_workspace(*args, **kwargs):
+                workspace = create_workspace(*args, **kwargs)
+                workspaces.append(workspace)
+                return workspace
+
+            create_bridge = scene_bridge_factory.__wrapped__(request, capture_workspace, tmp_path)
+
+            def fail(*_args, **_kwargs):
+                raise RuntimeError("simulated bridge failure")
+
+            if failure == "setup":
+                monkeypatch.setattr(__name__ + ".ScenesBridge", fail)
+            _workspace, _controller, bridge, _preview = create_bridge()
+            if failure == "assertion":
+                raise RuntimeError("simulated bridge failure")
+            monkeypatch.setattr(bridge, "close", fail)
+
+    assert len(workspaces) == 1
+    assert len(closed_controllers) == 1
+    assert workspaces[0]._runtime_persistence.flush(timeout_seconds=0)
+    assert not workspaces[0]._runtime_persistence._thread.is_alive()
 
 
 def _enable_default_camera_ptz(
@@ -292,14 +360,14 @@ def _enable_default_camera_ptz(
 
 
 def test_recording_bridge_projects_one_controller_and_applies_live_settings(
+    scene_bridge_factory,
     tmp_path: Path,
 ) -> None:
     default_directory = tmp_path / "Videos" / "Solin"
     chosen_directory = tmp_path / "Recordings"
     opened: list[str] = []
     recording = _Recording(default_directory)
-    workspace, controller, bridge, _preview = _bridge(
-        tmp_path,
+    workspace, controller, bridge, _preview = scene_bridge_factory(
         recording=recording,
         recording_directory_picker=lambda current: (
             str(chosen_directory) if current == str(default_directory) else ""
@@ -395,13 +463,11 @@ def test_recording_bridge_projects_one_controller_and_applies_live_settings(
     assert opened == [str(default_directory)]
     assert recording.refresh_count == 1
 
-    bridge.close()
-    controller.close()
     del workspace
 
 
-def test_camera_source_health_surfaces_an_actionable_layer_warning(tmp_path: Path) -> None:
-    workspace, controller, bridge, _preview_store = _bridge(tmp_path)
+def test_camera_source_health_surfaces_an_actionable_layer_warning(scene_bridge_factory) -> None:
+    workspace, controller, bridge, _preview_store = scene_bridge_factory()
     bridge.selectScene(CAMERA_SCENE_ID)  # the camera layer lives in the Camera scene
     camera_id = workspace.configured_cameras[0].id
     controller._consume_engine_event(  # noqa: SLF001 - exercise the queued event boundary
@@ -430,13 +496,10 @@ def test_camera_source_health_surfaces_an_actionable_layer_warning(tmp_path: Pat
     )
     assert recovered_record["source_warning"] is False
     assert recovered_record["source_warning_text"] == ""
-    bridge.close()
-    controller.close()
-    workspace.close()
 
 
-def test_bridge_persists_shared_ptz_presets_and_scene_actions(tmp_path: Path) -> None:
-    workspace, controller, bridge, _preview_store = _bridge(tmp_path)
+def test_bridge_persists_shared_ptz_presets_and_scene_actions(scene_bridge_factory) -> None:
+    workspace, controller, bridge, _preview_store = scene_bridge_factory()
     camera_id, _ = _enable_default_camera_ptz(workspace, controller)
     # The default camera layer lives in the Camera scene (scene 0 is now Default).
     bridge.selectScene(CAMERA_SCENE_ID)
@@ -480,12 +543,10 @@ def test_bridge_persists_shared_ptz_presets_and_scene_actions(tmp_path: Path) ->
 
     assert workspace.resources.camera_presets == ()
     assert controller.document.scene(bridge.selectedSceneId).entry_actions == ()
-    bridge.close()
-    controller.close()
 
 
-def test_bridge_rejects_absolute_position_for_non_onvif_camera(tmp_path: Path) -> None:
-    workspace, controller, bridge, _preview_store = _bridge(tmp_path)
+def test_bridge_rejects_absolute_position_for_non_onvif_camera(scene_bridge_factory) -> None:
+    workspace, controller, bridge, _preview_store = scene_bridge_factory()
     camera = workspace.configured_cameras[0]
     camera_id, layer_id = _enable_default_camera_ptz(workspace, controller)
     bridge.selectLayer(layer_id)
@@ -505,14 +566,12 @@ def test_bridge_rejects_absolute_position_for_non_onvif_camera(tmp_path: Path) -
         }
     )
     assert workspace.resources.camera_presets == ()
-    bridge.close()
-    controller.close()
 
 
 def test_bridge_edits_a_scene_and_tracks_desired_separately_from_applied(
-    tmp_path: Path,
+    scene_bridge_factory,
 ) -> None:
-    workspace, controller, bridge, _preview_store = _bridge(tmp_path)
+    workspace, controller, bridge, _preview_store = scene_bridge_factory()
 
     bridge.createScene("Custom")
     camera_id = workspace.configured_cameras[0].id
@@ -529,16 +588,14 @@ def test_bridge_edits_a_scene_and_tracks_desired_separately_from_applied(
     assert bridge.selectedSceneDesired
     assert not bridge.selectedSceneLive
     assert bridge.engineStatus == "Scene engine unavailable"
-    bridge.close()
-    controller.close()
 
 
 def test_bridge_add_year_text_adds_a_full_size_layer_and_reuses_one_source(
-    tmp_path: Path,
+    scene_bridge_factory,
 ) -> None:
     from solin.core.scenes.model import SourceKind
 
-    _workspace, controller, bridge, _preview_store = _bridge(tmp_path)
+    _workspace, controller, bridge, _preview_store = scene_bridge_factory()
     bridge.createScene("Talk")
     talk_id = bridge.selectedSceneId
 
@@ -564,12 +621,10 @@ def test_bridge_add_year_text_adds_a_full_size_layer_and_reuses_one_source(
         s for s in controller.document.sources if s.kind is SourceKind.YEARTEXT
     ]
     assert len(yeartext_sources) == 1
-    bridge.close()
-    controller.close()
 
 
-def test_bridge_preserves_enums_and_transform_contracts(tmp_path: Path) -> None:
-    _workspace, controller, bridge, _preview_store = _bridge(tmp_path)
+def test_bridge_preserves_enums_and_transform_contracts(scene_bridge_factory) -> None:
+    _workspace, controller, bridge, _preview_store = scene_bridge_factory()
     layer_id = controller.document.scene(bridge.selectedSceneId).layers[0].id
     bridge.selectLayer(layer_id)
 
@@ -604,12 +659,10 @@ def test_bridge_preserves_enums_and_transform_contracts(tmp_path: Path) -> None:
     centered = controller.document.scene(bridge.selectedSceneId).layers[0]
     assert centered.rect.x == 0.25
     assert centered.rect.y == 0.3
-    bridge.close()
-    controller.close()
 
 
-def test_bridge_toggles_horizontal_layer_mirroring_with_undo(tmp_path: Path) -> None:
-    _workspace, controller, bridge, _preview_store = _bridge(tmp_path)
+def test_bridge_toggles_horizontal_layer_mirroring_with_undo(scene_bridge_factory) -> None:
+    _workspace, controller, bridge, _preview_store = scene_bridge_factory()
     layer_id = controller.document.scene(bridge.selectedSceneId).layers[0].id
     bridge.selectLayer(layer_id)
     revision = controller.document.revision
@@ -633,14 +686,12 @@ def test_bridge_toggles_horizontal_layer_mirroring_with_undo(tmp_path: Path) -> 
     locked = controller.document.scene(bridge.selectedSceneId).layers[0]
     assert not locked.mirror_x
     assert controller.document.revision == locked_revision
-    bridge.close()
-    controller.close()
 
 
 def test_bridge_framing_session_commits_one_revision_and_undoes_cleanly(
-    tmp_path: Path,
+    scene_bridge_factory,
 ) -> None:
-    _workspace, controller, bridge, _preview_store = _bridge(tmp_path)
+    _workspace, controller, bridge, _preview_store = scene_bridge_factory()
     layer_id = controller.document.scene(bridge.selectedSceneId).layers[0].id
     bridge.selectLayer(layer_id)
     seed = controller.document.scene(bridge.selectedSceneId).layers[0]
@@ -703,14 +754,12 @@ def test_bridge_framing_session_commits_one_revision_and_undoes_cleanly(
 
     bridge.undo()
     assert controller.document.scene(bridge.selectedSceneId).layers[0] == original
-    bridge.close()
-    controller.close()
 
 
 def test_bridge_cancels_and_invalidates_framing_without_document_mutation(
-    tmp_path: Path,
+    scene_bridge_factory,
 ) -> None:
-    _workspace, controller, bridge, _preview_store = _bridge(tmp_path)
+    _workspace, controller, bridge, _preview_store = scene_bridge_factory()
     bridge.selectScene(CAMERA_SCENE_ID)  # a framable camera layer (not the year text)
     layer_id = controller.document.scene(bridge.selectedSceneId).layers[0].id
     bridge.selectLayer(layer_id)
@@ -740,14 +789,12 @@ def test_bridge_cancels_and_invalidates_framing_without_document_mutation(
 
     assert not bridge.framingActive
     assert bridge.updateLayerFraming({"operation": "move", "dx": 0.1, "dy": 0.1}) == {}
-    bridge.close()
-    controller.close()
 
 
 def test_bridge_fill_from_crop_expands_then_fills_without_source_kind_coupling(
-    tmp_path: Path,
+    scene_bridge_factory,
 ) -> None:
-    _workspace, controller, bridge, _preview_store = _bridge(tmp_path)
+    _workspace, controller, bridge, _preview_store = scene_bridge_factory()
     bridge.selectScene(CONTENT_SCENE_ID)
     content_layer_id = controller.document.scene(CONTENT_SCENE_ID).layers[0].id
     bridge.selectLayer(content_layer_id)
@@ -774,12 +821,10 @@ def test_bridge_fill_from_crop_expands_then_fills_without_source_kind_coupling(
     assert abs(filled.crop.top - 0.1) < 1e-9
     assert abs(filled.crop.bottom - 0.1) < 1e-9
     assert filled.fit_mode is FitMode.COVER
-    bridge.close()
-    controller.close()
 
 
-def test_bridge_explains_why_rotated_layers_cannot_be_framed(tmp_path: Path) -> None:
-    _workspace, controller, bridge, _preview_store = _bridge(tmp_path)
+def test_bridge_explains_why_rotated_layers_cannot_be_framed(scene_bridge_factory) -> None:
+    _workspace, controller, bridge, _preview_store = scene_bridge_factory()
     layer = controller.document.scene(bridge.selectedSceneId).layers[0]
     controller.documents.update_layer(
         bridge.selectedSceneId,
@@ -792,12 +837,10 @@ def test_bridge_explains_why_rotated_layers_cannot_be_framed(tmp_path: Path) -> 
     assert "rotation" in str(bridge.selectedLayer["framing_unavailable_reason"]).lower()
     assert bridge.beginLayerFraming(layer.id) == {}
     assert not bridge.fillLayerFromCrop(layer.id)
-    bridge.close()
-    controller.close()
 
 
-def test_bridge_explains_why_locked_layers_cannot_be_framed(tmp_path: Path) -> None:
-    _workspace, controller, bridge, _preview_store = _bridge(tmp_path)
+def test_bridge_explains_why_locked_layers_cannot_be_framed(scene_bridge_factory) -> None:
+    _workspace, controller, bridge, _preview_store = scene_bridge_factory()
     layer = controller.document.scene(bridge.selectedSceneId).layers[0]
     controller.documents.update_layer(
         bridge.selectedSceneId,
@@ -810,12 +853,10 @@ def test_bridge_explains_why_locked_layers_cannot_be_framed(tmp_path: Path) -> N
     assert "unlock" in str(bridge.selectedLayer["framing_unavailable_reason"]).lower()
     assert bridge.beginLayerFraming(layer.id) == {}
     assert not bridge.fillLayerFromCrop(layer.id)
-    bridge.close()
-    controller.close()
 
 
-def test_bridge_geometry_preview_commits_exactly_one_revision(tmp_path: Path) -> None:
-    _workspace, controller, bridge, _preview_store = _bridge(tmp_path)
+def test_bridge_geometry_preview_commits_exactly_one_revision(scene_bridge_factory) -> None:
+    _workspace, controller, bridge, _preview_store = scene_bridge_factory()
     layer_id = controller.document.scene(bridge.selectedSceneId).layers[0].id
     layer = controller.document.scene(bridge.selectedSceneId).layers[0]
     controller.documents.update_layer(
@@ -846,12 +887,10 @@ def test_bridge_geometry_preview_commits_exactly_one_revision(tmp_path: Path) ->
     bridge.commitLayerGeometry(geometry)
 
     assert controller.document.revision == revision + 1
-    bridge.close()
-    controller.close()
 
 
-def test_bridge_scene_roles_are_removable_secondary_metadata(tmp_path: Path) -> None:
-    _workspace, controller, bridge, _preview_store = _bridge(tmp_path)
+def test_bridge_scene_roles_are_removable_secondary_metadata(scene_bridge_factory) -> None:
+    _workspace, controller, bridge, _preview_store = scene_bridge_factory()
     default_id = controller.documents.program_default_scene_id
     records = [
         bridge.scenesModel.get(row) for row in range(bridge.scenesModel.rowCount())
@@ -863,16 +902,13 @@ def test_bridge_scene_roles_are_removable_secondary_metadata(tmp_path: Path) -> 
 
     assert controller.documents.program_default_scene_id is None
     assert not controller.documents.program_automation_configured
-    bridge.close()
-    controller.close()
 
 
 def test_bridge_delete_requires_a_replacement_only_for_program_scene(
-    tmp_path: Path,
+    scene_bridge_factory,
 ) -> None:
     notifications = _Notifications()
-    _workspace, controller, bridge, _preview_store = _bridge(
-        tmp_path,
+    _workspace, controller, bridge, _preview_store = scene_bridge_factory(
         notifications=notifications,
     )
     bridge.setVirtualCameraEnabled(True)
@@ -894,14 +930,12 @@ def test_bridge_delete_requires_a_replacement_only_for_program_scene(
     assert {
         output.manual_scene_id for output in controller.runtime.state.outputs
     } == {CONTENT_SCENE_ID}
-    bridge.close()
-    controller.close()
 
 
 def test_bridge_deletes_offline_scene_without_confusing_editor_preview(
-    tmp_path: Path,
+    scene_bridge_factory,
 ) -> None:
-    _workspace, controller, bridge, _preview_store = _bridge(tmp_path)
+    _workspace, controller, bridge, _preview_store = scene_bridge_factory()
     bridge.selectScene(CONTENT_SCENE_ID)
     bridge.setActive(True)
     assert not bridge.selectedSceneRequiresReplacement
@@ -910,14 +944,12 @@ def test_bridge_deletes_offline_scene_without_confusing_editor_preview(
 
     assert all(scene.id != CONTENT_SCENE_ID for scene in controller.document.scenes)
     assert all(not mapping.assignments for mapping in controller.document.automation)
-    bridge.close()
-    controller.close()
 
 
 def test_bridge_keeps_preview_across_scene_switch_but_invalidates_on_profile_change(
-    tmp_path: Path,
+    scene_bridge_factory,
 ) -> None:
-    workspace, controller, bridge, preview_store = _bridge(tmp_path)
+    workspace, controller, bridge, preview_store = scene_bridge_factory()
     bridge.setActive(True)
     scene_id = bridge.selectedSceneId
     frame = QImage(64, 36, QImage.Format.Format_ARGB32)
@@ -954,14 +986,12 @@ def test_bridge_keeps_preview_across_scene_switch_but_invalidates_on_profile_cha
     bridge.activateSceneProfile(target.id)
     assert bridge.documentGeneration == generation + 1
     assert not bridge.previewAvailable
-    bridge.close()
-    controller.close()
 
 
 def test_bridge_source_rows_reorder_front_to_back_and_unlock_cleanly(
-    tmp_path: Path,
+    scene_bridge_factory,
 ) -> None:
-    _workspace, controller, bridge, _preview_store = _bridge(tmp_path)
+    _workspace, controller, bridge, _preview_store = scene_bridge_factory()
     scene_id = bridge.selectedSceneId
     source_id = controller.document.scene(scene_id).layers[0].source_id
     original_id = controller.document.scene(scene_id).layers[0].id
@@ -986,12 +1016,10 @@ def test_bridge_source_rows_reorder_front_to_back_and_unlock_cleanly(
     )
     assert not updated.visible
     assert not updated.locked
-    bridge.close()
-    controller.close()
 
 
-def test_bridge_resolves_transitive_ptz_camera_once(tmp_path: Path) -> None:
-    workspace, controller, bridge, _preview_store = _bridge(tmp_path)
+def test_bridge_resolves_transitive_ptz_camera_once(scene_bridge_factory) -> None:
+    workspace, controller, bridge, _preview_store = scene_bridge_factory()
     camera_id, _layer_id = _enable_default_camera_ptz(workspace, controller)
     reference = SourceDefinition(
         id=new_identity(),
@@ -1006,13 +1034,11 @@ def test_bridge_resolves_transitive_ptz_camera_once(tmp_path: Path) -> None:
     bridge.selectLayer(layer.id)
 
     assert [camera["id"] for camera in bridge.selectedLayerPtzCameras] == [camera_id]
-    bridge.close()
-    controller.close()
 
 
-def test_bridge_stops_ptz_motion_on_deactivation(tmp_path: Path) -> None:
+def test_bridge_stops_ptz_motion_on_deactivation(scene_bridge_factory) -> None:
     ptz = _ManualPtz()
-    workspace, controller, bridge, _preview_store = _bridge(tmp_path, ptz=ptz)
+    workspace, controller, bridge, _preview_store = scene_bridge_factory(ptz=ptz)
     camera_id, layer_id = _enable_default_camera_ptz(workspace, controller)
     bridge.selectLayer(layer_id)
     bridge.setActive(True)
@@ -1022,16 +1048,13 @@ def test_bridge_stops_ptz_motion_on_deactivation(tmp_path: Path) -> None:
 
     assert ptz.moves == [camera_id]
     assert ptz.stops == [camera_id]
-    bridge.close()
-    controller.close()
 
 
 def test_bridge_reports_profile_failures_through_central_notifications(
-    tmp_path: Path,
+    scene_bridge_factory,
 ) -> None:
     notifications = _Notifications()
-    _workspace, controller, bridge, _preview_store = _bridge(
-        tmp_path,
+    _workspace, controller, bridge, _preview_store = scene_bridge_factory(
         notifications=notifications,
     )
 
@@ -1046,12 +1069,10 @@ def test_bridge_reports_profile_failures_through_central_notifications(
             {"title": "Scenes", "dedupe_key": "scenes-profile-update-failed"},
         )
     ]
-    bridge.close()
-    controller.close()
 
 
-def test_bridge_edits_profile_and_scene_transition_policies(tmp_path: Path) -> None:
-    _workspace, controller, bridge, _preview_store = _bridge(tmp_path)
+def test_bridge_edits_profile_and_scene_transition_policies(scene_bridge_factory) -> None:
+    _workspace, controller, bridge, _preview_store = scene_bridge_factory()
     scene_id = bridge.selectedSceneId
 
     bridge.setProgramTransition(TransitionKind.DISSOLVE.value, 450)
@@ -1087,16 +1108,13 @@ def test_bridge_edits_profile_and_scene_transition_policies(tmp_path: Path) -> N
     bridge.clearSceneTransitionOverride(scene_id)
     assert bridge.selectedSceneTransitionOverrideKind == ""
     assert controller.documents.effective_transition(scene_id).kind is TransitionKind.DISSOLVE
-    bridge.close()
-    controller.close()
 
 
 def test_bridge_reports_invalid_transition_without_mutating_policy(
-    tmp_path: Path,
+    scene_bridge_factory,
 ) -> None:
     notifications = _Notifications()
-    _workspace, controller, bridge, _preview_store = _bridge(
-        tmp_path,
+    _workspace, controller, bridge, _preview_store = scene_bridge_factory(
         notifications=notifications,
     )
     original = controller.document.transition_policy
@@ -1105,29 +1123,24 @@ def test_bridge_reports_invalid_transition_without_mutating_policy(
 
     assert controller.document.transition_policy == original
     assert notifications.errors[-1][1]["dedupe_key"] == "scenes-transition-invalid"
-    bridge.close()
-    controller.close()
 
 
 def test_bridge_does_not_duplicate_application_transition_notifications(
-    tmp_path: Path,
+    scene_bridge_factory,
 ) -> None:
     notifications = _Notifications()
-    _workspace, controller, bridge, _preview_store = _bridge(
-        tmp_path,
+    _workspace, controller, bridge, _preview_store = scene_bridge_factory(
         notifications=notifications,
     )
 
     controller.transition_fallback.emit("The transition used a cut instead.")
 
     assert notifications.warnings == []
-    bridge.close()
-    controller.close()
 
 
 @pytest.mark.parametrize("rate", [(30_000, 1_001), (10_000_000, 333_333)])
-def test_bridge_uses_exact_local_camera_format(tmp_path: Path, rate: tuple[int, int]) -> None:
-    workspace, controller, bridge, _preview_store = _bridge(tmp_path)
+def test_bridge_uses_exact_local_camera_format(scene_bridge_factory, rate: tuple[int, int]) -> None:
+    workspace, controller, bridge, _preview_store = scene_bridge_factory()
     video_format = LocalVideoFormat(
         media_type=CameraMediaType.JPEG,
         pixel_format="JPEG",
@@ -1174,14 +1187,12 @@ def test_bridge_uses_exact_local_camera_format(tmp_path: Path, rate: tuple[int, 
     assert configuration.fps_numerator == rate[0]
     assert configuration.fps_denominator == rate[1]
     assert configuration.keep_active
-    bridge.close()
-    controller.close()
 
 
 def test_bridge_exposes_unverified_windows_camera_for_automatic_capture(
-    tmp_path: Path,
+    scene_bridge_factory,
 ) -> None:
-    _workspace, controller, bridge, _preview_store = _bridge(tmp_path)
+    _workspace, controller, bridge, _preview_store = scene_bridge_factory()
     controller._set_local_cameras(
         LocalCameraDiscovery(
             supported=True,
@@ -1229,12 +1240,10 @@ def test_bridge_exposes_unverified_windows_camera_for_automatic_capture(
     assert configuration.device_id == "camera://c920"
     assert configuration.media_type is None
     assert configuration.width == 0
-    bridge.close()
-    controller.close()
 
 
-def test_camera_list_refreshes_from_pending_to_two_then_three_devices(tmp_path: Path) -> None:
-    _workspace, controller, bridge, _preview_store = _bridge(tmp_path)
+def test_camera_list_refreshes_from_pending_to_two_then_three_devices(scene_bridge_factory) -> None:
+    _workspace, controller, bridge, _preview_store = scene_bridge_factory()
     pending = LocalCameraDiscovery(supported=True, ready=False, generation=0, devices=())
     camera = LocalCameraDevice(
         device_id="camera://integrated",
@@ -1260,14 +1269,12 @@ def test_camera_list_refreshes_from_pending_to_two_then_three_devices(tmp_path: 
     assert [device["id"] for device in bridge.localCameraDevices] == [
         "", camera.device_id, virtual.device_id, usb.device_id,
     ]
-    bridge.close()
-    controller.close()
 
 
 def test_bridge_preserves_persisted_format_when_camera_recovers_before_save(
-    tmp_path: Path,
+    scene_bridge_factory,
 ) -> None:
-    workspace, controller, bridge, _preview_store = _bridge(tmp_path)
+    workspace, controller, bridge, _preview_store = scene_bridge_factory()
     video_format = LocalVideoFormat(
         media_type=CameraMediaType.JPEG,
         pixel_format="JPEG",
@@ -1356,14 +1363,11 @@ def test_bridge_preserves_persisted_format_when_camera_recovers_before_save(
     assert configuration.width == 1920
     assert configuration.height == 1080
     assert configuration.fps_numerator == 30
-    bridge.close()
-    controller.close()
 
 
-def test_bridge_protects_onvif_credentials_from_scene_documents(tmp_path: Path) -> None:
+def test_bridge_protects_onvif_credentials_from_scene_documents(scene_bridge_factory) -> None:
     credentials = _Credentials()
-    workspace, controller, bridge, _preview_store = _bridge(
-        tmp_path,
+    workspace, controller, bridge, _preview_store = scene_bridge_factory(
         credentials=credentials,
     )
 
@@ -1393,12 +1397,10 @@ def test_bridge_protects_onvif_credentials_from_scene_documents(tmp_path: Path) 
     assert credentials.saved[0].username == "operator"
     assert credentials.saved[0].password == "secret"
     assert "secret" not in repr(camera)
-    bridge.close()
-    controller.close()
 
 
-def test_bridge_disconnects_runtime_callbacks_before_qml_teardown(tmp_path: Path) -> None:
-    _workspace, controller, bridge, _preview_store = _bridge(tmp_path)
+def test_bridge_disconnects_runtime_callbacks_before_qml_teardown(scene_bridge_factory) -> None:
+    _workspace, controller, bridge, _preview_store = scene_bridge_factory()
     changed = QSignalSpy(bridge.changed)
 
     bridge.close()
@@ -1406,17 +1408,16 @@ def test_bridge_disconnects_runtime_callbacks_before_qml_teardown(tmp_path: Path
     controller.runtime_changed.emit(controller.runtime.state)
 
     assert changed.count() == 0
-    controller.close()
 
 
-def test_a_camera_used_by_another_scene_can_still_be_added(tmp_path: Path) -> None:
+def test_a_camera_used_by_another_scene_can_still_be_added(scene_bridge_factory) -> None:
     """One camera, many scenes: a capture device can only be opened once.
 
     Hiding cameras that are already on air elsewhere left no way to build a second
     scene around the same camera — creating a duplicate source for the device just
     fails to open it.
     """
-    workspace, controller, bridge, _preview_store = _bridge(tmp_path)
+    workspace, controller, bridge, _preview_store = scene_bridge_factory()
     camera_id = workspace.configured_cameras[0].id
 
     bridge.createScene("Stage")
@@ -1435,12 +1436,10 @@ def test_a_camera_used_by_another_scene_can_still_be_added(tmp_path: Path) -> No
     # The other scene keeps it too — one source shown by both, not a copy.
     assert [layer.source_id for layer in stage.layers] == [camera_id]
     assert sum(1 for s in controller.document.sources if s.id == camera_id) == 1
-    bridge.close()
-    controller.close()
 
 
-def test_a_camera_already_in_this_scene_is_not_offered_again(tmp_path: Path) -> None:
-    workspace, controller, bridge, _preview_store = _bridge(tmp_path)
+def test_a_camera_already_in_this_scene_is_not_offered_again(scene_bridge_factory) -> None:
+    workspace, controller, bridge, _preview_store = scene_bridge_factory()
     camera_id = workspace.configured_cameras[0].id
 
     bridge.createScene("Stage")
@@ -1449,18 +1448,16 @@ def test_a_camera_already_in_this_scene_is_not_offered_again(tmp_path: Path) -> 
     bridge.addConfiguredCamera(camera_id)
 
     assert camera_id not in {camera["id"] for camera in bridge.configuredCameras}
-    bridge.close()
-    controller.close()
 
 
-def test_a_new_scene_becomes_the_one_being_edited(tmp_path: Path) -> None:
+def test_a_new_scene_becomes_the_one_being_edited(scene_bridge_factory) -> None:
     """Creating a scene must move the canvas to it, not just the list highlight.
 
     The preview only renders the scene it was last pointed at, so setting the
     selection alone left the new scene looking selected while the canvas still
     showed the previous one.
     """
-    _workspace, controller, bridge, _preview = _bridge(tmp_path)
+    _workspace, controller, bridge, _preview = scene_bridge_factory()
     bridge.setActive(True)
     starting = bridge.selectedSceneId
 
@@ -1470,12 +1467,10 @@ def test_a_new_scene_becomes_the_one_being_edited(tmp_path: Path) -> None:
     assert created.name == "Fresh"
     assert bridge.selectedSceneId == created.id
     assert controller.preview_scene_id == created.id != starting
-    bridge.close()
-    controller.close()
 
 
-def test_duplicating_a_scene_moves_the_canvas_to_the_copy(tmp_path: Path) -> None:
-    _workspace, controller, bridge, _preview = _bridge(tmp_path)
+def test_duplicating_a_scene_moves_the_canvas_to_the_copy(scene_bridge_factory) -> None:
+    _workspace, controller, bridge, _preview = scene_bridge_factory()
     bridge.setActive(True)
 
     bridge.duplicateScene(bridge.selectedSceneId)
@@ -1483,12 +1478,10 @@ def test_duplicating_a_scene_moves_the_canvas_to_the_copy(tmp_path: Path) -> Non
     copy = controller.document.scenes[-1]
     assert bridge.selectedSceneId == copy.id
     assert controller.preview_scene_id == copy.id
-    bridge.close()
-    controller.close()
 
 
-def test_deleting_a_scene_moves_the_canvas_to_what_replaces_it(tmp_path: Path) -> None:
-    _workspace, controller, bridge, _preview = _bridge(tmp_path)
+def test_deleting_a_scene_moves_the_canvas_to_what_replaces_it(scene_bridge_factory) -> None:
+    _workspace, controller, bridge, _preview = scene_bridge_factory()
     bridge.setActive(True)
     bridge.createScene("Doomed")
     doomed = bridge.selectedSceneId
@@ -1497,26 +1490,22 @@ def test_deleting_a_scene_moves_the_canvas_to_what_replaces_it(tmp_path: Path) -
 
     assert bridge.selectedSceneId != doomed
     assert controller.preview_scene_id == bridge.selectedSceneId
-    bridge.close()
-    controller.close()
 
 
 def test_the_canvas_is_not_pointed_anywhere_while_the_editor_is_inactive(
-    tmp_path: Path,
+    scene_bridge_factory,
 ) -> None:
     """An off-screen editor must not claim the preview by creating a scene."""
-    _workspace, controller, bridge, _preview = _bridge(tmp_path)
+    _workspace, controller, bridge, _preview = scene_bridge_factory()
 
     bridge.createScene("Offscreen")
 
     assert controller.preview_scene_id is None
-    bridge.close()
-    controller.close()
 
 
-def test_an_rtsp_address_without_credentials_is_not_flagged(tmp_path: Path) -> None:
+def test_an_rtsp_address_without_credentials_is_not_flagged(scene_bridge_factory) -> None:
     """The vendor in-path login form must still save; only userinfo is rejected."""
-    _workspace, controller, bridge, _preview = _bridge(tmp_path)
+    _workspace, controller, bridge, _preview = scene_bridge_factory()
 
     saved = bridge.saveCamera(
         {
@@ -1531,11 +1520,9 @@ def test_an_rtsp_address_without_credentials_is_not_flagged(tmp_path: Path) -> N
     )
 
     assert saved is True
-    bridge.close()
-    controller.close()
 
 
-def test_a_pasted_address_with_a_login_is_split_not_rejected(tmp_path: Path) -> None:
+def test_a_pasted_address_with_a_login_is_split_not_rejected(scene_bridge_factory) -> None:
     """Operators paste vendor URLs carrying a login; refusing them helps nobody.
 
     The address is persisted and printed by libobs, so the credential cannot stay
@@ -1543,8 +1530,8 @@ def test_a_pasted_address_with_a_login_is_split_not_rejected(tmp_path: Path) -> 
     camera instead of an error.
     """
     credentials = _Credentials()
-    _workspace, controller, bridge, _preview = _bridge(
-        tmp_path, credentials=credentials
+    _workspace, controller, bridge, _preview = scene_bridge_factory(
+        credentials=credentials
     )
 
     saved = bridge.saveCamera(
@@ -1563,10 +1550,10 @@ def test_a_pasted_address_with_a_login_is_split_not_rejected(tmp_path: Path) -> 
     assert camera.credential_ref, "the login must be stored, not discarded"
 
 
-def test_the_stored_address_never_keeps_the_login(tmp_path: Path) -> None:
+def test_the_stored_address_never_keeps_the_login(scene_bridge_factory) -> None:
     credentials = _Credentials()
-    _workspace, controller, bridge, _preview = _bridge(
-        tmp_path, credentials=credentials
+    _workspace, controller, bridge, _preview = scene_bridge_factory(
+        credentials=credentials
     )
 
     bridge.saveCamera(

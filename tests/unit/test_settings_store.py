@@ -1,3 +1,4 @@
+import tempfile
 from types import SimpleNamespace
 
 from solin.core.foundation.constants import (
@@ -8,6 +9,7 @@ from solin.core.foundation.constants import (
 from solin.core.foundation import settings_store
 from solin.core.foundation import identity
 from solin.core.foundation.settings_keys import SettingsKey
+from solin.core.releases.channel import UpdateChannel
 
 
 class _FakeSettings:
@@ -67,18 +69,63 @@ def test_installation_settings_store_preserves_global_app_namespace(monkeypatch)
     store = settings_store.InstallationSettingsStore.create()
 
     store.set_install_id("a" * 32)
-    store.set_pending_patch_cleanup_path("C:/Temp/Solin_patch.exe")
+    store.set_pending_update_cleanup_path("C:/Temp/Solin-update.exe")
 
     assert store.install_id() == "a" * 32
-    assert store.pending_patch_cleanup_path() == "C:/Temp/Solin_patch.exe"
+    assert store.pending_update_cleanup_path() == "C:/Temp/Solin-update.exe"
     assert _FakeSettings.buckets[(QSETTINGS_ORG_NAME, QSETTINGS_APP_APP)] == {
         SettingsKey.INSTALL_ID: "a" * 32,
-        SettingsKey.PENDING_PATCH_CLEANUP: "C:/Temp/Solin_patch.exe",
+        SettingsKey.PENDING_UPDATE_CLEANUP: "C:/Temp/Solin-update.exe",
     }
 
-    store.clear_pending_patch_cleanup_path()
+    store.clear_pending_update_cleanup_path()
 
-    assert store.pending_patch_cleanup_path() == ""
+    assert store.pending_update_cleanup_path() == ""
+
+
+def test_installation_update_channel_is_typed_and_invalid_values_fall_back(monkeypatch) -> None:
+    _install_fake_settings(monkeypatch)
+    store = settings_store.InstallationSettingsStore.create()
+
+    assert store.update_channel() is UpdateChannel.STABLE
+    store.set_update_channel(UpdateChannel.BETA)
+    assert store.update_channel() is UpdateChannel.BETA
+
+    _FakeSettings.buckets[(QSETTINGS_ORG_NAME, QSETTINGS_APP_APP)][
+        SettingsKey.UPDATE_CHANNEL
+    ] = "preview"
+    assert store.update_channel() is UpdateChannel.STABLE
+
+
+def test_legacy_patch_cleanup_only_removes_recognized_temporary_file(
+    monkeypatch, tmp_path
+) -> None:
+    _install_fake_settings(monkeypatch)
+    monkeypatch.setattr(tempfile, "gettempdir", lambda: str(tmp_path))
+    legacy = tmp_path / "Solin_patch_previous.exe"
+    legacy.write_bytes(b"old patch")
+    store = settings_store.InstallationSettingsStore.create()
+    store.settings.set_value(SettingsKey.LEGACY_PENDING_PATCH_CLEANUP, str(legacy))
+
+    store.clean_legacy_update_download()
+
+    assert not legacy.exists()
+    assert store.settings.string(SettingsKey.LEGACY_PENDING_PATCH_CLEANUP) == ""
+
+
+def test_legacy_patch_cleanup_forgets_untrusted_path_without_deleting_it(
+    monkeypatch, tmp_path
+) -> None:
+    _install_fake_settings(monkeypatch)
+    outside = tmp_path / "unrelated.exe"
+    outside.write_bytes(b"keep")
+    store = settings_store.InstallationSettingsStore.create()
+    store.settings.set_value(SettingsKey.LEGACY_PENDING_PATCH_CLEANUP, str(outside))
+
+    store.clean_legacy_update_download()
+
+    assert outside.read_bytes() == b"keep"
+    assert store.settings.string(SettingsKey.LEGACY_PENDING_PATCH_CLEANUP) == ""
 
 
 def test_get_install_id_uses_installation_settings_store(monkeypatch) -> None:
