@@ -1,16 +1,14 @@
 # ADR-0001: Use a supervised native sidecar for Scenes
 
-- **Status:** Superseded for the default playback and composition backend
+- **Status:** Superseded by [ADR-0002](0002-use-supervised-libobs-for-media-and-scenes.md)
 - **Date:** 2026-08-22
 - **Initial release stage:** Beta
 - **Decision record:** [Discussion #12](https://github.com/Solin-Software/Solin/discussions/12)
 - **Implementation:** [PR #11](https://github.com/Solin-Software/Solin/pull/11)
 
-The default backend now runs libobs in a supervised Python sidecar and owns
-media playback and composition. This record preserves the original decision;
-the Windows C++ backend remains selectable with `SOLIN_SCENE_ENGINE=native`.
-See [Building and platform requirements](../building.md) for current support
-and delivery limitations.
+This record preserves the original decision and its rationale. The architecture
+that replaced it is documented in
+[ADR-0002](0002-use-supervised-libobs-for-media-and-scenes.md).
 
 ## Context
 
