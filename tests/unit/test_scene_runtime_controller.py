@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from contextlib import ExitStack
 from concurrent.futures import CancelledError, Future
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 from typing import cast
 
 import pytest
@@ -89,7 +91,6 @@ from solin.core.scenes.runtime import (
     SceneRuntimeService,
     create_default_runtime_state,
 )
-from solin.core.scenes.workspace import SceneWorkspaceService
 
 
 def _document() -> SceneDocument:
@@ -512,10 +513,12 @@ class _PendingGeometryEngine(_Engine):
     [(scene.id, layer.id) for scene in _document().scenes for layer in scene.layers],
 )
 def test_committed_geometry_reaches_every_layer_without_preview_or_rehydrate(
+    request,
     scene_id: str, layer_id: str, geometry: str,
 ) -> None:
     engine = _Engine()
     documents, _runtime, controller = _runtime_controller(
+        request,
         engine, _Projection(), request_ids=("hydrate", "committed-geometry"),
     )
     controller.start_engine()
@@ -533,12 +536,12 @@ def test_committed_geometry_reaches_every_layer_without_preview_or_rehydrate(
     assert all(item[2] == scene_id for item in engine.preview_geometries)
     assert all(item[4] == engine.snapshots[0][1].document.revision for item in engine.preview_geometries)
     assert len(engine.snapshots) == 1
-    controller.close()
 
 
-def test_batch_geometry_commit_undo_redo_sends_all_layers() -> None:
+def test_batch_geometry_commit_undo_redo_sends_all_layers(request) -> None:
     engine = _Engine()
     documents, _runtime, controller = _runtime_controller(
+        request,
         engine, _Projection(), request_ids=("hydrate",),
     )
     controller.start_engine()
@@ -556,13 +559,13 @@ def test_batch_geometry_commit_undo_redo_sends_all_layers() -> None:
         updated_layers + scene.layers + updated_layers
     )
     assert len(engine.snapshots) == 1
-    controller.close()
 
 
 @pytest.mark.parametrize("geometry", ["rect", "crop"])
-def test_hidden_geometry_waits_until_visibility_hydrates_the_authored_layout(geometry: str) -> None:
+def test_hidden_geometry_waits_until_visibility_hydrates_the_authored_layout(request, geometry: str) -> None:
     engine = _Engine()
     documents, _runtime, controller = _runtime_controller(
+        request,
         engine, _Projection(), request_ids=("hydrate",),
     )
     errors: list[str] = []
@@ -589,12 +592,12 @@ def test_hidden_geometry_waits_until_visibility_hydrates_the_authored_layout(geo
     documents.update_layer(scene.id, hidden.id, revealed)
     assert len(engine.snapshots) == baseline + 1
     assert engine.snapshots[-1][1].document.scene(scene.id).layers[0] == revealed
-    controller.close()
 
 
-def test_batch_geometry_history_sends_only_visible_layers() -> None:
+def test_batch_geometry_history_sends_only_visible_layers(request) -> None:
     engine = _Engine()
     documents, _runtime, controller = _runtime_controller(
+        request,
         engine, _Projection(), request_ids=("hydrate",),
     )
     controller.start_engine()
@@ -612,12 +615,12 @@ def test_batch_geometry_history_sends_only_visible_layers() -> None:
         updated[1], scene.layers[1], updated[1],
     ]
     assert len(engine.snapshots) == baseline
-    controller.close()
 
 
-def test_geometry_queue_preserves_other_layer_commits_and_latest_mouse_move() -> None:
+def test_geometry_queue_preserves_other_layer_commits_and_latest_mouse_move(request) -> None:
     engine = _PendingGeometryEngine()
     documents, _runtime, controller = _runtime_controller(
+        request,
         engine, _Projection(), request_ids=("hydrate",),
     )
     controller.start_engine()
@@ -638,12 +641,12 @@ def test_geometry_queue_preserves_other_layer_commits_and_latest_mouse_move() ->
     engine.finish_geometry(2)
     assert len(engine.preview_geometries) == 3
     assert len(engine.snapshots) == 1
-    controller.close()
 
 
-def test_batch_undo_during_pending_geometry_keeps_all_layer_restorations() -> None:
+def test_batch_undo_during_pending_geometry_keeps_all_layer_restorations(request) -> None:
     engine = _PendingGeometryEngine()
     documents, _runtime, controller = _runtime_controller(
+        request,
         engine, _Projection(), request_ids=("hydrate",),
     )
     controller.start_engine()
@@ -662,13 +665,13 @@ def test_batch_undo_during_pending_geometry_keeps_all_layer_restorations() -> No
     assert restored == {layer.id: layer for layer in scene.layers}
     assert len(engine.preview_geometries) == 3
     assert len(engine.snapshots) == 1
-    controller.close()
 
 
 @pytest.mark.parametrize("graph_changes", [False, True])
-def test_geometry_waits_for_hydration_and_uses_the_applied_revision(graph_changes: bool) -> None:
+def test_geometry_waits_for_hydration_and_uses_the_applied_revision(request, graph_changes: bool) -> None:
     engine = _PendingGeometryEngine(defer_hydration=True)
     documents, _runtime, controller = _runtime_controller(
+        request,
         engine, _Projection(), request_ids=("hydrate",),
     )
     controller.start_engine()
@@ -693,12 +696,12 @@ def test_geometry_waits_for_hydration_and_uses_the_applied_revision(graph_change
     assert engine.preview_geometries[1][3:5] == (preview, revision)
     engine.finish_geometry(1)
     assert len(engine.snapshots) == (2 if graph_changes else 1)
-    controller.close()
 
 
-def test_graph_hydration_supersedes_queued_geometry_for_deleted_layers() -> None:
+def test_graph_hydration_supersedes_queued_geometry_for_deleted_layers(request) -> None:
     engine = _PendingGeometryEngine()
     documents, _runtime, controller = _runtime_controller(
+        request,
         engine, _Projection(), request_ids=("hydrate",),
     )
     controller.start_engine()
@@ -721,13 +724,13 @@ def test_graph_hydration_supersedes_queued_geometry_for_deleted_layers() -> None
     assert engine.preview_geometries[1][4] == engine.snapshots[-1][1].document.revision
     engine.finish_geometry(1)
     assert len(engine.preview_geometries) == 2
-    controller.close()
 
 
 @pytest.mark.parametrize("emit_failure", [False, True])
-def test_restart_hydrates_commits_and_ignores_old_geometry_completion(emit_failure: bool) -> None:
+def test_restart_hydrates_commits_and_ignores_old_geometry_completion(request, emit_failure: bool) -> None:
     engine = _PendingGeometryEngine()
     documents, _runtime, controller = _runtime_controller(
+        request,
         engine, _Projection(), request_ids=("hydrate",),
     )
     errors: list[str] = []
@@ -754,16 +757,17 @@ def test_restart_hydrates_commits_and_ignores_old_geometry_completion(emit_failu
     engine.finish_geometry(1)
     assert len(engine.preview_geometries) == 2
     assert engine.preview_geometries[1][3] == latest
-    controller.close()
 
 
 @pytest.mark.parametrize("failure", ["rejected", "exception", "invalid", "cancelled", "timeout"])
 @pytest.mark.parametrize("committed", [False, True])
 def test_geometry_failure_reports_commits_and_continues_other_layers(
+    request,
     failure: str, committed: bool,
 ) -> None:
     engine = _PendingGeometryEngine()
     documents, _runtime, controller = _runtime_controller(
+        request,
         engine, _Projection(), request_ids=("hydrate",),
     )
     errors: list[str] = []
@@ -812,10 +816,9 @@ def test_geometry_failure_reports_commits_and_continues_other_layers(
         )
     assert len(engine.preview_geometries) == (3 if committed else 2)
     assert len(engine.snapshots) == 1
-    controller.close()
 
 
-def test_synchronous_geometry_dispatch_failure_does_not_wedge_the_queue() -> None:
+def test_synchronous_geometry_dispatch_failure_does_not_wedge_the_queue(request) -> None:
     class _RaisingGeometryEngine(_Engine):
         def preview_layer_geometry(self, *args, **kwargs):
             if not self.preview_geometries:
@@ -825,6 +828,7 @@ def test_synchronous_geometry_dispatch_failure_does_not_wedge_the_queue() -> Non
 
     engine = _RaisingGeometryEngine()
     documents, _runtime, controller = _runtime_controller(
+        request,
         engine, _Projection(), request_ids=("hydrate",),
     )
     errors: list[str] = []
@@ -838,13 +842,13 @@ def test_synchronous_geometry_dispatch_failure_does_not_wedge_the_queue() -> Non
     assert [item[3] for item in engine.preview_geometries] == [*updated.layers, updated.layers[0]]
     assert errors == []
     assert len(engine.snapshots) == 1
-    controller.close()
 
 
 @pytest.mark.parametrize("recovers", [False, True])
-def test_committed_geometry_failure_retries_once_without_starving_other_layers(recovers: bool) -> None:
+def test_committed_geometry_failure_retries_once_without_starving_other_layers(request, recovers: bool) -> None:
     engine = _PendingGeometryEngine()
     documents, _runtime, controller = _runtime_controller(
+        request,
         engine, _Projection(), request_ids=("hydrate",),
     )
     errors: list[str] = []
@@ -870,12 +874,12 @@ def test_committed_geometry_failure_retries_once_without_starving_other_layers(r
         assert errors == ["Scene engine layer_geometry failed (engine_request_timed_out)"]
     assert len(engine.preview_geometries) == 3
     assert len(engine.snapshots) == 1
-    controller.close()
 
 
-def test_failed_commit_does_not_replay_geometry_superseded_by_a_newer_commit() -> None:
+def test_failed_commit_does_not_replay_geometry_superseded_by_a_newer_commit(request) -> None:
     engine = _PendingGeometryEngine()
     documents, _runtime, controller = _runtime_controller(
+        request,
         engine, _Projection(), request_ids=("hydrate",),
     )
     errors: list[str] = []
@@ -893,20 +897,23 @@ def test_failed_commit_does_not_replay_geometry_superseded_by_a_newer_commit() -
     assert [item[3] for item in engine.preview_geometries] == [first, latest]
     assert errors == []
     assert len(engine.snapshots) == 1
-    controller.close()
 
 
 @pytest.mark.parametrize("outcome", ["applied", "rejected", "failed"])
 def test_profile_hydration_holds_geometry_until_the_profile_outcome(
-    tmp_path: Path, outcome: str,
+    scene_workspace_factory,
+    request,
+    tmp_path: Path,
+    outcome: str,
 ) -> None:
-    workspace, collection = _real_workspace(tmp_path)
+    workspace, collection = _real_workspace(scene_workspace_factory, tmp_path)
     engine = _PendingGeometryEngine()
     ids = iter(("hydrate", "profile", "geometry", "new-geometry"))
     controller = SceneRuntimeController(
         workspace, _Projection(), engine=cast(SceneEngine, engine),
         request_id_factory=lambda: next(ids), session_id="test-session",
     )
+    request.addfinalizer(controller.close)
     controller.start_engine()
     engine.defer_hydration = True
     controller.activate_scene_profile(collection.id)
@@ -935,10 +942,9 @@ def test_profile_hydration_holds_geometry_until_the_profile_outcome(
         assert engine.preview_geometries[0][4] == engine.snapshots[0][1].document.revision
     engine.finish_geometry(0)
     assert len(engine.snapshots) == 2
-    controller.close()
 
 
-def test_preview_geometry_coalesces_mouse_moves_without_hydrating_each_frame() -> None:
+def test_preview_geometry_coalesces_mouse_moves_without_hydrating_each_frame(request) -> None:
     class _PendingPreviewEngine(_Engine):
         def __init__(self) -> None:
             super().__init__()
@@ -952,6 +958,7 @@ def test_preview_geometry_coalesces_mouse_moves_without_hydrating_each_frame() -
 
     engine = _PendingPreviewEngine()
     documents, _runtime, controller = _runtime_controller(
+        request,
         engine,
         _Projection(),
         request_ids=("hydrate", "preview-1", "preview-2"),
@@ -997,7 +1004,6 @@ def test_preview_geometry_coalesces_mouse_moves_without_hydrating_each_frame() -
     # applied live by the coalesced preview, so the graph is never rebuilt (which
     # would re-open every source, e.g. cameras).
     assert len(engine.snapshots) == 1
-    controller.close()
 
 
 class _PtzExecutor:
@@ -1127,18 +1133,24 @@ def _ptz_result(status: PtzRecallStatus, error_code: str = "") -> PtzRecallResul
 
 
 def _runtime_controller(
+    request,
     engine: _Engine,
     projection: _Projection,
     *,
     request_ids: tuple[str, ...],
     document: SceneDocument | None = None,
     ptz=None,
+    cleanup: ExitStack | None = None,
 ) -> tuple[SceneDocumentService, SceneRuntimeService, SceneRuntimeController]:
     documents = SceneDocumentService(document or _document())
     runtime = SceneRuntimeService(
         documents,
         create_default_runtime_state(documents.document),
     )
+    cleanup = ExitStack() if cleanup is None else cleanup
+    request.addfinalizer(cleanup.close)
+    cleanup.callback(runtime.close)
+
     def _ids():
         # Named ids first, then anonymous ones. Three buses means more traffic than
         # a fixture can sensibly enumerate, and running out used to abort dispatch
@@ -1159,7 +1171,32 @@ def _runtime_controller(
         request_id_factory=lambda: next(ids),
         session_id="test-session",
     )
+    # Once constructed, the controller owns the runtime through its workspace.
+    cleanup.pop_all()
+    cleanup.callback(controller.close)
     return documents, runtime, controller
+
+
+def test_runtime_controller_cleanup_releases_subscriptions_after_an_assertion() -> None:
+    engine = _Engine()
+    projection = _Projection()
+    with pytest.raises(AssertionError, match="simulated runtime assertion failure"):
+        with ExitStack() as finalizers:
+            request = SimpleNamespace(addfinalizer=finalizers.callback)
+            _documents, _runtime, controller = _runtime_controller(
+                request,
+                engine,
+                projection,
+                request_ids=("hydrate",),
+            )
+            controller.start_engine()
+            assert engine.listener is not None
+            assert projection._listeners
+            raise AssertionError("simulated runtime assertion failure")
+
+    assert engine.stopped
+    assert engine.listener is None
+    assert not projection._listeners
 
 
 def _preview_egress_descriptor() -> FrameChannelDescriptor:
@@ -1208,7 +1245,7 @@ def _content_ingress_descriptor(
     )
 
 
-def test_content_transport_hydration_preserves_live_program_before_animated_take() -> None:
+def test_content_transport_hydration_preserves_live_program_before_animated_take(request) -> None:
     class _PendingPrepareEngine(_Engine):
         def __init__(self) -> None:
             super().__init__()
@@ -1223,6 +1260,7 @@ def test_content_transport_hydration_preserves_live_program_before_animated_take
     projection = _Projection()
     engine = _PendingPrepareEngine()
     _documents, _runtime, controller = _runtime_controller(
+        request,
         engine,
         projection,
         request_ids=(
@@ -1255,10 +1293,9 @@ def test_content_transport_hydration_preserves_live_program_before_animated_take
     assert engine.preparations[-1][0] == "prepare-program-current-transport"
     assert engine.preparations[-1][1] is BusId.VIRTUAL_CAMERA
     assert engine.preparations[-1][-1].kind is not TransitionKind.CUT
-    controller.close()
 
 
-def test_content_transport_retirement_waits_for_the_animated_program_exit() -> None:
+def test_content_transport_retirement_waits_for_the_animated_program_exit(request) -> None:
     class _SwitchablePrepareEngine(_Engine):
         def __init__(self) -> None:
             super().__init__()
@@ -1276,6 +1313,7 @@ def test_content_transport_retirement_waits_for_the_animated_program_exit() -> N
     projection = _Projection()
     engine = _SwitchablePrepareEngine()
     _documents, _runtime, controller = _runtime_controller(
+        request,
         engine,
         projection,
         request_ids=(
@@ -1328,7 +1366,6 @@ def test_content_transport_retirement_waits_for_the_animated_program_exit() -> N
     assert dict(engine.snapshots[-1][1].active_scenes)[BusId.VIRTUAL_CAMERA] == (
         CAMERA_SCENE_ID
     )
-    controller.close()
 
 
 def test_projection_categories_are_explicit_and_unknown_types_fail_safe() -> None:
@@ -1346,10 +1383,12 @@ def test_projection_categories_are_explicit_and_unknown_types_fail_safe() -> Non
 
 @pytest.mark.parametrize("state", list(MediaPlaybackState))
 @pytest.mark.parametrize("slot", [0, 1])
-def test_playback_events_are_forwarded_without_changing_engine_health(state, slot) -> None:
+def test_playback_events_are_forwarded_without_changing_engine_health(request, state, slot) -> None:
     engine = _Engine()
+    cleanup = ExitStack()
     _documents, runtime, controller = _runtime_controller(
-        engine, _Projection(), request_ids=(),
+        request,
+        engine, _Projection(), request_ids=(), cleanup=cleanup,
     )
     try:
         controller.start_engine()
@@ -1380,13 +1419,13 @@ def test_playback_events_are_forwarded_without_changing_engine_health(state, slo
         assert len(engine.snapshots) == snapshot_count
         assert controller.source_health(DEFAULT_CAMERA_SOURCE_ID) == source_health
     finally:
-        controller.close()
-        runtime.close()
+        cleanup.close()
 
 
-def test_source_health_is_retained_until_ready_or_stopped() -> None:
+def test_source_health_is_retained_until_ready_or_stopped(request) -> None:
     engine = _Engine()
     _documents, runtime, controller = _runtime_controller(
+        request,
         engine,
         _Projection(),
         request_ids=("hydrate",),
@@ -1416,14 +1455,14 @@ def test_source_health_is_retained_until_ready_or_stopped() -> None:
         )
     )
     assert controller.source_health(DEFAULT_CAMERA_SOURCE_ID) is None
-    controller.close()
-    runtime.close()
     assert content_category_for_projection({"type": "future_source"}) is (
         ContentCategory.EXTERNAL_STREAM
     )
 
 
-def test_scene_profile_is_published_only_after_native_hydration_ack(tmp_path: Path) -> None:
+def test_scene_profile_is_published_only_after_native_hydration_ack(
+    scene_workspace_factory, request, tmp_path: Path
+) -> None:
     class _PendingProfileEngine(_Engine):
         def __init__(self) -> None:
             super().__init__()
@@ -1439,7 +1478,7 @@ def test_scene_profile_is_published_only_after_native_hydration_ack(tmp_path: Pa
             self.snapshots.append((request_id, snapshot))
             return self.profile_hydration
 
-    workspace, collection = _real_workspace(tmp_path)
+    workspace, collection = _real_workspace(scene_workspace_factory, tmp_path)
     previous_id = workspace.active_collection.id
     engine = _PendingProfileEngine()
     request_ids = iter(("initial-hydrate", "profile-hydrate"))
@@ -1450,6 +1489,7 @@ def test_scene_profile_is_published_only_after_native_hydration_ack(tmp_path: Pa
         request_id_factory=lambda: next(request_ids),
         session_id="test-session",
     )
+    request.addfinalizer(controller.close)
     controller.set_preview_scene(CONTENT_SCENE_ID)
     published_document_ids: list[str] = []
     controller.scene_profiles_changed.connect(
@@ -1483,6 +1523,8 @@ def test_scene_profile_is_published_only_after_native_hydration_ack(tmp_path: Pa
 
 
 def test_rejected_scene_profile_hydration_preserves_the_previous_profile(
+    scene_workspace_factory,
+    request,
     tmp_path: Path,
 ) -> None:
     class _RejectingProfileEngine(_Engine):
@@ -1506,7 +1548,7 @@ def test_rejected_scene_profile_hydration_preserves_the_previous_profile(
                 )
             )
 
-    workspace, collection = _real_workspace(tmp_path)
+    workspace, collection = _real_workspace(scene_workspace_factory, tmp_path)
     previous_id = workspace.active_collection.id
     engine = _RejectingProfileEngine()
     request_ids = iter(("initial-hydrate", "profile-hydrate"))
@@ -1517,6 +1559,7 @@ def test_rejected_scene_profile_hydration_preserves_the_previous_profile(
         request_id_factory=lambda: next(request_ids),
         session_id="test-session",
     )
+    request.addfinalizer(controller.close)
     controller.start_engine()
 
     controller.activate_scene_profile(collection.id)
@@ -1526,7 +1569,7 @@ def test_rejected_scene_profile_hydration_preserves_the_previous_profile(
     assert controller.last_engine_error_code == "source_unavailable"
 
 
-def _real_workspace(tmp_path: Path):
+def _real_workspace(scene_workspace_factory, tmp_path: Path):
     paths = ProfilePaths.from_roots(
         data_dir=tmp_path / "data",
         cache_dir=tmp_path / "cache",
@@ -1534,7 +1577,7 @@ def _real_workspace(tmp_path: Path):
     )
     paths.ensure_dirs()
     identities = iter(("default-document", "collection-b", "document-b"))
-    workspace = SceneWorkspaceService(
+    workspace = scene_workspace_factory(
         paths,
         seed_names=SceneSeedNames(
             content_source="Current content",
@@ -1554,8 +1597,9 @@ def _real_workspace(tmp_path: Path):
     return workspace, collection
 
 
-def test_live_scene_deletion_requires_and_takes_the_chosen_replacement() -> None:
+def test_live_scene_deletion_requires_and_takes_the_chosen_replacement(request) -> None:
     documents, runtime, controller = _runtime_controller(
+        request,
         _Engine(),
         _Projection(),
         request_ids=(),
@@ -1576,12 +1620,12 @@ def test_live_scene_deletion_requires_and_takes_the_chosen_replacement() -> None
     assert {
         output.manual_scene_id for output in runtime.state.outputs
     } == {CONTENT_CAMERA_PIP_SCENE_ID}
-    controller.close()
 
 
-def test_runtime_refreshes_local_cameras_without_blocking_the_caller() -> None:
+def test_runtime_refreshes_local_cameras_without_blocking_the_caller(request) -> None:
     engine = _Engine()
     _documents, _runtime, controller = _runtime_controller(
+        request,
         engine,
         _Projection(),
         request_ids=("hydrate", "list-cameras"),
@@ -1594,10 +1638,9 @@ def test_runtime_refreshes_local_cameras_without_blocking_the_caller() -> None:
     assert future is not None
     assert controller.local_cameras.supported
     assert controller.local_cameras.devices[0].device_id == "camera://one"
-    controller.close()
 
 
-def test_runtime_coalesces_camera_refreshes_while_discovery_is_in_flight() -> None:
+def test_runtime_coalesces_camera_refreshes_while_discovery_is_in_flight(request) -> None:
     class _PendingCameraEngine(_Engine):
         def __init__(self) -> None:
             super().__init__()
@@ -1616,6 +1659,7 @@ def test_runtime_coalesces_camera_refreshes_while_discovery_is_in_flight() -> No
 
     engine = _PendingCameraEngine()
     _documents, _runtime, controller = _runtime_controller(
+        request,
         engine,
         _Projection(),
         request_ids=("hydrate", "list-cameras"),
@@ -1628,28 +1672,28 @@ def test_runtime_coalesces_camera_refreshes_while_discovery_is_in_flight() -> No
     assert first is engine.camera_future
     assert second is first
     assert engine.camera_requests == ["list-cameras"]
-    controller.close()
 
 
-def test_reload_yeartext_forwards_a_notification_to_the_engine() -> None:
+def test_reload_yeartext_forwards_a_notification_to_the_engine(request) -> None:
     projection = _Projection()
     engine = _Engine()
     _documents, _runtime, controller = _runtime_controller(
+        request,
         engine, projection, request_ids=("hydrate",)
     )
 
     controller.reload_yeartext()
 
     assert getattr(engine, "yeartext_reloads", 0) == 1
-    controller.close()
 
 
-def test_committing_a_layer_resize_does_not_rehydrate() -> None:
+def test_committing_a_layer_resize_does_not_rehydrate(request) -> None:
     # Resizing/moving a source in the canvas must NOT rebuild the scene graph
     # (which re-opens every source, e.g. the camera). It should be applied live.
     projection = _Projection()
     engine = _Engine()
     documents, _runtime, controller = _runtime_controller(
+        request,
         engine, projection,
         request_ids=("hydrate",) + tuple(f"take-{i}" for i in range(20)),
     )
@@ -1668,13 +1712,14 @@ def test_committing_a_layer_resize_does_not_rehydrate() -> None:
     assert len(engine.snapshots) == baseline, (
         "a layer resize must not re-hydrate the engine"
     )
-    controller.close()
 
 
-def test_runtime_prepares_and_takes_without_full_snapshot_on_hot_path() -> None:
+def test_runtime_prepares_and_takes_without_full_snapshot_on_hot_path(request) -> None:
     projection = _Projection()
     engine = _Engine()
+    cleanup = ExitStack()
     _documents, _runtime, controller = _runtime_controller(
+        request,
         engine,
         projection,
         request_ids=(
@@ -1689,6 +1734,7 @@ def test_runtime_prepares_and_takes_without_full_snapshot_on_hot_path() -> None:
             "take-pip-vcam",
             "output",
         ),
+        cleanup=cleanup,
     )
 
     assert controller.desired_scene(BusId.EDITOR) == CAMERA_SCENE_ID
@@ -1716,16 +1762,17 @@ def test_runtime_prepares_and_takes_without_full_snapshot_on_hot_path() -> None:
 
     controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
     assert [(bus, on) for _id, bus, on in engine.outputs] == [(BusId.VIRTUAL_CAMERA, True)]
-    controller.close()
+    cleanup.close()
     assert engine.stopped
     assert not controller.engine_ready
     assert readiness == [True, False]
 
 
-def test_manual_take_reconciles_when_the_saved_auto_return_scene_is_unchanged() -> None:
+def test_manual_take_reconciles_when_the_saved_auto_return_scene_is_unchanged(request) -> None:
     projection = _Projection()
     engine = _Engine()
     _documents, runtime, controller = _runtime_controller(
+        request,
         engine,
         projection,
         request_ids=(),
@@ -1738,12 +1785,12 @@ def test_manual_take_reconciles_when_the_saved_auto_return_scene_is_unchanged() 
 
     assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
     assert controller.program_automation_suspended
-    controller.close()
 
 
-def test_auto_media_returns_to_the_previous_program_base_scene() -> None:
+def test_auto_media_returns_to_the_previous_program_base_scene(request) -> None:
     projection = _Projection()
     _documents, runtime, controller = _runtime_controller(
+        request,
         _Engine(),
         projection,
         request_ids=(),
@@ -1758,12 +1805,12 @@ def test_auto_media_returns_to_the_previous_program_base_scene() -> None:
     projection.set_type("idle")
 
     assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == (CONTENT_CAMERA_PIP_SCENE_ID)
-    controller.close()
 
 
-def test_audio_only_playback_does_not_trigger_native_scene_auto_switch() -> None:
+def test_audio_only_playback_does_not_trigger_native_scene_auto_switch(request) -> None:
     projection = _Projection()
     _documents, _runtime, controller = _runtime_controller(
+        request,
         _Engine(),
         projection,
         request_ids=(),
@@ -1772,12 +1819,12 @@ def test_audio_only_playback_does_not_trigger_native_scene_auto_switch() -> None
     projection.set_state({"type": "video", "is_audio": True})
 
     assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
-    controller.close()
 
 
-def test_return_scene_override_does_not_take_program_until_media_ends() -> None:
+def test_return_scene_override_does_not_take_program_until_media_ends(request) -> None:
     projection = _Projection()
     _documents, _runtime, controller = _runtime_controller(
+        request,
         _Engine(),
         projection,
         request_ids=(),
@@ -1794,16 +1841,16 @@ def test_return_scene_override_does_not_take_program_until_media_ends() -> None:
     projection.set_type("idle")
 
     assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == (CONTENT_CAMERA_PIP_SCENE_ID)
-    controller.close()
 
 
 @pytest.mark.parametrize("bus_id", [BusId.MEDIA_WINDOWS, BusId.VIRTUAL_CAMERA])
 @pytest.mark.parametrize("scene_id", [CAMERA_SCENE_ID, NO_SIGNAL_SCENE_ID, CONTENT_CAMERA_PIP_SCENE_ID])
 def test_select_scene_during_media_returns_only_from_content_scenes(
+    request,
     bus_id: BusId, scene_id: str,
 ) -> None:
     projection = _Projection()
-    _documents, runtime, controller = _runtime_controller(_Engine(), projection, request_ids=())
+    _documents, runtime, controller = _runtime_controller(request, _Engine(), projection, request_ids=())
     controller.select_scene(bus_id, CONTENT_CAMERA_PIP_SCENE_ID)
     projection.set_type("image")
     assert controller.desired_scene(bus_id) == CONTENT_SCENE_ID
@@ -1825,14 +1872,13 @@ def test_select_scene_during_media_returns_only_from_content_scenes(
     )
     projection.set_type("image")
     assert controller.desired_scene(bus_id) == CONTENT_SCENE_ID
-    controller.close()
 
 
 @pytest.mark.parametrize("bus_id", [BusId.MEDIA_WINDOWS, BusId.VIRTUAL_CAMERA])
-def test_session_routing_reaches_engine_and_right_override_preserves_live_scene(bus_id: BusId) -> None:
+def test_session_routing_reaches_engine_and_right_override_preserves_live_scene(request, bus_id: BusId) -> None:
     projection = _Projection()
     engine = _Engine()
-    _documents, runtime, controller = _runtime_controller(engine, projection, request_ids=())
+    _documents, runtime, controller = _runtime_controller(request, engine, projection, request_ids=())
     controller.start_engine()
     projection.set_type("video")
     other_bus = BusId.VIRTUAL_CAMERA if bus_id is BusId.MEDIA_WINDOWS else BusId.MEDIA_WINDOWS
@@ -1855,14 +1901,13 @@ def test_session_routing_reaches_engine_and_right_override_preserves_live_scene(
     assert controller.applied_scene(bus_id) == CONTENT_CAMERA_PIP_SCENE_ID
     projection.set_type("video")
     assert controller.applied_scene(bus_id) == CONTENT_SCENE_ID
-    controller.close()
 
 
-def test_session_selection_survives_playback_updates_but_expires_with_presentation() -> None:
+def test_session_selection_survives_playback_updates_but_expires_with_presentation(request) -> None:
     from solin.core.projection.application import ProjectionSession
 
     projection = ProjectionSession()
-    _documents, _runtime, controller = _runtime_controller(_Engine(), projection, request_ids=())
+    _documents, _runtime, controller = _runtime_controller(request, _Engine(), projection, request_ids=())
     projection.set_state({"type": "video", "path": "first.mp4"})
     controller.select_scene(BusId.MEDIA_WINDOWS, NO_SIGNAL_SCENE_ID)
     session = projection.presentation_session_id
@@ -1871,12 +1916,12 @@ def test_session_selection_survives_playback_updates_but_expires_with_presentati
     assert controller.desired_scene(BusId.MEDIA_WINDOWS) == NO_SIGNAL_SCENE_ID
     projection.set_state({"type": "video", "path": "second.mp4"})
     assert controller.desired_scene(BusId.MEDIA_WINDOWS) == CONTENT_SCENE_ID
-    controller.close()
 
 
 @pytest.mark.parametrize("bus_id", [BusId.MEDIA_WINDOWS, BusId.VIRTUAL_CAMERA])
 @pytest.mark.parametrize("operation", ["select", "return", "disable", "resume"])
 def test_failed_session_runtime_write_preserves_live_selection_and_return(
+    request,
     monkeypatch: pytest.MonkeyPatch, bus_id: BusId, operation: str,
 ) -> None:
     class _FailingStore:
@@ -1884,7 +1929,7 @@ def test_failed_session_runtime_write_preserves_live_selection_and_return(
             raise OSError("Runtime save failed")
 
     projection = _Projection()
-    _documents, runtime, controller = _runtime_controller(_Engine(), projection, request_ids=())
+    _documents, runtime, controller = _runtime_controller(request, _Engine(), projection, request_ids=())
     controller.select_scene(bus_id, CONTENT_CAMERA_PIP_SCENE_ID)
     projection.set_type("video")
     controller.select_scene(
@@ -1911,13 +1956,12 @@ def test_failed_session_runtime_write_preserves_live_selection_and_return(
     controller.select_scene(bus_id, CONTENT_SCENE_ID)
     projection.set_type("idle")
     assert controller.desired_scene(bus_id) == CONTENT_CAMERA_PIP_SCENE_ID
-    controller.close()
 
 
 @pytest.mark.parametrize("bus_id", [BusId.MEDIA_WINDOWS, BusId.VIRTUAL_CAMERA])
-def test_disabling_automation_pins_each_output_to_its_current_session_scene(bus_id: BusId) -> None:
+def test_disabling_automation_pins_each_output_to_its_current_session_scene(request, bus_id: BusId) -> None:
     projection = _Projection()
-    _documents, runtime, controller = _runtime_controller(_Engine(), projection, request_ids=())
+    _documents, runtime, controller = _runtime_controller(request, _Engine(), projection, request_ids=())
     projection.set_type("video")
     controller.select_scene(bus_id, NO_SIGNAL_SCENE_ID)
     before_desired = controller.desired_scenes
@@ -1926,7 +1970,6 @@ def test_disabling_automation_pins_each_output_to_its_current_session_scene(bus_
     assert all(output.mode is OutputMode.MANUAL for output in runtime.state.outputs)
     projection.set_type("idle")
     assert controller.desired_scenes == before_desired
-    controller.close()
 
 
 @pytest.mark.parametrize("bus_id", [BusId.MEDIA_WINDOWS, BusId.VIRTUAL_CAMERA])
@@ -1934,10 +1977,11 @@ def test_disabling_automation_pins_each_output_to_its_current_session_scene(bus_
     (True, 1.0, True), (False, 1.0, False), (True, 0.0, False),
 ])
 def test_conditional_return_follows_visible_nested_media(
+    request,
     bus_id: BusId, visible: bool, opacity: float, has_content: bool,
 ) -> None:
     projection = _Projection()
-    documents, _runtime, controller = _runtime_controller(_Engine(), projection, request_ids=())
+    documents, _runtime, controller = _runtime_controller(request, _Engine(), projection, request_ids=())
     documents.create_source(SourceDefinition(
         id="nested-source", name="Nested media", kind=SourceKind.SCENE_REFERENCE,
         configuration=SceneReferenceConfig(target_scene_id=CONTENT_CAMERA_PIP_SCENE_ID),
@@ -1953,13 +1997,12 @@ def test_conditional_return_follows_visible_nested_media(
     assert controller.return_scene_override_available(bus_id) is has_content
     projection.set_type("idle")
     assert controller.desired_scene(bus_id) == (CAMERA_SCENE_ID if has_content else "nested-media")
-    controller.close()
 
 
 @pytest.mark.parametrize("bus_id", [BusId.MEDIA_WINDOWS, BusId.VIRTUAL_CAMERA])
-def test_selection_restores_auto_during_media_and_preserves_previously_pinned_return(bus_id: BusId) -> None:
+def test_selection_restores_auto_during_media_and_preserves_previously_pinned_return(request, bus_id: BusId) -> None:
     projection = _Projection()
-    _documents, runtime, controller = _runtime_controller(_Engine(), projection, request_ids=())
+    _documents, runtime, controller = _runtime_controller(request, _Engine(), projection, request_ids=())
     controller.take_scene(bus_id, CONTENT_CAMERA_PIP_SCENE_ID)
     projection.set_type("video")
     assert controller.desired_scene(bus_id) == CONTENT_CAMERA_PIP_SCENE_ID
@@ -1975,12 +2018,11 @@ def test_selection_restores_auto_during_media_and_preserves_previously_pinned_re
     assert controller.desired_scene(bus_id) == CAMERA_SCENE_ID
     projection.set_type("video")
     assert controller.desired_scene(bus_id) == CONTENT_SCENE_ID
-    controller.close()
 
 
-def test_removed_session_scene_and_return_fall_back_without_invalid_references() -> None:
+def test_removed_session_scene_and_return_fall_back_without_invalid_references(request) -> None:
     projection = _Projection()
-    documents, _runtime, controller = _runtime_controller(_Engine(), projection, request_ids=())
+    documents, _runtime, controller = _runtime_controller(request, _Engine(), projection, request_ids=())
     documents.create_scene("Return", scene_id="return")
     documents.create_scene("Temporary", scene_id="temporary")
     controller.select_scene(BusId.MEDIA_WINDOWS, "return")
@@ -1993,13 +2035,12 @@ def test_removed_session_scene_and_return_fall_back_without_invalid_references()
     controller.resume_program_automation()
     projection.set_type("idle")
     assert controller.desired_scene(BusId.MEDIA_WINDOWS) == CAMERA_SCENE_ID
-    controller.close()
 
 
 @pytest.mark.parametrize("stop_before_resuming", [False, True])
-def test_automation_off_on_preserves_independent_return_bases(stop_before_resuming: bool) -> None:
+def test_automation_off_on_preserves_independent_return_bases(request, stop_before_resuming: bool) -> None:
     projection = _Projection()
-    _documents, _runtime, controller = _runtime_controller(_Engine(), projection, request_ids=())
+    _documents, _runtime, controller = _runtime_controller(request, _Engine(), projection, request_ids=())
     controller.select_scene(BusId.MEDIA_WINDOWS, CONTENT_CAMERA_PIP_SCENE_ID)
     controller.select_scene(BusId.VIRTUAL_CAMERA, NO_SIGNAL_SCENE_ID)
     projection.set_type("video")
@@ -2010,12 +2051,12 @@ def test_automation_off_on_preserves_independent_return_bases(stop_before_resumi
     projection.set_type("idle")
     assert controller.desired_scene(BusId.MEDIA_WINDOWS) == CONTENT_CAMERA_PIP_SCENE_ID
     assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == NO_SIGNAL_SCENE_ID
-    controller.close()
 
 
-def test_auto_media_does_not_return_after_operator_takes_a_scene_without_content() -> None:
+def test_auto_media_does_not_return_after_operator_takes_a_scene_without_content(request) -> None:
     projection = _Projection()
     _documents, _runtime, controller = _runtime_controller(
+        request,
         _Engine(),
         projection,
         request_ids=(),
@@ -2032,12 +2073,12 @@ def test_auto_media_does_not_return_after_operator_takes_a_scene_without_content
     projection.set_type("idle")
 
     assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == NO_SIGNAL_SCENE_ID
-    controller.close()
 
 
-def test_auto_media_returns_after_operator_takes_another_content_scene() -> None:
+def test_auto_media_returns_after_operator_takes_another_content_scene(request) -> None:
     projection = _Projection()
     _documents, runtime, controller = _runtime_controller(
+        request,
         _Engine(),
         projection,
         request_ids=(),
@@ -2066,12 +2107,12 @@ def test_auto_media_returns_after_operator_takes_another_content_scene() -> None
     projection.set_type("idle")
 
     assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == NO_SIGNAL_SCENE_ID
-    controller.close()
 
 
-def test_taking_a_content_scene_resumes_a_suspended_media_session() -> None:
+def test_taking_a_content_scene_resumes_a_suspended_media_session(request) -> None:
     projection = _Projection()
     _documents, runtime, controller = _runtime_controller(
+        request,
         _Engine(),
         projection,
         request_ids=(),
@@ -2093,12 +2134,12 @@ def test_taking_a_content_scene_resumes_a_suspended_media_session() -> None:
     projection.set_type("idle")
 
     assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
-    controller.close()
 
 
-def test_taking_the_live_automatic_media_scene_is_a_noop() -> None:
+def test_taking_the_live_automatic_media_scene_is_a_noop(request) -> None:
     projection = _Projection()
     _documents, runtime, controller = _runtime_controller(
+        request,
         _Engine(),
         projection,
         request_ids=(),
@@ -2112,12 +2153,12 @@ def test_taking_the_live_automatic_media_scene_is_a_noop() -> None:
     assert after is before
     assert not controller.program_automation_suspended
     assert controller.program_return_override_available
-    controller.close()
 
 
-def test_taking_media_again_resumes_a_suspended_automatic_media_session() -> None:
+def test_taking_media_again_resumes_a_suspended_automatic_media_session(request) -> None:
     projection = _Projection()
     _documents, _runtime, controller = _runtime_controller(
+        request,
         _Engine(),
         projection,
         request_ids=(),
@@ -2131,12 +2172,12 @@ def test_taking_media_again_resumes_a_suspended_automatic_media_session() -> Non
 
     assert not controller.program_automation_suspended
     assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
-    controller.close()
 
 
-def test_resume_program_automation_reconciles_when_runtime_state_is_unchanged() -> None:
+def test_resume_program_automation_reconciles_when_runtime_state_is_unchanged(request) -> None:
     projection = _Projection()
     _documents, _runtime, controller = _runtime_controller(
+        request,
         _Engine(),
         projection,
         request_ids=(),
@@ -2153,12 +2194,12 @@ def test_resume_program_automation_reconciles_when_runtime_state_is_unchanged() 
     projection.set_type("idle")
 
     assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
-    controller.close()
 
 
-def test_reenabling_program_automation_restores_the_session_return_base() -> None:
+def test_reenabling_program_automation_restores_the_session_return_base(request) -> None:
     projection = _Projection()
     _documents, _runtime, controller = _runtime_controller(
+        request,
         _Engine(),
         projection,
         request_ids=(),
@@ -2175,12 +2216,12 @@ def test_reenabling_program_automation_restores_the_session_return_base() -> Non
     projection.set_type("idle")
 
     assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
-    controller.close()
 
 
-def test_disabling_automation_preserves_the_latest_desired_scene_during_take() -> None:
+def test_disabling_automation_preserves_the_latest_desired_scene_during_take(request) -> None:
     projection = _Projection()
     _documents, runtime, controller = _runtime_controller(
+        request,
         _Engine(),
         projection,
         request_ids=(),
@@ -2197,10 +2238,10 @@ def test_disabling_automation_preserves_the_latest_desired_scene_during_take() -
     assert program.mode is OutputMode.MANUAL
     assert program.manual_scene_id == CAMERA_SCENE_ID
     assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
-    controller.close()
 
 
 def test_disabled_previous_scene_memory_returns_to_default(
+    request,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
@@ -2209,6 +2250,7 @@ def test_disabled_previous_scene_memory_returns_to_default(
     )
     projection = _Projection()
     _documents, runtime, controller = _runtime_controller(
+        request,
         _Engine(),
         projection,
         request_ids=(),
@@ -2223,11 +2265,11 @@ def test_disabled_previous_scene_memory_returns_to_default(
     projection.set_type("idle")
 
     assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
-    controller.close()
 
 
 @pytest.mark.parametrize("scene_id", [CONTENT_SCENE_ID, NO_SIGNAL_SCENE_ID])
 def test_disabled_previous_scene_memory_resets_only_automatic_outputs_to_their_defaults(
+    request,
     monkeypatch: pytest.MonkeyPatch,
     scene_id: str,
 ) -> None:
@@ -2240,6 +2282,7 @@ def test_disabled_previous_scene_memory_resets_only_automatic_outputs_to_their_d
     ))
     projection = _Projection()
     _documents, _runtime, controller = _runtime_controller(
+        request,
         _Engine(), projection, request_ids=(), document=document,
     )
     controller.select_scene(BusId.MEDIA_WINDOWS, CAMERA_SCENE_ID)
@@ -2251,12 +2294,12 @@ def test_disabled_previous_scene_memory_resets_only_automatic_outputs_to_their_d
         CONTENT_CAMERA_PIP_SCENE_ID if scene_id == CONTENT_SCENE_ID else scene_id
     )
     assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == NO_SIGNAL_SCENE_ID
-    controller.close()
 
 
-def test_transition_policy_changes_do_not_rehydrate_and_preview_always_cuts() -> None:
+def test_transition_policy_changes_do_not_rehydrate_and_preview_always_cuts(request) -> None:
     engine = _Engine()
     documents, _runtime, controller = _runtime_controller(
+        request,
         engine,
         _Projection(),
         request_ids=(
@@ -2295,12 +2338,12 @@ def test_transition_policy_changes_do_not_rehydrate_and_preview_always_cuts() ->
     )
     assert engine.takes[-1][1].document_revision == hydrated_revision
     assert len(engine.snapshots) == 1
-    controller.close()
 
 
-def test_policy_only_revision_uses_hydrated_revision_for_auxiliary_commands() -> None:
+def test_policy_only_revision_uses_hydrated_revision_for_auxiliary_commands(request) -> None:
     engine = _Engine()
     documents, _runtime, controller = _runtime_controller(
+        request,
         engine,
         _Projection(),
         request_ids=("hydrate", "output", "render", "preview-geometry"),
@@ -2320,10 +2363,9 @@ def test_policy_only_revision_uses_hydrated_revision_for_auxiliary_commands() ->
     assert len(engine.snapshots) == 1
     assert engine.preview_geometries[-1][4] == hydrated_revision
     assert errors == []
-    controller.close()
 
 
-def test_transition_fallback_is_reported_without_marking_engine_failed() -> None:
+def test_transition_fallback_is_reported_without_marking_engine_failed(request) -> None:
     class _FallbackEngine(_Engine):
         def prepare_scene(
             self,
@@ -2358,6 +2400,7 @@ def test_transition_fallback_is_reported_without_marking_engine_failed() -> None
 
     engine = _FallbackEngine()
     _documents, _runtime, controller = _runtime_controller(
+        request,
         engine,
         _Projection(),
         request_ids=(
@@ -2379,13 +2422,13 @@ def test_transition_fallback_is_reported_without_marking_engine_failed() -> None
     ]
     assert controller.last_engine_error_code == ""
     assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
-    controller.close()
 
 
-def test_auto_switch_resolves_transition_for_each_destination_scene() -> None:
+def test_auto_switch_resolves_transition_for_each_destination_scene(request) -> None:
     projection = _Projection()
     engine = _Engine()
     documents, _runtime, controller = _runtime_controller(
+        request,
         engine,
         projection,
         request_ids=(
@@ -2446,10 +2489,9 @@ def test_auto_switch_resolves_transition_for_each_destination_scene() -> None:
     assert engine.preparation_content_media_epochs == [1, 1, 1, None, None, None]
     assert len(engine.snapshots) == 1
     assert [targets for _request_id, targets in engine.window_target_updates] == [(target,)]
-    controller.close()
 
 
-def test_runtime_coalesces_rapid_scene_selection_while_prepare_is_in_flight() -> None:
+def test_runtime_coalesces_rapid_scene_selection_while_prepare_is_in_flight(request) -> None:
     class _PendingPrepareEngine(_Engine):
         def __init__(self) -> None:
             super().__init__()
@@ -2492,6 +2534,7 @@ def test_runtime_coalesces_rapid_scene_selection_while_prepare_is_in_flight() ->
 
     engine = _PendingPrepareEngine()
     _documents, _runtime, controller = _runtime_controller(
+        request,
         engine,
         _Projection(),
         request_ids=tuple(f"request-{index}" for index in range(8)),
@@ -2516,12 +2559,12 @@ def test_runtime_coalesces_rapid_scene_selection_while_prepare_is_in_flight() ->
     assert len(engine.takes) == 1
     assert engine.takes[0][1].scene_id == CONTENT_CAMERA_PIP_SCENE_ID
     assert controller.applied_scene(BusId.EDITOR) == CONTENT_CAMERA_PIP_SCENE_ID
-    controller.close()
 
 
-def test_editor_preview_uses_its_own_channel_without_changing_program() -> None:
+def test_editor_preview_uses_its_own_channel_without_changing_program(request) -> None:
     engine = _Engine()
     _documents, _runtime, controller = _runtime_controller(
+        request,
         engine,
         _Projection(),
         request_ids=("hydrate-preview",),
@@ -2536,12 +2579,12 @@ def test_editor_preview_uses_its_own_channel_without_changing_program() -> None:
     assert dict(snapshot.render_enabled)[BusId.EDITOR]
     assert not dict(snapshot.output_enabled)[BusId.MEDIA_WINDOWS]
     assert not controller.runtime.state.output(BusId.MEDIA_WINDOWS).enabled
-    controller.close()
 
 
-def test_editor_preview_transport_is_idle_until_the_editor_requests_frames() -> None:
+def test_editor_preview_transport_is_idle_until_the_editor_requests_frames(request) -> None:
     engine = _Engine()
     _documents, _runtime, controller = _runtime_controller(
+        request,
         engine,
         _Projection(),
         request_ids=(
@@ -2578,14 +2621,14 @@ def test_editor_preview_transport_is_idle_until_the_editor_requests_frames() -> 
         BusId.EDITOR,
         False,
     )
-    controller.close()
 
 
-def test_preview_demand_is_published_when_the_media_scene_is_already_selected() -> None:
+def test_preview_demand_is_published_when_the_media_scene_is_already_selected(request) -> None:
     projection = _Projection()
     projection.set_type("image")
     engine = _Engine()
     _documents, _runtime, controller = _runtime_controller(
+        request,
         engine,
         projection,
         request_ids=(),
@@ -2603,12 +2646,12 @@ def test_preview_demand_is_published_when_the_media_scene_is_already_selected() 
     controller.set_preview_scene(None)
     assert changes == [CONTENT_SCENE_ID, None]
     assert desired_changes == []
-    controller.close()
 
 
-def test_editor_preview_remains_independent_while_program_is_mirrored() -> None:
+def test_editor_preview_remains_independent_while_program_is_mirrored(request) -> None:
     engine = _Engine()
     _documents, _runtime, controller = _runtime_controller(
+        request,
         engine,
         _Projection(),
         request_ids=(
@@ -2628,12 +2671,12 @@ def test_editor_preview_remains_independent_while_program_is_mirrored() -> None:
     assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
     assert controller.desired_scene(BusId.EDITOR) == CONTENT_SCENE_ID
     assert controller.applied_scene(BusId.EDITOR) == CONTENT_SCENE_ID
-    controller.close()
 
 
-def test_native_window_target_updates_without_rehydrating_the_scene_graph() -> None:
+def test_native_window_target_updates_without_rehydrating_the_scene_graph(request) -> None:
     engine = _Engine()
     _documents, _runtime, controller = _runtime_controller(
+        request,
         engine,
         _Projection(),
         request_ids=(
@@ -2669,12 +2712,12 @@ def test_native_window_target_updates_without_rehydrating_the_scene_graph() -> N
     assert engine.window_target_updates[-1][1] == ()
     assert controller.desired_scene(BusId.EDITOR) == CAMERA_SCENE_ID
     assert engine.renders[-1][1:] == (BusId.MEDIA_WINDOWS, False)
-    controller.close()
 
 
-def test_editor_preview_target_merges_with_projection_window_targets() -> None:
+def test_editor_preview_target_merges_with_projection_window_targets(request) -> None:
     engine = _Engine()
     _documents, _runtime, controller = _runtime_controller(
+        request,
         engine,
         _Projection(),
         request_ids=("initial-hydrate", "attach-window", "attach-editor", "clear-editor"),
@@ -2696,13 +2739,13 @@ def test_editor_preview_target_merges_with_projection_window_targets() -> None:
 
     controller.set_editor_preview_target(None)
     assert engine.window_target_updates[-1][1] == (projection,)
-    controller.close()
 
 
-def test_content_ingress_demand_follows_visible_routes_and_scene_sources() -> None:
+def test_content_ingress_demand_follows_visible_routes_and_scene_sources(request) -> None:
     projection = _Projection()
     engine = _Engine()
     _documents, _runtime, controller = _runtime_controller(
+        request,
         engine,
         projection,
         request_ids=(),
@@ -2736,12 +2779,12 @@ def test_content_ingress_demand_follows_visible_routes_and_scene_sources() -> No
     controller.set_window_targets(())
     assert not controller.content_ingress_required
     assert changes == [True, False, True, False]
-    controller.close()
 
 
-def test_raw_native_window_target_is_independent_from_authored_scenes() -> None:
+def test_raw_native_window_target_is_independent_from_authored_scenes(request) -> None:
     engine = _Engine()
     _documents, _runtime, controller = _runtime_controller(
+        request,
         engine,
         _Projection(),
         request_ids=("initial-hydrate", "attach-window"),
@@ -2763,12 +2806,12 @@ def test_raw_native_window_target_is_independent_from_authored_scenes() -> None:
 
     assert [targets for _id, targets in engine.window_target_updates] == [(target,)]
     assert controller.desired_scene(BusId.EDITOR) == CAMERA_SCENE_ID
-    controller.close()
 
 
-def test_program_window_target_uses_program_without_an_editor_scene() -> None:
+def test_program_window_target_uses_program_without_an_editor_scene(request) -> None:
     engine = _Engine()
     _documents, _runtime, controller = _runtime_controller(
+        request,
         engine,
         _Projection(),
         request_ids=("initial-hydrate", "program-render", "program-window"),
@@ -2792,12 +2835,12 @@ def test_program_window_target_uses_program_without_an_editor_scene() -> None:
     assert [targets for _id, targets in engine.window_target_updates] == [(target,)]
     assert engine.renders[-1] == ("program-render", BusId.VIRTUAL_CAMERA, True)
     assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
-    controller.close()
 
 
-def test_duplicate_native_window_target_update_is_a_noop() -> None:
+def test_duplicate_native_window_target_update_is_a_noop(request) -> None:
     engine = _Engine()
     _documents, _runtime, controller = _runtime_controller(
+        request,
         engine,
         _Projection(),
         request_ids=(
@@ -2825,13 +2868,13 @@ def test_duplicate_native_window_target_update_is_a_noop() -> None:
 
     assert len(engine.snapshots) == snapshot_count
     assert len(engine.window_target_updates) == update_count
-    controller.close()
 
 
-def test_runtime_clears_stale_applied_state_and_rehydrates_a_restarted_engine() -> None:
+def test_runtime_clears_stale_applied_state_and_rehydrates_a_restarted_engine(request) -> None:
     projection = _Projection()
     engine = _Engine()
     _documents, _runtime, controller = _runtime_controller(
+        request,
         engine,
         projection,
         request_ids=("initial-hydrate", "restart-hydrate"),
@@ -2852,7 +2895,7 @@ def test_runtime_clears_stale_applied_state_and_rehydrates_a_restarted_engine() 
     assert controller.applied_scenes == controller.desired_scenes
 
 
-def test_runtime_coalesces_hydration_changes_while_one_request_is_in_flight() -> None:
+def test_runtime_coalesces_hydration_changes_while_one_request_is_in_flight(request) -> None:
     class _PendingHydrateEngine(_Engine):
         def __init__(self) -> None:
             super().__init__()
@@ -2873,6 +2916,7 @@ def test_runtime_coalesces_hydration_changes_while_one_request_is_in_flight() ->
 
     engine = _PendingHydrateEngine()
     documents, _runtime, controller = _runtime_controller(
+        request,
         engine,
         _Projection(),
         request_ids=("hydrate-1", "hydrate-2"),
@@ -2901,10 +2945,9 @@ def test_runtime_coalesces_hydration_changes_while_one_request_is_in_flight() ->
     assert not controller.hydration_in_progress
     assert controller.native_window_routing_ready
     assert controller.applied_scenes == controller.desired_scenes
-    controller.close()
 
 
-def test_applied_native_window_route_remains_ready_during_graph_rehydration() -> None:
+def test_applied_native_window_route_remains_ready_during_graph_rehydration(request) -> None:
     class _PendingHydrateEngine(_Engine):
         def __init__(self) -> None:
             super().__init__()
@@ -2925,6 +2968,7 @@ def test_applied_native_window_route_remains_ready_during_graph_rehydration() ->
 
     engine = _PendingHydrateEngine()
     documents, _runtime, controller = _runtime_controller(
+        request,
         engine,
         _Projection(),
         request_ids=("initial-hydrate", "document-hydrate"),
@@ -2944,10 +2988,9 @@ def test_applied_native_window_route_remains_ready_during_graph_rehydration() ->
 
     assert controller.hydration_in_progress
     assert controller.native_window_routing_ready
-    controller.close()
 
 
-def test_output_change_during_hydration_is_folded_into_a_new_snapshot() -> None:
+def test_output_change_during_hydration_is_folded_into_a_new_snapshot(request) -> None:
     class _PendingHydrateEngine(_Engine):
         def __init__(self) -> None:
             super().__init__()
@@ -2967,6 +3010,7 @@ def test_output_change_during_hydration_is_folded_into_a_new_snapshot() -> None:
 
     engine = _PendingHydrateEngine()
     _documents, _runtime, controller = _runtime_controller(
+        request,
         engine,
         _Projection(),
         request_ids=("hydrate-1", "hydrate-2"),
@@ -2989,10 +3033,9 @@ def test_output_change_during_hydration_is_folded_into_a_new_snapshot() -> None:
         engine._ack(second_request, second_snapshot.sequence, second_snapshot.document.revision)
     )
     assert controller.applied_scenes == controller.desired_scenes
-    controller.close()
 
 
-def test_rejected_hydration_preserves_the_native_error_code() -> None:
+def test_rejected_hydration_preserves_the_native_error_code(request) -> None:
     class _RejectingHydrateEngine(_Engine):
         def hydrate(
             self,
@@ -3017,6 +3060,7 @@ def test_rejected_hydration_preserves_the_native_error_code() -> None:
 
     engine = _RejectingHydrateEngine()
     _documents, _runtime, controller = _runtime_controller(
+        request,
         engine,
         _Projection(),
         request_ids=("hydrate",),
@@ -3032,10 +3076,9 @@ def test_rejected_hydration_preserves_the_native_error_code() -> None:
     assert controller.last_engine_error_code == "source_unavailable"
     assert errors == ["Scene engine hydrate rejected (source_unavailable)"]
     assert "sensitive" not in errors[0]
-    controller.close()
 
 
-def test_rejected_output_preserves_the_native_error_code() -> None:
+def test_rejected_output_preserves_the_native_error_code(request) -> None:
     class _RejectingOutputEngine(_Engine):
         def set_output_enabled(
             self,
@@ -3062,6 +3105,7 @@ def test_rejected_output_preserves_the_native_error_code() -> None:
 
     engine = _RejectingOutputEngine()
     _documents, _runtime, controller = _runtime_controller(
+        request,
         engine,
         _Projection(),
         request_ids=("hydrate", "output"),
@@ -3076,10 +3120,9 @@ def test_rejected_output_preserves_the_native_error_code() -> None:
     # transient and a later successful command clears it.
     assert errors == ["Scene engine output rejected (media_graph_stopped)"]
     assert "sensitive" not in errors[0]
-    controller.close()
 
 
-def test_failed_preparation_cancels_its_native_resource() -> None:
+def test_failed_preparation_cancels_its_native_resource(request) -> None:
     class _FailingPrepareEngine(_Engine):
         def prepare_scene(
             self,
@@ -3101,6 +3144,7 @@ def test_failed_preparation_cancels_its_native_resource() -> None:
     projection = _Projection()
     engine = _FailingPrepareEngine()
     _documents, _runtime, controller = _runtime_controller(
+        request,
         engine,
         projection,
         request_ids=("hydrate", "prepare-media", "prepare-vcam"),
@@ -3119,10 +3163,9 @@ def test_failed_preparation_cancels_its_native_resource() -> None:
     ]
     assert controller.desired_scene(BusId.EDITOR) == CONTENT_SCENE_ID
     assert controller.applied_scene(BusId.EDITOR) == CAMERA_SCENE_ID
-    controller.close()
 
 
-def test_rejected_preparation_preserves_the_native_error_code() -> None:
+def test_rejected_preparation_preserves_the_native_error_code(request) -> None:
     class _RejectingPrepareEngine(_Engine):
         def prepare_scene(
             self,
@@ -3142,6 +3185,7 @@ def test_rejected_preparation_preserves_the_native_error_code() -> None:
     engine = _RejectingPrepareEngine()
     projection = _Projection()
     _documents, _runtime, controller = _runtime_controller(
+        request,
         engine,
         projection,
         request_ids=("hydrate", "prepare-media", "prepare-vcam"),
@@ -3159,10 +3203,9 @@ def test_rejected_preparation_preserves_the_native_error_code() -> None:
         "Scene engine prepare rejected (source_unavailable)",
     ]
     assert set(engine.cancelled) >= {"prepare-media", "prepare-vcam"}
-    controller.close()
 
 
-def test_cancelled_preparation_does_not_publish_a_sticky_engine_error() -> None:
+def test_cancelled_preparation_does_not_publish_a_sticky_engine_error(request) -> None:
     class _CancelledPrepareEngine(_Engine):
         def prepare_scene(
             self,
@@ -3181,6 +3224,7 @@ def test_cancelled_preparation_does_not_publish_a_sticky_engine_error() -> None:
     engine = _CancelledPrepareEngine()
     projection = _Projection()
     _documents, _runtime, controller = _runtime_controller(
+        request,
         engine,
         projection,
         request_ids=("hydrate", "prepare-media", "prepare-vcam"),
@@ -3193,10 +3237,9 @@ def test_cancelled_preparation_does_not_publish_a_sticky_engine_error() -> None:
 
     assert controller.last_engine_error_code == ""
     assert errors == []
-    controller.close()
 
 
-def test_rejected_take_keeps_applied_scene_and_reports_sanitized_error() -> None:
+def test_rejected_take_keeps_applied_scene_and_reports_sanitized_error(request) -> None:
     class _RejectingEngine(_Engine):
         def take_prepared(
             self,
@@ -3222,6 +3265,7 @@ def test_rejected_take_keeps_applied_scene_and_reports_sanitized_error() -> None
     projection = _Projection()
     engine = _RejectingEngine()
     _documents, _runtime, controller = _runtime_controller(
+        request,
         engine,
         projection,
         request_ids=(
@@ -3249,11 +3293,12 @@ def test_rejected_take_keeps_applied_scene_and_reports_sanitized_error() -> None
     assert "secret" not in errors[0]
 
 
-def test_scene_take_waits_for_ptz_positioning_before_cutting() -> None:
+def test_scene_take_waits_for_ptz_positioning_before_cutting(request) -> None:
     projection = _Projection()
     engine = _Engine()
     ptz = _PtzExecutor()
     _documents, _runtime, controller = _runtime_controller(
+        request,
         engine,
         projection,
         request_ids=(
@@ -3282,14 +3327,14 @@ def test_scene_take_waits_for_ptz_positioning_before_cutting() -> None:
     assert len(engine.takes) == 3  # program, projection, editor
     assert controller.applied_scene(BusId.EDITOR) == CONTENT_SCENE_ID
     assert events[0].result.succeeded
-    controller.close()
 
 
-def test_manual_ptz_motion_is_scaled_stopped_and_can_store_a_preset() -> None:
+def test_manual_ptz_motion_is_scaled_stopped_and_can_store_a_preset(request) -> None:
     projection = _Projection()
     engine = _Engine()
     ptz = _PtzExecutor()
     _documents, _runtime, controller = _runtime_controller(
+        request,
         engine,
         projection,
         request_ids=(),
@@ -3310,14 +3355,14 @@ def test_manual_ptz_motion_is_scaled_stopped_and_can_store_a_preset() -> None:
     assert ptz.moves == [(DEFAULT_CAMERA_SOURCE_ID, -0.4, 0.2, 0.0)]
     assert ptz.stops == [DEFAULT_CAMERA_SOURCE_ID]
     assert ptz.stored == ["preset-wide"]
-    controller.close()
 
 
-def test_keep_current_ptz_policy_blocks_take_on_failure() -> None:
+def test_keep_current_ptz_policy_blocks_take_on_failure(request) -> None:
     projection = _Projection()
     engine = _Engine()
     ptz = _PtzExecutor()
     _documents, _runtime, controller = _runtime_controller(
+        request,
         engine,
         projection,
         request_ids=(
@@ -3343,14 +3388,14 @@ def test_keep_current_ptz_policy_blocks_take_on_failure() -> None:
     assert controller.applied_scene(BusId.EDITOR) == CONTENT_SCENE_ID
     assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
     assert errors == ["Scene PTZ recall blocked Take (ptz_recall_timeout)"]
-    controller.close()
 
 
-def test_take_anyway_ptz_policy_cuts_after_failure() -> None:
+def test_take_anyway_ptz_policy_cuts_after_failure(request) -> None:
     projection = _Projection()
     engine = _Engine()
     ptz = _PtzExecutor()
     _documents, _runtime, controller = _runtime_controller(
+        request,
         engine,
         projection,
         request_ids=(
@@ -3372,14 +3417,14 @@ def test_take_anyway_ptz_policy_cuts_after_failure() -> None:
 
     assert len(engine.takes) == 3  # program, projection, editor
     assert controller.applied_scene(BusId.EDITOR) == CONTENT_SCENE_ID
-    controller.close()
 
 
-def test_document_change_cancels_in_flight_ptz_and_native_preparation() -> None:
+def test_document_change_cancels_in_flight_ptz_and_native_preparation(request) -> None:
     projection = _Projection()
     engine = _Engine()
     ptz = _PtzExecutor()
     documents, _runtime, controller = _runtime_controller(
+        request,
         engine,
         projection,
         request_ids=(
@@ -3398,14 +3443,14 @@ def test_document_change_cancels_in_flight_ptz_and_native_preparation() -> None:
     assert ptz.cancelled == [ptz.futures[0]]
     assert engine.cancelled == ["prepare-program"]
     assert len(engine.snapshots) == 2
-    controller.close()
 
 
-def test_projection_and_program_can_show_different_scenes() -> None:
+def test_projection_and_program_can_show_different_scenes(request) -> None:
     # The point of the whole two-output change: the room's screen and the virtual
     # camera are routed independently.
     engine = _Engine()
     _documents, runtime, controller = _runtime_controller(
+        request,
         engine, _Projection(), request_ids=("hydrate",)
     )
     controller.start_engine()
@@ -3426,7 +3471,6 @@ def test_projection_and_program_can_show_different_scenes() -> None:
     prepared = {bus_id: scene_id for _id, bus_id, scene_id, *_ in engine.preparations}
     assert prepared[BusId.VIRTUAL_CAMERA] == CONTENT_SCENE_ID
     assert prepared[BusId.MEDIA_WINDOWS] == CONTENT_CAMERA_PIP_SCENE_ID
-    controller.close()
 
 
 def test_each_output_keeps_its_own_default_scene_across_a_save() -> None:
@@ -3450,10 +3494,11 @@ def test_each_output_keeps_its_own_default_scene_across_a_save() -> None:
     assert restored.output(BusId.VIRTUAL_CAMERA).default_scene_id == CAMERA_SCENE_ID
 
 
-def test_content_is_playing_tracks_what_the_content_channel_carries() -> None:
+def test_content_is_playing_tracks_what_the_content_channel_carries(request) -> None:
     """Idle blanks the content source — unless an idle video/image feeds it."""
     projection = _Projection()
     _, _, controller = _runtime_controller(
+        request,
         _Engine(), projection, request_ids=("r1",)
     )
 

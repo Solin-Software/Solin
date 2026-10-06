@@ -3,8 +3,9 @@ from __future__ import annotations
 import gzip
 import hashlib
 import os
+import socket
 import threading
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 
 import pytest
@@ -26,6 +27,7 @@ from solin.core.media.download_storage import (
     safe_remove,
 )
 from tests._paths import REPO_ROOT
+from tests._http import LoopbackHTTPServer
 
 
 def _download_from_server(
@@ -49,7 +51,7 @@ def _download_from_server(
         def log_message(self, _format, *_args):
             return
 
-    server = HTTPServer(("127.0.0.1", 0), Handler)
+    server = LoopbackHTTPServer(Handler)
     server_thread = threading.Thread(target=server.handle_request, daemon=True)
     server_thread.start()
 
@@ -76,7 +78,11 @@ def _download_from_server(
     return finished, errors
 
 
-def test_downloader_accepts_transparently_decoded_response(tmp_path):
+def test_downloader_accepts_transparently_decoded_response(monkeypatch, tmp_path):
+    def unexpected_hostname_lookup(*_args):
+        raise AssertionError("Loopback HTTP validation must not discover network hosts")
+
+    monkeypatch.setattr(socket, "getfqdn", unexpected_hostname_lookup)
     decoded_body = b"media payload" * 1024
     encoded_body = gzip.compress(decoded_body)
 

@@ -1,9 +1,18 @@
 from __future__ import annotations
 import time
+import struct
+import re
+import subprocess
+import sys
+from collections import Counter, deque
 from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass, field, replace
+from pathlib import Path
+from pprint import pformat
+from queue import Empty, SimpleQueue
+from tempfile import TemporaryDirectory
 from threading import Event
 
 import pytest
@@ -15,9 +24,13 @@ from solin.controllers.content_frame_ingress_controller import (
 )
 from solin.core.projection.image_framing import ImageTransform
 from solin.controllers.shared_memory_preview_egress import SharedMemoryPreviewEgressController
-from solin.core.scenes.content_frame_channel import SharedFrameChannelReader
+from solin.core.scenes.content_frame_channel import (
+    SharedFrameChannelReader,
+    SharedFrameChannelWriter,
+    _SEQ_OFFSET,
+)
 from solin.core.scenes.content_frame_publisher import SharedMemoryContentPublisher
-from solin.core.scenes.engine import SceneEngineSnapshot
+from solin.core.scenes.engine import SceneEngine, SceneEngineSnapshot
 from solin.core.scenes.libobs_engine import create_libobs_scene_engine
 from solin.core.scenes.model import (
     BusId,
@@ -41,6 +54,84 @@ class _BgraFrame:
     pixel_format: VideoPixelFormat = VideoPixelFormat.BGRA
 
 
+@dataclass(slots=True)
+class _PixelWaitProbe:
+    read_attempts: int = 0
+    read_timeouts: int = 0
+    frames: int = 0
+    last_frame: _BgraFrame | None = None
+    empty_reads: Counter[str] = field(default_factory=Counter)
+    channel_samples: deque[tuple[int, int, int]] = field(default_factory=lambda: deque(maxlen=8))
+    read_total_ms: float = 0.0
+    read_maximum_ms: float = 0.0
+
+    def read_latest(self, subscriber: _BgraEgress) -> _BgraFrame | None:
+        self.read_attempts += 1
+        sequence_before = subscriber.channel_sequence()
+        started = time.perf_counter()
+        timed_out = False
+        try:
+            candidate = subscriber.read_latest()
+        except TimeoutError:
+            self.read_timeouts += 1
+            timed_out = True
+            candidate = None
+        elapsed_ms = (time.perf_counter() - started) * 1000
+        self.read_total_ms += elapsed_ms
+        self.read_maximum_ms = max(self.read_maximum_ms, elapsed_ms)
+        if candidate is not None:
+            self.frames += 1
+            self.last_frame = candidate
+        else:
+            sequence_after = subscriber.channel_sequence()
+            last_delivered = subscriber._reader._last_seq
+            sample = (sequence_before, sequence_after, last_delivered)
+            if not self.channel_samples or self.channel_samples[-1] != sample:
+                self.channel_samples.append(sample)
+            # These snapshots bracket the public read, not its internal copy.
+            # A stable unmatched header does not prove why that copy was rejected.
+            if timed_out:
+                return None
+            if sequence_before != sequence_after:
+                reason = "header_changed_during_read"
+            elif sequence_before == 0:
+                reason = "not_published"
+            elif sequence_before & 1:
+                reason = "observed_odd_sequence"
+            elif sequence_before == last_delivered:
+                reason = "already_delivered"
+            else:
+                reason = "stable_unaccepted"
+            self.empty_reads[reason] += 1
+        return candidate
+
+    def observation(self, *, aspect_ratio: bool = False) -> dict[str, object]:
+        frame = self.last_frame
+        points = ((200, 900), (200, 200), (1700, 200), (1700, 900), (1200, 700))
+        if aspect_ratio and frame is not None:
+            points = ((frame.width // 2, frame.height // 2), (0, frame.height // 2),
+                      (239, frame.height // 2), (240, frame.height // 2),
+                      (1679, frame.height // 2), (1680, frame.height // 2),
+                      (frame.width - 1, frame.height // 2))
+        return {
+            "read_attempts": self.read_attempts,
+            "read_timeouts": self.read_timeouts,
+            "frames": self.frames,
+            "read_total_ms": round(self.read_total_ms, 3),
+            "read_maximum_ms": round(self.read_maximum_ms, 3),
+            "empty_reads": dict(self.empty_reads),
+            "channel_samples_before_after_last": list(self.channel_samples),
+            "last_frame": None if frame is None else {
+                "sequence": frame.sequence,
+                "size": (frame.width, frame.height),
+                "pixels": [
+                    (x, y, _bgra_pixel(frame, x, y).hex())
+                    for x, y in points
+                ],
+            },
+        }
+
+
 class _BgraEgress:
     """Observe the app-owned libobs egress without depending on Qt dispatch."""
 
@@ -62,6 +153,10 @@ class _BgraEgress:
             pixel_format=VideoPixelFormat.BGRA,
             pixels=frame.data,
         )
+
+    def channel_sequence(self) -> int:
+        assert self._reader._buf is not None
+        return struct.unpack_from("<Q", self._reader._buf, _SEQ_OFFSET)[0]
 
     def close(self) -> None:
         self._reader.close()
@@ -135,11 +230,12 @@ def _wait_for_pixel(
     expected: bytes,
     after_sequence: int = 0,
     timeout: float = 5.0,
+    probe: _PixelWaitProbe | None = None,
 ) -> _BgraFrame | None:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         try:
-            candidate = subscriber.read_latest()
+            candidate = subscriber.read_latest() if probe is None else probe.read_latest(subscriber)
         except TimeoutError:
             candidate = None
         if candidate is not None and candidate.sequence > after_sequence:
@@ -147,6 +243,88 @@ def _wait_for_pixel(
                 return candidate
         time.sleep(1 / 120)
     return None
+
+
+def _image_framing_ingress_observation(
+    ingress: ContentFrameIngressController,
+) -> dict[str, object]:
+    observation: dict[str, object] = {"worker_alive": ingress._worker.is_alive()}
+    # Match _publish's lock order and never wait indefinitely for diagnostics.
+    if not ingress._publisher_lock.acquire(timeout=0.05):
+        observation["snapshot_error"] = "Publisher state busy"
+        return observation
+    try:
+        if not ingress._condition.acquire(timeout=0.05):
+            observation["snapshot_error"] = "Control state busy"
+            return observation
+        try:
+            publisher = ingress._publisher
+            observation.update({
+                "media_epoch": ingress._media_epoch,
+                "requested_transform": ingress._image_transform,
+                "pending_transform": ingress._pending_image_transform,
+                "animation_current": ingress._animation.current,
+                "animation_target": ingress._animation.target,
+                "animation_active": ingress._animation.is_active,
+                "frame_pending": ingress._pending_frame is not None,
+                "retained_epoch": (
+                    ingress._retained_frame[1] if ingress._retained_frame is not None else None
+                ),
+                "publisher_sequence": getattr(publisher, "_sequence", None),
+                "publisher_present": publisher is not None,
+                "publisher_type": type(publisher).__name__,
+            })
+            descriptor = publisher.descriptor if publisher is not None else None
+        finally:
+            ingress._condition.release()
+    finally:
+        ingress._publisher_lock.release()
+    if publisher is None or descriptor is None:
+        return observation
+    observation["descriptor"] = {
+        "channel_id": descriptor.channel_id,
+        "generation": descriptor.generation,
+        "transport": descriptor.transport.value,
+        "size": (descriptor.width, descriptor.height),
+        "pixel_format": descriptor.pixel_format.value,
+        "color_space": descriptor.color_space.value,
+        "color_range": descriptor.color_range.value,
+    }
+    reader = None
+    try:
+        reader = SharedFrameChannelReader(
+            descriptor.handle_token, descriptor.width, descriptor.height,
+        )
+        frame = reader.read_latest()
+        if frame is None:
+            observation["frame"] = "No complete ingress snapshot"
+        else:
+            observation["frame"] = {
+                "sequence": reader._last_seq,
+                "media_epoch": frame.media_epoch,
+                "size": (frame.width, frame.height),
+                "stride": frame.stride,
+                "quadrant_centers": [
+                    (x, y, frame.data[
+                        y * frame.stride + x * 4 : y * frame.stride + x * 4 + 4
+                    ].hex())
+                    for y in (frame.height // 4, 3 * frame.height // 4)
+                    for x in (frame.width // 4, 3 * frame.width // 4)
+                ],
+            }
+    except (OSError, ValueError, BufferError) as error:
+        observation["snapshot_error"] = {
+            "type": type(error).__name__, "errno": getattr(error, "errno", None),
+        }
+    finally:
+        if reader is not None:
+            try:
+                reader.close()
+            except (OSError, ValueError, BufferError) as error:
+                observation["snapshot_close_error"] = {
+                    "type": type(error).__name__, "errno": getattr(error, "errno", None),
+                }
+    return observation
 
 
 def _quadrant_image(width: int = 800, height: int = 600) -> QImage:
@@ -167,21 +345,129 @@ def _quadrant_image(width: int = 800, height: int = 600) -> QImage:
     return image
 
 
+def _engine_observation(engine: SceneEngine) -> dict[str, object]:
+    health = engine.health
+    heartbeat = health.last_heartbeat_monotonic
+    observation = {
+        "status": health.status.value,
+        "message": health.message,
+        "process_id": health.process_id,
+        "restart_count": health.restart_count,
+        "health_snapshot_last_receive_age_seconds": (
+            None if heartbeat is None else round(time.monotonic() - heartbeat, 3)
+        ),
+        "metrics": asdict(engine.metrics),
+    }
+    if sys.platform == "darwin" and health.process_id is not None:
+        # Only called to explain a failed assertion, after its deadline. Sample
+        # the live sidecar before cleanup removes the native execution stacks.
+        try:
+            with TemporaryDirectory(prefix="solin-native-sample-") as directory:
+                report = Path(directory) / "sample.txt"
+                result = subprocess.run(
+                    # A 10 ms interval captures blocked calls without building
+                    # thousands of software-shader branches before the timeout.
+                    ["/usr/bin/sample", str(health.process_id), "1", "10", "-file", str(report)],
+                    capture_output=True, text=True, timeout=5, check=False,
+                )
+                if result.returncode == 0 and report.is_file():
+                    # Loaded-image paths are not needed to locate blocked calls.
+                    sample = report.read_text(errors="replace").split(
+                        "Binary Images:", 1,
+                    )[0]
+                    # A busy software shader can produce thousands of branches
+                    # in one thread. Keep every thread's call-chain prefix within
+                    # the report budget rather than truncating away later threads.
+                    sections = re.split(r"(?m)(?=^    \d+ Thread_)", sample)
+                    budget = max(0, 65536 // len(sections) - 32)
+                    observation["native_stacks"] = "\n".join(
+                        section if len(section) <= budget
+                        else section[:budget] + "\n[Remaining samples omitted]\n"
+                        for section in sections
+                    )[:65536]
+                else:
+                    observation["native_sample_error"] = result.stderr[-2000:]
+        except (OSError, subprocess.TimeoutExpired) as error:
+            observation["native_sample_error"] = type(error).__name__
+    return observation
+
+
+def test_pixel_wait_probe_distinguishes_idle_writer_odd_sequence_and_read_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    egress = _BgraEgress(16, 16, channel_id="pixel-wait-probe")
+    try:
+        writer = SharedFrameChannelWriter(
+            16, 16, name=egress.descriptor.handle_token, create=False,
+        )
+        try:
+            probe = _PixelWaitProbe()
+            assert probe.read_latest(egress) is None
+            payload = bytes((0xE0, 0x40, 0x20, 0xFF)) * (16 * 16)
+            for _ in range(12):
+                writer.write(payload)
+                assert probe.read_latest(egress) is not None
+                assert probe.read_latest(egress) is None
+            assert writer._buf is not None
+            struct.pack_into("<Q", writer._buf, _SEQ_OFFSET, 25)
+            assert probe.read_latest(egress) is None
+
+            def timed_out():
+                raise TimeoutError("Injected IPC read timeout")
+
+            with monkeypatch.context() as patch:
+                patch.setattr(egress._reader, "read_latest", timed_out)
+                assert probe.read_latest(egress) is None
+
+            observation = probe.observation()
+            assert probe.read_attempts == 27
+            assert probe.read_timeouts == 1
+            assert probe.frames == 12
+            assert observation["empty_reads"] == {
+                "not_published": 1, "already_delivered": 12, "observed_odd_sequence": 1,
+            }
+            assert len(probe.channel_samples) == 8
+            assert probe.channel_samples[-1] == (25, 25, 24)
+            assert probe.last_frame is not None
+            assert probe.last_frame.sequence == 24
+            assert probe.last_frame.pixels == payload
+            message = pformat(observation, width=120)
+            assert "(25, 25, 24)" in message
+            assert "observed_odd_sequence" in message
+            assert "..." not in message
+        finally:
+            writer.close()
+    finally:
+        egress.close()
+
+
 def _wait_for_clean_aspect_transition(
     subscriber: _BgraEgress,
     *,
+    ingress: ContentFrameIngressController,
+    engine: SceneEngine,
+    stage: str,
     previous_center: bytes,
     previous_edge: bytes,
     next_center: bytes,
     next_edge: bytes,
     timeout: float = 5.0,
 ) -> _BgraFrame:
+    probe = _PixelWaitProbe()
+
+    def observation() -> dict[str, object]:
+        return {
+            "stage": stage,
+            "expected_center_edge": (next_center.hex(), next_edge.hex()),
+            "previous_center_edge": (previous_center.hex(), previous_edge.hex()),
+            "egress": probe.observation(aspect_ratio=True),
+            "ingress": _image_framing_ingress_observation(ingress),
+            "engine": _engine_observation(engine),
+        }
+
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        try:
-            candidate = subscriber.read_latest()
-        except TimeoutError:
-            candidate = None
+        candidate = probe.read_latest(subscriber)
         if candidate is None:
             time.sleep(1 / 240)
             continue
@@ -189,11 +475,15 @@ def _wait_for_clean_aspect_transition(
         edge = _bgra_pixel(candidate, 0, candidate.height // 2)
         if center == previous_center:
             assert edge == previous_edge, (
-                "the previous raster was rendered with the next sample's geometry"
+                "the previous raster was rendered with the next sample's geometry\n"
+                + pformat(observation(), width=120)
             )
         if center == next_center and edge == next_edge:
             return candidate
-    raise AssertionError("the aspect-ratio transition did not reach its next frame")
+    raise AssertionError(
+        "the aspect-ratio transition did not reach its next frame\n"
+        + pformat(observation(), width=120)
+    )
 
 
 def _content_document() -> tuple[SceneDocument, SceneDefinition]:
@@ -266,6 +556,7 @@ def test_return_to_cached_content_never_publishes_the_previous_presentation(
     events: list[object] = []
     unsubscribe = engine.subscribe(events.append)
     prepare_latencies: list[float] = []
+    program_probe = _PixelWaitProbe()
     sequence = 1
 
     def prepare(
@@ -306,7 +597,7 @@ def test_return_to_cached_content_never_publishes_the_previous_presentation(
         )
 
     def program_matches(match: Callable[[_BgraFrame, int, int], bool]) -> bool:
-        frame = program.read_latest()
+        frame = program_probe.read_latest(program)
         return frame is not None and match(frame, frame.width // 2, frame.height // 2)
 
     def is_blue(pixel: bytes) -> bool:
@@ -359,7 +650,13 @@ def test_return_to_cached_content_never_publishes_the_previous_presentation(
                         _bgra_pixel(frame, x, y), retained_pixel
                     )
                 )
-            ), events
+            ), pformat({
+                "stage": "retained program presentation", "cycle": cycle,
+                "expected_pixel": retained_pixel.hex(),
+                "program": program_probe.observation(),
+                "ingress": _image_framing_ingress_observation(ingress),
+                "engine": _engine_observation(engine),
+            }, width=120)
 
             take(prepare(away_scene.id))
             assert _wait_for(
@@ -412,7 +709,24 @@ def test_return_to_cached_content_never_publishes_the_previous_presentation(
         engine.stop()
 
 
+def _run_native_readback(scenario: str) -> None:
+    # libobs, its plugins and registered source types have process-wide state.
+    # Give each scenario the same lifetime boundary as the production sidecar.
+    result = subprocess.run(
+        [sys.executable, "-c", (
+            "from tests.integration.test_native_scene_content_pipeline import "
+            f"{scenario}; {scenario}()"
+        )],
+        capture_output=True, text=True, timeout=30, check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_native_readback_preserves_source_alpha_and_flattens_scene_background() -> None:
+    _run_native_readback("_assert_native_readback_alpha")
+
+
+def _assert_native_readback_alpha() -> None:
     from solin.core.media.obs_runtime import ObsRuntime
     from solin.core.media.obs_source_render import (
         render_source_to_bgra, resolve_render_source_to_bgra, shutdown,
@@ -451,6 +765,91 @@ def test_native_readback_preserves_source_alpha_and_flattens_scene_background() 
         assert opaque_center[3] == 255
         assert opaque_background == bytes((0, 0, 0, 255))
     finally:
+        if scene is not None:
+            scene.release()
+        if source is not None:
+            source.release()
+        shutdown()
+        runtime.shutdown()
+
+
+def test_native_bgra_frames_preserve_color_and_transparency_across_opacity_changes() -> None:
+    _run_native_readback("_assert_native_bgra_opacity_changes")
+
+
+def _assert_native_bgra_opacity_changes() -> None:
+    from solin.core.media.obs_frame_source import create_frame_source
+    from solin.core.media.obs_runtime import ObsRuntime
+    from solin.core.media.obs_source_render import (
+        render_source_to_bgra, resolve_render_source_to_bgra, shutdown,
+    )
+
+    runtime = ObsRuntime()
+    source = scene = callback = None
+    samples = SimpleQueue()
+    last_sample = None
+    try:
+        runtime.ensure_started(width=64, height=64)
+        source = create_frame_source(runtime, "bgra-alpha-readback")
+        assert source is not None
+        scene = runtime.ob.Scene.create("bgra-alpha-readback-scene")
+        scene.add(source.source)
+        opaque_renderer = resolve_render_source_to_bgra(opaque_background=True)
+
+        def pixels(renderer, subject):
+            result = renderer(subject, 64, 64, canvas_width=64, canvas_height=64)
+            assert result is not None
+            data, stride = result
+            return (data[32 * stride + 16 * 4:32 * stride + 17 * 4],
+                    data[32 * stride + 48 * 4:32 * stride + 49 * 4])
+
+        def sample_frame(_width, _height):
+            # Async frames are selected during the video tick. Consume them in
+            # that same thread's render phase, as the production egress does.
+            try:
+                samples.put((
+                    pixels(render_source_to_bgra, source.source),
+                    pixels(render_source_to_bgra, scene.as_source()),
+                    pixels(opaque_renderer, scene.as_source()),
+                ))
+            except Exception as error:  # noqa: BLE001 - propagate callback failures to pytest
+                samples.put(error)
+
+        def next_frame_matches(expected):
+            nonlocal last_sample
+            try:
+                last_sample = samples.get_nowait()
+            except Empty:
+                return False
+            if isinstance(last_sample, Exception):
+                raise last_sample
+            return last_sample[0] == (expected, bytes((0, 0, 0, 0)))
+
+        callback = runtime.ob.add_main_render_callback(sample_frame)
+        # Reuse the same native source/texture so alpha metadata cannot leak
+        # from an opaque frame into a transparent one or vice versa.
+        for reset in (True, False):
+            rgb = (32, 64, 224) if reset else (64, 32, 192)
+            for alpha, composed in (
+                (255, bytes((*rgb, 255))),
+                (128, bytes((*(channel // 2 for channel in rgb), 128))),
+                (0, bytes((0, 0, 0, 0))),
+                (255, bytes((*rgb, 255))),
+            ):
+                original = bytes((*rgb, alpha))
+                assert source.push_bgra(original * 32 * 64, 32, 64, 128, reset=reset)
+                assert _wait_for(lambda expected=original: next_frame_matches(expected)), (
+                    reset, alpha, last_sample,
+                )
+                assert last_sample[1] == (
+                    composed, bytes((0, 0, 0, 0)),
+                )
+                assert last_sample[2] == (
+                    composed[:3] + b"\xff", bytes((0, 0, 0, 255)),
+                )
+    finally:
+        if callback is not None:
+            runtime.ob.remove_main_render_callback(callback)
         if scene is not None:
             scene.release()
         if source is not None:
@@ -581,10 +980,13 @@ def test_actual_size_content_reaches_composed_libobs_output() -> None:
         green = bytes((0x20, 0xD0, 0x20, 0xFF))
         yellow = bytes((0x20, 0xD0, 0xD0, 0xFF))
         black = bytes((0, 0, 0, 0xFF))
-        for _ in range(8):
+        for cycle in range(8):
             ingress.submit_frame(sixteen_by_nine)
             latest = _wait_for_clean_aspect_transition(
                 egress,
+                ingress=ingress,
+                engine=engine,
+                stage=f"aspect cycle {cycle}: 4:3 to 16:9",
                 previous_center=green,
                 previous_edge=black,
                 next_center=yellow,
@@ -595,6 +997,9 @@ def test_actual_size_content_reaches_composed_libobs_output() -> None:
             ingress.submit_frame(four_by_three)
             latest = _wait_for_clean_aspect_transition(
                 egress,
+                ingress=ingress,
+                engine=engine,
+                stage=f"aspect cycle {cycle}: 16:9 to 4:3",
                 previous_center=yellow,
                 previous_edge=yellow,
                 next_center=green,
@@ -760,6 +1165,7 @@ def test_libobs_image_framing_preserves_aspect_and_normalized_pan() -> None:
         green = bytes((0x20, 0xD0, 0x20, 0xFF))
         blue = bytes((0xE0, 0x40, 0x20, 0xFF))
         yellow = bytes((0x20, 0xD0, 0xE0, 0xFF))
+        probe = _PixelWaitProbe()
         output = None
         deadline = time.monotonic() + 8.0
         while output is None and time.monotonic() < deadline:
@@ -770,9 +1176,15 @@ def test_libobs_image_framing_preserves_aspect_and_normalized_pan() -> None:
                 y=900,
                 expected=blue,
                 timeout=0.1,
+                probe=probe,
             )
 
-        assert output is not None
+        assert output is not None, pformat({
+            "expected_blue": blue.hex(),
+            "egress": probe.observation(),
+            "ingress": _image_framing_ingress_observation(ingress),
+            "engine": _engine_observation(engine),
+        }, width=120)
         samples = [
             (x, y, _bgra_pixel(output, x, y))
             for y in (0, 100, 200, 400, 539, 540, 700, 900, 1079)
@@ -794,14 +1206,22 @@ def test_libobs_image_framing_preserves_aspect_and_normalized_pan() -> None:
             canvas_height=1080,
             animate=True,
         )
+        probe = _PixelWaitProbe()
         centered = _wait_for_pixel(
             egress,
             x=1200,
             y=200,
             expected=green,
             timeout=8.0,
+            probe=probe,
         )
-        assert centered is not None
+        assert centered is not None, pformat({
+            "stage": "centered zoom",
+            "expected_green": green.hex(),
+            "egress": probe.observation(),
+            "ingress": _image_framing_ingress_observation(ingress),
+            "engine": _engine_observation(engine),
+        }, width=120)
         assert _bgra_pixel(centered, 200, 200) == red
         assert _bgra_pixel(centered, 200, 900) == blue
         assert _bgra_pixel(centered, 1200, 700) == yellow

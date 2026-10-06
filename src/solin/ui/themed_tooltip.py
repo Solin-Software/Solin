@@ -211,6 +211,9 @@ def show_themed_tooltip(anchor: QRect, text: str, *, screen: QScreen | None = No
     if position is None:
         hide_themed_tooltip()
         return
+    # Create the hidden native window before applying the final position;
+    # native window creation can adjust its initial geometry.
+    popup.winId()
     popup.move(position)
     popup.show()
     popup.raise_()

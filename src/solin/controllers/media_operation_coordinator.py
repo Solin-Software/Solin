@@ -98,6 +98,8 @@ class MediaOperationCoordinator(QObject):
     ) -> None:
         if not isinstance(max_workers, int) or isinstance(max_workers, bool) or max_workers < 1:
             raise ValueError("max_workers must be a positive integer")
+        if not QThread.isMainThread():
+            raise RuntimeError("MediaOperationCoordinator must be created on the main Qt thread")
         super().__init__(parent)
         self._max_workers = max_workers
         self._resource_lanes = resource_lanes or ResourceLaneRegistry()
@@ -507,5 +509,5 @@ class MediaOperationCoordinator(QObject):
         self.operationChanged.emit(record)
 
     def _assert_gui_thread(self) -> None:
-        if QThread.currentThread() != self.thread():
-            raise RuntimeError("MediaOperationCoordinator must be used from its Qt thread")
+        if not QThread.isMainThread():
+            raise RuntimeError("MediaOperationCoordinator must be used on the main Qt thread")

@@ -1,15 +1,10 @@
 from __future__ import annotations
 
 from ipaddress import IPv4Address
-from pathlib import Path
 from typing import Any, cast
 
 import pytest
-import shiboken6
-from PySide6.QtCore import QMetaObject, QObject, Qt, QUrl, Signal
-from PySide6.QtQml import QQmlComponent
-from PySide6.QtQuickWidgets import QQuickWidget
-from PySide6.QtTest import QTest
+from PySide6.QtCore import QObject, Signal
 from PySide6.QtWidgets import QApplication
 
 from solin.core.foundation.qr_codes import generate_qr_png
@@ -25,8 +20,6 @@ from solin.ui.qml.settings import remote
 from solin.ui.qml.settings.remote import RemoteSettings
 from solin.ui.qml.settings.domain import SettingsDomain
 from solin.ui.qml.settings.navigation import SettingsNavigation
-from solin.ui.qml.host import configure_qml_controls_style
-from solin.styles.themes.registry import get_theme
 
 
 class _MemorySettings:
@@ -368,77 +361,3 @@ def test_certificate_picker_return_after_profile_cleanup_does_not_export_stale_c
     monkeypatch.setattr(remote.QFileDialog, "getSaveFileName", choose_after_cleanup)
     domain.invoke("saveCertificate")
     assert not target.exists()
-
-
-@pytest.mark.parametrize("theme_id", ["dark", "light"])
-def test_remote_setup_qml_fits_windows_and_preserves_dismissal_semantics(remote_settings, theme_id):
-    domain, settings, _, _, _ = remote_settings
-    configure_qml_controls_style()
-    widget = QQuickWidget()
-    widget.setResizeMode(QQuickWidget.ResizeMode.SizeRootObjectToView)
-    widget.resize(360, 640)
-    warnings = []
-    widget.engine().warnings.connect(
-        lambda items: warnings.extend(item.toString() for item in items)
-    )
-    widget.rootContext().setContextProperty(
-        "appTheme",
-        get_theme(theme_id).qml_palette(),
-    )
-    widget.rootContext().setContextProperty("settingsRemote", domain)
-    source_url = QUrl.fromLocalFile(str(Path("src/solin/qml/remote-test.qml").resolve()))
-    component = QQmlComponent(widget.engine())
-    component.setData(
-        b"import QtQuick; import QtQuick.Controls; Item { "
-        b"width: 360; height: 640; SettingsRemoteSetup {} }",
-        source_url,
-    )
-    root = component.create(widget.rootContext())
-    assert root is not None, [error.toString() for error in component.errors()]
-    widget.setContent(source_url, component, root)
-    widget.show()
-    QApplication.processEvents()
-    dialog = root.findChild(QObject, "settingsRemoteSetup")
-    assert dialog is not None
-    try:
-        _enable(remote_settings)
-        _running(domain)
-        for width, height in [
-            (360, 640),
-            (480, 640),
-            (839, 700),
-            (840, 700),
-            (1280, 800),
-            (480, 360),
-        ]:
-            widget.resize(width, height)
-            QTest.qWait(20)
-            assert dialog.property("visible")
-            assert 0 < dialog.property("width") <= width
-            assert 0 < dialog.property("height") <= height
-            for name in (
-                "remoteSetupClose",
-                "remoteSetupCopy",
-                "remoteSetupSaveCertificate",
-                "remoteSetupDone",
-            ):
-                button = dialog.findChild(QObject, name)
-                assert button is not None
-                assert button.property("height") >= 44
-        QMetaObject.invokeMethod(dialog, "close", Qt.ConnectionType.DirectConnection)
-        QTest.qWait(150)
-        assert not domain.state["setupVisible"]
-        assert not settings.onboarding_seen()
-        domain.invoke("openSetup")
-        QTest.qWait(150)
-        assert dialog.property("visible")
-        done = dialog.findChild(QObject, "remoteSetupDone")
-        QMetaObject.invokeMethod(done, "clicked", Qt.ConnectionType.DirectConnection)
-        QTest.qWait(150)
-        assert settings.onboarding_seen()
-        assert not dialog.property("visible")
-        assert warnings == []
-    finally:
-        domain.invoke("closeSetup")
-        widget.setSource(QUrl())
-        shiboken6.delete(widget)

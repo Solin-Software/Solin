@@ -138,14 +138,17 @@ Intel and Apple Silicon jobs build with Nuitka, apply ad-hoc signatures, create
 architecture-specific DMGs, verify the bundle architecture, and validate
 packaged startup and application replacement.
 
-Published `pylibobs` wheels provide the runtime on Windows, Linux and Apple Silicon
-macOS. On Intel macOS, bootstrap a local `pylibobs==0.1.2` wheel against the official
-OBS 32.1.2 Intel runtime before installing requirements:
+Published `pylibobs` wheels provide the runtime on Windows and Linux. On both
+macOS architectures, bootstrap a local `pylibobs==0.1.2` wheel against the official
+OBS 32.1.2 runtime before installing requirements. The helper preserves the
+`libobs.framework` identity required for Cocoa resource lookup and relocates its
+native dependencies before signing and validating them:
 
 ```text
 python -m pip install setuptools==80.10.2 wheel==0.46.3 cffi==2.0.0
 python scripts/build_pylibobs_macos.py --output-dir .pip-wheels
-python -m pip install --find-links .pip-wheels -r requirements-dev.txt
+python -m pip install --no-index --find-links .pip-wheels --no-deps pylibobs
+python -m pip install -r requirements-dev.txt
 python -m pip install --no-deps -e .
 ```
 

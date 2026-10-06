@@ -31,6 +31,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from .pylibobs_compat import set_video_compat
+
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from collections.abc import Sequence
 
@@ -239,6 +241,7 @@ class ObsRuntime:
     def __init__(self) -> None:
         self._lock = threading.RLock()
         self._context: Any | None = None
+        self._graphics_module_owner: Any | None = None
         self._pylibobs: Any | None = None
         self._video = ObsVideoConfig()
         self._used_channels: set[int] = set()
@@ -425,10 +428,14 @@ class ObsRuntime:
                 graphics_module = _graphics_module_path()
 
                 def _init_video(ctx=context, gm=graphics_module):
-                    if gm is not None:
-                        ctx.set_video(width, height, fps_num=fps, graphics_module=gm)
-                    else:
-                        ctx.set_video(width, height, fps_num=fps)
+                    self._graphics_module_owner = set_video_compat(
+                        ctx,
+                        binding=ob,
+                        width=width,
+                        height=height,
+                        fps_num=fps,
+                        graphics_module=gm,
+                    )
 
                 if nix_display_configured:
                     _init_video()
@@ -446,6 +453,7 @@ class ObsRuntime:
                         ctx.shutdown()
                 except Exception:  # noqa: BLE001 - teardown must not mask the root cause
                     log.warning("libobs teardown after failed startup errored", exc_info=True)
+                self._graphics_module_owner = None
                 self._release_owned_x11_display()
                 raise ObsRuntimeError(f"Failed to start libobs runtime: {exc}") from exc
 
@@ -479,6 +487,7 @@ class ObsRuntime:
                 log.warning("libobs context shutdown errored", exc_info=True)
             finally:
                 self._context = None
+                self._graphics_module_owner = None
                 self._release_owned_x11_display()
 
     # ── Linux X display sharing ───────────────────────────────────────────

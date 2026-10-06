@@ -1,7 +1,9 @@
 """Cross-workflow guarantees required before a distribution can be published."""
 from pathlib import Path
 import re
+import shutil
 import subprocess
+import sys
 
 import pytest
 import yaml
@@ -29,7 +31,8 @@ def test_publication_requires_all_platforms_and_quality():
 
 
 def test_quality_gate_waits_for_every_platform():
-    quality = workflow("quality.yml")["jobs"]
+    quality_workflow = workflow("quality.yml")
+    quality = quality_workflow["jobs"]
     assert quality["gate"]["name"] == "Quality Gate"
     assert quality["gate"]["if"] == "always()"
     assert set(quality["gate"]["needs"]) == {"changes", "static", "platforms"}
@@ -39,12 +42,142 @@ def test_quality_gate_waits_for_every_platform():
     )
     assert "git diff --no-renames --name-only" in quality["changes"]["steps"][1]["run"]
     assert len(quality["platforms"]["strategy"]["matrix"]["include"]) == 4
+    assert quality_workflow["env"]["QT_QPA_PLATFORM"] == "offscreen"
+    for target in quality["platforms"]["strategy"]["matrix"]["include"]:
+        assert target["qt_platform"] == ("cocoa" if target["platform"] == "Darwin" else "offscreen")
+    steps = {step.get("name"): step for step in quality["platforms"]["steps"]}
+    assert steps["Native protocol and benchmarks"]["if"] == "runner.os == 'Linux'"
+    windows = steps["Python suites on Windows"]
+    assert windows["if"] == "runner.os == 'Windows'"
+    assert "pytest tests/contract --durations=20" in windows["run"]
+    assert "pytest tests/integration --durations=20" in windows["run"]
+    assert "pytest tests/unit --durations=20" in windows["run"]
+    macos = steps["Python suites on macOS"]
+    assert macos["if"] == "runner.os == 'macOS'"
+    assert "pytest tests/contract --durations=20" in macos["run"]
+    assert "pytest tests/integration --durations=20" in macos["run"]
+    assert "pytest tests/unit --durations=20" in macos["run"]
+
+
+def test_macos_quality_preserves_crash_evidence_without_interactive_alerts():
+    steps = workflow("quality.yml")["jobs"]["platforms"]["steps"]
+    suites = next(step for step in steps if step.get("name") == "Python suites on macOS")
+    commands = suites["run"]
+    configuration = "defaults write com.apple.CrashReporter DialogType -string server"
+    assert configuration in commands
+    assert commands.index(configuration) < commands.index("python -m pytest")
+    assert "ulimit -c unlimited" in commands
+    report = next(step for step in steps if step.get("name") == "Report macOS native crashes")
+    assert report["if"] == "failure() && runner.os == 'macOS'"
+    assert '"thread backtrace all"' in report["run"]
+    assert '"Library/Logs/DiagnosticReports"' in report["run"]
+
+
+def test_python_suite_preserves_failure_evidence_before_abrupt_exit(tmp_path):
+    child = tmp_path / "test_failure_then_exit.py"
+    child.write_text(
+        "import os\n"
+        "def test_assertion():\n"
+        "    assert False, 'failure evidence before process termination'\n"
+        "def test_exit():\n"
+        "    os._exit(23)\n",
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [sys.executable, "-m", "pytest", str(child), "-q", "-p", "tests.conftest",
+         "-c", str(REPO_ROOT / "pyproject.toml"), f"--confcutdir={tmp_path}",
+         f"--basetemp={tmp_path / 'child-tmp'}"],
+        cwd=REPO_ROOT, capture_output=True, text=True, timeout=30, check=False,
+    )
+    assert result.returncode == 23, result.stdout + result.stderr
+    assert "failure evidence before process termination" in result.stderr
+    assert "test_assertion [call]" in result.stderr
+    assert "short test summary" not in result.stdout
+
+
+@pytest.mark.parametrize("failure", ["timeout", "unavailable"])
+def test_macos_crash_report_collection_survives_debugger_failure(
+    failure, monkeypatch, tmp_path, capsys,
+):
+    steps = workflow("quality.yml")["jobs"]["platforms"]["steps"]
+    report = next(step for step in steps if step.get("name") == "Report macOS native crashes")
+    script = report["run"].split("python - <<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+    (tmp_path / "solin-core.42").touch()
+    reports = tmp_path / "Library/Logs/DiagnosticReports"
+    reports.mkdir(parents=True)
+    (reports / "Python-native.ips").write_text("native crash evidence", encoding="utf-8")
+    monkeypatch.setenv("RUNNER_TEMP", str(tmp_path))
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+
+    def unavailable_debugger(command, *, timeout, check):
+        if failure == "timeout":
+            raise subprocess.TimeoutExpired(command, timeout)
+        raise OSError("debugger unavailable")
+
+    monkeypatch.setattr(subprocess, "run", unavailable_debugger)
+    exec(compile(script, "macos-crash-report-collection", "exec"), {})
+    output = capsys.readouterr().out
+    assert "native crash evidence" in output
+    assert "::warning::Could not inspect native core" in output
+    assert (tmp_path / "solin-native-crashes/Python-native.ips").read_text() == "native crash evidence"
+
+
+def test_python_suite_preserves_fatal_qt_destruction_diagnostic(tmp_path):
+    child = tmp_path / "test_deferred_fatal.py"
+    child.write_text(
+        "import os\n"
+        "if os.name == 'posix':\n"
+        "    import resource\n"
+        "    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))\n"
+        "from PySide6.QtCore import QObject, qFatal\n"
+        "def test_deferred_destruction():\n"
+        "    obj = QObject()\n"
+        "    obj.destroyed.connect(lambda: qFatal('deferred Qt destruction failure'))\n"
+        "    obj.deleteLater()\n",
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [sys.executable, "-m", "pytest", str(child), "-q", "-p", "tests.conftest",
+         "-c", str(REPO_ROOT / "pyproject.toml"), f"--confcutdir={tmp_path}",
+         f"--basetemp={tmp_path / 'child-tmp'}"],
+        cwd=REPO_ROOT, capture_output=True, text=True, timeout=30, check=False,
+    )
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert "deferred Qt destruction failure" in result.stderr
 
 
 def test_all_external_actions_are_pinned_to_commits():
     for path in (REPO_ROOT / ".github/workflows").glob("*.yml"):
         for action in re.findall(r"uses: ([^\s#]+)", path.read_text()):
             assert action.startswith("./") or re.search(r"@[a-f0-9]{40}$", action), action
+
+
+@pytest.mark.parametrize("failed_suite", ["contract", "integration", "unit", None])
+def test_windows_quality_preserves_suite_failure_and_stops_later_suites(failed_suite):
+    executable = shutil.which("pwsh")
+    if executable is None:
+        pytest.skip("PowerShell is not installed")
+    steps = workflow("quality.yml")["jobs"]["platforms"]["steps"]
+    commands = next(step["run"] for step in steps if step.get("name") == "Python suites on Windows")
+    failure_path = f"tests/{failed_suite}" if failed_suite else ""
+    # Simulate Python's native exit status while executing the actual CI script.
+    script = (
+        "function python {\n"
+        "    $suite = $args[2]\n"
+        "    Write-Output $suite\n"
+        f"    $global:LASTEXITCODE = if ($suite -eq '{failure_path}') {{ 7 }} else {{ 0 }}\n"
+        "}\n"
+        + commands
+        + "\nexit $LASTEXITCODE\n"
+    )
+    result = subprocess.run(
+        [executable, "-NoProfile", "-NonInteractive", "-Command", script],
+        capture_output=True, text=True, timeout=15, check=False,
+    )
+    assert result.returncode == (7 if failed_suite else 0), result.stdout + result.stderr
+    suites = ["contract", "integration", "unit"]
+    expected = suites[:suites.index(failed_suite) + 1] if failed_suite else suites
+    assert result.stdout.splitlines() == [f"tests/{suite}" for suite in expected]
 
 
 def test_linux_smoke_rejects_clean_early_exit():
@@ -54,7 +187,6 @@ def test_linux_smoke_rejects_clean_early_exit():
     assert block is not None
     bash = Path("C:/Program Files/Git/bin/bash.exe")
     if not bash.exists():
-        import shutil
         executable = shutil.which("bash")
         if executable is None:
             pytest.skip("bash is not installed")

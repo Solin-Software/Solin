@@ -32,6 +32,8 @@ class MediaTreeSource(QObject):
     retryRequested = Signal()
 
     def __init__(self, tree_id: str, parent: QObject | None = None) -> None:
+        if not QThread.isMainThread():
+            raise RuntimeError("MediaTreeSource must be created on the main Qt thread")
         if not tree_id.strip():
             raise ValueError("tree_id must not be empty")
         super().__init__(parent)
@@ -223,8 +225,8 @@ class MediaTreeSource(QObject):
         self.errorChanged.emit()
 
     def _assert_source_thread(self) -> None:
-        if QThread.currentThread() != self.thread():
-            raise RuntimeError("Media-tree snapshots must be published on the Qt thread")
+        if not QThread.isMainThread():
+            raise RuntimeError("Media-tree snapshots must be published on the main Qt thread")
 
     def _assert_stable_node_contract(self, snapshot: MediaTreeSnapshot) -> None:
         if self._snapshot is None or self._snapshot.tree_id != self._tree_id:

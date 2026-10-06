@@ -7,6 +7,7 @@ their geometry, and routes the active program onto a global output channel.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from threading import RLock
 from urllib.parse import quote, urlsplit, urlunsplit
 from typing import Any, Protocol
@@ -128,6 +129,8 @@ class LibobsSceneGraph:
         active_scenes: dict,
         content_source: Any | None = None,
         source_credentials: dict | None = None,
+        *,
+        before_activate: Callable[[], None] | None = None,
     ) -> None:
         """Rebuild the scene graph from a document record and route the program.
 
@@ -138,9 +141,14 @@ class LibobsSceneGraph:
         ``source_credentials`` maps a source id to its ``{"username", "password"}``.
         It is passed alongside the document rather than inside it: the document
         record is persisted and cached, and a password must live in neither.
+
+        ``before_activate`` runs after rebuilding, with the previous Program
+        detached and before routing the new one. Exceptions abort activation;
+        the caller owns synchronization with borrowers throughout the rebuild.
         """
-        self._source_credentials = dict(source_credentials or {})
+        credentials = dict(source_credentials or {})
         self.clear()
+        self._source_credentials = credentials
         if self._crop_render_callback is None:
             self._crop_render_callback = self._runtime.ob.add_main_render_callback(
                 self.refresh_source_crops,
@@ -171,6 +179,8 @@ class LibobsSceneGraph:
                 if not layer.get("visible", True):
                     continue
                 self._add_layer(ob, scene_id, scene, layer, canvas, sources_by_id, content_source)
+        if before_activate is not None:
+            before_activate()
         self._setup_program(active_scenes)
 
     def _add_layer(
@@ -670,7 +680,13 @@ class LibobsSceneGraph:
         return refreshed
 
     def clear(self) -> None:
-        """Release the current scenes/sources (keeps the reserved channel)."""
+        """Detach Program before releasing its graph; keep the reserved channel.
+
+        A failed detachment propagates without releasing or mutating the graph.
+        Its sources may still be rendered by the active output channel.
+        """
+        if self._program_channel is not None:
+            self._runtime.set_channel_source(self._program_channel, None)
         with self._crop_lock:
             self._cropped_items.clear()
         self._pending.clear()
@@ -678,11 +694,6 @@ class LibobsSceneGraph:
         self._content_source = None
         self._yeartext_sources = []
         self._layer_items = {}
-        if self._program_channel is not None:
-            try:
-                self._runtime.set_channel_source(self._program_channel, None)
-            except Exception:  # noqa: BLE001 - libobs boundary
-                log.debug("Could not clear the program channel", exc_info=True)
         if self._transition is not None:
             try:
                 self._transition.release()

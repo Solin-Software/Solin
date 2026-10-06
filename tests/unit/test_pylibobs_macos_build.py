@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import os
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
@@ -34,23 +35,21 @@ def _official_app(root: Path) -> Path:
     return contents
 
 
-def test_intel_bundle_adapts_official_framework_and_plugin_layout(tmp_path):
+def test_macos_bundle_adapts_official_framework_and_plugin_layout(tmp_path):
     contents = _official_app(tmp_path / "official")
     runtime = tmp_path / "runtime"
     builder._copy_runtime(contents, runtime)
 
-    assert (runtime / "Frameworks" / "libobs.dylib").read_bytes() == b"libobs"
-    assert not (runtime / "Frameworks" / "libobs.framework").exists()
+    framework_libobs = runtime / "Frameworks" / "libobs.framework" / "Versions" / "A" / "libobs"
+    assert framework_libobs.read_bytes() == b"libobs"
+    assert not (runtime / "libobs.dylib").exists()
     assert not (runtime / "Frameworks" / "QtCore.framework").exists()
     assert not (runtime / "Frameworks" / "OBS Helper.app").exists()
     assert (runtime / "obs-ffmpeg-mux").read_bytes() == b"mux"
     assert (runtime / "data" / "libobs" / "default.effect").read_bytes() == b"shader"
     for name in builder.REQUIRED_PLUGINS:
-        # Both the package stager and upstream pylibobs lookup see the same
-        # plugins/data; the latter looks relative to Frameworks/libobs.dylib.
-        for base in (runtime, runtime / "Frameworks"):
-            assert (base / "obs-plugins" / f"{name}.dylib").read_bytes() == name.encode()
-            assert (base / "data" / "obs-plugins" / name / "locale" / "en-US.ini").is_file()
+        assert (runtime / "obs-plugins" / f"{name}.dylib").read_bytes() == name.encode()
+        assert (runtime / "data" / "obs-plugins" / name / "locale" / "en-US.ini").is_file()
 
 
 def test_missing_required_plugin_rejects_runtime(tmp_path):
@@ -91,9 +90,14 @@ def test_relocation_uses_one_libobs_identity_and_rebases_host_dependent_paths(
     tmp_path, monkeypatch
 ):
     frameworks = tmp_path / "Frameworks"
-    core = _write(frameworks / "libobs.dylib", b"\xcf\xfa\xed\xfe")
+    framework_libobs = _write(
+        frameworks / "libobs.framework" / "Versions" / "A" / "libobs",
+        b"\xcf\xfa\xed\xfe",
+    )
     graphics = _write(frameworks / "libobs-opengl.dylib", b"\xcf\xfa\xed\xfe")
+    _write(frameworks / "libavcodec.dylib", b"\xcf\xfa\xed\xfe")
     helper = _write(tmp_path / "obs-ffmpeg-mux", b"\xcf\xfa\xed\xfe")
+    plugin = _write(tmp_path / "obs-plugins" / "image-source.dylib", b"\xcf\xfa\xed\xfe")
     calls = []
 
     def run(command, **kwargs):
@@ -105,26 +109,59 @@ def test_relocation_uses_one_libobs_identity_and_rebases_host_dependent_paths(
             result = "cmd LC_RPATH\n    path @executable_path/../Frameworks (offset 12)\n"
         elif command[0] == "otool" and "-L" in command:
             result = command[-1] + ":\n"
-            if command[-1] != str(core):
+            if command[-1] == str(framework_libobs):
                 result += (
-                    "    @rpath/libobs.framework/Versions/A/libobs (compatibility version 1.0.0)\n"
+                    "    @rpath/libobs.framework/Versions/A/libobs "
+                    "(compatibility version 1.0.0)\n"
                 )
-                result += "    /old/OBS.app/Contents/Frameworks/libobs-opengl.dylib (compatibility version 1.0.0)\n"
+                result += "    @rpath/libavcodec.dylib (compatibility version 61.0.0)\n"
+            elif command[-1] == str(graphics):
+                result += "    @rpath/libobs-opengl.dylib (compatibility version 1.0.0)\n"
+                result += (
+                    "    @rpath/libobs.framework/Versions/A/libobs "
+                    "(compatibility version 1.0.0)\n"
+                )
+            else:
+                result += (
+                    "    @rpath/libobs.framework/Versions/A/libobs "
+                    "(compatibility version 1.0.0)\n"
+                )
+                result += (
+                    "    /old/OBS.app/Contents/Frameworks/libobs-opengl.dylib "
+                    "(compatibility version 1.0.0)\n"
+                )
             result += "    /usr/lib/libSystem.B.dylib (compatibility version 1.0.0)\n"
         return subprocess.CompletedProcess(command, 0, stdout=result)
 
     monkeypatch.setattr(builder, "_run", run)
-    builder._relocate_runtime(tmp_path)
+    builder._relocate_runtime(tmp_path, "x86_64")
 
-    assert ["install_name_tool", "-id", "@rpath/libobs.dylib", str(core)] in calls
-    for binary in (graphics, helper):
+    assert [
+        "install_name_tool",
+        "-add_rpath",
+        "@loader_path/../../..",
+        str(framework_libobs),
+    ] in calls
+    assert [
+        "install_name_tool",
+        "-change",
+        "@rpath/libavcodec.dylib",
+        "@rpath/libavcodec.dylib",
+        str(framework_libobs),
+    ] not in calls
+    for binary, relocated_libobs in (
+        (graphics, "@loader_path/libobs.framework/Versions/A/libobs"),
+        (helper, "@loader_path/Frameworks/libobs.framework/Versions/A/libobs"),
+        (plugin, "@loader_path/../Frameworks/libobs.framework/Versions/A/libobs"),
+    ):
         assert [
             "install_name_tool",
             "-change",
             "@rpath/libobs.framework/Versions/A/libobs",
-            "@rpath/libobs.dylib",
+            relocated_libobs,
             str(binary),
         ] in calls
+    for binary in (helper, plugin):
         assert [
             "install_name_tool",
             "-change",
@@ -132,14 +169,22 @@ def test_relocation_uses_one_libobs_identity_and_rebases_host_dependent_paths(
             "@rpath/libobs-opengl.dylib",
             str(binary),
         ] in calls
+    assert ["install_name_tool", "-add_rpath", "@loader_path", str(graphics)] in calls
     assert ["install_name_tool", "-add_rpath", "@loader_path/Frameworks", str(helper)] in calls
+    assert [
+        "install_name_tool",
+        "-add_rpath",
+        "@loader_path/../Frameworks",
+        str(plugin),
+    ] in calls
     assert ["codesign", "--force", "--sign", "-", str(helper)] in calls
+    assert ["codesign", "--force", "--sign", "-", str(framework_libobs)] in calls
 
 
 @pytest.mark.parametrize(
     "architecture, dependency, error",
     [
-        ("arm64", "", "does not support Intel"),
+        ("arm64", "", "does not support x86_64"),
         ("x86_64", "@rpath/not-bundled.dylib", "Unbundled native dependency"),
     ],
 )
@@ -150,7 +195,13 @@ def test_relocation_rejects_wrong_architecture_and_missing_native_dependency(
     dependency,
     error,
 ):
-    _write(tmp_path / "Frameworks" / "libobs.dylib", b"\xcf\xfa\xed\xfe")
+    _write(
+        tmp_path / "Frameworks" / "libobs.framework" / "Versions" / "A" / "libobs",
+        b"\xcf\xfa\xed\xfe",
+    )
+    _write(tmp_path / "Frameworks" / "libobs-opengl.dylib", b"\xcf\xfa\xed\xfe")
+    _write(tmp_path / "obs-ffmpeg-mux", b"\xcf\xfa\xed\xfe")
+    _write(tmp_path / "obs-plugins" / "image-source.dylib", b"\xcf\xfa\xed\xfe")
 
     def run(command, **kwargs):
         result = architecture if command[0] == "lipo" else "header:\n"
@@ -160,16 +211,72 @@ def test_relocation_rejects_wrong_architecture_and_missing_native_dependency(
 
     monkeypatch.setattr(builder, "_run", run)
     with pytest.raises(builder.BindingBuildError, match=error):
-        builder._relocate_runtime(tmp_path)
+        builder._relocate_runtime(tmp_path, "x86_64")
 
 
 def test_native_build_unmounts_even_when_runtime_layout_is_invalid(tmp_path, monkeypatch):
     calls = []
     monkeypatch.setattr(builder, "_run", lambda command, **kwargs: calls.append(command))
     with pytest.raises(builder.BindingBuildError, match="one OBS application"):
-        builder._extract_runtime(tmp_path / "obs.dmg", tmp_path / "runtime")
+        builder._extract_runtime(tmp_path / "obs.dmg", tmp_path / "runtime", "x86_64")
     assert calls[0][:2] == ["hdiutil", "attach"]
     assert calls[-1][:2] == ["hdiutil", "detach"]
+
+
+def test_macos_locator_patch_prefers_framework_executable(tmp_path):
+    locator = tmp_path / "pylibobs" / "_lib.py"
+    locator.parent.mkdir(parents=True)
+    locator.write_text(
+        """from pathlib import Path
+
+_LIBS_DIR = Path("_libs")
+
+def probe(base, lib_name):
+    # Try the most-likely path first per platform
+    candidates = [
+        base / lib_name,                          # win/linux flat layout
+        base / "Frameworks" / lib_name,           # macOS .app layout
+        base / "Frameworks" / "libobs.0.dylib",   # macOS versioned alias
+    ]
+
+
+def find_libobs():
+    return "libobs"
+
+
+# OBS helpers that libobs spawns
+
+def get_obs_data_dir():
+    libobs_path = Path(find_libobs())
+    # Co-located bundled data (same directory as the DLL)
+    for candidate in [
+        libobs_path.parent / "data",
+        libobs_path.parent.parent.parent / "data",  # OBS install layout
+    ]:
+        if candidate.exists():
+            return str(candidate)
+
+
+def get_obs_module_dirs():
+    libobs_path = Path(find_libobs()).resolve()
+    lib_dir = libobs_path.parent
+    # 1. Bundled layout (fetch_libs.py extracts plugins next to obs.dll)
+    bundled_plugins = lib_dir / "obs-plugins"
+    bundled_data = lib_dir / "data" / "obs-plugins" / "%module%"
+    if bundled_plugins.exists():
+        return str(bundled_plugins), str(bundled_data)
+""",
+        encoding="utf-8",
+    )
+
+    builder._patch_macos_locator(tmp_path)
+
+    patched = locator.read_text(encoding="utf-8")
+    assert 'base / "Frameworks" / "libobs.framework" / "Versions" / "A" / "libobs"' in patched
+    assert patched.index("libobs.framework") < patched.index("base / lib_name")
+    assert "def _bundled_root" in patched
+    assert 'candidates.append(bundled_root / "data")' in patched
+    assert 'bundled_plugins = bundled_root / "obs-plugins"' in patched
 
 
 def test_native_smoke_initializes_graphics_audio_modules_and_media_sources(tmp_path, monkeypatch):
@@ -178,13 +285,17 @@ def test_native_smoke_initializes_graphics_audio_modules_and_media_sources(tmp_p
     monkeypatch.setenv("OBS_DATA_PATH", "/unrelated/system/shaders")
     monkeypatch.setenv("DYLD_LIBRARY_PATH", "/unrelated/system/native")
     monkeypatch.setattr(builder, "_run", lambda command, **kwargs: calls.append((command, kwargs)))
-    builder._verify_source_runtime(tmp_path)
+    builder._verify_source_runtime(tmp_path, "x86_64")
     command, options = calls[0]
     assert "LIBOBS_PATH" not in options["env"]
     assert "OBS_DATA_PATH" not in options["env"]
     assert "DYLD_LIBRARY_PATH" not in options["env"]
-    assert options["env"]["PYTHONPATH"] == str(tmp_path)
-    assert "context.set_video" in command[-1]
+    assert options["env"]["PYTHONPATH"] == os.pathsep.join(
+        (str(tmp_path), str(builder.REPO_ROOT / "src"))
+    )
+    assert "set_video_compat" in command[-1]
+    assert "graphics_owner = set_video_compat" in command[-1]
+    assert "\n_ = graphics_owner\n" in command[-1]
     assert "context.set_audio" in command[-1]
     assert "context.load_modules" in command[-1]
     assert "Source.create" in command[-1]
@@ -231,23 +342,60 @@ def test_native_smoke_rejects_placeholder_sources_and_always_releases_them(
     monkeypatch.setattr(libraries, "get_bundled_modules", lambda: [
         (name, "binary", "data") for name in builder.REQUIRED_PLUGINS
     ])
+    monkeypatch.setattr(pylibobs, "__version__", "fixed-test-version")
     monkeypatch.setattr(builder, "_run", lambda command, **kwargs: exec(command[-1], {}))
     if missing is None:
-        builder._verify_source_runtime(tmp_path)
+        builder._verify_source_runtime(tmp_path, "x86_64")
         assert released == ["ffmpeg_source", "image_source", "color_source_v3"]
     else:
         with pytest.raises(AssertionError, match=f"Missing native video source: {missing}"):
-            builder._verify_source_runtime(tmp_path)
+            builder._verify_source_runtime(tmp_path, "x86_64")
         assert released[-1] == missing
 
 
 @pytest.mark.parametrize(
-    "system, architecture", [("win32", "AMD64"), ("linux", "x86_64"), ("darwin", "arm64")]
+    "system, architecture", [("win32", "AMD64"), ("linux", "x86_64")]
 )
-def test_published_wheel_platforms_do_not_run_intel_bootstrap(monkeypatch, system, architecture):
+def test_non_macos_platforms_do_not_run_native_bootstrap(monkeypatch, system, architecture):
     monkeypatch.setattr(builder.sys, "platform", system)
     monkeypatch.setattr(builder.platform, "machine", lambda: architecture)
     monkeypatch.setattr(
         builder, "build_wheel", lambda *args: pytest.fail("unexpected native build")
     )
     assert builder.main([]) == 0
+
+
+@pytest.mark.parametrize(
+    ("host_architecture", "expected_architecture"),
+    [("x86_64", "x86_64"), ("AMD64", "x86_64"), ("arm64", "arm64"), ("aarch64", "arm64")],
+)
+def test_macos_builds_corrected_wheel_for_both_architectures(
+    tmp_path, monkeypatch, host_architecture, expected_architecture
+):
+    calls = []
+    monkeypatch.setattr(builder.sys, "platform", "darwin")
+    monkeypatch.setattr(builder.platform, "machine", lambda: host_architecture)
+    monkeypatch.setattr(
+        builder,
+        "build_wheel",
+        lambda output, cache, architecture: calls.append((output, cache, architecture))
+        or tmp_path / builder._wheel_name(architecture),
+    )
+
+    assert builder.main(["--output-dir", str(tmp_path / "wheels")]) == 0
+    assert calls[0][2] == expected_architecture
+
+
+def test_runtime_specs_match_official_obs_release_assets():
+    assert builder._runtime_url(builder.RUNTIME_SPECS["x86_64"]).endswith(
+        "OBS-Studio-32.1.2-macOS-Intel.dmg"
+    )
+    assert builder.RUNTIME_SPECS["x86_64"].sha256 == (
+        "f7febee4c52e97930ffa9d8bcae79ee4c60c411827688cfbe36bc53edc51616e"
+    )
+    assert builder._runtime_url(builder.RUNTIME_SPECS["arm64"]).endswith(
+        "OBS-Studio-32.1.2-macOS-Apple.dmg"
+    )
+    assert builder.RUNTIME_SPECS["arm64"].sha256 == (
+        "2aeb3aaa99544fefd557f10ac6550e73df71540dd57528b2a1e6f39a55ebacfb"
+    )

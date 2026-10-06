@@ -6,6 +6,7 @@ import time
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
+import shiboken6
 from PySide6.QtCore import (
     Q_ARG,
     QCoreApplication,
@@ -15,16 +16,19 @@ from PySide6.QtCore import (
     QObject,
     QPoint,
     QPointF,
+    QSize,
     QTimer,
     QTranslator,
+    QUrl,
     Signal,
     Slot,
     Qt,
 )
-from PySide6.QtGui import QColor, QCursor, QPixmap, QWheelEvent
+from PySide6.QtGui import QColor, QCursor, QGuiApplication, QPixmap, QWheelEvent
+from PySide6.QtQml import QQmlComponent
 from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtTest import QSignalSpy, QTest
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QWidget
 
 from solin.controllers.timer_engine import TimerEngine
 from solin.core.foundation.resources import application_translation_root
@@ -49,6 +53,10 @@ from solin.ui.helpers import (
     begin_qml_pointer_cursor,
     end_qml_pointer_cursor,
     set_qml_pointer_cursor,
+)
+from tests._paths import REPO_ROOT
+from tests._qt import (
+    dispose_widget, mouse_click, mouse_move, show_and_activate, wait_for_geometry, wait_until,
 )
 
 
@@ -496,6 +504,7 @@ def _playlist_tree_host(
     nodes: list[dict],
     *,
     height: int = 260,
+    register_cleanup,
 ) -> tuple[
     QQuickWidget,
     _PlaylistTreeControllerProbe,
@@ -505,6 +514,9 @@ def _playlist_tree_host(
     protection = _PlaybackProtectionProbe(enabled=False)
     controller = _PlaylistTreeControllerProbe(nodes)
     widget = QQuickWidget()
+    register_cleanup(widget)
+    protection.setParent(widget)
+    controller.setParent(widget)
     widget.resize(520, height)
     configure_qml_host(
         widget,
@@ -532,16 +544,30 @@ def _playlist_tree_host(
     return widget, controller, model, protection
 
 
+@pytest.fixture
+def playlist_tree_host(request):
+    def register_cleanup(widget):
+        def close_widget():
+            if shiboken6.isValid(widget):
+                dispose_widget(widget)
+
+        request.addfinalizer(close_widget)
+
+    def create(nodes, *, height=260):
+        return _playlist_tree_host(nodes, height=height, register_cleanup=register_cleanup)
+
+    return create
+
+
 def _dispose_qml_host(
     widget: QQuickWidget,
     popup: QObject | None = None,
 ) -> None:
-    if popup is not None:
-        QMetaObject.invokeMethod(popup, "close", Qt.ConnectionType.DirectConnection)
-    widget.close()
-    QCoreApplication.processEvents()
-    widget.deleteLater()
-    QCoreApplication.sendPostedEvents(widget, QEvent.Type.DeferredDelete)
+    try:
+        if popup is not None:
+            QMetaObject.invokeMethod(popup, "close", Qt.ConnectionType.DirectConnection)
+    finally:
+        dispose_widget(widget)
 
 
 def _snapshot_node(node: dict) -> MediaTreeNodeSnapshot:
@@ -593,10 +619,10 @@ def _wait_until(predicate, *, timeout_seconds: float = 1.0) -> None:
         QTest.qWait(10)
 
 
-def test_playlist_tree_reconciles_complete_snapshots_without_recreating_host() -> None:
+def test_playlist_tree_reconciles_complete_snapshots_without_recreating_host(playlist_tree_host) -> None:
     keep = _playlist_media_node("keep", "Keep")
     remove = _playlist_media_node("remove", "Remove")
-    widget, _controller, model, _protection = _playlist_tree_host(
+    widget, _controller, model, _protection = playlist_tree_host(
         [keep, remove],
         height=220,
     )
@@ -651,15 +677,14 @@ def test_playlist_tree_reconciles_complete_snapshots_without_recreating_host() -
     QTest.qWait(30)
     assert _find_visual(root, "mediaCard-keep") is keep_card
     assert "Updated after same-tree reactivation" in _visible_texts(keep_card)
-    widget.deleteLater()
 
 
-def test_playlist_tree_accepts_node_ids_reserved_by_javascript_objects() -> None:
+def test_playlist_tree_accepts_node_ids_reserved_by_javascript_objects(playlist_tree_host) -> None:
     nodes = [
         _playlist_media_node(node_id, node_id)
         for node_id in ("constructor", "__proto__", "toString", "safe-id")
     ]
-    widget, _controller, _model, _protection = _playlist_tree_host(
+    widget, _controller, _model, _protection = playlist_tree_host(
         nodes,
         height=360,
     )
@@ -669,12 +694,11 @@ def test_playlist_tree_accepts_node_ids_reserved_by_javascript_objects() -> None
     for node in nodes:
         assert _find_visual(root, f"mediaCard-{node['id']}") is not None
 
-    widget.deleteLater()
 
 
-def test_playlist_tree_shows_a_retryable_state_after_snapshot_failure() -> None:
+def test_playlist_tree_shows_a_retryable_state_after_snapshot_failure(playlist_tree_host) -> None:
     node = _playlist_media_node("media-1", "Media")
-    widget, _controller, model, _protection = _playlist_tree_host([node])
+    widget, _controller, model, _protection = playlist_tree_host([node])
     root = widget.rootObject()
     assert root is not None
     retries: list[bool] = []
@@ -697,10 +721,9 @@ def test_playlist_tree_shows_a_retryable_state_after_snapshot_failure() -> None:
     assert retries == [True]
     assert model.transitioning is True
     assert model.error == ""
-    widget.deleteLater()
 
 
-def test_playlist_tree_preserves_card_identity_across_parent_snapshots() -> None:
+def test_playlist_tree_preserves_card_identity_across_parent_snapshots(playlist_tree_host) -> None:
     media = _playlist_media_node("moving", "Moving media")
     first = {
         "type": "section",
@@ -721,7 +744,7 @@ def test_playlist_tree_preserves_card_identity_across_parent_snapshots() -> None
         "itemCount": 0,
         "children": [],
     }
-    widget, _controller, model, _protection = _playlist_tree_host(
+    widget, _controller, model, _protection = playlist_tree_host(
         [first, second],
         height=360,
     )
@@ -746,7 +769,6 @@ def test_playlist_tree_preserves_card_identity_across_parent_snapshots() -> None
     assert _find_visual(root, "mediaCard-moving") is moving_card
     assert moving_card.mapToScene(QPointF()).y() > second_card.mapToScene(QPointF()).y()
     assert widget.errors() == []
-    widget.deleteLater()
 
 
 def test_playlist_edit_shell_accepts_the_shared_tree_theme_contract() -> None:
@@ -775,7 +797,7 @@ def test_playlist_edit_shell_accepts_the_shared_tree_theme_contract() -> None:
     widget.deleteLater()
 
 
-def test_playlist_tree_preserves_nested_section_geometry() -> None:
+def test_playlist_tree_preserves_nested_section_geometry(playlist_tree_host) -> None:
     child = _playlist_media_node("child", "Nested media")
     populated = {
         "type": "section",
@@ -801,7 +823,7 @@ def test_playlist_tree_preserves_nested_section_geometry() -> None:
         "canDrag": True,
         "children": [],
     }
-    widget, _controller, _model, _protection = _playlist_tree_host(
+    widget, _controller, _model, _protection = playlist_tree_host(
         [populated, empty],
         height=360,
     )
@@ -821,13 +843,12 @@ def test_playlist_tree_preserves_nested_section_geometry() -> None:
     assert populated_card.height() > 48
     assert empty_card.height() == pytest.approx(118)
     assert widget.errors() == []
-    widget.deleteLater()
 
 
-def test_playlist_tree_drag_keeps_placeholder_and_full_ghost_feedback() -> None:
+def test_playlist_tree_drag_keeps_placeholder_and_full_ghost_feedback(playlist_tree_host) -> None:
     first = _playlist_media_node("first", "First media")
     second = _playlist_media_node("second", "Second media")
-    widget, controller, _model, _protection = _playlist_tree_host(
+    widget, controller, _model, _protection = playlist_tree_host(
         [first, second],
         height=220,
     )
@@ -846,27 +867,26 @@ def test_playlist_tree_drag_keeps_placeholder_and_full_ghost_feedback() -> None:
     start = grip.mapToScene(QPointF(grip.width() / 2, grip.height() / 2)).toPoint()
     moved = QPoint(start.x() + 30, start.y() + 35)
     QTest.mousePress(widget, Qt.MouseButton.LeftButton, pos=start)
-    QTest.mouseMove(widget, moved, delay=10)
-    QTest.qWait(20)
-
-    assert card.parentItem() is overlay
-    assert card.height() == pytest.approx(72)
-    assert card.property("opacity") == pytest.approx(0.34)
-    assert placeholder.property("visible") is True
-
-    QTest.mouseRelease(widget, Qt.MouseButton.LeftButton, pos=moved)
+    try:
+        QTest.mouseMove(widget, moved, delay=10)
+        QTest.qWait(20)
+        assert card.parentItem() is overlay
+        assert card.height() == pytest.approx(72)
+        assert card.property("opacity") == pytest.approx(0.34)
+        assert placeholder.property("visible") is True
+    finally:
+        QTest.mouseRelease(widget, Qt.MouseButton.LeftButton, pos=moved)
     QTest.qWait(10)
     assert placeholder.property("visible") is False
     assert controller.moves
     assert controller.moves[-1][-1] == 1
     assert widget.errors() == []
-    widget.deleteLater()
 
 
-def test_playlist_tree_accepts_consecutive_down_and_back_reorders() -> None:
+def test_playlist_tree_accepts_consecutive_down_and_back_reorders(playlist_tree_host) -> None:
     first = _playlist_media_node("first", "First media")
     second = _playlist_media_node("second", "Second media")
-    widget, controller, _model, _protection = _playlist_tree_host(
+    widget, controller, _model, _protection = playlist_tree_host(
         [first, second],
         height=220,
     )
@@ -884,12 +904,14 @@ def test_playlist_tree_accepts_consecutive_down_and_back_reorders() -> None:
         start = drag_area.mapToScene(
             QPointF(drag_area.width() / 2, drag_area.height() / 2)
         ).toPoint()
-        QTest.mousePress(widget, Qt.MouseButton.LeftButton, pos=start)
-        QTest.qWait(5)
-        QTest.mouseMove(widget, QPoint(start.x() + 10, start.y() + 10), delay=10)
         destination = QPoint(start.x() + 20, start.y() + delta_y)
-        QTest.mouseMove(widget, destination, delay=10)
-        QTest.mouseRelease(widget, Qt.MouseButton.LeftButton, pos=destination)
+        QTest.mousePress(widget, Qt.MouseButton.LeftButton, pos=start)
+        try:
+            QTest.qWait(5)
+            QTest.mouseMove(widget, QPoint(start.x() + 10, start.y() + 10), delay=10)
+            QTest.mouseMove(widget, destination, delay=10)
+        finally:
+            QTest.mouseRelease(widget, Qt.MouseButton.LeftButton, pos=destination)
         QTest.qWait(240)
 
     drag_by("first", 115)
@@ -901,10 +923,9 @@ def test_playlist_tree_accepts_consecutive_down_and_back_reorders() -> None:
     assert [node["id"] for node in controller._nodes] == ["first", "second"]
     assert len(controller.moves) == 2
     assert widget.errors() == []
-    widget.deleteLater()
 
 
-def test_playlist_section_collapse_retains_the_original_height_animation() -> None:
+def test_playlist_section_collapse_retains_the_original_height_animation(playlist_tree_host) -> None:
     section = {
         "type": "section",
         "id": "animated",
@@ -917,7 +938,7 @@ def test_playlist_section_collapse_retains_the_original_height_animation() -> No
         "canDrag": True,
         "children": [_playlist_media_node("child", "Nested media")],
     }
-    widget, controller, _model, _protection = _playlist_tree_host(
+    widget, controller, _model, _protection = playlist_tree_host(
         [section],
         height=260,
     )
@@ -946,7 +967,7 @@ def test_playlist_section_collapse_retains_the_original_height_animation() -> No
         assert controller.collapsed == ["animated"]
         assert widget.errors() == []
     finally:
-        widget.deleteLater()
+        dispose_widget(widget)
 
 
 def test_media_countdown_page_renders_context_and_applies_meeting_suggestion() -> None:
@@ -1298,11 +1319,15 @@ def test_advanced_timer_keeps_navigation_and_part_actions_inside_available_width
 
 @pytest.mark.parametrize(("width", "height"), [(320, 400), (640, 520), (960, 760)])
 def test_advanced_timer_settings_open_as_a_responsive_modal(
+    request,
     width: int,
     height: int,
 ) -> None:
     timer = _AdvancedTimerProbe()
     widget = QQuickWidget()
+    request.addfinalizer(lambda: dispose_widget(widget))
+    widget.setWindowFlag(Qt.WindowType.FramelessWindowHint)
+    timer.setParent(widget)
     widget.resize(width, height)
     configure_qml_host(
         widget,
@@ -1313,8 +1338,7 @@ def test_advanced_timer_settings_open_as_a_responsive_modal(
     )
     root = widget.rootObject()
     assert root is not None
-    widget.show()
-    QTest.qWait(30)
+    show_and_activate(widget)
 
     settings = root.findChild(QObject, "timerSettingsDialog")
     viewport = root.findChild(QObject, "timerSettingsViewport")
@@ -1328,8 +1352,11 @@ def test_advanced_timer_settings_open_as_a_responsive_modal(
     click_point = settings_button.mapToScene(
         QPointF(settings_button.width() / 2, settings_button.height() / 2)
     ).toPoint()
-    QTest.mouseClick(widget, Qt.MouseButton.LeftButton, pos=click_point)
-    QTest.qWait(40)
+    mouse_click(widget, Qt.MouseButton.LeftButton, pos=click_point)
+    wait_until(
+        lambda: settings.property("visible") and viewport.property("width") > 0,
+        description="timer settings modal layout",
+    )
 
     assert settings.property("visible") is True
     assert 0 < settings.property("width") <= width - 32
@@ -1356,7 +1383,6 @@ def test_advanced_timer_settings_open_as_a_responsive_modal(
     _wait_until(lambda: settings.property("visible") is False)
     assert settings_button.property("activeFocus") is True
     assert widget.errors() == []
-    widget.deleteLater()
 
 
 @pytest.mark.parametrize(
@@ -1610,35 +1636,148 @@ def test_qml_host_renders_clock_face_content() -> None:
     assert any(":" in text for text in _visible_texts(root))
 
 
-def test_timer_pointer_area_enters_and_exits_native_cursor_state() -> None:
-    probe = _CursorProbe()
-    widget = QQuickWidget()
-    widget.resize(160, 48)
-
-    configure_qml_host(
-        widget,
-        type_name="TimerButton",
-        clear_color="#000000",
-        context_properties={"timer": probe},
-        mouse_tracking=True,
+def _timer_pointer_host(request, offset: QPoint, *, root_control: bool = False):
+    initial_cursor = QCursor.pos()
+    host = QWidget()
+    host.resize(420, 220)
+    host.move(host.screen().availableGeometry().center() - host.rect().center())
+    QCursor.setPos(host.screen().availableGeometry().bottomRight())
+    QGuiApplication.sync()
+    host.setMouseTracking(True)
+    widget = QQuickWidget(host)
+    widget.setGeometry(
+        offset.x() if root_control else 10, offset.y() if root_control else 10,
+        160 if root_control else 400, 48 if root_control else 200,
     )
-    root = widget.rootObject()
-    assert root is not None
-    root.setProperty("text", "Start")
+    probe = _CursorProbe()
+
+    def cleanup(_probe=probe) -> None:
+        # Retain the context bridge until Component.onDestruction finishes.
+        try:
+            dispose_widget(host)
+        finally:
+            QCursor.setPos(initial_cursor)
+            QGuiApplication.sync()
+
+    request.addfinalizer(cleanup)
+    configure_qml_host(
+        widget, type_name="TimerButton", clear_color="#000000",
+        context_properties={"timer": probe}, mouse_tracking=True, defer_load=not root_control,
+    )
+    if root_control:
+        button = widget.rootObject()
+        assert button is not None
+        button.setProperty("text", "Start")
+        button.setProperty("enabled", False)
+        widget.show()
+        return host, widget, button, probe
+    # Production timer controls live inside a page, rather than occupying the
+    # whole native view. Keep view crossings outside the control's hit rectangle.
+    url = QUrl.fromLocalFile(str(REPO_ROOT / "src/solin/qml/TimerInputTest.qml"))
+    component = QQmlComponent(widget.engine(), widget)
+    component.setData(b'''
+        import QtQuick
+        Item {
+            property int buttonX: 40
+            property int buttonY: 40
+            TimerButton {
+                objectName: "nativeTimerButton"
+                x: parent.buttonX; y: parent.buttonY
+                width: 160; height: 48; text: "Start"
+                enabled: false
+            }
+        }
+    ''', url)
+    root = component.create(widget.rootContext())
+    assert root is not None, [error.toString() for error in component.errors()]
+    root.setProperty("buttonX", offset.x())
+    root.setProperty("buttonY", offset.y())
+    widget.setContent(url, component, root)
+    button = root.findChild(QObject, "nativeTimerButton")
+    assert button is not None
+    # Construct and show the complete child view before exposing its parent.
     widget.show()
-    _APP.processEvents()
+    return host, widget, button, probe
 
-    QTest.mouseMove(widget, QPoint(12, 12))
+
+@pytest.mark.parametrize(
+    ("offset", "outside", "initially_over_button"),
+    [
+        pytest.param(QPoint(40, 40), QPoint(20, 160), True, id="left-from-button"),
+        pytest.param(QPoint(120, 80), QPoint(380, 160), False, id="right-from-outside"),
+    ],
+)
+@pytest.mark.parametrize("root_control", [False, True], ids=["page", "root"])
+def test_timer_pointer_area_enters_and_exits_native_cursor_state(
+    request, offset: QPoint, outside: QPoint, initially_over_button: bool, root_control: bool,
+) -> None:
+    host, widget, button, probe = _timer_pointer_host(request, offset, root_control=root_control)
+    crossings = []
+    surface_leaves = []
+
+    class PointerTrace(QObject):
+        def eventFilter(self, watched, event):  # noqa: N802 - Qt override
+            kind = event.type()
+            if kind in (QEvent.Type.Enter, QEvent.Type.Leave, QEvent.Type.MouseMove):
+                position = (
+                    event.globalPosition().toPoint() if hasattr(event, "globalPosition") else None
+                )
+                crossings.append(("host" if watched is host else "view", kind.name, position))
+                if watched is widget and kind == QEvent.Type.Leave:
+                    surface_leaves.append(kind)
+            return False
+
+    trace = PointerTrace(host)
+    host.installEventFilter(trace)
+    widget.installEventFilter(trace)
+
+    def diagnostic() -> str:
+        native_host = widget if widget.windowHandle() is not None else host
+        window = native_host.windowHandle()
+        return (
+            f"timer pointer crossing: entered={probe.entered}, exited={probe.exited}, "
+            f"cursor={QCursor.pos()}, offset={offset}, outside={outside}, "
+            f"view={widget.geometry()}, native_host={type(native_host).__name__}, "
+            f"exposed={window.isExposed() if window else None}, "
+            f"active={host.isActiveWindow()}, crossings={crossings}"
+        )
+
+    show_and_activate(host)
+    wait_for_geometry(widget, size=QSize(160, 48) if root_control else QSize(400, 200))
+    native_window = widget.windowHandle()
+    if native_window is not None:
+        assert QTest.qWaitForWindowExposed(native_window, 3000), diagnostic()
+    if initially_over_button:
+        mouse_move(
+            widget, QPoint(12, 12) if root_control else offset + QPoint(12, 12), sync_cursor=True,
+        )
+
+    # Establish delivery with the control disabled. This destination differs
+    # from either ambient cursor position; same-position warps generate no input.
+    surface_inside = QPoint(80, 24) if root_control else outside
+    mouse_move(widget, surface_inside, sync_cursor=True)
+    if root_control:
+        # A root control has no neutral area inside its view. Leave it physically
+        # and observe the native exit before enabling the control for qualification.
+        previous_leaves = len(surface_leaves)
+        mouse_move(host, outside, sync_cursor=True)
+        wait_until(lambda: len(surface_leaves) > previous_leaves, description=diagnostic)
+    assert (probe.entered, probe.exited) == (0, 0)
+    button.setProperty("enabled", True)
+    assert (probe.entered, probe.exited) == (0, 0)
+
+    # The 30 ms observation starts after delivery, matching the control contract.
+    # Preparation above never counts a native-view crossing as a button entry.
+    mouse_move(widget, QPoint(12, 12) if root_control else offset + QPoint(12, 12), sync_cursor=True)
     QTest.qWait(30)
+    assert (probe.entered, probe.exited) == (1, 0), diagnostic()
 
-    assert probe.entered == 1
-    assert probe.exited == 0
-
-    root.setProperty("enabled", False)
+    button.setProperty("enabled", False)
     QTest.qWait(30)
-
-    assert probe.entered == 1
-    assert probe.exited == 1
+    assert (probe.entered, probe.exited) == (1, 1), diagnostic()
+    mouse_move(host if root_control else widget, outside, sync_cursor=True)
+    QTest.qWait(30)
+    assert (probe.entered, probe.exited) == (1, 1), diagnostic()
 
 
 def test_timer_icon_only_button_centers_its_visible_content() -> None:
@@ -1725,49 +1864,99 @@ def test_timer_navigation_tooltip_uses_overlay_and_fits_below_header() -> None:
     widget.deleteLater()
 
 
-def test_shared_playlist_tree_requires_explicit_play_when_protection_is_enabled() -> None:
+def test_shared_playlist_tree_requires_explicit_play_when_protection_is_enabled(
+    playlist_tree_host,
+) -> None:
     node = _playlist_media_node("media-1", "Protected media")
-    widget, controller, _model, protection = _playlist_tree_host([node], height=180)
+    widget, controller, _model, protection = playlist_tree_host([node], height=180)
     try:
+        show_and_activate(widget)
         root = widget.rootObject()
         assert root is not None
         protection.set_enabled(True)
-        QTest.qWait(10)
 
         play_button = _find_visual(root, "protectedPlayButton-media-1")
         card_hit_area = _find_visual(root, "mediaCardHitArea-media-1")
+        root_playlist = _find_visual(root, "rootPlaylist")
         assert play_button is not None
         assert card_hit_area is not None
+        assert root_playlist is not None
+        wait_until(
+            lambda: play_button.property("visible"), description="playback protection enabled"
+        )
         assert play_button.property("visible") is True
         assert play_button.property("enabled") is True
         assert card_hit_area.property("cursorShape") == Qt.CursorShape.ArrowCursor
 
-        card_center = card_hit_area.mapToScene(
-            QPointF(card_hit_area.width() / 2, card_hit_area.height() / 2)
-        ).toPoint()
-        QTest.mouseClick(widget, Qt.MouseButton.LeftButton, pos=card_center)
+        def card_center():
+            return card_hit_area.mapToScene(
+                QPointF(card_hit_area.width() / 2, card_hit_area.height() / 2)
+            ).toPoint()
+
+        def clipping_chain():
+            center = QPointF(card_center())
+            ancestor = card_hit_area.parentItem()
+            while ancestor is not None:
+                if ancestor.clip():
+                    yield ancestor, ancestor.mapFromScene(center)
+                ancestor = ancestor.parentItem()
+
+        def card_ready():
+            # The list animates its clipping height independently of card layout.
+            return (
+                card_hit_area.isVisible()
+                and card_hit_area.isEnabled()
+                and card_hit_area.width() > 0
+                and card_hit_area.height() > 0
+                and root_playlist.height() >= card_hit_area.height()
+                and root_playlist.height() == root_playlist.implicitHeight()
+                and widget.rect().contains(card_center())
+                and all(ancestor.contains(point) for ancestor, point in clipping_chain())
+            )
+
+        def wait_for_card():
+            wait_until(
+                card_ready,
+                description=lambda: (
+                    f"visible card center {card_center()}: "
+                    f"playlist height={root_playlist.height()}, "
+                    f"implicitHeight={root_playlist.implicitHeight()}, "
+                    f"card size={(card_hit_area.width(), card_hit_area.height())}, "
+                    f"clipping={[(ancestor.objectName(), ancestor.size(), point) for ancestor, point in clipping_chain()]}"
+                ),
+            )
+
+        wait_for_card()
+        mouse_click(widget, Qt.MouseButton.LeftButton, pos=card_center())
         assert controller.projected == []
         assert QMetaObject.invokeMethod(play_button, "clicked")
         assert controller.projected == ["media-1"]
 
         protection.set_locked(True)
-        QTest.qWait(1)
+        wait_until(lambda: not play_button.property("enabled"), description="protected play lock")
         assert play_button.property("enabled") is False
 
         protection.set_locked(False)
         protection.set_enabled(False)
-        QTest.qWait(1)
+        wait_until(
+            lambda: not play_button.property("visible"), description="playback protection disabled"
+        )
         assert play_button.property("visible") is False
         assert card_hit_area.property("cursorShape") == Qt.CursorShape.PointingHandCursor
-        QTest.mouseClick(widget, Qt.MouseButton.LeftButton, pos=card_center)
+        wait_for_card()
+        mouse_click(widget, Qt.MouseButton.LeftButton, pos=card_center())
+        wait_until(
+            lambda: controller.projected == ["media-1", "media-1"],
+            description="unprotected card playback",
+        )
         assert controller.projected == ["media-1", "media-1"]
     finally:
-        widget.deleteLater()
+        dispose_widget(widget)
 
 
-def test_playlist_tree_media_menu_forwards_add_to_destination() -> None:
+def test_playlist_tree_media_menu_forwards_add_to_destination(playlist_tree_host) -> None:
     node = _playlist_media_node("media-1", "Destination media")
-    widget, controller, _model, _protection = _playlist_tree_host(
+    widget, controller, _model, _protection = playlist_tree_host(
         [node],
         height=180,
     )
@@ -1784,9 +1973,9 @@ def test_playlist_tree_media_menu_forwards_add_to_destination() -> None:
         _dispose_qml_host(widget)
 
 
-def test_playlist_tree_media_menu_forwards_set_as_idle() -> None:
+def test_playlist_tree_media_menu_forwards_set_as_idle(playlist_tree_host) -> None:
     node = _playlist_media_node("media-1", "Idle media")
-    widget, controller, _model, _protection = _playlist_tree_host(
+    widget, controller, _model, _protection = playlist_tree_host(
         [node],
         height=180,
     )
@@ -1808,12 +1997,12 @@ def test_playlist_tree_media_menu_forwards_set_as_idle() -> None:
         _dispose_qml_host(widget, menu)
 
 
-def test_playlist_tree_media_menu_omits_ineligible_idle_action() -> None:
+def test_playlist_tree_media_menu_omits_ineligible_idle_action(playlist_tree_host) -> None:
     node = {
         **_playlist_media_node("media-1", "Remote media"),
         "canSetAsIdle": False,
     }
-    widget, _controller, _model, _protection = _playlist_tree_host(
+    widget, _controller, _model, _protection = playlist_tree_host(
         [node],
         height=180,
     )
@@ -1831,13 +2020,13 @@ def test_playlist_tree_media_menu_omits_ineligible_idle_action() -> None:
         _dispose_qml_host(widget, menu)
 
 
-def test_image_thumbnail_cursor_follows_playback_protection() -> None:
+def test_image_thumbnail_cursor_follows_playback_protection(playlist_tree_host) -> None:
     image = {
         **_playlist_media_node("image-1", "Protected image"),
         "mediaType": "image",
         "badge": "Image",
     }
-    widget, _controller, _model, protection = _playlist_tree_host(
+    widget, _controller, _model, protection = playlist_tree_host(
         [image],
         height=180,
     )
@@ -1862,25 +2051,24 @@ def test_image_thumbnail_cursor_follows_playback_protection() -> None:
         framing_area.property("cursorShape")
         == Qt.CursorShape.PointingHandCursor
     )
-    widget.deleteLater()
 
 
-def test_playlist_tree_forwards_nested_hover_to_the_native_cursor() -> None:
+def test_playlist_tree_forwards_nested_hover_to_the_native_cursor(playlist_tree_host) -> None:
     image = {
         **_playlist_media_node("image-1", "Framed image"),
         "mediaType": "image",
         "badge": "Image",
     }
-    widget, controller, _model, _protection = _playlist_tree_host(
+    widget, controller, _model, _protection = playlist_tree_host(
         [image],
         height=180,
     )
     root = widget.rootObject()
     assert root is not None
-    # This test emits hover signals explicitly; a pointer left by an earlier
-    # window must not emit a competing native hover during processEvents().
-    QCursor.setPos(widget.mapToGlobal(QPoint(widget.width() + 20, widget.height() + 20)))
-    QTest.qWait(10)
+    # Exercise QML cursor signals without competing native pointer delivery.
+    # Process the host's hide events before connecting the manual callbacks.
+    widget.hide()
+    _APP.processEvents()
     controller.pointerEntered.connect(lambda: begin_qml_pointer_cursor(widget))
     controller.pointerCursorEntered.connect(
         lambda _source, shape: set_qml_pointer_cursor(widget, shape)
@@ -1904,7 +2092,9 @@ def test_playlist_tree_forwards_nested_hover_to_the_native_cursor() -> None:
 
     drag_area.entered.emit()
     _APP.processEvents()
-    assert widget.cursor().shape() == Qt.CursorShape.OpenHandCursor
+    assert widget.cursor().shape() == Qt.CursorShape.OpenHandCursor, (
+        f"visible={widget.isVisible()}, pointer={QCursor.pos()}"
+    )
     assert (
         widget.quickWindow().cursor().shape()
         == Qt.CursorShape.OpenHandCursor
@@ -1952,7 +2142,6 @@ def test_playlist_tree_forwards_nested_hover_to_the_native_cursor() -> None:
     controller.pointerCursorChanged.disconnect()
     controller.pointerCursorExited.disconnect()
     controller.pointerExited.disconnect()
-    widget.deleteLater()
 
 
 def _send_thumbnail_wheel(widget: QQuickWidget, modifiers) -> None:
@@ -1970,10 +2159,12 @@ def _send_thumbnail_wheel(widget: QQuickWidget, modifiers) -> None:
     QApplication.sendEvent(widget.quickWindow(), event)
 
 
-def test_image_framing_thumbnail_handles_click_zoom_pan_and_reset() -> None:
+def test_image_framing_thumbnail_handles_click_zoom_pan_and_reset(request) -> None:
     portrait = QPixmap(90, 160)
     portrait.fill(QColor("red"))
     widget = QQuickWidget()
+    request.addfinalizer(lambda: dispose_widget(widget))
+    widget.setWindowFlag(Qt.WindowType.FramelessWindowHint)
     widget.resize(100, 56)
     configure_qml_host(
         widget,
@@ -1989,7 +2180,7 @@ def test_image_framing_thumbnail_handles_click_zoom_pan_and_reset() -> None:
     root.setProperty("imageSource", "image://playlistthumbs/portrait/0")
     root.setProperty("projectionAspectRatio", 16 / 9)
     root.setProperty("sourceAspectRatio", 9 / 16)
-    widget.show()
+    show_and_activate(widget)
     for _attempt in range(20):
         if root.property("imageReady"):
             break
@@ -2071,7 +2262,6 @@ def test_image_framing_thumbnail_handles_click_zoom_pan_and_reset() -> None:
     QTest.mouseClick(widget, Qt.MouseButton.LeftButton, pos=QPoint(86, 42))
     assert reset.count() == 1
     assert root.property("framingActive") is False
-    widget.deleteLater()
 
 
 def test_image_framing_thumbnail_loads_a_local_file_source(tmp_path) -> None:
@@ -2101,10 +2291,12 @@ def test_image_framing_thumbnail_loads_a_local_file_source(tmp_path) -> None:
     assert root.property("imageReady") is True
 
 
-def test_image_framing_thumbnail_projection_frame_covers_fixed_viewport() -> None:
+def test_image_framing_thumbnail_projection_frame_covers_fixed_viewport(request) -> None:
     landscape = QPixmap(160, 90)
     landscape.fill(QColor("red"))
     widget = QQuickWidget()
+    request.addfinalizer(lambda: dispose_widget(widget))
+    widget.setWindowFlag(Qt.WindowType.FramelessWindowHint)
     widget.resize(100, 56)
     configure_qml_host(
         widget,
@@ -2120,7 +2312,7 @@ def test_image_framing_thumbnail_projection_frame_covers_fixed_viewport() -> Non
     assert root is not None
     root.setProperty("imageSource", "image://playlistthumbs/landscape/0")
     root.setProperty("sourceAspectRatio", 16 / 9)
-    widget.show()
+    show_and_activate(widget)
     for _attempt in range(20):
         if root.property("imageReady"):
             break
@@ -2146,10 +2338,12 @@ def test_image_framing_thumbnail_projection_frame_covers_fixed_viewport() -> Non
     assert root.property("frameY") == pytest.approx(0.0)
 
 
-def test_image_framing_thumbnail_fits_portrait_in_fixed_viewport() -> None:
+def test_image_framing_thumbnail_fits_portrait_in_fixed_viewport(request) -> None:
     portrait = QPixmap(90, 160)
     portrait.fill(QColor("red"))
     widget = QQuickWidget()
+    request.addfinalizer(lambda: dispose_widget(widget))
+    widget.setWindowFlag(Qt.WindowType.FramelessWindowHint)
     widget.resize(100, 56)
     configure_qml_host(
         widget,
@@ -2166,7 +2360,7 @@ def test_image_framing_thumbnail_fits_portrait_in_fixed_viewport() -> None:
     root.setProperty("projectionAspectRatio", 5 / 4)
     root.setProperty("sourceAspectRatio", 9 / 16)
     root.setProperty("imageSource", "image://playlistthumbs/portrait/0")
-    widget.show()
+    show_and_activate(widget)
     for _attempt in range(20):
         if root.property("imageReady"):
             break

@@ -111,6 +111,8 @@ class ContentFrameIngressController(QObject):
         canvas_width: int = _DEFAULT_CANVAS_WIDTH,
         canvas_height: int = _DEFAULT_CANVAS_HEIGHT,
     ) -> None:
+        if not QThread.isMainThread():
+            raise RuntimeError("ContentFrameIngressController must be created on the main Qt thread")
         super().__init__(parent)
         # accelerated_publisher_factory / enable_accelerated are accepted for
         # backward-compatible call sites but ignored — the Qt/D3D11 accelerated
@@ -464,7 +466,7 @@ class ContentFrameIngressController(QObject):
         self,
         descriptor: FrameChannelDescriptor | None,
     ) -> None:
-        if QThread.currentThread() == self.thread():
+        if QThread.isMainThread():
             self._deliver_descriptor_change(descriptor)
         else:
             self._descriptor_change_requested.emit(descriptor)

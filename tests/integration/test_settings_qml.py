@@ -5,11 +5,21 @@ import os
 import math
 import subprocess
 import sys
+import tempfile
 from types import SimpleNamespace
 
 import pytest
-import shiboken6
-from PySide6.QtCore import QObject, QPointF, Property, Qt, QTranslator, QUrl, Slot
+from PySide6.QtCore import (
+    QMetaObject,
+    QObject,
+    QPointF,
+    QSize,
+    Property,
+    Qt,
+    QTranslator,
+    Slot,
+)
+from PySide6.QtGui import QKeySequence
 from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtQml import QQmlExpression
 from PySide6.QtTest import QTest
@@ -22,6 +32,19 @@ from solin.ui.qml.settings.catalogue import SECTIONS
 from solin.ui.qml.settings.domain import SettingsDomain
 from solin.ui.qml.settings.navigation import SettingsNavigation
 from solin.ui.qml.svg_icons import SvgIconProvider
+from tests._qt import (
+    dispose_qobject,
+    dispose_widget,
+    key_click,
+    mouse_click,
+    mouse_drag,
+    mouse_move,
+    mouse_press,
+    mouse_release,
+    show_and_activate,
+    wait_for_geometry,
+    wait_until,
+)
 
 
 class RecordingDomain(SettingsDomain):
@@ -129,22 +152,59 @@ def _control(row, class_fragment):
     return controls[0]
 
 
-def _settle():
-    QApplication.processEvents()
-    QTest.qWait(210)
-    QApplication.processEvents()
+def _settle(view):
+    wait_for_geometry(view.widget, size=view.widget.size())
+    # Controls popups live in the window overlay, outside the view's visual tree.
+    for item in _items(view.widget.quickWindow().contentItem()):
+        item.ensurePolished()
+    wait_until(
+        lambda: not any(
+            obj.inherits("QQuickAbstractAnimation") and obj.property("running")
+            for obj in view.root.findChildren(QObject)
+        ),
+        description="settings transitions to finish",
+    )
+
+
+def _wait_until(predicate, timeout=3000):
+    wait_until(predicate, description="QML state", timeout_ms=timeout)
+
+
+def _standard_key_click(widget, standard_key):
+    bindings = QKeySequence.keyBindings(standard_key)
+    assert bindings, f"No native binding for {standard_key.name}"
+    combination = bindings[0][0]
+    key_click(widget, combination.key(), combination.keyboardModifiers())
+
+
+def _expanded_body_settled(body):
+    target = body.property("targetHeight")
+    return (
+        target > 0
+        and body.property("animatedHeight") == pytest.approx(target)
+        and body.height() == pytest.approx(target, abs=1)
+        and body.opacity() == pytest.approx(1)
+    )
 
 
 @pytest.fixture
-def create_view():
-    surfaces = []
+def create_view(request):
     original_theme = current_theme().id
+    request.addfinalizer(lambda: activate_theme(original_theme))
 
     def create(width=1000, height=740, theme="dark"):
         activate_theme(theme)
-        domains = {name: RecordingDomain(state) for name, state in _domain_states().items()}
+        domains = {}
+        for name, state in _domain_states().items():
+            domain = RecordingDomain(state)
+            request.addfinalizer(lambda domain=domain: dispose_qobject(domain))
+            domains[name] = domain
         navigation = SettingsNavigation(domains)
+        request.addfinalizer(lambda: dispose_qobject(navigation))
         widget = QQuickWidget()
+        request.addfinalizer(lambda: dispose_widget(widget))
+        # The production QQuickWidget is a child viewport without an OS frame.
+        widget.setWindowFlag(Qt.WindowType.FramelessWindowHint)
         widget.resize(width, height)
         warnings = []
         widget.engine().warnings.connect(lambda errors: warnings.extend(error.toString() for error in errors))
@@ -163,18 +223,13 @@ def create_view():
         )
         view = SimpleNamespace(widget=widget, root=widget.rootObject(), domains=domains,
                                navigation=navigation, warnings=warnings, handle=handle)
-        surfaces.append(view)
-        widget.show()
-        _settle()
+        show_and_activate(widget, size=QSize(width, height))
+        _settle(view)
         assert widget.errors() == [], "\n".join(error.toString() for error in widget.errors())
         assert view.root is not None
         return view
 
-    yield create
-    for view in reversed(surfaces):
-        view.widget.setSource(QUrl())
-        shiboken6.delete(view.widget)
-    activate_theme(original_theme)
+    return create
 
 
 @pytest.mark.parametrize("width", [360, 480, 839, 840, 1280])
@@ -197,7 +252,7 @@ def test_settings_all_sections_fit_available_width(create_view, width, theme):
         for group in _translated_groups(section["groups"]):
             view.navigation.expand(group["id"], True)
         view.navigation.openSection(section["id"], "", "")
-        _settle()
+        _settle(view)
         assert view.root.property("showingPage") is True
         assert sections.isVisible() is (width >= 840)
         for group in _translated_groups(section["groups"]):
@@ -220,55 +275,84 @@ def test_settings_all_sections_fit_available_width(create_view, width, theme):
 def test_compact_search_result_reveals_control_and_back_restores_query(create_view):
     view = create_view(width=360)
     view.navigation.search("websocket")
-    _settle()
+    _settle(view)
     assert view.root.property("showingSearch") is True
     results = _find(view.root, "settingsResults")
     results.forceActiveFocus()
     results.setProperty("currentIndex", 0)
-    QTest.keyClick(view.widget, Qt.Key.Key_Return)
-    _settle()
+    key_click(view.widget, Qt.Key.Key_Return)
+    _settle(view)
     assert view.navigation.currentSection["id"] == "integrations"
     assert view.navigation.targetKey == "obsPort"
     row = _find(view.root, "setting_obsPort")
     assert row is not None and row.isVisible()
     assert row.property("highlighted") is True
     assert view.widget.quickWindow().activeFocusItem() in list(_items(row))
-    QTest.keyClick(view.widget, Qt.Key.Key_Left, Qt.KeyboardModifier.AltModifier)
-    _settle()
+    _standard_key_click(view.widget, QKeySequence.StandardKey.Back)
+    _wait_until(lambda: view.root.property("showingSearch") is True)
+    _settle(view)
     assert view.navigation.query == "websocket"
     assert view.root.property("showingSearch") is True
+    assert view.warnings == []
+
+
+@pytest.mark.parametrize("width", [360, 1000])
+def test_word_navigation_edits_focused_setting_without_leaving_page(create_view, width):
+    view = create_view(width=width)
+    view.domains["general"].publish(yeartextReference="Draft reference")
+    view.navigation.openSection("projection", "yeartext", "yeartextReference")
+    _settle(view)
+    field = _control(_find(view.root, "setting_yeartextReference"), "TextField")
+    assert view.widget.quickWindow().activeFocusItem() is field
+    field.setProperty("cursorPosition", len("Draft reference"))
+
+    _standard_key_click(view.widget, QKeySequence.StandardKey.MoveToPreviousWord)
+    _wait_until(lambda: field.property("cursorPosition") == len("Draft "))
+    assert field.property("text") == "Draft reference"
+    assert view.root.property("showingPage") is True
+    assert view.navigation.detailsOpen is True
+    assert view.navigation.currentSection["id"] == "projection"
+    assert view.navigation.targetKey == "yeartextReference"
+    assert view.widget.quickWindow().activeFocusItem() is field
+
+    key_click(view.widget, Qt.Key.Key_X)
+    _wait_until(lambda: view.domains["general"].state["yeartextReference"] == "Draft xreference")
+    assert field.property("text") == "Draft xreference"
+    assert field.property("cursorPosition") == len("Draft x")
+    assert view.root.property("showingPage") is True
+    assert view.navigation.detailsOpen is True
     assert view.warnings == []
 
 
 def test_toggle_dispatch_and_draft_survive_page_navigation_and_resize(create_view):
     view = create_view()
     view.navigation.openSection("media", "playback", "startVideosPaused")
-    _settle()
+    _settle(view)
     row = _find(view.root, "setting_startVideosPaused")
     toggle = _control(row, "Switch")
     position = toggle.mapToItem(view.root, QPointF(toggle.width() / 2, toggle.height() / 2))
-    QTest.mouseClick(view.widget, Qt.MouseButton.LeftButton, pos=position.toPoint())
-    _settle()
+    mouse_click(view.widget, Qt.MouseButton.LeftButton, pos=position.toPoint())
+    _settle(view)
     assert ("startVideosPaused", True) in view.domains["general"].calls
     view.navigation.openSection("projection", "yeartext", "yeartextReference")
-    _settle()
+    _settle(view)
     row = _find(view.root, "setting_yeartextReference")
     field = _control(row, "TextField")
     field.forceActiveFocus()
     QTest.keyClick(view.widget, Qt.Key.Key_A, Qt.KeyboardModifier.ControlModifier)
     QTest.keyClicks(view.widget, "Draft reference")
-    _settle()
+    _settle(view)
     assert view.domains["general"].state["yeartextReference"] == "Draft reference"
     for width in (360, 1280, 480):
         view.widget.resize(width, 360)
-        _settle()
+        _settle(view)
         assert view.navigation.currentSection["id"] == "projection"
         assert view.root.property("showingPage") is True
         assert _control(_find(view.root, "setting_yeartextReference"), "TextField").property("text") == "Draft reference"
     view.navigation.openSection("about", "", "")
-    _settle()
+    _settle(view)
     view.navigation.openSection("projection", "yeartext", "yeartextReference")
-    _settle()
+    _settle(view)
     assert _control(_find(view.root, "setting_yeartextReference"), "TextField").property("text") == "Draft reference"
     assert view.warnings == []
 
@@ -315,7 +399,7 @@ def test_desktop_selection_control_is_to_right_of_label(create_view):
 def test_section_header_controls_center_on_combined_heading(create_view, width):
     view = create_view(width=width)
     view.navigation.openSection("appearance", "", "")
-    _settle()
+    _settle(view)
     page = _find(view.root, "settingsPage")
     title = next(item for item in _items(page)
                  if item.property("text") == "Appearance and languages"
@@ -348,7 +432,7 @@ def test_action_status_aligns_with_actions_and_stacks_on_narrow_width(create_vie
     view = create_view(width=width)
     view.domains["general"].publish(yeartextStatusText="Annual text updated for 2026")
     view.navigation.openSection("projection", "yeartext", "yeartextStatusText")
-    _settle()
+    _settle(view)
     row = _find(view.root, "setting_yeartextStatusText")
     status = next(item for item in _items(row)
                   if item.property("text") == "Annual text updated for 2026")
@@ -377,18 +461,19 @@ def test_settings_high_dpi_short_window_layout(create_view):
     # this scenario in a fresh process to exercise real 200% scaling.
     if os.environ.get("SOLIN_SETTINGS_DPI_TEST") != "1":
         environment = dict(os.environ, QT_SCALE_FACTOR="2", SOLIN_SETTINGS_DPI_TEST="1")
-        result = subprocess.run(
-            [sys.executable, "-m", "pytest", __file__, "-k", "test_settings_high_dpi_short_window_layout",
-             "-q", "--basetemp=.pytest-tmp-settings-dpi"],
-            env=environment, capture_output=True, text=True, timeout=45,
-        )
+        with tempfile.TemporaryDirectory(prefix="solin-settings-dpi-") as basetemp:
+            result = subprocess.run(
+                [sys.executable, "-m", "pytest", __file__, "-k", "test_settings_high_dpi_short_window_layout",
+                 "-q", f"--basetemp={basetemp}"],
+                env=environment, capture_output=True, text=True, timeout=45,
+            )
         assert result.returncode == 0, result.stdout + result.stderr
         return
     view = create_view(width=840, height=320)
     assert view.widget.devicePixelRatioF() >= 2
     assert view.root.width() == 840
     view.navigation.openSection("projection", "yeartext", "yeartextReference")
-    _settle()
+    _settle(view)
     row = _find(view.root, "setting_yeartextReference")
     assert row is not None and row.isVisible()
     position = row.mapToItem(view.root, QPointF(0, 0))
@@ -400,14 +485,14 @@ def test_settings_high_dpi_short_window_layout(create_view):
 def test_page_scroll_and_rapid_navigation_are_preserved(create_view):
     view = create_view(width=1000, height=360)
     view.navigation.openSection("media", "", "")
-    _settle()
+    _settle(view)
     flickable = _find(view.root, "settingsPageViewport")
     flickable.setProperty("contentY", 80.0)
-    _settle()
+    _settle(view)
     assert view.navigation.scrollPosition("media") == pytest.approx(80, abs=1)
     for name in ("projection", "integrations", "about", "media"):
         view.navigation.openSection(name, "", "")
-    _settle()
+    _settle(view)
     assert view.navigation.currentSection["id"] == "media"
     flickable = _find(view.root, "settingsPageViewport")
     assert flickable.property("contentY") == pytest.approx(80, abs=1)
@@ -417,25 +502,21 @@ def test_page_scroll_and_rapid_navigation_are_preserved(create_view):
 def test_settings_page_scrolls_with_a_mouse_drag(create_view):
     view = create_view(width=1000, height=360)
     view.navigation.openSection("media", "", "")
-    _settle()
+    _settle(view)
     page = _find(view.root, "settingsPage")
     flickable = _find(view.root, "settingsPageViewport")
     assert flickable.property("contentHeight") > page.height()
     start = page.mapToItem(view.root, page.width() / 2, page.height() - 24)
     end = page.mapToItem(view.root, page.width() / 2, 72)
-    QTest.mousePress(view.widget, Qt.MouseButton.LeftButton, pos=start.toPoint())
-    for step in range(1, 7):
-        position = start + (end - start) * (step / 6)
-        QTest.mouseMove(view.widget, position.toPoint(), delay=12)
-    QTest.mouseRelease(view.widget, Qt.MouseButton.LeftButton, pos=end.toPoint())
-    _settle()
+    mouse_drag(view.widget, start.toPoint(), end.toPoint())
+    _settle(view)
     assert flickable.property("contentY") > 20
 
 
 def test_compact_section_header_stays_fixed_while_content_scrolls(create_view):
     view = create_view(width=480, height=360)
     view.navigation.openSection("media", "", "")
-    _settle()
+    _settle(view)
     page = _find(view.root, "settingsPage")
     header = _find(page, "settingsCompactHeader")
     viewport = _find(page, "settingsPageViewport")
@@ -448,7 +529,7 @@ def test_compact_section_header_stays_fixed_while_content_scrolls(create_view):
     assert header.mapToItem(page, QPointF(0, 0)).y() == pytest.approx(0, abs=1)
     assert viewport.mapToItem(page, QPointF(0, 0)).y() == pytest.approx(header.height(), abs=1)
     viewport.setProperty("contentY", 90.0)
-    _settle()
+    _settle(view)
     assert viewport.property("contentY") == pytest.approx(90, abs=1)
     assert header.mapToItem(page, QPointF(0, 0)).y() == pytest.approx(0, abs=1)
     assert 0 <= title.mapToItem(header, QPointF(0, 0)).y() < header.height()
@@ -470,11 +551,11 @@ def test_settings_button_uses_pointing_cursor(create_view):
     position = button.mapToItem(
         view.root, QPointF(button.width() / 2, button.height() / 2)
     )
-    QTest.mouseMove(view.widget, position.toPoint())
-    QApplication.processEvents()
+    mouse_move(view.widget, position.toPoint())
+    _wait_until(lambda: view.widget.cursor().shape() == Qt.CursorShape.PointingHandCursor)
     assert view.widget.cursor().shape() == Qt.CursorShape.PointingHandCursor
-    QTest.mouseMove(view.widget, QPointF(1, 1).toPoint())
-    QApplication.processEvents()
+    mouse_move(view.widget, QPointF(1, 1).toPoint())
+    _wait_until(lambda: view.widget.cursor().shape() == Qt.CursorShape.ArrowCursor)
     assert view.widget.cursor().shape() == Qt.CursorShape.ArrowCursor
 
 
@@ -482,27 +563,27 @@ def test_rejected_remote_enable_restores_toggle_state(create_view):
     view = create_view(width=1000, height=740)
     view.navigation.openSection("remote", "", "")
     view.domains["remote"].reject_enable = True
-    _settle()
+    _settle(view)
     row = _find(view.root, "setting_enabled")
     toggle = _control(row, "Switch")
     assert not toggle.property("checked")
     position = toggle.mapToItem(
         view.root, QPointF(toggle.width() / 2, toggle.height() / 2)
     )
-    QTest.mouseClick(view.widget, Qt.MouseButton.LeftButton, pos=position.toPoint())
-    _settle()
+    mouse_click(view.widget, Qt.MouseButton.LeftButton, pos=position.toPoint())
+    _settle(view)
     assert view.domains["remote"].state["enabled"] is False
     assert toggle.property("checked") is False
     view.domains["remote"].reject_enable = False
     view.domains["remote"].publish(enabled=True)
-    _settle()
+    _settle(view)
     assert toggle.property("checked") is True
 
 
 def test_remote_page_has_no_manual_network_refresh_action(create_view):
     view = create_view(width=1000, height=740)
     view.navigation.openSection("remote", "", "")
-    _settle()
+    _settle(view)
     assert _find(view.root, "setting_statusMessage") is None
     assert all(
         row.get("action") != "refreshNetworks"
@@ -515,7 +596,7 @@ def test_remote_page_has_no_manual_network_refresh_action(create_view):
 def test_integrations_have_no_camera_fallback_control_or_search_result(create_view, width):
     view = create_view(width=width)
     view.navigation.openSection("integrations", "", "")
-    _settle()
+    _settle(view)
     assert _find(view.root, "setting_cameraEnabled") is None
     assert _find(view.root, "group_camera") is None
     view.navigation.search("camera")
@@ -532,7 +613,7 @@ def test_remote_setup_reserves_scrollbar_gutter_and_scrolls_with_mouse_drag(crea
         fingerprint="AA:BB:CC:DD " * 12,
         fingerprintVisible=True,
     )
-    _settle()
+    _settle(view)
     window_root = view.widget.quickWindow().contentItem()
     dialog = next(
         (obj for obj in view.root.findChildren(QObject)
@@ -550,20 +631,78 @@ def test_remote_setup_reserves_scrollbar_gutter_and_scrolls_with_mouse_drag(crea
 
     start = viewport.mapToScene(QPointF(viewport.width() / 2, viewport.height() - 20))
     end = viewport.mapToScene(QPointF(viewport.width() / 2, 50))
-    QTest.mousePress(view.widget, Qt.MouseButton.LeftButton, pos=start.toPoint())
-    for step in range(1, 7):
-        position = start + (end - start) * (step / 6)
-        QTest.mouseMove(view.widget, position.toPoint(), delay=12)
-    QTest.mouseRelease(view.widget, Qt.MouseButton.LeftButton, pos=end.toPoint())
-    _settle()
+    mouse_drag(view.widget, start.toPoint(), end.toPoint())
+    _settle(view)
     assert viewport.property("contentY") > 20
+    assert view.warnings == []
+
+
+@pytest.mark.parametrize("theme", ["dark", "light"])
+def test_remote_setup_fits_window_and_routes_dismissal_actions(create_view, theme):
+    view = create_view(width=360, height=640, theme=theme)
+    domain = view.domains["remote"]
+    domain.publish(
+        setupVisible=True,
+        setupUrl="https://192.168.1.2:8443/setup",
+        verificationCode="123 456",
+        fingerprint="AA:BB:CC:DD " * 12,
+        fingerprintVisible=True,
+    )
+    _settle(view)
+    dialog = next(
+        (
+            obj
+            for obj in view.root.findChildren(QObject)
+            if obj.objectName() == "settingsRemoteSetup"
+        ),
+        None,
+    )
+    assert dialog is not None
+
+    for width, height in [
+        (360, 640),
+        (480, 640),
+        (839, 700),
+        (840, 700),
+        (1280, 800),
+        (480, 360),
+    ]:
+        view.widget.resize(width, height)
+        _settle(view)
+        assert dialog.property("visible")
+        assert 0 < dialog.property("width") <= width
+        assert 0 < dialog.property("height") <= height
+        for name in (
+            "remoteSetupClose",
+            "remoteSetupCopy",
+            "remoteSetupSaveCertificate",
+            "remoteSetupDone",
+        ):
+            button = dialog.findChild(QObject, name)
+            assert button is not None
+            assert button.property("height") >= 44
+
+    domain.calls.clear()
+    QMetaObject.invokeMethod(dialog, "close", Qt.ConnectionType.DirectConnection)
+    _settle(view)
+    assert ("closeSetup",) in domain.calls
+
+    domain.publish(setupVisible=False)
+    _settle(view)
+    domain.publish(setupVisible=True)
+    _settle(view)
+    done = dialog.findChild(QObject, "remoteSetupDone")
+    assert done is not None
+    QMetaObject.invokeMethod(done, "clicked", Qt.ConnectionType.DirectConnection)
+    _settle(view)
+    assert ("completeSetup",) in domain.calls
     assert view.warnings == []
 
 
 def test_compact_toggle_remains_beside_its_label(create_view):
     view = create_view(width=360)
     view.navigation.openSection("media", "playback", "startVideosPaused")
-    _settle()
+    _settle(view)
     row = _find(view.root, "setting_startVideosPaused")
     toggle = _control(row, "Switch")
     label = next(item for item in _items(row) if item.property("text") == "Start videos paused")
@@ -621,7 +760,7 @@ def test_wide_search_results_stay_in_content_pane(create_view):
     view = create_view(width=1280)
     pane = _find(view.root, "settingsNavigationPane")
     view.navigation.search("websocket")
-    _settle()
+    _settle(view)
     results = _find(view.root, "settingsResults")
     assert results is not None and results.isVisible()
     assert results.mapToItem(view.root, QPointF(0, 0)).x() > (
@@ -638,8 +777,8 @@ def test_noncollapsible_group_title_has_no_filled_header(create_view):
     button_position = theme_button.mapToItem(
         view.root, QPointF(theme_button.width() / 2, theme_button.height() / 2)
     )
-    QTest.mouseMove(view.widget, button_position.toPoint())
-    QApplication.processEvents()
+    mouse_move(view.widget, button_position.toPoint())
+    _wait_until(lambda: view.widget.cursor().shape() == Qt.CursorShape.PointingHandCursor)
     assert view.widget.cursor().shape() == Qt.CursorShape.PointingHandCursor
     for group_name in ("appearance", "languages"):
         heading = _find(view.root, "groupHeading_" + group_name)
@@ -647,8 +786,8 @@ def test_noncollapsible_group_title_has_no_filled_header(create_view):
         heading_position = heading.mapToItem(
             view.root, QPointF(heading.width() / 2, heading.height() / 2)
         )
-        QTest.mouseMove(view.widget, heading_position.toPoint())
-        QApplication.processEvents()
+        mouse_move(view.widget, heading_position.toPoint())
+        _wait_until(lambda: view.widget.cursor().shape() == Qt.CursorShape.ArrowCursor)
         assert view.widget.cursor().shape() == Qt.CursorShape.ArrowCursor
         assert not _find(view.root, "groupSurface_" + group_name).isVisible()
         assert _find(view.root, "groupBodySurface_" + group_name).isVisible()
@@ -658,7 +797,7 @@ def test_noncollapsible_group_title_has_no_filled_header(create_view):
 def test_obs_encloses_nested_ndi_and_animates_expansion(create_view):
     view = create_view(width=1280, height=900)
     view.navigation.openSection("integrations", "", "")
-    _settle()
+    _settle(view)
     obs = _find(view.root, "group_obs")
     body = _find(view.root, "groupBody_obs")
     heading = _find(view.root, "groupHeading_obs")
@@ -666,14 +805,34 @@ def test_obs_encloses_nested_ndi_and_animates_expansion(create_view):
     assert obs.property("expanded") is False
     assert body.height() == 0
 
+    view.widget.raise_()
+    view.widget.activateWindow()
+    assert QTest.qWaitForWindowActive(view.widget, 2000)
+    samples = []
+
+    def sample():
+        samples.append((
+            body.property("animatedHeight"), body.property("targetHeight"), body.opacity()
+        ))
+
+    # Observe every property change, including frames delivered during the
+    # click. Wall-clock sleeps can miss the start or the entire transition.
+    body.animatedHeightChanged.connect(sample)
+    body.opacityChanged.connect(sample)
     position = heading.mapToScene(QPointF(heading.width() / 2, heading.height() / 2))
-    QTest.mouseClick(view.widget, Qt.MouseButton.LeftButton, pos=position.toPoint())
-    QTest.qWait(55)
-    intermediate_height = body.height()
-    assert intermediate_height > 0
-    assert 0 < body.opacity() < 1
-    _settle()
-    assert body.height() > intermediate_height
+    try:
+        mouse_click(view.widget, Qt.MouseButton.LeftButton, pos=position.toPoint())
+        _wait_until(lambda: obs.property("expanded") is True)
+        _wait_until(lambda: _expanded_body_settled(body))
+    finally:
+        body.animatedHeightChanged.disconnect(sample)
+        body.opacityChanged.disconnect(sample)
+    # Layout can retarget the animation as the newly visible rows are polished.
+    # Measure the animated value against its contemporaneous target, rather
+    # than comparing an intermediate layout height with the final geometry.
+    intermediate_heights = [height for height, target, opacity in samples
+                            if height > 0 and height != pytest.approx(target) and 0 < opacity < 1]
+    assert intermediate_heights, samples
     assert body.opacity() == pytest.approx(1)
     assert surface.height() == pytest.approx(obs.height(), abs=1)
     assert not _find(view.root, "groupBodySurface_obs").isVisible()
@@ -681,10 +840,12 @@ def test_obs_encloses_nested_ndi_and_animates_expansion(create_view):
     view.navigation.search("Available NDI sources")
     result = next(result for result in view.navigation.results if result["key"] == "ndiSource")
     view.navigation.openSection(result["section"], result["group"], result["key"])
-    _settle()
     # The ancestor follows the nested group's changing implicit height, so
     # both expansion animations must finish before checking containment.
-    QTest.qWait(250)
+    _wait_until(lambda: view.navigation.expanded("obs") and view.navigation.expanded("ndi"))
+    ndi_body = _find(view.root, "groupBody_ndi")
+    assert ndi_body is not None
+    _wait_until(lambda: _expanded_body_settled(body) and _expanded_body_settled(ndi_body))
     assert view.navigation.expanded("obs") and view.navigation.expanded("ndi")
     ndi = _find(view.root, "group_ndi")
     assert ndi in list(_items(obs))
@@ -703,7 +864,7 @@ def test_remote_credentials_expand_from_header_with_summary_and_keep_drafts(crea
     view = create_view(width=1280, height=900)
     view.domains["remote"].publish(credentialsSummary="Configured as operator", password="draft")
     view.navigation.openSection("remote", "", "")
-    _settle()
+    _settle(view)
     group = _find(view.root, "group_credentials")
     heading = _find(view.root, "groupHeading_credentials")
     body = _find(view.root, "groupBody_credentials")
@@ -713,17 +874,18 @@ def test_remote_credentials_expand_from_header_with_summary_and_keep_drafts(crea
     assert _find(view.root, "setting_credentialsSummary") is None
     assert not any(item.property("text") == "Change" for item in _items(group))
     position = heading.mapToScene(QPointF(heading.width() / 2, heading.height() / 2))
-    QTest.mouseClick(view.widget, Qt.MouseButton.LeftButton, pos=position.toPoint())
-    _settle()
+    mouse_click(view.widget, Qt.MouseButton.LeftButton, pos=position.toPoint())
+    _wait_until(lambda: _expanded_body_settled(body))
+    _settle(view)
     assert group.property("expanded") is True
     for key in ("username", "password", "passwordConfirmation", "saveCredentials"):
         assert _find(view.root, "setting_" + key).isVisible()
     view.navigation.expand("credentials", False)
-    _settle()
+    _settle(view)
     view.navigation.search("Confirm password")
     result = next(result for result in view.navigation.results if result["key"] == "passwordConfirmation")
     view.navigation.openSection(result["section"], result["group"], result["key"])
-    _settle()
+    _settle(view)
     assert _find(view.root, "group_credentials").property("expanded") is True
     assert view.domains["remote"].state["password"] == "draft"
     assert view.domains["remote"].calls == []
@@ -739,14 +901,14 @@ def test_meeting_time_picker_requires_configured_day(create_view, kind, time_key
     domain = view.domains["general"]
     domain.publish(**{f"{kind}Day": -1, f"{kind}TimeEnabled": False})
     view.navigation.openSection("meetings", "schedule", time_key)
-    _settle()
+    _settle(view)
     button = _control(_find(view.root, f"setting_{time_key}"), "Button")
 
     assert button.property("enabled") is False
     position = button.mapToScene(QPointF(button.width() / 2, button.height() / 2))
-    QTest.mouseClick(view.widget, Qt.MouseButton.LeftButton, pos=position.toPoint())
+    mouse_click(view.widget, Qt.MouseButton.LeftButton, pos=position.toPoint())
     QTest.keyClick(view.widget, Qt.Key.Key_Return)
-    _settle()
+    _settle(view)
 
     assert not any(obj.property("modal") is True and obj.property("visible") is True
                    for obj in view.root.findChildren(QObject))
@@ -757,11 +919,11 @@ def test_meeting_time_picker_requires_configured_day(create_view, kind, time_key
 def test_congregation_lookup_uses_shared_search_and_selection_controls(create_view):
     view = create_view(width=1000, height=740)
     view.navigation.openSection("meetings", "schedule", "congregationName")
-    _settle()
+    _settle(view)
     button = _control(_find(view.root, "setting_congregationName"), "Button")
     position = button.mapToScene(QPointF(button.width() / 2, button.height() / 2))
-    QTest.mouseClick(view.widget, Qt.MouseButton.LeftButton, pos=position.toPoint())
-    _settle()
+    mouse_click(view.widget, Qt.MouseButton.LeftButton, pos=position.toPoint())
+    _settle(view)
 
     window_root = view.widget.quickWindow().contentItem()
     search = _find(window_root, "settingsCongregationSearch")
@@ -775,11 +937,11 @@ def test_congregation_lookup_uses_shared_search_and_selection_controls(create_vi
         "label": "Central · São Paulo",
         "description": "Central",
     }])
-    _settle()
+    _settle(view)
     option = _find(window_root, "settingsCongregationOption_congregation-id")
     position = option.mapToScene(QPointF(option.width() / 2, option.height() / 2))
-    QTest.mouseClick(view.widget, Qt.MouseButton.LeftButton, pos=position.toPoint())
-    _settle()
+    mouse_click(view.widget, Qt.MouseButton.LeftButton, pos=position.toPoint())
+    _settle(view)
 
     assert ("chooseCongregation", "congregation-id", "Central") in (
         view.domains["general"].calls
@@ -790,14 +952,14 @@ def test_congregation_lookup_uses_shared_search_and_selection_controls(create_vi
 def test_meeting_time_picker_applies_clock_selection(create_view):
     view = create_view(width=1000, height=740)
     view.navigation.openSection("meetings", "schedule", "midweekTime")
-    _settle()
+    _settle(view)
     row = _find(view.root, "setting_midweekTime")
     button = _control(row, "Button")
 
     def click(item):
         position = item.mapToScene(QPointF(item.width() / 2, item.height() / 2))
-        QTest.mouseClick(view.widget, Qt.MouseButton.LeftButton, pos=position.toPoint())
-        _settle()
+        mouse_click(view.widget, Qt.MouseButton.LeftButton, pos=position.toPoint())
+        _settle(view)
 
     click(button)
     assert any(obj.property("modal") is True and obj.property("visible") is True
@@ -838,29 +1000,33 @@ def test_meeting_time_picker_applies_clock_selection(create_view):
             face.height() / 2 - math.cos(angle) * radius,
         )).toPoint()
 
-    QTest.mousePress(view.widget, Qt.MouseButton.LeftButton, pos=dial_point(0, 72))
-    QApplication.processEvents()
-    assert clock.property("hour") == 12
-    assert clock.property("mode") == "hour"
-    QTest.mouseMove(view.widget, dial_point(270, 72), delay=40)
-    QApplication.processEvents()
-    assert clock.property("hour") == 21
-    assert clock.property("mode") == "hour"
-    QTest.mouseRelease(view.widget, Qt.MouseButton.LeftButton, pos=dial_point(270, 72))
-    _settle()
+    mouse_press(view.widget, Qt.MouseButton.LeftButton, pos=dial_point(0, 72))
+    try:
+        QApplication.processEvents()
+        assert clock.property("hour") == 12
+        assert clock.property("mode") == "hour"
+        mouse_move(view.widget, dial_point(270, 72), delay=40)
+        QApplication.processEvents()
+        assert clock.property("hour") == 21
+        assert clock.property("mode") == "hour"
+    finally:
+        mouse_release(view.widget, Qt.MouseButton.LeftButton, pos=dial_point(270, 72))
+    _settle(view)
     assert clock.property("mode") == "minute"
 
-    QTest.mousePress(view.widget, Qt.MouseButton.LeftButton, pos=dial_point(0, 108))
-    QApplication.processEvents()
-    assert clock.property("minute") == 0
-    QTest.mouseMove(view.widget, dial_point(90, 108), delay=40)
-    QApplication.processEvents()
-    assert clock.property("minute") == 15
-    QTest.mouseMove(view.widget, dial_point(150, 108), delay=40)
-    QApplication.processEvents()
-    assert clock.property("minute") == 25
-    QTest.mouseRelease(view.widget, Qt.MouseButton.LeftButton, pos=dial_point(150, 108))
-    _settle()
+    mouse_press(view.widget, Qt.MouseButton.LeftButton, pos=dial_point(0, 108))
+    try:
+        QApplication.processEvents()
+        assert clock.property("minute") == 0
+        mouse_move(view.widget, dial_point(90, 108), delay=40)
+        QApplication.processEvents()
+        assert clock.property("minute") == 15
+        mouse_move(view.widget, dial_point(150, 108), delay=40)
+        QApplication.processEvents()
+        assert clock.property("minute") == 25
+    finally:
+        mouse_release(view.widget, Qt.MouseButton.LeftButton, pos=dial_point(150, 108))
+    _settle(view)
     assert clock.property("minute") == 25
     apply_button = next(item for item in _items(window_root)
                         if item.property("text") == "Apply" and item.isVisible()

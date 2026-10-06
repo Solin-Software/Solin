@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import http.client
 import threading
-from http.server import HTTPServer
 from pathlib import Path
 
 from solin.core.ingest.wifi_server import build_upload_html, make_handler
@@ -11,6 +10,7 @@ from solin.core.ingest.wifi_uploads import (
     parse_multipart,
     safe_filename,
 )
+from tests._http import LoopbackHTTPServer
 
 
 def _multipart(filename: str, payload: bytes = b"data") -> tuple[bytes, str]:
@@ -102,7 +102,7 @@ def test_wifi_upload_rejects_disallowed_extension_server_side(tmp_path):
         on_activity=lambda: None,
         embedded_dir=tmp_path,
     )
-    server = HTTPServer(("127.0.0.1", 0), handler)
+    server = LoopbackHTTPServer(handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
@@ -137,7 +137,7 @@ def test_wifi_upload_saves_allowed_media_in_injected_directory(tmp_path):
         on_activity=lambda: None,
         embedded_dir=embedded_dir,
     )
-    server = HTTPServer(("127.0.0.1", 0), handler)
+    server = LoopbackHTTPServer(handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:

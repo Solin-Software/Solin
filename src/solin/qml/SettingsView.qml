@@ -79,7 +79,7 @@ Rectangle {
         }
     }
     Shortcut {
-        sequence: "Alt+Left"
+        sequences: [StandardKey.Back]
         enabled: root.compact && settingsNavigation.detailsOpen
         onActivated: root.goBack()
     }

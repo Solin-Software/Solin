@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import time
+import threading
 
-from PySide6.QtCore import QCoreApplication
+import pytest
+
+from PySide6.QtCore import QCoreApplication, QObject
 from PySide6.QtGui import QImage
 
 from solin.controllers.media_operation_coordinator import MediaOperationCoordinator
@@ -12,6 +15,7 @@ from solin.core.media.presentation_probe import (
     ProbedMediaAvailability,
 )
 from solin.ui.qml.media_tree.state import MediaAvailability, MediaStateRegistry
+from tests._qt import dispose_qobject
 
 
 _APP = QCoreApplication.instance() or QCoreApplication([])
@@ -27,21 +31,45 @@ def _wait_until(predicate, timeout: float = 3.0) -> None:
     QCoreApplication.processEvents()
 
 
-def test_controller_rejects_slow_completion_for_a_replaced_source(
-    tmp_path,
-    monkeypatch,
-) -> None:
-    coordinator = MediaOperationCoordinator(max_workers=2)
-    registry = MediaStateRegistry()
+@pytest.fixture
+def probe_components(tmp_path):
+    """Own probe workers and their Qt objects through failure-safe teardown."""
+    owner = QObject()
+    coordinator = MediaOperationCoordinator(parent=owner)
+    registry = MediaStateRegistry(owner)
     controller = MediaProbeController(
         coordinator=coordinator,
         registry=registry,
         media_cache_dir=tmp_path / "cache",
+        parent=owner,
     )
+    try:
+        yield coordinator, registry, controller
+    finally:
+        try:
+            controller.shutdown()
+        finally:
+            unfinished = coordinator.shutdown()
+            try:
+                assert unfinished == (), f"Media probe workers did not stop: {unfinished!r}"
+            finally:
+                dispose_qobject(owner)
+
+
+def test_controller_rejects_slow_completion_for_a_replaced_source(
+    monkeypatch,
+    probe_components,
+) -> None:
+    coordinator, registry, controller = probe_components
+    old_started = threading.Event()
+    release_old = threading.Event()
+    old_completed = threading.Event()
 
     def probe(request):
         if request.source == "old.mp4":
-            time.sleep(0.12)
+            old_started.set()
+            assert release_old.wait(5), "Old media probe was not released"
+            old_completed.set()
             return MediaPresentationProbeResult(ProbedMediaAvailability.MISSING)
         return MediaPresentationProbeResult(
             ProbedMediaAvailability.AVAILABLE,
@@ -52,29 +80,28 @@ def test_controller_rejects_slow_completion_for_a_replaced_source(
         "solin.controllers.media_probe_controller.probe_media_presentation",
         probe,
     )
-    controller.request(owner_id="playlist:1", node_id="media-1", source="old.mp4")
-    controller.request(owner_id="playlist:1", node_id="media-1", source="new.mp4")
+    try:
+        controller.request(owner_id="playlist:1", node_id="media-1", source="old.mp4")
+        _wait_until(old_started.is_set)
+        controller.request(owner_id="playlist:1", node_id="media-1", source="new.mp4")
+        _wait_until(lambda: registry.state("playlist:1", "media-1").local_path == "new.mp4")
+        assert not old_completed.is_set()
+        release_old.set()
+        _wait_until(lambda: coordinator.active_count == 0)
+        assert old_completed.is_set()
 
-    _wait_until(lambda: coordinator.active_count == 0)
-
-    state = registry.state("playlist:1", "media-1")
-    assert state.availability == MediaAvailability.AVAILABLE
-    assert state.local_path == "new.mp4"
-    controller.shutdown()
-    coordinator.shutdown()
+        state = registry.state("playlist:1", "media-1")
+        assert state.availability == MediaAvailability.AVAILABLE
+        assert state.local_path == "new.mp4"
+    finally:
+        release_old.set()
 
 
 def test_controller_retries_temporary_cloud_lock_without_ui_polling(
-    tmp_path,
     monkeypatch,
+    probe_components,
 ) -> None:
-    coordinator = MediaOperationCoordinator()
-    registry = MediaStateRegistry()
-    controller = MediaProbeController(
-        coordinator=coordinator,
-        registry=registry,
-        media_cache_dir=tmp_path / "cache",
-    )
+    _, registry, controller = probe_components
     attempts = 0
 
     def probe(_request):
@@ -108,22 +135,14 @@ def test_controller_retries_temporary_cloud_lock_without_ui_polling(
     )
 
     assert registry.state("playlist:1", "media-1").local_path == "hydrated.mp4"
-    controller.shutdown()
-    _wait_until(lambda: coordinator.active_count == 0)
-    coordinator.shutdown()
 
 
 def test_controller_retries_existing_thumbnail_until_it_decodes(
     tmp_path,
     monkeypatch,
+    probe_components,
 ) -> None:
-    coordinator = MediaOperationCoordinator()
-    registry = MediaStateRegistry()
-    controller = MediaProbeController(
-        coordinator=coordinator,
-        registry=registry,
-        media_cache_dir=tmp_path / "cache",
-    )
+    _, registry, controller = probe_components
     reads = 0
     ready = []
 
@@ -174,22 +193,14 @@ def test_controller_retries_existing_thumbnail_until_it_decodes(
 
     assert ready[0] is None
     assert isinstance(ready[-1], QImage)
-    controller.shutdown()
-    _wait_until(lambda: coordinator.active_count == 0)
-    coordinator.shutdown()
 
 
 def test_controller_rejects_stale_thumbnail_when_same_path_content_changes(
     tmp_path,
     monkeypatch,
+    probe_components,
 ) -> None:
-    coordinator = MediaOperationCoordinator()
-    registry = MediaStateRegistry()
-    controller = MediaProbeController(
-        coordinator=coordinator,
-        registry=registry,
-        media_cache_dir=tmp_path / "cache",
-    )
+    _, registry, controller = probe_components
     signatures = iter(("10:20", "11:30"))
     ready = []
 
@@ -232,22 +243,14 @@ def test_controller_rejects_stale_thumbnail_when_same_path_content_changes(
     assert isinstance(ready[0], QImage)
     assert ready[-1] is None
     assert registry.state("playlist:1", "media-1").thumbnail_source == ""
-    controller.shutdown()
-    _wait_until(lambda: coordinator.active_count == 0)
-    coordinator.shutdown()
 
 
 def test_controller_keeps_official_artwork_across_media_revision_changes(
     tmp_path,
     monkeypatch,
+    probe_components,
 ) -> None:
-    coordinator = MediaOperationCoordinator()
-    registry = MediaStateRegistry()
-    controller = MediaProbeController(
-        coordinator=coordinator,
-        registry=registry,
-        media_cache_dir=tmp_path / "cache",
-    )
+    _, registry, controller = probe_components
     ready = []
     signatures = iter(("media:one", "media:two"))
     monkeypatch.setattr(
@@ -281,22 +284,14 @@ def test_controller_keeps_official_artwork_across_media_revision_changes(
 
     assert all(isinstance(image, QImage) for image in ready)
     assert registry.state("playlist:1", "media-1").thumbnail_source
-    controller.shutdown()
-    _wait_until(lambda: coordinator.active_count == 0)
-    coordinator.shutdown()
 
 
 def test_controller_stops_retrying_a_permanently_invalid_thumbnail(
     tmp_path,
     monkeypatch,
+    probe_components,
 ) -> None:
-    coordinator = MediaOperationCoordinator()
-    registry = MediaStateRegistry()
-    controller = MediaProbeController(
-        coordinator=coordinator,
-        registry=registry,
-        media_cache_dir=tmp_path / "cache",
-    )
+    coordinator, registry, controller = probe_components
     reads = 0
 
     monkeypatch.setattr(
@@ -342,21 +337,13 @@ def test_controller_stops_retrying_a_permanently_invalid_thumbnail(
     time.sleep(0.01)
     QCoreApplication.processEvents()
     assert reads == 3
-    controller.shutdown()
-    coordinator.shutdown()
 
 
 def test_controller_stabilizes_missing_local_media_before_confirming_absence(
-    tmp_path,
     monkeypatch,
+    probe_components,
 ) -> None:
-    coordinator = MediaOperationCoordinator()
-    registry = MediaStateRegistry()
-    controller = MediaProbeController(
-        coordinator=coordinator,
-        registry=registry,
-        media_cache_dir=tmp_path / "cache",
-    )
+    _, registry, controller = probe_components
     attempts = 0
 
     def missing(_request):
@@ -384,7 +371,3 @@ def test_controller_stabilizes_missing_local_media_before_confirming_absence(
             and registry.state("playlist:1", "media-1").availability == MediaAvailability.MISSING
         )
     )
-
-    controller.shutdown()
-    _wait_until(lambda: coordinator.active_count == 0)
-    coordinator.shutdown()

@@ -39,6 +39,8 @@ class PopupHoverController(QObject):
         self._enabled_ids = set(settings.hover_popup_ids())
         self._targets: dict[str, _PopupTarget] = {}
         self._pending: tuple[str, QWidget, QRect] | None = None
+        self._pending_windows: tuple[QObject, ...] = ()
+        self._pending_ancestors: tuple[QWidget, ...] = ()
         self._blocked: QRect | None = None
         self._filter_installed = False
         self._timer = QTimer(self)
@@ -51,6 +53,8 @@ class PopupHoverController(QObject):
         # A host may destroy other native surfaces from its destroyed signal,
         # before this child is deleted. Stop filtering without touching the host.
         self._pending = None
+        self._pending_windows = ()
+        self._pending_ancestors = ()
         self._blocked = None
         self._sync_event_filter()
         self._timer.stop()
@@ -95,6 +99,16 @@ class PopupHoverController(QObject):
             return
         if self._blocked is not None:
             return
+        ancestors = []
+        ancestor = surface
+        while ancestor is not None:
+            ancestors.append(ancestor)
+            ancestor = ancestor.parentWidget()
+        self._pending_ancestors = tuple(ancestors)
+        widgets = (self._owner.window(), *self._pending_ancestors)
+        self._pending_windows = widgets + tuple(
+            window for widget in widgets if (window := widget.windowHandle()) is not None
+        )
         self._pending = (popup_id, surface, rect)
         self._sync_event_filter()
         self._timer.start()
@@ -102,6 +116,8 @@ class PopupHoverController(QObject):
     def cancel(self) -> None:
         self._timer.stop()
         self._pending = None
+        self._pending_windows = ()
+        self._pending_ancestors = ()
         self._release_block_outside_anchor()
         self._sync_event_filter()
 
@@ -155,18 +171,20 @@ class PopupHoverController(QObject):
         elif event_type in (
             QEvent.Type.MouseButtonPress,
             QEvent.Type.KeyPress,
-            QEvent.Type.WindowDeactivate,
             QEvent.Type.ApplicationDeactivate,
         ):
             self.cancel()
+        elif self._pending is not None and event_type == QEvent.Type.WindowDeactivate:
+            # The application filter also sees late deactivation from dismissed
+            # popups. Compare the hosts captured at entry without dereferencing
+            # widgets that may already be undergoing native destruction.
+            if any(watched is window for window in self._pending_windows):
+                self.cancel()
         elif self._pending is not None and event_type in (
             QEvent.Type.Hide,
             QEvent.Type.Move,
             QEvent.Type.Resize,
         ):
-            surface = self._pending[1]
-            if isinstance(watched, QWidget) and (
-                watched is surface or watched.isAncestorOf(surface)
-            ):
+            if any(watched is ancestor for ancestor in self._pending_ancestors):
                 self.cancel()
         return False

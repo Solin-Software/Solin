@@ -4,8 +4,8 @@ import os
 from collections.abc import Mapping
 from typing import Any, cast
 
-from PySide6.QtCore import QEvent, QObject, Qt, Slot
-from PySide6.QtGui import QColor, QMouseEvent, QSurfaceFormat
+from PySide6.QtCore import QCoreApplication, QEvent, QObject, Qt, Slot
+from PySide6.QtGui import QColor, QEnterEvent, QMouseEvent, QSurfaceFormat
 from PySide6.QtQuick import QQuickItem
 from PySide6.QtQuickControls2 import QQuickStyle
 from PySide6.QtQuickWidgets import QQuickWidget
@@ -15,6 +15,30 @@ from solin.ui.helpers import QmlPointerCursorState
 from solin.ui.qml.loader import QmlLoadHandle
 
 _QML_CONTROLS_STYLE = "Basic"
+
+
+class _EmbeddedPointerEnterFilter(QObject):
+    """Translate QWidget window coordinates into the embedded Quick scene."""
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802
+        if not isinstance(event, QEnterEvent):
+            return False
+        widget = self.parent()
+        if (
+            isinstance(widget, QQuickWidget)
+            and watched is widget
+            and event.scenePosition() != event.position()
+        ):
+            # QQuickWidget maps MouseMove to local scene coordinates, but Qt
+            # 6.11.1 forwards Enter with the parent window's scenePosition.
+            mapped = QEnterEvent(
+                event.position(), event.position(), event.globalPosition(), event.pointingDevice()
+            )
+            mapped.setTimestamp(event.timestamp())
+            QCoreApplication.sendEvent(widget.quickWindow(), mapped)
+            event.setAccepted(mapped.isAccepted())
+            return True
+        return False
 
 
 class _TextFocusDismissFilter(QObject):
@@ -127,6 +151,9 @@ def configure_qml_host(
     dismiss_text_focus_on_pointer_press: bool = False,
 ) -> QmlLoadHandle:
     configure_qml_controls_style()
+    enter_filter = _EmbeddedPointerEnterFilter(widget)
+    widget.installEventFilter(enter_filter)
+    cast(Any, widget)._qml_pointer_enter_filter = enter_filter
     surface_format = QSurfaceFormat()
     surface_format.setAlphaBufferSize(alpha_buffer_size)
     widget.setFormat(surface_format)

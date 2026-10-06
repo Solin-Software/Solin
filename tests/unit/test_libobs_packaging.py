@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import io
 import os
+import plistlib
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -66,16 +68,55 @@ def _touch(path: Path, value: bytes = b"fixture") -> None:
     path.write_bytes(value)
 
 
+def _framework(root: Path, name: str = "libobs") -> Path:
+    framework = root / "Frameworks" / f"{name}.framework"
+    version = framework / "Versions" / "A"
+    _touch(version / name, b"\xcf\xfa\xed\xfe")
+    _touch(version / "Resources" / "default.effect", b"shader")
+    if name == "libobs":
+        for effect in (
+            "default_rect", "opaque", "solid", "repeat", "format_conversion",
+            "bicubic_scale", "lanczos_scale", "area", "bilinear_lowres_scale",
+            "premultiplied_alpha",
+        ):
+            _touch(version / "Resources" / f"{effect}.effect", b"shader")
+    _touch(version / "Resources" / "Info.plist", plistlib.dumps({
+        "CFBundleExecutable": name,
+        "CFBundleIdentifier": f"com.obsproject.{name}",
+        "CFBundlePackageType": "FMWK",
+    }))
+    # setuptools/wheel expands the official framework's symbolic links.
+    shutil.copytree(version, framework / "Versions" / "Current")
+    shutil.copy2(version / name, framework / name)
+    shutil.copytree(version / "Resources", framework / "Resources")
+    return framework
+
+
+def _symlink(link: Path, target: str, *, directory: bool = False) -> None:
+    try:
+        link.symlink_to(target, target_is_directory=directory)
+    except OSError as exc:
+        if getattr(exc, "winerror", None) == 1314:
+            pytest.skip("Windows requires Developer Mode or privilege to create symbolic links")
+        raise
+
+
 def _runtime(package: Path, target: str) -> Path:
     root = package / "_libs" / target / "x86_64"
     names = {
         "windows": ("obs.dll", "libobs-d3d11.dll", "obs-ffmpeg-mux.exe"),
         "linux": ("libobs.so.0", "libobs-opengl.so", "obs-ffmpeg-mux"),
-        "macos": ("Frameworks/libobs.dylib", "Frameworks/libobs-opengl.dylib", "obs-ffmpeg-mux"),
+        "macos": (
+            "Frameworks/libobs.framework/Versions/A/libobs",
+            "Frameworks/libobs-opengl.dylib",
+            "obs-ffmpeg-mux",
+        ),
     }
     suffix = {"windows": ".dll", "linux": ".so", "macos": ".dylib"}[target]
     for name in names[target]:
         _touch(root / name)
+    if target == "macos":
+        _framework(root)
     for name in ("obs-ffmpeg", "image-source", "obs-transitions"):
         _touch(root / "obs-plugins" / f"{name}{suffix}")
     _touch(root / "data/libobs/default.effect")
@@ -83,10 +124,263 @@ def _runtime(package: Path, target: str) -> Path:
     return root
 
 
+@pytest.mark.parametrize("missing", [
+    "Resources/Info.plist", "Resources/default.effect", "Resources/default_rect.effect",
+])
+def test_macos_framework_resources_are_required_before_copying(tmp_path, monkeypatch, missing):
+    package, app = tmp_path / "installed", tmp_path / "application"
+    source = _runtime(package, "macos")
+    (source / "Frameworks/libobs.framework/Versions/A" / missing).unlink()
+    if missing.endswith(".effect"):
+        (source / "Frameworks/libobs.framework/Versions/Current" / missing).unlink()
+        (source / "Frameworks/libobs.framework" / missing).unlink()
+    _touch(app / "previous", b"previous")
+    _touch(tmp_path / "LICENSE")
+    monkeypatch.setattr(packaging.shutil, "copytree", lambda *a, **kw: pytest.fail("copied invalid runtime"))
+
+    with pytest.raises(packaging.LibobsPackagingError, match="missing"):
+        packaging.stage_runtime(
+            package_dir=package, application_dir=app, target_platform="macos",
+            architecture="x86_64", license_files=[tmp_path / "LICENSE"],
+        )
+    assert (app / "previous").read_bytes() == b"previous"
+
+
+@pytest.mark.parametrize("metadata", [
+    b"invalid plist",
+    plistlib.dumps({
+        "CFBundleExecutable": "../libobs", "CFBundleIdentifier": "com.obsproject.libobs",
+        "CFBundlePackageType": "FMWK",
+    }),
+    plistlib.dumps({
+        "CFBundleExecutable": "libobs", "CFBundleIdentifier": "wrong.identifier",
+        "CFBundlePackageType": "FMWK",
+    }),
+    plistlib.dumps({
+        "CFBundleExecutable": "libobs", "CFBundleIdentifier": "com.obsproject.libobs",
+        "CFBundlePackageType": "BNDL",
+    }),
+    plistlib.dumps(["not a metadata dictionary"]),
+])
+def test_macos_framework_rejects_invalid_metadata(tmp_path, metadata):
+    root = _runtime(tmp_path, "macos")
+    _touch(root / "Frameworks/libobs.framework/Versions/A/Resources/Info.plist", metadata)
+    with pytest.raises(packaging.LibobsPackagingError, match="framework"):
+        packaging.validate_runtime(root, "macos")
+
+
+@pytest.mark.parametrize("alias", ["libobs", "Resources", "Versions/Current"])
+def test_macos_framework_rejects_divergent_wheel_aliases_before_copying(
+    tmp_path, monkeypatch, alias,
+):
+    root = _runtime(tmp_path / "installed", "macos")
+    duplicate = root / "Frameworks/libobs.framework" / alias
+    if duplicate.is_dir():
+        duplicate = duplicate / ("libobs" if alias == "Versions/Current" else "default.effect")
+    duplicate.write_bytes(b"different version")
+    app = tmp_path / "application"
+    _touch(app / "previous", b"previous")
+    _touch(tmp_path / "LICENSE")
+    monkeypatch.setattr(packaging.shutil, "copytree", lambda *a, **kw: pytest.fail("copied divergent alias"))
+    with pytest.raises(packaging.LibobsPackagingError, match="Conflicting framework alias"):
+        packaging.stage_runtime(
+            package_dir=tmp_path / "installed", application_dir=app, target_platform="macos",
+            architecture="x86_64", license_files=[tmp_path / "LICENSE"],
+        )
+    assert duplicate.read_bytes() == b"different version"
+    assert (app / "previous").read_bytes() == b"previous"
+
+
+def test_macos_framework_rejects_multiple_real_versions(tmp_path):
+    root = _runtime(tmp_path, "macos")
+    framework = root / "Frameworks/libobs.framework"
+    shutil.copytree(framework / "Versions/A", framework / "Versions/B")
+    with pytest.raises(packaging.LibobsPackagingError, match="one canonical framework version"):
+        packaging.validate_runtime(root, "macos")
+
+
+def test_macos_normalization_rebuilds_only_exported_aliases(tmp_path, monkeypatch):
+    root = _runtime(tmp_path, "macos")
+    framework = root / "Frameworks/libobs.framework"
+    version = framework / "Versions/A"
+    for entry in ("Headers/obs.h", "Modules/module.modulemap", "_CodeSignature/CodeResources"):
+        _touch(version / entry)
+        _touch(framework / "Versions/Current" / entry)
+    links = []
+
+    def create_link(path, target, target_is_directory=False):
+        assert not path.exists()
+        links.append((path.relative_to(framework).as_posix(), target, target_is_directory))
+
+    monkeypatch.setattr(Path, "symlink_to", create_link)
+    packaging._normalize_macos_frameworks(root)
+    assert set(links) == {
+        ("Versions/Current", "A", True),
+        ("libobs", "Versions/Current/libobs", False),
+        ("Resources", "Versions/Current/Resources", True),
+        ("Headers", "Versions/Current/Headers", True),
+        ("Modules", "Versions/Current/Modules", True),
+    }
+    assert (version / "libobs").read_bytes() == b"\xcf\xfa\xed\xfe"
+    assert (version / "Resources/default.effect").read_bytes() == b"shader"
+    assert (version / "_CodeSignature/CodeResources").is_file()
+    assert not (framework / "_CodeSignature").exists()
+
+
+def test_other_framework_uses_its_plist_executable_and_version(tmp_path, monkeypatch):
+    root = _runtime(tmp_path, "macos")
+    framework = root / "Frameworks/support.framework"
+    version = framework / "Versions/B"
+    _touch(version / "support-renderer", b"\xcf\xfa\xed\xfe")
+    _touch(version / "Resources/Info.plist", plistlib.dumps({
+        "CFBundleExecutable": "support-renderer",
+        "CFBundleIdentifier": "org.example.support",
+        "CFBundlePackageType": "FMWK",
+    }))
+    links = []
+
+    def create_link(path, target, target_is_directory=False):
+        links.append((path, target))
+
+    monkeypatch.setattr(Path, "symlink_to", create_link)
+    packaging._normalize_macos_frameworks(root)
+    assert (framework / "Versions/Current", "B") in links
+    assert (framework / "support-renderer", "Versions/Current/support-renderer") in links
+    assert not any(path == framework / "support" for path, _ in links)
+
+
+def test_native_inventory_returns_each_resolved_binary_once(tmp_path, monkeypatch):
+    root = tmp_path / "runtime"
+    canonical = root / "Frameworks/libobs.framework/Versions/A/libobs"
+    alias = root / "Frameworks/libobs.framework/libobs"
+    _touch(canonical, b"\xcf\xfa\xed\xfe")
+    _touch(alias, canonical.read_bytes())
+    resolve = Path.resolve
+    # Exercise the real inventory on hosts that cannot create file symlinks.
+    monkeypatch.setattr(Path, "resolve", lambda p, **kw: resolve(canonical if p == alias else p, **kw))
+    assert packaging._native_files(root) == [canonical.resolve()]
+
+
+@pytest.mark.parametrize("explicit", [False, True])
+def test_macos_relocation_uses_canonical_binary_parents(tmp_path, monkeypatch, explicit):
+    root = tmp_path / "runtime"
+    canonical = root / "Frameworks/libobs.framework/Versions/A/libobs"
+    alias = root / "Frameworks/libobs.framework/libobs"
+    _touch(canonical, b"\xcf\xfa\xed\xfe")
+    _touch(alias, canonical.read_bytes())
+    resolve = Path.resolve
+    monkeypatch.setattr(Path, "resolve", lambda p, **kw: resolve(canonical if p == alias else p, **kw))
+    calls = []
+
+    def run(command, **kwargs):
+        calls.append(command)
+        output = b"binary:\n" if command[:2] == ["otool", "-L"] else b""
+        return subprocess.CompletedProcess(command, 0, output, b"")
+
+    monkeypatch.setattr(packaging.subprocess, "run", run)
+    packaging._relocate_macos(root, binaries=[alias, canonical] if explicit else None)
+    assert ["install_name_tool", "-add_rpath", "@loader_path/../../..", str(canonical)] in calls
+    assert [command[-1] for command in calls if command[0] == "codesign"] == [str(canonical)]
+    assert not any(command[-1] == str(alias) for command in calls)
+
+
+@pytest.mark.parametrize("aliases", ["expanded", "symlinks", "absent"])
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="macOS framework symlink semantics require a POSIX filesystem",
+)
+def test_macos_staging_restores_versioned_framework_aliases(tmp_path, monkeypatch, aliases):
+    _touch(tmp_path / "link-probe-target")
+    _symlink(tmp_path / "link-probe", "link-probe-target")
+    package, app = tmp_path / "installed", tmp_path / "application"
+    source = _runtime(package, "macos")
+    _framework(source, "support")
+    for framework in (source / "Frameworks").glob("*.framework"):
+        if aliases != "expanded":
+            shutil.rmtree(framework / "Versions/Current")
+            shutil.rmtree(framework / "Resources")
+            (framework / framework.stem).unlink()
+        if aliases == "symlinks":
+            _symlink(framework / "Versions/Current", "A", directory=True)
+            _symlink(framework / "Resources", "Versions/Current/Resources", directory=True)
+            _symlink(framework / framework.stem, f"Versions/Current/{framework.stem}")
+    _touch(app / "Solin")
+    _touch(tmp_path / "LICENSE")
+    monkeypatch.setattr(packaging, "_relocate_macos", lambda *a, **kw: None)
+    destination = packaging.stage_runtime(
+        package_dir=package, application_dir=app, target_platform="macos",
+        architecture="x86_64", license_files=[tmp_path / "LICENSE"],
+    )
+    for name in ("libobs", "support"):
+        framework = destination / "Frameworks" / f"{name}.framework"
+        assert (framework / "Versions/Current").is_symlink()
+        assert (framework / "Resources").is_symlink()
+        assert (framework / name).is_symlink()
+        assert (framework / name).resolve() == framework / "Versions/A" / name
+        assert (framework / "Resources/Info.plist").is_file()
+    before = {path: path.readlink() for path in destination.rglob("*") if path.is_symlink()}
+    packaging._normalize_macos_frameworks(destination)
+    assert {path: path.readlink() for path in destination.rglob("*") if path.is_symlink()} == before
+    original = source / "Frameworks/libobs.framework"
+    assert (original / "libobs").is_symlink() == (aliases == "symlinks")
+    assert (original / "libobs").exists() == (aliases != "absent")
+
+
+def test_macos_rejects_escaping_links_before_copying(tmp_path, monkeypatch):
+    root = _runtime(tmp_path / "installed", "macos")
+    escape = root / "escape"
+    _touch(escape)
+    external = tmp_path / "external"
+    _touch(external)
+    is_symlink, resolve = Path.is_symlink, Path.resolve
+    monkeypatch.setattr(Path, "is_symlink", lambda p: p == escape or is_symlink(p))
+    monkeypatch.setattr(Path, "resolve", lambda p, **kw: resolve(external if p == escape else p, **kw))
+    app = tmp_path / "application"
+    app.mkdir()
+    _touch(tmp_path / "LICENSE")
+    monkeypatch.setattr(packaging.shutil, "copytree", lambda *a, **kw: pytest.fail("copied escaping link"))
+    with pytest.raises(packaging.LibobsPackagingError, match="escapes"):
+        packaging.stage_runtime(
+            package_dir=tmp_path / "installed", application_dir=app, target_platform="macos",
+            architecture="x86_64", license_files=[tmp_path / "LICENSE"],
+        )
+
+
+@pytest.mark.parametrize("invalid", ["broken", "cycle", "absolute"])
+def test_macos_rejects_non_relocatable_links(tmp_path, monkeypatch, invalid):
+    root = _runtime(tmp_path, "macos")
+    link = root / "invalid-link"
+    _touch(link)
+    is_symlink, resolve, readlink = Path.is_symlink, Path.resolve, Path.readlink
+    monkeypatch.setattr(Path, "is_symlink", lambda p: p == link or is_symlink(p))
+
+    def resolve_link(path, **kwargs):
+        if path == link:
+            if invalid == "broken":
+                raise FileNotFoundError("broken link")
+            return resolve(root if invalid == "cycle" else root / "obs-ffmpeg-mux")
+        return resolve(path, **kwargs)
+
+    monkeypatch.setattr(Path, "resolve", resolve_link)
+    def read_link(path):
+        if path == link:
+            return resolve(root / "obs-ffmpeg-mux") if invalid == "absolute" else Path(".")
+        return readlink(path)
+
+    monkeypatch.setattr(Path, "readlink", read_link)
+    with pytest.raises(packaging.LibobsPackagingError, match="link"):
+        packaging.validate_runtime(root, "macos")
+
+
 @pytest.mark.parametrize("target", ["windows", "linux", "macos"])
 def test_staging_copies_only_the_host_architecture_preserves_layout_and_notices(
     tmp_path, target, monkeypatch
 ):
+    if target == "macos" and os.name == "nt":
+        pytest.skip("macOS framework symlink semantics require a POSIX filesystem")
+    if target == "macos":
+        _touch(tmp_path / "link-probe-target")
+        _symlink(tmp_path / "link-probe", "link-probe-target")
     package, app = tmp_path / "installed", tmp_path / "application"
     source = _runtime(package, target)
     _touch(package / "_libs" / target / "arm64" / "other-architecture")

@@ -3,8 +3,11 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 import time
+from contextlib import ExitStack
 
-from PySide6.QtCore import QCoreApplication, QEvent, QObject, QPoint, QPointF, Qt, Signal
+import pytest
+
+from PySide6.QtCore import QCoreApplication, QEvent, QObject, QPoint, QPointF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QMouseEvent
 from PySide6.QtQuick import QQuickItem
 from PySide6.QtQuickWidgets import QQuickWidget
@@ -24,8 +27,8 @@ from solin.core.scenes.recording import (
     ProgramRecordingStatus,
     SceneRecordingConfig,
 )
-from solin.core.scenes.workspace import SceneWorkspaceService
 from solin.ui.qml.scenes import ScenesEditorWidget
+from tests._qt import mouse_move, mouse_press, mouse_release, show_and_activate, wait_until
 
 
 class _Projection:
@@ -133,6 +136,35 @@ def _seed_names() -> SceneSeedNames:
     )
 
 
+@pytest.fixture
+def scene_editor_factory(request, scene_workspace_factory):
+    def create(paths: ProfilePaths, *, recording=None, engine_ready=False):
+        cleanup = ExitStack()
+        request.addfinalizer(cleanup.close)
+        workspace = scene_workspace_factory(paths, seed_names=_seed_names())
+        controller = SceneRuntimeController(workspace, _Projection())
+        cleanup.callback(controller.close)
+        if engine_ready:
+            controller._set_engine_ready(True)
+        widget = ScenesEditorWidget(controller, recording=recording)
+        # The editor is a child viewport in production, without a native title
+        # bar that Cocoa constrains to the available screen height.
+        widget.setWindowFlag(Qt.WindowType.FramelessWindowHint)
+
+        def close_widget() -> None:
+            try:
+                widget.cleanup()
+            finally:
+                widget.deleteLater()
+                QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+                QCoreApplication.processEvents()
+
+        cleanup.callback(close_widget)
+        return workspace, controller, widget, cleanup.close
+
+    return create
+
+
 def _find_quick_item(root: QQuickItem, object_name: str) -> QQuickItem | None:
     if root.objectName() == object_name:
         return root
@@ -154,10 +186,10 @@ def _wait_until(predicate, timeout_ms: int = 1000) -> bool:
     return bool(predicate())
 
 
-def test_scenes_qml_editor_loads_with_the_real_workspace(tmp_path: Path) -> None:
-    workspace = SceneWorkspaceService(_profile_paths(tmp_path), seed_names=_seed_names())
-    controller = SceneRuntimeController(workspace, _Projection())
-    widget = ScenesEditorWidget(controller)
+def test_scenes_qml_editor_loads_with_the_real_workspace(
+    scene_editor_factory, tmp_path: Path
+) -> None:
+    workspace, controller, widget, _close_editor = scene_editor_factory(_profile_paths(tmp_path))
     widget.resize(1280, 760)
     widget.show()
     QCoreApplication.processEvents()
@@ -234,26 +266,21 @@ def test_scenes_qml_editor_loads_with_the_real_workspace(tmp_path: Path) -> None
     assert canvas is not None
     assert canvas.property("width") > 300
 
-    widget.cleanup()
-    widget.deleteLater()
-    QCoreApplication.processEvents()
-    controller.close()
-
 
 def test_program_recording_control_and_settings_share_the_injected_state(
+    scene_editor_factory,
     tmp_path: Path,
 ) -> None:
-    workspace = SceneWorkspaceService(_profile_paths(tmp_path), seed_names=_seed_names())
-    controller = SceneRuntimeController(workspace, _Projection())
-    controller._set_engine_ready(True)
     recording = _Recording(tmp_path / "Videos" / "Solin")
-    widget = ScenesEditorWidget(controller, recording=recording)
-    widget.resize(1280, 760)
-    widget.show()
+    workspace, controller, widget, _close_editor = scene_editor_factory(
+        _profile_paths(tmp_path), recording=recording, engine_ready=True,
+    )
+    show_and_activate(widget, size=QSize(1280, 760))
     assert _wait_until(lambda: widget._qml.status() is QQuickWidget.Status.Ready)
 
     root = widget._qml.rootObject()
     assert root is not None
+    wait_until(lambda: root.width() == 1280, description="wide recording layout")
     recording_button = root.findChild(QQuickItem, "scenesProgramRecordingButton")
     recording_popover = root.findChild(QObject, "scenesRecordingPopover")
     microphone = root.findChild(QQuickItem, "scenesRecordingMicrophone")
@@ -291,7 +318,10 @@ def test_program_recording_control_and_settings_share_the_injected_state(
     recording_popover.close()
 
     widget.resize(450, 400)
-    QCoreApplication.processEvents()
+    wait_until(
+        lambda: root.width() == 450 and not recording_button.property("expanded"),
+        description="compact recording layout",
+    )
     assert recording_button.property("expanded") is False
     recording_button.settingsRequested.emit()
     QCoreApplication.processEvents()
@@ -307,16 +337,11 @@ def test_program_recording_control_and_settings_share_the_injected_state(
     controller.set_output_enabled(BusId.VIRTUAL_CAMERA, False)
     assert not widget.bridge.profileChangesBlocked
 
-    widget.cleanup()
-    widget.deleteLater()
-    QCoreApplication.processEvents()
-    controller.close()
 
-
-def test_canvas_framing_shortcuts_overlay_and_responsive_actions(tmp_path: Path) -> None:
-    workspace = SceneWorkspaceService(_profile_paths(tmp_path), seed_names=_seed_names())
-    controller = SceneRuntimeController(workspace, _Projection())
-    widget = ScenesEditorWidget(controller)
+def test_canvas_framing_shortcuts_overlay_and_responsive_actions(
+    scene_editor_factory, tmp_path: Path
+) -> None:
+    workspace, controller, widget, _close_editor = scene_editor_factory(_profile_paths(tmp_path))
     widget.resize(1280, 760)
     widget.show()
     assert _wait_until(lambda: widget._qml.status() is QQuickWidget.Status.Ready)
@@ -399,70 +424,59 @@ def test_canvas_framing_shortcuts_overlay_and_responsive_actions(tmp_path: Path)
     QCoreApplication.processEvents()
     assert begin_button.property("showLabel") is False
 
-    widget.cleanup()
-    widget.deleteLater()
-    QCoreApplication.processEvents()
-    controller.close()
 
-
-def test_alt_handle_drag_crops_and_framing_keyboard_commits_the_crop(tmp_path: Path) -> None:
-    workspace = SceneWorkspaceService(_profile_paths(tmp_path), seed_names=_seed_names())
-    controller = SceneRuntimeController(workspace, _Projection())
-    widget = ScenesEditorWidget(controller)
+def test_alt_handle_drag_crops_and_framing_keyboard_commits_the_crop(
+    scene_editor_factory, tmp_path: Path
+) -> None:
+    workspace, controller, widget, _close_editor = scene_editor_factory(_profile_paths(tmp_path))
     widget.resize(1280, 760)
     widget.show()
     assert _wait_until(lambda: widget._qml.status() is QQuickWidget.Status.Ready)
-    try:
-        scene = next(scene for scene in controller.document.scenes if scene.name == "Camera")
-        layer = scene.layers[0]
-        controller.documents.update_layer(
-            scene.id, layer.id,
-            replace(layer, rect=NormalizedRect(x=0.2, y=0.2, width=0.6, height=0.6)),
-        )
-        widget.bridge.selectScene(scene.id)
-        widget.bridge.selectLayer(layer.id)
+    scene = next(scene for scene in controller.document.scenes if scene.name == "Camera")
+    layer = scene.layers[0]
+    controller.documents.update_layer(
+        scene.id, layer.id,
+        replace(layer, rect=NormalizedRect(x=0.2, y=0.2, width=0.6, height=0.6)),
+    )
+    widget.bridge.selectScene(scene.id)
+    widget.bridge.selectLayer(layer.id)
+    QCoreApplication.processEvents()
+    root = widget._qml.rootObject()
+    layer_item = _find_quick_item(root, f"scenesCanvasLayer-{layer.id}")
+    assert layer_item is not None
+    center = layer_item.mapToScene(QPointF(layer_item.width() / 2, layer_item.height() / 2))
+    QTest.mouseClick(widget._qml, Qt.MouseButton.LeftButton, pos=center.toPoint())
+    start = layer_item.mapToScene(QPointF(0, layer_item.height() / 2))
+    end = start + QPointF(40, 0)
+    for event_type, point, button, buttons in (
+        (QEvent.Type.MouseButtonPress, start, Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton),
+        (QEvent.Type.MouseMove, end, Qt.MouseButton.NoButton, Qt.MouseButton.LeftButton),
+        (QEvent.Type.MouseButtonRelease, end, Qt.MouseButton.LeftButton, Qt.MouseButton.NoButton),
+    ):
+        QCoreApplication.sendEvent(widget._qml, QMouseEvent(
+            event_type, point, point, button, buttons, Qt.KeyboardModifier.AltModifier,
+        ))
         QCoreApplication.processEvents()
-        root = widget._qml.rootObject()
-        layer_item = _find_quick_item(root, f"scenesCanvasLayer-{layer.id}")
-        assert layer_item is not None
-        center = layer_item.mapToScene(QPointF(layer_item.width() / 2, layer_item.height() / 2))
-        QTest.mouseClick(widget._qml, Qt.MouseButton.LeftButton, pos=center.toPoint())
-        start = layer_item.mapToScene(QPointF(0, layer_item.height() / 2))
-        end = start + QPointF(40, 0)
-        for event_type, point, button, buttons in (
-            (QEvent.Type.MouseButtonPress, start, Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton),
-            (QEvent.Type.MouseMove, end, Qt.MouseButton.NoButton, Qt.MouseButton.LeftButton),
-            (QEvent.Type.MouseButtonRelease, end, Qt.MouseButton.LeftButton, Qt.MouseButton.NoButton),
-        ):
-            QCoreApplication.sendEvent(widget._qml, QMouseEvent(
-                event_type, point, point, button, buttons, Qt.KeyboardModifier.AltModifier,
-            ))
-            QCoreApplication.processEvents()
-        cropped = controller.document.scene(scene.id).layers[0]
-        assert cropped.crop.left > 0
-        assert cropped.crop.right == 0
-        assert cropped.rect.x > 0.2
-        assert cropped.rect.width < 0.6
-        QTest.keyClick(widget._qml, Qt.Key.Key_F)
-        assert widget.bridge.framingActive
-        QTest.keyClick(widget._qml, Qt.Key.Key_Right, Qt.KeyboardModifier.ShiftModifier)
-        QTest.keyClick(widget._qml, Qt.Key.Key_Return)
-        QCoreApplication.processEvents()
-        assert not widget.bridge.framingActive
-        framed = controller.document.scene(scene.id).layers[0]
-        assert framed.rect == NormalizedRect()
-        assert framed.crop != cropped.crop
-    finally:
-        widget.cleanup()
-        widget.deleteLater()
-        QCoreApplication.processEvents()
-        controller.close()
+    cropped = controller.document.scene(scene.id).layers[0]
+    assert cropped.crop.left > 0
+    assert cropped.crop.right == 0
+    assert cropped.rect.x > 0.2
+    assert cropped.rect.width < 0.6
+    QTest.keyClick(widget._qml, Qt.Key.Key_F)
+    assert widget.bridge.framingActive
+    QTest.keyClick(widget._qml, Qt.Key.Key_Right, Qt.KeyboardModifier.ShiftModifier)
+    QTest.keyClick(widget._qml, Qt.Key.Key_Return)
+    QCoreApplication.processEvents()
+    assert not widget.bridge.framingActive
+    framed = controller.document.scene(scene.id).layers[0]
+    assert framed.rect == NormalizedRect()
+    assert framed.crop != cropped.crop
 
 
-def test_responsive_drawer_toggle_reflects_the_drawer_state(tmp_path: Path) -> None:
-    workspace = SceneWorkspaceService(_profile_paths(tmp_path), seed_names=_seed_names())
-    controller = SceneRuntimeController(workspace, _Projection())
-    widget = ScenesEditorWidget(controller)
+def test_responsive_drawer_toggle_reflects_the_drawer_state(
+    scene_editor_factory, tmp_path: Path
+) -> None:
+    workspace, controller, widget, _close_editor = scene_editor_factory(_profile_paths(tmp_path))
     widget.resize(1000, 700)
     widget.show()
     assert _wait_until(lambda: widget._qml.status() is QQuickWidget.Status.Ready)
@@ -486,19 +500,15 @@ def test_responsive_drawer_toggle_reflects_the_drawer_state(tmp_path: Path) -> N
     assert _wait_until(lambda: QColor(toggle.property("color")).alpha() > 0)
     assert str(toggle_icon.property("source")) != closed_icon_source
 
-    widget.cleanup()
-    widget.deleteLater()
-    QCoreApplication.processEvents()
-    controller.close()
-
 
 def test_transition_duration_fields_apply_uncommitted_text_and_persist(
+    scene_editor_factory,
+    scene_workspace_factory,
+    request,
     tmp_path: Path,
 ) -> None:
     paths = _profile_paths(tmp_path)
-    workspace = SceneWorkspaceService(paths, seed_names=_seed_names())
-    controller = SceneRuntimeController(workspace, _Projection())
-    widget = ScenesEditorWidget(controller)
+    workspace, controller, widget, close_editor = scene_editor_factory(paths)
     widget.resize(1280, 760)
     widget.show()
     QCoreApplication.processEvents()
@@ -569,16 +579,14 @@ def test_transition_duration_fields_apply_uncommitted_text_and_persist(
         lambda: controller.documents.effective_transition(scene_id).duration_ms == 825
     )
 
-    widget.cleanup()
-    widget.deleteLater()
-    QCoreApplication.processEvents()
-    controller.close()
 
-    reopened_workspace = SceneWorkspaceService(paths, seed_names=_seed_names())
+    close_editor()
+
+    reopened_workspace = scene_workspace_factory(paths, seed_names=_seed_names())
     reopened_controller = SceneRuntimeController(reopened_workspace, _Projection())
+    request.addfinalizer(reopened_controller.close)
     assert reopened_controller.document.transition_policy.default.duration_ms == 725
     assert reopened_controller.documents.effective_transition(scene_id).duration_ms == 825
-    reopened_controller.close()
 
 
 def test_scene_qml_sources_describe_both_reorder_ghosts_and_responsive_drawer() -> None:
@@ -640,15 +648,14 @@ def test_scene_qml_sources_describe_both_reorder_ghosts_and_responsive_drawer() 
     ).read_text(encoding="utf-8")
 
 
-def test_scene_and_source_drag_handles_update_the_native_cursor(tmp_path: Path) -> None:
-    workspace = SceneWorkspaceService(_profile_paths(tmp_path), seed_names=_seed_names())
-    controller = SceneRuntimeController(workspace, _Projection())
-    widget = ScenesEditorWidget(controller)
-    widget.resize(1280, 760)
-    widget.show()
-    QCoreApplication.processEvents()
+def test_scene_and_source_drag_handles_update_the_native_cursor(
+    scene_editor_factory, tmp_path: Path
+) -> None:
+    workspace, controller, widget, _close_editor = scene_editor_factory(_profile_paths(tmp_path))
+    show_and_activate(widget, size=QSize(1280, 760))
     root = widget._qml.rootObject()
     assert root is not None
+    wait_until(lambda: root.width() == 1280, description="wide scene editor layout")
 
     scene_id = str(widget.bridge.scenesModel.get(0)["id"])
     assert _wait_until(
@@ -659,24 +666,22 @@ def test_scene_and_source_drag_handles_update_the_native_cursor(tmp_path: Path) 
     scene_point = scene_drag.mapToScene(
         QPointF(scene_drag.width() / 2, scene_drag.height() / 2)
     ).toPoint()
-    QTest.mouseMove(widget._qml, scene_point)
+    mouse_move(widget._qml, scene_point)
     assert _wait_until(
         lambda: widget._qml.quickWindow().cursor().shape()
         == Qt.CursorShape.OpenHandCursor
     )
     scene_drag_point = scene_point + QPoint(0, int(scene_drag.height()) + 12)
-    QTest.mousePress(widget._qml, Qt.MouseButton.LeftButton, pos=scene_point)
-    QTest.mouseMove(widget._qml, scene_drag_point)
-    assert _wait_until(
-        lambda: QApplication.overrideCursor() is not None
-        and QApplication.overrideCursor().shape()
-        == Qt.CursorShape.ClosedHandCursor
-    )
-    QTest.mouseRelease(
-        widget._qml,
-        Qt.MouseButton.LeftButton,
-        pos=scene_drag_point,
-    )
+    mouse_press(widget._qml, Qt.MouseButton.LeftButton, pos=scene_point)
+    try:
+        mouse_move(widget._qml, scene_drag_point)
+        wait_until(
+            lambda: QApplication.overrideCursor() is not None
+            and QApplication.overrideCursor().shape() == Qt.CursorShape.ClosedHandCursor,
+            description="scene drag cursor",
+        )
+    finally:
+        mouse_release(widget._qml, Qt.MouseButton.LeftButton, pos=scene_drag_point)
     assert _wait_until(lambda: QApplication.overrideCursor() is None)
 
     layer_id = str(widget.bridge.layersModel.get(0)["id"])
@@ -685,40 +690,24 @@ def test_scene_and_source_drag_handles_update_the_native_cursor(tmp_path: Path) 
     source_point = source_drag.mapToScene(
         QPointF(source_drag.width() / 2, source_drag.height() / 2)
     ).toPoint()
-    # Moving directly from the just-released scene drag to the source drag can
-    # be coalesced by the offscreen Qt backend.  Cross a neutral point first so
-    # the hover leave/enter pair is deterministic, matching a real pointer path.
-    QTest.mouseMove(widget._qml, QPoint(1, 1))
-    QCoreApplication.processEvents()
-    QTest.mouseMove(widget._qml, source_point)
-    # The native cursor bridge itself is deterministic; Qt's offscreen hover
-    # synthesis can omit the second entered event after a drag in a long test
-    # process. Exercise the same QML→bridge path explicitly once the hit target
-    # is resolved, while the isolated hover test above still covers synthesis.
-    widget.bridge.beginPointer(
-        f"source-drag:{layer_id}",
-        int(Qt.CursorShape.OpenHandCursor.value),
+    mouse_move(widget._qml, QPoint(1, 1))
+    mouse_move(widget._qml, source_point)
+    wait_until(
+        lambda: widget._qml.quickWindow().cursor().shape() == Qt.CursorShape.OpenHandCursor,
+        description="source drag hover cursor",
     )
-    assert widget._qml.quickWindow().cursor().shape() == Qt.CursorShape.OpenHandCursor
     source_drag_point = source_point + QPoint(0, int(source_drag.height()) + 12)
-    QTest.mousePress(widget._qml, Qt.MouseButton.LeftButton, pos=source_point)
-    QTest.mouseMove(widget._qml, source_drag_point)
-    assert _wait_until(
-        lambda: QApplication.overrideCursor() is not None
-        and QApplication.overrideCursor().shape()
-        == Qt.CursorShape.ClosedHandCursor
-    )
-    QTest.mouseRelease(
-        widget._qml,
-        Qt.MouseButton.LeftButton,
-        pos=source_drag_point,
-    )
+    mouse_press(widget._qml, Qt.MouseButton.LeftButton, pos=source_point)
+    try:
+        mouse_move(widget._qml, source_drag_point)
+        wait_until(
+            lambda: QApplication.overrideCursor() is not None
+            and QApplication.overrideCursor().shape() == Qt.CursorShape.ClosedHandCursor,
+            description="source drag cursor",
+        )
+    finally:
+        mouse_release(widget._qml, Qt.MouseButton.LeftButton, pos=source_drag_point)
     assert _wait_until(lambda: QApplication.overrideCursor() is None)
-
-    widget.cleanup()
-    widget.deleteLater()
-    QCoreApplication.processEvents()
-    controller.close()
 
 
 def test_scene_qml_attaches_ptz_keys_to_an_item() -> None:

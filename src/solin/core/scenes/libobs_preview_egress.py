@@ -8,17 +8,17 @@ cross-platform ``SHARED_MEMORY_BGRA`` block the app created and reads
 ``handle_token`` in the hydrate ``preview_egress`` descriptor; the sidecar
 attaches to it as a writer.
 
-Rendering runs on a worker thread that enters the graphics context per frame
-(serialised with the main render loop by libobs' graphics mutex). The rendered
-source is a **borrowed** scene source owned by the scene graph, so a render and a
-scene-source swap are mutually excluded by ``_lock`` — the sidecar clears the
-source before a re-hydrate releases the old scenes.
+Rendering runs in libobs' main render callback, which already owns the graphics
+context. A competing worker can starve behind the main composite on a software
+renderer. The source is borrowed from the scene graph; rendering and source
+swaps are mutually excluded, and the sidecar clears it before rebuilding scenes.
 """
 
 from __future__ import annotations
 
 import logging
 import threading
+import time
 from collections.abc import Callable
 from typing import Any
 
@@ -36,17 +36,25 @@ class LibobsPreviewEgress:
         self._runtime = runtime
         self._before_render = before_render
         self._lock = threading.Lock()
+        self._lifecycle_lock = threading.Lock()
         self._writer: Any = None
         self._handle_token = ""
         self._width = 0
         self._height = 0
         self._scene_source: Any = None
         self._enabled = False
-        self._stop = threading.Event()
-        self._thread: threading.Thread | None = None
+        self._callback: Any = None
+        self._render_to_bgra: Callable[..., Any] | None = None
+        self._next_render_at = 0.0
+        self._closed = False
 
     def configure(self, descriptor: object) -> None:
         """Attach (or re-attach) the writer to the app's egress block."""
+        with self._lifecycle_lock:
+            if not self._closed:
+                self._configure(descriptor)
+
+    def _configure(self, descriptor: object) -> None:
         if not isinstance(descriptor, dict) or descriptor.get("transport") != SHARED_MEMORY_BGRA:
             self._detach_writer()
             return
@@ -77,7 +85,19 @@ class LibobsPreviewEgress:
             self._handle_token = token
             self._width = width
             self._height = height
-        self._ensure_thread()
+            self._next_render_at = 0.0
+        from solin.core.media.obs_source_render import resolve_render_source_to_bgra
+
+        try:
+            self._render_to_bgra = resolve_render_source_to_bgra(
+                before_render=self._before_render, opaque_background=True,
+            )
+            # OBS registration/removal takes its callback-list mutex. Never hold
+            # the egress lock here: an executing callback may be waiting for it.
+            self._callback = self._runtime.ob.add_main_render_callback(self._on_render)
+        except Exception:  # noqa: BLE001 - libobs callback boundary
+            log.warning("could not register preview render callback", exc_info=True)
+            self._detach_writer()
 
     def set_scene_source(self, source: Any) -> None:
         """Set the borrowed scene source to render (None to stop rendering).
@@ -87,52 +107,41 @@ class LibobsPreviewEgress:
         """
         with self._lock:
             self._scene_source = source
+            self._next_render_at = 0.0
 
     def set_enabled(self, enabled: bool) -> None:
         with self._lock:
             self._enabled = bool(enabled)
+            self._next_render_at = 0.0
 
-    def _ensure_thread(self) -> None:
-        if self._thread is not None and self._thread.is_alive():
-            return
-        self._stop.clear()
-        self._thread = threading.Thread(
-            target=self._loop, name="solin-preview-render", daemon=True
-        )
-        self._thread.start()
-
-    def _loop(self) -> None:
-        from solin.core.media.obs_source_render import resolve_render_source_to_bgra
-
-        render_to_bgra = resolve_render_source_to_bgra(
-            before_render=self._before_render, opaque_background=True,
-        )
-
-        canvas = self._runtime.video
-        while not self._stop.wait(_RENDER_INTERVAL_S):
+    def _on_render(self, _cx: int, _cy: int) -> None:
+        # The binding's callback trampoline catches exceptions without logging.
+        # Own this boundary so a failed render/write remains diagnosable.
+        try:
             with self._lock:
                 writer = self._writer
                 source = self._scene_source
                 enabled = self._enabled
                 width = self._width
                 height = self._height
-                if writer is None or source is None or not enabled:
-                    continue
-                try:
-                    result = render_to_bgra(
-                        source, width, height,
-                        canvas_width=canvas.width, canvas_height=canvas.height,
-                    )
-                except Exception:  # noqa: BLE001 - libobs graphics boundary
-                    log.warning("preview render errored", exc_info=True)
-                    continue
+                render_to_bgra = self._render_to_bgra
+                if writer is None or source is None or not enabled or render_to_bgra is None:
+                    return
+                now = time.monotonic()
+                if now < self._next_render_at:
+                    return
+                self._next_render_at = now + _RENDER_INTERVAL_S
+                canvas = self._runtime.video
+                result = render_to_bgra(
+                    source, width, height,
+                    canvas_width=canvas.width, canvas_height=canvas.height,
+                )
                 if result is None:
-                    continue
+                    return
                 data, stride = result
-                try:
-                    writer.write(self._tight(data, stride, width, height), stride=width * 4)
-                except Exception:  # noqa: BLE001 - shared-memory boundary
-                    log.debug("preview egress write errored", exc_info=True)
+                writer.write(self._tight(data, stride, width, height), stride=width * 4)
+        except Exception:  # noqa: BLE001 - libobs render/shared-memory callback boundary
+            log.warning("preview render or egress write errored", exc_info=True)
 
     @staticmethod
     def _tight(data: bytes, stride: int, width: int, height: int) -> bytes:
@@ -146,9 +155,16 @@ class LibobsPreviewEgress:
         return bytes(out)
 
     def _detach_writer(self) -> None:
+        # Removal waits for the native callback to finish, before the writer or
+        # borrowed source can be disposed. The lifecycle lock serializes callers.
+        callback = self._callback
+        if callback is not None:
+            self._runtime.ob.remove_main_render_callback(callback)
+            self._callback = None
         with self._lock:
             writer, self._writer = self._writer, None
             self._handle_token = ""
+            self._render_to_bgra = None
         if writer is not None:
             try:
                 writer.close()
@@ -156,10 +172,8 @@ class LibobsPreviewEgress:
                 log.debug("preview egress writer close errored", exc_info=True)
 
     def shutdown(self) -> None:
-        self._stop.set()
-        thread, self._thread = self._thread, None
-        if thread is not None and thread is not threading.current_thread():
-            thread.join(timeout=1.0)
-        with self._lock:
-            self._scene_source = None
-        self._detach_writer()
+        with self._lifecycle_lock:
+            self._closed = True
+            self._detach_writer()
+            with self._lock:
+                self._scene_source = None

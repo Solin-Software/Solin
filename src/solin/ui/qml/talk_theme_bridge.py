@@ -110,8 +110,8 @@ class TalkThemeBridge(QObject):
     editLayerRequested = Signal(str)
     saveAsRequested = Signal()
     unsavedChangesRequested = Signal(str)
-    pointerEntered = Signal(int)
-    pointerExited = Signal()
+    pointerEntered = Signal(str, int)
+    pointerExited = Signal(str)
 
     def __init__(
         self,
@@ -1011,13 +1011,13 @@ class TalkThemeBridge(QObject):
         self.changed.emit()
         self.exportRequested.emit()
 
-    @Slot(int)
-    def beginPointer(self, cursor_shape: int) -> None:
-        self.pointerEntered.emit(cursor_shape)
+    @Slot(str, int)
+    def beginPointer(self, cursor_source: str, cursor_shape: int) -> None:
+        self.pointerEntered.emit(cursor_source, cursor_shape)
 
-    @Slot()
-    def endPointer(self) -> None:
-        self.pointerExited.emit()
+    @Slot(str)
+    def endPointer(self, cursor_source: str) -> None:
+        self.pointerExited.emit(cursor_source)
 
     def finish_projection(self, result: ProjectionResult) -> None:
         self._rendering = False

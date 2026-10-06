@@ -11,13 +11,13 @@ if a future ``pylibobs`` ships its own version the call sites can prefer it unch
 Rendering happens under ``obs_enter_graphics()``. The texrender is drawn at the requested
 output size while ``gs_ortho`` spans the *canvas* coordinate space, so a 1920x1080 scene
 scales into whatever cell the caller asked for. Stage surfaces are cached per size because
-allocating one per frame would thrash GPU memory at preview frame rates.
+allocating one per frame would thrash GPU memory at preview frame rates. The native
+graphics mutex also guards these caches, including calls from its render callbacks.
 """
 
 from __future__ import annotations
 
 import logging
-import threading
 from collections.abc import Callable
 from functools import partial
 from typing import Any
@@ -37,7 +37,6 @@ _GS_BLEND_ZERO = 0
 _GS_BLEND_ONE = 1
 _GS_BLEND_INVSRCALPHA = 5
 
-_lock = threading.Lock()
 _texrender: Any = None
 _stage_surfaces: dict[tuple[int, int], Any] = {}
 _casts: dict[str, Any] = {}
@@ -54,15 +53,19 @@ def _bind() -> tuple[Any, Any]:
 
     lib: Any = get_lib()
     if not _casts:
-        _casts["texrender_create"] = ffi.cast(
-            "struct gs_texrender_s **(*)(int, int)", lib.gs_texrender_create
-        )
-        _casts["stagesurface_create"] = ffi.cast(
-            "struct gs_stagesurf_s **(*)(uint32_t, uint32_t, int)", lib.gs_stagesurface_create
-        )
-        _casts["texrender_get_texture"] = ffi.cast(
-            "gs_texture_t *(*)(struct gs_texrender_s **)", lib.gs_texrender_get_texture
-        )
+        # Publish a complete binding table; another egress must never observe a
+        # partially prepared set while a CFFI conversion releases the GIL.
+        _casts.update({
+            "texrender_create": ffi.cast(
+                "struct gs_texrender_s **(*)(int, int)", lib.gs_texrender_create
+            ),
+            "stagesurface_create": ffi.cast(
+                "struct gs_stagesurf_s **(*)(uint32_t, uint32_t, int)", lib.gs_stagesurface_create
+            ),
+            "texrender_get_texture": ffi.cast(
+                "gs_texture_t *(*)(struct gs_texrender_s **)", lib.gs_texrender_get_texture
+            ),
+        })
     return ffi, lib
 
 
@@ -102,68 +105,67 @@ def render_source_to_bgra(
     global _texrender
     ffi, lib = _bind()
 
-    with _lock:
-        lib.obs_enter_graphics()
-        try:
-            if before_render is not None and not before_render():
-                return None
-            if _texrender is None:
-                _texrender = _casts["texrender_create"](_GS_BGRA, _GS_ZS_NONE)
-                if not _texrender:
-                    raise RuntimeError("gs_texrender_create returned NULL")
-            surface = _stage_surface_for(ffi, width, height)
-
-            lib.gs_texrender_reset(_texrender)
-            if not lib.gs_texrender_begin(_texrender, width, height):
-                return None
-            try:
-                # struct vec4 is opaque in pylibobs's cdef, so the four floats are
-                # allocated directly and reinterpreted — vec4 is exactly float[4].
-                clear_components = ffi.new(
-                    "float[4]", [0.0, 0.0, 0.0, 1.0 if opaque_background else 0.0],
-                )
-                clear_color = ffi.cast("struct vec4 *", clear_components)
-                lib.gs_clear(_GS_CLEAR_COLOR, clear_color, 0.0, 0)
-                # Span the canvas coordinate space so the scene scales into the target.
-                lib.gs_ortho(
-                    0.0, float(canvas_width), 0.0, float(canvas_height), -100.0, 100.0
-                )
-                # Copy raw sources unchanged. A composited scene carries premultiplied
-                # alpha, so flatten it over black without multiplying alpha twice.
-                lib.gs_blend_state_push()
-                lib.gs_blend_function(
-                    _GS_BLEND_ONE,
-                    _GS_BLEND_INVSRCALPHA if opaque_background else _GS_BLEND_ZERO,
-                )
-                try:
-                    lib.obs_source_video_render(pointer)
-                finally:
-                    lib.gs_blend_state_pop()
-            finally:
-                lib.gs_texrender_end(_texrender)
-
-            texture = _casts["texrender_get_texture"](_texrender)
-            if not texture:
-                return None
-            lib.gs_stage_texture(surface, texture)
-
-            data_pointer = ffi.new("uint8_t **")
-            linesize = ffi.new("uint32_t *")
-            if not lib.gs_stagesurface_map(surface, data_pointer, linesize):
-                return None
-            try:
-                stride = int(linesize[0])
-                if stride <= 0 or data_pointer[0] == ffi.NULL:
-                    return None
-                data = bytes(ffi.buffer(data_pointer[0], stride * height))
-            finally:
-                lib.gs_stagesurface_unmap(surface)
-            return data, stride
-        except Exception:  # noqa: BLE001 - libobs graphics boundary
-            log.debug("render_source_to_bgra failed", exc_info=True)
+    lib.obs_enter_graphics()
+    try:
+        if before_render is not None and not before_render():
             return None
+        if _texrender is None:
+            _texrender = _casts["texrender_create"](_GS_BGRA, _GS_ZS_NONE)
+            if not _texrender:
+                raise RuntimeError("gs_texrender_create returned NULL")
+        surface = _stage_surface_for(ffi, width, height)
+
+        lib.gs_texrender_reset(_texrender)
+        if not lib.gs_texrender_begin(_texrender, width, height):
+            return None
+        try:
+            # struct vec4 is opaque in pylibobs's cdef, so the four floats are
+            # allocated directly and reinterpreted — vec4 is exactly float[4].
+            clear_components = ffi.new(
+                "float[4]", [0.0, 0.0, 0.0, 1.0 if opaque_background else 0.0],
+            )
+            clear_color = ffi.cast("struct vec4 *", clear_components)
+            lib.gs_clear(_GS_CLEAR_COLOR, clear_color, 0.0, 0)
+            # Span the canvas coordinate space so the scene scales into the target.
+            lib.gs_ortho(
+                0.0, float(canvas_width), 0.0, float(canvas_height), -100.0, 100.0
+            )
+            # Copy raw sources unchanged. A composited scene carries premultiplied
+            # alpha, so flatten it over black without multiplying alpha twice.
+            lib.gs_blend_state_push()
+            lib.gs_blend_function(
+                _GS_BLEND_ONE,
+                _GS_BLEND_INVSRCALPHA if opaque_background else _GS_BLEND_ZERO,
+            )
+            try:
+                lib.obs_source_video_render(pointer)
+            finally:
+                lib.gs_blend_state_pop()
         finally:
-            lib.obs_leave_graphics()
+            lib.gs_texrender_end(_texrender)
+
+        texture = _casts["texrender_get_texture"](_texrender)
+        if not texture:
+            return None
+        lib.gs_stage_texture(surface, texture)
+
+        data_pointer = ffi.new("uint8_t **")
+        linesize = ffi.new("uint32_t *")
+        if not lib.gs_stagesurface_map(surface, data_pointer, linesize):
+            return None
+        try:
+            stride = int(linesize[0])
+            if stride <= 0 or data_pointer[0] == ffi.NULL:
+                return None
+            data = bytes(ffi.buffer(data_pointer[0], stride * height))
+        finally:
+            lib.gs_stagesurface_unmap(surface)
+        return data, stride
+    except Exception:  # noqa: BLE001 - libobs graphics boundary
+        log.debug("render_source_to_bgra failed", exc_info=True)
+        return None
+    finally:
+        lib.obs_leave_graphics()
 
 
 def shutdown() -> None:
@@ -177,23 +179,22 @@ def shutdown() -> None:
         _texrender = None
         _stage_surfaces.clear()
         return
-    with _lock:
-        lib.obs_enter_graphics()
-        try:
-            for surface in _stage_surfaces.values():
-                try:
-                    lib.gs_stagesurface_destroy(surface)
-                except Exception:  # noqa: BLE001 - teardown must be total
-                    log.debug("gs_stagesurface_destroy failed", exc_info=True)
-            _stage_surfaces.clear()
-            if _texrender is not None:
-                try:
-                    lib.gs_texrender_destroy(_texrender)
-                except Exception:  # noqa: BLE001 - teardown must be total
-                    log.debug("gs_texrender_destroy failed", exc_info=True)
-                _texrender = None
-        finally:
-            lib.obs_leave_graphics()
+    lib.obs_enter_graphics()
+    try:
+        for surface in _stage_surfaces.values():
+            try:
+                lib.gs_stagesurface_destroy(surface)
+            except Exception:  # noqa: BLE001 - teardown must be total
+                log.debug("gs_stagesurface_destroy failed", exc_info=True)
+        _stage_surfaces.clear()
+        if _texrender is not None:
+            try:
+                lib.gs_texrender_destroy(_texrender)
+            except Exception:  # noqa: BLE001 - teardown must be total
+                log.debug("gs_texrender_destroy failed", exc_info=True)
+            _texrender = None
+    finally:
+        lib.obs_leave_graphics()
 
 
 def resolve_render_source_to_bgra(

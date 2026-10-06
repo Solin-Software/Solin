@@ -50,11 +50,8 @@ class SceneThumbnailEgressController(QObject):
         self._cell = (0, 0)
         self._generation = 0
         self._closed = False
-        self._stop = threading.Event()
-        self._worker = threading.Thread(
-            target=self._run, name="solin-scene-thumbnails", daemon=True
-        )
-        self._worker.start()
+        self._worker: threading.Thread | None = None
+        self._stop_event: threading.Event | None = None
 
     @property
     def descriptor(self) -> FrameChannelDescriptor | None:
@@ -100,24 +97,35 @@ class SceneThumbnailEgressController(QObject):
         except Exception:  # noqa: BLE001 - shared-memory boundary
             log.warning("could not create the thumbnail channel", exc_info=True)
             return False
-        self._generation += 1
-        descriptor = FrameChannelDescriptor(
-            channel_id=self._channel_id,
-            generation=self._generation,
-            producer_kind=FrameProducerKind.SOLIN_OFFSCREEN,
-            transport=FrameChannelTransport.SHARED_MEMORY_BGRA,
-            handle_token=reader.name,
-            width=cell_width,
-            height=cell_height * len(scene_ids),
-            pixel_format=VideoPixelFormat.BGRA,
-            color_space=VideoColorSpace.SRGB,
-            color_range=VideoColorRange.FULL,
-        )
         with self._lock:
-            old, self._reader = self._reader, reader
-            self._descriptor = descriptor
-            self._scene_ids = scene_ids
-            self._cell = (cell_width, cell_height)
+            if self._closed:
+                closed = True
+                old = None
+            else:
+                closed = False
+                self._generation += 1
+                descriptor = FrameChannelDescriptor(
+                    channel_id=self._channel_id,
+                    generation=self._generation,
+                    producer_kind=FrameProducerKind.SOLIN_OFFSCREEN,
+                    transport=FrameChannelTransport.SHARED_MEMORY_BGRA,
+                    handle_token=reader.name,
+                    width=cell_width,
+                    height=cell_height * len(scene_ids),
+                    pixel_format=VideoPixelFormat.BGRA,
+                    color_space=VideoColorSpace.SRGB,
+                    color_range=VideoColorRange.FULL,
+                )
+                old, self._reader = self._reader, reader
+                self._descriptor = descriptor
+                self._scene_ids = scene_ids
+                self._cell = (cell_width, cell_height)
+                worker = self._prepare_worker_locked()
+                if worker is not None:
+                    worker.start()
+        if closed:
+            self._release(reader)
+            return False
         self._release(old)
         return True
 
@@ -128,6 +136,8 @@ class SceneThumbnailEgressController(QObject):
             self._descriptor = None
             self._scene_ids = ()
             self._cell = (0, 0)
+            worker, stop_event = self._detach_worker_locked()
+        self._stop_worker(worker, stop_event)
         self._release(old)
 
     def close(self) -> None:
@@ -137,9 +147,45 @@ class SceneThumbnailEgressController(QObject):
             self._closed = True
             reader, self._reader = self._reader, None
             self._descriptor = None
-        self._stop.set()
-        self._worker.join(timeout=2.0)
+            self._scene_ids = ()
+            self._cell = (0, 0)
+            worker, stop_event = self._detach_worker_locked()
+        self._stop_worker(worker, stop_event)
         self._release(reader)
+
+    def _prepare_worker_locked(self) -> threading.Thread | None:
+        if self._closed or self._worker is not None:
+            return None
+        stop_event = threading.Event()
+        worker = threading.Thread(
+            target=self._run,
+            args=(stop_event,),
+            name="solin-scene-thumbnails",
+            daemon=True,
+        )
+        self._stop_event = stop_event
+        self._worker = worker
+        return worker
+
+    def _detach_worker_locked(
+        self,
+    ) -> tuple[threading.Thread | None, threading.Event | None]:
+        worker, self._worker = self._worker, None
+        stop_event, self._stop_event = self._stop_event, None
+        return worker, stop_event
+
+    @staticmethod
+    def _stop_worker(
+        worker: threading.Thread | None,
+        stop_event: threading.Event | None,
+    ) -> None:
+        if stop_event is not None:
+            stop_event.set()
+        if worker is None or worker is threading.current_thread():
+            return
+        worker.join(timeout=2.0)
+        if worker.is_alive():
+            log.warning("scene thumbnail worker did not stop within its deadline")
 
     def _release(self, reader: SharedFrameChannelReader | None) -> None:
         if reader is None:
@@ -150,8 +196,8 @@ class SceneThumbnailEgressController(QObject):
             except Exception:  # noqa: BLE001 - best-effort
                 log.debug("thumbnail channel teardown errored", exc_info=True)
 
-    def _run(self) -> None:
-        while not self._stop.wait(_POLL_INTERVAL_S):
+    def _run(self, stop_event: threading.Event) -> None:
+        while not stop_event.wait(_POLL_INTERVAL_S):
             with self._lock:
                 if self._closed:
                     return

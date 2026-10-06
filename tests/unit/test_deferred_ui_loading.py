@@ -71,7 +71,7 @@ def test_async_handle_applies_worker_result_on_application_thread() -> None:
     handle = AsyncLoadHandle(
         lambda: 42,
         lambda value: results.append(
-            (value, QThread.currentThread() is parent.thread())
+            (value, QThread.isMainThread())
         ),
         parent,
         thread_name_prefix="test-async-load",

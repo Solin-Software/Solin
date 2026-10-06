@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+import gc
+
+import pytest
+import shiboken6
+from PySide6.QtCore import QCoreApplication, QEvent, QThread
+
 from solin.ui.qml.media_tree.model import MediaTreeSource, SnapshotPublishResult
 from solin.ui.qml.media_tree.snapshot import (
     MediaTreeNodeSnapshot,
@@ -19,6 +26,36 @@ def _media(node_id: str, *, revision: int = 0, title: str = ""):
 
 def _snapshot(revision: int, *roots: MediaTreeNodeSnapshot) -> MediaTreeSnapshot:
     return MediaTreeSnapshot.create("playlist:test", revision, roots)
+
+
+def test_destroying_source_preserves_the_application_thread() -> None:
+    main_thread = QThread.currentThread()
+    source = MediaTreeSource("playlist:test")
+    source.publish_snapshot(_snapshot(1))
+    source.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    del source
+    gc.collect()
+
+    assert shiboken6.isValid(main_thread)
+    assert main_thread.isCurrentThread()
+    assert QCoreApplication.eventDispatcher() is not None
+
+
+def test_source_rejects_publication_from_a_worker() -> None:
+    source = MediaTreeSource("playlist:test")
+    with ThreadPoolExecutor(max_workers=1) as workers:
+        result = workers.submit(source.publish_snapshot, _snapshot(1))
+        with pytest.raises(RuntimeError, match="Qt thread"):
+            result.result(timeout=2)
+    assert source.revision == -1
+
+
+def test_source_rejects_construction_from_a_worker() -> None:
+    with ThreadPoolExecutor(max_workers=1) as workers:
+        result = workers.submit(MediaTreeSource, "playlist:test")
+        with pytest.raises(RuntimeError, match="created on the main Qt thread"):
+            result.result(timeout=2)
 
 
 def test_source_projects_a_deeply_detached_complete_tree() -> None:

@@ -84,15 +84,15 @@ def test_installed_sideview_distribution_provides_the_native_backend():
 def test_pylibobs_is_a_pinned_runtime_dependency():
     """libobs is the only media engine on this branch, so pin its binding.
 
-    Keep the manifests and the Intel wheel bootstrap on the same binding release.
+    Keep the manifests and the macOS wheel bootstrap on the same binding release.
     """
     pinned = _locked_requirements().get(canonicalize_name("pylibobs"))
 
     assert pinned is not None, "pylibobs is missing from requirements.txt"
     assert str(pinned.specifier) == f"=={PYLIBOBS_VERSION}"
-    from scripts.build_pylibobs_macos import PYLIBOBS_VERSION as intel_binding_version
+    from scripts.build_pylibobs_macos import PYLIBOBS_VERSION as macos_binding_version
 
-    assert Version(intel_binding_version) == PYLIBOBS_VERSION
+    assert Version(macos_binding_version) == PYLIBOBS_VERSION
 
 
 @pytest.mark.parametrize(
@@ -105,14 +105,19 @@ def test_scene_engine_dependency_is_selected_on_every_supported_platform(system,
     assert requirement.marker is None or requirement.marker.evaluate(environment)
 
 
-def test_macos_intel_installation_contains_the_native_media_backend():
-    if platform.system() != "Darwin" or platform.machine().lower() != "x86_64":
+def test_macos_installation_contains_the_native_media_backend():
+    if platform.system() != "Darwin":
         return
     from pylibobs._ffi import ffi, get_lib
-    from pylibobs._lib import get_bundled_modules
+    from pylibobs._lib import find_libobs, get_bundled_modules
 
-    root = Path(pylibobs.__file__).resolve().parent / "_libs" / "macos" / "x86_64"
-    assert (root / "Frameworks" / "libobs.dylib").is_file()
+    architecture = {"x86_64": "x86_64", "amd64": "x86_64", "arm64": "arm64", "aarch64": "arm64"}[
+        platform.machine().lower()
+    ]
+    root = Path(pylibobs.__file__).resolve().parent / "_libs" / "macos" / architecture
+    framework_libobs = root / "Frameworks" / "libobs.framework" / "Versions" / "A" / "libobs"
+    assert framework_libobs.is_file()
+    assert Path(find_libobs()).resolve() == framework_libobs.resolve()
     assert (root / "Frameworks" / "libobs-opengl.dylib").is_file()
     assert (root / "data" / "libobs" / "default.effect").is_file()
     modules = {name: (Path(binary), Path(data)) for name, binary, data in get_bundled_modules()}

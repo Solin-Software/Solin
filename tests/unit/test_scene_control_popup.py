@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 import time
+from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
@@ -32,9 +34,10 @@ from solin.core.scenes.recording import (
 )
 from solin.core.scenes.repository import SceneRuntimeRepository
 from solin.core.scenes.runtime import SceneRuntimeState
-from solin.core.scenes.workspace import SceneWorkspaceService
 from solin.styles.theme import PALETTE
+from solin.widgets.scenes import control_popup
 from solin.widgets.scenes.control_popup import SceneControlPopup, _SceneCard
+from tests._qt import wait_until
 
 
 class _Projection:
@@ -60,7 +63,7 @@ class _Recording(QObject):
     configuration_changed = Signal(object)
     busy_changed = Signal(bool)
 
-    def __init__(self, directory: Path) -> None:
+    def __init__(self, directory: Path, *, monotonic: Callable[[], float]) -> None:
         super().__init__()
         self.supported = True
         self.state = ProgramRecordingState()
@@ -72,6 +75,7 @@ class _Recording(QObject):
             devices=(),
         )
         self.directory = directory
+        self._monotonic = monotonic
         self.toggle_count = 0
 
     @property
@@ -85,7 +89,7 @@ class _Recording(QObject):
             if self.busy
             else ProgramRecordingState(
                 status=ProgramRecordingStatus.RECORDING,
-                started_at_monotonic=time.monotonic() - 65,
+                started_at_monotonic=self._monotonic() - 65,
                 output_path=self.directory / "recording.mp4",
                 active_config=self.configuration,
             )
@@ -96,33 +100,50 @@ class _Recording(QObject):
         return self.directory
 
 
-def _controller(
-    tmp_path: Path,
-    *,
-    projection: _Projection | None = None,
-) -> SceneRuntimeController:
-    paths = ProfilePaths.from_roots(
-        data_dir=tmp_path / "data",
-        cache_dir=tmp_path / "cache",
-        profile_id="scene-control-popup-test",
-    )
-    paths.ensure_dirs()
-    workspace = SceneWorkspaceService(
-        paths,
-        seed_names=SceneSeedNames(
-            content_source="Current content",
-            default_camera_source="Default camera",
-            no_signal_source="No signal background",
-            content_scene="Content",
-            camera_scene="Camera",
-            content_camera_pip_scene="Content and camera",
-            no_signal_scene="No signal",
-            content_layer="Content",
-            camera_layer="Camera",
-            background_layer="Background",
-        ),
-    )
-    return SceneRuntimeController(workspace, projection or _Projection())
+@pytest.fixture
+def recording_factory(monkeypatch: pytest.MonkeyPatch):
+    # Both sides use the same clock, independent of machine uptime. Replacing
+    # this module binding leaves the shared time module and wait deadlines real.
+    def monotonic() -> float:
+        return 100.0
+
+    monkeypatch.setattr(control_popup, "time", SimpleNamespace(monotonic=monotonic))
+
+    def create(directory: Path) -> _Recording:
+        return _Recording(directory, monotonic=monotonic)
+
+    return create
+
+
+@pytest.fixture
+def controller_factory(request, tmp_path: Path, scene_workspace_factory):
+    def create(*, projection: _Projection | None = None) -> SceneRuntimeController:
+        paths = ProfilePaths.from_roots(
+            data_dir=tmp_path / "data",
+            cache_dir=tmp_path / "cache",
+            profile_id="scene-control-popup-test",
+        )
+        paths.ensure_dirs()
+        workspace = scene_workspace_factory(
+            paths,
+            seed_names=SceneSeedNames(
+                content_source="Current content",
+                default_camera_source="Default camera",
+                no_signal_source="No signal background",
+                content_scene="Content",
+                camera_scene="Camera",
+                content_camera_pip_scene="Content and camera",
+                no_signal_scene="No signal",
+                content_layer="Content",
+                camera_layer="Camera",
+                background_layer="Background",
+            ),
+        )
+        controller = SceneRuntimeController(workspace, projection or _Projection())
+        request.addfinalizer(controller.close)
+        return controller
+
+    return create
 
 
 def _add_camera_pip_scene(
@@ -151,13 +172,13 @@ def _add_camera_pip_scene(
 
 
 def test_scene_toolbar_popup_uses_the_shared_program_recording_state(
-    tmp_path: Path,
+    controller_factory, recording_factory, tmp_path: Path,
 ) -> None:
-    controller = _controller(tmp_path)
+    controller = controller_factory()
     controller._set_engine_ready(True)
     # Recording captures the virtual camera, so the control needs that output on.
     controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
-    recording = _Recording(tmp_path / "Videos" / "Solin")
+    recording = recording_factory(tmp_path / "Videos" / "Solin")
     popup = SceneControlPopup(controller, recording=recording)
 
     assert popup._recording_button.isVisibleTo(popup)
@@ -177,7 +198,7 @@ def test_scene_toolbar_popup_uses_the_shared_program_recording_state(
 
     recording.state = ProgramRecordingState(
         status=ProgramRecordingStatus.RECORDING,
-        started_at_monotonic=time.monotonic() - 65,
+        started_at_monotonic=recording.state.started_at_monotonic,
         output_path=tmp_path / "recording.mp4",
         active_config=recording.configuration,
         microphone_warning="Microphone unavailable; recording silence.",
@@ -208,11 +229,10 @@ def test_scene_toolbar_popup_uses_the_shared_program_recording_state(
 
     popup.deleteLater()
     QCoreApplication.processEvents()
-    controller.close()
 
 
 def test_recording_controls_never_show_as_a_standalone_window_during_build(
-    tmp_path: Path,
+    controller_factory, recording_factory, tmp_path: Path,
 ) -> None:
     class _TopLevelShowRecorder(QObject):
         def __init__(self) -> None:
@@ -228,8 +248,8 @@ def test_recording_controls_never_show_as_a_standalone_window_during_build(
                 self.object_names.append(watched.objectName())
             return False
 
-    controller = _controller(tmp_path)
-    recording = _Recording(tmp_path / "Videos" / "Solin")
+    controller = controller_factory()
+    recording = recording_factory(tmp_path / "Videos" / "Solin")
     application = QApplication.instance()
     assert application is not None
     recorder = _TopLevelShowRecorder()
@@ -245,16 +265,15 @@ def test_recording_controls_never_show_as_a_standalone_window_during_build(
 
     popup.deleteLater()
     QCoreApplication.processEvents()
-    controller.close()
 
 
 def test_panel_header_has_an_attach_button_right_of_the_hover_button(
-    tmp_path: Path,
+    controller_factory,
 ) -> None:
     # The scenes panel can be attached to the bottom of the main window; its
     # toggle sits immediately right of the hover ("pointer") button so the two
     # read as one control group in the header.
-    controller = _controller(tmp_path)
+    controller = controller_factory()
     popup = SceneControlPopup(controller)
     popup.hover_button.show()  # the host reveals this when it binds a preference
     popup.show()
@@ -270,7 +289,6 @@ def test_panel_header_has_an_attach_button_right_of_the_hover_button(
     popup.close()
     popup.deleteLater()
     QCoreApplication.processEvents()
-    controller.close()
 
 
 class _DockHost(QWidget):
@@ -298,8 +316,8 @@ class _DockHost(QWidget):
         return self._scenes_dock
 
 
-def test_attach_button_docks_the_panel_into_the_window_bottom(tmp_path: Path) -> None:
-    controller = _controller(tmp_path)
+def test_attach_button_docks_the_panel_into_the_window_bottom(controller_factory) -> None:
+    controller = controller_factory()
     host = _DockHost()
     host.resize(900, 600)
     host.show()
@@ -337,13 +355,12 @@ def test_attach_button_docks_the_panel_into_the_window_bottom(tmp_path: Path) ->
     host.close()
     host.deleteLater()
     QCoreApplication.processEvents()
-    controller.close()
 
 
-def test_attach_button_reverts_when_no_dock_host_is_available(tmp_path: Path) -> None:
+def test_attach_button_reverts_when_no_dock_host_is_available(controller_factory) -> None:
     # A popup with no MainWindow ancestor (standalone) must stay floating rather
     # than half-dock, and the button must not stay stuck on.
-    controller = _controller(tmp_path)
+    controller = controller_factory()
     popup = SceneControlPopup(controller)
 
     popup.dock_button.setChecked(True)
@@ -355,13 +372,12 @@ def test_attach_button_reverts_when_no_dock_host_is_available(tmp_path: Path) ->
 
     popup.deleteLater()
     QCoreApplication.processEvents()
-    controller.close()
 
 
 def test_virtual_camera_button_states_its_status_with_static_live_style(
-    tmp_path: Path,
+    controller_factory,
 ) -> None:
-    controller = _controller(tmp_path)
+    controller = controller_factory()
     popup = SceneControlPopup(controller)
 
     # Disabled: the label and checked state describe the output.
@@ -382,16 +398,15 @@ def test_virtual_camera_button_states_its_status_with_static_live_style(
 
     popup.deleteLater()
     QCoreApplication.processEvents()
-    controller.close()
 
 
 def test_record_button_is_icon_only_with_static_red_recording_style(
-    tmp_path: Path,
+    controller_factory, recording_factory, tmp_path: Path,
 ) -> None:
-    controller = _controller(tmp_path)
+    controller = controller_factory()
     controller._set_engine_ready(True)
     controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
-    recording = _Recording(tmp_path / "Videos" / "Solin")
+    recording = recording_factory(tmp_path / "Videos" / "Solin")
     popup = SceneControlPopup(controller, recording=recording)
 
     # Sits in the header, immediately left of the virtual-camera toggle.
@@ -419,19 +434,18 @@ def test_record_button_is_icon_only_with_static_red_recording_style(
 
     popup.deleteLater()
     QCoreApplication.processEvents()
-    controller.close()
 
 
 def test_live_controls_use_static_styles_without_graphics_effects(
-    tmp_path: Path,
+    controller_factory, recording_factory, tmp_path: Path,
 ) -> None:
     # Regression: a QGraphicsEffect on a child of this translucent, frameless
     # popup makes Qt rasterise the window — the rounded corners paint black and
     # the button text disappears. Live controls use the panel's static stylesheet.
     from PySide6.QtCore import QVariantAnimation
-    controller = _controller(tmp_path)
+    controller = controller_factory()
     controller._set_engine_ready(True)
-    recording = _Recording(tmp_path / "Videos" / "Solin")
+    recording = recording_factory(tmp_path / "Videos" / "Solin")
     popup = SceneControlPopup(controller, recording=recording)
 
     popup._set_output_enabled(True)
@@ -457,7 +471,6 @@ def test_live_controls_use_static_styles_without_graphics_effects(
 
     popup.deleteLater()
     QCoreApplication.processEvents()
-    controller.close()
 
 
 def test_dock_preference_survives_a_restart(tmp_path: Path) -> None:
@@ -479,8 +492,8 @@ def test_dock_preference_survives_a_restart(tmp_path: Path) -> None:
     assert ProfileAppSettingsStore.for_organization(organization).scenes_panel_docked() is False
 
 
-def test_scene_cards_follow_the_document_with_canvas_proportions(tmp_path: Path) -> None:
-    controller = _controller(tmp_path)
+def test_scene_cards_follow_the_document_with_canvas_proportions(controller_factory) -> None:
+    controller = controller_factory()
     controller.documents.create_scene("Lectern", scene_id="lectern")
     popup = SceneControlPopup(controller)
     QCoreApplication.processEvents()
@@ -511,12 +524,11 @@ def test_scene_cards_follow_the_document_with_canvas_proportions(tmp_path: Path)
 
     popup.deleteLater()
     QCoreApplication.processEvents()
-    controller.close()
 
 
-def test_scene_strip_scrolls_sideways_and_never_exceeds_the_screen(tmp_path: Path) -> None:
+def test_scene_strip_scrolls_sideways_and_never_exceeds_the_screen(controller_factory) -> None:
 
-    controller = _controller(tmp_path)
+    controller = controller_factory()
     for index in range(10):
         controller.documents.create_scene(f"Scene {index}", scene_id=f"s{index}")
     popup = SceneControlPopup(controller)
@@ -538,15 +550,14 @@ def test_scene_strip_scrolls_sideways_and_never_exceeds_the_screen(tmp_path: Pat
     popup.close()
     popup.deleteLater()
     QCoreApplication.processEvents()
-    controller.close()
 
 
-def test_scene_strip_hides_the_scrollbar_when_the_cards_all_fit(tmp_path: Path) -> None:
+def test_scene_strip_hides_the_scrollbar_when_the_cards_all_fit(controller_factory) -> None:
     # Regression: the panel width ignored the card frame's 1px borders, so it came
     # out 2px short of its own content — showing a scrollbar and clipping the last
     # card even with room to spare.
 
-    controller = _controller(tmp_path)
+    controller = controller_factory()
     popup = SceneControlPopup(controller)
     popup.show()
     QCoreApplication.processEvents()
@@ -581,15 +592,14 @@ def test_scene_strip_hides_the_scrollbar_when_the_cards_all_fit(tmp_path: Path) 
     popup.close()
     popup.deleteLater()
     QCoreApplication.processEvents()
-    controller.close()
 
 
-def test_panel_never_uses_a_graphics_effect_and_reopens_visible(tmp_path: Path) -> None:
+def test_panel_never_uses_a_graphics_effect_and_reopens_visible(controller_factory) -> None:
     # Two regressions with one cause: a QGraphicsOpacityEffect on this
     # translucent frameless popup made Qt rasterise it (black behind the rounded
     # corners) and could leave it stranded fully transparent, so clicking the
     # toolbar appeared to do nothing. The fade now rides windowOpacity.
-    controller = _controller(tmp_path)
+    controller = controller_factory()
     popup = SceneControlPopup(controller)
     anchor = QWidget()
     anchor.resize(40, 40)
@@ -613,16 +623,15 @@ def test_panel_never_uses_a_graphics_effect_and_reopens_visible(tmp_path: Path) 
     anchor.close()
     anchor.deleteLater()
     QCoreApplication.processEvents()
-    controller.close()
 
 
 def test_panel_reports_a_just_dismissed_close_so_the_toolbar_can_toggle(
-    tmp_path: Path,
+    controller_factory,
 ) -> None:
     # Qt closes a popup on the click that lands outside it, so the click that
     # reaches the toolbar button arrives after the dismissal. Without this the
     # button always reopened the panel instead of toggling it shut.
-    controller = _controller(tmp_path)
+    controller = controller_factory()
     popup = SceneControlPopup(controller)
     anchor = QWidget()
     anchor.resize(40, 40)
@@ -646,17 +655,16 @@ def test_panel_reports_a_just_dismissed_close_so_the_toolbar_can_toggle(
     anchor.close()
     anchor.deleteLater()
     QCoreApplication.processEvents()
-    controller.close()
 
 
 def test_undocking_restores_translucency_before_the_window_is_recreated(
-    tmp_path: Path,
+    controller_factory,
 ) -> None:
     # Regression: setParent() recreates the native window and X11 picks its
     # visual from WA_TranslucentBackground at creation time. Setting the
     # attribute *after* reparenting left the reopened panel opaque, so its
     # rounded corners painted black for the rest of the session.
-    controller = _controller(tmp_path)
+    controller = controller_factory()
     host = _DockHost()
     host.resize(900, 600)
     host.show()
@@ -693,11 +701,10 @@ def test_undocking_restores_translucency_before_the_window_is_recreated(
     host.close()
     host.deleteLater()
     QCoreApplication.processEvents()
-    controller.close()
 
 
-def test_card_routing_buttons_are_exclusive_with_static_live_style(tmp_path: Path) -> None:
-    controller = _controller(tmp_path)
+def test_card_routing_buttons_are_exclusive_with_static_live_style(controller_factory) -> None:
+    controller = controller_factory()
     popup = SceneControlPopup(controller)
     QCoreApplication.processEvents()
     scene_ids = [scene.id for scene in controller.document.scenes]
@@ -719,13 +726,12 @@ def test_card_routing_buttons_are_exclusive_with_static_live_style(tmp_path: Pat
 
     popup.deleteLater()
     QCoreApplication.processEvents()
-    controller.close()
 
 
 def test_card_virtual_camera_button_only_shows_while_that_output_runs(
-    tmp_path: Path,
+    controller_factory,
 ) -> None:
-    controller = _controller(tmp_path)
+    controller = controller_factory()
     controller.set_output_enabled(BusId.VIRTUAL_CAMERA, False)
     popup = SceneControlPopup(controller)
     popup.show()
@@ -748,13 +754,12 @@ def test_card_virtual_camera_button_only_shows_while_that_output_runs(
     popup.close()
     popup.deleteLater()
     QCoreApplication.processEvents()
-    controller.close()
 
 
-def test_panel_requests_thumbnails_only_while_it_is_on_screen(tmp_path: Path) -> None:
+def test_panel_requests_thumbnails_only_while_it_is_on_screen(controller_factory) -> None:
     # Thumbnails cost GPU renders in the sidecar, so a closed panel must not ask
     # for them.
-    controller = _controller(tmp_path)
+    controller = controller_factory()
     asked: list[tuple] = []
     controller.set_thumbnail_egress = lambda d, ids, w, h: asked.append((d, ids, w, h))
     popup = SceneControlPopup(controller)
@@ -778,13 +783,12 @@ def test_panel_requests_thumbnails_only_while_it_is_on_screen(tmp_path: Path) ->
 
     popup.deleteLater()
     QCoreApplication.processEvents()
-    controller.close()
 
 
-def test_scene_card_paints_the_live_thumbnail_it_is_given(tmp_path: Path) -> None:
+def test_scene_card_paints_the_live_thumbnail_it_is_given(controller_factory) -> None:
     from PySide6.QtGui import QImage
 
-    controller = _controller(tmp_path)
+    controller = controller_factory()
     popup = SceneControlPopup(controller)
     QCoreApplication.processEvents()
     scene_id = next(iter(popup._scene_cards))
@@ -800,14 +804,13 @@ def test_scene_card_paints_the_live_thumbnail_it_is_given(tmp_path: Path) -> Non
 
     popup.deleteLater()
     QCoreApplication.processEvents()
-    controller.close()
 
 
-def test_thumbnail_request_is_retried_until_the_engine_hears_it(tmp_path: Path) -> None:
+def test_thumbnail_request_is_retried_until_the_engine_hears_it(controller_factory) -> None:
     # Regression: the panel opens before the engine is ready, the controller drops
     # the command, and because the block had already been allocated every later
     # sync short-circuited — so the cards stayed dead for the whole session.
-    controller = _controller(tmp_path)
+    controller = controller_factory()
     ready = {"value": False}
     calls: list[tuple] = []
 
@@ -839,14 +842,13 @@ def test_thumbnail_request_is_retried_until_the_engine_hears_it(tmp_path: Path) 
     popup.close()
     popup.deleteLater()
     QCoreApplication.processEvents()
-    controller.close()
 
 
-def test_card_buttons_route_each_output_independently(tmp_path: Path) -> None:
+def test_card_buttons_route_each_output_independently(controller_factory) -> None:
     # Regression: the card handler was left calling take_program_scene, the old
     # lockstep take, so routing the projection dragged the virtual camera with it
     # (and the reverse). The outputs are independent.
-    controller = _controller(tmp_path)
+    controller = controller_factory()
     controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
     popup = SceneControlPopup(controller)
     QCoreApplication.processEvents()
@@ -872,7 +874,6 @@ def test_card_buttons_route_each_output_independently(tmp_path: Path) -> None:
 
     popup.deleteLater()
     QCoreApplication.processEvents()
-    controller.close()
 
 
 @pytest.mark.parametrize("role", ["projection", "program"])
@@ -913,10 +914,10 @@ def test_card_right_click_requests_return_without_left_routing(role: str) -> Non
     [("projection", BusId.MEDIA_WINDOWS), ("program", BusId.VIRTUAL_CAMERA)],
 )
 def test_card_left_click_during_playback_returns_only_from_content_scenes(
-    tmp_path: Path, role: str, bus_id: BusId, docked: bool, has_content: bool,
+    controller_factory, role: str, bus_id: BusId, docked: bool, has_content: bool,
 ) -> None:
     projection = _Projection()
-    controller = _controller(tmp_path, projection=projection)
+    controller = controller_factory(projection=projection)
     controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
     camera_scene = next(scene.id for scene in controller.document.scenes if scene.name == "Camera")
     controller.documents.create_scene("Lectern", scene_id="lectern")
@@ -958,7 +959,6 @@ def test_card_left_click_during_playback_returns_only_from_content_scenes(
         popup.deleteLater()
         host.deleteLater()
         QCoreApplication.processEvents()
-        controller.close()
 
 
 @pytest.mark.parametrize("docked", [False, True])
@@ -968,10 +968,10 @@ def test_card_left_click_during_playback_returns_only_from_content_scenes(
     [("projection", BusId.MEDIA_WINDOWS), ("program", BusId.VIRTUAL_CAMERA)],
 )
 def test_reselecting_content_from_a_card_restores_the_session_return(
-    tmp_path: Path, role: str, bus_id: BusId, docked: bool, override_return: bool,
+    controller_factory, role: str, bus_id: BusId, docked: bool, override_return: bool,
 ) -> None:
     projection = ProjectionSession()
-    controller = _controller(tmp_path, projection=projection)
+    controller = controller_factory(projection=projection)
     controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
     camera_scene = next(scene.id for scene in controller.document.scenes if scene.name == "Camera")
     controller.select_scene(bus_id, camera_scene)
@@ -1001,7 +1001,10 @@ def test_reselecting_content_from_a_card_restores_the_session_return(
             QTest.mouseClick(fallback_button, Qt.MouseButton.RightButton)
             assert controller.desired_scene(bus_id) == "camera-pip"
             assert PALETTE.success in fallback_button.styleSheet()
-            QTest.qWait(450)
+            wait_until(
+                lambda: not popup._success_flash._active,
+                description="return-scene feedback completion",
+            )
         return_scene = "fallback" if override_return else camera_scene
 
         QTest.mouseClick(lectern_button, Qt.MouseButton.LeftButton)
@@ -1033,7 +1036,6 @@ def test_reselecting_content_from_a_card_restores_the_session_return(
         popup.deleteLater()
         host.deleteLater()
         QCoreApplication.processEvents()
-        controller.close()
 
 
 @pytest.mark.parametrize("docked", [False, True])
@@ -1042,10 +1044,10 @@ def test_reselecting_content_from_a_card_restores_the_session_return(
     [("projection", BusId.MEDIA_WINDOWS), ("program", BusId.VIRTUAL_CAMERA)],
 )
 def test_card_right_click_saves_only_its_output_return_and_restores_feedback(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, role: str, bus_id: BusId, docked: bool,
+    controller_factory, monkeypatch: pytest.MonkeyPatch, role: str, bus_id: BusId, docked: bool,
 ) -> None:
     projection = _Projection()
-    controller = _controller(tmp_path, projection=projection)
+    controller = controller_factory(projection=projection)
     controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
     controller.documents.create_scene("Lectern", scene_id="lectern")
     host = _DockHost()
@@ -1095,7 +1097,10 @@ def test_card_right_click_saves_only_its_output_return_and_restores_feedback(
         popup.set_docked(not docked)
         popup._render()
         assert popup._scene_cards["lectern"] is card
-        QTest.qWait(450)
+        wait_until(
+            lambda: not popup._success_flash._active,
+            description="return-scene feedback completion",
+        )
         assert button.styleSheet() == original_style
         assert popup._success_flash._active == {}
 
@@ -1111,7 +1116,6 @@ def test_card_right_click_saves_only_its_output_return_and_restores_feedback(
         popup.deleteLater()
         host.deleteLater()
         QCoreApplication.processEvents()
-        controller.close()
 
 
 @pytest.mark.parametrize(
@@ -1120,11 +1124,11 @@ def test_card_right_click_saves_only_its_output_return_and_restores_feedback(
 )
 @pytest.mark.parametrize("outcome", ["denied", "save_failed", "media_scene"])
 def test_card_rejected_return_has_no_success_flash_or_routing_changes(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture,
+    controller_factory, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture,
     role: str, bus_id: BusId, outcome: str,
 ) -> None:
     projection = _Projection()
-    controller = _controller(tmp_path, projection=projection)
+    controller = controller_factory(projection=projection)
     controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
     popup = SceneControlPopup(controller)
     projection.set_type("video")
@@ -1176,15 +1180,14 @@ def test_card_rejected_return_has_no_success_flash_or_routing_changes(
     finally:
         popup.deleteLater()
         QCoreApplication.processEvents()
-        controller.close()
 
 
 @pytest.mark.parametrize("has_content", [False, True])
 def test_disabled_projection_card_allows_return_override_only_from_content(
-    tmp_path: Path, has_content: bool,
+    controller_factory, has_content: bool,
 ) -> None:
     projection = _Projection()
-    controller = _controller(tmp_path, projection=projection)
+    controller = controller_factory(projection=projection)
     controller.set_output_enabled(BusId.MEDIA_WINDOWS, False)
     controller.documents.create_scene("Lectern", scene_id="lectern")
     _add_camera_pip_scene(controller, "camera-pip")
@@ -1216,7 +1219,6 @@ def test_disabled_projection_card_allows_return_override_only_from_content(
     finally:
         popup.deleteLater()
         QCoreApplication.processEvents()
-        controller.close()
 
 
 @pytest.mark.parametrize(
@@ -1224,11 +1226,11 @@ def test_disabled_projection_card_allows_return_override_only_from_content(
     [("projection", BusId.MEDIA_WINDOWS), ("program", BusId.VIRTUAL_CAMERA)],
 )
 def test_failed_noncontent_card_take_preserves_live_media_and_saved_return(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture,
+    controller_factory, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture,
     role: str, bus_id: BusId,
 ) -> None:
     projection = ProjectionSession()
-    controller = _controller(tmp_path, projection=projection)
+    controller = controller_factory(projection=projection)
     controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
     camera_scene = next(scene.id for scene in controller.document.scenes if scene.name == "Camera")
     controller.select_scene(bus_id, camera_scene)
@@ -1274,14 +1276,13 @@ def test_failed_noncontent_card_take_preserves_live_media_and_saved_return(
     finally:
         popup.deleteLater()
         QCoreApplication.processEvents()
-        controller.close()
 
 
 def test_failed_automation_resume_preserves_temporary_card_routing(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    controller_factory, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     projection = ProjectionSession()
-    controller = _controller(tmp_path, projection=projection)
+    controller = controller_factory(projection=projection)
     controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
     _add_camera_pip_scene(controller, "camera-pip")
     controller.documents.create_scene("Lectern", scene_id="lectern")
@@ -1321,14 +1322,13 @@ def test_failed_automation_resume_preserves_temporary_card_routing(
     finally:
         popup.deleteLater()
         QCoreApplication.processEvents()
-        controller.close()
 
 
 def test_failed_automation_enable_never_persists_an_intermediate_return_base(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    controller_factory, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     projection = ProjectionSession()
-    controller = _controller(tmp_path, projection=projection)
+    controller = controller_factory(projection=projection)
     controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
     _add_camera_pip_scene(controller, "camera-pip")
     controller.documents.create_scene("Lectern", scene_id="lectern")
@@ -1368,15 +1368,14 @@ def test_failed_automation_enable_never_persists_an_intermediate_return_base(
     finally:
         popup.deleteLater()
         QCoreApplication.processEvents()
-        controller.close()
 
 
 @pytest.mark.parametrize("stop_before_resuming", [False, True])
 def test_automatic_off_on_preserves_independent_card_returns_and_saved_bases(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stop_before_resuming: bool,
+    controller_factory, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stop_before_resuming: bool,
 ) -> None:
     projection = _Projection()
-    controller = _controller(tmp_path, projection=projection)
+    controller = controller_factory(projection=projection)
     controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
     _add_camera_pip_scene(controller, "camera-pip")
     controller.documents.create_scene("Lectern", scene_id="lectern")
@@ -1420,13 +1419,12 @@ def test_automatic_off_on_preserves_independent_card_returns_and_saved_bases(
     finally:
         popup.deleteLater()
         QCoreApplication.processEvents()
-        controller.close()
 
 
-def test_live_thumbnail_is_clipped_to_the_card_corners(tmp_path: Path) -> None:
+def test_live_thumbnail_is_clipped_to_the_card_corners(controller_factory) -> None:
     from PySide6.QtGui import QImage
 
-    controller = _controller(tmp_path)
+    controller = controller_factory()
     popup = SceneControlPopup(controller)
     popup.show()
     QCoreApplication.processEvents()
@@ -1452,17 +1450,16 @@ def test_live_thumbnail_is_clipped_to_the_card_corners(tmp_path: Path) -> None:
     popup.close()
     popup.deleteLater()
     QCoreApplication.processEvents()
-    controller.close()
 
 
 def test_choosing_a_scene_from_a_card_keeps_media_auto_switch_working(
-    tmp_path: Path,
+    controller_factory,
 ) -> None:
     # Regression: the card pinned its output to MANUAL, so media stopped taking
     # the output over — the video played but was never shown — and the panel no
     # longer has the auto-switch control that used to undo that.
     projection = _Projection()
-    controller = _controller(tmp_path, projection=projection)
+    controller = controller_factory(projection=projection)
     popup = SceneControlPopup(controller)
     QCoreApplication.processEvents()
     camera_scene = next(
@@ -1484,14 +1481,13 @@ def test_choosing_a_scene_from_a_card_keeps_media_auto_switch_working(
 
     popup.deleteLater()
     QCoreApplication.processEvents()
-    controller.close()
 
 
 def test_idle_media_slot_shows_a_faded_glyph_instead_of_pure_black(
-    tmp_path: Path,
+    controller_factory,
 ) -> None:
     projection = _Projection()
-    controller = _controller(tmp_path, projection=projection)
+    controller = controller_factory(projection=projection)
     popup = SceneControlPopup(controller)
     popup.show()
     QCoreApplication.processEvents()
@@ -1522,16 +1518,15 @@ def test_idle_media_slot_shows_a_faded_glyph_instead_of_pure_black(
     popup.close()
     popup.deleteLater()
     QCoreApplication.processEvents()
-    controller.close()
 
 
 def test_the_record_button_only_exists_while_the_virtual_camera_does(
-    tmp_path: Path,
+    controller_factory, recording_factory, tmp_path: Path,
 ) -> None:
     """Recording captures Program, so there is nothing to record with the output off."""
-    controller = _controller(tmp_path)
+    controller = controller_factory()
     controller._set_engine_ready(True)
-    recording = _Recording(tmp_path / "Videos" / "Solin")
+    recording = recording_factory(tmp_path / "Videos" / "Solin")
     popup = SceneControlPopup(controller, recording=recording)
 
     assert not popup._recording_button.isVisibleTo(popup)
@@ -1545,4 +1540,3 @@ def test_the_record_button_only_exists_while_the_virtual_camera_does(
 
     popup.deleteLater()
     QCoreApplication.processEvents()
-    controller.close()

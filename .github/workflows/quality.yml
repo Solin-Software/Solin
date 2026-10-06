@@ -14,6 +14,7 @@ permissions:
 env:
   PYTHON_VERSION: "3.13.12"
   QT_QPA_PLATFORM: offscreen
+  PYTHONFAULTHANDLER: "1"
 
 jobs:
   changes:
@@ -79,13 +80,19 @@ jobs:
         include:
           - runner: ubuntu-24.04
             platform: Linux
+            qt_platform: offscreen
           - runner: windows-2025
             platform: Windows
+            qt_platform: offscreen
           - runner: macos-15-intel
             platform: Darwin
+            qt_platform: cocoa
           - runner: macos-15
             platform: Darwin
+            qt_platform: cocoa
     runs-on: ${{ matrix.runner }}
+    env:
+      QT_QPA_PLATFORM: ${{ matrix.qt_platform }}
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -120,24 +127,27 @@ jobs:
             requirements.txt
             requirements-dev.txt
 
-      - name: Build Intel macOS pylibobs wheel
-        if: runner.os == 'macOS' && runner.arch == 'X64'
+      - name: Build macOS pylibobs wheel
+        if: runner.os == 'macOS'
         shell: bash
         run: |
           python -m pip install setuptools==80.10.2 wheel==0.46.3 cffi==2.0.0
           python scripts/build_pylibobs_macos.py --output-dir .pip-wheels
 
-      - name: Install dependencies on Intel macOS
-        if: runner.os == 'macOS' && runner.arch == 'X64'
-        run: python -m pip install --find-links .pip-wheels -r requirements-dev.txt -e .
+      - name: Install dependencies on macOS
+        if: runner.os == 'macOS'
+        run: |
+          python -m pip install --no-index --find-links .pip-wheels --no-deps pylibobs
+          python -m pip install -r requirements-dev.txt -e .
 
       - name: Install dependencies
-        if: runner.os != 'macOS' || runner.arch != 'X64'
+        if: runner.os != 'macOS'
         run: python -m pip install -r requirements-dev.txt -e .
 
       - run: python scripts/typecheck.py --pythonplatform ${{ matrix.platform }}
 
       - name: Native protocol and benchmarks
+        if: runner.os == 'Linux'
         run: |
           cmake -S native/media_engine -B build/native/media-engine-ci -DCMAKE_BUILD_TYPE=Release
           cmake --build build/native/media-engine-ci --config Release --parallel
@@ -149,9 +159,64 @@ jobs:
           xvfb-run --auto-servernum python -m pytest tests/contract tests/integration tests/e2e --durations=20
           xvfb-run --auto-servernum python -m pytest tests/unit --durations=20
 
-      - name: Python suites
-        if: runner.os != 'Linux'
-        run: python -m pytest tests/unit tests/contract tests/integration --durations=20
+      - name: Python suites on Windows
+        if: runner.os == 'Windows'
+        run: |
+          python -m pytest tests/contract --durations=20
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m pytest tests/integration --durations=20
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m pytest tests/unit --durations=20
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Python suites on macOS
+        if: runner.os == 'macOS'
+        run: |
+          # Intentional fatal diagnostics must retain reports without covering native UI tests.
+          defaults write com.apple.CrashReporter DialogType -string server
+          sudo sysctl -w kern.corefile="$RUNNER_TEMP/solin-core.%P"
+          ulimit -c unlimited
+          python -m pytest tests/contract --durations=20
+          python -m pytest tests/unit --durations=20
+          python -m pytest tests/integration --durations=20
+
+      - name: Report macOS native crashes
+        if: failure() && runner.os == 'macOS'
+        run: |
+          python - <<'PY'
+          import os
+          import shutil
+          import subprocess
+          from pathlib import Path
+          reports = Path.home() / "Library/Logs/DiagnosticReports"
+          destination = Path(os.environ["RUNNER_TEMP"]) / "solin-native-crashes"
+          destination.mkdir(exist_ok=True)
+          for report in sorted(reports.glob("*")):
+              if report.suffix in {".ips", ".crash"} and "python" in report.name.lower():
+                  shutil.copy2(report, destination / report.name)
+                  print(f"::group::{report.name}", flush=True)
+                  print(report.read_text(errors="replace"), flush=True)
+                  print("::endgroup::", flush=True)
+          for core in sorted(Path(os.environ["RUNNER_TEMP"]).glob("solin-core.*")):
+              print(f"::group::Native core {core.name}", flush=True)
+              try:
+                  subprocess.run(
+                      ["lldb", "--batch", "--core", str(core),
+                       "--one-line", "thread backtrace all"],
+                      timeout=60, check=False,
+                  )
+              except (OSError, subprocess.TimeoutExpired) as error:
+                  print(f"::warning::Could not inspect native core {core.name}: {error}", flush=True)
+              finally:
+                  print("::endgroup::")
+          PY
+
+      - name: Preserve macOS native crash reports
+        if: failure() && runner.os == 'macOS'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: native-crashes-${{ matrix.runner }}
+          path: ${{ runner.temp }}/solin-native-crashes
 
       - name: Packaging source checks
         run: python -m pytest tests/contract/test_build_console_modes.py tests/contract/test_linux_appimage_packaging.py tests/contract/test_playlist_file_associations.py

@@ -9,6 +9,7 @@ from solin.core.timer.models import MediaCountdownPresentation
 from solin.core.projection.image_framing import IDENTITY_IMAGE_TRANSFORM
 from solin.projection.window import BaseProjectionView
 from solin.projection.yearly_text import YearlyTextWidget
+from tests._qt import dispose_widget, wait_until
 
 
 _APP = QApplication.instance() or QApplication([])
@@ -105,8 +106,9 @@ def test_countdown_digits_align_vertically_with_the_jw_badge():
     assert countdown_layout.text_rect.center().y() == badge_y + (badge_size / 2.0)
 
 
-def test_clearing_yearly_timer_fades_whole_page_before_restoring_idle():
+def test_clearing_yearly_timer_fades_whole_page_before_restoring_idle(request):
     view = _ProjectionViewHarness()
+    request.addfinalizer(lambda: dispose_widget(view))
     view.resize(1280, 720)
     view.set_yearly_text("Annual text", "Reference")
     view.show()
@@ -114,26 +116,53 @@ def test_clearing_yearly_timer_fades_whole_page_before_restoring_idle():
     view._yearly_widget.set_countdown(55, 90)
     view._stack.setCurrentIndex(view._PAGE_YEARLY)
 
+    def snapshot():
+        return (
+            view._yearly_timer_exit_pending,
+            view._yearly_widget._countdown_remaining,
+            view._stack.currentIndex(),
+            view._yearly_opacity.opacity(),
+            view._yearly_anim.duration(),
+        )
+
+    values = []
+    finished = []
+    view._yearly_anim.valueChanged.connect(lambda _value: values.append(snapshot()))
+    view._yearly_anim.finished.connect(lambda: finished.append(snapshot()))
     view.clear()
 
     assert view._stack.currentIndex() == view._PAGE_YEARLY
     assert view._yearly_widget._countdown_remaining == 55
     assert view._yearly_timer_exit_pending is True
     assert view._yearly_anim.duration() == view._YEARLY_TIMER_EXIT_FADE_DURATION_MS
+    assert view._yearly_widget.graphicsEffect() is view._yearly_opacity
 
-    QTest.qWait((view._yearly_anim.duration() // 2) + 20)
-    assert 0.0 < view._yearly_opacity.opacity() < 1.0
-    assert view._yearly_widget._countdown_remaining == 55
-
-    QTest.qWait((view._yearly_anim.duration() // 2) + 40)
+    # Keep the original total wait budget, but observe both animation phases.
+    wait_until(
+        lambda: len(finished) == 2,
+        timeout_ms=(
+            view._YEARLY_TIMER_EXIT_FADE_DURATION_MS + view._YEARLY_FADE_IN_DURATION_MS + 100
+        ),
+        description=lambda: (
+            f"yearly page fade-out and idle fade-in: state={snapshot()}, "
+            f"animation_time={view._yearly_anim.currentTime()}, "
+            f"values={values}, finished={finished}"
+        ),
+    )
+    fade_out = [state for state in values if state[0]]
+    assert any(0.0 < state[3] < 1.0 for state in fade_out)
+    assert all(state[1] == 55 and state[2] == view._PAGE_YEARLY for state in fade_out)
+    # The production finished handler clears the countdown and starts idle fade-in.
+    assert finished[0] == (False, None, view._PAGE_YEARLY, 0.0, view._YEARLY_FADE_IN_DURATION_MS)
+    fade_in = [state for state in values if not state[0]]
+    assert any(0.0 < state[3] < 1.0 for state in fade_in)
+    assert all(state[1] is None and state[2] == view._PAGE_YEARLY for state in fade_in)
     assert view._yearly_timer_exit_pending is False
     assert view._yearly_widget._countdown_remaining is None
     assert view._stack.currentIndex() == view._PAGE_YEARLY
-    assert 0.0 <= view._yearly_opacity.opacity() < 1.0
     assert view._yearly_anim.duration() == view._YEARLY_FADE_IN_DURATION_MS
-
-    QTest.qWait(view._yearly_anim.duration() + 40)
     assert view._yearly_opacity.opacity() == 1.0
+    assert view._yearly_anim.state() is QAbstractAnimation.State.Stopped
 
 
 def test_immediate_countdown_clear_always_requests_a_repaint():
