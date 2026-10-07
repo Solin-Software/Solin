@@ -612,6 +612,7 @@ def test_linux_host_mux_copy_uses_the_private_runtime_and_checks_its_dependencie
     packaging._relocate_linux(root, binaries=[helper])
     assert calls == [
         ["patchelf", "--set-rpath", "$ORIGIN:$ORIGIN/pylibobs/_libs/linux/x86_64", str(helper)],
+        ["readelf", "--dynamic", "--wide", str(helper)],
         ["ldd", str(helper)],
     ]
 
@@ -799,9 +800,19 @@ def test_linux_duplicate_identity_is_checked_before_rpath_mutation(tmp_path, mon
 def test_linux_dependency_probe_rejects_missing_libraries_and_incompatible_abi(
     monkeypatch, stdout, stderr,
 ):
+    def probe(command, **_kwargs):
+        if command[0] == "readelf":
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                b" 0x1 (NEEDED) Shared library: [libavcodec.so.60]\n",
+                b"",
+            )
+        return subprocess.CompletedProcess(command, 0, stdout, stderr)
+
     monkeypatch.setattr(
         packaging.subprocess, "run",
-        lambda command, **_kwargs: subprocess.CompletedProcess(command, 0, stdout, stderr),
+        probe,
     )
     with pytest.raises(packaging.LibobsPackagingError, match="Unresolved libobs dependencies"):
         packaging._linux_linked_libraries(Path("libobs.so.0"))
@@ -815,6 +826,13 @@ def test_linux_dependency_probe_uses_only_staged_runtime_search_paths(tmp_path, 
     monkeypatch.setenv("LD_PRELOAD", "/host/preload.so")
 
     def probe(command, **kwargs):
+        if command[0] == "readelf":
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                b" 0x1 (NEEDED) Shared library: [libobs.so.30]\n",
+                b"",
+            )
         captured_environment.update(kwargs["env"])
         return subprocess.CompletedProcess(
             command, 0, b"libobs.so.30 => /runtime/libobs.so.30 (0x0)\n", b"",
@@ -830,6 +848,41 @@ def test_linux_dependency_probe_uses_only_staged_runtime_search_paths(tmp_path, 
     ]
     assert "LD_PRELOAD" not in captured_environment
     assert "/host/injected" not in captured_environment["LD_LIBRARY_PATH"]
+
+
+def test_linux_dependency_probe_ignores_transitive_host_graph(tmp_path, monkeypatch):
+    binary = tmp_path / "libSDL2-2.0.so.0"
+
+    def probe(command, **_kwargs):
+        if command[0] == "readelf":
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                (
+                    b" 0x1 (NEEDED) Shared library: [libgbm.so.1]\n"
+                    b" 0x1 (NEEDED) Shared library: [libc.so.6]\n"
+                ),
+                b"",
+            )
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            (
+                b"libgbm.so.1 => /usr/lib/x86_64-linux-gnu/libgbm.so.1 (0x0)\n"
+                b"libexpat.so.1 => /usr/lib/x86_64-linux-gnu/libexpat.so.1 (0x0)\n"
+                b"libc.so.6 => /usr/lib/x86_64-linux-gnu/libc.so.6 (0x0)\n"
+            ),
+            b"",
+        )
+
+    monkeypatch.setattr(packaging.subprocess, "run", probe)
+
+    libraries = packaging._linux_linked_libraries(binary)
+
+    assert libraries == {
+        "libgbm.so.1": Path("/usr/lib/x86_64-linux-gnu/libgbm.so.1").resolve(),
+        "libc.so.6": Path("/usr/lib/x86_64-linux-gnu/libc.so.6").resolve(),
+    }
 
 
 def test_linux_dependency_notices_follow_the_owning_distribution_package(tmp_path, monkeypatch):

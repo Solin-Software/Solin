@@ -52,6 +52,7 @@ _LINUX_HOST_LIBRARIES = frozenset({
     "libutil.so.1", "libresolv.so.2", "libGL.so.1", "libEGL.so.1",
     "libGLX.so.0", "libGLdispatch.so.0", "libOpenGL.so.0", "libglapi.so.0",
     "libgbm.so.1", "libvulkan.so.1", "libva.so.2", "libva-drm.so.2", "libva-x11.so.2",
+    "ld-linux-x86-64.so.2", "ld-linux-aarch64.so.1",
 })
 _LINUX_DOCUMENTATION_ROOT = Path("/usr/share/doc")
 # Effects loaded by OBS 32.1.2's graphics initialization, including OpenGL.
@@ -236,12 +237,43 @@ def _native_files(root: Path) -> list[Path]:
     return result
 
 
+def _linux_host_library(name: str) -> bool:
+    return name in _LINUX_HOST_LIBRARIES or name.startswith(("libdrm", "libnss_"))
+
+
+def _linux_needed_libraries(binary: Path) -> frozenset[str]:
+    environment = dict(os.environ)
+    environment["LC_ALL"] = "C"
+    result = subprocess.run(
+        ["readelf", "--dynamic", "--wide", str(binary)],
+        check=True,
+        capture_output=True,
+        env=environment,
+    )
+    needed = set()
+    marker = "Shared library: ["
+    for line in result.stdout.decode("utf-8", errors="replace").splitlines():
+        if "(NEEDED)" not in line:
+            continue
+        start = line.find(marker)
+        end = line.find("]", start + len(marker)) if start >= 0 else -1
+        if start < 0 or end < 0:
+            raise LibobsPackagingError(f"Invalid ELF dependency record in {binary}: {line.strip()}")
+        name = line[start + len(marker):end]
+        if not name or Path(name).name != name:
+            raise LibobsPackagingError(f"Invalid shared-library name: {name}")
+        needed.add(name)
+    return frozenset(needed)
+
+
 def _linux_linked_libraries(
     binary: Path, *, private_root: Path | None = None,
 ) -> dict[str, Path]:
+    needed = _linux_needed_libraries(binary)
     environment = dict(os.environ)
     environment.pop("LD_LIBRARY_PATH", None)
     environment.pop("LD_PRELOAD", None)
+    environment["LC_ALL"] = "C"
     if private_root is not None:
         private_root = private_root.resolve()
         search_paths = list(dict.fromkeys((binary.resolve().parent, private_root)))
@@ -259,9 +291,20 @@ def _linux_linked_libraries(
         fields = line.split()
         if len(fields) >= 3 and fields[1] == "=>" and fields[2].startswith("/"):
             name = fields[0]
+            if name not in needed:
+                continue
             if Path(name).name != name:
                 raise LibobsPackagingError(f"Invalid shared-library name: {name}")
             libraries[name] = Path(fields[2]).resolve()
+        elif len(fields) >= 2 and fields[0].startswith("/"):
+            library = Path(fields[0]).resolve()
+            if library.name in needed:
+                libraries[library.name] = library
+    missing = sorted(needed.difference(libraries))
+    if missing:
+        raise LibobsPackagingError(
+            f"Unresolved direct libobs dependencies in {binary}: {', '.join(missing)}"
+        )
     return libraries
 
 
@@ -309,7 +352,7 @@ def _relocate_linux(root: Path, *, binaries: Sequence[Path] | None = None) -> No
             _set_linux_rpath(root, binary)
         for binary in targets:
             for name, library in _linux_linked_libraries(binary).items():
-                if name in _LINUX_HOST_LIBRARIES or name.startswith(("libdrm", "libnss_")):
+                if _linux_host_library(name):
                     continue
                 if not library.is_relative_to(root_resolved):
                     raise LibobsPackagingError(f"Mux helper dependency was not bundled: {name}")
@@ -339,7 +382,7 @@ def _relocate_linux(root: Path, *, binaries: Sequence[Path] | None = None) -> No
             continue
         visited.add(binary)
         for name, library in sorted(libraries.items()):
-            if name in _LINUX_HOST_LIBRARIES or name.startswith(("libdrm", "libnss_")):
+            if _linux_host_library(name):
                 continue
             if library.is_relative_to(root_resolved):
                 continue
@@ -364,7 +407,7 @@ def _relocate_linux(root: Path, *, binaries: Sequence[Path] | None = None) -> No
     # now bind inside the staged runtime; this also catches ABI/version errors.
     for binary in sorted(visited, key=lambda path: path.as_posix()):
         for name, library in _linux_linked_libraries(binary).items():
-            if name in _LINUX_HOST_LIBRARIES or name.startswith(("libdrm", "libnss_")):
+            if _linux_host_library(name):
                 continue
             if not library.is_relative_to(root_resolved):
                 raise LibobsPackagingError(
