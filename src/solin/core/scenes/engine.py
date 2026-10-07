@@ -580,6 +580,20 @@ class EngineHealthEvent:
 
 
 @dataclass(frozen=True, slots=True)
+class FrameEgressReadyEvent:
+    """A frame egress published its first frame for one channel generation."""
+
+    channel_id: str
+    generation: int
+    handle_token: str
+
+    def __post_init__(self) -> None:
+        _identity(self.channel_id, "frame egress channel id")
+        _non_negative_int(self.generation, "frame egress generation")
+        _identity(self.handle_token, "frame egress handle token")
+
+
+@dataclass(frozen=True, slots=True)
 class ProgramRecordingEvent:
     state: ProgramRecordingNativeState
 
@@ -598,7 +612,11 @@ class MediaPlaybackEvent:
 
 
 SceneEngineEvent: TypeAlias = (
-    SourceHealthEvent | EngineHealthEvent | ProgramRecordingEvent | MediaPlaybackEvent
+    SourceHealthEvent
+    | EngineHealthEvent
+    | FrameEgressReadyEvent
+    | ProgramRecordingEvent
+    | MediaPlaybackEvent
 )
 
 

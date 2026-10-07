@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 import threading
+from collections.abc import Callable
 from typing import Any
 
 from solin.core.scenes.content_frame_consumer import SHARED_MEMORY_BGRA
@@ -28,29 +29,42 @@ log = logging.getLogger(__name__)
 class LibobsProgramEgress:
     """Mirrors the program (main mix) into the app's program egress channel."""
 
-    def __init__(self, runtime: Any) -> None:
+    def __init__(
+        self,
+        runtime: Any,
+        *,
+        on_ready: Callable[[str, int, str], None] | None = None,
+    ) -> None:
         self._runtime = runtime
+        self._on_ready = on_ready
         self._lock = threading.Lock()
         self._writer: Any = None
+        self._channel_id = ""
+        self._generation = 0
         self._handle_token = ""
         self._width = 0
         self._height = 0
         self._callback: Any = None
+        self._ready_notified = False
 
     def configure(self, descriptor: object) -> None:
         """Attach (or detach) the mirror to the app's program egress block."""
         if not isinstance(descriptor, dict) or descriptor.get("transport") != SHARED_MEMORY_BGRA:
             self._teardown()
             return
+        channel_id = str(descriptor.get("channel_id") or "")
+        generation = int(descriptor.get("generation") or 0)
         token = str(descriptor.get("handle_token") or "")
         width = int(descriptor.get("width") or 0)
         height = int(descriptor.get("height") or 0)
-        if not token or width <= 0 or height <= 0:
+        if not channel_id or generation < 0 or not token or width <= 0 or height <= 0:
             self._teardown()
             return
         with self._lock:
             if (
                 self._writer is not None
+                and self._channel_id == channel_id
+                and self._generation == generation
                 and self._handle_token == token
                 and self._width == width
                 and self._height == height
@@ -79,9 +93,12 @@ class LibobsProgramEgress:
         with self._lock:
             self._writer = writer
             self._callback = callback
+            self._channel_id = channel_id
+            self._generation = generation
             self._handle_token = token
             self._width = width
             self._height = height
+            self._ready_notified = False
 
     def _on_frame(self, planes, linesizes, width, height, _fmt, _ts) -> None:
         # Runs on the obs video thread for every rendered program frame.
@@ -100,6 +117,17 @@ class LibobsProgramEgress:
                          stride=target_width * 4)
         except Exception:  # noqa: BLE001 - shared-memory boundary
             log.debug("program egress write errored", exc_info=True)
+            return
+        notify: tuple[str, int, str] | None = None
+        with self._lock:
+            if writer is self._writer and not self._ready_notified:
+                self._ready_notified = True
+                notify = (self._channel_id, self._generation, self._handle_token)
+        if notify is not None and self._on_ready is not None:
+            try:
+                self._on_ready(*notify)
+            except Exception:  # noqa: BLE001 - readiness observers cannot break video output
+                log.debug("program egress readiness callback errored", exc_info=True)
 
     @staticmethod
     def _tight(data: bytes, stride: int, width: int, height: int) -> bytes:
@@ -116,7 +144,10 @@ class LibobsProgramEgress:
         with self._lock:
             callback, self._callback = self._callback, None
             writer, self._writer = self._writer, None
+            self._channel_id = ""
+            self._generation = 0
             self._handle_token = ""
+            self._ready_notified = False
         if callback is not None:
             try:
                 self._runtime.ob.remove_raw_video_callback(callback)

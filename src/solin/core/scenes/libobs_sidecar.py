@@ -305,7 +305,10 @@ class LibobsSidecarEngine:
             if self._scene_graph is not None else None,
             before_render=self._scene_graph.refresh_source_crops,
         )
-        self._program_egress = LibobsProgramEgress(runtime)
+        self._program_egress = LibobsProgramEgress(
+            runtime,
+            on_ready=self._emit_frame_egress_ready,
+        )
         from solin.core.scenes.libobs_audio_sources import LibobsAudioMixer
         from solin.core.scenes.libobs_media_source import LibobsMediaSource
         from solin.core.scenes.libobs_recorder import LibobsRecorder
@@ -510,6 +513,35 @@ class LibobsSidecarEngine:
             sink(envelope)
         except Exception:  # noqa: BLE001 - an event write must not break handling
             log.debug("could not emit program recording state", exc_info=True)
+
+    def _emit_frame_egress_ready(
+        self,
+        channel_id: str,
+        generation: int,
+        handle_token: str,
+    ) -> None:
+        """Emit a one-shot readiness edge after a frame egress publishes."""
+        sink = self._event_sink
+        if sink is None:
+            return
+        envelope = SceneIpcEnvelope(
+            message_type="frame_egress_ready",
+            request_id="event-frame-egress-ready",
+            session_id=self._session_id,
+            process_generation=self._process_generation,
+            sequence=0,
+            document_revision=0,
+            deadline_monotonic_ms=int(time.monotonic() * 1000) + 2000,
+            payload={
+                "channel_id": channel_id,
+                "generation": generation,
+                "handle_token": handle_token,
+            },
+        )
+        try:
+            sink(envelope)
+        except Exception:  # noqa: BLE001 - an event write must not break rendering
+            log.debug("could not emit frame egress readiness", exc_info=True)
 
     # ── media control (Fork A: libobs decodes; app drives over IPC) ─────────
 

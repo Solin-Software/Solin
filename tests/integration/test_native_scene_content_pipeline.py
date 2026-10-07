@@ -30,7 +30,7 @@ from solin.core.scenes.content_frame_channel import (
     _SEQ_OFFSET,
 )
 from solin.core.scenes.content_frame_publisher import SharedMemoryContentPublisher
-from solin.core.scenes.engine import SceneEngine, SceneEngineSnapshot
+from solin.core.scenes.engine import FrameEgressReadyEvent, SceneEngine, SceneEngineSnapshot
 from solin.core.scenes.libobs_engine import create_libobs_scene_engine
 from solin.core.scenes.model import (
     BusId,
@@ -137,9 +137,10 @@ class _BgraEgress:
 
     def __init__(self, width: int, height: int, *, channel_id: str) -> None:
         self._controller = SharedMemoryPreviewEgressController(width, height, channel_id=channel_id)
-        self.descriptor = self._controller.descriptor
-        assert self.descriptor is not None
-        self._reader = SharedFrameChannelReader(self.descriptor.handle_token, width, height)
+        descriptor = self._controller.descriptor
+        assert descriptor is not None
+        self.descriptor = descriptor
+        self._reader = SharedFrameChannelReader(descriptor.handle_token, width, height)
 
     def read_latest(self) -> _BgraFrame | None:
         frame = self._reader.read_latest()
@@ -554,7 +555,19 @@ def test_return_to_cached_content_never_publishes_the_previous_presentation(
         else bytes((0x20, 0x20, 0xE0, 0xFF))
     )
     events: list[object] = []
-    unsubscribe = engine.subscribe(events.append)
+    program_ready = Event()
+
+    def on_engine_event(event: object) -> None:
+        events.append(event)
+        if (
+            isinstance(event, FrameEgressReadyEvent)
+            and event.channel_id == program.descriptor.channel_id
+            and event.generation == program.descriptor.generation
+            and event.handle_token == program.descriptor.handle_token
+        ):
+            program_ready.set()
+
+    unsubscribe = engine.subscribe(on_engine_event)
     prepare_latencies: list[float] = []
     program_probe = _PixelWaitProbe()
     sequence = 1
@@ -639,6 +652,13 @@ def test_return_to_cached_content_never_publishes_the_previous_presentation(
             .result(15)
             .applied
         )
+        assert program_ready.wait(15), pformat({
+            "stage": "program egress readiness",
+            "descriptor": asdict(program.descriptor),
+            "events": events,
+            "program": program_probe.observation(),
+            "engine": _engine_observation(engine),
+        }, width=120)
 
         for cycle in range(3):
             if cycle:
