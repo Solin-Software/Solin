@@ -2311,7 +2311,6 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
                 std::scoped_lock lock{frame_mutex_};
                 if (gpu) {
                     latest_gpu_frame_ = std::move(frame);
-                    gpu_output_ready_.store(true);
                     ++gpu_frame_wakeup_generation_;
                 } else {
                     latest_frame_ = std::move(frame);
@@ -2410,8 +2409,10 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
             {
                 std::scoped_lock lock{frame_mutex_};
                 last_selection_at_ = std::chrono::steady_clock::now();
-                if (start_requested_.load() && gpu_output_ready_.load() &&
-                    !started_timestamp_.has_value()) {
+                if (start_requested_.load() && !started_timestamp_.has_value()) {
+                    // Matching compositor inputs are the causal readiness barrier.
+                    // Waiting for a prior GPU appsink publication delays an
+                    // immediate Take by at least one compositor tick.
                     started_timestamp_ = timestamp;
                 }
                 auto progress = 0.0;
@@ -2617,7 +2618,6 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
     std::atomic_bool completed_{false};
     std::atomic_bool output_ready_{false};
     std::atomic_bool system_memory_output_enabled_{false};
-    std::atomic_bool gpu_output_ready_{false};
     // Selection/probe state is confined to the compositor streaming thread.
     GstClockTime selected_output_timestamp_{GST_CLOCK_TIME_NONE};
     std::uint64_t selected_output_submission_{0U};
