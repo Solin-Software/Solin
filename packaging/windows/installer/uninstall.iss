@@ -57,6 +57,17 @@ begin
   Result := RegValueExists(OtherRootKey, '{#MyRegSubkey}', 'InstallPath');
 end;
 
+procedure DeleteInstallerRegistryParentIfEmpty();
+begin
+  // [Registry] owns every machine/user-scope child beneath Software\Solin.
+  // Once Inno has removed those children, do not leave an empty vendor
+  // container that looks like an installation to diagnostics or smoke tests.
+  if IsAdminInstallMode() then
+    RegDeleteKeyIfEmpty(HKLM64, 'Software\Solin')
+  else
+    RegDeleteKeyIfEmpty(HKCU64, 'Software\Solin');
+end;
+
 procedure DeleteCameraStorage();
 begin
   // DelTree does not follow reparse points. Never schedule deletion by path:
@@ -114,6 +125,7 @@ begin
     usPostUninstall:
     begin
       DeleteCameraStorage();
+      DeleteInstallerRegistryParentIfEmpty();
       // Inno Setup installer temp files left behind from interrupted installs
       DeleteTempFiles(AppDir);
 

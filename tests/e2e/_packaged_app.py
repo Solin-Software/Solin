@@ -12,6 +12,7 @@ import pytest
 
 
 _SOLIN_REGISTRY_ROOT = r"Software\Solin"
+_SOLIN_INSTALLER_REGISTRY_KEY = rf"{_SOLIN_REGISTRY_ROOT}\Solin"
 
 
 def path_from_env(name: str, *, purpose: str) -> Path:
@@ -151,23 +152,35 @@ def _registry_key_exists(root: Any, subkey: str) -> bool:
         return True
 
 
+def _solin_registry_guard_targets(
+    winreg: Any, profile_ids: tuple[str, ...]
+) -> tuple[tuple[str, Any, str], ...]:
+    targets: list[tuple[str, Any, str]] = [
+        ("HKCU", winreg.HKEY_CURRENT_USER, _SOLIN_REGISTRY_ROOT),
+    ]
+    targets.extend(
+        ("HKCU", winreg.HKEY_CURRENT_USER, f"Software\\Solin_{profile_id}")
+        for profile_id in profile_ids
+    )
+    # Machine-scope installer metadata lives one level below the vendor
+    # container. Inno Setup can legitimately leave an empty Software\Solin
+    # parent after uninstall, so only the actual install marker is a conflict.
+    targets.append(
+        ("HKLM", winreg.HKEY_LOCAL_MACHINE, _SOLIN_INSTALLER_REGISTRY_KEY)
+    )
+    return tuple(targets)
+
+
 def skip_if_solin_registry_exists(*profile_ids: str) -> None:
     if os.name != "nt":
         return
     winreg = _winreg()
-    roots = (
-        ("HKCU", winreg.HKEY_CURRENT_USER),
-        ("HKLM", winreg.HKEY_LOCAL_MACHINE),
-    )
-    subkeys = [_SOLIN_REGISTRY_ROOT]
-    subkeys.extend(f"Software\\Solin_{profile_id}" for profile_id in profile_ids)
-    for root_name, root in roots:
-        for subkey in subkeys:
-            if _registry_key_exists(root, subkey):
-                pytest.skip(
-                    f"{root_name}\\{subkey} already exists; refusing to mutate "
-                    "a machine with an existing Solin installation."
-                )
+    for root_name, root, subkey in _solin_registry_guard_targets(winreg, profile_ids):
+        if _registry_key_exists(root, subkey):
+            pytest.skip(
+                f"{root_name}\\{subkey} already exists; refusing to mutate "
+                "a machine with an existing Solin installation."
+            )
 
 
 def _delete_registry_tree(root: Any, subkey: str) -> None:
