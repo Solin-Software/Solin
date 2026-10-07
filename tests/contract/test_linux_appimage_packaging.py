@@ -143,6 +143,21 @@ def test_linux_ci_installs_all_pinned_obs_direct_dependency_providers():
         assert "add-apt-repository" not in workflow
 
 
+def test_linux_ci_bounds_package_mirror_failures():
+    for relative, step_name in (
+        (".github/workflows/build-solin-linux.yml", "Install Linux build and runtime dependencies"),
+        (".github/workflows/quality.yml", "Install Linux runtime dependencies"),
+    ):
+        workflow = _read(relative)
+        block = workflow.split(f"- name: {step_name}", 1)[1].split("- name:", 1)[0]
+        assert "timeout-minutes: 20" in block
+        assert "Acquire::Retries=3" in block
+        assert "Acquire::http::Timeout=30" in block
+        assert "Acquire::https::Timeout=30" in block
+        assert 'sudo apt-get "${apt_options[@]}" update' in block
+        assert 'sudo apt-get "${apt_options[@]}" install' in block
+
+
 def test_linux_mux_comes_from_the_checksum_pinned_official_release():
     script = _read("scripts/build_solin.sh")
     assert 'OBS_RUNTIME_VERSION="32.1.2"' in script

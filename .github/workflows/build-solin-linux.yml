@@ -51,11 +51,17 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install Linux build and runtime dependencies
+        timeout-minutes: 20
         shell: bash
         run: |
-          sudo apt-get update
+          apt_options=(
+            -o Acquire::Retries=3
+            -o Acquire::http::Timeout=30
+            -o Acquire::https::Timeout=30
+          )
+          sudo apt-get "${apt_options[@]}" update
           mapfile -t libobs_packages < <(bash scripts/build_solin.sh --print-native-packages)
-          sudo apt-get install --yes --no-install-recommends \
+          sudo apt-get "${apt_options[@]}" install --yes --no-install-recommends \
             "${libobs_packages[@]}" \
             binutils \
             build-essential \
