@@ -17,7 +17,6 @@ from PySide6.QtCore import (
     QPoint,
     QPointF,
     QSize,
-    QTimer,
     QTranslator,
     QUrl,
     Signal,
@@ -1612,28 +1611,28 @@ def test_qml_host_renders_clock_face_content() -> None:
     engine = TimerEngine()
     bridge = ClockRenderBridge(engine, lambda: ClockConfig())
     widget = QQuickWidget()
-    widget.resize(800, 450)
+    try:
+        widget.resize(800, 450)
+        configure_qml_host(
+            widget,
+            type_name="ClockFace",
+            clear_color="#000000",
+            context_properties={
+                "clock": bridge,
+                "timerDigitFontFamily": "Arial",
+            },
+        )
+        widget.show()
+        QTest.qWait(50)
 
-    configure_qml_host(
-        widget,
-        type_name="ClockFace",
-        clear_color="#000000",
-        context_properties={
-            "clock": bridge,
-            "timerDigitFontFamily": "Arial",
-        },
-    )
-    widget.show()
-
-    QTimer.singleShot(50, _APP.quit)
-    _APP.exec()
-
-    root = widget.rootObject()
-    assert widget.errors() == []
-    assert root is not None
-    assert root.width() == 800
-    assert root.height() == 450
-    assert any(":" in text for text in _visible_texts(root))
+        root = widget.rootObject()
+        assert widget.errors() == []
+        assert root is not None
+        assert root.width() == 800
+        assert root.height() == 450
+        assert any(":" in text for text in _visible_texts(root))
+    finally:
+        dispose_widget(widget)
 
 
 def _timer_pointer_host(request, offset: QPoint, *, root_control: bool = False):
