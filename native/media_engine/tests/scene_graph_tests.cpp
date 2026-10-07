@@ -207,6 +207,7 @@ struct TransitionCounters final {
     std::uint64_t active{0U};
     std::uint64_t maximum_active{0U};
     bool origin_rendering_enabled_at_start{false};
+    bool overlapped_handoff{false};
 };
 
 class FakePreparedTransition final
@@ -226,6 +227,8 @@ class FakePreparedTransition final
             return;
         }
         started_ = true;
+        counters_->overlapped_handoff =
+            counters_->overlapped_handoff || counters_->active > 0U;
         ++counters_->started;
         ++counters_->active;
         counters_->maximum_active =
@@ -1269,6 +1272,8 @@ void test_rapid_program_retargets_are_latest_wins_and_resource_bounded() {
     expect(renderer->retarget_before_first_frame == 1U,
            "a retarget before the first composed frame uses the stable transition origin");
     runtime.take(second, 1U, 6U);
+    expect(renderer->transition_counters->overlapped_handoff,
+           "a retarget starts the replacement compositor before retiring the previous one");
 
     const auto active_second = std::dynamic_pointer_cast<FakePreparedTransition>(
         renderer->active[static_cast<std::size_t>(OutputBus::virtual_camera)]);
@@ -1300,8 +1305,8 @@ void test_rapid_program_retargets_are_latest_wins_and_resource_bounded() {
     expect(renderer->transition_counters->active == 0U &&
                renderer->transition_counters->started == 3U &&
                renderer->transition_counters->stopped == 3U &&
-               renderer->transition_counters->maximum_active == 1U,
-           "rapid retargets stop superseded compositors and keep resource use bounded");
+               renderer->transition_counters->maximum_active == 2U,
+           "rapid retargets use a bounded one-compositor handoff overlap");
 }
 
 } // namespace

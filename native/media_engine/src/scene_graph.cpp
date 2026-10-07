@@ -805,12 +805,10 @@ void SceneGraphRuntime::take(const OutputBus bus, const std::string_view scene_i
     impl_->pending_by_token.erase(pending);
     impl_->token_by_request.erase(committed.request_id);
     auto previous = std::move(impl_->active[index]);
-    if (previous.has_value()) {
-        // Retargeting replaces the ephemeral compositor, but the stable scene
-        // graph remains an input until commit_take has acquired the new A/B.
-        Impl::stop_transition(previous.value());
-    }
     if (impl_->renderer != nullptr) {
+        // Retargeting must hand A/B ownership to the replacement compositor
+        // before the previous compositor is stopped. Stopping first clears its
+        // published frames and can leave Program without a causal render source.
         impl_->renderer->commit_take(bus, committed.render_graph,
                                      committed.transition_output, sequence);
     }
