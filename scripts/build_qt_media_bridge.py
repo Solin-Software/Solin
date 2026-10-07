@@ -168,8 +168,6 @@ def build_qt_media_bridge(
             str(SOURCE_DIRECTORY),
             "-B",
             str(build_directory),
-            "-G",
-            "Visual Studio 17 2022",
             "-A",
             "x64",
             f"-DPython3_EXECUTABLE={sys.executable}",

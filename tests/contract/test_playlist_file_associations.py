@@ -102,11 +102,15 @@ def test_linux_appimage_declares_and_packages_native_playlist_mime_type():
 def test_macos_bundle_exports_native_playlist_uti_with_document_icon():
     workflow = _read(".github/workflows/build-solin-macos.yml")
 
-    assert "Register Solin playlist document type" in workflow
-    assert "scripts/configure_macos_playlist_filetype.py" in workflow
+    assert "Configure macOS bundle metadata and playlist type" in workflow
+    assert "scripts/configure_macos_bundle.py" in workflow
+    assert '--short-version "${MACOS_VERSION}"' in workflow
+    assert '--bundle-version "${MACOS_BUILD}"' in workflow
+    assert '--minimum-system-version "13.0"' in workflow
+    assert "PlistBuddy" not in workflow
     assert 'iconutil --convert icns --output "$RESOURCES/playlist.icns"' in workflow
     assert "plutil -lint" in workflow
-    assert workflow.index("Register Solin playlist document type") < workflow.index(
+    assert workflow.index("Configure macOS bundle metadata and playlist type") < workflow.index(
         "Ad-hoc sign app bundle"
     )
 
@@ -135,9 +139,15 @@ def test_macos_bundle_configuration_preserves_other_document_types(tmp_path: Pat
     subprocess.run(
         [
             sys.executable,
-            "scripts/configure_macos_playlist_filetype.py",
+            "scripts/configure_macos_bundle.py",
             "--bundle",
             os.fspath(bundle),
+            "--short-version",
+            "26.32.0",
+            "--bundle-version",
+            "26.32.1",
+            "--minimum-system-version",
+            "13.0",
         ],
         cwd=ROOT,
         check=True,
@@ -146,6 +156,9 @@ def test_macos_bundle_configuration_preserves_other_document_types(tmp_path: Pat
     with plist_path.open("rb") as stream:
         plist = plistlib.load(stream)
     assert plist["CFBundleIdentifier"] == "com.solin.Solin"
+    assert plist["CFBundleShortVersionString"] == "26.32.0"
+    assert plist["CFBundleVersion"] == "26.32.1"
+    assert plist["LSMinimumSystemVersion"] == "13.0"
     assert plist["CFBundleDocumentTypes"][0]["CFBundleTypeName"] == "Existing"
     playlist_document = plist["CFBundleDocumentTypes"][-1]
     assert playlist_document["LSItemContentTypes"] == ["com.solin.playlist"]

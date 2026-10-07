@@ -83,12 +83,16 @@ def test_every_standalone_build_includes_and_qualifies_the_libobs_runtime():
         assert "QtMultimedia" not in recipe
 
 
-def test_macos_installs_the_intel_binding_wheel_before_binary_dependency_download():
+def test_macos_keeps_the_custom_binding_wheel_separate_from_downloaded_dependencies():
     workflow = _read(".github/workflows/build-solin-macos.yml")
-    assert workflow.index("python scripts/build_pylibobs_macos.py --output-dir .pip-wheels") < workflow.index("python -m pip download")
+    assert workflow.index("python scripts/build_pylibobs_macos.py --output-dir .pylibobs-wheel") < workflow.index("python -m pip download")
     assert "setuptools==80.10.2 wheel==0.46.3 cffi==2.0.0" in workflow
     download = workflow.split("python -m pip download", 1)[1].split("python -m pip install", 1)[0]
-    assert "--find-links .pip-wheels" in download
+    assert "--find-links .pylibobs-wheel" not in download
+    assert "--force-reinstall" in workflow
+    assert "--no-deps" in workflow
+    assert "Expected exactly one custom pylibobs wheel." in workflow
+    assert 'root.rglob("obs-ffmpeg-mux")' in workflow
 
 
 def test_macos_qualifies_final_library_layout_before_signing_and_disk_image():

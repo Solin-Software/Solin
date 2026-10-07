@@ -68,6 +68,7 @@ def test_native_dependency_downloads_are_versioned_and_digest_pinned() -> None:
 def test_windows_release_builds_and_packages_the_native_engine() -> None:
     workflow = _read(".github/workflows/build-solin-windows.yml")
     build_script = _read("scripts/build_native_engine.py")
+    qt_bridge_script = _read("scripts/build_qt_media_bridge.py")
     package_script = _read("scripts/package_native_engine_windows.py")
 
     assert "python scripts\\build_native_engine.py --configuration Release" in workflow
@@ -78,6 +79,10 @@ def test_windows_release_builds_and_packages_the_native_engine() -> None:
     assert "virtual-camera\\x64\\solin-virtual-camera.dll" in workflow
     assert "virtual-camera\\x86\\solin-virtual-camera.dll" in workflow
     assert "SOLIN_MEDIA_ENGINE_ENABLE_GSTREAMER=ON" in build_script
+    assert "Visual Studio 17 2022" not in build_script
+    assert "Visual Studio 17 2022" not in qt_bridge_script
+    assert '"-A",\n            "x64"' in build_script
+    assert '"-A",\n            "Win32"' in build_script
     assert 'scripts" / "build_qt_media_bridge.py' in build_script
     assert "install_qt_bridge_sdk_windows.ps1" in _read("scripts/build_qt_media_bridge.py")
     assert "GSTREAMER_PLUGIN_FILENAMES = (" in package_script

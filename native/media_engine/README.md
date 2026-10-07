@@ -122,7 +122,7 @@ debug components into an explicit directory. From the repository root:
 
 ```text
 powershell -ExecutionPolicy Bypass -File scripts/install_gstreamer_windows.ps1
-cmake -S native/media_engine -B build/native/media-engine-gstreamer -G "Visual Studio 17 2022" -A x64 -DSOLIN_MEDIA_ENGINE_ENABLE_GSTREAMER=ON -DSOLIN_GSTREAMER_ROOT=build/dependencies/gstreamer/msvc_x86_64
+cmake -S native/media_engine -B build/native/media-engine-gstreamer -A x64 -DSOLIN_MEDIA_ENGINE_ENABLE_GSTREAMER=ON -DSOLIN_GSTREAMER_ROOT=build/dependencies/gstreamer/msvc_x86_64
 ```
 
 The GStreamer option builds the discovery and source-runtime integration tests, including

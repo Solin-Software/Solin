@@ -1,4 +1,4 @@
-"""Configure the native Solin playlist UTI in a built macOS app bundle."""
+"""Configure release metadata and the native playlist UTI in a macOS app bundle."""
 
 from __future__ import annotations
 
@@ -16,8 +16,15 @@ PLAYLIST_MIME = "application/vnd.solin.playlist+zip"
 PLAYLIST_EXTENSION = "solinplaylist"
 
 
-def configure_bundle(bundle: Path, *, icon_name: str = "playlist.icns") -> None:
-    """Atomically add or replace Solin's document declaration in Info.plist."""
+def configure_bundle(
+    bundle: Path,
+    *,
+    short_version: str,
+    bundle_version: str,
+    minimum_system_version: str,
+    icon_name: str = "playlist.icns",
+) -> None:
+    """Atomically apply release metadata and Solin's document declaration."""
     plist_path = bundle / "Contents" / "Info.plist"
     icon_path = bundle / "Contents" / "Resources" / icon_name
     if not plist_path.is_file():
@@ -29,6 +36,18 @@ def configure_bundle(bundle: Path, *, icon_name: str = "playlist.icns") -> None:
         plist = plistlib.load(stream)
     if not isinstance(plist, dict):
         raise ValueError("App bundle Info.plist root must be a dictionary")
+
+    for label, value in (
+        ("short version", short_version),
+        ("bundle version", bundle_version),
+        ("minimum system version", minimum_system_version),
+    ):
+        if not value.strip():
+            raise ValueError(f"macOS {label} must not be empty")
+
+    plist["CFBundleShortVersionString"] = short_version
+    plist["CFBundleVersion"] = bundle_version
+    plist["LSMinimumSystemVersion"] = minimum_system_version
 
     document_type = {
         "CFBundleTypeName": "Solin Playlist",
@@ -108,12 +127,21 @@ def _write_plist_atomically(path: Path, value: dict[str, Any]) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Register .solinplaylist in a built macOS app bundle."
+        description="Configure release metadata and .solinplaylist in a built macOS app bundle."
     )
     parser.add_argument("--bundle", required=True, type=Path)
+    parser.add_argument("--short-version", required=True)
+    parser.add_argument("--bundle-version", required=True)
+    parser.add_argument("--minimum-system-version", required=True)
     parser.add_argument("--icon-name", default="playlist.icns")
     args = parser.parse_args()
-    configure_bundle(args.bundle, icon_name=args.icon_name)
+    configure_bundle(
+        args.bundle,
+        short_version=args.short_version,
+        bundle_version=args.bundle_version,
+        minimum_system_version=args.minimum_system_version,
+        icon_name=args.icon_name,
+    )
     return 0
 
 

@@ -413,6 +413,21 @@ def _verify_source_runtime(source: Path, architecture: str) -> None:
     )
 
 
+def _verify_built_wheel(wheel: Path, architecture: str) -> None:
+    """Require every runtime artifact that downstream packaging depends on."""
+    with zipfile.ZipFile(wheel) as archive:
+        names = set(archive.namelist())
+    expected_libobs = (
+        f"pylibobs/_libs/macos/{architecture}/"
+        "Frameworks/libobs.framework/Versions/A/libobs"
+    )
+    if expected_libobs not in names:
+        raise BindingBuildError("Built wheel does not contain libobs")
+    expected_mux = f"pylibobs/_libs/macos/{architecture}/obs-ffmpeg-mux"
+    if expected_mux not in names:
+        raise BindingBuildError("Built wheel does not contain obs-ffmpeg-mux")
+
+
 def build_wheel(output_dir: Path, cache_dir: Path, architecture: str) -> Path:
     spec = RUNTIME_SPECS[architecture]
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -458,12 +473,7 @@ def build_wheel(output_dir: Path, cache_dir: Path, architecture: str) -> Path:
         wheel = wheels / wheel_name
         if not wheel.is_file():
             raise BindingBuildError(f"Build did not produce the expected macOS wheel {wheel_name}")
-        with zipfile.ZipFile(wheel) as archive:
-            expected_libobs = (
-                f"/macos/{architecture}/Frameworks/libobs.framework/Versions/A/libobs"
-            )
-            if not any(name.endswith(expected_libobs) for name in archive.namelist()):
-                raise BindingBuildError("Built wheel does not contain libobs")
+        _verify_built_wheel(wheel, architecture)
         destination = output_dir / wheel_name
         with tempfile.NamedTemporaryFile(dir=output_dir, delete=False) as stream:
             temporary_wheel = Path(stream.name)

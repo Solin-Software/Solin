@@ -642,6 +642,63 @@ def test_linux_dependency_closure_is_bundled_with_notices_but_keeps_host_graphic
     assert {command[-1] for command in commands} == {str(core), str(root / codec.name), str(root / codec_dependency.name)}
 
 
+def test_linux_dependency_closure_reuses_identical_duplicate_soname(tmp_path, monkeypatch):
+    root, system = tmp_path / "runtime", tmp_path / "system"
+    core_a = root / "libobs.so.0"
+    core_b = root / "obs-plugins/image-source.so"
+    zlib_a = system / "a/libz.so.1"
+    zlib_b = system / "b/libz.so.1"
+    for binary in (core_a, core_b):
+        _touch(binary, b"\x7fELF" + binary.name.encode())
+    for library in (zlib_a, zlib_b):
+        _touch(library, b"\x7fELF-identical-zlib")
+    notices = []
+
+    def dependencies(binary):
+        if binary == core_a:
+            return {"libz.so.1": zlib_a}
+        if binary == core_b:
+            return {"libz.so.1": zlib_b}
+        return {}
+
+    monkeypatch.setattr(packaging, "_linux_linked_libraries", dependencies)
+    monkeypatch.setattr(
+        packaging, "_copy_linux_dependency_notice", lambda library, _root: notices.append(library)
+    )
+    monkeypatch.setattr(packaging.subprocess, "run", lambda *_args, **_kwargs: None)
+
+    packaging._relocate_linux(root)
+
+    assert (root / "libz.so.1").read_bytes() == zlib_a.read_bytes()
+    assert set(notices) == {zlib_a, zlib_b}
+
+
+def test_linux_dependency_closure_rejects_divergent_duplicate_soname(tmp_path, monkeypatch):
+    root, system = tmp_path / "runtime", tmp_path / "system"
+    core_a = root / "libobs.so.0"
+    core_b = root / "obs-plugins/image-source.so"
+    zlib_a = system / "a/libz.so.1"
+    zlib_b = system / "b/libz.so.1"
+    for binary in (core_a, core_b):
+        _touch(binary, b"\x7fELF" + binary.name.encode())
+    _touch(zlib_a, b"\x7fELF-zlib-a")
+    _touch(zlib_b, b"\x7fELF-zlib-b")
+
+    def dependencies(binary):
+        if binary == core_a:
+            return {"libz.so.1": zlib_a}
+        if binary == core_b:
+            return {"libz.so.1": zlib_b}
+        return {}
+
+    monkeypatch.setattr(packaging, "_linux_linked_libraries", dependencies)
+    monkeypatch.setattr(packaging, "_copy_linux_dependency_notice", lambda *_args: None)
+    monkeypatch.setattr(packaging.subprocess, "run", lambda *_args, **_kwargs: None)
+
+    with pytest.raises(packaging.LibobsPackagingError, match="Conflicting private libobs dependency"):
+        packaging._relocate_linux(root)
+
+
 @pytest.mark.parametrize(
     ("stdout", "stderr"),
     [(b"libavcodec.so.60 => not found\n", b""), (b"", b"version GLIBC_2.38 not found\n")],
