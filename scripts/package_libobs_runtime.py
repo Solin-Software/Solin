@@ -284,46 +284,80 @@ def _copy_linux_dependency_notice(library: Path, root: Path) -> None:
     shutil.copy2(notice, destination)
 
 
+def _set_linux_rpath(root: Path, binary: Path) -> None:
+    relative = os.path.relpath(root, binary.parent).replace(os.sep, "/")
+    subprocess.run(
+        ["patchelf", "--set-rpath", f"$ORIGIN:$ORIGIN/{relative}", str(binary)],
+        check=True,
+        capture_output=True,
+    )
+
+
 def _relocate_linux(root: Path, *, binaries: Sequence[Path] | None = None) -> None:
-    """Stage the resolved ELF closure while retaining host C/graphics libraries."""
-    pending = list(_native_files(root) if binaries is None else binaries)
-    visited = set()
+    """Stage one deterministic ELF closure while retaining host C/graphics libraries."""
+    root_resolved = root.resolve()
+    if binaries is not None:
+        targets = list(dict.fromkeys(path.resolve() for path in binaries))
+        for binary in targets:
+            _set_linux_rpath(root, binary)
+        for binary in targets:
+            for name, library in _linux_linked_libraries(binary).items():
+                if name in _LINUX_HOST_LIBRARIES or name.startswith(("libdrm", "libnss_")):
+                    continue
+                if not library.is_relative_to(root_resolved):
+                    raise LibobsPackagingError(f"Mux helper dependency was not bundled: {name}")
+        return
+
+    pending = sorted(_native_files(root), key=lambda path: path.as_posix())
+    visited: set[Path] = set()
     while pending:
-        binary = pending.pop()
+        binary = pending.pop(0).resolve()
         if binary in visited:
             continue
         visited.add(binary)
-        relative = os.path.relpath(root, binary.parent).replace(os.sep, "/")
-        subprocess.run(
-            ["patchelf", "--set-rpath", f"$ORIGIN:$ORIGIN/{relative}", str(binary)],
-            check=True,
-            capture_output=True,
-        )
         libraries = _linux_linked_libraries(binary)
-        for name, library in libraries.items():
+        for name, library in sorted(libraries.items()):
             if name in _LINUX_HOST_LIBRARIES or name.startswith(("libdrm", "libnss_")):
                 continue
-            if library.is_relative_to(root.resolve()):
+            if library.is_relative_to(root_resolved):
                 continue
-            if binaries is not None:
-                raise LibobsPackagingError(f"Mux helper dependency was not bundled: {name}")
             destination = root / name
             _require_file(library)
             if destination.exists():
-                if not destination.is_file() or not filecmp.cmp(
-                    destination, library, shallow=False,
-                ):
-                    raise LibobsPackagingError(f"Conflicting private libobs dependency: {name}")
-                _copy_linux_dependency_notice(library, root)
+                if not destination.is_file():
+                    raise LibobsPackagingError(f"Private libobs dependency is not a file: {name}")
+                # The final runtime has one namespace per SONAME. Keep the
+                # provider selected first by the sorted closure rather than
+                # allowing ldd probe order to replace it with a host copy.
+                if filecmp.cmp(destination, library, shallow=False):
+                    _copy_linux_dependency_notice(library, root)
                 continue
             shutil.copy2(library, destination)
             _copy_linux_dependency_notice(library, root)
-            pending.append(destination)
+            pending.append(destination.resolve())
+            pending.sort(key=lambda path: path.as_posix())
+
+    for binary in sorted(visited, key=lambda path: path.as_posix()):
+        _set_linux_rpath(root, binary)
+
+    # Re-resolve after the private RPATH is final. Every non-host SONAME must
+    # now bind inside the staged runtime; this also catches ABI/version errors.
+    for binary in sorted(visited, key=lambda path: path.as_posix()):
+        for name, library in _linux_linked_libraries(binary).items():
+            if name in _LINUX_HOST_LIBRARIES or name.startswith(("libdrm", "libnss_")):
+                continue
+            if not library.is_relative_to(root_resolved):
+                raise LibobsPackagingError(
+                    f"Private libobs dependency escaped the staged runtime: "
+                    f"{binary} -> {name} => {library}"
+                )
 
 
 def _relocate_macos(root: Path, *, binaries: Sequence[Path] | None = None) -> None:
     """Resolve OBS's framework paths relative to each staged Mach-O loader."""
     inventory = _native_files(root)
+    root_resolved = root.resolve()
+    frameworks = (root / "Frameworks").resolve()
     targets = (
         inventory if binaries is None
         else list(dict.fromkeys(path.resolve() for path in binaries))
@@ -338,12 +372,17 @@ def _relocate_macos(root: Path, *, binaries: Sequence[Path] | None = None) -> No
             dependency = line.strip().split(" (", 1)[0]
             if dependency.startswith(("/System/Library/", "/usr/lib/")):
                 continue
+            preserve_dependency = False
             if dependency.startswith("@loader_path/"):
                 target = (binary.parent / dependency.removeprefix("@loader_path/")).resolve()
+                preserve_dependency = target.is_file()
+            elif dependency.startswith("@rpath/"):
+                target = root / "Frameworks" / dependency.removeprefix("@rpath/")
+                preserve_dependency = target.is_file()
             elif "/Frameworks/" in dependency:
                 target = root / "Frameworks" / dependency.split("/Frameworks/", 1)[1]
             else:
-                target = root / "Frameworks" / dependency.removeprefix("@rpath/")
+                target = root / "Frameworks" / Path(dependency).name
             if not target.is_file():
                 candidates = [p for p in inventory if p.name == Path(dependency).name]
                 if len(candidates) != 1:
@@ -352,22 +391,23 @@ def _relocate_macos(root: Path, *, binaries: Sequence[Path] | None = None) -> No
                     )
                 target = candidates[0]
             target = target.resolve()
-            if not target.is_relative_to(root.resolve()):
+            if not target.is_relative_to(root_resolved):
                 raise LibobsPackagingError(f"libobs dependency escapes its bundle: {dependency}")
             if target == binary.resolve():  # the dylib's own install name
                 continue
-            relative = os.path.relpath(target, binary.parent).replace(os.sep, "/")
-            subprocess.run(
-                [
-                    "install_name_tool",
-                    "-change",
-                    dependency,
-                    f"@loader_path/{relative}",
-                    str(binary),
-                ],
-                check=True,
-                capture_output=True,
-            )
+            if preserve_dependency:
+                continue
+            if target.is_relative_to(frameworks):
+                relocated = f"@rpath/{target.relative_to(frameworks).as_posix()}"
+            else:
+                relative = os.path.relpath(target, binary.parent).replace(os.sep, "/")
+                relocated = f"@loader_path/{relative}"
+            if relocated != dependency:
+                subprocess.run(
+                    ["install_name_tool", "-change", dependency, relocated, str(binary)],
+                    check=True,
+                    capture_output=True,
+                )
         # A mux helper copied next to the host must not retain the wheel-root
         # @loader_path/Frameworks search path. Normalize LC_RPATH as well as imports.
         load_commands = subprocess.run(
