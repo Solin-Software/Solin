@@ -4,6 +4,7 @@ import hashlib
 import io
 import os
 import subprocess
+import zipfile
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -399,3 +400,36 @@ def test_runtime_specs_match_official_obs_release_assets():
     assert builder.RUNTIME_SPECS["arm64"].sha256 == (
         "2aeb3aaa99544fefd557f10ac6550e73df71540dd57528b2a1e6f39a55ebacfb"
     )
+
+
+@pytest.mark.parametrize("missing", ["libobs", "obs-ffmpeg-mux"])
+def test_built_wheel_requires_complete_private_runtime(tmp_path, missing):
+    wheel = tmp_path / "pylibobs.whl"
+    entries = {
+        "pylibobs/_libs/macos/arm64/Frameworks/libobs.framework/Versions/A/libobs": b"libobs",
+        "pylibobs/_libs/macos/arm64/obs-ffmpeg-mux": b"mux",
+    }
+    if missing == "libobs":
+        entries.pop(
+            "pylibobs/_libs/macos/arm64/Frameworks/libobs.framework/Versions/A/libobs"
+        )
+    else:
+        entries.pop("pylibobs/_libs/macos/arm64/obs-ffmpeg-mux")
+    with zipfile.ZipFile(wheel, "w") as archive:
+        for name, payload in entries.items():
+            archive.writestr(name, payload)
+
+    with pytest.raises(builder.BindingBuildError, match=missing):
+        builder._verify_built_wheel(wheel, "arm64")
+
+
+def test_built_wheel_accepts_complete_private_runtime(tmp_path):
+    wheel = tmp_path / "pylibobs.whl"
+    with zipfile.ZipFile(wheel, "w") as archive:
+        archive.writestr(
+            "pylibobs/_libs/macos/arm64/Frameworks/libobs.framework/Versions/A/libobs",
+            b"libobs",
+        )
+        archive.writestr("pylibobs/_libs/macos/arm64/obs-ffmpeg-mux", b"mux")
+
+    builder._verify_built_wheel(wheel, "arm64")

@@ -97,11 +97,11 @@ jobs:
           PIP_NO_INPUT: "1"
         run: |
           python -m pip install --upgrade --retries 10 --timeout 120 pip
-          mkdir -p .pip-wheels
+          rm -rf .pylibobs-wheel
+          mkdir -p .pip-wheels .pylibobs-wheel
           python -m pip install setuptools==80.10.2 wheel==0.46.3 cffi==2.0.0
-          python scripts/build_pylibobs_macos.py --output-dir .pip-wheels
+          python scripts/build_pylibobs_macos.py --output-dir .pylibobs-wheel
           python -m pip download \
-            --find-links .pip-wheels \
             --requirement requirements-dev.txt \
             --dest .pip-wheels \
             --only-binary=:all: \
@@ -112,6 +112,16 @@ jobs:
             --no-index \
             --find-links .pip-wheels \
             --requirement requirements-dev.txt
+          set -- .pylibobs-wheel/pylibobs-*.whl
+          if [ "$#" -ne 1 ] || [ ! -f "$1" ]; then
+            echo "Expected exactly one custom pylibobs wheel." >&2
+            exit 1
+          fi
+          python -m pip install \
+            --force-reinstall \
+            --no-deps \
+            "$1"
+          python -c 'from pathlib import Path; import pylibobs; root = Path(pylibobs.__file__).resolve().parent / "_libs" / "macos"; helpers = list(root.rglob("obs-ffmpeg-mux")); assert len(helpers) == 1, f"Expected one bundled obs-ffmpeg-mux, found {helpers}"'
           python -m pip install --no-deps -e .
           python -m pip install --retries 10 --timeout 120 --prefer-binary -r requirements-build.txt
 
@@ -201,7 +211,7 @@ jobs:
           fi
           test -d "${BUILD_DIR}/${APP_NAME}.app"
 
-      - name: Register Solin playlist document type
+      - name: Configure macOS bundle metadata and playlist type
         shell: bash
         run: |
           set -euo pipefail
@@ -223,8 +233,11 @@ jobs:
           cp "$SOURCE_ICON" "$ICONSET/icon_512x512@2x.png"
           iconutil --convert icns --output "$RESOURCES/playlist.icns" "$ICONSET"
 
-          python scripts/configure_macos_playlist_filetype.py \
+          python scripts/configure_macos_bundle.py \
             --bundle "$BUNDLE" \
+            --short-version "${MACOS_VERSION}" \
+            --bundle-version "${MACOS_BUILD}" \
+            --minimum-system-version "13.0" \
             --icon-name "playlist.icns"
 
           plutil -lint "$BUNDLE/Contents/Info.plist"
@@ -424,15 +437,12 @@ jobs:
             --application-dir "$BUNDLE/Contents/MacOS" \
             --executable "$BUNDLE/Contents/MacOS/main"
 
-      - name: Validate architecture and set numeric bundle versions
+      - name: Validate architecture
         shell: bash
         env:
           EXPECTED_ARCH: ${{ matrix.architecture }}
         run: |
           bundle="${BUILD_DIR}/${APP_NAME}.app"
-          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${MACOS_VERSION}" "$bundle/Contents/Info.plist"
-          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${MACOS_BUILD}" "$bundle/Contents/Info.plist"
-          /usr/libexec/PlistBuddy -c "Add :LSMinimumSystemVersion string 13.0" "$bundle/Contents/Info.plist" || /usr/libexec/PlistBuddy -c "Set :LSMinimumSystemVersion 13.0" "$bundle/Contents/Info.plist"
           while IFS= read -r -d '' binary; do
             if file "$binary" | grep -q 'Mach-O'; then
               lipo -verify_arch "$EXPECTED_ARCH" "$binary"

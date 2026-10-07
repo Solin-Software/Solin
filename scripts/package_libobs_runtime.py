@@ -308,9 +308,14 @@ def _relocate_linux(root: Path, *, binaries: Sequence[Path] | None = None) -> No
             if binaries is not None:
                 raise LibobsPackagingError(f"Mux helper dependency was not bundled: {name}")
             destination = root / name
-            if destination.exists():
-                raise LibobsPackagingError(f"Conflicting private libobs dependency: {name}")
             _require_file(library)
+            if destination.exists():
+                if not destination.is_file() or not filecmp.cmp(
+                    destination, library, shallow=False,
+                ):
+                    raise LibobsPackagingError(f"Conflicting private libobs dependency: {name}")
+                _copy_linux_dependency_notice(library, root)
+                continue
             shutil.copy2(library, destination)
             _copy_linux_dependency_notice(library, root)
             pending.append(destination)
