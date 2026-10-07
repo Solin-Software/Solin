@@ -883,7 +883,9 @@ void test_program_transitions_render_real_synthetic_frames(
     std::uint8_t minimum_dissolve_luma = 255U;
     std::size_t sampled_frames = 0U;
     bool every_short_transition_published_a_blended_frame = true;
+    bool every_short_transition_reached_its_target = true;
     std::vector<std::uint64_t> missed_short_transition_indices;
+    std::vector<std::uint64_t> stalled_short_transition_indices;
     for (std::uint64_t index = 0U; index < 20U; ++index) {
         const auto target = index % 2U == 0U ? "scene-blue" : "scene-red";
         const auto prepare_sequence = 2'000U + index * 2U;
@@ -899,9 +901,14 @@ void test_program_transitions_render_real_synthetic_frames(
             std::this_thread::sleep_for(250ms);
         }
         bool published_blended_frame = false;
-        const auto deadline = std::chrono::steady_clock::now() + 120ms;
+        bool reached_target = false;
+        // The correctness contract is causal ordering: a required Program
+        // consumer must observe a body frame before the destination endpoint.
+        // Keep only a generous deadlock watchdog here; runner scheduling is not
+        // part of the transition's requested 50 ms presentation duration.
+        const auto deadline = std::chrono::steady_clock::now() + 2s;
         while (std::chrono::steady_clock::now() < deadline) {
-            const auto frame = wait_for_program_center(renderer, last_sequence, 40ms);
+            const auto frame = wait_for_program_center(renderer, last_sequence, 100ms);
             if (!frame.has_value()) {
                 continue;
             }
@@ -919,12 +926,25 @@ void test_program_transitions_render_real_synthetic_frames(
             published_blended_frame =
                 published_blended_frame || (!red_endpoint && !blue_endpoint);
             ++sampled_frames;
+            const bool target_endpoint =
+                target == std::string_view{"scene-blue"}
+                    ? blue_endpoint
+                    : red_endpoint;
+            if (target_endpoint) {
+                reached_target = true;
+                break;
+            }
         }
         every_short_transition_published_a_blended_frame =
             every_short_transition_published_a_blended_frame &&
             published_blended_frame;
+        every_short_transition_reached_its_target =
+            every_short_transition_reached_its_target && reached_target;
         if (!published_blended_frame) {
             missed_short_transition_indices.push_back(index);
+        }
+        if (!reached_target) {
+            stalled_short_transition_indices.push_back(index);
         }
     }
     expect(sampled_frames >= 40U,
@@ -938,6 +958,15 @@ void test_program_transitions_render_real_synthetic_frames(
     }
     expect(every_short_transition_published_a_blended_frame,
            "every minimum-duration Program transition publishes a blended NV12 frame");
+    if (!every_short_transition_reached_its_target) {
+        std::cerr << "Stalled minimum-duration transition indices:";
+        for (const auto index : stalled_short_transition_indices) {
+            std::cerr << ' ' << index;
+        }
+        std::cerr << '\n';
+    }
+    expect(every_short_transition_reached_its_target,
+           "every minimum-duration Program transition reaches its requested endpoint");
     expect(minimum_dissolve_luma >= 24U,
            "Dissolve never publishes a transient black/blank Program frame");
 }
