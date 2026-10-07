@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-from solin.core.scenes.engine import SceneEngineStatus
+from solin.core.scenes.engine import FrameEgressReadyEvent, SceneEngineStatus
 from solin.core.scenes.recording import (
     AudioDeviceSelection,
     AudioSelectionMode,
@@ -45,11 +45,14 @@ from solin.core.scenes.media_control import (
     MediaPlaybackState,
 )
 from solin.core.scenes.process_engine import (
+    SceneEngineProcessConfig,
     SceneEngineCommandRejectedError,
+    SubprocessSceneEngine,
     _ack_from_envelope,
     _audio_device_discovery_from_envelope,
     _capabilities_from_envelope,
     _command_error_from_envelope,
+    _frame_egress_ready_from_envelope,
     _heartbeat_from_envelope,
     _local_camera_discovery_from_envelope,
     _media_playback_event_from_envelope,
@@ -3122,6 +3125,108 @@ def test_program_egress_tight_repacks_padded_stride():
     tight = LibobsProgramEgress._tight(padded, 12, 2, 2)
     assert len(tight) == 2 * 2 * 4
     assert tight[0:8] == padded[0:8] and tight[8:16] == padded[12:20]
+
+
+def test_program_egress_readiness_follows_successful_publication(monkeypatch):
+    import solin.core.scenes.content_frame_channel as frame_channel_module
+    from solin.core.scenes.libobs_program_egress import LibobsProgramEgress
+
+    writers = []
+
+    class FakeWriter:
+        def __init__(self, width, height, *, name, create):
+            self.width = width
+            self.height = height
+            self.name = name
+            self.create = create
+            self.fail = False
+            self.writes = []
+            self.closed = 0
+            writers.append(self)
+
+        def write(self, data, *, stride):
+            if self.fail:
+                raise RuntimeError("publication failed")
+            self.writes.append((bytes(data), stride))
+
+        def close(self):
+            self.closed += 1
+
+    monkeypatch.setattr(frame_channel_module, "SharedFrameChannelWriter", FakeWriter)
+
+    callbacks = []
+    removed_callbacks = []
+    ob = types.SimpleNamespace(
+        VideoFormat=types.SimpleNamespace(BGRA=7),
+        add_raw_video_callback=lambda callback, **_kwargs: callbacks.append(callback) or callback,
+        remove_raw_video_callback=removed_callbacks.append,
+    )
+    ready = []
+    egress = LibobsProgramEgress(
+        types.SimpleNamespace(ob=ob),
+        on_ready=lambda *identity: ready.append(identity),
+    )
+    descriptor = {
+        "transport": "shared_memory_bgra",
+        "channel_id": "solin-program",
+        "generation": 3,
+        "handle_token": "program-token",
+        "width": 2,
+        "height": 2,
+    }
+
+    egress.configure(descriptor)
+    assert len(writers) == 1 and len(callbacks) == 1
+    first = writers[0]
+    first.fail = True
+    egress._on_frame([bytes(range(16))], [8], 2, 2, None, None)
+    assert ready == []
+
+    first.fail = False
+    egress._on_frame([bytes(range(16))], [8], 2, 2, None, None)
+    egress._on_frame([bytes(range(16))], [8], 2, 2, None, None)
+    assert ready == [("solin-program", 3, "program-token")]
+    assert len(first.writes) == 2
+
+    egress.configure(descriptor)
+    assert len(writers) == 1
+
+    egress.configure({**descriptor, "generation": 4})
+    assert first.closed == 1
+    second = writers[1]
+    egress._on_frame([bytes(range(16))], [8], 2, 2, None, None)
+    assert ready == [
+        ("solin-program", 3, "program-token"),
+        ("solin-program", 4, "program-token"),
+    ]
+    egress.shutdown()
+    assert second.closed == 1
+
+
+def test_frame_egress_readiness_event_is_unsolicited_and_wire_compatible():
+    sidecar = LibobsSidecarEngine()
+    emitted: list[SceneIpcEnvelope] = []
+    sidecar.set_event_sink(emitted.append)
+    sidecar.handle(_request("hello"))
+    sidecar._emit_frame_egress_ready("solin-program", 8, "program-token")
+
+    envelope = emitted[-1]
+    parsed = _frame_egress_ready_from_envelope(envelope)
+    assert parsed == FrameEgressReadyEvent(
+        channel_id="solin-program",
+        generation=8,
+        handle_token="program-token",
+    )
+
+    client = SubprocessSceneEngine(SceneEngineProcessConfig(executable=Path("unused")))
+    client._session_id = envelope.session_id
+    client._process_generation = envelope.process_generation
+    received = []
+    client.subscribe(received.append)
+    client._receive(envelope, envelope.process_generation)
+
+    assert received == [parsed]
+    assert client._pending == {}
 
 
 def test_scene_graph_scene_source_returns_built_scene():

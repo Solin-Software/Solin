@@ -21,6 +21,7 @@ from solin.core.scenes.engine import (
     DEFAULT_ENGINE_STARTUP_DEADLINE_MS,
     MAXIMUM_OUTPUT_WINDOW_TARGETS,
     EngineHealthEvent,
+    FrameEgressReadyEvent,
     FrameChannelDescriptor,
     LocalCameraDevice,
     LocalCameraDiscovery,
@@ -110,6 +111,7 @@ _PREPARATION_FIELDS = frozenset(
 _TRANSITION_FIELDS = frozenset({"kind", "duration_ms"})
 _HEARTBEAT_FIELDS = frozenset({"monotonic_ms"})
 _SOURCE_HEALTH_FIELDS = frozenset({"source_id", "status", "error_code", "message"})
+_FRAME_EGRESS_READY_FIELDS = frozenset({"channel_id", "generation", "handle_token"})
 _LOCAL_CAMERA_LIST_FIELDS = frozenset({"supported", "ready", "generation", "devices", "error_code"})
 _LOCAL_CAMERA_FIELDS = frozenset(
     {"device_id", "display_name", "software_device", "formats", "probe"}
@@ -1254,6 +1256,7 @@ class SubprocessSceneEngine:
             self._last_received_monotonic = self._monotonic()
             if envelope.message_type in {
                 "source_health",
+                "frame_egress_ready",
                 "program_recording_state",
                 "media_playback_state",
             }:
@@ -1262,6 +1265,9 @@ class SubprocessSceneEngine:
                 pending = self._pending.pop(envelope.request_id, None)
         if envelope.message_type == "source_health":
             self._emit_event(_source_health_from_envelope(envelope))
+            return
+        if envelope.message_type == "frame_egress_ready":
+            self._emit_event(_frame_egress_ready_from_envelope(envelope))
             return
         if envelope.message_type == "program_recording_state":
             self._emit_event(_program_recording_event_from_envelope(envelope))
@@ -1749,6 +1755,21 @@ def _source_health_from_envelope(envelope: SceneIpcEnvelope) -> SourceHealthEven
         status=status,
         error_code=require_text(payload["error_code"], "source error code", maximum=128),
         message=require_text(payload["message"], "source health message"),
+    )
+
+
+def _frame_egress_ready_from_envelope(envelope: SceneIpcEnvelope) -> FrameEgressReadyEvent:
+    payload = require_payload_fields(
+        envelope.payload,
+        _FRAME_EGRESS_READY_FIELDS,
+        message_type="frame egress ready",
+    )
+    return FrameEgressReadyEvent(
+        channel_id=require_text(payload["channel_id"], "frame egress channel id", maximum=256),
+        generation=require_non_negative_int(payload["generation"], "frame egress generation"),
+        handle_token=require_text(
+            payload["handle_token"], "frame egress handle token", maximum=256
+        ),
     )
 
 
