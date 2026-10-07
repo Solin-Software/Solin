@@ -271,7 +271,12 @@ class GatedSourceRuntime final : public solin::media_engine::SourceRuntime {
 
     [[nodiscard]] std::shared_ptr<const solin::media_engine::SourceFrame>
     latest_frame() const override {
-        return released_.load() ? delegate_->latest_frame() : nullptr;
+        if (released_.load()) {
+            return delegate_->latest_frame();
+        }
+        unavailable_observations_.fetch_add(1U);
+        observation_wakeup_.notify_all();
+        return nullptr;
     }
 
     [[nodiscard]] bool wait_for_frame(
@@ -288,10 +293,30 @@ class GatedSourceRuntime final : public solin::media_engine::SourceRuntime {
         frame_signal_->notify();
     }
 
+    [[nodiscard]] std::uint64_t unavailable_observations() const noexcept {
+        return unavailable_observations_.load();
+    }
+
+    [[nodiscard]] bool wait_for_unavailable_observation_after(
+        const std::uint64_t after,
+        const std::chrono::steady_clock::time_point deadline) const noexcept {
+        try {
+            std::unique_lock lock{observation_mutex_};
+            return observation_wakeup_.wait_until(lock, deadline, [this, after] {
+                return unavailable_observations_.load() > after;
+            });
+        } catch (...) {
+            return false;
+        }
+    }
+
   private:
     std::shared_ptr<solin::media_engine::SourceRuntime> delegate_{};
     std::shared_ptr<solin::media_engine::GStreamerFrameSignal> frame_signal_{};
     std::atomic_bool released_{false};
+    mutable std::atomic_uint64_t unavailable_observations_{0U};
+    mutable std::mutex observation_mutex_{};
+    mutable std::condition_variable observation_wakeup_{};
 };
 
 class StartupGateFactory final : public solin::media_engine::SourceRuntimeFactory {
@@ -1207,9 +1232,39 @@ void test_program_cadence_recovers_when_media_arrives_before_the_startup_camera(
         {.kind = SceneTransitionKind::fade_to_black, .duration_ms = 200U});
     graph.take(prepared, 1U, 10'002U);
     std::this_thread::sleep_for(3'500ms);
+
+    // Synchronize release with a stalled feeder observation. At this point the
+    // renderer has crossed its 3 s acknowledgement watchdog. Waiting for one
+    // more unavailable-camera probe places the release inside the existing
+    // recovery cycle, where carrying the old 500 ms backoff would be observable.
+    const auto observations = camera->unavailable_observations();
+    expect(camera->wait_for_unavailable_observation_after(
+               observations, std::chrono::steady_clock::now() + 1s),
+           "the startup fixture reaches the stalled renderer recovery cycle");
+    std::this_thread::sleep_for(25ms);
+    const auto released_at = std::chrono::steady_clock::now();
     camera->release();
 
     solin::media_engine::SceneOutputFrameCursor cursor{};
+    bool recovered = false;
+    const auto recovery_deadline = released_at + 450ms;
+    while (std::chrono::steady_clock::now() < recovery_deadline) {
+        const auto sequence = renderer->visit_latest_frame(
+            OutputBus::virtual_camera, cursor,
+            [](const solin::media_engine::VideoFrameView&) {});
+        if (sequence.has_value()) {
+            cursor = sequence.value();
+            recovered = true;
+            break;
+        }
+        static_cast<void>(renderer->wait_for_frame(
+            OutputBus::virtual_camera, cursor, std::stop_token{},
+            (std::min)(recovery_deadline,
+                       std::chrono::steady_clock::now() + 20ms)));
+    }
+    expect(recovered,
+           "Program resumes after the startup camera publishes its first frame");
+
     std::size_t frame_count = 0U;
     const auto deadline = std::chrono::steady_clock::now() + 2s;
     while (std::chrono::steady_clock::now() < deadline) {

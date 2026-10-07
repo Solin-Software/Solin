@@ -823,6 +823,12 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
     };
 
     struct SourceInput final {
+        enum class Availability : std::uint8_t {
+            unavailable,
+            fallback,
+            frame,
+        };
+
         SourceRuntime* runtime{nullptr};
         GstElement* app_source{nullptr};
         GstElement* tee{nullptr};
@@ -831,6 +837,7 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
         GstCaps* render_caps{nullptr};
         GstBuffer* missing_frame_buffer{nullptr};
         bool missing_frame_active{false};
+        Availability observed_availability{Availability::unavailable};
         std::uint64_t last_stream_epoch{0U};
         std::uint64_t last_sequence{0U};
         std::uint32_t configured_width{0U};
@@ -1350,14 +1357,35 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
                 continue;
             }
             const auto requested_replay = source_replay_requested_.exchange(false);
-            const bool source_changed = std::ranges::any_of(
-                sources_, [](const auto& item) {
-                    const auto& source = item.second;
-                    const auto frame = source.runtime->latest_frame();
-                    return frame != nullptr &&
-                           (frame->stream_epoch != source.last_stream_epoch ||
-                            frame->sequence != source.last_sequence);
-                });
+            bool source_changed = false;
+            bool source_became_renderable = false;
+            for (auto& [_, source] : sources_) {
+                const auto frame = source.runtime->latest_frame();
+                auto availability = SourceInput::Availability::unavailable;
+                if (frame != nullptr) {
+                    availability = SourceInput::Availability::frame;
+                } else {
+                    const auto status = source.runtime->health().status;
+                    if (status == SourceRuntimeStatus::failed ||
+                        status == SourceRuntimeStatus::degraded) {
+                        availability = SourceInput::Availability::fallback;
+                    }
+                }
+                if (availability != source.observed_availability) {
+                    source_became_renderable =
+                        source_became_renderable ||
+                        (source.observed_availability ==
+                             SourceInput::Availability::unavailable &&
+                         availability != SourceInput::Availability::unavailable);
+                    source.observed_availability = availability;
+                    source_changed = true;
+                }
+                if (frame != nullptr &&
+                    (frame->stream_epoch != source.last_stream_epoch ||
+                     frame->sequence != source.last_sequence)) {
+                    source_changed = true;
+                }
+            }
             bool flush_pending_render = false;
             if (!requested_replay && !source_changed) {
                 if (!pending_render_timestamp.has_value()) {
@@ -1384,6 +1412,14 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
                 // interval. Supply that bounded look-ahead once for a static or
                 // paused source; it is not another causal frame to acknowledge.
                 flush_pending_render = true;
+            }
+            if (render_timeout_reported && source_became_renderable) {
+                // The recovery backoff only throttles retries of the same stalled
+                // revision. A previously unavailable input becoming renderable,
+                // either with pixels or a degraded-source fallback, can complete
+                // the compositor input set. Submit that state immediately instead
+                // of carrying the stale retry deadline forward.
+                next_render_deadline.reset();
             }
             const auto pacing_generation = rendering_generation_.load();
             if (!requested_replay && !flush_pending_render &&
