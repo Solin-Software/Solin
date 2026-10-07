@@ -64,7 +64,16 @@ def test_appimage_recipe_has_required_appdir_metadata_and_pinned_tools():
 
     assert 'APPIMAGETOOL_VERSION="1.9.1"' in package_script
     assert 'APPIMAGETOOL_SHA256="' in package_script
-    assert 'TYPE2_RUNTIME_SHA256="' in package_script
+    assert 'TYPE2_RUNTIME_VERSION="20251108"' in package_script
+    assert (
+        'TYPE2_RUNTIME_SHA256="2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d"'
+        in package_script
+    )
+    assert (
+        "type2-runtime/releases/download/${TYPE2_RUNTIME_VERSION}/runtime-x86_64"
+        in package_script
+    )
+    assert "type2-runtime/releases/download/continuous" not in package_script
     assert "sha256sum --check --status" in package_script
     assert "SOLIN_APPIMAGE_SKIP_BUILD" in package_script
     assert "APPIMAGE_EXTRACT_AND_RUN=1" in package_script
