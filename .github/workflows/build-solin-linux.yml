@@ -21,6 +21,11 @@ on:
         required: true
         type: boolean
         default: true
+      run_release_smoke_tests:
+        description: Run AppImage replacement smoke against a verified predecessor
+        required: true
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -169,7 +174,7 @@ jobs:
           echo "Solin AppImage remained running for the smoke-test window."
 
       - name: Download verified predecessor
-        if: inputs.release
+        if: ${{ inputs.release || inputs.run_release_smoke_tests }}
         env:
           GH_TOKEN: ${{ github.token }}
           SOLIN_TRANSITION_LINUX_URL: ${{ vars.SOLIN_TRANSITION_LINUX_URL }}
@@ -177,7 +182,7 @@ jobs:
         run: python scripts/release.py download-predecessor --platform linux --architecture x86_64 --output build/previous-app/Solin.AppImage --github-env SOLIN_OLD_APPIMAGE
 
       - name: AppImage replacement smoke
-        if: inputs.release
+        if: ${{ inputs.release || inputs.run_release_smoke_tests }}
         env:
           SOLIN_NEW_APPIMAGE: ${{ github.workspace }}/dist/Solin-${{ env.APP_VERSION }}-linux-x86_64.AppImage
         run: xvfb-run --auto-servernum python -m pytest tests/e2e/test_linux_app_upgrade_smoke.py -q

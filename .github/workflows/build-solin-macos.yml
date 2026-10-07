@@ -446,7 +446,7 @@ jobs:
           bundle="${BUILD_DIR}/${APP_NAME}.app"
           while IFS= read -r -d '' binary; do
             if file "$binary" | grep -q 'Mach-O'; then
-              lipo -verify_arch "$EXPECTED_ARCH" "$binary"
+              lipo "$binary" -verify_arch "$EXPECTED_ARCH"
             fi
           done < <(find "$bundle" -type f -print0)
 

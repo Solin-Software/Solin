@@ -1916,8 +1916,6 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
             outgoing_control_.reset();
         }
         incoming_->set_direct_output_enabled(false);
-        start_requires_system_memory_output_.store(
-            system_memory_output_enabled_.load());
         start_requested_.store(true);
         wakeup_.notify_all();
     }
@@ -1979,17 +1977,28 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
     visit_latest_frame(const std::uint64_t after_sequence,
                        const VideoFrameVisitor& visitor) const noexcept override {
         try {
-            const auto sequence =
-                visit_gstreamer_frame(latest_frame(), after_sequence, visitor);
-            if (sequence.has_value() && body_observation_armed_.load() &&
-                sequence.value() > body_observation_after_sequence_.load()) {
-                auto unobserved = std::int64_t{0};
-                const auto observed_at =
-                    std::chrono::duration_cast<std::chrono::nanoseconds>(
-                        std::chrono::steady_clock::now().time_since_epoch())
-                        .count();
-                static_cast<void>(body_observed_at_ns_.compare_exchange_strong(
-                    unobserved, observed_at));
+            if (completed_.load()) {
+                return incoming_->visit_latest_frame(after_sequence, visitor);
+            }
+            std::shared_ptr<const SourceFrame> frame;
+            {
+                std::scoped_lock lock{frame_mutex_};
+                frame = latest_frame_;
+            }
+            if (frame == nullptr) {
+                return visit_gstreamer_frame(latest_frame(), after_sequence, visitor);
+            }
+            const auto sequence = visit_gstreamer_frame(frame, after_sequence, visitor);
+            if (sequence.has_value()) {
+                std::scoped_lock lock{frame_mutex_};
+                // A successful visitor acknowledges the frame it actually mapped,
+                // even if newer output arrived while the visitor was running.
+                if (body_first_timestamp_.has_value() &&
+                    frame->presentation_timestamp_ns >= *body_first_timestamp_ &&
+                    (!terminal_timestamp_.has_value() ||
+                     frame->presentation_timestamp_ns < *terminal_timestamp_)) {
+                    body_observed_ = true;
+                }
             }
             return sequence;
         } catch (...) {
@@ -2105,6 +2114,15 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
         g_signal_connect(compositor, "samples-selected",
                          G_CALLBACK(&PreparedGStreamerTransition::on_samples_selected),
                          this);
+        auto* compositor_output = gst_element_get_static_pad(compositor, "src");
+        if (compositor_output == nullptr) {
+            throw SceneRendererError{"transition_preparation_failed",
+                                     "The transition output pad is unavailable"};
+        }
+        gst_pad_add_probe(compositor_output, GST_PAD_PROBE_TYPE_BUFFER,
+                          &PreparedGStreamerTransition::stamp_selected_output,
+                          this, nullptr);
+        gst_object_unref(compositor_output);
 
         auto* caps_filter = add_element(pipeline.get(), "capsfilter");
         const auto caps = output_caps(format);
@@ -2141,7 +2159,7 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
 
     [[nodiscard]] static GstElement* add_transition_input(GstElement* pipeline) {
         auto* source = add_element(pipeline, "appsrc");
-        g_object_set(source, "is-live", TRUE, "do-timestamp", TRUE, "format",
+        g_object_set(source, "is-live", TRUE, "do-timestamp", FALSE, "format",
                      GST_FORMAT_TIME, "block", FALSE, "emit-signals", FALSE,
                      "max-buffers", static_cast<guint64>(1U), "max-bytes",
                      static_cast<guint64>(0U), "max-time", static_cast<guint64>(0U),
@@ -2262,6 +2280,11 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
                 gst_video_info_from_caps(&info, caps) == FALSE) {
                 return GST_FLOW_ERROR;
             }
+            if (!GST_CLOCK_TIME_IS_VALID(GST_BUFFER_PTS(buffer)) ||
+                GST_BUFFER_OFFSET(buffer) == 0U ||
+                GST_BUFFER_OFFSET(buffer) == GST_BUFFER_OFFSET_NONE) {
+                return GST_FLOW_OK;
+            }
             const auto sequence = frame_sequence_->fetch_add(1U) + 1U;
             auto payload = std::make_shared<GStreamerRenderedFramePayload>(
                 sample_guard.release(), device_.owner);
@@ -2303,7 +2326,8 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
     }
 
     [[nodiscard]] bool push_frame(
-        GstElement* source, const std::shared_ptr<const SourceFrame>& frame) noexcept {
+        GstElement* source, const std::shared_ptr<const SourceFrame>& frame,
+        const GstClockTime timestamp, const std::uint64_t submission) noexcept {
         try {
             const auto sample = gstreamer_sample(frame);
             if (!sample) {
@@ -2318,9 +2342,11 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
             if (buffer == nullptr) {
                 return false;
             }
-            GST_BUFFER_PTS(buffer) = GST_CLOCK_TIME_NONE;
+            GST_BUFFER_PTS(buffer) = timestamp;
             GST_BUFFER_DTS(buffer) = GST_CLOCK_TIME_NONE;
             GST_BUFFER_DURATION(buffer) = GST_CLOCK_TIME_NONE;
+            GST_BUFFER_OFFSET(buffer) = submission;
+            GST_BUFFER_OFFSET_END(buffer) = submission;
             auto* retimed = gst_sample_new(buffer, caps, nullptr, nullptr);
             gst_buffer_unref(buffer);
             if (retimed == nullptr) {
@@ -2341,14 +2367,25 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
         g_object_set(incoming_pad_, "alpha", alphas.incoming, nullptr);
     }
 
-    static void on_samples_selected(GstAggregator* aggregator, GstSegment*, guint64,
+    // Caller holds frame_mutex_; only stamped compositor output is published.
+    [[nodiscard]] bool output_published(const GstClockTime timestamp,
+                                        const bool require_cpu) const noexcept {
+        return latest_gpu_frame_ != nullptr &&
+               latest_gpu_frame_->presentation_timestamp_ns >= timestamp &&
+               (!require_cpu || (latest_frame_ != nullptr &&
+                                latest_frame_->presentation_timestamp_ns >= timestamp));
+    }
+
+    static void on_samples_selected(GstAggregator* aggregator, GstSegment*, guint64 pts,
                                     guint64, guint64, GstStructure*,
                                     gpointer user_data) noexcept {
         static_cast<PreparedGStreamerTransition*>(user_data)
-            ->mark_inputs_selected(aggregator);
+            ->mark_inputs_selected(aggregator, pts);
     }
 
-    void mark_inputs_selected(GstAggregator* aggregator) noexcept {
+    void mark_inputs_selected(GstAggregator* aggregator,
+                              const GstClockTime timestamp) noexcept {
+        selected_output_submission_ = 0U;
         try {
             std::unique_ptr<GstSample, decltype(&gst_sample_unref)> outgoing{
                 gst_aggregator_peek_next_sample(
@@ -2358,8 +2395,63 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
                 gst_aggregator_peek_next_sample(
                     aggregator, GST_AGGREGATOR_PAD(incoming_pad_)),
                 &gst_sample_unref};
-            if (outgoing != nullptr && incoming != nullptr &&
-                !output_ready_.exchange(true)) {
+            auto* outgoing_buffer = outgoing == nullptr
+                                        ? nullptr : gst_sample_get_buffer(outgoing.get());
+            auto* incoming_buffer = incoming == nullptr
+                                        ? nullptr : gst_sample_get_buffer(incoming.get());
+            if (outgoing_buffer == nullptr || incoming_buffer == nullptr ||
+                !GST_CLOCK_TIME_IS_VALID(timestamp) ||
+                GST_BUFFER_OFFSET(outgoing_buffer) == 0U ||
+                GST_BUFFER_OFFSET(outgoing_buffer) == GST_BUFFER_OFFSET_NONE ||
+                GST_BUFFER_OFFSET(outgoing_buffer) != GST_BUFFER_OFFSET(incoming_buffer) ||
+                GST_BUFFER_PTS(outgoing_buffer) != GST_BUFFER_PTS(incoming_buffer)) {
+                return;
+            }
+            {
+                std::scoped_lock lock{frame_mutex_};
+                last_selection_at_ = std::chrono::steady_clock::now();
+                if (start_requested_.load() && gpu_output_ready_.load() &&
+                    !started_timestamp_.has_value()) {
+                    started_timestamp_ = timestamp;
+                }
+                auto progress = 0.0;
+                if (terminal_timestamp_.has_value()) {
+                    // A demand change cannot reverse an already selected endpoint.
+                    progress = 1.0;
+                } else if (started_timestamp_.has_value()) {
+                    const auto duration = static_cast<GstClockTime>(
+                        transition_.duration_ms) * GST_MSECOND;
+                    progress = static_cast<double>(timestamp - *started_timestamp_) /
+                               static_cast<double>(duration);
+                    const bool require_cpu = system_memory_output_enabled_.load();
+                    const auto observation_timeout = static_cast<GstClockTime>(
+                        std::chrono::duration_cast<std::chrono::nanoseconds>(
+                            kTransitionObservationTimeout).count());
+                    const bool body_deadline_open =
+                        !body_first_timestamp_.has_value() ||
+                        timestamp - *body_first_timestamp_ < observation_timeout;
+                    const bool body_delivered =
+                        body_first_timestamp_.has_value() &&
+                        output_published(*body_first_timestamp_, require_cpu);
+                    if (progress >= 0.75 && body_deadline_open &&
+                        (!body_delivered || (require_cpu && !body_observed_))) {
+                        progress = 0.5;
+                    }
+                    if (progress >= 0.25 && progress <= 0.75 &&
+                        !body_first_timestamp_.has_value()) {
+                        body_first_timestamp_ = timestamp;
+                    }
+                    if (progress >= 1.0 && !terminal_timestamp_.has_value()) {
+                        terminal_timestamp_ = timestamp;
+                    }
+                }
+                // samples-selected runs before these exact inputs are composed.
+                // The output PTS, rather than the feeder's scheduling, owns alpha.
+                apply_weights(scene_transition_weights(transition_, progress));
+            }
+            selected_output_timestamp_ = timestamp;
+            selected_output_submission_ = GST_BUFFER_OFFSET(outgoing_buffer);
+            if (!output_ready_.exchange(true)) {
                 open_readiness_gate(output_readiness_valve_);
                 wakeup_.notify_all();
             }
@@ -2367,63 +2459,70 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
         }
     }
 
-    struct OutputPublicationCheckpoint final {
-        std::uint64_t gpu{0U};
-        std::uint64_t cpu{0U};
-    };
-
-    [[nodiscard]] OutputPublicationCheckpoint
-    output_publication_checkpoint() const noexcept {
-        try {
-            std::scoped_lock lock{frame_mutex_};
-            return {
-                .gpu = gpu_frame_wakeup_generation_,
-                .cpu = frame_wakeup_generation_,
-            };
-        } catch (...) {
-            return {};
+    static GstPadProbeReturn stamp_selected_output(
+        GstPad*, GstPadProbeInfo* info, gpointer user_data) noexcept {
+        auto& transition = *static_cast<PreparedGStreamerTransition*>(user_data);
+        auto* buffer = GST_PAD_PROBE_INFO_BUFFER(info);
+        // This probe runs on the same compositor streaming thread as
+        // samples-selected, before any leaky queues or GPU/CPU fan-out. A clock
+        // tick with missing or mismatched inputs cannot acknowledge an effect.
+        if (buffer == nullptr || transition.selected_output_submission_ == 0U ||
+            GST_BUFFER_PTS(buffer) != transition.selected_output_timestamp_) {
+            return GST_PAD_PROBE_DROP;
         }
-    }
-
-    [[nodiscard]] bool wait_for_output_after(
-        const OutputPublicationCheckpoint checkpoint, const bool require_cpu,
-        const std::chrono::steady_clock::time_point deadline) noexcept {
-        try {
-            std::unique_lock lock{frame_mutex_};
-            const auto delivered = [&] {
-                return gpu_frame_wakeup_generation_ > checkpoint.gpu &&
-                       (!require_cpu ||
-                        frame_wakeup_generation_ > checkpoint.cpu);
-            };
-            static_cast<void>(frame_wakeup_.wait_until(
-                lock, deadline,
-                [this, &delivered] { return stopped_.load() || delivered(); }));
-            return delivered();
-        } catch (...) {
-            return false;
+        buffer = gst_buffer_make_writable(buffer);
+        GST_PAD_PROBE_INFO_DATA(info) = buffer;
+        if (buffer == nullptr) {
+            return GST_PAD_PROBE_DROP;
         }
+        GST_BUFFER_OFFSET(buffer) = transition.selected_output_submission_;
+        GST_BUFFER_OFFSET_END(buffer) = transition.selected_output_submission_;
+        return GST_PAD_PROBE_OK;
     }
 
     void feed() noexcept {
-        std::optional<std::chrono::steady_clock::time_point> started_at;
         std::optional<std::chrono::steady_clock::time_point> start_requested_at;
-        bool body_frame_delivered = false;
-        std::optional<std::chrono::steady_clock::time_point>
-            body_frame_first_attempted_at;
-        std::optional<std::chrono::steady_clock::time_point>
-            body_frame_delivered_at;
+        std::optional<std::chrono::steady_clock::time_point> terminal_selected_at;
         const auto delivery_timeout = (std::max)(
             frame_interval_ * 4,
             std::chrono::duration_cast<std::chrono::nanoseconds>(250ms));
+        std::uint64_t submission = 0U;
         while (!stopped_.load()) {
             const auto iteration_started_at = std::chrono::steady_clock::now();
-            const bool start_requested = start_requested_.load();
-            if (start_requested && !start_requested_at.has_value()) {
+            if (start_requested_.load() && !start_requested_at.has_value()) {
                 start_requested_at = iteration_started_at;
             }
             auto* error = gst_bus_pop_filtered(bus_, GST_MESSAGE_ERROR);
             if (error != nullptr) {
                 gst_message_unref(error);
+                break;
+            }
+            bool started = false;
+            bool terminal = false;
+            bool delivered = false;
+            bool selection_stalled = false;
+            {
+                std::scoped_lock lock{frame_mutex_};
+                started = started_timestamp_.has_value();
+                terminal = terminal_timestamp_.has_value();
+                selection_stalled = started && last_selection_at_.has_value() &&
+                    iteration_started_at - *last_selection_at_ >= delivery_timeout;
+                if (terminal) {
+                    // Both egresses must publish a frame selected with terminal
+                    // alpha. Waiter wakeups and older queued output are not ACKs.
+                    delivered = output_published(
+                        *terminal_timestamp_, system_memory_output_enabled_.load());
+                }
+            }
+            if (terminal && !terminal_selected_at.has_value()) {
+                terminal_selected_at = iteration_started_at;
+            }
+            if (delivered || selection_stalled ||
+                (terminal_selected_at.has_value() &&
+                 iteration_started_at - *terminal_selected_at >= delivery_timeout) ||
+                (!started && start_requested_at.has_value() &&
+                 iteration_started_at - *start_requested_at >= kTransitionStartTimeout)) {
+                // Device/egress failure retains the existing bounded Cut recovery.
                 break;
             }
             const auto outgoing =
@@ -2432,108 +2531,26 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
                     : (outgoing_ == nullptr ? nullptr
                                             : outgoing_->latest_gpu_frame());
             const auto incoming = incoming_->latest_gpu_frame();
-            auto progress = 0.0;
-            bool terminal_frame = false;
-            bool body_frame = false;
-            if (started_at.has_value()) {
-                const auto now = std::chrono::steady_clock::now();
-                const auto elapsed = now - *started_at;
-                const auto duration = std::chrono::milliseconds{transition_.duration_ms};
-                progress = std::chrono::duration<double>(elapsed).count() /
-                           std::chrono::duration<double>(duration).count();
-                terminal_frame = progress >= 1.0;
-                const bool body_delivery_deadline_open =
-                    !body_frame_first_attempted_at.has_value() ||
-                    now < *body_frame_first_attempted_at +
-                              kTransitionObservationTimeout;
-                body_frame = !body_frame_delivered &&
-                             body_delivery_deadline_open && progress >= 0.25;
-                const auto observed_at_ns = body_observed_at_ns_.load();
-                const auto now_ns =
-                    std::chrono::duration_cast<std::chrono::nanoseconds>(
-                        now.time_since_epoch())
-                        .count();
-                const bool body_observation_pending =
-                    body_frame_delivered_at.has_value() &&
-                    body_observation_armed_.load() &&
-                    system_memory_output_enabled_.load() &&
-                    (observed_at_ns == 0 ||
-                     now_ns - observed_at_ns < frame_interval_.count());
-                const bool body_observation_deadline_open =
-                    body_frame_delivered_at.has_value() &&
-                    now < *body_frame_delivered_at +
-                              kTransitionObservationTimeout;
-                if (terminal_frame &&
-                    (body_frame || (body_observation_pending &&
-                                    body_observation_deadline_open))) {
-                    // A required egress that fell behind must observe the body of
-                    // the effect for one output interval before the destination
-                    // is promoted. A late feeder retries body publication within
-                    // one bounded observation window; the observation deadline
-                    // starts only after delivery instead of expiring while the
-                    // worker is descheduled.
-                    progress = 0.5;
-                    terminal_frame = false;
+            if (outgoing != nullptr && incoming != nullptr) {
+                const auto clock = gst_element_get_clock(pipeline_);
+                if (clock != nullptr) {
+                    const auto now = gst_clock_get_time(clock);
+                    const auto base = gst_element_get_base_time(pipeline_);
+                    gst_object_unref(clock);
+                    if (GST_CLOCK_TIME_IS_VALID(now) &&
+                        GST_CLOCK_TIME_IS_VALID(base) && now >= base) {
+                        // One shared running-time PTS and identity binds A/B even
+                        // when their appsrc queues reach the compositor separately.
+                        ++submission;
+                        const bool pushed_outgoing = push_frame(
+                            outgoing_source_, outgoing, now - base, submission);
+                        const bool pushed_incoming = push_frame(
+                            incoming_source_, incoming, now - base, submission);
+                        if (!pushed_outgoing || !pushed_incoming) {
+                            break;
+                        }
+                    }
                 }
-                apply_weights(scene_transition_weights(transition_, progress));
-            }
-            const bool require_cpu =
-                start_requires_system_memory_output_.load() &&
-                system_memory_output_enabled_.load();
-            if (body_frame && require_cpu &&
-                !body_observation_armed_.load()) {
-                const auto current_frame = latest_frame();
-                const auto after_sequence =
-                    current_frame == nullptr ? 0U : current_frame->sequence;
-                body_observation_after_sequence_.store(after_sequence);
-                body_observation_armed_.store(true);
-            }
-            if (body_frame && !body_frame_first_attempted_at.has_value()) {
-                body_frame_first_attempted_at = iteration_started_at;
-            }
-            const bool gpu_output_ready = gpu_output_ready_.load();
-            const bool synchronize_output =
-                started_at.has_value() ||
-                (start_requested && gpu_output_ready);
-            const auto publication_checkpoint =
-                synchronize_output ? output_publication_checkpoint()
-                                   : OutputPublicationCheckpoint{};
-            const bool have_outgoing =
-                outgoing != nullptr &&
-                push_frame(outgoing_source_, outgoing);
-            const bool have_incoming =
-                incoming != nullptr &&
-                push_frame(incoming_source_, incoming);
-            if (start_requested && have_outgoing && have_incoming &&
-                output_ready_.load() && gpu_output_ready &&
-                !started_at.has_value()) {
-                started_at = std::chrono::steady_clock::now();
-            }
-            if (synchronize_output && have_outgoing && have_incoming) {
-                const auto delivered = wait_for_output_after(
-                    publication_checkpoint, require_cpu,
-                    std::chrono::steady_clock::now() + delivery_timeout);
-                if (body_frame && delivered) {
-                    body_frame_delivered = true;
-                    body_frame_delivered_at =
-                        std::chrono::steady_clock::now();
-                }
-                if (terminal_frame && delivered) {
-                    break;
-                }
-            }
-            if (terminal_frame) {
-                break;
-            }
-            if (!started_at.has_value() && start_requested_at.has_value() &&
-                std::chrono::steady_clock::now() - *start_requested_at >=
-                    kTransitionStartTimeout) {
-                // Readiness is a publication barrier, not ownership of Program.
-                // If an egress/device cannot acknowledge the prepared effect,
-                // promote the already prepared destination as a bounded Cut;
-                // its demand gate has retained sticky negotiation and can resume
-                // independently. Never retain the previous Program forever.
-                break;
             }
             std::unique_lock lock{wakeup_mutex_};
             wakeup_.wait_until(lock, iteration_started_at + frame_interval_,
@@ -2600,11 +2617,16 @@ class PreparedGStreamerTransition final : public PreparedSceneRenderGraph {
     std::atomic_bool completed_{false};
     std::atomic_bool output_ready_{false};
     std::atomic_bool system_memory_output_enabled_{false};
-    std::atomic_bool start_requires_system_memory_output_{false};
     std::atomic_bool gpu_output_ready_{false};
-    mutable std::atomic_bool body_observation_armed_{false};
-    mutable std::atomic_uint64_t body_observation_after_sequence_{0U};
-    mutable std::atomic_int64_t body_observed_at_ns_{0};
+    // Selection/probe state is confined to the compositor streaming thread.
+    GstClockTime selected_output_timestamp_{GST_CLOCK_TIME_NONE};
+    std::uint64_t selected_output_submission_{0U};
+    // Animation/publication state is protected by frame_mutex_.
+    std::optional<GstClockTime> started_timestamp_{};
+    std::optional<GstClockTime> body_first_timestamp_{};
+    std::optional<GstClockTime> terminal_timestamp_{};
+    std::optional<std::chrono::steady_clock::time_point> last_selection_at_{};
+    mutable bool body_observed_{false};
     std::thread feeder_{};
     std::mutex wakeup_mutex_{};
     std::condition_variable wakeup_{};

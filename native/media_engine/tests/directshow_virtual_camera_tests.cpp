@@ -13,6 +13,7 @@
 #include <ksproxy.h>
 #include <windows.h>
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <chrono>
@@ -104,6 +105,7 @@ struct ExpectedProfile final {
 };
 
 constexpr REFERENCE_TIME kFrameDuration = 10'000'000LL / 30LL;
+constexpr auto kCaptureTimeout = std::chrono::milliseconds{3000};
 constexpr GUID kTestRendererClassId{
     0x44D4F119,
     0x2301,
@@ -111,54 +113,105 @@ constexpr GUID kTestRendererClassId{
     {0xA2, 0x34, 0x15, 0x2D, 0x65, 0x18, 0x8A, 0x6B},
 };
 
-[[nodiscard]] bool read_exact(const HANDLE pipe,
-                              const std::span<std::uint8_t> bytes) noexcept {
-    std::size_t offset = 0U;
-    while (offset < bytes.size()) {
-        DWORD read = 0U;
-        if (ReadFile(pipe, bytes.data() + offset,
-                     static_cast<DWORD>(bytes.size() - offset), &read,
-                     nullptr) == FALSE ||
-            read == 0U) {
-            return false;
-        }
-        offset += read;
+[[nodiscard]] std::uint64_t frame_checksum(
+    const std::span<const std::uint8_t> bytes) noexcept {
+    std::uint64_t checksum = 1'469'598'103'934'665'603ULL;
+    for (const auto byte : bytes) {
+        checksum ^= byte;
+        checksum *= 1'099'511'628'211ULL;
     }
-    return true;
+    return checksum;
 }
 
-[[nodiscard]] bool write_exact(
-    const HANDLE pipe, const std::span<const std::uint8_t> bytes) noexcept {
+[[nodiscard]] DWORD remaining_wait_ms(
+    const std::chrono::steady_clock::time_point deadline) noexcept {
+    const auto remaining = std::chrono::ceil<std::chrono::milliseconds>(
+        deadline - std::chrono::steady_clock::now()).count();
+    return static_cast<DWORD>((std::max)(std::int64_t{0}, remaining));
+}
+
+[[nodiscard]] DWORD complete_pipe_operation(
+    const HANDLE pipe, OVERLAPPED& overlapped, const BOOL started,
+    DWORD& transferred,
+    const std::chrono::steady_clock::time_point deadline) noexcept {
+    if (started != FALSE) {
+        return ERROR_SUCCESS;
+    }
+    const auto error = GetLastError();
+    if (error != ERROR_IO_PENDING) {
+        return error;
+    }
+    if (WaitForSingleObject(overlapped.hEvent, remaining_wait_ms(deadline)) !=
+        WAIT_OBJECT_0) {
+        // Drain cancellation before the stack OVERLAPPED or buffer is destroyed.
+        static_cast<void>(CancelIoEx(pipe, &overlapped));
+        static_cast<void>(GetOverlappedResult(pipe, &overlapped, &transferred, TRUE));
+        return ERROR_TIMEOUT;
+    }
+    return GetOverlappedResult(pipe, &overlapped, &transferred, FALSE) != FALSE
+               ? ERROR_SUCCESS
+               : GetLastError();
+}
+
+[[nodiscard]] DWORD transfer_pipe_bytes(
+    const HANDLE pipe, const HANDLE event, const std::span<std::uint8_t> bytes,
+    const bool write,
+    const std::chrono::steady_clock::time_point deadline) noexcept {
     std::size_t offset = 0U;
     while (offset < bytes.size()) {
-        DWORD written = 0U;
-        if (WriteFile(pipe, bytes.data() + offset,
-                      static_cast<DWORD>(bytes.size() - offset), &written,
-                      nullptr) == FALSE ||
-            written == 0U) {
-            return false;
+        if (std::chrono::steady_clock::now() >= deadline) {
+            return ERROR_TIMEOUT;
         }
-        offset += written;
+        static_cast<void>(ResetEvent(event));
+        OVERLAPPED overlapped{};
+        overlapped.hEvent = event;
+        DWORD transferred = 0U;
+        const auto remaining = static_cast<DWORD>(bytes.size() - offset);
+        const auto started =
+            write ? WriteFile(pipe, bytes.data() + offset, remaining,
+                              &transferred, &overlapped)
+                  : ReadFile(pipe, bytes.data() + offset, remaining,
+                             &transferred, &overlapped);
+        const auto error = complete_pipe_operation(
+            pipe, overlapped, started, transferred, deadline);
+        if (error != ERROR_SUCCESS) {
+            return error;
+        }
+        if (transferred == 0U) {
+            return ERROR_HANDLE_EOF;
+        }
+        offset += transferred;
     }
-    return true;
+    return ERROR_SUCCESS;
 }
 
 void serve_live_frame_endpoint(
     const HANDLE pipe,
     const solin::media_engine::SharedVideoFramePublisher& publisher,
+    const std::chrono::steady_clock::time_point deadline,
     std::atomic_bool& completed, std::atomic_bool& valid_exchange) noexcept {
     using namespace solin::media_engine;
-    const auto connected = ConnectNamedPipe(pipe, nullptr) != FALSE ||
-                           GetLastError() == ERROR_PIPE_CONNECTED;
+    const auto event = CreateEventW(nullptr, TRUE, FALSE, nullptr);
     try {
+        if (event == nullptr) {
+            throw std::runtime_error{"broker event creation failed"};
+        }
+        OVERLAPPED overlapped{};
+        overlapped.hEvent = event;
+        DWORD transferred = 0U;
+        const auto started = ConnectNamedPipe(pipe, &overlapped);
+        const auto error = complete_pipe_operation(
+            pipe, overlapped, started, transferred, deadline);
         std::array<std::uint8_t, kVirtualCameraBrokerRequestSize> request_bytes{};
-        if (!connected || !read_exact(pipe, request_bytes)) {
+        if ((error != ERROR_SUCCESS && error != ERROR_PIPE_CONNECTED) ||
+            transfer_pipe_bytes(pipe, event, request_bytes, false, deadline) !=
+                ERROR_SUCCESS) {
             throw std::runtime_error{"broker read failed"};
         }
         const auto request =
             decode_virtual_camera_broker_request(request_bytes);
         const auto& configuration = publisher.configuration();
-        const auto response = encode_virtual_camera_broker_response({
+        auto response = encode_virtual_camera_broker_response({
             .status = VirtualCameraBrokerStatus::ok,
             .nonce = request.nonce,
             .mapping_file_path_utf8 =
@@ -169,32 +222,33 @@ void serve_live_frame_endpoint(
             .fps_numerator = 30U,
             .fps_denominator = 1U,
         });
-        valid_exchange.store(write_exact(pipe, response));
-        static_cast<void>(FlushFileBuffers(pipe));
+        if (transfer_pipe_bytes(pipe, event, response, true, deadline) !=
+            ERROR_SUCCESS) {
+            throw std::runtime_error{"broker write failed"};
+        }
+        std::array<std::uint8_t, 1U> presence_marker{};
+        if (transfer_pipe_bytes(pipe, event, presence_marker, false, deadline) !=
+                ERROR_SUCCESS ||
+            presence_marker.front() != kVirtualCameraBrokerPresenceMarker) {
+            throw std::runtime_error{"broker presence marker missing"};
+        }
+        valid_exchange.store(true);
+        // Keep the current protocol's presence lease alive. The fixture leaves
+        // its heartbeat unchanged so the filter must detect staleness, return
+        // to standby, and close the lease itself.
+        if (transfer_pipe_bytes(pipe, event, presence_marker, false, deadline) !=
+            ERROR_BROKEN_PIPE) {
+            throw std::runtime_error{"broker lease did not disconnect"};
+        }
     } catch (...) {
         valid_exchange.store(false);
     }
     static_cast<void>(DisconnectNamedPipe(pipe));
     static_cast<void>(CloseHandle(pipe));
-    completed.store(true);
-}
-
-void release_blocked_broker_server() noexcept {
-    using namespace solin::media_engine::windows_virtual_camera;
-    try {
-        const auto pipe = CreateFileW(current_user_broker_pipe_name().c_str(),
-                                      GENERIC_READ | GENERIC_WRITE, 0U, nullptr,
-                                      OPEN_EXISTING, 0U, nullptr);
-        if (pipe == INVALID_HANDLE_VALUE) {
-            return;
-        }
-        std::array<std::uint8_t,
-                   solin::media_engine::kVirtualCameraBrokerRequestSize>
-            invalid_request{};
-        static_cast<void>(write_exact(pipe, invalid_request));
-        static_cast<void>(CloseHandle(pipe));
-    } catch (...) {
+    if (event != nullptr) {
+        static_cast<void>(CloseHandle(event));
     }
+    completed.store(true);
 }
 
 struct CapturedSample final {
@@ -228,11 +282,11 @@ class SampleCaptureRenderer final : public CBaseRenderer {
             return E_FAIL;
         }
         const auto length = sample->GetActualDataLength();
-        std::uint64_t checksum = 1'469'598'103'934'665'603ULL;
-        for (LONG index = 0; index < length; ++index) {
-            checksum ^= bytes[index];
-            checksum *= 1'099'511'628'211ULL;
+        if (length <= 0 || length > sample->GetSize()) {
+            return E_FAIL;
         }
+        const auto checksum = frame_checksum(
+            {bytes, static_cast<std::size_t>(length)});
         {
             std::lock_guard lock{mutex_};
             samples_.push_back({
@@ -253,10 +307,11 @@ class SampleCaptureRenderer final : public CBaseRenderer {
     }
 
     [[nodiscard]] std::vector<CapturedSample> wait_for_samples(
-        const std::size_t count, const std::chrono::milliseconds timeout) {
+        const std::chrono::steady_clock::time_point deadline,
+        const std::function<bool(const std::vector<CapturedSample>&)>& ready) {
         std::unique_lock lock{mutex_};
-        static_cast<void>(samples_available_.wait_for(
-            lock, timeout, [this, count] { return samples_.size() >= count; }));
+        static_cast<void>(samples_available_.wait_until(
+            lock, deadline, [this, &ready] { return ready(samples_); }));
         return samples_;
     }
 
@@ -552,6 +607,7 @@ int wmain(const int argument_count, wchar_t** arguments) {
     SampleCaptureRenderer* capture_renderer = nullptr;
     std::unique_ptr<solin::media_engine::SharedVideoFramePublisher>
         live_publisher;
+    std::uint64_t expected_live_checksum = 0U;
     try {
         const auto live_layout = solin::media_engine::packed_video_frame_layout(
             640U, 360U, solin::media_engine::VideoFramePixelFormat::nv12);
@@ -571,6 +627,7 @@ int wmain(const int argument_count, wchar_t** arguments) {
         std::fill(live_frame.bytes.begin() +
                       static_cast<std::ptrdiff_t>(live_layout.plane_offsets[1]),
                   live_frame.bytes.end(), std::uint8_t{128U});
+        expected_live_checksum = frame_checksum(live_frame.bytes);
         valid = expect(
             live_publisher->publish(
                 solin::media_engine::video_frame_view(live_frame)) == 1U,
@@ -650,11 +707,34 @@ int wmain(const int argument_count, wchar_t** arguments) {
                 IID_IMediaControl, reinterpret_cast<void**>(control.put()));
         }
         if (SUCCEEDED(result)) {
+            result = control.get()->Run();
+        }
+        if (SUCCEEDED(result) &&
+            stream_config.get()->SetFormat(nullptr) != VFW_E_NOT_STOPPED) {
+            result = E_FAIL;
+        }
+        const auto capture_started = std::chrono::steady_clock::now();
+        const auto capture_deadline = capture_started + kCaptureTimeout;
+        std::vector<CapturedSample> samples;
+        if (SUCCEEDED(result)) {
+            // Expose the broker only after the offline graph has delivered a
+            // standby sample. Publishing earlier races the first FillBuffer and
+            // can make the first sample live, reversing the transition oracle.
+            samples = capture_renderer->wait_for_samples(
+                capture_deadline,
+                [](const auto& captured) { return !captured.empty(); });
+            if (samples.empty() ||
+                samples.front().checksum == expected_live_checksum) {
+                result = E_FAIL;
+            }
+        }
+        if (SUCCEEDED(result)) {
             const auto pipe = CreateNamedPipeW(
                 solin::media_engine::windows_virtual_camera::
                     current_user_broker_pipe_name()
                         .c_str(),
-                PIPE_ACCESS_DUPLEX | FILE_FLAG_FIRST_PIPE_INSTANCE,
+                PIPE_ACCESS_DUPLEX | FILE_FLAG_FIRST_PIPE_INSTANCE |
+                    FILE_FLAG_OVERLAPPED,
                 PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT |
                     PIPE_REJECT_REMOTE_CLIENTS,
                 1U,
@@ -668,23 +748,38 @@ int wmain(const int argument_count, wchar_t** arguments) {
             } else {
                 broker_thread = std::thread{
                     serve_live_frame_endpoint, pipe,
-                    std::cref(*live_publisher), std::ref(broker_completed),
+                    std::cref(*live_publisher), capture_deadline,
+                    std::ref(broker_completed),
                     std::ref(broker_exchange_valid)};
             }
         }
         if (SUCCEEDED(result)) {
-            result = control.get()->Run();
+            // Both capture phases share the original three-second deadline.
+            // Require the stale-producer transition before stopping the graph,
+            // as Stop itself also closes the broker presence lease.
+            samples = capture_renderer->wait_for_samples(
+                capture_deadline, [expected_live_checksum](const auto& captured) {
+                    return captured.size() >= 55U &&
+                           captured.back().checksum == captured.front().checksum &&
+                           std::any_of(captured.begin(), captured.end(),
+                                       [expected_live_checksum](const auto& sample) {
+                                           return sample.checksum ==
+                                                  expected_live_checksum;
+                                       });
+                });
         }
         if (SUCCEEDED(result) &&
-            stream_config.get()->SetFormat(nullptr) != VFW_E_NOT_STOPPED) {
+            (WaitForSingleObject(broker_thread.native_handle(),
+                                 remaining_wait_ms(capture_deadline)) !=
+                 WAIT_OBJECT_0 ||
+             !broker_completed.load() || !broker_exchange_valid.load())) {
             result = E_FAIL;
         }
-        const auto capture_started = std::chrono::steady_clock::now();
-        std::vector<CapturedSample> samples;
-        if (SUCCEEDED(result)) {
-            samples = capture_renderer->wait_for_samples(
-                55U, std::chrono::milliseconds{3000});
-            result = control.get()->Stop();
+        if (control.get() != nullptr) {
+            const auto stop_result = control.get()->Stop();
+            if (SUCCEEDED(result)) {
+                result = stop_result;
+            }
         }
         const auto capture_elapsed = std::chrono::steady_clock::now() -
                                      capture_started;
@@ -694,6 +789,7 @@ int wmain(const int argument_count, wchar_t** arguments) {
             if (samples.size() < 55U || samples[0].length != expected_size ||
                 !samples[0].sync_point || !samples[0].discontinuity ||
                 samples[0].start != 0 ||
+                samples[0].checksum == expected_live_checksum ||
                 capture_elapsed < std::chrono::milliseconds{1800}) {
                 result = E_FAIL;
             }
@@ -715,6 +811,7 @@ int wmain(const int argument_count, wchar_t** arguments) {
             }
             if (SUCCEEDED(result) &&
                 (live_index == samples.size() ||
+                 samples[live_index].checksum != expected_live_checksum ||
                  !samples[live_index].discontinuity)) {
                 result = E_FAIL;
             }
@@ -743,12 +840,10 @@ int wmain(const int argument_count, wchar_t** arguments) {
             }
         }
         if (broker_thread.joinable()) {
-            if (!broker_completed.load()) {
-                release_blocked_broker_server();
-            }
             broker_thread.join();
         }
-        if (SUCCEEDED(result) && !broker_exchange_valid.load()) {
+        if (SUCCEEDED(result) &&
+            (!broker_completed.load() || !broker_exchange_valid.load())) {
             result = E_FAIL;
         }
         if (FAILED(result)) {
@@ -761,6 +856,7 @@ int wmain(const int argument_count, wchar_t** arguments) {
                              .count()
                       << ", broker_completed=" << broker_completed.load()
                       << ", broker_valid=" << broker_exchange_valid.load()
+                      << ", expected_live_checksum=" << expected_live_checksum
                       << '\n';
             for (std::size_t index = 0U; index < samples.size(); ++index) {
                 std::cerr << "sample[" << index << "] length="

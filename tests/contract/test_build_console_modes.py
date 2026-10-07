@@ -104,6 +104,19 @@ def test_macos_qualifies_final_library_layout_before_signing_and_disk_image():
     assert qualify < workflow.index("- name: Create DMG")
 
 
+def test_macos_architecture_validation_places_the_binary_before_variadic_arch_flags():
+    workflow = _read(".github/workflows/build-solin-macos.yml")
+    assert 'lipo "$binary" -verify_arch "$EXPECTED_ARCH"' in workflow
+
+
+def test_linux_manual_build_can_qualify_the_release_upgrade_without_a_tag():
+    workflow = _read(".github/workflows/build-solin-linux.yml")
+    assert "run_release_smoke_tests:" in workflow
+    for step in ("Download verified predecessor", "AppImage replacement smoke"):
+        block = workflow.split(f"- name: {step}", 1)[1].split("- name:", 1)[0]
+        assert "inputs.release || inputs.run_release_smoke_tests" in block
+
+
 def test_linux_ci_provides_a_graphics_session_for_libobs_build_qualification():
     assert 'xvfb-run --auto-servernum env SOLIN_PYTHON="$(command -v python)" bash scripts/build_solin.sh' in _read(".github/workflows/build-solin-linux.yml")
     quality = _read(".github/workflows/quality.yml")

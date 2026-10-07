@@ -1533,6 +1533,193 @@ class ImmediateFailureGraph final
     }
 };
 
+// Hold only the transition's input feeder. GStreamer's streaming threads and
+// output clock remain free to render the already selected, retained endpoints.
+class TransitionFeederGateGraph final
+    : public solin::media_engine::PreparedSceneRenderGraph {
+  public:
+    explicit TransitionFeederGateGraph(
+        std::shared_ptr<solin::media_engine::PreparedSceneRenderGraph> graph)
+        : graph_(std::move(graph)) {}
+
+    void arm() {
+        std::scoped_lock lock{mutex_};
+        armed_ = true;
+    }
+
+    void set_direct_output_enabled(const bool enabled) noexcept override {
+        std::scoped_lock lock{mutex_};
+        if (!enabled && armed_) {
+            gated_ = true;
+        }
+    }
+
+    [[nodiscard]] std::shared_ptr<const solin::media_engine::SourceFrame>
+    latest_frame() const noexcept override {
+        return graph_->latest_frame();
+    }
+
+    [[nodiscard]] std::shared_ptr<const solin::media_engine::SourceFrame>
+    latest_gpu_frame() const noexcept override {
+        std::unique_lock lock{mutex_};
+        if (gated_ && calls_after_take_++ != 0U) {
+            blocked_ = true;
+            wakeup_.notify_all();
+            wakeup_.wait(lock, [this] { return released_; });
+        }
+        return graph_->latest_gpu_frame();
+    }
+
+    [[nodiscard]] bool wait_until_blocked() const {
+        std::unique_lock lock{mutex_};
+        return wakeup_.wait_for(lock, 500ms, [this] { return blocked_; });
+    }
+
+    void release() {
+        std::scoped_lock lock{mutex_};
+        released_ = true;
+        wakeup_.notify_all();
+    }
+
+  private:
+    std::shared_ptr<solin::media_engine::PreparedSceneRenderGraph> graph_;
+    mutable std::mutex mutex_{};
+    mutable std::condition_variable wakeup_{};
+    bool armed_{false};
+    bool gated_{false};
+    bool released_{false};
+    mutable bool blocked_{false};
+    mutable unsigned calls_after_take_{0U};
+};
+
+void test_program_transition_clock_survives_a_descheduled_feeder(
+    solin::media_engine::MediaRuntime& media_runtime) {
+    using solin::media_engine::OutputBus;
+    const auto renderer = media_runtime.scene_renderer();
+    const auto snapshot = transition_snapshot();
+    const auto document = solin::media_engine::compile_scene_document(snapshot);
+    solin::media_engine::SourceRegistry registry{media_runtime.source_runtime_factory()};
+    registry.replace_snapshot(snapshot);
+    const auto prepare = [&](const char* scene, const char* source) {
+        auto resources =
+            std::make_shared<solin::media_engine::SceneRenderResources>();
+        resources->source_leases.push_back(registry.acquire(source, scene));
+        const auto& lease = resources->source_leases.front();
+        expect(wait_for_frame(lease.runtime(), 5s) != nullptr,
+               "the gated transition fixture has a retained source frame");
+        auto graph = renderer->prepare({
+            .bus = OutputBus::virtual_camera,
+            .document_revision = snapshot.document_revision,
+            .output = snapshot.outputs[1],
+            .graph = document->scenes.at(scene),
+            .sources = {{.source_id = source,
+                         .generation = lease.generation(),
+                         .runtime = &lease.runtime()}},
+            .resources = std::move(resources),
+        });
+        graph->set_direct_output_enabled(true);
+        expect(graph->wait_for_frame(0U, {}, std::chrono::steady_clock::now() + 1s),
+               "the gated transition fixture primes CPU and GPU output");
+        return graph;
+    };
+    const auto red = prepare("scene-red", "color-red");
+    const auto blue = prepare("scene-blue", "color-blue");
+    auto outgoing = std::make_shared<TransitionFeederGateGraph>(red);
+    renderer->set_system_memory_output_enabled(
+        OutputBus::virtual_camera,
+        solin::media_engine::SystemMemoryOutputConsumer::frame_channel, true);
+    renderer->commit_hydration({nullptr, outgoing}, {false, true}, 1U);
+    const auto transition = renderer->prepare_transition(
+        OutputBus::virtual_camera, blue,
+        {.kind = solin::media_engine::SceneTransitionKind::dissolve,
+         .duration_ms = 50U});
+    expect(transition.render_output != nullptr && !transition.fallback_applied,
+           "the gated transition prepares the production D3D11 effect");
+    if (transition.render_output == nullptr) {
+        return;
+    }
+    transition.render_output->set_direct_output_enabled(true);
+    const auto origin = outgoing->latest_frame();
+    const auto prime_deadline = std::chrono::steady_clock::now() + 1s;
+    while (transition.render_output->latest_frame() == origin &&
+           std::chrono::steady_clock::now() < prime_deadline) {
+        std::this_thread::sleep_for(1ms);
+    }
+    const auto primed = transition.render_output->latest_frame();
+    expect(primed != nullptr && primed != origin,
+           "the gated transition publishes its own pre-Take endpoint");
+    if (primed == nullptr || primed == origin) {
+        return;
+    }
+    std::mutex visitor_mutex;
+    std::condition_variable_any visitor_wakeup;
+    bool endpoint_mapped = false;
+    bool release_endpoint = false;
+    // This reader maps the origin before Take, then returns after body output
+    // has arrived. Its successful visit must acknowledge that origin PTS only.
+    std::jthread endpoint_reader{[&](const std::stop_token stop) {
+        static_cast<void>(transition.render_output->visit_latest_frame(
+            0U, [&](const solin::media_engine::VideoFrameView&) {
+                std::unique_lock lock{visitor_mutex};
+                endpoint_mapped = true;
+                visitor_wakeup.notify_all();
+                visitor_wakeup.wait(lock, stop, [&] { return release_endpoint; });
+            }));
+    }};
+    {
+        std::unique_lock lock{visitor_mutex};
+        expect(visitor_wakeup.wait_for(lock, 1s, [&] { return endpoint_mapped; }),
+               "the delayed reader maps the origin before Take");
+    }
+    outgoing->arm();
+    renderer->commit_take(OutputBus::virtual_camera, blue,
+                          transition.render_output, 2U);
+    expect(outgoing->wait_until_blocked(),
+           "the transition feeder is descheduled after its first on-air submission");
+    const auto body_deadline = std::chrono::steady_clock::now() + 120ms;
+    auto retained = transition.render_output->latest_frame();
+    const auto body_timestamp = primed->presentation_timestamp_ns +
+        2U * static_cast<std::uint64_t>(
+            solin::media_engine::scene_transition_frame_interval(
+                snapshot.outputs[1].video_format).count());
+    while (retained != nullptr && retained->presentation_timestamp_ns < body_timestamp &&
+           std::chrono::steady_clock::now() < body_deadline) {
+        static_cast<void>(transition.render_output->wait_for_frame(
+            retained->sequence, {}, body_deadline));
+        retained = transition.render_output->latest_frame();
+    }
+    {
+        std::scoped_lock lock{visitor_mutex};
+        release_endpoint = true;
+    }
+    visitor_wakeup.notify_all();
+    endpoint_reader.join();
+    // Let the next output selection react to the delayed endpoint visit before
+    // the real Program consumer is allowed to acknowledge a body frame.
+    if (retained != nullptr) {
+        static_cast<void>(transition.render_output->wait_for_frame(
+            retained->sequence, {}, std::chrono::steady_clock::now() + 120ms));
+    }
+    bool blended = false;
+    std::uint64_t cursor = 0U;
+    const auto deadline = std::chrono::steady_clock::now() + 120ms;
+    while (std::chrono::steady_clock::now() < deadline && !blended) {
+        const auto frame = wait_for_program_center(renderer, cursor, 40ms);
+        if (frame.has_value()) {
+            cursor = frame->sequence;
+            blended = near_channel(frame->yuv[1], 171U, 40U) &&
+                      near_channel(frame->yuv[2], 179U, 40U);
+        }
+    }
+    // Release before asserting or destroying the renderer, even on failure.
+    outgoing->release();
+    expect(blended,
+           "the Program output clock renders a real blended frame while its feeder is descheduled");
+    renderer->shutdown();
+    red->stop();
+    blue->stop();
+}
+
 void test_renderer_hydration_and_output_updates_drive_graph_demand(
     const std::shared_ptr<solin::media_engine::SceneRenderer>& renderer) {
     using solin::media_engine::OutputBus;
@@ -1888,6 +2075,8 @@ int main(const int argc, const char* const argv[]) {
             test_color_source_publishes_bounded_latest_d3d11_frames(media_runtime);
             test_rtsp_source_decodes_to_the_same_bounded_frame_contract(media_runtime);
             if (probe.d3d11_compositor) {
+                test_program_transition_clock_survives_a_descheduled_feeder(
+                    media_runtime);
                 test_scene_renderer_composes_nested_scene_to_shared_d3d11_frame(
                     media_runtime);
                 test_failed_source_does_not_block_healthy_compositor_layers(media_runtime);

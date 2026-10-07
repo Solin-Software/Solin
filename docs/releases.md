@@ -80,6 +80,27 @@ draft.
 The platform workflows remain manually runnable for diagnostics. Manual output
 is short lived and is not distribution.
 
+## Qualifying a branch before tagging
+
+Run the same platform build workflows on a pushed working branch before preparing
+another beta. These runs build the full packages and exercise the packaged runtime
+and verified-predecessor upgrade tests, but do not invoke the release publisher:
+
+```text
+gh workflow run quality.yml --ref <branch>
+gh workflow run build-solin-windows.yml --ref <branch> -f run_release_smoke_tests=true
+gh workflow run build-solin-linux.yml --ref <branch> -f run_packaged_smoke_test=true -f run_release_smoke_tests=true
+gh workflow run build-solin-macos.yml --ref <branch> -f run_release_smoke_tests=true
+gh run list --branch <branch>
+```
+
+Inspect failed job logs, fix the cause on that branch, push, and dispatch the
+affected workflow again. Qualify all platforms and Quality on the final commit.
+Download successful packages from the run's artifacts for additional testing.
+Only after qualification should the normal review, release preparation, and tag
+publication flow proceed. Diagnostic artifacts are not published releases and
+do not require a version bump or tag.
+
 ## External repository prerequisites
 
 Production publication depends on repository controls that cannot be declared

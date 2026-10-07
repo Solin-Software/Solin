@@ -650,22 +650,19 @@ def test_linux_dependency_closure_is_bundled_with_notices_but_keeps_host_graphic
     core, codec, codec_dependency = root / "libobs.so.0", system / "libavcodec.so.60", system / "libx264.so.164"
     for library in (core, codec, codec_dependency, system / "libc.so.6", system / "libGL.so.1"):
         _touch(library, b"\x7fELF" + library.name.encode())
-    notices, commands, probes = [], [], {}
+    notices, commands = [], []
 
-    def dependencies(binary):
-        probes[binary] = probes.get(binary, 0) + 1
+    def dependencies(binary, *, private_root=None):
         if binary == core:
             return {
-                "libavcodec.so.60": root / codec.name if probes[binary] > 1 else codec,
+                "libavcodec.so.60": root / codec.name if private_root is None else codec,
                 "libc.so.6": system / "libc.so.6",
                 "libGL.so.1": system / "libGL.so.1",
             }
-        if binary.name == codec.name:
-            return {
-                "libx264.so.164": (
-                    root / codec_dependency.name if probes[binary] > 1 else codec_dependency
-                )
-            }
+        if binary == codec:
+            return {"libx264.so.164": codec_dependency}
+        if binary == root / codec.name:
+            return {"libx264.so.164": root / codec_dependency.name}
         return {}
 
     monkeypatch.setattr(packaging, "_linux_linked_libraries", dependencies)
@@ -689,15 +686,14 @@ def test_linux_dependency_closure_reuses_identical_duplicate_soname(tmp_path, mo
         _touch(binary, b"\x7fELF" + binary.name.encode())
     for library in (zlib_a, zlib_b):
         _touch(library, b"\x7fELF-identical-zlib")
-    notices, probes = [], {}
+    notices = []
     private = root / "libz.so.1"
 
-    def dependencies(binary):
-        probes[binary] = probes.get(binary, 0) + 1
+    def dependencies(binary, *, private_root=None):
         if binary == core_a:
-            return {"libz.so.1": private if probes[binary] > 1 else zlib_a}
+            return {"libz.so.1": private if private_root is None else zlib_a}
         if binary == core_b:
-            return {"libz.so.1": private if probes[binary] > 1 else zlib_b}
+            return {"libz.so.1": private if private_root is None else zlib_b}
         return {}
 
     monkeypatch.setattr(packaging, "_linux_linked_libraries", dependencies)
@@ -712,7 +708,7 @@ def test_linux_dependency_closure_reuses_identical_duplicate_soname(tmp_path, mo
     assert set(notices) == {zlib_a, zlib_b}
 
 
-def test_linux_dependency_closure_selects_one_divergent_soname_provider_deterministically(
+def test_linux_dependency_closure_rejects_divergent_soname_providers(
     tmp_path, monkeypatch,
 ):
     root, system = tmp_path / "runtime", tmp_path / "system"
@@ -726,23 +722,74 @@ def test_linux_dependency_closure_selects_one_divergent_soname_provider_determin
     _touch(zlib_b, b"\x7fELF-zlib-b")
 
     private = root / "libz.so.1"
-    probes = {}
-
-    def dependencies(binary):
-        probes[binary] = probes.get(binary, 0) + 1
+    def dependencies(binary, *, private_root=None):
         if binary == core_a:
-            return {"libz.so.1": private if probes[binary] > 1 else zlib_a}
+            return {"libz.so.1": private if private_root is None else zlib_a}
         if binary == core_b:
-            return {"libz.so.1": private if probes[binary] > 1 else zlib_b}
+            return {"libz.so.1": private if private_root is None else zlib_b}
         return {}
 
     monkeypatch.setattr(packaging, "_linux_linked_libraries", dependencies)
     monkeypatch.setattr(packaging, "_copy_linux_dependency_notice", lambda *_args: None)
     monkeypatch.setattr(packaging.subprocess, "run", lambda *_args, **_kwargs: None)
 
-    packaging._relocate_linux(root)
+    with pytest.raises(packaging.LibobsPackagingError, match="Conflicting private libobs dependency"):
+        packaging._relocate_linux(root)
 
-    assert private.read_bytes() == zlib_a.read_bytes()
+
+def test_linux_dependency_probe_uses_private_paths_before_discovering_plugins(tmp_path, monkeypatch):
+    root = tmp_path / "runtime"
+    core = root / "libobs.so.30"
+    graphics = root / "libobs-opengl.so"
+    for binary in (core, graphics):
+        _touch(binary, b"\x7fELF" + binary.name.encode())
+    relocated = set()
+
+    def relocate(command, **kwargs):
+        relocated.add(Path(command[-1]))
+
+    private_probes = []
+
+    def dependencies(binary, *, private_root=None):
+        if private_root is not None:
+            private_probes.append((binary, private_root))
+            return {core.name: core} if binary == graphics else {}
+        if binary not in relocated:
+            raise packaging.LibobsPackagingError("libobs.so.30 => not found")
+        return {core.name: core} if binary == graphics else {}
+
+    monkeypatch.setattr(packaging.subprocess, "run", relocate)
+    monkeypatch.setattr(packaging, "_linux_linked_libraries", dependencies)
+    packaging._relocate_linux(root)
+    assert {binary for binary, _private_root in private_probes} == {core, graphics}
+    assert {private_root for _binary, private_root in private_probes} == {root.resolve()}
+
+
+def test_linux_duplicate_identity_is_checked_before_rpath_mutation(tmp_path, monkeypatch):
+    root = tmp_path / "runtime"
+    first = root / "libobs.so.30"
+    second = root / "obs-plugins/image-source.so"
+    library = tmp_path / "system/libbrotlicommon.so.1"
+    for binary in (first, second, library):
+        _touch(binary, b"\x7fELF" + binary.name.encode())
+    relocated = set()
+
+    def relocate(command, **kwargs):
+        binary = Path(command[-1])
+        relocated.add(binary)
+        binary.write_bytes(binary.read_bytes() + b"-relocated")
+
+    def dependencies(binary, *, private_root=None):
+        if binary == first:
+            return {library.name: root / library.name if private_root is None else library}
+        if binary == second:
+            return {library.name: root / library.name if private_root is None else library}
+        return {}
+
+    monkeypatch.setattr(packaging.subprocess, "run", relocate)
+    monkeypatch.setattr(packaging, "_linux_linked_libraries", dependencies)
+    monkeypatch.setattr(packaging, "_copy_linux_dependency_notice", lambda *_args: None)
+    packaging._relocate_linux(root)
 
 
 @pytest.mark.parametrize(
@@ -758,6 +805,31 @@ def test_linux_dependency_probe_rejects_missing_libraries_and_incompatible_abi(
     )
     with pytest.raises(packaging.LibobsPackagingError, match="Unresolved libobs dependencies"):
         packaging._linux_linked_libraries(Path("libobs.so.0"))
+
+
+def test_linux_dependency_probe_uses_only_staged_runtime_search_paths(tmp_path, monkeypatch):
+    root = tmp_path / "runtime"
+    binary = root / "obs-plugins/image-source.so"
+    captured_environment = {}
+    monkeypatch.setenv("LD_LIBRARY_PATH", "/host/injected")
+    monkeypatch.setenv("LD_PRELOAD", "/host/preload.so")
+
+    def probe(command, **kwargs):
+        captured_environment.update(kwargs["env"])
+        return subprocess.CompletedProcess(
+            command, 0, b"libobs.so.30 => /runtime/libobs.so.30 (0x0)\n", b"",
+        )
+
+    monkeypatch.setattr(packaging.subprocess, "run", probe)
+    libraries = packaging._linux_linked_libraries(binary, private_root=root)
+
+    assert libraries == {"libobs.so.30": Path("/runtime/libobs.so.30").resolve()}
+    assert captured_environment["LD_LIBRARY_PATH"].split(os.pathsep) == [
+        str(binary.resolve().parent),
+        str(root.resolve()),
+    ]
+    assert "LD_PRELOAD" not in captured_environment
+    assert "/host/injected" not in captured_environment["LD_LIBRARY_PATH"]
 
 
 def test_linux_dependency_notices_follow_the_owning_distribution_package(tmp_path, monkeypatch):
