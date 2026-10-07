@@ -611,7 +611,7 @@ def test_linux_host_mux_copy_uses_the_private_runtime_and_checks_its_dependencie
     monkeypatch.setattr(packaging.subprocess, "run", run)
     packaging._relocate_linux(root, binaries=[helper])
     assert calls == [
-        ["patchelf", "--set-rpath", "$ORIGIN:$ORIGIN/pylibobs/_libs/linux/x86_64", str(helper)],
+        ["patchelf", "--set-rpath", "$ORIGIN/pylibobs/_libs/linux/x86_64", str(helper)],
         ["readelf", "--dynamic", "--wide", str(helper)],
         ["ldd", str(helper)],
     ]

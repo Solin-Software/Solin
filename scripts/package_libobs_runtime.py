@@ -334,10 +334,11 @@ def _copy_linux_dependency_notice(library: Path, root: Path) -> None:
     shutil.copy2(notice, destination)
 
 
-def _set_linux_rpath(root: Path, binary: Path) -> None:
+def _set_linux_rpath(root: Path, binary: Path, *, include_binary_directory: bool = True) -> None:
     relative = os.path.relpath(root, binary.parent).replace(os.sep, "/")
+    rpath = f"$ORIGIN:$ORIGIN/{relative}" if include_binary_directory else f"$ORIGIN/{relative}"
     subprocess.run(
-        ["patchelf", "--set-rpath", f"$ORIGIN:$ORIGIN/{relative}", str(binary)],
+        ["patchelf", "--set-rpath", rpath, str(binary)],
         check=True,
         capture_output=True,
     )
@@ -349,7 +350,15 @@ def _relocate_linux(root: Path, *, binaries: Sequence[Path] | None = None) -> No
     if binaries is not None:
         targets = list(dict.fromkeys(path.resolve() for path in binaries))
         for binary in targets:
-            _set_linux_rpath(root, binary)
+            # A helper copied beside the application must not search its own
+            # directory before the private libobs runtime. Nuitka may leave
+            # flat copies of shared libraries there, which would otherwise
+            # shadow the qualified runtime we just staged.
+            _set_linux_rpath(
+                root,
+                binary,
+                include_binary_directory=binary.is_relative_to(root_resolved),
+            )
         for binary in targets:
             for name, library in _linux_linked_libraries(binary).items():
                 if _linux_host_library(name):
