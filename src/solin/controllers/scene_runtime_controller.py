@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable, Mapping
 from concurrent.futures import CancelledError, Future
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Protocol
 
 from PySide6.QtCore import QObject, Signal, Slot
@@ -16,6 +16,7 @@ from solin.core.scenes.engine import (
     DEFAULT_ENGINE_STARTUP_DEADLINE_MS,
     EngineHealthEvent,
     FrameChannelDescriptor,
+    FrameEgressReadyEvent,
     LocalCameraDiscovery,
     MediaPlaybackEvent,
     OutputWindowTarget,
@@ -106,6 +107,7 @@ class _PendingTake:
     prepare_request_id: str
     prepare_sequence: int
     document_revision: int
+    content_presentation_id: int | None = None
     take_request_id: str = ""
     take_sequence: int = -1
 
@@ -262,6 +264,7 @@ class SceneRuntimeController(QObject):
         self._applied_scenes: tuple[tuple[BusId, str], ...] = ()
         self._pending: dict[BusId, _PendingTake] = {}
         self._failed_takes: set[tuple[BusId, str]] = set()
+        self._take_reconciliation_required: set[BusId] = set()
         self._ptz_batches: dict[BusId, _PendingPtzBatch] = {}
         self._moving_camera_bindings: dict[str, PtzBinding] = {}
         self._last_destination_enabled = self._destination_enabled()
@@ -1083,6 +1086,7 @@ class SceneRuntimeController(QObject):
         )
 
     def stop_engine(self) -> None:
+        self._take_reconciliation_required.clear()
         if self._profile_activation is not None:
             self._workspace.discard_collection_activation(
                 self._profile_activation.activation
@@ -1197,6 +1201,13 @@ class SceneRuntimeController(QObject):
         session_id = self._projection_session_id()
         if session_id != self._last_projection_session_id:
             self._last_projection_session_id = session_id
+            # A failed content take belongs to that presentation, even when the
+            # next playlist item uses the same scene. Keep unrelated failures.
+            self._failed_takes = {
+                (bus_id, scene_id)
+                for bus_id, scene_id in self._failed_takes
+                if not scene_uses_content_source(self._documents.document, scene_id)
+            }
             # Pinned outputs keep their return bases until automation resumes.
             self._automatic_media_scene_selections = {
                 bus_id: selection
@@ -1229,12 +1240,18 @@ class SceneRuntimeController(QObject):
     def _consume_engine_event(self, event: object) -> None:
         if not isinstance(
             event,
-            (EngineHealthEvent, SourceHealthEvent, ProgramRecordingEvent, MediaPlaybackEvent),
+            (
+                EngineHealthEvent,
+                SourceHealthEvent,
+                FrameEgressReadyEvent,
+                ProgramRecordingEvent,
+                MediaPlaybackEvent,
+            ),
         ):
             self._report_exception("event", RuntimeError("Invalid scene engine event"))
             return
         self.engine_event.emit(event)
-        if isinstance(event, (ProgramRecordingEvent, MediaPlaybackEvent)):
+        if isinstance(event, (FrameEgressReadyEvent, ProgramRecordingEvent, MediaPlaybackEvent)):
             return
         if isinstance(event, SourceHealthEvent):
             previous = self._source_health.get(event.source_id)
@@ -1329,7 +1346,10 @@ class SceneRuntimeController(QObject):
                 continue
             if (bus_id, desired_scene_id) in self._failed_takes:
                 continue
-            if self.applied_scene(bus_id) != desired_scene_id:
+            if (
+                self.applied_scene(bus_id) != desired_scene_id
+                or bus_id in self._take_reconciliation_required
+            ):
                 self._prepare_take(bus_id, desired_scene_id)
                 return
 
@@ -1555,6 +1575,11 @@ class SceneRuntimeController(QObject):
             prepare_request_id=request_id,
             prepare_sequence=sequence,
             document_revision=self._engine_document_revision,
+            content_presentation_id=(
+                self._projection_session_id()
+                if scene_uses_content_source(self._documents.document, scene_id)
+                else None
+            ),
         )
         self._pending[bus_id] = pending
         # The editor canvas wants an instant cut to whatever is selected; the
@@ -1564,6 +1589,9 @@ class SceneRuntimeController(QObject):
             if bus_id is BusId.EDITOR
             else self._documents.effective_transition(scene_id)
         )
+        # Epochs guard app-owned ingress frames. Video is decoded in the sidecar;
+        # waiting for ingress would block open_media on the same ordered command
+        # stream and reject the Program take before the decoder can open.
         future = self._engine.prepare_scene(
             bus_id,
             scene_id,
@@ -1573,8 +1601,9 @@ class SceneRuntimeController(QObject):
             sequence=sequence,
             deadline_ms=_PREPARE_DEADLINE_MS,
             content_media_epoch=(
-                self._projection_session_id()
-                if scene_uses_content_source(self._documents.document, scene_id)
+                pending.content_presentation_id
+                if content_category_for_projection(self._projection.state)
+                is not ContentCategory.VIDEO
                 else None
             ),
         )
@@ -1658,16 +1687,14 @@ class SceneRuntimeController(QObject):
             pending is None
             or pending.prepare_request_id != preparation.request_id
             or pending.scene_id != preparation.scene_id
-            or self.desired_scene(preparation.bus_id) != preparation.scene_id
         ):
+            return
+        if self._discard_superseded_take(preparation.bus_id, pending):
             return
         request_id = self._request_id_factory()
         sequence = self._next_sequence()
-        pending = _PendingTake(
-            scene_id=pending.scene_id,
-            prepare_request_id=pending.prepare_request_id,
-            prepare_sequence=pending.prepare_sequence,
-            document_revision=pending.document_revision,
+        pending = replace(
+            pending,
             take_request_id=request_id,
             take_sequence=sequence,
         )
@@ -1700,6 +1727,15 @@ class SceneRuntimeController(QObject):
     def _consume_async_result(self, payload: object) -> None:
         values = _context_tuple(payload, 4, "async result")
         operation, context, result, error = values
+        if (
+            (operation == "prepare" or operation == "take" and error is not None)
+            and isinstance(context, tuple)
+            and len(context) == 2
+            and isinstance(context[0], BusId)
+            and isinstance(context[1], _PendingTake)
+            and self._discard_superseded_take(context[0], context[1])
+        ):
+            return
         if error is not None:
             if operation == "layer_geometry":
                 self._finish_layer_geometry(context, error=error)
@@ -1905,10 +1941,19 @@ class SceneRuntimeController(QObject):
             document_revision=expected.document_revision,
         )
         if not ack.applied:
+            if self._discard_superseded_take(bus_id, expected):
+                return
             self._clear_failed_pending("take", context)
             self._report_rejection("take", ack)
             return
         self._pending.pop(bus_id, None)
+        if (
+            expected.content_presentation_id is not None
+            and expected.content_presentation_id != self._projection_session_id()
+        ):
+            self._take_reconciliation_required.add(bus_id)
+        else:
+            self._take_reconciliation_required.discard(bus_id)
         applied = dict(self._applied_scenes)
         applied[bus_id] = expected.scene_id
         self._set_applied_scenes(
@@ -1956,6 +2001,8 @@ class SceneRuntimeController(QObject):
             or self._pending.get(context.bus_id) != context.expected
         ):
             return
+        if self._discard_superseded_take(context.bus_id, context.expected):
+            return
         batch.remaining.remove(context.future)
         if not result.succeeded and context.action.on_timeout is PtzTimeoutPolicy.KEEP_CURRENT:
             batch.blocking_error_codes.append(result.error_code or "ptz_recall_failed")
@@ -1969,6 +2016,8 @@ class SceneRuntimeController(QObject):
                 result=result,
             )
         )
+        if self._discard_superseded_take(context.bus_id, context.expected):
+            return
         if batch.remaining:
             return
         self._ptz_batches.pop(context.bus_id, None)
@@ -2087,19 +2136,40 @@ class SceneRuntimeController(QObject):
         self,
         scenes: tuple[tuple[BusId, str], ...],
     ) -> None:
+        if not scenes:
+            self._take_reconciliation_required.clear()
         if scenes == self._applied_scenes:
             return
         self._applied_scenes = scenes
         self.applied_scenes_changed.emit(scenes)
 
     def _cancel_pending(self, bus_id: BusId, *, cancel_native: bool) -> None:
+        pending = self._pending.pop(bus_id, None)
         batch = self._ptz_batches.pop(bus_id, None)
         if batch is not None and self._ptz is not None:
             for future in tuple(batch.remaining):
                 self._ptz.cancel(future)
-        pending = self._pending.pop(bus_id, None)
         if cancel_native and pending is not None and self._engine is not None:
             self._engine.cancel_preparation(pending.prepare_request_id)
+
+    def _discard_superseded_take(self, bus_id: BusId, expected: _PendingTake) -> bool:
+        if self._pending.get(bus_id) != expected:
+            return True
+        presentation_id = expected.content_presentation_id
+        if self.desired_scene(bus_id) == expected.scene_id and (
+            presentation_id is None or presentation_id == self._projection_session_id()
+        ):
+            return False
+        # Scene identity alone is insufficient: video and the next image can use
+        # the same content scene but require different sources/readiness guards.
+        # Retire the old transaction before callbacks can target its replacement.
+        if expected.take_request_id:
+            # A lost/stale Take result cannot prove which scene is physically
+            # applied. Reconcile this bus even when the previous cache matches.
+            self._take_reconciliation_required.add(bus_id)
+        self._cancel_pending(bus_id, cancel_native=True)
+        self._reconcile_desired(prepare=True)
+        return True
 
     def _cancel_all_pending(self, *, cancel_native: bool) -> None:
         for bus_id in set(self._pending) | set(self._ptz_batches):
@@ -2146,7 +2216,9 @@ class SceneRuntimeController(QObject):
         if self._hydrate_dirty:
             self._hydrate_if_ready()
             return
-        self._schedule_next_take(skip=(bus_id, completed_scene_id))
+        self._schedule_next_take(
+            skip=None if bus_id in self._take_reconciliation_required else (bus_id, completed_scene_id),
+        )
 
     def _report_exception(self, operation: object, error: object) -> None:
         if isinstance(error, SceneEngineCommandRejectedError):
