@@ -17,6 +17,11 @@ The smoke launches the packaged executable with isolated user data directories,
 verifies that it stays alive through the startup window, then terminates the
 process.
 
+Each smoke owns private user-data, temporary-directory, and IPC namespaces. On
+POSIX, it also owns a separate process group and cleans up launcher descendants,
+including the child spawned by AppImage extract-and-run. Upgrade pairs reuse the
+same environment so replacement cannot conceal a surviving old instance.
+
 Run the full-installer upgrade smoke only on a disposable Windows test machine
 or CI runner with no existing Solin installation:
 

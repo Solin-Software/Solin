@@ -180,19 +180,14 @@ def test_windows_quality_preserves_suite_failure_and_stops_later_suites(failed_s
     assert result.stdout.splitlines() == [f"tests/{suite}" for suite in expected]
 
 
-def test_linux_smoke_rejects_clean_early_exit():
+def test_linux_smoke_rejects_clean_early_exit(monkeypatch):
+    from tests.e2e._packaged_app import assert_process_survives_startup
+
     text = (REPO_ROOT / ".github/workflows/build-solin-linux.yml").read_text()
-    assert 'exit "$status"' not in text
-    block = re.search(r'if \[\[ "\$status" -ne 124.*?fi', text, re.DOTALL)
-    assert block is not None
-    bash = Path("C:/Program Files/Git/bin/bash.exe")
-    if not bash.exists():
-        executable = shutil.which("bash")
-        if executable is None:
-            pytest.skip("bash is not installed")
-    else:
-        executable = str(bash)
-    assert subprocess.run([executable, "-c", "status=0; " + block.group()], check=False).returncode == 1
+    assert "test_packaged_app_smoke.py::test_packaged_app_survives_startup_window" in text
+    monkeypatch.setenv("SOLIN_E2E_STARTUP_SECONDS", "2")
+    with pytest.raises(pytest.fail.Exception, match="exited during startup with 0"):
+        assert_process_survives_startup(Path(sys.executable), args=("-c", "raise SystemExit(0)"))
 
 
 def test_windows_distribution_contains_only_the_full_installer():

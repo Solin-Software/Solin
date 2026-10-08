@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import json
 import os
+import signal
 import subprocess
 import sys
 import time
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -40,6 +42,7 @@ def isolated_app_env(temp_root: Path) -> dict[str, str]:
     xdg_config_dir = temp_root / "Config"
     xdg_data_dir = temp_root / "Data"
     xdg_cache_dir = temp_root / "Cache"
+    temporary_dir = temp_root / "Temp"
     for path in (
         temp_root / "AppData" / "Roaming",
         temp_root / "AppData" / "Local",
@@ -47,6 +50,7 @@ def isolated_app_env(temp_root: Path) -> dict[str, str]:
         xdg_config_dir,
         xdg_data_dir,
         xdg_cache_dir,
+        temporary_dir,
     ):
         path.mkdir(parents=True, exist_ok=True)
 
@@ -58,6 +62,12 @@ def isolated_app_env(temp_root: Path) -> dict[str, str]:
     env["XDG_CONFIG_HOME"] = str(xdg_config_dir)
     env["XDG_DATA_HOME"] = str(xdg_data_dir)
     env["XDG_CACHE_HOME"] = str(xdg_cache_dir)
+    # Qt's Unix local sockets and AppImage extraction use the temporary directory.
+    # Keep it shared within one upgrade pair and private between separate tests.
+    env["TMPDIR"] = str(temporary_dir)
+    env["TMP"] = str(temporary_dir)
+    env["TEMP"] = str(temporary_dir)
+    env["SOLIN_IPC_SERVER_NAME"] = f"sln-{uuid.uuid4().hex[:12]}"
     env.setdefault(
         "QT_LOGGING_RULES",
         "qt.qpa.mime=false",
@@ -229,6 +239,7 @@ def assert_process_survives_startup(
         [str(exe_path), *args],
         cwd=exe_path.parent,
         env=env,
+        start_new_session=os.name == "posix",
     )
     try:
         deadline = time.monotonic() + startup_seconds
@@ -238,11 +249,31 @@ def assert_process_survives_startup(
                 pytest.fail(f"Packaged app exited during startup with {exit_code}.")
             time.sleep(0.2)
     finally:
-        if process.poll() is None:
-            process.terminate()
+        if os.name == "posix":
+            # AppImage extract-and-run forks AppRun and waits in the runtime.
+            # Terminating only that launcher leaves the application (and its
+            # single-instance socket) alive across replacement tests.
             try:
-                process.wait(timeout=shutdown_timeout)
-            except subprocess.TimeoutExpired:
+                os.killpg(process.pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+        elif process.poll() is None:
+            process.terminate()
+        try:
+            process.wait(timeout=shutdown_timeout)
+        except subprocess.TimeoutExpired:
+            if os.name == "posix":
+                os.killpg(process.pid, signal.SIGKILL)
+            else:
                 process.kill()
-                process.wait(timeout=5)
-                pytest.fail("Packaged app did not stop after the smoke test.")
+            process.wait(timeout=5)
+            pytest.fail("Packaged app did not stop after the smoke test.")
+        finally:
+            if os.name == "posix":
+                # A launcher may exit before its descendants, including on a
+                # startup failure. Always dispose of its owned group so no
+                # child survives the helper, even if it ignores SIGTERM.
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass

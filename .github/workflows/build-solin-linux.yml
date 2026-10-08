@@ -165,19 +165,13 @@ jobs:
       - name: Run AppImage startup smoke
         if: ${{ (inputs.release || inputs.run_packaged_smoke_test) }}
         shell: bash
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+          SOLIN_PACKAGED_EXE: ${{ github.workspace }}/dist/Solin-${{ env.APP_VERSION }}-linux-x86_64.AppImage
         run: |
-          appimage="${DIST_DIR}/${APP_NAME}-${APP_VERSION}-linux-x86_64.AppImage"
-          set +e
-          timeout --signal=TERM 15s xvfb-run --auto-servernum \
+          xvfb-run --auto-servernum \
             --server-args="-screen 0 1280x720x24" \
-            env APPIMAGE_EXTRACT_AND_RUN=1 "$appimage"
-          status=$?
-          set -e
-          if [[ "$status" -ne 124 && "$status" -ne 143 ]]; then
-            echo "Solin AppImage exited unexpectedly with status $status." >&2
-            exit 1
-          fi
-          echo "Solin AppImage remained running for the smoke-test window."
+            python -m pytest tests/e2e/test_packaged_app_smoke.py::test_packaged_app_survives_startup_window -q
 
       - name: Download verified predecessor
         if: ${{ inputs.release || inputs.run_release_smoke_tests }}
