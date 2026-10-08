@@ -20,6 +20,7 @@
 #include <condition_variable>
 #include <exception>
 #include <iostream>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -260,63 +261,107 @@ class GatedSourceRuntime final : public solin::media_engine::SourceRuntime {
         : delegate_(std::move(delegate)), frame_signal_(std::move(frame_signal)) {}
 
     void start() override { delegate_->start(); }
-    void stop() noexcept override { delegate_->stop(); }
+    void stop() noexcept override {
+        resume_observation();
+        delegate_->stop();
+    }
 
     [[nodiscard]] solin::media_engine::SourceRuntimeHealth health() const override {
-        if (!released_.load()) {
+        {
+            std::scoped_lock lock{observation_mutex_};
+            auto& observation = observations_[std::this_thread::get_id()];
+            if (!std::exchange(observation.frame_pending, false)) {
+                // The unsettled graph's readiness check follows submission and
+                // ACK probing. Its next frame read is the availability scan,
+                // rather than the submission that also reads this runtime.
+                observation.scan_pending = true;
+            }
+            if (std::exchange(observation.unavailable_snapshot, false)) {
+                return {.status = solin::media_engine::SourceRuntimeStatus::starting};
+            }
+        }
+        const auto availability = availability_.load();
+        if (availability == Availability::unavailable) {
             return {.status = solin::media_engine::SourceRuntimeStatus::starting};
+        }
+        if (availability == Availability::degraded) {
+            return {.status = solin::media_engine::SourceRuntimeStatus::degraded,
+                    .error_code = "source_frame_timeout"};
         }
         return delegate_->health();
     }
 
     [[nodiscard]] std::shared_ptr<const solin::media_engine::SourceFrame>
     latest_frame() const override {
-        if (released_.load()) {
+        if (availability_.load() == Availability::frame) {
             return delegate_->latest_frame();
         }
-        unavailable_observations_.fetch_add(1U);
-        observation_wakeup_.notify_all();
+        std::unique_lock lock{observation_mutex_};
+        auto& observation = observations_[std::this_thread::get_id()];
+        const bool availability_scan = std::exchange(observation.scan_pending, false);
+        observation.frame_pending = true;
+        if (observation_armed_ && availability_scan) {
+            observation_armed_ = false;
+            observation_held_ = true;
+            observation_wakeup_.notify_all();
+            observation_wakeup_.wait(lock, [this] { return observation_resumed_; });
+            // Preserve the unavailable frame/health snapshot even when readiness
+            // changes while this call is held. Its notification must survive the
+            // feeder's subsequent entry into the recovery wait.
+            observation.unavailable_snapshot = true;
+        }
         return nullptr;
     }
 
     [[nodiscard]] bool wait_for_frame(
         const std::uint64_t after_sequence, const std::stop_token stop_token,
         const std::chrono::steady_clock::time_point deadline) const noexcept override {
-        return released_.load() &&
+        return availability_.load() == Availability::frame &&
                delegate_->wait_for_frame(after_sequence, stop_token, deadline);
     }
 
     void wake_frame_waiters() noexcept override { delegate_->wake_frame_waiters(); }
 
-    void release() noexcept {
-        released_.store(true);
+    void release(const bool degraded = false) noexcept {
+        availability_.store(degraded ? Availability::degraded : Availability::frame);
         frame_signal_->notify();
     }
 
-    [[nodiscard]] std::uint64_t unavailable_observations() const noexcept {
-        return unavailable_observations_.load();
+    void hold_next_unavailable_observation() {
+        std::scoped_lock lock{observation_mutex_};
+        observation_armed_ = true;
+        observation_resumed_ = false;
     }
 
-    [[nodiscard]] bool wait_for_unavailable_observation_after(
-        const std::uint64_t after,
-        const std::chrono::steady_clock::time_point deadline) const noexcept {
-        try {
-            std::unique_lock lock{observation_mutex_};
-            return observation_wakeup_.wait_until(lock, deadline, [this, after] {
-                return unavailable_observations_.load() > after;
-            });
-        } catch (...) {
-            return false;
-        }
+    [[nodiscard]] bool wait_until_observation_held() const {
+        std::unique_lock lock{observation_mutex_};
+        return observation_wakeup_.wait_for(lock, 1s, [this] {
+            return observation_held_;
+        });
+    }
+
+    void resume_observation() noexcept {
+        std::scoped_lock lock{observation_mutex_};
+        observation_resumed_ = true;
+        observation_wakeup_.notify_all();
     }
 
   private:
+    enum class Availability : std::uint8_t { unavailable, frame, degraded };
+    struct Observation final {
+        bool frame_pending{false};
+        bool scan_pending{false};
+        bool unavailable_snapshot{false};
+    };
     std::shared_ptr<solin::media_engine::SourceRuntime> delegate_{};
     std::shared_ptr<solin::media_engine::GStreamerFrameSignal> frame_signal_{};
-    std::atomic_bool released_{false};
-    mutable std::atomic_uint64_t unavailable_observations_{0U};
+    std::atomic<Availability> availability_{Availability::unavailable};
     mutable std::mutex observation_mutex_{};
     mutable std::condition_variable observation_wakeup_{};
+    mutable bool observation_armed_{false};
+    mutable bool observation_held_{false};
+    bool observation_resumed_{true};
+    mutable std::map<std::thread::id, Observation> observations_{};
 };
 
 class StartupGateFactory final : public solin::media_engine::SourceRuntimeFactory {
@@ -1195,7 +1240,7 @@ void test_failed_source_does_not_block_healthy_compositor_layers(
 }
 
 void test_program_cadence_recovers_when_media_arrives_before_the_startup_camera(
-    solin::media_engine::MediaRuntime& media_runtime) {
+    solin::media_engine::MediaRuntime& media_runtime, const bool degraded = false) {
     using solin::media_engine::OutputBus;
     using solin::media_engine::SceneTransitionKind;
 
@@ -1233,17 +1278,20 @@ void test_program_cadence_recovers_when_media_arrives_before_the_startup_camera(
     graph.take(prepared, 1U, 10'002U);
     std::this_thread::sleep_for(3'500ms);
 
-    // Synchronize release with a stalled feeder observation. At this point the
-    // renderer has crossed its 3 s acknowledgement watchdog. Waiting for one
-    // more unavailable-camera probe places the release inside the existing
-    // recovery cycle, where carrying the old 500 ms backoff would be observable.
-    const auto observations = camera->unavailable_observations();
-    expect(camera->wait_for_unavailable_observation_after(
-               observations, std::chrono::steady_clock::now() + 1s),
-           "the startup fixture reaches the stalled renderer recovery cycle");
-    std::this_thread::sleep_for(25ms);
+    // Hold an unavailable snapshot after the 3 s acknowledgement watchdog.
+    // Publish readiness before that snapshot returns, so the feeder must not
+    // lose the notification between its availability scan and recovery wait.
+    camera->hold_next_unavailable_observation();
+    struct ObservationRelease final {
+        GatedSourceRuntime& runtime;
+        ~ObservationRelease() { runtime.resume_observation(); }
+    };
+    const ObservationRelease observation_release{*camera};
+    expect(camera->wait_until_observation_held(),
+           "the startup fixture holds an unavailable recovery observation");
     const auto released_at = std::chrono::steady_clock::now();
-    camera->release();
+    camera->release(degraded);
+    camera->resume_observation();
 
     solin::media_engine::SceneOutputFrameCursor cursor{};
     bool recovered = false;
@@ -1263,7 +1311,9 @@ void test_program_cadence_recovers_when_media_arrives_before_the_startup_camera(
                        std::chrono::steady_clock::now() + 20ms)));
     }
     expect(recovered,
-           "Program resumes after the startup camera publishes its first frame");
+           degraded
+               ? "Program resumes when the unavailable camera becomes degraded"
+               : "Program resumes after the startup camera publishes its first frame");
 
     std::size_t frame_count = 0U;
     const auto deadline = std::chrono::steady_clock::now() + 2s;
@@ -2166,6 +2216,8 @@ int main(const int argc, const char* const argv[]) {
                 test_failed_source_does_not_block_healthy_compositor_layers(media_runtime);
                 test_program_cadence_recovers_when_media_arrives_before_the_startup_camera(
                     media_runtime);
+                test_program_cadence_recovers_when_media_arrives_before_the_startup_camera(
+                    media_runtime, true);
             }
             if (argc == 2 && std::string_view{argv[1]} == "--local-camera") {
                 test_first_hardware_camera_publishes_its_exact_selected_format(media_runtime);

@@ -625,12 +625,8 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
                 // been disabled. Conversely, enabling demand needs a retained
                 // replay because a static source has no future producer wakeup.
                 render_acknowledgement_.notify_all();
-            }
-            if (replay_retained_frame) {
-                // Static images and paused video may not emit another producer
-                // notification after demand opens. Re-submit the retained latest
-                // source frames so the newly negotiated egress gets its first
-                // sample without polling or decoding twice.
+                // Recovery waits use source activity. Disabling demand must also
+                // wake them to re-evaluate an ACK no longer requiring this branch.
                 source_frame_signal_->notify();
             }
         } catch (...) {
@@ -1341,7 +1337,10 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
             pending_render_started_at;
         std::optional<GstClockTime> pending_render_timestamp;
         bool render_timeout_reported = false;
-        while (!stopped_.load()) {
+        while (!stopped_.load() && !failed_.load()) {
+            // Capture before reading the bus or sources: activity published
+            // during either observation must remain visible to the retry wait.
+            const auto observed_source_revision = source_frame_signal_->revision();
             auto* message = gst_bus_pop_filtered(bus_, GST_MESSAGE_ERROR);
             if (message != nullptr) {
                 gst_message_unref(message);
@@ -1425,7 +1424,10 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
             if (!requested_replay && !flush_pending_render &&
                 next_render_deadline.has_value() &&
                 !wait_for_render_slot(next_render_deadline.value(),
-                                      pacing_generation)) {
+                                      pacing_generation,
+                                      render_timeout_reported
+                                          ? std::optional{observed_source_revision}
+                                          : std::nullopt)) {
                 continue;
             }
             // A non-force-live aggregator consumes one sample from every active input
@@ -1568,6 +1570,7 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
         } catch (...) {
         }
         render_acknowledgement_.notify_all();
+        source_frame_signal_->notify();
         wake_frame_waiters();
     }
 
@@ -1583,19 +1586,32 @@ class PreparedGStreamerSceneGraph final : public PreparedSceneRenderGraph {
 
     [[nodiscard]] bool wait_for_render_slot(
         const std::chrono::steady_clock::time_point deadline,
-        const std::uint64_t rendering_generation) noexcept {
+        const std::uint64_t rendering_generation,
+        const std::optional<std::uint64_t> source_revision) noexcept {
         try {
+            const auto interrupted = [this, rendering_generation] {
+                return stopped_.load() || failed_.load() ||
+                       !rendering_enabled_.load() ||
+                       rendering_generation_.load() != rendering_generation ||
+                       source_replay_requested_.load();
+            };
+            if (source_revision.has_value()) {
+                if (interrupted()) {
+                    return false;
+                }
+                if (std::chrono::steady_clock::now() < deadline) {
+                    // Recovery waits observe source readiness, not just egress
+                    // ACKs. Rescan on activity without consuming another render
+                    // slot or shortening the backoff for ordinary frame changes.
+                    static_cast<void>(source_frame_signal_->wait_after(
+                        source_revision.value(), {}, deadline));
+                    return false;
+                }
+                return true;
+            }
             std::unique_lock lock{render_acknowledgement_mutex_};
-            const auto interrupted = render_acknowledgement_.wait_until(
-                lock, deadline, [this, rendering_generation] {
-                    return stopped_.load() || failed_.load() ||
-                           !rendering_enabled_.load() ||
-                           rendering_generation_.load() != rendering_generation ||
-                           source_replay_requested_.load();
-                });
-            return !interrupted && !stopped_.load() && !failed_.load() &&
-                   rendering_enabled_.load() &&
-                   rendering_generation_.load() == rendering_generation;
+            return !render_acknowledgement_.wait_until(lock, deadline, interrupted) &&
+                   !interrupted();
         } catch (...) {
             return false;
         }
