@@ -21,6 +21,7 @@ from solin.core.scenes.engine import (
     EngineHealthEvent,
     FrameChannelDescriptor,
     FrameChannelTransport,
+    FrameEgressReadyEvent,
     FrameProducerKind,
     LocalCameraDevice,
     LocalCameraDiscovery,
@@ -2491,6 +2492,306 @@ def test_auto_switch_resolves_transition_for_each_destination_scene(request) -> 
     assert [targets for _request_id, targets in engine.window_target_updates] == [(target,)]
 
 
+@pytest.mark.parametrize("state_type", ["video", "image", "timer", "browser", "ndi"])
+def test_auto_switch_waits_for_app_frames_only_for_app_owned_presentations(
+    request,
+    state_type: str,
+) -> None:
+    projection = _Projection()
+    engine = _Engine()
+    _documents, _runtime, controller = _runtime_controller(
+        request,
+        engine,
+        projection,
+        request_ids=(),
+    )
+    controller.start_engine()
+
+    # Projection publishes its identity before starting the video decoder or
+    # submitting the first app-owned frame. The video decoder is in the sidecar;
+    # it cannot produce a frame in the app's ingress channel.
+    projection.set_type(state_type)
+
+    assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
+    assert controller.applied_scene(BusId.MEDIA_WINDOWS) == CONTENT_SCENE_ID
+    assert len(engine.preparations) == 3
+    expected_epoch = None if state_type == "video" else projection.session_id
+    assert engine.preparation_content_media_epochs == [expected_epoch] * 3
+
+
+def test_frame_egress_readiness_is_forwarded_without_marking_the_engine_failed(request) -> None:
+    engine = _Engine()
+    _documents, _runtime, controller = _runtime_controller(
+        request,
+        engine,
+        _Projection(),
+        request_ids=(),
+    )
+    observed = []
+    errors = []
+    controller.engine_event.connect(observed.append)
+    controller.engine_error.connect(errors.append)
+    controller.start_engine()
+    observed.clear()
+    event = FrameEgressReadyEvent("solin-program", 1, "frame-channel")
+    assert engine.listener is not None
+
+    engine.listener(event)
+
+    assert observed == [event]
+    assert errors == []
+    assert controller.engine_ready
+    assert controller.last_engine_error_code == ""
+
+
+@pytest.mark.parametrize("completion", ["prepared", "rejected", "timed_out"])
+@pytest.mark.parametrize("next_type", ["image", "video"])
+@pytest.mark.parametrize("stage", ["prepare", "take"])
+def test_replaced_video_preparation_is_reconciled_for_the_latest_presentation(
+    request,
+    monkeypatch,
+    completion: str,
+    next_type: str,
+    stage: str,
+) -> None:
+    engine = _Engine()
+    projection = _Projection()
+    _documents, _runtime, controller = _runtime_controller(
+        request,
+        engine,
+        projection,
+        request_ids=(),
+    )
+    controller.start_engine()
+    method_name = "prepare_scene" if stage == "prepare" else "take_prepared"
+    dispatch = getattr(engine, method_name)
+    pending: Future = Future()
+    obsolete: list[ScenePreparation] = []
+    obsolete_results = []
+
+    def defer_first_preparation(*args, **kwargs):
+        result = dispatch(*args, **kwargs)
+        if not obsolete:
+            obsolete.append(result.result() if stage == "prepare" else args[0])
+            obsolete_results.append(result.result())
+            return pending
+        return result
+
+    monkeypatch.setattr(engine, method_name, defer_first_preparation)
+    errors: list[str] = []
+    controller.engine_error.connect(errors.append)
+    projection.set_type("video")
+    projection.set_type(next_type)
+    assert len(engine.preparations) == 1
+    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
+
+    if completion == "prepared":
+        pending.set_result(obsolete_results[0])
+    elif completion == "rejected":
+        pending.set_exception(SceneEngineCommandRejectedError("source_unavailable"))
+    else:
+        pending.set_exception(SceneEngineRequestTimeoutError("obsolete preparation"))
+
+    # A new presentation can use the same scene. The previous preparation must
+    # neither take that scene nor block its replacement with a stale failure.
+    assert len(engine.preparations) == 4
+    expected_cancelled = (
+        [] if stage == "take" and completion == "prepared" else [obsolete[0].request_id]
+    )
+    assert engine.cancelled == expected_cancelled
+    completed_takes = engine.takes if stage == "prepare" else engine.takes[1:]
+    assert len(completed_takes) == 3
+    assert all(prepared.request_id != obsolete[0].request_id for _, prepared in completed_takes)
+    current_epoch = projection.session_id if next_type == "image" else None
+    assert engine.preparation_content_media_epochs == [None, *([current_epoch] * 3)]
+    assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
+    assert errors == []
+
+
+def test_a_new_video_retries_a_failed_content_take_without_changing_the_scene(
+    request,
+    monkeypatch,
+) -> None:
+    engine = _Engine()
+    projection = _Projection()
+    _documents, _runtime, controller = _runtime_controller(
+        request,
+        engine,
+        projection,
+        request_ids=(),
+    )
+    controller.start_engine()
+    prepare = engine.prepare_scene
+    failed = False
+
+    def fail_first_content_prepare(*args, **kwargs):
+        nonlocal failed
+        result = prepare(*args, **kwargs)
+        if not failed:
+            failed = True
+            return _failed(SceneEngineCommandRejectedError("source_unavailable"))
+        return result
+
+    monkeypatch.setattr(engine, "prepare_scene", fail_first_content_prepare)
+    projection.set_type("video")
+    assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
+    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
+
+    # Advancing a playlist can open another video without visiting idle or
+    # changing the scene. A failure belongs to the old presentation only.
+    projection.set_type("video")
+
+    assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
+    assert len(engine.preparations) == 4
+
+
+@pytest.mark.parametrize("completion", ["applied", "timed_out"])
+def test_obsolete_video_take_is_reconciled_after_returning_to_idle(
+    request,
+    monkeypatch,
+    completion: str,
+) -> None:
+    engine = _Engine()
+    projection = _Projection()
+    _documents, _runtime, controller = _runtime_controller(
+        request,
+        engine,
+        projection,
+        request_ids=(),
+    )
+    controller.start_engine()
+    take = engine.take_prepared
+    pending: Future = Future()
+    acknowledgements = []
+
+    def defer_first_take(*args, **kwargs):
+        result = take(*args, **kwargs)
+        if not acknowledgements:
+            acknowledgements.append(result.result())
+            return pending
+        return result
+
+    monkeypatch.setattr(engine, "take_prepared", defer_first_take)
+    projection.set_type("video")
+    projection.set_type("idle")
+    assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
+    assert len(engine.takes) == 1
+
+    if completion == "applied":
+        pending.set_result(acknowledgements[0])
+    else:
+        pending.set_exception(SceneEngineRequestTimeoutError("obsolete take"))
+
+    # The original command may already have changed the physical output. The
+    # previously applied scene is not evidence that it is still on that scene.
+    assert [prepared.scene_id for _, prepared in engine.takes] == [
+        CONTENT_SCENE_ID,
+        CAMERA_SCENE_ID,
+    ]
+    assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
+    assert controller._pending == {}
+
+
+def test_applied_obsolete_video_take_remains_known_when_replacement_preparation_fails(
+    request,
+    monkeypatch,
+) -> None:
+    engine = _Engine()
+    projection = _Projection()
+    _documents, _runtime, controller = _runtime_controller(
+        request,
+        engine,
+        projection,
+        request_ids=(),
+    )
+    controller.start_engine()
+    take = engine.take_prepared
+    prepare = engine.prepare_scene
+    pending: Future = Future()
+    acknowledgements = []
+
+    def defer_first_take(*args, **kwargs):
+        result = take(*args, **kwargs)
+        if not acknowledgements:
+            acknowledgements.append(result.result())
+            return pending
+        return result
+
+    def fail_replacement_preparation(bus_id, *args, **kwargs):
+        result = prepare(bus_id, *args, **kwargs)
+        if bus_id is BusId.VIRTUAL_CAMERA and projection.state["type"] == "image":
+            return _failed(SceneEngineCommandRejectedError("source_unavailable"))
+        return result
+
+    monkeypatch.setattr(engine, "take_prepared", defer_first_take)
+    monkeypatch.setattr(engine, "prepare_scene", fail_replacement_preparation)
+    projection.set_type("video")
+    projection.set_type("image")
+    pending.set_result(acknowledgements[0])
+
+    assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
+    assert (BusId.VIRTUAL_CAMERA, CONTENT_SCENE_ID) in controller._failed_takes
+    assert controller._pending == {}
+    attempts = len(engine.preparations)
+    controller._reconcile_desired(prepare=True)
+    assert len(engine.preparations) == attempts
+
+
+def test_graph_hydration_preserves_readiness_for_a_replaced_video_take(
+    request,
+    monkeypatch,
+) -> None:
+    engine = _Engine()
+    projection = _Projection()
+    _documents, _runtime, controller = _runtime_controller(
+        request,
+        engine,
+        projection,
+        request_ids=(),
+    )
+    controller.start_engine()
+    take = engine.take_prepared
+    pending: Future = Future()
+    acknowledgements = []
+
+    def defer_first_take(*args, **kwargs):
+        result = take(*args, **kwargs)
+        if not acknowledgements:
+            acknowledgements.append(result.result())
+            return pending
+        return result
+
+    monkeypatch.setattr(engine, "take_prepared", defer_first_take)
+    projection.set_type("video")
+    projection.set_type("image")
+    controller.set_program_egress(
+        replace(
+            _content_ingress_descriptor(FrameChannelTransport.SHARED_MEMORY_VIDEO, generation=1),
+            channel_id="program-egress",
+            producer_kind=FrameProducerKind.NATIVE_COMPOSITOR,
+        )
+    )
+    assert len(engine.snapshots) == 1
+
+    pending.set_result(acknowledgements[0])
+
+    # Hydration records the physical scene, but cannot establish that the new
+    # image's app-owned frame is ready. Program still needs its current epoch.
+    assert len(engine.snapshots) == 2
+    assert dict(engine.snapshots[-1][1].active_scenes)[BusId.VIRTUAL_CAMERA] == CONTENT_SCENE_ID
+    program_epochs = [
+        epoch
+        for preparation, epoch in zip(
+            engine.preparations, engine.preparation_content_media_epochs, strict=True
+        )
+        if preparation[1] is BusId.VIRTUAL_CAMERA
+    ]
+    assert program_epochs == [None, projection.session_id]
+    assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
+    assert controller._take_reconciliation_required == set()
+    assert controller._pending == {}
+
+
 def test_runtime_coalesces_rapid_scene_selection_while_prepare_is_in_flight(request) -> None:
     class _PendingPrepareEngine(_Engine):
         def __init__(self) -> None:
@@ -3327,6 +3628,80 @@ def test_scene_take_waits_for_ptz_positioning_before_cutting(request) -> None:
     assert len(engine.takes) == 3  # program, projection, editor
     assert controller.applied_scene(BusId.EDITOR) == CONTENT_SCENE_ID
     assert events[0].result.succeeded
+
+
+@pytest.mark.parametrize("status", [PtzRecallStatus.SUCCEEDED, PtzRecallStatus.FAILED])
+def test_replaced_video_ptz_batch_cannot_take_or_block_the_next_presentation(
+    request,
+    status: PtzRecallStatus,
+) -> None:
+    class _CancellingPtzExecutor(_PtzExecutor):
+        def cancel(self, future):
+            super().cancel(future)
+            future.cancel()
+
+    projection = _Projection()
+    engine = _Engine()
+    ptz = _CancellingPtzExecutor()
+    _documents, _runtime, controller = _runtime_controller(
+        request,
+        engine,
+        projection,
+        request_ids=(),
+        document=_document_with_ptz_action(PtzTimeoutPolicy.KEEP_CURRENT),
+        ptz=ptz,
+    )
+    errors: list[str] = []
+    controller.engine_error.connect(errors.append)
+    controller.start_engine()
+    projection.set_type("video")
+    obsolete_request_id = engine.preparations[0][0]
+    projection.set_type("image")
+
+    ptz.futures[0].set_result(_ptz_result(status))
+
+    assert len(ptz.futures) == 2
+    assert engine.cancelled == [obsolete_request_id]
+    assert engine.preparation_content_media_epochs == [None, projection.session_id]
+    assert engine.takes == []
+    assert errors == []
+
+    ptz.futures[1].set_result(_ptz_result(PtzRecallStatus.SUCCEEDED))
+
+    assert len(engine.takes) == 3
+    assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
+    assert errors == []
+
+
+@pytest.mark.parametrize("status", [PtzRecallStatus.SUCCEEDED, PtzRecallStatus.FAILED])
+def test_ptz_event_can_return_to_idle_without_leaving_a_pending_video_take(
+    request,
+    status: PtzRecallStatus,
+) -> None:
+    projection = _Projection()
+    engine = _Engine()
+    ptz = _PtzExecutor()
+    _documents, _runtime, controller = _runtime_controller(
+        request,
+        engine,
+        projection,
+        request_ids=(),
+        document=_document_with_ptz_action(PtzTimeoutPolicy.KEEP_CURRENT),
+        ptz=ptz,
+    )
+    errors: list[str] = []
+    controller.engine_error.connect(errors.append)
+    controller.ptz_event.connect(lambda _event: projection.set_type("idle"))
+    controller.start_engine()
+    projection.set_type("video")
+
+    ptz.futures[0].set_result(_ptz_result(status))
+
+    assert engine.takes == []
+    assert controller._pending == {}
+    assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
+    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
+    assert errors == []
 
 
 def test_manual_ptz_motion_is_scaled_stopped_and_can_store_a_preset(request) -> None:

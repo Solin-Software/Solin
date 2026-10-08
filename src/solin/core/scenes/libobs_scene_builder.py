@@ -13,6 +13,11 @@ from urllib.parse import quote, urlsplit, urlunsplit
 from typing import Any, Protocol
 
 from solin.core.scenes.model import Crop, NormalizedRect
+from solin.core.scenes.libobs_transitions import (
+    FALLBACK_TRANSITION_KIND,
+    TRANSITION_SOURCE_IDS,
+    LibobsTransitionPool,
+)
 
 log = logging.getLogger(__name__)
 
@@ -26,14 +31,6 @@ _MIRROR_BUS = "media_windows"
 # referencing it are fed by the content ingress source, not a placeholder.
 _CONTENT_SOURCE_ID = "solin.content.current"
 
-# Model TransitionKind (see model.TransitionKind) → obs transition source id.
-_TRANSITION_IDS = {
-    "cut": "cut_transition",
-    "dissolve": "fade_transition",
-    "fade_to_black": "fade_to_color_transition",
-}
-_FALLBACK_KIND = "cut"
-
 
 class _SceneTransition(Protocol):
     def set_source(self, source: object) -> None: ...
@@ -42,7 +39,7 @@ class _SceneTransition(Protocol):
 
     def start(self, destination: object, duration_ms: int) -> bool: ...
 
-    def release(self) -> None: ...
+    def clear(self) -> None: ...
 
 
 def _parse_color(hex_color: str) -> int:
@@ -109,6 +106,7 @@ class LibobsSceneGraph:
         # Program transition: a transition source sits on the program channel and
         # holds the active scene; scene switches animate through take().
         self._transition: _SceneTransition | None = None
+        self._transitions = LibobsTransitionPool(runtime, "solin-transition")
         self._transition_kind: str | None = None
         self._active_scene_id: str | None = None
         self._pending: dict[str, tuple[str, str, int, str]] = {}
@@ -179,6 +177,7 @@ class LibobsSceneGraph:
                 if not layer.get("visible", True):
                     continue
                 self._add_layer(ob, scene_id, scene, layer, canvas, sources_by_id, content_source)
+        self._transitions.prepare_document(document)
         if before_activate is not None:
             before_activate()
         self._setup_program(active_scenes)
@@ -557,24 +556,12 @@ class LibobsSceneGraph:
             return
         if self._program_channel is None:
             self._program_channel = self._runtime.acquire_channel()
-        transition = self._create_transition(_FALLBACK_KIND)
+        transition = self._transitions.prepared(FALLBACK_TRANSITION_KIND)
         self._transition = transition
-        self._transition_kind = _FALLBACK_KIND
+        self._transition_kind = FALLBACK_TRANSITION_KIND
         transition.set_source(scene.as_source())
         self._active_scene_id = program_scene_id
         self._runtime.set_channel_source(self._program_channel, self._transition)
-
-    def _create_transition(self, model_kind: str) -> _SceneTransition:
-        ob = self._runtime.ob
-        canvas = self._runtime.video
-        obs_id = _TRANSITION_IDS.get(model_kind, _TRANSITION_IDS[_FALLBACK_KIND])
-        settings = {"color": 0xFF000000} if obs_id == "fade_to_color_transition" else {}
-        transition = ob.Transition.create(obs_id, f"solin-transition-{model_kind}", settings)
-        try:
-            transition.set_size(canvas.width, canvas.height)
-        except Exception:  # noqa: BLE001 - libobs boundary
-            log.debug("transition set_size errored", exc_info=True)
-        return transition
 
     def prepare(
         self,
@@ -591,8 +578,10 @@ class LibobsSceneGraph:
         can never swap the program using a token meant for the projection."""
         if scene_id not in self._scenes:
             return None
-        fallback_applied = model_kind not in _TRANSITION_IDS
-        effective_kind = _FALLBACK_KIND if fallback_applied else model_kind
+        fallback_applied = model_kind not in TRANSITION_SOURCE_IDS
+        effective_kind = FALLBACK_TRANSITION_KIND if fallback_applied else model_kind
+        if bus_id == _PROGRAM_BUS:
+            self._transitions.prepare(effective_kind)
         self._token_seq += 1
         token = f"prep-{self._token_seq}"
         self._pending[token] = (scene_id, effective_kind, int(duration_ms), bus_id)
@@ -645,9 +634,8 @@ class LibobsSceneGraph:
         return self._pending.pop(token, None) is not None
 
     def _swap_transition(self, model_kind: str) -> None:
-        # Changing kind means a new transition source; carry the live scene into
-        # it so the program does not blink.
-        new_transition = self._create_transition(model_kind)
+        # Carry the live scene into the prepared transition before routing it.
+        new_transition = self._transitions.prepared(model_kind)
         active = self._scenes.get(self._active_scene_id) if self._active_scene_id else None
         if active is not None:
             new_transition.set_source(active.as_source())
@@ -657,9 +645,9 @@ class LibobsSceneGraph:
             self._runtime.set_channel_source(self._program_channel, new_transition)
         if old is not None:
             try:
-                old.release()
+                old.clear()
             except Exception:  # noqa: BLE001 - libobs boundary
-                log.debug("old transition release errored", exc_info=True)
+                log.debug("old transition clear errored", exc_info=True)
 
     def cancel_all(self) -> None:
         self._pending.clear()
@@ -687,6 +675,7 @@ class LibobsSceneGraph:
         """
         if self._program_channel is not None:
             self._runtime.set_channel_source(self._program_channel, None)
+        self._transitions.reset_sources()
         with self._crop_lock:
             self._cropped_items.clear()
         self._pending.clear()
@@ -694,12 +683,7 @@ class LibobsSceneGraph:
         self._content_source = None
         self._yeartext_sources = []
         self._layer_items = {}
-        if self._transition is not None:
-            try:
-                self._transition.release()
-            except Exception:  # noqa: BLE001 - libobs boundary
-                log.debug("transition release errored", exc_info=True)
-            self._transition = None
+        self._transition = None
         self._transition_kind = None
         self._active_scene_id = None
         for source in self._sources:
@@ -721,6 +705,7 @@ class LibobsSceneGraph:
             self._runtime.ob.remove_main_render_callback(self._crop_render_callback)
             self._crop_render_callback = None
         self.clear()
+        self._transitions.shutdown()
         if self._program_channel is not None:
             try:
                 self._runtime.release_channel(self._program_channel)

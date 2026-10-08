@@ -18,10 +18,14 @@ from threading import Event
 import pytest
 from PySide6.QtCore import QCoreApplication
 from PySide6.QtGui import QColor, QImage
+from PIL import Image
 
 from solin.controllers.content_frame_ingress_controller import (
     ContentFrameIngressController,
 )
+from solin.controllers.scene_runtime_controller import SceneRuntimeController
+from solin.core.foundation.runtime_paths import ProfilePaths
+from solin.core.projection.application import ProjectionSession
 from solin.core.projection.image_framing import ImageTransform
 from solin.controllers.shared_memory_preview_egress import SharedMemoryPreviewEgressController
 from solin.core.scenes.content_frame_channel import (
@@ -30,8 +34,14 @@ from solin.core.scenes.content_frame_channel import (
     _SEQ_OFFSET,
 )
 from solin.core.scenes.content_frame_publisher import SharedMemoryContentPublisher
-from solin.core.scenes.engine import FrameEgressReadyEvent, SceneEngine, SceneEngineSnapshot
+from solin.core.scenes.engine import (
+    FrameEgressReadyEvent,
+    MediaPlaybackEvent,
+    SceneEngine,
+    SceneEngineSnapshot,
+)
 from solin.core.scenes.libobs_engine import create_libobs_scene_engine
+from solin.core.scenes.media_control import MediaControlAction, MediaPlaybackState
 from solin.core.scenes.model import (
     BusId,
     CONTENT_SOURCE_ID,
@@ -487,20 +497,24 @@ def _wait_for_clean_aspect_transition(
     )
 
 
+def _seed_names() -> SceneSeedNames:
+    return SceneSeedNames(
+        content_source="Content",
+        default_camera_source="Camera",
+        no_signal_source="No signal",
+        content_scene="Content scene",
+        camera_scene="Camera scene",
+        content_camera_pip_scene="Content and camera",
+        no_signal_scene="No signal scene",
+        content_layer="Content",
+        camera_layer="Camera",
+        background_layer="Background",
+    )
+
+
 def _content_document() -> tuple[SceneDocument, SceneDefinition]:
     document = create_default_scene_document(
-        SceneSeedNames(
-            content_source="Content",
-            default_camera_source="Camera",
-            no_signal_source="No signal",
-            content_scene="Content scene",
-            camera_scene="Camera scene",
-            content_camera_pip_scene="Content and camera",
-            no_signal_scene="No signal scene",
-            content_layer="Content",
-            camera_layer="Camera",
-            background_layer="Background",
-        ),
+        _seed_names(),
         document_id="libobs-content-pipeline-smoke",
         created_at="2026-01-01T00:00:00+00:00",
     )
@@ -518,6 +532,161 @@ def _content_document() -> tuple[SceneDocument, SceneDefinition]:
         ),
         content_scene,
     )
+
+
+@pytest.mark.parametrize("autoplay", [True, False], ids=["playing", "paused"])
+@pytest.mark.parametrize(
+    "transition",
+    [TransitionSpec(TransitionKind.CUT, 0), TransitionSpec(TransitionKind.DISSOLVE, 350)],
+    ids=["cut", "dissolve"],
+)
+def test_video_auto_switch_reaches_program_without_app_decoded_frames(
+    tmp_path: Path,
+    scene_workspace_factory,
+    autoplay: bool,
+    transition: TransitionSpec,
+) -> None:
+    # ffmpeg_source decodes this animated fixture without relying on an external
+    # fixture encoder. No app-owned pixels are published during video playback.
+    path = tmp_path / "video.gif"
+    colors = ("#ff0000", "#0000ff")
+    images = [Image.new("RGB", (160, 90), colors[index % 2]) for index in range(80)]
+    try:
+        images[0].save(path, save_all=True, append_images=images[1:], duration=200, loop=0)
+    finally:
+        for image in images:
+            image.close()
+
+    paths = ProfilePaths.from_roots(
+        data_dir=tmp_path / "data",
+        cache_dir=tmp_path / "cache",
+        profile_id="video-route",
+    )
+    paths.ensure_dirs()
+    workspace = scene_workspace_factory(paths, seed_names=_seed_names())
+    workspace.documents.set_program_transition(transition)
+    content_scene_id = workspace.documents.program_media_scene_id
+    assert content_scene_id is not None
+    default_scene_id = workspace.documents.program_default_scene_id
+    engine = create_libobs_scene_engine()
+    ingress = ContentFrameIngressController(publisher_factory=SharedMemoryContentPublisher)
+    program = _BgraEgress(1920, 1080, channel_id="solin-program")
+    projection = ProjectionSession()
+    unsubscribe_projection = projection.subscribe(
+        lambda: ingress.begin_presentation(projection.presentation_session_id)
+    )
+    controller = SceneRuntimeController(workspace, projection, engine=engine)
+    events: list[object] = []
+    errors: list[str] = []
+    unsubscribe_engine = engine.subscribe(events.append)
+    controller.engine_error.connect(errors.append)
+    application = QCoreApplication.instance()
+    assert application is not None
+    probe = _PixelWaitProbe()
+
+    def program_is_color(expected: bytes) -> bool:
+        frame = probe.read_latest(program)
+        return frame is not None and _program_pixel_matches(
+            _bgra_pixel(frame, frame.width // 2, frame.height // 2),
+            expected,
+        )
+
+    def observation() -> str:
+        return pformat(
+            {
+                "errors": errors,
+                "events": events[-10:],
+                "program": probe.observation(),
+                "desired": controller.desired_scenes,
+                "applied": controller.applied_scenes,
+                "engine": _engine_observation(engine),
+            },
+            width=120,
+        )
+
+    try:
+        controller.set_content_ingress(ingress.descriptor)
+        controller.set_program_egress(program.descriptor)
+        controller.start_engine()
+        assert _wait_for(
+            lambda: controller.applied_scene(BusId.VIRTUAL_CAMERA) == default_scene_id,
+            application=application,
+            timeout=15,
+        ), observation()
+
+        for cycle in range(2):
+            # Match MediaProjectionController: commit presentation identity first,
+            # immediately queue open_media next, without pumping Qt between them.
+            # An ingress wait here blocks the decoder queued behind preparation.
+            projection.set_state({"type": "video", "title": f"Video {cycle}"})
+            assert (
+                engine.open_media(
+                    str(path),
+                    is_local_file=True,
+                    autoplay=autoplay,
+                    request_id=f"video-open-{cycle}",
+                    deadline_ms=4000,
+                )
+                .result(5)
+                .applied
+            )
+            assert _wait_for(
+                lambda: any(
+                    isinstance(event, MediaPlaybackEvent)
+                    and event.state.state
+                    is (MediaPlaybackState.PLAYING if autoplay else MediaPlaybackState.PAUSED)
+                    for event in events
+                ),
+                application=application,
+            ), observation()
+            assert _wait_for(
+                lambda: (
+                    controller.applied_scene(BusId.VIRTUAL_CAMERA) == content_scene_id
+                    and controller.applied_scene(BusId.MEDIA_WINDOWS) == content_scene_id
+                ),
+                application=application,
+            ), observation()
+            if not autoplay:
+                assert (
+                    engine.control_media(
+                        MediaControlAction.PLAY,
+                        request_id=f"video-play-{cycle}",
+                        deadline_ms=4000,
+                    )
+                    .result(5)
+                    .applied
+                )
+            assert _wait_for(
+                lambda: program_is_color(bytes((0, 0, 255, 255))),
+                application=application,
+            ), observation()
+            assert _wait_for(
+                lambda: program_is_color(bytes((255, 0, 0, 255))),
+                application=application,
+            ), observation()
+            assert errors == [], observation()
+
+            assert (
+                engine.control_media(
+                    MediaControlAction.CLOSE,
+                    request_id=f"video-close-{cycle}",
+                    deadline_ms=4000,
+                )
+                .result(5)
+                .applied
+            )
+            projection.reset_state()
+            assert _wait_for(
+                lambda: controller.applied_scene(BusId.VIRTUAL_CAMERA) == default_scene_id,
+                application=application,
+            ), observation()
+            events.clear()
+    finally:
+        controller.close()
+        unsubscribe_projection()
+        unsubscribe_engine()
+        ingress.close()
+        program.close()
 
 
 @pytest.mark.parametrize(
