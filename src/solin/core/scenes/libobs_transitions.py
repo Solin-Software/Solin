@@ -39,7 +39,7 @@ class LibobsTransitionPool:
         try:
             canvas = self._runtime.video
             transition.set_size(canvas.width, canvas.height)
-        except Exception:
+        except Exception:  # noqa: BLE001 - release the candidate before propagating failure
             transition.release()
             raise
         self._transitions[kind] = transition

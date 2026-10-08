@@ -84,7 +84,7 @@ class LibobsProjectionRoute:
             showing = self._inc_showing(transition)
             if self._showing and old is not None:
                 self._dec_showing(old)
-        except Exception:
+        except Exception:  # noqa: BLE001 - roll back new showing refs before propagating failure
             if showing:
                 self._dec_showing(transition)
             transition.clear()
