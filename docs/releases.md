@@ -63,7 +63,7 @@ quality gate, then builds and tests all required packages:
 
 - Windows x86-64 setup, which also installs and registers the virtual camera;
 - ad-hoc signed macOS 13+ DMGs for Intel and Apple Silicon;
-- Linux x86-64 AppImage requiring glibc 2.35 or newer.
+- Linux x86-64 AppImage requiring glibc 2.38 or newer.
 
 The publisher runs only after every required job succeeds. It verifies the exact
 asset inventory, sizes, SHA-256 hashes, source commit, architecture, and release

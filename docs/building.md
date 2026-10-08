@@ -1,7 +1,7 @@
 # Building and platform requirements
 
 The repository supports Windows x86-64, macOS 13+ on Intel and Apple Silicon,
-and Linux x86-64 with glibc 2.35 or newer. Generated files are written under
+and Linux x86-64 with glibc 2.38 or newer. Generated files are written under
 `build/` or `dist/` and must not be committed.
 
 Playback and scenes use the supervised libobs sidecar. Source runs launch its

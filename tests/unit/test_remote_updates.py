@@ -76,7 +76,7 @@ def test_stopping_suppresses_pending_result(monkeypatch, tmp_path):
         UpdateInfo(
             UpdateAction.REVEAL,
             ReleaseVersion.parse("26.32.0"),
-            ReleaseAsset("linux", "x86_64", "appimage", "Solin.AppImage", 3, "a" * 64, "2.35"),
+            ReleaseAsset("linux", "x86_64", "appimage", "Solin.AppImage", 3, "a" * 64, "2.38"),
             "https://github.com/file",
         )
     )

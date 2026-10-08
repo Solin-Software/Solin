@@ -179,7 +179,11 @@ def test_linux_mux_comes_from_the_checksum_pinned_official_release():
 
 
 def test_linux_build_rejects_platforms_below_the_dependency_abi_floor():
+    from solin.core.releases.manifest import REQUIRED_ASSETS
+
     script = _read("scripts/build_solin.sh")
     assert 'platform.machine() != "x86_64"' in script
-    assert 'tuple(map(int, version.split("."))) < (2, 38)' in script
+    floor = tuple(map(int, REQUIRED_ASSETS[("linux", "x86_64", "appimage")][1].split(".")))
+    assert floor == (2, 38)
+    assert f'tuple(map(int, version.split("."))) < {floor}' in script
     assert script.index("Ubuntu 22.04 is unsupported") < script.index('"${PYTHON}" -m nuitka')

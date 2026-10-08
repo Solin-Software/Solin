@@ -1,7 +1,11 @@
 from dataclasses import replace
 
+import pytest
+
 from solin.core.releases.channel import UpdateChannel
-from solin.core.releases.manifest import LocalizedReleaseNotes, ReleaseAsset, ReleaseManifest
+from solin.core.releases.manifest import (
+    REQUIRED_ASSETS, LocalizedReleaseNotes, ReleaseAsset, ReleaseManifest,
+)
 from solin.core.releases.version import ReleaseVersion
 from solin.core.remote.update_policy import UpdateAction, evaluate_update
 
@@ -70,3 +74,12 @@ def test_elevated_installation_gets_full_setup_for_assisted_install():
     result = select([manifest()], automatic_windows=False)
     assert result.asset.kind == "installer"
     assert result.action == UpdateAction.REVEAL
+
+
+@pytest.mark.parametrize("glibc,compatible", [("2.35", False), ("2.37", False), ("2.38", True), ("2.39", True)])
+def test_linux_update_respects_the_packaged_dependency_abi_floor(glibc, compatible):
+    release = manifest(platform="linux", kind="appimage")
+    floor = REQUIRED_ASSETS[("linux", "x86_64", "appimage")][1]
+    release = replace(release, assets=(replace(release.assets[0], minimum_os=floor),))
+    result = select([release], platform="linux", os_version=glibc)
+    assert (result is not None) is compatible
