@@ -7,7 +7,8 @@ their geometry, and routes the active program onto a global output channel.
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from threading import RLock
 from urllib.parse import quote, urlsplit, urlunsplit
 from typing import Any, Protocol
@@ -209,6 +210,7 @@ class LibobsSceneGraph:
             "item": item,
             "layer": layer,
             "placeholder": placeholder,
+            "content_source": content_source if is_content else None,
         }
         layer_id = str(layer.get("id") or "")
         if layer_id:
@@ -484,60 +486,155 @@ class LibobsSceneGraph:
         )
 
     def set_content_source(self, new_source: Any | None) -> None:
-        """Retarget the content-slot items to ``new_source`` without re-hydrating.
+        """Retarget Content immediately, preserving geometry and native z-order."""
+        with self.content_source_replacement(new_source) as commit:
+            commit()
 
-        Used to swap between the BGRA frame source and a libobs-decoded media
-        source live. Each content item is re-created with the new source at its
-        original z-order and geometry; an owned placeholder (used when there was
-        no content) is released once replaced.
+    @contextmanager
+    def content_source_replacement(self, new_source: Any | None) -> Iterator[Callable[[], None]]:
+        """Stage hidden content items; the caller commits after accepting Take.
+
+        Allocation and geometry failures happen before any route changes. Exiting
+        without committing discards the staged items and leaves live content alone.
         """
         if new_source is self._content_source:
+            yield lambda: None
             return
-        self._content_source = new_source
         ob = self._runtime.ob
         canvas = self._runtime.video
-        for record in self._content_items:
-            scene = record["scene"]
+        candidates: list[tuple[dict, Any, Any]] = []
+        try:
+            for record in self._content_items:
+                if record["content_source"] is new_source:
+                    continue
+                layer = record["layer"]
+                placeholder = (
+                    self._create_color(ob, layer, canvas, _PLACEHOLDER_COLOR)
+                    if new_source is None else None
+                )
+                item = None
+                candidates.append((record, item, placeholder))
+                scene = record["scene"]
+
+                def stage(scene=scene, source=new_source if new_source is not None else placeholder):
+                    item = scene.add(source)
+                    item.visible = False
+                    return item
+
+                item = self._atomic_scene_update(scene, stage)
+                candidates[-1] = (record, item, placeholder)
+                # Prepare every item before removing any live one. A geometry
+                # or source failure leaves the previous presentation intact.
+                self._apply_item_geometry(item, layer, canvas, ob)
+        except Exception:  # noqa: BLE001 - discard staged resources before propagating failure
+            self._discard_content_candidates(candidates)
+            raise
+        committed = False
+
+        def commit():
+            nonlocal committed
+            if committed:
+                return
+            by_scene: dict[int, list[tuple[dict, Any, Any]]] = {}
+            for candidate in candidates:
+                by_scene.setdefault(id(candidate[0]["scene"]), []).append(candidate)
+            for batch in by_scene.values():
+                self._commit_content_items(batch, new_source)
+            self._content_source = new_source
+            committed = True
+
+        try:
+            yield commit
+        finally:
+            self._discard_content_candidates(candidates)
+
+    def _commit_content_items(self, candidates: list[tuple[dict, Any, Any]], new_source: Any) -> None:
+        old_placeholders = [record["placeholder"] for record, _, _ in candidates]
+        for record, new_item, _placeholder in candidates:
             old_item = record["item"]
-            layer = record["layer"]
-            old_placeholder = record["placeholder"]
-            try:
-                order = int(old_item.order_position)
-            except Exception:  # noqa: BLE001 - libobs boundary
-                order = None
-            if new_source is not None:
-                source = new_source
-                new_placeholder = None
-            else:  # reverting to "no content" — stand in with a placeholder
-                source = self._create_color(ob, layer, canvas,
-                                            _PLACEHOLDER_COLOR)
-                new_placeholder = source
-            new_item = scene.add(source)  # added on top; restore its z-order below
-            self._apply_item_geometry(new_item, layer, canvas, ob)
-            if order is not None:
-                try:
-                    new_item.order_position = order
-                except Exception:  # noqa: BLE001 - libobs boundary
-                    log.debug("content item order restore errored", exc_info=True)
+            new_item.order_position = int(old_item.order_position)
+            # The render callback owns graphics/scene locks before attempting
+            # crop maintenance. Never acquire our crop lock inside atomic_update.
             with self._crop_lock:
                 self._cropped_items.pop(id(old_item), None)
-            try:
-                old_item.remove()
-            except Exception:  # noqa: BLE001 - libobs boundary
-                log.debug("content item remove errored", exc_info=True)
-            record["item"] = new_item
-            record["placeholder"] = new_placeholder
-            if old_placeholder is not None:
-                try:
-                    old_placeholder.release()
-                except Exception:  # noqa: BLE001 - libobs boundary
-                    log.debug("content placeholder release errored", exc_info=True)
-                try:
+
+        def commit():
+            # All Content layers in this scene change at one native render
+            # boundary, including scenes that repeat the canonical source.
+            for record, new_item, new_placeholder in candidates:
+                record["item"].remove()
+                new_item.visible = bool(record["layer"].get("visible", True))
+                record["item"] = new_item
+                record["placeholder"] = new_placeholder
+                record["content_source"] = new_source
+
+        try:
+            self._atomic_scene_update(candidates[0][0]["scene"], commit)
+        finally:
+            # Release native resources outside the scene locks. Also account for
+            # completed items if an exceptional native mutation needs a retry.
+            for (record, new_item, new_placeholder), old_placeholder in zip(
+                candidates, old_placeholders, strict=True,
+            ):
+                if record["item"] is not new_item:
+                    continue
+                if old_placeholder is not None:
+                    try:
+                        old_placeholder.release()
+                    except Exception:  # noqa: BLE001 - release remaining native resources
+                        log.warning("Could not release a replaced content placeholder", exc_info=True)
                     self._sources.remove(old_placeholder)
-                except ValueError:
-                    pass
-            if new_placeholder is not None:
-                self._sources.append(new_placeholder)
+                if new_placeholder is not None:
+                    self._sources.append(new_placeholder)
+
+    def _discard_content_candidates(self, candidates: list[tuple[dict, Any, Any]]) -> None:
+        for record, item, placeholder in candidates:
+            if record["item"] is item:
+                continue  # already committed; retain accurate state for a retry
+            if item is not None:
+                with self._crop_lock:
+                    self._cropped_items.pop(id(item), None)
+                try:
+                    item.remove()
+                except Exception:  # noqa: BLE001 - still release the remaining staged resources
+                    log.warning("Could not discard a staged content item", exc_info=True)
+            if placeholder is not None:
+                try:
+                    placeholder.release()
+                except Exception:  # noqa: BLE001 - libobs cleanup boundary
+                    log.warning("Could not release a staged content placeholder", exc_info=True)
+
+    @staticmethod
+    def _atomic_scene_update(scene: Any, update: Callable[[], Any]) -> Any:
+        """Keep libobs rendering outside item insertion and visibility commits.
+
+        Do not acquire the crop lock here: libobs holds its scene locks while
+        invoking the callback. Geometry is prepared on hidden items separately.
+        """
+        pointer = getattr(scene, "_ptr", None)
+        if pointer is None:
+            return update()
+        from pylibobs._ffi import ffi, get_lib
+
+        result: list[Any] = []
+        errors: list[Exception] = []
+
+        def invoke(_data, _scene):
+            try:
+                result.append(update())
+            except Exception as error:  # noqa: BLE001 - exceptions cannot cross the C callback
+                errors.append(error)
+
+        callback: Any = ffi.callback("void(void *, obs_scene_t *)")(invoke)
+        lib: Any = get_lib()
+        lib.obs_scene_atomic_update(
+            pointer, ffi.cast("obs_scene_atomic_update_func", callback), ffi.NULL,
+        )
+        if errors:
+            raise errors[0]
+        if not result:
+            raise RuntimeError("The libobs scene update was not executed")
+        return result[0]
 
     def _create_color(self, ob: Any, layer: dict, canvas: Any, color: int) -> Any:
         rect = layer.get("rect") or {}

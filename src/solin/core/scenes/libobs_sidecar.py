@@ -223,6 +223,12 @@ class LibobsSidecarEngine:
         self._camera_generation = 0
         self._media_source: Any | None = None
         self._bg_media_source: Any | None = None
+        # Transport close must not replace the outgoing picture with old ingress
+        # pixels. Keep silent sources only while libobs still shows them.
+        self._retired_media_source: Any | None = None
+        self._retired_media_sources: list[Any] = []
+        self._content_restore_pending = False
+        self._prepared_content_epochs: dict[str, int] = {}
         self._media_lock = threading.Lock()
         # slot -> the last (position, duration) actually observed, so a dropped
         # stream can be told apart from a video that reached its end.
@@ -330,6 +336,9 @@ class LibobsSidecarEngine:
         if message_type == "hello":
             self._boot_runtime()
             return _reply(request, "hello_ack", self._capabilities())
+        if message_type == "ping":
+            self._release_hidden_media_presentation()
+            return build_response(request)
         if message_type == "start_program_recording":
             return self._handle_start_recording(request)
         if message_type == "stop_program_recording":
@@ -358,6 +367,7 @@ class LibobsSidecarEngine:
             graph = self._scene_graph
             if graph is not None:
                 graph.cancel_all()
+            self._prepared_content_epochs.clear()
             return None  # a notification — no response
         if message_type == "reload_yeartext":
             graph = self._scene_graph
@@ -574,6 +584,11 @@ class LibobsSidecarEngine:
             opened = media.open(path, autoplay=autoplay, is_local_file=is_local,
                                 volume_percent=volume, speed_percent=speed)
             if opened and not slot:
+                if self._scene_graph is not None:
+                    for token in self._prepared_content_epochs:
+                        self._scene_graph.discard(token)
+                self._prepared_content_epochs.clear()
+                self._content_restore_pending = True
                 # Foreground slot: apply trim and composite into the scene content.
                 self._media_trim_start_ms = trim_start
                 self._media_trim_end_from_ms = trim_end  # from the end
@@ -583,6 +598,8 @@ class LibobsSidecarEngine:
                 if self._scene_graph is not None:
                     try:
                         self._scene_graph.set_content_source(media.source)
+                        self._retired_media_source = None
+                        self._release_hidden_media_presentation()
                     except Exception:  # noqa: BLE001 - a scene error must not kill the sidecar
                         log.warning("could not route media into the content slot",
                                     exc_info=True)
@@ -622,18 +639,17 @@ class LibobsSidecarEngine:
                 if not slot:
                     self._media_trim_ended = False  # re-evaluated on the next poll
             elif action == "close":
-                media.close()
+                if slot:
+                    media.close()
+                else:
+                    retired = media.detach_presentation()
+                    if retired is not None:
+                        self._retired_media_source = retired
+                        self._retired_media_sources.append(retired)
                 if not slot:
                     self._media_trim_start_ms = 0
                     self._media_trim_end_from_ms = 0
                     self._media_trim_ended = False
-                    if self._scene_graph is not None:
-                        try:
-                            self._scene_graph.set_content_source(
-                                self._frame_content_source()
-                            )
-                        except Exception:  # noqa: BLE001 - a scene error must not kill the sidecar
-                            log.warning("could not revert the content slot", exc_info=True)
                 reverted = True
             else:
                 return _ack(request, applied=False, error_code="invalid_media_action",
@@ -663,11 +679,43 @@ class LibobsSidecarEngine:
         return consumer.source if consumer is not None else None
 
     def _effective_content_source(self) -> Any | None:
-        """The content-slot source: an open media source wins over BGRA ingress."""
+        """Keep the outgoing presentation until current ingress is prepared."""
         media = self._media_source
         if media is not None and media.source is not None:
             return media.source
+        if self._content_restore_pending:
+            return self._retired_media_source
         return self._frame_content_source()
+
+    def _release_retired_media_source(self, source: Any) -> None:
+        try:
+            source.media_stop()
+        except Exception:  # noqa: BLE001 - cleanup must still release the native reference
+            log.warning("Could not stop the retired media presentation", exc_info=True)
+        try:
+            source.release()
+        except Exception:  # noqa: BLE001 - libobs boundary
+            log.warning("Could not release the retired media presentation", exc_info=True)
+        self._retired_media_sources.remove(source)
+        if source is self._retired_media_source:
+            self._retired_media_source = None
+
+    def _release_hidden_media_presentation(self) -> None:
+        """Collect on the control thread after all libobs showing refs disappear.
+
+        Showing includes both transition origins and destinations, projection,
+        previews and thumbnails. A Take acknowledgement only starts a transition;
+        neither that acknowledgement nor its configured duration proves retirement.
+        """
+        for source in tuple(self._retired_media_sources):
+            try:
+                if source.showing:
+                    continue
+                if source is self._retired_media_source and self._scene_graph is not None:
+                    self._scene_graph.set_content_source(None)
+                self._release_retired_media_source(source)
+            except Exception:  # noqa: BLE001 - cleanup must not break supervision
+                log.warning("Could not collect the retired media presentation", exc_info=True)
 
     def _sample_media(self, slot: int = 0) -> tuple[int, int, int, str] | None:
         """Read (state, position_ms, duration_ms, path) for ``slot``, or None.
@@ -876,6 +924,7 @@ class LibobsSidecarEngine:
                         error_message="the libobs runtime is not running")
         try:
             payload = request.payload
+            self._prepared_content_epochs.clear()
             # Stop the preview render on the old (about-to-be-released) scenes
             # before rebuilding — the egress renders a borrowed scene source.
             if self._preview_egress is not None:
@@ -1065,7 +1114,8 @@ class LibobsSidecarEngine:
         ):
             raise SceneIpcError("Invalid content media epoch")
         media = self._media_source
-        if expected_epoch is not None and (media is None or media.source is None):
+        restore_content = expected_epoch is not None and (media is None or media.source is None)
+        if restore_content:
             consumer = self._content_consumer
             if consumer is None or not consumer.wait_for_epoch(
                 expected_epoch, deadline=request.deadline_monotonic_ms / 1000,
@@ -1095,6 +1145,8 @@ class LibobsSidecarEngine:
                 "error_code": "unknown_scene",
                 "error_message": f"no scene {scene_id!r}",
             })
+        if restore_content and expected_epoch is not None:
+            self._prepared_content_epochs[result["token"]] = expected_epoch
         return _reply(request, "scene_prepared", {
             "bus_id": bus_id,
             "scene_id": scene_id,
@@ -1122,27 +1174,51 @@ class LibobsSidecarEngine:
         if route != bus_id:
             return _ack(request, applied=False, error_code="bus_mismatch",
                         error_message="the prepared scene belongs to another output")
-        if bus_id == "editor":
-            # The editor channel drives no output: taking one of its scenes only
-            # re-points the off-screen preview egress, so the token is dropped
-            # rather than executed.
-            if not graph.discard(token):
-                return _ack(request, applied=False, error_code="unknown_preparation",
-                            error_message="no such prepared scene")
-            egress = self._preview_egress
-            if egress is not None:
-                scene_id = str(payload.get("scene_id") or "")
-                source = graph.scene_source(scene_id) if scene_id else None
-                egress.set_scene_source(source)
-            return _ack(request, applied=True)
-        if bus_id == "media_windows":
-            # Projection animates on its OWN transition, independent of the program.
-            if graph.take_projection(token, self._projection_route):
+        expected_epoch = self._prepared_content_epochs.get(token)
+        if expected_epoch is not None:
+            consumer = self._content_consumer
+            if consumer is None or not consumer.wait_for_epoch(
+                expected_epoch, deadline=request.deadline_monotonic_ms / 1000,
+            ):
+                graph.discard(token)
+                self._prepared_content_epochs.pop(token, None)
+                return _ack(request, applied=False, error_code="source_unavailable",
+                            error_message="The prepared content presentation is no longer ready")
+        from contextlib import nullcontext
+
+        replacement = (
+            graph.content_source_replacement(self._frame_content_source())
+            if expected_epoch is not None and self._content_restore_pending
+            else nullcontext(None)
+        )
+        with replacement as commit_content:
+            applied = False
+            if bus_id == "editor":
+                # The editor channel drives no output: taking one of its scenes only
+                # re-points the off-screen preview egress, so the token is dropped
+                # rather than executed.
+                if not graph.discard(token):
+                    return _ack(request, applied=False, error_code="unknown_preparation",
+                                error_message="no such prepared scene")
+                egress = self._preview_egress
+                if egress is not None:
+                    scene_id = str(payload.get("scene_id") or "")
+                    source = graph.scene_source(scene_id) if scene_id else None
+                    egress.set_scene_source(source)
+                applied = True
+            elif bus_id == "media_windows":
+                # Projection animates on its OWN transition, independent of the program.
+                applied = graph.take_projection(token, self._projection_route)
+            else:
+                applied = graph.take(token)
+            self._prepared_content_epochs.pop(token, None)
+            if applied:
+                if commit_content is not None:
+                    commit_content()
+                    self._content_restore_pending = False
+                    self._retired_media_source = None
+                    self._release_hidden_media_presentation()
                 return _ack(request, applied=True)
-            return _ack(request, applied=False, error_code="unknown_preparation",
-                        error_message="no such prepared scene")
-        if graph.take(token):
-            return _ack(request, applied=True)
         return _ack(request, applied=False, error_code="unknown_preparation",
                     error_message="no such prepared scene")
 
@@ -1252,6 +1328,10 @@ class LibobsSidecarEngine:
                 log.warning("libobs scene graph shutdown errored", exc_info=True)
         # Stop the content pump + release its source only after the scenes that
         # referenced it are gone.
+        for source in tuple(self._retired_media_sources):
+            self._release_retired_media_source(source)
+        self._content_restore_pending = False
+        self._prepared_content_epochs.clear()
         self._stop_content_consumer()
         runtime, self._runtime = self._runtime, None
         self._runtime_started = False

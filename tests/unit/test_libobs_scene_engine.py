@@ -393,6 +393,7 @@ class _FakeMediaSource:
         self.play_pause_calls: list[bool] = []
         self.stops = 0
         self.restarts = 0
+        self.showing = True
 
     def media_play_pause(self, pause: bool) -> None:
         self.play_pause_calls.append(pause)
@@ -2957,7 +2958,7 @@ def test_engine_control_media_drives_transport_with_trim_offset():
     engine.shutdown()
 
 
-def test_engine_control_media_close_reverts_content_slot_and_stops_poller():
+def test_engine_control_media_close_retires_a_silent_picture_and_stops_poller():
     runtime = _CompositingRuntime()
     engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
     engine.set_event_sink(lambda _e: None)
@@ -2970,9 +2971,254 @@ def test_engine_control_media_close_reverts_content_slot_and_stops_poller():
 
     ack = _ack_from_envelope(engine.handle(_request("control_media", {"action": "close"})))
     assert ack.applied is True
-    assert media.stops >= 1 and media.released == 1  # stopped + released
+    assert media.stops == media.released == 0
+    assert media.volume == 0.0 and media.play_pause_calls[-1] is True
+    assert engine._media_source.source is None
+    assert engine._retired_media_source is media
     assert engine._media_poller is None  # poller stopped
-    assert all(i.source is not media for i in runtime.scenes[0].items)  # slot reverted
+    assert any(i.source is media for i in runtime.scenes[0].items)
+    engine.handle(_request("control_media", {"action": "close"}))
+    assert engine._retired_media_source is media  # repeated close preserves the picture
+    engine.handle(_request("ping"))
+    assert media.stops == media.released == 0  # at least one output still shows it
+    media.showing = False
+    engine.handle(_request("ping"))
+    assert media.stops == media.released == 1
+    assert engine._retired_media_source is None
+    assert all(i.source is not media for i in runtime.scenes[0].items)
+    engine.handle(_request("ping"))
+    engine.shutdown()
+    assert media.released == 1
+
+
+@pytest.mark.parametrize("replacement", ["ingress", "video", "shutdown"])
+def test_retired_media_never_restores_stale_ingress_and_releases_on_replacement(replacement):
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+    engine.handle(_request("hydrate", {"document": _MEDIA_DOC,
+                                        "active_scenes": {"virtual_camera": "s1"}}))
+    frame_source = object()
+    ready_epochs = set()
+    engine._content_consumer = types.SimpleNamespace(
+        source=frame_source,
+        wait_for_epoch=lambda epoch, **_: epoch in ready_epochs,
+        stop=lambda: None,
+    )
+    try:
+        engine._scene_graph.set_content_source(frame_source)
+        engine.handle(_request("open_media", {"path": "/c.mp4"}))
+        media = _media_sources(runtime)[-1]
+        engine.handle(_request("control_media", {"action": "close"}))
+        assert engine._effective_content_source() is media
+        assert any(i.source is media for i in runtime.scenes[0].items)
+        assert all(i.source is not frame_source for i in runtime.scenes[0].items)
+
+        prepare = {"bus_id": "virtual_camera", "scene_id": "s1",
+                   "transition": {"kind": "cut", "duration_ms": 0}, "content_media_epoch": 3}
+        response = engine.handle(_request("prepare_scene", prepare))
+        assert response.message_type == "error"
+        assert response.payload["error_code"] == "source_unavailable"
+        assert engine._effective_content_source() is media
+        ready_epochs.add(3)
+        unknown = engine.handle(_request("prepare_scene", {**prepare, "scene_id": "missing"}))
+        assert unknown.message_type == "error"
+        assert media.released == 0  # even ready pixels cannot commit an invalid destination
+
+        if replacement == "ingress":
+            prepared = engine.handle(_request("prepare_scene", prepare))
+            assert prepared.message_type == "scene_prepared"
+            assert engine._effective_content_source() is media  # prepare never changes live pixels
+            ack = engine.handle(_request("take_prepared", {
+                "preparation_token": prepared.payload["preparation_token"],
+                "bus_id": "virtual_camera", "scene_id": "s1",
+            }))
+            assert _ack_from_envelope(ack).applied
+            assert engine._effective_content_source() is frame_source
+            assert any(i.source is frame_source for i in runtime.scenes[0].items)
+        elif replacement == "video":
+            assert _ack_from_envelope(engine.handle(_request("open_media", {"path": "/next.mp4"}))).applied
+            assert engine._effective_content_source() is _media_sources(runtime)[-1]
+        else:
+            engine.shutdown()
+        if replacement != "shutdown":
+            assert media.stops == media.released == 0  # an older graph may still show it
+            media.showing = False
+            engine.handle(_request("ping"))
+        assert media.stops == media.released == 1
+        assert engine._retired_media_source is None
+    finally:
+        engine.shutdown()
+
+
+@pytest.mark.parametrize("completion", ["cancelled", "superseded", "rejected", "new_video"])
+def test_prepared_content_does_not_replace_retired_video_until_a_current_take(completion, monkeypatch):
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+    ready_epoch = 3
+    frame = object()
+    engine._content_consumer = types.SimpleNamespace(
+        source=frame, wait_for_epoch=lambda epoch, **_: epoch == ready_epoch, stop=lambda: None,
+    )
+    try:
+        engine._scene_graph.hydrate(_MEDIA_DOC, {"virtual_camera": "s1"}, frame)
+        engine.handle(_request("open_media", {"path": "/video.mp4"}))
+        media = engine._media_source.source
+        engine.handle(_request("control_media", {"action": "close"}))
+        bus_id = "media_windows" if completion == "rejected" else "virtual_camera"
+        prepare_payload = {"bus_id": bus_id, "scene_id": "s1", "content_media_epoch": 3}
+        prepared = engine.handle(_request("prepare_scene", prepare_payload))
+        assert prepared.message_type == "scene_prepared"
+        assert any(item.source is media for item in runtime.scenes[0].items)
+        if completion == "cancelled":
+            engine.handle(_request("cancel_preparation"))
+        elif completion == "superseded":
+            ready_epoch = 4
+        elif completion == "rejected":
+            monkeypatch.setattr(engine._projection_route, "start", lambda *_: False)
+        else:
+            engine.handle(_request("open_media", {"path": "/new-video.mp4"}))
+        current = engine._effective_content_source()
+        response = engine.handle(_request("take_prepared", {
+            "preparation_token": prepared.payload["preparation_token"],
+            "bus_id": bus_id, "scene_id": "s1",
+        }))
+        assert not _ack_from_envelope(response).applied
+        assert engine._effective_content_source() is current
+        assert any(item.source is current for item in runtime.scenes[0].items)
+        assert media.stops == media.released == 0
+        if completion == "rejected":
+            monkeypatch.setattr(engine._projection_route, "start", lambda *_: True)
+            retry = engine.handle(_request("prepare_scene", prepare_payload))
+            assert _ack_from_envelope(engine.handle(_request("take_prepared", {
+                "preparation_token": retry.payload["preparation_token"],
+                "bus_id": bus_id, "scene_id": "s1",
+            }))).applied
+            assert engine._effective_content_source() is frame
+    finally:
+        engine.shutdown()
+
+
+def test_each_prepared_content_token_revalidates_its_epoch_after_another_take():
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+    ready_epoch = 3
+    frame = object()
+    engine._content_consumer = types.SimpleNamespace(
+        source=frame, wait_for_epoch=lambda epoch, **_: epoch == ready_epoch, stop=lambda: None,
+    )
+    try:
+        engine._scene_graph.hydrate(_MEDIA_DOC, {"virtual_camera": "s1"}, frame)
+        engine.handle(_request("open_media", {"path": "/video.mp4"}))
+        engine.handle(_request("control_media", {"action": "close"}))
+        prepare = {"bus_id": "virtual_camera", "scene_id": "s1", "content_media_epoch": 3}
+        first = engine.handle(_request("prepare_scene", prepare))
+        second = engine.handle(_request("prepare_scene", prepare))
+        take = {"bus_id": "virtual_camera", "scene_id": "s1"}
+        assert _ack_from_envelope(engine.handle(_request("take_prepared", {
+            **take, "preparation_token": first.payload["preparation_token"],
+        }))).applied
+        assert not engine._content_restore_pending
+        ready_epoch = 4
+        rejected = engine.handle(_request("take_prepared", {
+            **take, "preparation_token": second.payload["preparation_token"],
+        }))
+        assert not _ack_from_envelope(rejected).applied
+        assert rejected.payload["error_code"] == "source_unavailable"
+        assert engine._effective_content_source() is frame
+    finally:
+        engine.shutdown()
+
+
+def test_content_source_replacement_failure_keeps_live_items_and_can_retry(monkeypatch):
+    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+
+    runtime = _CompositingRuntime()
+    graph = LibobsSceneGraph(runtime)
+    previous = object()
+    destination = object()
+    graph.hydrate(_MEDIA_DOC, {"virtual_camera": "s1"}, previous)
+    items = tuple(runtime.scenes[0].items)
+    apply_geometry = graph._apply_item_geometry
+
+    def fail_geometry(*_args):
+        raise RuntimeError("geometry failed")
+
+    monkeypatch.setattr(graph, "_apply_item_geometry", fail_geometry)
+    with pytest.raises(RuntimeError, match="geometry failed"):
+        graph.set_content_source(destination)
+    assert tuple(runtime.scenes[0].items) == items
+    assert graph._content_source is previous
+    monkeypatch.setattr(graph, "_apply_item_geometry", apply_geometry)
+    graph.set_content_source(destination)
+    assert graph._content_source is destination
+    assert any(item.source is destination for item in runtime.scenes[0].items)
+    assert all(item.source is not previous for item in runtime.scenes[0].items)
+    graph.shutdown()
+
+
+def test_content_staging_failure_does_not_consume_take_or_discard_video(monkeypatch):
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+    frame = object()
+    engine._content_consumer = types.SimpleNamespace(
+        source=frame, wait_for_epoch=lambda *_args, **_kwargs: True, stop=lambda: None,
+    )
+    try:
+        graph = engine._scene_graph
+        graph.hydrate(_MEDIA_DOC, {"virtual_camera": "s1"}, frame)
+        engine.handle(_request("open_media", {"path": "/video.mp4"}))
+        media = engine._media_source.source
+        engine.handle(_request("control_media", {"action": "close"}))
+        prepared = engine.handle(_request("prepare_scene", {
+            "bus_id": "media_windows", "scene_id": "s1", "content_media_epoch": 3,
+        }))
+        take = {"bus_id": "media_windows", "scene_id": "s1",
+                "preparation_token": prepared.payload["preparation_token"]}
+        starts = []
+        monkeypatch.setattr(engine._projection_route, "start", lambda *_: starts.append(True) or True)
+        geometry = graph._apply_item_geometry
+
+        def fail_geometry(*_args):
+            raise RuntimeError("geometry failed")
+
+        monkeypatch.setattr(graph, "_apply_item_geometry", fail_geometry)
+        with pytest.raises(RuntimeError, match="geometry failed"):
+            engine.handle(_request("take_prepared", take))
+        assert starts == []
+        assert engine._effective_content_source() is media
+        assert engine._content_restore_pending
+        assert graph.pending_route(take["preparation_token"]) == "media_windows"
+        assert all(item.source is not frame for item in runtime.scenes[0].items)
+
+        monkeypatch.setattr(graph, "_apply_item_geometry", geometry)
+        assert _ack_from_envelope(engine.handle(_request("take_prepared", take))).applied
+        assert starts == [True]
+        assert engine._effective_content_source() is frame
+        assert media.stops == media.released == 0
+    finally:
+        engine.shutdown()
+
+
+def test_background_close_does_not_retire_or_replace_foreground_content():
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+    try:
+        engine.handle(_request("open_media", {"path": "/video.mp4"}))
+        foreground = engine._media_source.source
+        engine.handle(_request("open_media", {"path": "/audio.mp3", "slot": 1}))
+        background = engine._bg_media_source.source
+        engine.handle(_request("control_media", {"action": "close", "slot": 1}))
+        assert background.stops == background.released == 1
+        assert engine._media_source.source is foreground
+        assert engine._retired_media_source is None
+        assert engine._effective_content_source() is foreground
+    finally:
+        engine.shutdown()
 
 
 def test_engine_set_media_properties_updates_volume_and_speed():

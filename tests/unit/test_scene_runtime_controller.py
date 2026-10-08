@@ -2519,6 +2519,49 @@ def test_auto_switch_waits_for_app_frames_only_for_app_owned_presentations(
     assert engine.preparation_content_media_epochs == [expected_epoch] * 3
 
 
+@pytest.mark.parametrize("next_type", ["image", "timer", "browser", "ndi"])
+def test_video_to_app_content_prepares_current_pixels_when_the_scene_is_unchanged(
+    request, next_type: str,
+) -> None:
+    projection = _Projection()
+    engine = _Engine()
+    _documents, _runtime, controller = _runtime_controller(
+        request, engine, projection, request_ids=(),
+    )
+    controller.start_engine()
+    projection.set_type("video")
+    assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
+    engine.preparations.clear()
+    engine.preparation_content_media_epochs.clear()
+
+    projection.set_type(next_type)
+
+    assert len(engine.preparations) == 3
+    assert all(scene_id == CONTENT_SCENE_ID for _, _, scene_id, _, _ in engine.preparations)
+    assert engine.preparation_content_media_epochs == [projection.session_id] * 3
+    assert controller._take_reconciliation_required == set()
+    assert len(engine.snapshots) == 1
+
+
+def test_video_to_image_during_hydration_commits_pixels_after_the_snapshot(request) -> None:
+    projection = _Projection()
+    projection.set_type("video")
+    engine = _PendingGeometryEngine(defer_hydration=True)
+    _documents, _runtime, controller = _runtime_controller(
+        request, engine, projection, request_ids=(),
+    )
+    controller.start_engine()
+    assert controller.applied_scenes == ()
+    projection.set_type("image")  # same Content scene, but a new presentation
+    assert engine.preparations == []
+    engine.finish_hydration(0)
+
+    assert engine.preparation_content_media_epochs == [projection.session_id] * 3
+    assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
+    assert controller._take_reconciliation_required == set()
+    assert controller._content_restoration_epoch is None
+
+
 def test_frame_egress_readiness_is_forwarded_without_marking_the_engine_failed(request) -> None:
     engine = _Engine()
     _documents, _runtime, controller = _runtime_controller(

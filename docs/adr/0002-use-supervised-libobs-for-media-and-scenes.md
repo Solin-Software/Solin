@@ -151,6 +151,18 @@ Changes to the media engine must preserve the following properties:
   paths when those paths change materially;
 - no silent fallback to a second playback engine when libobs is unavailable.
 
+Closing foreground transport silences audio immediately and retains its paused
+picture while any libobs output still shows it, including transition origins,
+previews and thumbnails. The sidecar collects retired sources on its control
+heartbeat after their showing references disappear; shutdown releases all
+remaining references. Closing media never restores cached pixels from an earlier
+application presentation.
+
+Application-owned content replaces that picture only at Take, after preparation
+and revalidation of the requested uploaded presentation epoch. Cancellation leaves
+the live picture intact. A change from video to application-owned content must
+reconcile that epoch even when the scene ID stays the same or hydration is pending.
+
 ## Reconsideration triggers
 
 Create a superseding ADR before replacing this architecture. Reconsider the

@@ -535,6 +535,7 @@ def _content_document() -> tuple[SceneDocument, SceneDefinition]:
 
 
 @pytest.mark.parametrize("autoplay", [True, False], ids=["playing", "paused"])
+@pytest.mark.parametrize("return_kind", ["idle", "image"], ids=["default-return", "image-return"])
 @pytest.mark.parametrize(
     "transition",
     [TransitionSpec(TransitionKind.CUT, 0), TransitionSpec(TransitionKind.DISSOLVE, 350)],
@@ -545,6 +546,8 @@ def test_video_auto_switch_reaches_program_without_app_decoded_frames(
     scene_workspace_factory,
     autoplay: bool,
     transition: TransitionSpec,
+    return_kind: str,
+    record_property,
 ) -> None:
     # Each clip has a persistent identity at its center and a changing corner.
     # A latest-frame observer can skip any 200 ms interval under render load;
@@ -590,6 +593,8 @@ def test_video_auto_switch_reaches_program_without_app_decoded_frames(
     application = QCoreApplication.instance()
     assert application is not None
     probe = _PixelWaitProbe()
+    close_latencies_ms: list[float] = []
+    destination_latencies_ms: list[float] = []
 
     def program_is_color(expected: bytes, after_sequence: int) -> bool:
         frame = probe.read_latest(program)
@@ -623,7 +628,21 @@ def test_video_auto_switch_reaches_program_without_app_decoded_frames(
         ), observation()
 
         for cycle, path in enumerate(media_paths):
+            before_image = program.channel_sequence()
+            projection.set_state({"type": "image", "title": f"Image {cycle}"})
+            previous_image = QImage(160, 90, QImage.Format.Format_ARGB32)
+            previous_image.fill(QColor("#00ff00"))
+            ingress.submit_frame(previous_image)
+            assert _wait_for(
+                lambda: (
+                    controller.applied_scene(BusId.VIRTUAL_CAMERA) == content_scene_id
+                    and program_is_color(bytes((0, 255, 0, 255)), before_image)
+                ),
+                application=application,
+            ), observation()
+
             before_open = program.channel_sequence()
+            ingress_sequence = getattr(ingress._publisher, "_sequence", 0)
             # Match MediaProjectionController: commit presentation identity first,
             # immediately queue open_media next, without pumping Qt between them.
             # An ingress wait here blocks the decoder queued behind preparation.
@@ -697,26 +716,65 @@ def test_video_auto_switch_reaches_program_without_app_decoded_frames(
                 return abs(pixel[0] - animation_origin[0]) > 12
 
             assert _wait_for(animation_changed, application=application), observation()
-            assert getattr(ingress._publisher, "_sequence", 0) == 0
+            assert getattr(ingress._publisher, "_sequence", 0) == ingress_sequence
             assert errors == [], observation()
             assert fallbacks == [], observation()
 
-            assert (
-                engine.control_media(
-                    MediaControlAction.CLOSE,
-                    request_id=f"video-close-{cycle}",
-                    deadline_ms=4000,
+            with _record_program_centers(program) as samples:
+                close_started_at = time.monotonic()
+                assert (
+                    engine.control_media(
+                        MediaControlAction.CLOSE,
+                        request_id=f"video-close-{cycle}",
+                        deadline_ms=4000,
+                    )
+                    .result(5)
+                    .applied
                 )
-                .result(5)
-                .applied
+                close_latencies_ms.append((time.monotonic() - close_started_at) * 1000)
+                # IPC and Qt reconciliation are asynchronous. Observe the closed
+                # content scene before the default take can hide an invalid swap.
+                time.sleep(0.15)
+                outgoing = tuple(samples)
+                assert outgoing and all(
+                    pixel[1] <= 6 and max(pixel[0], pixel[2]) >= 240
+                    for _, pixel in outgoing
+                ), f"Closing transport discarded the outgoing video picture: {outgoing!r}"
+                destination_started_at = time.monotonic()
+                if return_kind == "image":
+                    projection.set_state({"type": "image", "title": "Next image"})
+                    next_image = QImage(160, 90, QImage.Format.Format_ARGB32)
+                    next_image.fill(QColor("#ff00ff"))
+                    ingress.submit_frame(next_image)
+                    destination_scene_id = content_scene_id
+                else:
+                    projection.reset_state()
+                    destination_scene_id = default_scene_id
+                assert _wait_for(
+                    lambda destination_scene_id=destination_scene_id: (
+                        controller.applied_scene(BusId.VIRTUAL_CAMERA) == destination_scene_id
+                        and controller.applied_scene(BusId.MEDIA_WINDOWS) == destination_scene_id
+                        and not controller._pending
+                    ),
+                    application=application,
+                ), observation()
+                if return_kind == "image":
+                    assert _wait_for(
+                        lambda: any(pixel[0] >= 240 and pixel[2] >= 240 for _, pixel in tuple(samples)),
+                        application=application,
+                    ), observation()
+                destination_latencies_ms.append((time.monotonic() - destination_started_at) * 1000)
+                time.sleep(transition.duration_ms / 1000 + 0.1)
+            assert samples, observation()
+            assert all(pixel[1] <= max(pixel[0], pixel[2]) + 6 for _, pixel in samples), (
+                f"The previous green image reappeared while closing video: {samples!r}"
             )
-            projection.reset_state()
-            assert _wait_for(
-                lambda: (controller.applied_scene(BusId.VIRTUAL_CAMERA) == default_scene_id
-                         and controller.applied_scene(BusId.MEDIA_WINDOWS) == default_scene_id),
-                application=application,
-            ), observation()
             events.clear()
+        record_property("media_close_ms", ",".join(f"{value:.3f}" for value in close_latencies_ms))
+        record_property(
+            "destination_commit_ms",
+            ",".join(f"{value:.3f}" for value in destination_latencies_ms),
+        )
     finally:
         controller.close()
         unsubscribe_projection()

@@ -541,7 +541,23 @@ class LibobsMediaSource:
         except Exception:  # noqa: BLE001 - libobs boundary
             return 0
 
-    def close(self) -> None:
+    def detach_presentation(self) -> Any | None:
+        """End transport ownership while leaving a silent, paused picture drawable.
+
+        The caller owns the returned source and must release it after the scene
+        outputs stop showing it, or when ready content replaces it.
+        """
+        source = self._source
+        if source is not None:
+            try:
+                source.volume = 0.0
+                source.media_play_pause(True)
+            except Exception:  # noqa: BLE001 - do not orphan a failed native source
+                self.close()
+                raise
+        return self._detach_source()
+
+    def _detach_source(self) -> Any | None:
         source, self._source = self._source, None
         self._path = ""
         self._local = True
@@ -554,9 +570,14 @@ class LibobsMediaSource:
             self._tempo_audio.stop()
         self._tempo_audio_running = False
         self._tempo_pending = False
+        if source is not None:
+            self._set_active(source, False)
+        return source
+
+    def close(self) -> None:
+        source = self._detach_source()
         if source is None:
             return
-        self._set_active(source, False)  # symmetrical: never leak an activate ref
         try:
             source.media_stop()
         except Exception:  # noqa: BLE001 - libobs boundary

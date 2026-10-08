@@ -247,6 +247,45 @@ def test_the_activate_ref_is_taken_once_and_released_once(monkeypatch):
     assert [kind for kind, _ in recorder.calls] == ["inc", "dec"]
 
 
+def test_detach_presentation_relinquishes_transport_without_discarding_video(monkeypatch):
+    recorder = _with_activation(monkeypatch)
+    runtime = _Runtime()
+    media = LibobsMediaSource(runtime)
+    media.open("/clip.mp4")
+    source = runtime.created[-1]
+    tempo_stops = []
+    media._tempo_audio.stop = lambda: tempo_stops.append(True)
+
+    assert media.detach_presentation() is source
+    assert source.volume == 0.0
+    assert source.play_pause[-1] is True
+    assert source.stops == source.released == 0
+    assert media.source is None and media.path == ""
+    assert tempo_stops == [True]
+    assert [kind for kind, _ in recorder.calls] == ["inc", "dec"]
+    assert media.detach_presentation() is None
+    media.close()
+    assert source.stops == source.released == 0
+    source.release()  # ownership was transferred to the presentation owner
+
+
+def test_failed_presentation_pause_closes_the_source_instead_of_orphaning_it(monkeypatch):
+    _with_activation(monkeypatch)
+    runtime = _Runtime()
+    media = LibobsMediaSource(runtime)
+    media.open("/clip.mp4")
+    source = runtime.created[-1]
+
+    def fail_pause(_pause):
+        raise RuntimeError("pause failed")
+
+    source.media_play_pause = fail_pause
+    with pytest.raises(RuntimeError, match="pause failed"):
+        media.detach_presentation()
+    assert media.source is None
+    assert source.stops == source.released == 1
+
+
 def test_a_wrapper_without_a_raw_pointer_does_not_break_playback(monkeypatch):
     """The activation call is best-effort; media must still open without it."""
     monkeypatch.delenv("SOLIN_MEDIA_HW_DECODE", raising=False)

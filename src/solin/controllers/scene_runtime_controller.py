@@ -259,6 +259,8 @@ class SceneRuntimeController(QObject):
         self._local_camera_future: Future[LocalCameraDiscovery] | None = None
         self._automatic_media_scene_selections: dict[BusId, _AutomaticMediaSceneSelection] = {}
         self._last_projection_session_id = self._projection_session_id()
+        self._last_projection_category = content_category_for_projection(projection.state)
+        self._content_restoration_epoch: int | None = None
         self._last_content_playing = self.content_is_playing
         self._desired_scenes = self._resolve_desired_scenes()
         self._applied_scenes: tuple[tuple[BusId, str], ...] = ()
@@ -1200,6 +1202,23 @@ class SceneRuntimeController(QObject):
     def _on_projection_changed(self) -> None:
         session_id = self._projection_session_id()
         if session_id != self._last_projection_session_id:
+            category = content_category_for_projection(self._projection.state)
+            if (
+                (self._last_projection_category is ContentCategory.VIDEO
+                 or self._content_restoration_epoch is not None)
+                and category is not ContentCategory.VIDEO
+            ):
+                self._content_restoration_epoch = session_id
+                # A new app presentation must prepare its uploaded epoch even
+                # when the scene stays Content (e.g. video -> image or a pinned
+                # content scene -> idle). Scene identity alone cannot commit it.
+                self._take_reconciliation_required.update(
+                    bus_id for bus_id, scene_id in self._applied_scenes
+                    if scene_uses_content_source(self._documents.document, scene_id)
+                )
+            elif category is ContentCategory.VIDEO:
+                self._content_restoration_epoch = None
+            self._last_projection_category = category
             self._last_projection_session_id = session_id
             # A failed content take belongs to that presentation, even when the
             # next playlist item uses the same scene. Keep unrelated failures.
@@ -1214,7 +1233,6 @@ class SceneRuntimeController(QObject):
                 for bus_id, selection in self._automatic_media_scene_selections.items()
                 if self._runtime.state.output(bus_id).mode is OutputMode.MANUAL
             }
-            category = content_category_for_projection(self._projection.state)
             if (
                 not MEMORIZE_PRE_MEDIA_SCENE
                 and category in AUTOMATIC_MEDIA_CATEGORIES
@@ -1832,6 +1850,13 @@ class SceneRuntimeController(QObject):
         self._engine_document_revision = snapshot.document.revision
         self._failed_takes.clear()
         self._set_applied_scenes(snapshot.active_scenes)
+        if self._content_restoration_epoch is not None:
+            # A hydrate records scene routes, not a committed content epoch.
+            # Retain this obligation across an empty applied cache/recovery.
+            self._take_reconciliation_required.update(
+                bus_id for bus_id, scene_id in snapshot.active_scenes
+                if scene_uses_content_source(self._documents.document, scene_id)
+            )
         if self._hydrate_dirty:
             return
         self._schedule_next_take()
@@ -1954,6 +1979,8 @@ class SceneRuntimeController(QObject):
             self._take_reconciliation_required.add(bus_id)
         else:
             self._take_reconciliation_required.discard(bus_id)
+        if not self._take_reconciliation_required:
+            self._content_restoration_epoch = None
         applied = dict(self._applied_scenes)
         applied[bus_id] = expected.scene_id
         self._set_applied_scenes(
