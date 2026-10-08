@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import os
 import shutil
 import struct
@@ -135,6 +136,52 @@ def _camera_registration_paths(scope: _InstallScope) -> dict[str, Path]:
     return paths
 
 
+def _assert_camera_pair_identity(paths: dict[str, Path]) -> None:
+    x64_digest = hashlib.sha256(paths["x64"].read_bytes()).hexdigest()
+    x86_digest = hashlib.sha256(paths["x86"].read_bytes()).hexdigest()
+    pair_id = hashlib.sha256(f"{x64_digest}:{x86_digest}".encode("ascii")).hexdigest()[:20]
+    for architecture, path in paths.items():
+        assert path.parent.name == architecture
+        assert path.parent.parent.name == pair_id
+
+
+def _assert_reinstall_with_loaded_camera(
+    installer: Path, install_dir: Path, env: dict[str, str], scope: _InstallScope
+) -> None:
+    import ctypes
+    from ctypes import wintypes
+
+    paths = _camera_registration_paths(scope)
+    _assert_camera_pair_identity(paths)
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.LoadLibraryW.argtypes = [wintypes.LPCWSTR]
+    kernel32.LoadLibraryW.restype = wintypes.HMODULE
+    kernel32.FreeLibrary.argtypes = [wintypes.HMODULE]
+    kernel32.FreeLibrary.restype = wintypes.BOOL
+    handle = kernel32.LoadLibraryW(str(paths["x64"]))
+    if not handle:
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        # Repairing the same build must reuse the pair without replacing a DLL
+        # already loaded by a consumer.
+        _run_installer(installer, install_dir, env, scope)
+        assert _camera_registration_paths(scope) == paths
+        _assert_camera_pair_identity(paths)
+        _run_uninstaller(install_dir, env)
+        _assert_camera_absent(scope)
+        assert paths["x64"].is_file(), "a loaded DLL must survive file cleanup"
+        # Windows retains the loaded file, but the camera is unregistered. That
+        # residue must allow an immediate reinstall before closing the consumer.
+        _run_installer(installer, install_dir, env, scope)
+        assert _camera_registration_paths(scope) == paths
+        _assert_camera_pair_identity(paths)
+        _assert_camera_registered(env, scope)
+        assert_packaged_http_runtime(install_dir / _APP_EXE, env=env)
+    finally:
+        if not kernel32.FreeLibrary(handle):
+            raise ctypes.WinError(ctypes.get_last_error())
+
+
 def _require_windows_installer_opt_in() -> None:
     if os.name != "nt":
         pytest.skip("Windows installer upgrade smoke tests run only on Windows.")
@@ -263,6 +310,7 @@ def test_full_installer_upgrade_preserves_user_state() -> None:
         install_dir = temp_root / "Install" / "Solin"
         env = isolated_app_env(temp_root)
         installed = False
+        registration_paths: dict[str, Path] = {}
 
         try:
             _run_installer(old_installer, install_dir, env, "user")
@@ -292,10 +340,13 @@ def test_full_installer_upgrade_preserves_user_state() -> None:
             assert_profile_user_state_survived(sentinels)
             _assert_qsettings_survived()
             assert_process_survives_startup(install_dir / _APP_EXE, env=env)
+            _assert_reinstall_with_loaded_camera(new_installer, install_dir, env, "user")
         finally:
             if installed:
                 _run_uninstaller(install_dir, env)
                 _assert_camera_absent("user")
+                for path in registration_paths.values():
+                    assert not path.exists(), "unloaded camera DLL survived uninstall"
             cleanup_solin_test_registry(_PROFILE_ID)
             shutil.rmtree(install_dir, ignore_errors=True)
 
@@ -328,6 +379,7 @@ def test_full_installer_machine_scope_registers_camera_for_all_users() -> None:
         install_dir = temp_root / "Install" / "Solin"
         env = isolated_app_env(temp_root)
         installed = False
+        registration_paths: dict[str, Path] = {}
         try:
             _run_installer(new_installer, install_dir, env, "machine")
             installed = True
@@ -337,6 +389,7 @@ def test_full_installer_machine_scope_registers_camera_for_all_users() -> None:
             _run_rollback_injection(rollback_installer, install_dir, env, "machine")
             assert _camera_registration_paths("machine") == registration_paths
             _assert_camera_registered(env, "machine")
+            _assert_reinstall_with_loaded_camera(new_installer, install_dir, env, "machine")
             assert {
                 architecture: _camera_registration(architecture, "user")
                 for architecture in _PE_MACHINES
@@ -345,6 +398,8 @@ def test_full_installer_machine_scope_registers_camera_for_all_users() -> None:
             if installed:
                 _run_uninstaller(install_dir, env)
                 _assert_camera_absent("machine")
+                for path in registration_paths.values():
+                    assert not path.exists(), "unloaded camera DLL survived uninstall"
             assert {
                 architecture: _camera_registration(architecture, "user")
                 for architecture in _PE_MACHINES

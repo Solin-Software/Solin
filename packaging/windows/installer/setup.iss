@@ -53,7 +53,6 @@
 #ifndef MyWindowsVersion
   #error MyWindowsVersion must be supplied by the build pipeline.
 #endif
-#define MyVirtualCameraVersion MyWindowsVersion
 
 ; =============================================================================
 [Setup]

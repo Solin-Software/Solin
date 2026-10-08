@@ -143,6 +143,16 @@ not remain importable when their compiled Python package is absent from the
 new executable. The upgrade smoke seeds an obsolete extension and verifies
 its removal, HTTP operation and preservation of unrelated files and user state.
 
+The DirectShow filters are staged as an immutable x64/x86 pair identified by
+their binary hashes, independently of the application version. Reinstalling
+the same pair reuses its files; rebuilding the same application version stages
+a different pair without overwriting DLLs loaded by camera consumers. Uninstall
+removes both scoped camera registrations immediately. Windows keeps a loaded
+DLL until its consumer closes; later installation or uninstallation cleans
+obsolete unlocked files. Reboot deletion is not scheduled because the same
+pair may be reinstalled before reboot. The installer smoke verifies repair,
+uninstall and immediate reinstall while an x64 consumer keeps the DLL loaded.
+
 Windows artifacts are currently unsigned, matching the existing distribution
 model. Release integrity is enforced by the exact asset inventory, immutable
 GitHub release, recorded size, and SHA-256 verification before installation.

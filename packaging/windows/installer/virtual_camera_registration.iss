@@ -18,6 +18,7 @@ var
   GCameraPriorX86Exists: Boolean;
   GCameraPriorX64Path: String;
   GCameraPriorX86Path: String;
+  GCameraPairId: String;
 
 function CameraClassKey(): String;
 begin
@@ -46,7 +47,7 @@ end;
 
 function CameraVersionedFilterDirectory(Architecture: String): String;
 begin
-  Result := CameraVersionsRoot() + '\{#MyVirtualCameraVersion}\' + Architecture;
+  Result := CameraVersionsRoot() + '\' + GCameraPairId + '\' + Architecture;
 end;
 
 function CameraVersionedFilterPath(const Architecture: String): String;
@@ -275,13 +276,33 @@ begin
       GCameraPriorX86Exists, GCameraPriorX86Path
     );
   end;
-  if GCameraCreatedX64File then
-    DeleteFile(CameraVersionedFilterPath('x64'));
-  if GCameraCreatedX86File then
-    DeleteFile(CameraVersionedFilterPath('x86'));
-  RemoveDir(CameraVersionedFilterDirectory('x64'));
-  RemoveDir(CameraVersionedFilterDirectory('x86'));
-  RemoveDir(ExtractFileDir(CameraVersionedFilterDirectory('x64')));
+  // Extraction can fail before the pair identity exists. Do not resolve an
+  // incomplete identity to unrelated directories beneath the versions root.
+  if GCameraPairId <> '' then
+  begin
+    if GCameraCreatedX64File then
+      DeleteFile(CameraVersionedFilterPath('x64'));
+    if GCameraCreatedX86File then
+      DeleteFile(CameraVersionedFilterPath('x86'));
+    RemoveDir(CameraVersionedFilterDirectory('x64'));
+    RemoveDir(CameraVersionedFilterDirectory('x86'));
+    RemoveDir(ExtractFileDir(CameraVersionedFilterDirectory('x64')));
+  end;
+end;
+
+procedure PrepareCameraFilterPair();
+var
+  X64Hash: String;
+  X86Hash: String;
+begin
+  ExtractTemporaryFile('solin-virtual-camera-x64.dll');
+  ExtractTemporaryFile('solin-virtual-camera-x86.dll');
+  X64Hash := GetSHA256OfFile(ExpandConstant('{tmp}\solin-virtual-camera-x64.dll'));
+  X86Hash := GetSHA256OfFile(ExpandConstant('{tmp}\solin-virtual-camera-x86.dll'));
+  // Match the development registrar's immutable pair identity. App versions do
+  // not identify binaries: a diagnostic rebuild can keep the same app version.
+  // StageCameraFilter verifies the complete digest before reusing either file.
+  GCameraPairId := Copy(GetSHA256OfString(X64Hash + ':' + X86Hash), 1, 20);
 end;
 
 procedure StageCameraFilter(const Architecture: String; var Created: Boolean);
@@ -291,14 +312,14 @@ var
   TargetPath: String;
 begin
   SourceName := 'solin-virtual-camera-' + Architecture + '.dll';
-  ExtractTemporaryFile(SourceName);
   SourcePath := ExpandConstant('{tmp}\') + SourceName;
   TargetPath := CameraVersionedFilterPath(Architecture);
   if FileExists(TargetPath) then
   begin
-    // Published versions are immutable, including when a consumer holds the DLL.
+    // Reuse identical binaries even when a consumer holds the DLL. Never
+    // overwrite an existing content identity, including a hash-prefix collision.
     if GetSHA256OfFile(SourcePath) <> GetSHA256OfFile(TargetPath) then
-      RaiseException('A different virtual-camera binary already exists for this version: ' + TargetPath);
+      RaiseException('The managed virtual-camera binary has inconsistent contents: ' + TargetPath);
     Exit;
   end;
   if not ForceDirectories(ExtractFileDir(TargetPath)) then
@@ -313,6 +334,7 @@ begin
   // ssInstall is the last event in which an exception aborts Setup. Own the
   // immutable filter files and registration together, before application writes.
   BeginCameraRegistrationTransaction();
+  PrepareCameraFilterPair();
   StageCameraFilter('x64', GCameraCreatedX64File);
   StageCameraFilter('x86', GCameraCreatedX86File);
   RegisterCameraPair();
@@ -338,7 +360,7 @@ begin
     repeat
       if ((FindRec.Attributes and FILE_ATTRIBUTE_DIRECTORY) <> 0) and
          (FindRec.Name <> '.') and (FindRec.Name <> '..') and
-         (CompareText(FindRec.Name, '{#MyVirtualCameraVersion}') <> 0) then
+         (CompareText(FindRec.Name, GCameraPairId) <> 0) then
       begin
         Candidate := RootDir + '\' + FindRec.Name;
         if DelTree(Candidate, True, True, True) then

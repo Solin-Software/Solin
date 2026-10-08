@@ -94,22 +94,20 @@ begin
     usUninstall:
     begin
       // Unregister both DirectShow registry views before deleting the immutable
-      // version.
+      // pair. When no registration remains, there is no DLL to unregister.
       CameraFilterX64Path := '';
-      if not RegQueryStringValue(
+      RegQueryStringValue(
         CameraRegistrationRootKey(True), CameraClassKey(), '', CameraFilterX64Path
-      ) then
-        CameraFilterX64Path := CameraVersionedFilterPath('x64');
+      );
       if FileExists(CameraFilterX64Path) and
          not RunCameraRegsvr(CameraFilterX64Path, True, True, True) then
         Log('x64 virtual-camera cleanup failed during uninstall.');
       RemoveCameraRegistrationView(CameraRegistrationRootKey(True));
 
       CameraFilterX86Path := '';
-      if not RegQueryStringValue(
+      RegQueryStringValue(
         CameraRegistrationRootKey(False), CameraClassKey(), '', CameraFilterX86Path
-      ) then
-        CameraFilterX86Path := CameraVersionedFilterPath('x86');
+      );
       if FileExists(CameraFilterX86Path) and
          not RunCameraRegsvr(CameraFilterX86Path, False, True, True) then
         Log('x86 virtual-camera cleanup failed during uninstall.');
