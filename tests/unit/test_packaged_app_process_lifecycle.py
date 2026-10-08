@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import os
+import signal
 import socket
+import subprocess
 import sys
 import tempfile
 import time
@@ -10,9 +12,59 @@ from pathlib import Path
 import pytest
 
 from tests.e2e._packaged_app import assert_process_survives_startup
+from tests.e2e import _packaged_app
 
 
 pytestmark = pytest.mark.skipif(os.name != "posix", reason="POSIX launcher process groups")
+
+
+@pytest.mark.parametrize("listing", ["", "420 Z\n", "420 Z+\n421 S\n"])
+def test_macos_cleanup_accepts_only_terminated_group_members(monkeypatch, listing):
+    monkeypatch.setattr(sys, "platform", "darwin")
+
+    def denied(group_id, sig):
+        raise PermissionError("No signalable members")
+
+    def process_table(command, **kwargs):
+        assert command == ["ps", "-A", "-o", "pgid=,stat="]
+        return subprocess.CompletedProcess(command, 0, stdout=listing)
+
+    monkeypatch.setattr(os, "killpg", denied)
+    monkeypatch.setattr(subprocess, "run", process_table)
+    _packaged_app._signal_process_group(420, signal.SIGKILL)
+
+
+@pytest.mark.parametrize("platform, listing", [
+    ("darwin", "420 S\n"), ("darwin", "420 Z\n420 R+\n"), ("linux", "420 Z\n"),
+])
+def test_cleanup_propagates_actual_permission_failures(monkeypatch, platform, listing):
+    monkeypatch.setattr(sys, "platform", platform)
+
+    def denied(group_id, sig):
+        raise PermissionError("Permission denied")
+
+    monkeypatch.setattr(os, "killpg", denied)
+    monkeypatch.setattr(
+        subprocess, "run",
+        lambda command, **kwargs: subprocess.CompletedProcess(command, 0, stdout=listing),
+    )
+    with pytest.raises(PermissionError, match="Permission denied"):
+        _packaged_app._signal_process_group(420, signal.SIGKILL)
+
+
+def test_macos_cleanup_propagates_process_table_failure(monkeypatch):
+    monkeypatch.setattr(sys, "platform", "darwin")
+
+    def denied(group_id, sig):
+        raise PermissionError("Permission denied")
+
+    def failed_listing(command, **kwargs):
+        raise subprocess.CalledProcessError(1, command)
+
+    monkeypatch.setattr(os, "killpg", denied)
+    monkeypatch.setattr(subprocess, "run", failed_listing)
+    with pytest.raises(subprocess.CalledProcessError):
+        _packaged_app._signal_process_group(420, signal.SIGKILL)
 
 
 @pytest.fixture

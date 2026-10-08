@@ -231,6 +231,28 @@ def cleanup_solin_test_registry(*profile_ids: str) -> None:
         _delete_registry_tree(winreg.HKEY_CURRENT_USER, subkey)
 
 
+def _signal_process_group(group_id: int, sig: signal.Signals) -> None:
+    try:
+        os.killpg(group_id, sig)
+    except ProcessLookupError:
+        return
+    except PermissionError:
+        if sys.platform != "darwin":
+            raise
+        # XNU's killpg1 excludes zombies, then returns EPERM if no signalable
+        # member remains. An orphaned child can be in that state after TERM.
+        # Confirm that the owned group has no live members; never suppress an
+        # actual permission failure for a process that still needs cleanup.
+        listing = subprocess.run(
+            ["ps", "-A", "-o", "pgid=,stat="],
+            capture_output=True, text=True, check=True, timeout=5,
+        )
+        for row in listing.stdout.splitlines():
+            pgid, state = row.split()
+            if int(pgid) == group_id and not state.startswith("Z"):
+                raise
+
+
 def assert_process_survives_startup(
     exe_path: Path,
     *,
@@ -258,20 +280,14 @@ def assert_process_survives_startup(
             # AppImage extract-and-run forks AppRun and waits in the runtime.
             # Terminating only that launcher leaves the application (and its
             # single-instance socket) alive across replacement tests.
-            try:
-                os.killpg(process.pid, signal.SIGTERM)
-            except ProcessLookupError:
-                pass
+            _signal_process_group(process.pid, signal.SIGTERM)
         elif process.poll() is None:
             process.terminate()
         try:
             process.wait(timeout=shutdown_timeout)
         except subprocess.TimeoutExpired:
             if os.name == "posix":
-                try:
-                    os.killpg(process.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
+                _signal_process_group(process.pid, signal.SIGKILL)
             else:
                 process.kill()
             process.wait(timeout=5)
@@ -281,7 +297,4 @@ def assert_process_survives_startup(
                 # A launcher may exit before its descendants, including on a
                 # startup failure. Always dispose of its owned group so no
                 # child survives the helper, even if it ignores SIGTERM.
-                try:
-                    os.killpg(process.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
+                _signal_process_group(process.pid, signal.SIGKILL)
