@@ -22,6 +22,11 @@ build. Linux qualification needs a graphics session; CI uses Xvfb. macOS
 qualification runs in the macOS workflow and cannot be established by Windows
 tests alone.
 
+Packaged smoke tests also launch the delivered executable in its headless
+`--verify-http-runtime` role. A local HTTP server verifies gzip decoding,
+streamed responses and HTTP error handling through the production adapter,
+without opening the GUI, changing preferences or contacting external services.
+
 Install the `ffprobe` and `ffmpeg` command-line tools on PATH for titles,
 durations, embedded cover art, and video thumbnails. Python dependencies alone
 do not install those executables.
@@ -124,6 +129,12 @@ because Inno Setup performs the virtual-camera registration and transactional
 rollback that a copied directory cannot provide. Release runs resolve and
 verify their predecessor automatically; a manual diagnostic run may disable
 upgrade smoke testing.
+
+Upgrades replace the installer-owned `backports` runtime directory before
+copying the new payload. Optional extensions left by an older local build must
+not remain importable when their compiled Python package is absent from the
+new executable. The upgrade smoke seeds an obsolete extension and verifies
+its removal, HTTP operation and preservation of unrelated files and user state.
 
 Windows artifacts are currently unsigned, matching the existing distribution
 model. Release integrity is enforced by the exact asset inventory, immutable

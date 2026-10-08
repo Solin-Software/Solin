@@ -140,6 +140,14 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Name: "startupicon"; Description: "Start with Windows";     GroupDescription: "Options:"; Flags: unchecked
 
 ; =============================================================================
+[InstallDelete]
+; Replace this installer-owned Python namespace before copying the new payload.
+; Older local builds included optional backports extensions. Leaving an extension
+; behind when its compiled package disappears creates an importable, empty
+; namespace that breaks urllib3's optional compression detection.
+Type: filesandordirs; Name: "{app}\backports"
+
+; =============================================================================
 [Files]
 ; Stage the immutable filter pair before application files are installed.
 ; These files and their COM registration have one shared lifecycle owner.

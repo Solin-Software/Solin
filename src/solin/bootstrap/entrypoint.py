@@ -14,6 +14,11 @@ def run() -> None:
     """Dispatch the process role before importing application services or Qt."""
 
     arguments = sys.argv[1:]
+    if any(argument.split("=", 1)[0] == "--verify-http-runtime" for argument in arguments):
+        from .runtime_verification import main as verify_http_runtime
+
+        raise SystemExit(verify_http_runtime(arguments))
+
     if LIBOBS_SIDECAR_ARGUMENT in arguments:
         if arguments != [LIBOBS_SIDECAR_ARGUMENT]:
             raise SystemExit("The scene engine sidecar accepts no application arguments.")

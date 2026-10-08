@@ -19,6 +19,7 @@ from tests.e2e._packaged_app import (
     seed_profile_user_state,
     skip_if_solin_registry_exists,
 )
+from tests.e2e._http_runtime import assert_packaged_http_runtime
 
 
 pytestmark = pytest.mark.e2e
@@ -270,7 +271,19 @@ def test_full_installer_upgrade_preserves_user_state() -> None:
             sentinels = seed_profile_user_state(data_dir, _PROFILE_ID)
             _seed_qsettings()
 
+            # A previous development build can include an optional extension
+            # absent from the release payload. Even an unloaded .pyd makes
+            # Python see backports.zstd as a namespace, breaking urllib3 imports.
+            obsolete_extension = install_dir / "backports" / "zstd" / "_obsolete.pyd"
+            obsolete_extension.parent.mkdir(parents=True, exist_ok=True)
+            obsolete_extension.write_bytes(b"previous build extension")
+            unrelated_file = install_dir / "user-kept.txt"
+            unrelated_file.write_text("user-owned file", encoding="utf-8")
+
             _run_installer(new_installer, install_dir, env, "user")
+            assert not obsolete_extension.exists(), "obsolete Python extension survived upgrade"
+            assert unrelated_file.read_text(encoding="utf-8") == "user-owned file"
+            assert_packaged_http_runtime(install_dir / _APP_EXE, env=env)
             _assert_camera_registered(env, "user")
             registration_paths = _camera_registration_paths("user")
             _run_rollback_injection(rollback_installer, install_dir, env, "user")
@@ -318,6 +331,7 @@ def test_full_installer_machine_scope_registers_camera_for_all_users() -> None:
         try:
             _run_installer(new_installer, install_dir, env, "machine")
             installed = True
+            assert_packaged_http_runtime(install_dir / _APP_EXE, env=env)
             _assert_camera_registered(env, "machine")
             registration_paths = _camera_registration_paths("machine")
             _run_rollback_injection(rollback_installer, install_dir, env, "machine")
