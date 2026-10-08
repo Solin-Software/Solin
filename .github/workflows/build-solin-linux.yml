@@ -172,7 +172,9 @@ jobs:
         run: |
           xvfb-run --auto-servernum \
             --server-args="-screen 0 1280x720x24" \
-            python -m pytest tests/e2e/test_packaged_app_smoke.py -k 'startup_window or http_runtime' -q
+            python -m pytest \
+              tests/e2e/test_packaged_app_smoke.py::test_packaged_app_survives_startup_window \
+              tests/e2e/test_packaged_app_smoke.py::test_packaged_http_runtime -q
 
       - name: Download verified predecessor
         if: ${{ inputs.release || inputs.run_release_smoke_tests }}
