@@ -17,6 +17,13 @@ The smoke launches the packaged executable with isolated user data directories,
 verifies that it stays alive through the startup window, then terminates the
 process.
 
+Each smoke owns private user-data and IPC namespaces. POSIX smokes also isolate
+temporary directories, own a separate process group, and clean up launcher descendants,
+including the child spawned by AppImage extract-and-run. Upgrade pairs reuse the
+same environment so replacement cannot conceal a surviving old instance.
+Windows keeps the inherited system temporary directory so Inno Setup's
+self-deleting uninstaller helpers retain their own cleanup lifetime.
+
 Run the full-installer upgrade smoke only on a disposable Windows test machine
 or CI runner with no existing Solin installation:
 

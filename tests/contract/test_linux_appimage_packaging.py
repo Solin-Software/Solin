@@ -64,7 +64,16 @@ def test_appimage_recipe_has_required_appdir_metadata_and_pinned_tools():
 
     assert 'APPIMAGETOOL_VERSION="1.9.1"' in package_script
     assert 'APPIMAGETOOL_SHA256="' in package_script
-    assert 'TYPE2_RUNTIME_SHA256="' in package_script
+    assert 'TYPE2_RUNTIME_VERSION="20251108"' in package_script
+    assert (
+        'TYPE2_RUNTIME_SHA256="2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d"'
+        in package_script
+    )
+    assert (
+        "type2-runtime/releases/download/${TYPE2_RUNTIME_VERSION}/runtime-x86_64"
+        in package_script
+    )
+    assert "type2-runtime/releases/download/continuous" not in package_script
     assert "sha256sum --check --status" in package_script
     assert "SOLIN_APPIMAGE_SKIP_BUILD" in package_script
     assert "APPIMAGE_EXTRACT_AND_RUN=1" in package_script
@@ -85,7 +94,10 @@ def test_linux_workflow_packages_and_smokes_the_same_appimage_recipe():
     assert "scripts/package_solin_appimage.sh" in workflow
     assert "SOLIN_APPIMAGE_SKIP_BUILD: \"1\"" in workflow
     assert "runs-on: ubuntu-24.04" in workflow
-    assert "APPIMAGE_EXTRACT_AND_RUN=1" in workflow
+    assert 'APPIMAGE_EXTRACT_AND_RUN: "1"' in workflow
+    assert "test_packaged_app_smoke.py::test_packaged_app_survives_startup_window" in workflow
+    assert "test_packaged_app_smoke.py::test_packaged_http_runtime" in workflow
+    assert "timeout --signal=TERM" not in workflow
     assert "-linux-x86_64.AppImage" in workflow
     assert "dist/Solin-${{ env.APP_VERSION }}-linux-x86_64.AppImage" in workflow
 
@@ -134,6 +146,21 @@ def test_linux_ci_installs_all_pinned_obs_direct_dependency_providers():
         assert "add-apt-repository" not in workflow
 
 
+def test_linux_ci_bounds_package_mirror_failures():
+    for relative, step_name in (
+        (".github/workflows/build-solin-linux.yml", "Install Linux build and runtime dependencies"),
+        (".github/workflows/quality.yml", "Install Linux runtime dependencies"),
+    ):
+        workflow = _read(relative)
+        block = workflow.split(f"- name: {step_name}", 1)[1].split("- name:", 1)[0]
+        assert "timeout-minutes: 20" in block
+        assert "Acquire::Retries=3" in block
+        assert "Acquire::http::Timeout=30" in block
+        assert "Acquire::https::Timeout=30" in block
+        assert 'sudo apt-get "${apt_options[@]}" update' in block
+        assert 'sudo apt-get "${apt_options[@]}" install' in block
+
+
 def test_linux_mux_comes_from_the_checksum_pinned_official_release():
     script = _read("scripts/build_solin.sh")
     assert 'OBS_RUNTIME_VERSION="32.1.2"' in script
@@ -153,7 +180,11 @@ def test_linux_mux_comes_from_the_checksum_pinned_official_release():
 
 
 def test_linux_build_rejects_platforms_below_the_dependency_abi_floor():
+    from solin.core.releases.manifest import REQUIRED_ASSETS
+
     script = _read("scripts/build_solin.sh")
     assert 'platform.machine() != "x86_64"' in script
-    assert 'tuple(map(int, version.split("."))) < (2, 38)' in script
+    floor = tuple(map(int, REQUIRED_ASSETS[("linux", "x86_64", "appimage")][1].split(".")))
+    assert floor == (2, 38)
+    assert f'tuple(map(int, version.split("."))) < {floor}' in script
     assert script.index("Ubuntu 22.04 is unsupported") < script.index('"${PYTHON}" -m nuitka')

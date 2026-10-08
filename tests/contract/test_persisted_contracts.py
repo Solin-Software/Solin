@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from tests._paths import REPO_ROOT as PROJECT_ROOT
+from tests.e2e import _packaged_app as packaged_app
 from solin.core.foundation.constants import (
     DISPLAY_APP_NAME,
     IS_DEV,
@@ -177,6 +178,29 @@ def test_windows_installer_qsettings_cleanup_tracks_current_namespaces() -> None
         assert f"Software\\Solin\\{app_name}" in uninstall_iss
     assert "RegGetSubkeyNames(HKCU, 'Software', Names)" in uninstall_iss
     assert "Copy(KeyName, 1, 6) = 'Solin_'" in uninstall_iss
+
+
+def test_windows_registry_guard_distinguishes_settings_from_machine_install_marker() -> None:
+    class FakeWinreg:
+        HKEY_CURRENT_USER = object()
+        HKEY_LOCAL_MACHINE = object()
+
+    targets = packaged_app._solin_registry_guard_targets(FakeWinreg, ("main_hall",))
+
+    assert [(root_name, subkey) for root_name, _root, subkey in targets] == [
+        ("HKCU", r"Software\Solin"),
+        ("HKCU", r"Software\Solin_main_hall"),
+        ("HKLM", r"Software\Solin\Solin"),
+    ]
+
+
+def test_windows_uninstaller_removes_empty_scope_vendor_container() -> None:
+    uninstall_iss = (
+        PROJECT_ROOT / "packaging" / "windows" / "installer" / "uninstall.iss"
+    ).read_text(encoding="utf-8")
+
+    assert "RegDeleteKeyIfEmpty(HKLM64, 'Software\\Solin')" in uninstall_iss
+    assert "RegDeleteKeyIfEmpty(HKCU64, 'Software\\Solin')" in uninstall_iss
 
 
 def test_settings_key_names_and_values_are_stable() -> None:

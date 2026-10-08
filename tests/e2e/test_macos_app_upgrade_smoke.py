@@ -128,7 +128,7 @@ def test_macos_app_replacement_preserves_user_state() -> None:
     _app_executable(old_app)
     _app_executable(new_app)
 
-    with tempfile.TemporaryDirectory(prefix="solin-macos-upgrade-e2e-") as temp_dir:
+    with tempfile.TemporaryDirectory(prefix="sln-upgrade-") as temp_dir:
         temp_root = Path(temp_dir)
         env = isolated_app_env(temp_root)
         installed_app = temp_root / "Applications" / _APP_BUNDLE

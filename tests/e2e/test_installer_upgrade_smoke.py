@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import hashlib
 import os
 import shutil
 import struct
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from typing import Literal
@@ -19,6 +21,8 @@ from tests.e2e._packaged_app import (
     seed_profile_user_state,
     skip_if_solin_registry_exists,
 )
+from tests.e2e._http_runtime import assert_packaged_http_runtime
+from tests.e2e._windows_process import run_windows_process_tree
 
 
 pytestmark = pytest.mark.e2e
@@ -134,6 +138,52 @@ def _camera_registration_paths(scope: _InstallScope) -> dict[str, Path]:
     return paths
 
 
+def _assert_camera_pair_identity(paths: dict[str, Path]) -> None:
+    x64_digest = hashlib.sha256(paths["x64"].read_bytes()).hexdigest()
+    x86_digest = hashlib.sha256(paths["x86"].read_bytes()).hexdigest()
+    pair_id = hashlib.sha256(f"{x64_digest}:{x86_digest}".encode("ascii")).hexdigest()[:20]
+    for architecture, path in paths.items():
+        assert path.parent.name == architecture
+        assert path.parent.parent.name == pair_id
+
+
+def _assert_reinstall_with_loaded_camera(
+    installer: Path, install_dir: Path, env: dict[str, str], scope: _InstallScope
+) -> None:
+    import ctypes
+    from ctypes import wintypes
+
+    paths = _camera_registration_paths(scope)
+    _assert_camera_pair_identity(paths)
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.LoadLibraryW.argtypes = [wintypes.LPCWSTR]
+    kernel32.LoadLibraryW.restype = wintypes.HMODULE
+    kernel32.FreeLibrary.argtypes = [wintypes.HMODULE]
+    kernel32.FreeLibrary.restype = wintypes.BOOL
+    handle = kernel32.LoadLibraryW(str(paths["x64"]))
+    if not handle:
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        # Repairing the same build must reuse the pair without replacing a DLL
+        # already loaded by a consumer.
+        _run_installer(installer, install_dir, env, scope)
+        assert _camera_registration_paths(scope) == paths
+        _assert_camera_pair_identity(paths)
+        _run_uninstaller(install_dir, env)
+        _assert_camera_absent(scope)
+        assert paths["x64"].is_file(), "a loaded DLL must survive file cleanup"
+        # Windows retains the loaded file, but the camera is unregistered. That
+        # residue must allow an immediate reinstall before closing the consumer.
+        _run_installer(installer, install_dir, env, scope)
+        assert _camera_registration_paths(scope) == paths
+        _assert_camera_pair_identity(paths)
+        _assert_camera_registered(env, scope)
+        assert_packaged_http_runtime(install_dir / _APP_EXE, env=env)
+    finally:
+        if not kernel32.FreeLibrary(handle):
+            raise ctypes.WinError(ctypes.get_last_error())
+
+
 def _require_windows_installer_opt_in() -> None:
     if os.name != "nt":
         pytest.skip("Windows installer upgrade smoke tests run only on Windows.")
@@ -147,8 +197,7 @@ def _run_installer(
     env: dict[str, str],
     scope: _InstallScope,
 ) -> None:
-    timeout = float(os.environ.get("SOLIN_E2E_INSTALLER_TIMEOUT", "240"))
-    result = subprocess.run(  # noqa: S603 - e2e runs user-supplied installer artifacts
+    result = _run_logged_installer_process(
         [
             str(installer),
             "/VERYSILENT",
@@ -159,10 +208,6 @@ def _run_installer(
         ],
         cwd=installer.parent,
         env=env,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-        check=False,
     )
     if result.returncode != 0:
         pytest.fail(
@@ -180,7 +225,7 @@ def _run_rollback_injection(
     env: dict[str, str],
     scope: _InstallScope,
 ) -> None:
-    result = subprocess.run(  # noqa: S603 - trusted failure-injection artifact
+    result = _run_logged_installer_process(
         [
             str(installer),
             "/VERYSILENT",
@@ -191,10 +236,6 @@ def _run_rollback_injection(
         ],
         cwd=installer.parent,
         env=env,
-        capture_output=True,
-        text=True,
-        timeout=float(os.environ.get("SOLIN_E2E_INSTALLER_TIMEOUT", "240")),
-        check=False,
     )
     if result.returncode == 0:
         pytest.fail("The x86 registration failure-injection installer succeeded")
@@ -204,20 +245,69 @@ def _run_uninstaller(install_dir: Path, env: dict[str, str]) -> None:
     uninstallers = sorted(install_dir.glob("unins*.exe"))
     if not uninstallers:
         pytest.fail(f"Installer did not produce an uninstaller in {install_dir}")
-    result = subprocess.run(  # noqa: S603 - e2e runs installer-generated uninstaller
+    result = _run_logged_installer_process(
         [
             str(uninstallers[0]),
             "/VERYSILENT",
             "/SUPPRESSMSGBOXES",
             "/NORESTART",
         ],
-        cwd=install_dir,
+        cwd=uninstallers[0].parent.parent,
         env=env,
-        timeout=float(os.environ.get("SOLIN_E2E_INSTALLER_TIMEOUT", "240")),
-        check=False,
     )
     if result.returncode != 0:
-        pytest.fail(f"Uninstaller failed with exit code {result.returncode}")
+        pytest.fail(
+            f"Uninstaller failed with exit code {result.returncode}\n"
+            f"stdout:\n{result.stdout}\n\nstderr:\n{result.stderr}"
+        )
+
+
+def _run_logged_installer_process(
+    args: list[str], *, cwd: Path, env: dict[str, str]
+) -> subprocess.CompletedProcess[str]:
+    # Keep diagnostics outside {app}: uninstall can remove the application tree.
+    # The job waits for Inno's second phase as well as the original launcher.
+    with tempfile.TemporaryDirectory(prefix="solin-installer-log-") as directory:
+        log = Path(directory) / "setup.log"
+        command = [*args, f"/LOG={log}"]
+        try:
+            result = run_windows_process_tree(
+                command,
+                cwd=cwd,
+                env=env,
+                timeout=float(os.environ.get("SOLIN_E2E_INSTALLER_TIMEOUT", "240")),
+            )
+        except subprocess.TimeoutExpired as error:
+            error.add_note(
+                log.read_text(encoding="utf-8-sig", errors="replace")
+                if log.exists()
+                else "Inno did not create a log."
+            )
+            raise
+        if log.exists():
+            result.stdout += "\nInno log:\n" + log.read_text(encoding="utf-8-sig", errors="replace")
+        return result
+
+
+def _cleanup_installation(
+    install_dir: Path,
+    env: dict[str, str],
+    scope: _InstallScope,
+    camera_paths: dict[str, Path],
+) -> None:
+    primary_error = sys.exception()
+    try:
+        # A failed reinstall may follow a completed uninstall. Do not replace
+        # that failure with a misleading "missing uninstaller" cleanup error.
+        if any(install_dir.glob("unins*.exe")):
+            _run_uninstaller(install_dir, env)
+        _assert_camera_absent(scope)
+        for path in camera_paths.values():
+            assert not path.exists(), "unloaded camera DLL survived uninstall"
+    except (Exception, pytest.fail.Exception) as cleanup_error:  # noqa: BLE001 - retain primary failure
+        if primary_error is None:
+            raise
+        primary_error.add_note(f"Installer cleanup also failed: {cleanup_error}")
 
 
 def _seed_qsettings() -> None:
@@ -262,6 +352,7 @@ def test_full_installer_upgrade_preserves_user_state() -> None:
         install_dir = temp_root / "Install" / "Solin"
         env = isolated_app_env(temp_root)
         installed = False
+        registration_paths: dict[str, Path] = {}
 
         try:
             _run_installer(old_installer, install_dir, env, "user")
@@ -270,7 +361,19 @@ def test_full_installer_upgrade_preserves_user_state() -> None:
             sentinels = seed_profile_user_state(data_dir, _PROFILE_ID)
             _seed_qsettings()
 
+            # A previous development build can include an optional extension
+            # absent from the release payload. Even an unloaded .pyd makes
+            # Python see backports.zstd as a namespace, breaking urllib3 imports.
+            obsolete_extension = install_dir / "backports" / "zstd" / "_obsolete.pyd"
+            obsolete_extension.parent.mkdir(parents=True, exist_ok=True)
+            obsolete_extension.write_bytes(b"previous build extension")
+            unrelated_file = install_dir / "user-kept.txt"
+            unrelated_file.write_text("user-owned file", encoding="utf-8")
+
             _run_installer(new_installer, install_dir, env, "user")
+            assert not obsolete_extension.exists(), "obsolete Python extension survived upgrade"
+            assert unrelated_file.read_text(encoding="utf-8") == "user-owned file"
+            assert_packaged_http_runtime(install_dir / _APP_EXE, env=env)
             _assert_camera_registered(env, "user")
             registration_paths = _camera_registration_paths("user")
             _run_rollback_injection(rollback_installer, install_dir, env, "user")
@@ -279,10 +382,10 @@ def test_full_installer_upgrade_preserves_user_state() -> None:
             assert_profile_user_state_survived(sentinels)
             _assert_qsettings_survived()
             assert_process_survives_startup(install_dir / _APP_EXE, env=env)
+            _assert_reinstall_with_loaded_camera(new_installer, install_dir, env, "user")
         finally:
             if installed:
-                _run_uninstaller(install_dir, env)
-                _assert_camera_absent("user")
+                _cleanup_installation(install_dir, env, "user", registration_paths)
             cleanup_solin_test_registry(_PROFILE_ID)
             shutil.rmtree(install_dir, ignore_errors=True)
 
@@ -315,22 +418,24 @@ def test_full_installer_machine_scope_registers_camera_for_all_users() -> None:
         install_dir = temp_root / "Install" / "Solin"
         env = isolated_app_env(temp_root)
         installed = False
+        registration_paths: dict[str, Path] = {}
         try:
             _run_installer(new_installer, install_dir, env, "machine")
             installed = True
+            assert_packaged_http_runtime(install_dir / _APP_EXE, env=env)
             _assert_camera_registered(env, "machine")
             registration_paths = _camera_registration_paths("machine")
             _run_rollback_injection(rollback_installer, install_dir, env, "machine")
             assert _camera_registration_paths("machine") == registration_paths
             _assert_camera_registered(env, "machine")
+            _assert_reinstall_with_loaded_camera(new_installer, install_dir, env, "machine")
             assert {
                 architecture: _camera_registration(architecture, "user")
                 for architecture in _PE_MACHINES
             } == prior_user_registration
         finally:
             if installed:
-                _run_uninstaller(install_dir, env)
-                _assert_camera_absent("machine")
+                _cleanup_installation(install_dir, env, "machine", registration_paths)
             assert {
                 architecture: _camera_registration(architecture, "user")
                 for architecture in _PE_MACHINES

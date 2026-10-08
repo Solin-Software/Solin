@@ -122,7 +122,7 @@ def publish_manifest() -> ReleaseManifest:
         release.tag,
         release.channel,
         "a" * 40,
-        (ReleaseAsset("linux", "x86_64", "appimage", "Solin.AppImage", 1, "b" * 64, "2.35"),),
+        (ReleaseAsset("linux", "x86_64", "appimage", "Solin.AppImage", 1, "b" * 64, "2.38"),),
         (LocalizedReleaseNotes(release, {"en": "Changes"}),),
     )
 

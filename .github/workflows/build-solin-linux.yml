@@ -21,6 +21,11 @@ on:
         required: true
         type: boolean
         default: true
+      run_release_smoke_tests:
+        description: Run AppImage replacement smoke against a verified predecessor
+        required: true
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -46,11 +51,17 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install Linux build and runtime dependencies
+        timeout-minutes: 20
         shell: bash
         run: |
-          sudo apt-get update
+          apt_options=(
+            -o Acquire::Retries=3
+            -o Acquire::http::Timeout=30
+            -o Acquire::https::Timeout=30
+          )
+          sudo apt-get "${apt_options[@]}" update
           mapfile -t libobs_packages < <(bash scripts/build_solin.sh --print-native-packages)
-          sudo apt-get install --yes --no-install-recommends \
+          sudo apt-get "${apt_options[@]}" install --yes --no-install-recommends \
             "${libobs_packages[@]}" \
             binutils \
             build-essential \
@@ -154,22 +165,19 @@ jobs:
       - name: Run AppImage startup smoke
         if: ${{ (inputs.release || inputs.run_packaged_smoke_test) }}
         shell: bash
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+          SOLIN_E2E_STARTUP_SECONDS: "15"
+          SOLIN_PACKAGED_EXE: ${{ github.workspace }}/dist/Solin-${{ env.APP_VERSION }}-linux-x86_64.AppImage
         run: |
-          appimage="${DIST_DIR}/${APP_NAME}-${APP_VERSION}-linux-x86_64.AppImage"
-          set +e
-          timeout --signal=TERM 15s xvfb-run --auto-servernum \
+          xvfb-run --auto-servernum \
             --server-args="-screen 0 1280x720x24" \
-            env APPIMAGE_EXTRACT_AND_RUN=1 "$appimage"
-          status=$?
-          set -e
-          if [[ "$status" -ne 124 && "$status" -ne 143 ]]; then
-            echo "Solin AppImage exited unexpectedly with status $status." >&2
-            exit 1
-          fi
-          echo "Solin AppImage remained running for the smoke-test window."
+            python -m pytest \
+              tests/e2e/test_packaged_app_smoke.py::test_packaged_app_survives_startup_window \
+              tests/e2e/test_packaged_app_smoke.py::test_packaged_http_runtime -q
 
       - name: Download verified predecessor
-        if: inputs.release
+        if: ${{ inputs.release || inputs.run_release_smoke_tests }}
         env:
           GH_TOKEN: ${{ github.token }}
           SOLIN_TRANSITION_LINUX_URL: ${{ vars.SOLIN_TRANSITION_LINUX_URL }}
@@ -177,7 +185,7 @@ jobs:
         run: python scripts/release.py download-predecessor --platform linux --architecture x86_64 --output build/previous-app/Solin.AppImage --github-env SOLIN_OLD_APPIMAGE
 
       - name: AppImage replacement smoke
-        if: inputs.release
+        if: ${{ inputs.release || inputs.run_release_smoke_tests }}
         env:
           SOLIN_NEW_APPIMAGE: ${{ github.workspace }}/dist/Solin-${{ env.APP_VERSION }}-linux-x86_64.AppImage
         run: xvfb-run --auto-servernum python -m pytest tests/e2e/test_linux_app_upgrade_smoke.py -q

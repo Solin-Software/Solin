@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import json
 import os
+import signal
 import subprocess
 import sys
 import time
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +14,7 @@ import pytest
 
 
 _SOLIN_REGISTRY_ROOT = r"Software\Solin"
+_SOLIN_INSTALLER_REGISTRY_KEY = rf"{_SOLIN_REGISTRY_ROOT}\Solin"
 
 
 def path_from_env(name: str, *, purpose: str) -> Path:
@@ -39,6 +42,7 @@ def isolated_app_env(temp_root: Path) -> dict[str, str]:
     xdg_config_dir = temp_root / "Config"
     xdg_data_dir = temp_root / "Data"
     xdg_cache_dir = temp_root / "Cache"
+    temporary_dir = temp_root / "Temp"
     for path in (
         temp_root / "AppData" / "Roaming",
         temp_root / "AppData" / "Local",
@@ -57,6 +61,19 @@ def isolated_app_env(temp_root: Path) -> dict[str, str]:
     env["XDG_CONFIG_HOME"] = str(xdg_config_dir)
     env["XDG_DATA_HOME"] = str(xdg_data_dir)
     env["XDG_CACHE_HOME"] = str(xdg_cache_dir)
+    env["SOLIN_IPC_SERVER_NAME"] = f"sln-{uuid.uuid4().hex[:12]}"
+    if sys.platform != "win32":
+        # Unix sockets and AppImage extraction need a private temporary root.
+        # Windows IPC uses named pipes. Keep its system temporary directory:
+        # Inno's uninstaller owns self-deletion helpers beyond the test lifetime.
+        temporary_dir.mkdir(parents=True, exist_ok=True)
+        env["TMPDIR"] = str(temporary_dir)
+        env["TMP"] = str(temporary_dir)
+        env["TEMP"] = str(temporary_dir)
+        ipc_path = temporary_dir / env["SOLIN_IPC_SERVER_NAME"]
+        limit = 104 if sys.platform == "darwin" else 108
+        if len(os.fsencode(ipc_path)) >= limit:
+            raise ValueError("Packaged smoke temporary directory is too long for a Unix IPC socket.")
     env.setdefault(
         "QT_LOGGING_RULES",
         "qt.qpa.mime=false",
@@ -151,23 +168,35 @@ def _registry_key_exists(root: Any, subkey: str) -> bool:
         return True
 
 
+def _solin_registry_guard_targets(
+    winreg: Any, profile_ids: tuple[str, ...]
+) -> tuple[tuple[str, Any, str], ...]:
+    targets: list[tuple[str, Any, str]] = [
+        ("HKCU", winreg.HKEY_CURRENT_USER, _SOLIN_REGISTRY_ROOT),
+    ]
+    targets.extend(
+        ("HKCU", winreg.HKEY_CURRENT_USER, f"Software\\Solin_{profile_id}")
+        for profile_id in profile_ids
+    )
+    # Machine-scope installer metadata lives one level below the vendor
+    # container. Inno Setup can legitimately leave an empty Software\Solin
+    # parent after uninstall, so only the actual install marker is a conflict.
+    targets.append(
+        ("HKLM", winreg.HKEY_LOCAL_MACHINE, _SOLIN_INSTALLER_REGISTRY_KEY)
+    )
+    return tuple(targets)
+
+
 def skip_if_solin_registry_exists(*profile_ids: str) -> None:
     if os.name != "nt":
         return
     winreg = _winreg()
-    roots = (
-        ("HKCU", winreg.HKEY_CURRENT_USER),
-        ("HKLM", winreg.HKEY_LOCAL_MACHINE),
-    )
-    subkeys = [_SOLIN_REGISTRY_ROOT]
-    subkeys.extend(f"Software\\Solin_{profile_id}" for profile_id in profile_ids)
-    for root_name, root in roots:
-        for subkey in subkeys:
-            if _registry_key_exists(root, subkey):
-                pytest.skip(
-                    f"{root_name}\\{subkey} already exists; refusing to mutate "
-                    "a machine with an existing Solin installation."
-                )
+    for root_name, root, subkey in _solin_registry_guard_targets(winreg, profile_ids):
+        if _registry_key_exists(root, subkey):
+            pytest.skip(
+                f"{root_name}\\{subkey} already exists; refusing to mutate "
+                "a machine with an existing Solin installation."
+            )
 
 
 def _delete_registry_tree(root: Any, subkey: str) -> None:
@@ -203,6 +232,28 @@ def cleanup_solin_test_registry(*profile_ids: str) -> None:
         _delete_registry_tree(winreg.HKEY_CURRENT_USER, subkey)
 
 
+def _signal_process_group(group_id: int, sig: signal.Signals) -> None:
+    try:
+        os.killpg(group_id, sig)
+    except ProcessLookupError:
+        return
+    except PermissionError:
+        if sys.platform != "darwin":
+            raise
+        # XNU's killpg1 excludes zombies, then returns EPERM if no signalable
+        # member remains. An orphaned child can be in that state after TERM.
+        # Confirm that the owned group has no live members; never suppress an
+        # actual permission failure for a process that still needs cleanup.
+        listing = subprocess.run(
+            ["ps", "-A", "-o", "pgid=,stat="],
+            capture_output=True, text=True, check=True, timeout=5,
+        )
+        for row in listing.stdout.splitlines():
+            pgid, state = row.split()
+            if int(pgid) == group_id and not state.startswith("Z"):
+                raise
+
+
 def assert_process_survives_startup(
     exe_path: Path,
     *,
@@ -216,6 +267,7 @@ def assert_process_survives_startup(
         [str(exe_path), *args],
         cwd=exe_path.parent,
         env=env,
+        start_new_session=os.name == "posix",
     )
     try:
         deadline = time.monotonic() + startup_seconds
@@ -225,11 +277,25 @@ def assert_process_survives_startup(
                 pytest.fail(f"Packaged app exited during startup with {exit_code}.")
             time.sleep(0.2)
     finally:
-        if process.poll() is None:
+        if os.name == "posix":
+            # AppImage extract-and-run forks AppRun and waits in the runtime.
+            # Terminating only that launcher leaves the application (and its
+            # single-instance socket) alive across replacement tests.
+            _signal_process_group(process.pid, signal.SIGTERM)
+        elif process.poll() is None:
             process.terminate()
-            try:
-                process.wait(timeout=shutdown_timeout)
-            except subprocess.TimeoutExpired:
+        try:
+            process.wait(timeout=shutdown_timeout)
+        except subprocess.TimeoutExpired:
+            if os.name == "posix":
+                _signal_process_group(process.pid, signal.SIGKILL)
+            else:
                 process.kill()
-                process.wait(timeout=5)
-                pytest.fail("Packaged app did not stop after the smoke test.")
+            process.wait(timeout=5)
+            pytest.fail("Packaged app did not stop after the smoke test.")
+        finally:
+            if os.name == "posix":
+                # A launcher may exit before its descendants, including on a
+                # startup failure. Always dispose of its owned group so no
+                # child survives the helper, even if it ignores SIGTERM.
+                _signal_process_group(process.pid, signal.SIGKILL)

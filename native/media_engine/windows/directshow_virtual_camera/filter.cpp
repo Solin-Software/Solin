@@ -58,14 +58,6 @@ constexpr REFERENCE_TIME kNominalFrameDuration = kUnitsPerSecond / 30LL;
     return directshow_frame_time_100ns(index);
 }
 
-[[nodiscard]] std::chrono::steady_clock::time_point frame_due_time(
-    const std::chrono::steady_clock::time_point started_at,
-    const std::uint64_t index) noexcept {
-    return started_at + std::chrono::seconds{index / 30U} +
-           std::chrono::nanoseconds{static_cast<std::int64_t>(
-               (index % 30U) * 1'000'000'000ULL / 30U)};
-}
-
 } // namespace
 
 HRESULT configure_media_type(const DirectShowMediaProfile& profile,
@@ -180,18 +172,8 @@ HRESULT DirectShowCapturePin::FillBuffer(IMediaSample* sample) {
     if (sample == nullptr || adapter_ == nullptr) {
         return E_POINTER;
     }
-    const auto now = std::chrono::steady_clock::now();
-    bool cadence_discontinuity = false;
-    auto due = frame_due_time(deadline_epoch_, deadline_index_);
-    constexpr auto maximum_lateness =
-        std::chrono::nanoseconds{1'000'000'000LL / 30LL};
-    if (now > due + maximum_lateness) {
-        deadline_epoch_ = now;
-        deadline_index_ = 0U;
-        due = now;
-        cadence_discontinuity = true;
-    }
-    std::this_thread::sleep_until(due);
+    const auto deadline = cadence_.next(std::chrono::steady_clock::now());
+    std::this_thread::sleep_until(deadline.due);
 
     BYTE* bytes = nullptr;
     auto result = sample->GetPointer(&bytes);
@@ -236,7 +218,7 @@ HRESULT DirectShowCapturePin::FillBuffer(IMediaSample* sample) {
             visit_state.frame_changed = visit_state.adapted;
         });
     const auto generation = provider_.generation();
-    bool discontinuity = first_sample_ || cadence_discontinuity ||
+    bool discontinuity = first_sample_ || deadline.discontinuity ||
                          generation != last_generation_;
     const auto stable_live_frame = visited && visit_state.adapted &&
                                     generation != 0U &&
@@ -278,7 +260,6 @@ HRESULT DirectShowCapturePin::FillBuffer(IMediaSample* sample) {
     auto start = frame_time(frame_index_);
     auto end = frame_time(frame_index_ + 1U);
     ++frame_index_;
-    ++deadline_index_;
     sample->SetTime(&start, &end);
     sample->SetSyncPoint(TRUE);
     sample->SetDiscontinuity(discontinuity ? TRUE : FALSE);
@@ -342,8 +323,7 @@ HRESULT DirectShowCapturePin::SetMediaType(const CMediaType* media_type) {
 
 HRESULT DirectShowCapturePin::OnThreadCreate() {
     provider_.start();
-    deadline_epoch_ = std::chrono::steady_clock::now();
-    deadline_index_ = 0U;
+    cadence_.reset(std::chrono::steady_clock::now());
     frame_index_ = 0U;
     last_generation_ = 0U;
     last_input_sequence_ = 0U;

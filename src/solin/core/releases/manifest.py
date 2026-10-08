@@ -17,7 +17,7 @@ REQUIRED_ASSETS = {
     ("windows", "x86_64", "installer"): ("exe", "10.0.17763"),
     ("macos", "x86_64", "dmg"): ("dmg", "13.0"),
     ("macos", "arm64", "dmg"): ("dmg", "13.0"),
-    ("linux", "x86_64", "appimage"): ("AppImage", "2.35"),
+    ("linux", "x86_64", "appimage"): ("AppImage", "2.38"),
 }
 _HASH = re.compile(r"^[a-f0-9]{64}$")
 _SHA = re.compile(r"^[a-f0-9]{40}$")

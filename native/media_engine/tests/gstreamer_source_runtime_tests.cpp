@@ -20,6 +20,7 @@
 #include <condition_variable>
 #include <exception>
 #include <iostream>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -260,38 +261,107 @@ class GatedSourceRuntime final : public solin::media_engine::SourceRuntime {
         : delegate_(std::move(delegate)), frame_signal_(std::move(frame_signal)) {}
 
     void start() override { delegate_->start(); }
-    void stop() noexcept override { delegate_->stop(); }
+    void stop() noexcept override {
+        resume_observation();
+        delegate_->stop();
+    }
 
     [[nodiscard]] solin::media_engine::SourceRuntimeHealth health() const override {
-        if (!released_.load()) {
+        {
+            std::scoped_lock lock{observation_mutex_};
+            auto& observation = observations_[std::this_thread::get_id()];
+            if (!std::exchange(observation.frame_pending, false)) {
+                // The unsettled graph's readiness check follows submission and
+                // ACK probing. Its next frame read is the availability scan,
+                // rather than the submission that also reads this runtime.
+                observation.scan_pending = true;
+            }
+            if (std::exchange(observation.unavailable_snapshot, false)) {
+                return {.status = solin::media_engine::SourceRuntimeStatus::starting};
+            }
+        }
+        const auto availability = availability_.load();
+        if (availability == Availability::unavailable) {
             return {.status = solin::media_engine::SourceRuntimeStatus::starting};
+        }
+        if (availability == Availability::degraded) {
+            return {.status = solin::media_engine::SourceRuntimeStatus::degraded,
+                    .error_code = "source_frame_timeout"};
         }
         return delegate_->health();
     }
 
     [[nodiscard]] std::shared_ptr<const solin::media_engine::SourceFrame>
     latest_frame() const override {
-        return released_.load() ? delegate_->latest_frame() : nullptr;
+        if (availability_.load() == Availability::frame) {
+            return delegate_->latest_frame();
+        }
+        std::unique_lock lock{observation_mutex_};
+        auto& observation = observations_[std::this_thread::get_id()];
+        const bool availability_scan = std::exchange(observation.scan_pending, false);
+        observation.frame_pending = true;
+        if (observation_armed_ && availability_scan) {
+            observation_armed_ = false;
+            observation_held_ = true;
+            observation_wakeup_.notify_all();
+            observation_wakeup_.wait(lock, [this] { return observation_resumed_; });
+            // Preserve the unavailable frame/health snapshot even when readiness
+            // changes while this call is held. Its notification must survive the
+            // feeder's subsequent entry into the recovery wait.
+            observation.unavailable_snapshot = true;
+        }
+        return nullptr;
     }
 
     [[nodiscard]] bool wait_for_frame(
         const std::uint64_t after_sequence, const std::stop_token stop_token,
         const std::chrono::steady_clock::time_point deadline) const noexcept override {
-        return released_.load() &&
+        return availability_.load() == Availability::frame &&
                delegate_->wait_for_frame(after_sequence, stop_token, deadline);
     }
 
     void wake_frame_waiters() noexcept override { delegate_->wake_frame_waiters(); }
 
-    void release() noexcept {
-        released_.store(true);
+    void release(const bool degraded = false) noexcept {
+        availability_.store(degraded ? Availability::degraded : Availability::frame);
         frame_signal_->notify();
     }
 
+    void hold_next_unavailable_observation() {
+        std::scoped_lock lock{observation_mutex_};
+        observation_armed_ = true;
+        observation_resumed_ = false;
+    }
+
+    [[nodiscard]] bool wait_until_observation_held() const {
+        std::unique_lock lock{observation_mutex_};
+        return observation_wakeup_.wait_for(lock, 1s, [this] {
+            return observation_held_;
+        });
+    }
+
+    void resume_observation() noexcept {
+        std::scoped_lock lock{observation_mutex_};
+        observation_resumed_ = true;
+        observation_wakeup_.notify_all();
+    }
+
   private:
+    enum class Availability : std::uint8_t { unavailable, frame, degraded };
+    struct Observation final {
+        bool frame_pending{false};
+        bool scan_pending{false};
+        bool unavailable_snapshot{false};
+    };
     std::shared_ptr<solin::media_engine::SourceRuntime> delegate_{};
     std::shared_ptr<solin::media_engine::GStreamerFrameSignal> frame_signal_{};
-    std::atomic_bool released_{false};
+    std::atomic<Availability> availability_{Availability::unavailable};
+    mutable std::mutex observation_mutex_{};
+    mutable std::condition_variable observation_wakeup_{};
+    mutable bool observation_armed_{false};
+    mutable bool observation_held_{false};
+    bool observation_resumed_{true};
+    mutable std::map<std::thread::id, Observation> observations_{};
 };
 
 class StartupGateFactory final : public solin::media_engine::SourceRuntimeFactory {
@@ -883,7 +953,9 @@ void test_program_transitions_render_real_synthetic_frames(
     std::uint8_t minimum_dissolve_luma = 255U;
     std::size_t sampled_frames = 0U;
     bool every_short_transition_published_a_blended_frame = true;
+    bool every_short_transition_reached_its_target = true;
     std::vector<std::uint64_t> missed_short_transition_indices;
+    std::vector<std::uint64_t> stalled_short_transition_indices;
     for (std::uint64_t index = 0U; index < 20U; ++index) {
         const auto target = index % 2U == 0U ? "scene-blue" : "scene-red";
         const auto prepare_sequence = 2'000U + index * 2U;
@@ -899,9 +971,14 @@ void test_program_transitions_render_real_synthetic_frames(
             std::this_thread::sleep_for(250ms);
         }
         bool published_blended_frame = false;
-        const auto deadline = std::chrono::steady_clock::now() + 120ms;
+        bool reached_target = false;
+        // The correctness contract is causal ordering: a required Program
+        // consumer must observe a body frame before the destination endpoint.
+        // Keep only a generous deadlock watchdog here; runner scheduling is not
+        // part of the transition's requested 50 ms presentation duration.
+        const auto deadline = std::chrono::steady_clock::now() + 2s;
         while (std::chrono::steady_clock::now() < deadline) {
-            const auto frame = wait_for_program_center(renderer, last_sequence, 40ms);
+            const auto frame = wait_for_program_center(renderer, last_sequence, 100ms);
             if (!frame.has_value()) {
                 continue;
             }
@@ -919,12 +996,25 @@ void test_program_transitions_render_real_synthetic_frames(
             published_blended_frame =
                 published_blended_frame || (!red_endpoint && !blue_endpoint);
             ++sampled_frames;
+            const bool target_endpoint =
+                target == std::string_view{"scene-blue"}
+                    ? blue_endpoint
+                    : red_endpoint;
+            if (target_endpoint) {
+                reached_target = true;
+                break;
+            }
         }
         every_short_transition_published_a_blended_frame =
             every_short_transition_published_a_blended_frame &&
             published_blended_frame;
+        every_short_transition_reached_its_target =
+            every_short_transition_reached_its_target && reached_target;
         if (!published_blended_frame) {
             missed_short_transition_indices.push_back(index);
+        }
+        if (!reached_target) {
+            stalled_short_transition_indices.push_back(index);
         }
     }
     expect(sampled_frames >= 40U,
@@ -938,6 +1028,15 @@ void test_program_transitions_render_real_synthetic_frames(
     }
     expect(every_short_transition_published_a_blended_frame,
            "every minimum-duration Program transition publishes a blended NV12 frame");
+    if (!every_short_transition_reached_its_target) {
+        std::cerr << "Stalled minimum-duration transition indices:";
+        for (const auto index : stalled_short_transition_indices) {
+            std::cerr << ' ' << index;
+        }
+        std::cerr << '\n';
+    }
+    expect(every_short_transition_reached_its_target,
+           "every minimum-duration Program transition reaches its requested endpoint");
     expect(minimum_dissolve_luma >= 24U,
            "Dissolve never publishes a transient black/blank Program frame");
 }
@@ -1141,7 +1240,7 @@ void test_failed_source_does_not_block_healthy_compositor_layers(
 }
 
 void test_program_cadence_recovers_when_media_arrives_before_the_startup_camera(
-    solin::media_engine::MediaRuntime& media_runtime) {
+    solin::media_engine::MediaRuntime& media_runtime, const bool degraded = false) {
     using solin::media_engine::OutputBus;
     using solin::media_engine::SceneTransitionKind;
 
@@ -1178,9 +1277,44 @@ void test_program_cadence_recovers_when_media_arrives_before_the_startup_camera(
         {.kind = SceneTransitionKind::fade_to_black, .duration_ms = 200U});
     graph.take(prepared, 1U, 10'002U);
     std::this_thread::sleep_for(3'500ms);
-    camera->release();
+
+    // Hold an unavailable snapshot after the 3 s acknowledgement watchdog.
+    // Publish readiness before that snapshot returns, so the feeder must not
+    // lose the notification between its availability scan and recovery wait.
+    camera->hold_next_unavailable_observation();
+    struct ObservationRelease final {
+        GatedSourceRuntime& runtime;
+        ~ObservationRelease() { runtime.resume_observation(); }
+    };
+    const ObservationRelease observation_release{*camera};
+    expect(camera->wait_until_observation_held(),
+           "the startup fixture holds an unavailable recovery observation");
+    const auto released_at = std::chrono::steady_clock::now();
+    camera->release(degraded);
+    camera->resume_observation();
 
     solin::media_engine::SceneOutputFrameCursor cursor{};
+    bool recovered = false;
+    const auto recovery_deadline = released_at + 450ms;
+    while (std::chrono::steady_clock::now() < recovery_deadline) {
+        const auto sequence = renderer->visit_latest_frame(
+            OutputBus::virtual_camera, cursor,
+            [](const solin::media_engine::VideoFrameView&) {});
+        if (sequence.has_value()) {
+            cursor = sequence.value();
+            recovered = true;
+            break;
+        }
+        static_cast<void>(renderer->wait_for_frame(
+            OutputBus::virtual_camera, cursor, std::stop_token{},
+            (std::min)(recovery_deadline,
+                       std::chrono::steady_clock::now() + 20ms)));
+    }
+    expect(recovered,
+           degraded
+               ? "Program resumes when the unavailable camera becomes degraded"
+               : "Program resumes after the startup camera publishes its first frame");
+
     std::size_t frame_count = 0U;
     const auto deadline = std::chrono::steady_clock::now() + 2s;
     while (std::chrono::steady_clock::now() < deadline) {
@@ -1532,6 +1666,193 @@ class ImmediateFailureGraph final
         return false;
     }
 };
+
+// Hold only the transition's input feeder. GStreamer's streaming threads and
+// output clock remain free to render the already selected, retained endpoints.
+class TransitionFeederGateGraph final
+    : public solin::media_engine::PreparedSceneRenderGraph {
+  public:
+    explicit TransitionFeederGateGraph(
+        std::shared_ptr<solin::media_engine::PreparedSceneRenderGraph> graph)
+        : graph_(std::move(graph)) {}
+
+    void arm() {
+        std::scoped_lock lock{mutex_};
+        armed_ = true;
+    }
+
+    void set_direct_output_enabled(const bool enabled) noexcept override {
+        std::scoped_lock lock{mutex_};
+        if (!enabled && armed_) {
+            gated_ = true;
+        }
+    }
+
+    [[nodiscard]] std::shared_ptr<const solin::media_engine::SourceFrame>
+    latest_frame() const noexcept override {
+        return graph_->latest_frame();
+    }
+
+    [[nodiscard]] std::shared_ptr<const solin::media_engine::SourceFrame>
+    latest_gpu_frame() const noexcept override {
+        std::unique_lock lock{mutex_};
+        if (gated_ && calls_after_take_++ != 0U) {
+            blocked_ = true;
+            wakeup_.notify_all();
+            wakeup_.wait(lock, [this] { return released_; });
+        }
+        return graph_->latest_gpu_frame();
+    }
+
+    [[nodiscard]] bool wait_until_blocked() const {
+        std::unique_lock lock{mutex_};
+        return wakeup_.wait_for(lock, 500ms, [this] { return blocked_; });
+    }
+
+    void release() {
+        std::scoped_lock lock{mutex_};
+        released_ = true;
+        wakeup_.notify_all();
+    }
+
+  private:
+    std::shared_ptr<solin::media_engine::PreparedSceneRenderGraph> graph_;
+    mutable std::mutex mutex_{};
+    mutable std::condition_variable wakeup_{};
+    bool armed_{false};
+    bool gated_{false};
+    bool released_{false};
+    mutable bool blocked_{false};
+    mutable unsigned calls_after_take_{0U};
+};
+
+void test_program_transition_clock_survives_a_descheduled_feeder(
+    solin::media_engine::MediaRuntime& media_runtime) {
+    using solin::media_engine::OutputBus;
+    const auto renderer = media_runtime.scene_renderer();
+    const auto snapshot = transition_snapshot();
+    const auto document = solin::media_engine::compile_scene_document(snapshot);
+    solin::media_engine::SourceRegistry registry{media_runtime.source_runtime_factory()};
+    registry.replace_snapshot(snapshot);
+    const auto prepare = [&](const char* scene, const char* source) {
+        auto resources =
+            std::make_shared<solin::media_engine::SceneRenderResources>();
+        resources->source_leases.push_back(registry.acquire(source, scene));
+        const auto& lease = resources->source_leases.front();
+        expect(wait_for_frame(lease.runtime(), 5s) != nullptr,
+               "the gated transition fixture has a retained source frame");
+        auto graph = renderer->prepare({
+            .bus = OutputBus::virtual_camera,
+            .document_revision = snapshot.document_revision,
+            .output = snapshot.outputs[1],
+            .graph = document->scenes.at(scene),
+            .sources = {{.source_id = source,
+                         .generation = lease.generation(),
+                         .runtime = &lease.runtime()}},
+            .resources = std::move(resources),
+        });
+        graph->set_direct_output_enabled(true);
+        expect(graph->wait_for_frame(0U, {}, std::chrono::steady_clock::now() + 1s),
+               "the gated transition fixture primes CPU and GPU output");
+        return graph;
+    };
+    const auto red = prepare("scene-red", "color-red");
+    const auto blue = prepare("scene-blue", "color-blue");
+    auto outgoing = std::make_shared<TransitionFeederGateGraph>(red);
+    renderer->set_system_memory_output_enabled(
+        OutputBus::virtual_camera,
+        solin::media_engine::SystemMemoryOutputConsumer::frame_channel, true);
+    renderer->commit_hydration({nullptr, outgoing}, {false, true}, 1U);
+    const auto transition = renderer->prepare_transition(
+        OutputBus::virtual_camera, blue,
+        {.kind = solin::media_engine::SceneTransitionKind::dissolve,
+         .duration_ms = 50U});
+    expect(transition.render_output != nullptr && !transition.fallback_applied,
+           "the gated transition prepares the production D3D11 effect");
+    if (transition.render_output == nullptr) {
+        return;
+    }
+    transition.render_output->set_direct_output_enabled(true);
+    const auto origin = outgoing->latest_frame();
+    const auto prime_deadline = std::chrono::steady_clock::now() + 1s;
+    while (transition.render_output->latest_frame() == origin &&
+           std::chrono::steady_clock::now() < prime_deadline) {
+        std::this_thread::sleep_for(1ms);
+    }
+    const auto primed = transition.render_output->latest_frame();
+    expect(primed != nullptr && primed != origin,
+           "the gated transition publishes its own pre-Take endpoint");
+    if (primed == nullptr || primed == origin) {
+        return;
+    }
+    std::mutex visitor_mutex;
+    std::condition_variable_any visitor_wakeup;
+    bool endpoint_mapped = false;
+    bool release_endpoint = false;
+    // This reader maps the origin before Take, then returns after body output
+    // has arrived. Its successful visit must acknowledge that origin PTS only.
+    std::jthread endpoint_reader{[&](const std::stop_token stop) {
+        static_cast<void>(transition.render_output->visit_latest_frame(
+            0U, [&](const solin::media_engine::VideoFrameView&) {
+                std::unique_lock lock{visitor_mutex};
+                endpoint_mapped = true;
+                visitor_wakeup.notify_all();
+                visitor_wakeup.wait(lock, stop, [&] { return release_endpoint; });
+            }));
+    }};
+    {
+        std::unique_lock lock{visitor_mutex};
+        expect(visitor_wakeup.wait_for(lock, 1s, [&] { return endpoint_mapped; }),
+               "the delayed reader maps the origin before Take");
+    }
+    outgoing->arm();
+    renderer->commit_take(OutputBus::virtual_camera, blue,
+                          transition.render_output, 2U);
+    expect(outgoing->wait_until_blocked(),
+           "the transition feeder is descheduled after its first on-air submission");
+    const auto body_deadline = std::chrono::steady_clock::now() + 120ms;
+    auto retained = transition.render_output->latest_frame();
+    const auto body_timestamp = primed->presentation_timestamp_ns +
+        2U * static_cast<std::uint64_t>(
+            solin::media_engine::scene_transition_frame_interval(
+                snapshot.outputs[1].video_format).count());
+    while (retained != nullptr && retained->presentation_timestamp_ns < body_timestamp &&
+           std::chrono::steady_clock::now() < body_deadline) {
+        static_cast<void>(transition.render_output->wait_for_frame(
+            retained->sequence, {}, body_deadline));
+        retained = transition.render_output->latest_frame();
+    }
+    {
+        std::scoped_lock lock{visitor_mutex};
+        release_endpoint = true;
+    }
+    visitor_wakeup.notify_all();
+    endpoint_reader.join();
+    // Let the next output selection react to the delayed endpoint visit before
+    // the real Program consumer is allowed to acknowledge a body frame.
+    if (retained != nullptr) {
+        static_cast<void>(transition.render_output->wait_for_frame(
+            retained->sequence, {}, std::chrono::steady_clock::now() + 120ms));
+    }
+    bool blended = false;
+    std::uint64_t cursor = 0U;
+    const auto deadline = std::chrono::steady_clock::now() + 120ms;
+    while (std::chrono::steady_clock::now() < deadline && !blended) {
+        const auto frame = wait_for_program_center(renderer, cursor, 40ms);
+        if (frame.has_value()) {
+            cursor = frame->sequence;
+            blended = near_channel(frame->yuv[1], 171U, 40U) &&
+                      near_channel(frame->yuv[2], 179U, 40U);
+        }
+    }
+    // Release before asserting or destroying the renderer, even on failure.
+    outgoing->release();
+    expect(blended,
+           "the Program output clock renders a real blended frame while its feeder is descheduled");
+    renderer->shutdown();
+    red->stop();
+    blue->stop();
+}
 
 void test_renderer_hydration_and_output_updates_drive_graph_demand(
     const std::shared_ptr<solin::media_engine::SceneRenderer>& renderer) {
@@ -1888,11 +2209,15 @@ int main(const int argc, const char* const argv[]) {
             test_color_source_publishes_bounded_latest_d3d11_frames(media_runtime);
             test_rtsp_source_decodes_to_the_same_bounded_frame_contract(media_runtime);
             if (probe.d3d11_compositor) {
+                test_program_transition_clock_survives_a_descheduled_feeder(
+                    media_runtime);
                 test_scene_renderer_composes_nested_scene_to_shared_d3d11_frame(
                     media_runtime);
                 test_failed_source_does_not_block_healthy_compositor_layers(media_runtime);
                 test_program_cadence_recovers_when_media_arrives_before_the_startup_camera(
                     media_runtime);
+                test_program_cadence_recovers_when_media_arrives_before_the_startup_camera(
+                    media_runtime, true);
             }
             if (argc == 2 && std::string_view{argv[1]} == "--local-camera") {
                 test_first_hardware_camera_publishes_its_exact_selected_format(media_runtime);

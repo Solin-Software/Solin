@@ -1,7 +1,7 @@
 # Building and platform requirements
 
 The repository supports Windows x86-64, macOS 13+ on Intel and Apple Silicon,
-and Linux x86-64 with glibc 2.35 or newer. Generated files are written under
+and Linux x86-64 with glibc 2.38 or newer. Generated files are written under
 `build/` or `dist/` and must not be committed.
 
 Playback and scenes use the supervised libobs sidecar. Source runs launch its
@@ -21,6 +21,11 @@ or missing-plugin failures fail the
 build. Linux qualification needs a graphics session; CI uses Xvfb. macOS
 qualification runs in the macOS workflow and cannot be established by Windows
 tests alone.
+
+Packaged smoke tests also launch the delivered executable in its headless
+`--verify-http-runtime` role. A local HTTP server verifies gzip decoding,
+streamed responses and HTTP error handling through the production adapter,
+without opening the GUI, changing preferences or contacting external services.
 
 Install the `ffprobe` and `ffmpeg` command-line tools on PATH for titles,
 durations, embedded cover art, and video thumbnails. Python dependencies alone
@@ -113,6 +118,13 @@ build\native\media-engine-gstreamer\Release\solin-virtual-camera-frame-adapter-b
 
 CTest fails the Release build if any measured P95 exceeds the budget.
 
+DirectShow graph checks cover standby/live/stale-producer transitions with
+normal and deliberately slow consumers. They disable the renderer clock to
+verify the filter's own pacing, preserve exact sample timestamps and reject
+overproduction. Separate tests use controlled time to verify 30 fps deadlines,
+lateness boundaries and recovery without bursts; the graph watchdog bounds a
+stalled test rather than requiring a fixed frame count from a busy runner.
+
 For the historical QtMultimedia-to-native media route measurements, including
 fixture generation, explicit one-second CPU buckets, and provenance requirements, see
 [Native media performance measurements](native-media-performance.md).
@@ -124,6 +136,27 @@ because Inno Setup performs the virtual-camera registration and transactional
 rollback that a copied directory cannot provide. Release runs resolve and
 verify their predecessor automatically; a manual diagnostic run may disable
 upgrade smoke testing.
+
+Upgrades replace the installer-owned `backports` runtime directory before
+copying the new payload. Optional extensions left by an older local build must
+not remain importable when their compiled Python package is absent from the
+new executable. The upgrade smoke seeds an obsolete extension and verifies
+its removal, HTTP operation and preservation of unrelated files and user state.
+
+The DirectShow filters are staged as an immutable x64/x86 pair identified by
+their binary hashes, independently of the application version. Reinstalling
+the same pair reuses its files; rebuilding the same application version stages
+a different pair without overwriting DLLs loaded by camera consumers. Uninstall
+removes both scoped camera registrations immediately. Windows keeps a loaded
+DLL until its consumer closes; later installation or uninstallation cleans
+obsolete unlocked files. Reboot deletion is not scheduled because the same
+pair may be reinstalled before reboot. The installer smoke verifies repair,
+uninstall and immediate reinstall while an x64 consumer keeps the DLL loaded.
+Existing-directory confirmation uses Inno Setup's localized, silent-aware
+behavior, so files preserved by uninstall do not block an unattended reinstall.
+The Windows smoke waits for the whole installer/uninstaller process tree;
+Inno's original uninstaller process can exit before its cleanup phase finishes.
+Failures include the Inno log rather than relying only on the launcher exit code.
 
 Windows artifacts are currently unsigned, matching the existing distribution
 model. Release integrity is enforced by the exact asset inventory, immutable

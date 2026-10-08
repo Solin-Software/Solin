@@ -10,9 +10,9 @@ TEMPLATE_ROOT="${PROJECT_ROOT}/packaging/linux/appimage"
 APPIMAGETOOL_VERSION="1.9.1"
 APPIMAGETOOL_SHA256="ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0"
 APPIMAGETOOL_URL="https://github.com/AppImage/appimagetool/releases/download/${APPIMAGETOOL_VERSION}/appimagetool-x86_64.AppImage"
-TYPE2_RUNTIME_COMMIT="75849dce7cc37e4319b633df1f116ca895c71a12"
-TYPE2_RUNTIME_SHA256="1cc49bcf1e2ccd593c379adb17c9f85a36d619088296504de95b1d06215aebbf"
-TYPE2_RUNTIME_URL="https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-x86_64"
+TYPE2_RUNTIME_VERSION="20251108"
+TYPE2_RUNTIME_SHA256="2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d"
+TYPE2_RUNTIME_URL="https://github.com/AppImage/type2-runtime/releases/download/${TYPE2_RUNTIME_VERSION}/runtime-x86_64"
 
 fail() {
     printf 'error: %s\n' "$*" >&2
@@ -117,7 +117,7 @@ WORK_OUTPUT="${WORK_ROOT}/Solin-${APP_VERSION}-linux-x86_64.AppImage"
 FINAL_OUTPUT="${OUTPUT_ROOT}/Solin-${APP_VERSION}-linux-x86_64.AppImage"
 TOOL_CACHE="${HOME}/.cache/solin/tools"
 APPIMAGETOOL="${SOLIN_APPIMAGETOOL:-${TOOL_CACHE}/appimagetool-${APPIMAGETOOL_VERSION}-x86_64.AppImage}"
-TYPE2_RUNTIME="${SOLIN_APPIMAGE_RUNTIME:-${TOOL_CACHE}/runtime-x86_64-${TYPE2_RUNTIME_COMMIT}}"
+TYPE2_RUNTIME="${SOLIN_APPIMAGE_RUNTIME:-${TOOL_CACHE}/runtime-x86_64-${TYPE2_RUNTIME_VERSION}}"
 
 mkdir -p -- "${WORK_ROOT}" "${OUTPUT_ROOT}" "${TOOL_CACHE}"
 case "${APPDIR}" in

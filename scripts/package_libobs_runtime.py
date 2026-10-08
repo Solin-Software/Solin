@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import base64
 import filecmp
+import hashlib
 import importlib.metadata
 import io
 import os
@@ -51,6 +52,7 @@ _LINUX_HOST_LIBRARIES = frozenset({
     "libutil.so.1", "libresolv.so.2", "libGL.so.1", "libEGL.so.1",
     "libGLX.so.0", "libGLdispatch.so.0", "libOpenGL.so.0", "libglapi.so.0",
     "libgbm.so.1", "libvulkan.so.1", "libva.so.2", "libva-drm.so.2", "libva-x11.so.2",
+    "ld-linux-x86-64.so.2", "ld-linux-aarch64.so.1",
 })
 _LINUX_DOCUMENTATION_ROOT = Path("/usr/share/doc")
 # Effects loaded by OBS 32.1.2's graphics initialization, including OpenGL.
@@ -235,10 +237,47 @@ def _native_files(root: Path) -> list[Path]:
     return result
 
 
-def _linux_linked_libraries(binary: Path) -> dict[str, Path]:
+def _linux_host_library(name: str) -> bool:
+    return name in _LINUX_HOST_LIBRARIES or name.startswith(("libdrm", "libnss_"))
+
+
+def _linux_needed_libraries(binary: Path) -> frozenset[str]:
+    environment = dict(os.environ)
+    environment["LC_ALL"] = "C"
+    result = subprocess.run(
+        ["readelf", "--dynamic", "--wide", str(binary)],
+        check=True,
+        capture_output=True,
+        env=environment,
+    )
+    needed = set()
+    marker = "Shared library: ["
+    for line in result.stdout.decode("utf-8", errors="replace").splitlines():
+        if "(NEEDED)" not in line:
+            continue
+        start = line.find(marker)
+        end = line.find("]", start + len(marker)) if start >= 0 else -1
+        if start < 0 or end < 0:
+            raise LibobsPackagingError(f"Invalid ELF dependency record in {binary}: {line.strip()}")
+        name = line[start + len(marker):end]
+        if not name or Path(name).name != name:
+            raise LibobsPackagingError(f"Invalid shared-library name: {name}")
+        needed.add(name)
+    return frozenset(needed)
+
+
+def _linux_linked_libraries(
+    binary: Path, *, private_root: Path | None = None,
+) -> dict[str, Path]:
+    needed = _linux_needed_libraries(binary)
     environment = dict(os.environ)
     environment.pop("LD_LIBRARY_PATH", None)
     environment.pop("LD_PRELOAD", None)
+    environment["LC_ALL"] = "C"
+    if private_root is not None:
+        private_root = private_root.resolve()
+        search_paths = list(dict.fromkeys((binary.resolve().parent, private_root)))
+        environment["LD_LIBRARY_PATH"] = os.pathsep.join(map(str, search_paths))
     result = subprocess.run(
         ["ldd", str(binary)], check=True, capture_output=True, env=environment,
     )
@@ -252,9 +291,20 @@ def _linux_linked_libraries(binary: Path) -> dict[str, Path]:
         fields = line.split()
         if len(fields) >= 3 and fields[1] == "=>" and fields[2].startswith("/"):
             name = fields[0]
+            if name not in needed:
+                continue
             if Path(name).name != name:
                 raise LibobsPackagingError(f"Invalid shared-library name: {name}")
             libraries[name] = Path(fields[2]).resolve()
+        elif len(fields) >= 2 and fields[0].startswith("/"):
+            library = Path(fields[0]).resolve()
+            if library.name in needed:
+                libraries[library.name] = library
+    missing = sorted(needed.difference(libraries))
+    if missing:
+        raise LibobsPackagingError(
+            f"Unresolved direct libobs dependencies in {binary}: {', '.join(missing)}"
+        )
     return libraries
 
 
@@ -284,10 +334,11 @@ def _copy_linux_dependency_notice(library: Path, root: Path) -> None:
     shutil.copy2(notice, destination)
 
 
-def _set_linux_rpath(root: Path, binary: Path) -> None:
+def _set_linux_rpath(root: Path, binary: Path, *, include_binary_directory: bool = True) -> None:
     relative = os.path.relpath(root, binary.parent).replace(os.sep, "/")
+    rpath = f"$ORIGIN:$ORIGIN/{relative}" if include_binary_directory else f"$ORIGIN/{relative}"
     subprocess.run(
-        ["patchelf", "--set-rpath", f"$ORIGIN:$ORIGIN/{relative}", str(binary)],
+        ["patchelf", "--set-rpath", rpath, str(binary)],
         check=True,
         capture_output=True,
     )
@@ -299,25 +350,48 @@ def _relocate_linux(root: Path, *, binaries: Sequence[Path] | None = None) -> No
     if binaries is not None:
         targets = list(dict.fromkeys(path.resolve() for path in binaries))
         for binary in targets:
-            _set_linux_rpath(root, binary)
+            # A helper copied beside the application must not search its own
+            # directory before the private libobs runtime. Nuitka may leave
+            # flat copies of shared libraries there, which would otherwise
+            # shadow the qualified runtime we just staged.
+            _set_linux_rpath(
+                root,
+                binary,
+                include_binary_directory=binary.is_relative_to(root_resolved),
+            )
         for binary in targets:
             for name, library in _linux_linked_libraries(binary).items():
-                if name in _LINUX_HOST_LIBRARIES or name.startswith(("libdrm", "libnss_")):
+                if _linux_host_library(name):
                     continue
                 if not library.is_relative_to(root_resolved):
                     raise LibobsPackagingError(f"Mux helper dependency was not bundled: {name}")
         return
 
-    pending = sorted(_native_files(root), key=lambda path: path.as_posix())
+    initial = sorted(_native_files(root), key=lambda path: path.as_posix())
+    # Discover every originally staged binary before copying any host dependency.
+    # The search path contains only immutable staged files, so sibling libobs
+    # libraries resolve without letting an earlier copied dependency hide a
+    # conflicting provider needed by a later plugin.
+    discovered = {
+        binary.resolve(): _linux_linked_libraries(binary, private_root=root_resolved)
+        for binary in initial
+    }
+    # Fingerprint immutable payloads before patchelf changes ELF bytes. Comparing
+    # a relocated copy with its original creates false SONAME conflicts.
+    identities = {path.resolve(): _linux_library_digest(path) for path in initial}
+    pending: list[tuple[Path, dict[str, Path]]] = []
+    for binary in initial:
+        resolved = binary.resolve()
+        _set_linux_rpath(root, resolved)
+        pending.append((resolved, discovered[resolved]))
     visited: set[Path] = set()
     while pending:
-        binary = pending.pop(0).resolve()
+        binary, libraries = pending.pop(0)
         if binary in visited:
             continue
         visited.add(binary)
-        libraries = _linux_linked_libraries(binary)
         for name, library in sorted(libraries.items()):
-            if name in _LINUX_HOST_LIBRARIES or name.startswith(("libdrm", "libnss_")):
+            if _linux_host_library(name):
                 continue
             if library.is_relative_to(root_resolved):
                 continue
@@ -326,31 +400,34 @@ def _relocate_linux(root: Path, *, binaries: Sequence[Path] | None = None) -> No
             if destination.exists():
                 if not destination.is_file():
                     raise LibobsPackagingError(f"Private libobs dependency is not a file: {name}")
-                # The final runtime has one namespace per SONAME. Keep the
-                # provider selected first by the sorted closure rather than
-                # allowing ldd probe order to replace it with a host copy.
-                if filecmp.cmp(destination, library, shallow=False):
-                    _copy_linux_dependency_notice(library, root)
+                if identities.get(destination.resolve()) != _linux_library_digest(library):
+                    raise LibobsPackagingError(f"Conflicting private libobs dependency: {name}")
+                _copy_linux_dependency_notice(library, root)
                 continue
+            dependency_libraries = _linux_linked_libraries(library)
             shutil.copy2(library, destination)
+            identities[destination.resolve()] = _linux_library_digest(library)
             _copy_linux_dependency_notice(library, root)
-            pending.append(destination.resolve())
-            pending.sort(key=lambda path: path.as_posix())
-
-    for binary in sorted(visited, key=lambda path: path.as_posix()):
-        _set_linux_rpath(root, binary)
+            _set_linux_rpath(root, destination)
+            pending.append((destination.resolve(), dependency_libraries))
+            pending.sort(key=lambda item: item[0].as_posix())
 
     # Re-resolve after the private RPATH is final. Every non-host SONAME must
     # now bind inside the staged runtime; this also catches ABI/version errors.
     for binary in sorted(visited, key=lambda path: path.as_posix()):
         for name, library in _linux_linked_libraries(binary).items():
-            if name in _LINUX_HOST_LIBRARIES or name.startswith(("libdrm", "libnss_")):
+            if _linux_host_library(name):
                 continue
             if not library.is_relative_to(root_resolved):
                 raise LibobsPackagingError(
                     f"Private libobs dependency escaped the staged runtime: "
                     f"{binary} -> {name} => {library}"
                 )
+
+
+def _linux_library_digest(binary: Path) -> bytes:
+    with binary.open("rb") as stream:
+        return hashlib.file_digest(stream, "sha256").digest()
 
 
 def _relocate_macos(root: Path, *, binaries: Sequence[Path] | None = None) -> None:
