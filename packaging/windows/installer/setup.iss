@@ -76,6 +76,9 @@ AppMutex={#MyAppMutex}
 ; IsAdminInstallMode() → {autopf}\Solin   (install for all users)
 ;                     → {localappdata}\Solin  (install for current user only)
 DefaultDirName={code:GetDefaultInstallDir}
+; Use Inno's localized, silent-aware existing-directory confirmation. Residue
+; preserved by uninstall does not mean this is a foreign application directory.
+DirExistsWarning=auto
 DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
 
@@ -669,27 +672,6 @@ begin
   if CurStep = ssDone then
   begin
     CleanupObsoleteCameraVersions();
-  end;
-end;
-
-// ── Directory validation (prevent overwriting a non-Solin directory) ──────────
-
-function NextButtonClick(CurPageID: Integer): Boolean;
-begin
-  Result := True;
-  if CurPageID = wpSelectDir then
-  begin
-    if DirExists(WizardDirValue()) and
-       not FileExists(WizardDirValue() + '\{#MyAppExeName}') then
-    begin
-      if MsgBox(
-        'The selected directory exists and does not contain a Solin installation.' + #13#10 +
-        'Installing here may overwrite existing files.' + #13#10#13#10 +
-        'Continue anyway?',
-        mbConfirmation, MB_YESNO or MB_DEFBUTTON2
-      ) = IDNO then
-        Result := False;
-    end;
   end;
 end;
 

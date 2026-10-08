@@ -152,6 +152,11 @@ DLL until its consumer closes; later installation or uninstallation cleans
 obsolete unlocked files. Reboot deletion is not scheduled because the same
 pair may be reinstalled before reboot. The installer smoke verifies repair,
 uninstall and immediate reinstall while an x64 consumer keeps the DLL loaded.
+Existing-directory confirmation uses Inno Setup's localized, silent-aware
+behavior, so files preserved by uninstall do not block an unattended reinstall.
+The Windows smoke waits for the whole installer/uninstaller process tree;
+Inno's original uninstaller process can exit before its cleanup phase finishes.
+Failures include the Inno log rather than relying only on the launcher exit code.
 
 Windows artifacts are currently unsigned, matching the existing distribution
 model. Release integrity is enforced by the exact asset inventory, immutable

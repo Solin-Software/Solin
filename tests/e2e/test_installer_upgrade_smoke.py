@@ -5,6 +5,7 @@ import os
 import shutil
 import struct
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from typing import Literal
@@ -21,6 +22,7 @@ from tests.e2e._packaged_app import (
     skip_if_solin_registry_exists,
 )
 from tests.e2e._http_runtime import assert_packaged_http_runtime
+from tests.e2e._windows_process import run_windows_process_tree
 
 
 pytestmark = pytest.mark.e2e
@@ -195,8 +197,7 @@ def _run_installer(
     env: dict[str, str],
     scope: _InstallScope,
 ) -> None:
-    timeout = float(os.environ.get("SOLIN_E2E_INSTALLER_TIMEOUT", "240"))
-    result = subprocess.run(  # noqa: S603 - e2e runs user-supplied installer artifacts
+    result = _run_logged_installer_process(
         [
             str(installer),
             "/VERYSILENT",
@@ -207,10 +208,6 @@ def _run_installer(
         ],
         cwd=installer.parent,
         env=env,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-        check=False,
     )
     if result.returncode != 0:
         pytest.fail(
@@ -228,7 +225,7 @@ def _run_rollback_injection(
     env: dict[str, str],
     scope: _InstallScope,
 ) -> None:
-    result = subprocess.run(  # noqa: S603 - trusted failure-injection artifact
+    result = _run_logged_installer_process(
         [
             str(installer),
             "/VERYSILENT",
@@ -239,10 +236,6 @@ def _run_rollback_injection(
         ],
         cwd=installer.parent,
         env=env,
-        capture_output=True,
-        text=True,
-        timeout=float(os.environ.get("SOLIN_E2E_INSTALLER_TIMEOUT", "240")),
-        check=False,
     )
     if result.returncode == 0:
         pytest.fail("The x86 registration failure-injection installer succeeded")
@@ -252,20 +245,69 @@ def _run_uninstaller(install_dir: Path, env: dict[str, str]) -> None:
     uninstallers = sorted(install_dir.glob("unins*.exe"))
     if not uninstallers:
         pytest.fail(f"Installer did not produce an uninstaller in {install_dir}")
-    result = subprocess.run(  # noqa: S603 - e2e runs installer-generated uninstaller
+    result = _run_logged_installer_process(
         [
             str(uninstallers[0]),
             "/VERYSILENT",
             "/SUPPRESSMSGBOXES",
             "/NORESTART",
         ],
-        cwd=install_dir,
+        cwd=uninstallers[0].parent.parent,
         env=env,
-        timeout=float(os.environ.get("SOLIN_E2E_INSTALLER_TIMEOUT", "240")),
-        check=False,
     )
     if result.returncode != 0:
-        pytest.fail(f"Uninstaller failed with exit code {result.returncode}")
+        pytest.fail(
+            f"Uninstaller failed with exit code {result.returncode}\n"
+            f"stdout:\n{result.stdout}\n\nstderr:\n{result.stderr}"
+        )
+
+
+def _run_logged_installer_process(
+    args: list[str], *, cwd: Path, env: dict[str, str]
+) -> subprocess.CompletedProcess[str]:
+    # Keep diagnostics outside {app}: uninstall can remove the application tree.
+    # The job waits for Inno's second phase as well as the original launcher.
+    with tempfile.TemporaryDirectory(prefix="solin-installer-log-") as directory:
+        log = Path(directory) / "setup.log"
+        command = [*args, f"/LOG={log}"]
+        try:
+            result = run_windows_process_tree(
+                command,
+                cwd=cwd,
+                env=env,
+                timeout=float(os.environ.get("SOLIN_E2E_INSTALLER_TIMEOUT", "240")),
+            )
+        except subprocess.TimeoutExpired as error:
+            error.add_note(
+                log.read_text(encoding="utf-8-sig", errors="replace")
+                if log.exists()
+                else "Inno did not create a log."
+            )
+            raise
+        if log.exists():
+            result.stdout += "\nInno log:\n" + log.read_text(encoding="utf-8-sig", errors="replace")
+        return result
+
+
+def _cleanup_installation(
+    install_dir: Path,
+    env: dict[str, str],
+    scope: _InstallScope,
+    camera_paths: dict[str, Path],
+) -> None:
+    primary_error = sys.exception()
+    try:
+        # A failed reinstall may follow a completed uninstall. Do not replace
+        # that failure with a misleading "missing uninstaller" cleanup error.
+        if any(install_dir.glob("unins*.exe")):
+            _run_uninstaller(install_dir, env)
+        _assert_camera_absent(scope)
+        for path in camera_paths.values():
+            assert not path.exists(), "unloaded camera DLL survived uninstall"
+    except (Exception, pytest.fail.Exception) as cleanup_error:  # noqa: BLE001 - retain primary failure
+        if primary_error is None:
+            raise
+        primary_error.add_note(f"Installer cleanup also failed: {cleanup_error}")
 
 
 def _seed_qsettings() -> None:
@@ -343,10 +385,7 @@ def test_full_installer_upgrade_preserves_user_state() -> None:
             _assert_reinstall_with_loaded_camera(new_installer, install_dir, env, "user")
         finally:
             if installed:
-                _run_uninstaller(install_dir, env)
-                _assert_camera_absent("user")
-                for path in registration_paths.values():
-                    assert not path.exists(), "unloaded camera DLL survived uninstall"
+                _cleanup_installation(install_dir, env, "user", registration_paths)
             cleanup_solin_test_registry(_PROFILE_ID)
             shutil.rmtree(install_dir, ignore_errors=True)
 
@@ -396,10 +435,7 @@ def test_full_installer_machine_scope_registers_camera_for_all_users() -> None:
             } == prior_user_registration
         finally:
             if installed:
-                _run_uninstaller(install_dir, env)
-                _assert_camera_absent("machine")
-                for path in registration_paths.values():
-                    assert not path.exists(), "unloaded camera DLL survived uninstall"
+                _cleanup_installation(install_dir, env, "machine", registration_paths)
             assert {
                 architecture: _camera_registration(architecture, "user")
                 for architecture in _PE_MACHINES
