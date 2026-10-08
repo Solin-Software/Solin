@@ -2519,9 +2519,10 @@ def test_auto_switch_waits_for_app_frames_only_for_app_owned_presentations(
     assert engine.preparation_content_media_epochs == [expected_epoch] * 3
 
 
+@pytest.mark.parametrize("previous_type", ["video", "image", "timer", "browser", "ndi"])
 @pytest.mark.parametrize("next_type", ["image", "timer", "browser", "ndi"])
-def test_video_to_app_content_prepares_current_pixels_when_the_scene_is_unchanged(
-    request, next_type: str,
+def test_new_app_content_prepares_current_pixels_when_the_scene_is_unchanged(
+    request, previous_type: str, next_type: str,
 ) -> None:
     projection = _Projection()
     engine = _Engine()
@@ -2529,7 +2530,7 @@ def test_video_to_app_content_prepares_current_pixels_when_the_scene_is_unchange
         request, engine, projection, request_ids=(),
     )
     controller.start_engine()
-    projection.set_type("video")
+    projection.set_type(previous_type)
     assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
     engine.preparations.clear()
     engine.preparation_content_media_epochs.clear()
@@ -2543,9 +2544,12 @@ def test_video_to_app_content_prepares_current_pixels_when_the_scene_is_unchange
     assert len(engine.snapshots) == 1
 
 
-def test_video_to_image_during_hydration_commits_pixels_after_the_snapshot(request) -> None:
+@pytest.mark.parametrize("previous_type", ["video", "image", "timer"])
+def test_new_image_during_hydration_commits_pixels_after_the_snapshot(
+    request, previous_type: str,
+) -> None:
     projection = _Projection()
-    projection.set_type("video")
+    projection.set_type(previous_type)
     engine = _PendingGeometryEngine(defer_hydration=True)
     _documents, _runtime, controller = _runtime_controller(
         request, engine, projection, request_ids=(),
@@ -2559,7 +2563,197 @@ def test_video_to_image_during_hydration_commits_pixels_after_the_snapshot(reque
     assert engine.preparation_content_media_epochs == [projection.session_id] * 3
     assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
     assert controller._take_reconciliation_required == set()
-    assert controller._content_restoration_epoch is None
+    assert controller._pending_content_presentation_epoch is None
+
+
+@pytest.mark.parametrize("state_type", ["image", "timer"])
+@pytest.mark.parametrize("idle_media_path", ["", "idle.png"])
+def test_return_to_idle_commits_current_epoch_on_pinned_content_routes(
+    request, state_type: str, idle_media_path: str,
+) -> None:
+    projection = _Projection()
+    projection.idle_media_path = idle_media_path
+    engine = _Engine()
+    _documents, runtime, controller = _runtime_controller(
+        request, engine, projection, request_ids=(),
+    )
+    controller.start_engine()
+    projection.set_type(state_type)
+    runtime.take_program_scene(CONTENT_SCENE_ID)
+    engine.preparations.clear()
+    engine.preparation_content_media_epochs.clear()
+
+    projection.set_type("idle")
+
+    assert [bus for _, bus, _, _, _ in engine.preparations] == [
+        BusId.VIRTUAL_CAMERA, BusId.MEDIA_WINDOWS, BusId.EDITOR,
+    ]
+    assert engine.preparation_content_media_epochs == [projection.session_id] * 3
+    assert controller._pending_content_presentation_epoch is None
+    assert controller._take_reconciliation_required == set()
+
+
+def test_timer_return_to_custom_content_default_prepares_idle_pixels(request) -> None:
+    document = _document()
+    content = next(scene for scene in document.scenes if scene.id == CONTENT_SCENE_ID)
+    custom_idle = replace(content, id="custom-idle", name="Custom idle")
+    document = replace(
+        document,
+        scenes=document.scenes + (custom_idle,),
+        outputs=tuple(
+            replace(output, default_scene_id=custom_idle.id) for output in document.outputs
+        ),
+    )
+    projection = _Projection()
+    projection.idle_media_path = "idle.png"
+    engine = _Engine()
+    _documents, _runtime, controller = _runtime_controller(
+        request, engine, projection, request_ids=(), document=document,
+    )
+    controller.start_engine()
+    projection.set_type("timer")
+    engine.preparations.clear()
+    engine.preparation_content_media_epochs.clear()
+
+    projection.set_type("idle")
+
+    assert len(engine.preparations) == 3
+    assert all(scene == custom_idle.id for _, _, scene, _, _ in engine.preparations)
+    assert engine.preparation_content_media_epochs == [projection.session_id] * 3
+
+
+@pytest.mark.parametrize("state", [
+    {"type": "image", "path": "image.png"},
+    {"type": "timer", "remaining": 60},
+])
+def test_content_updates_within_an_epoch_do_not_take_again(request, state) -> None:
+    from solin.core.projection.application import ProjectionSession
+
+    projection = ProjectionSession()
+    engine = _Engine()
+    _documents, _runtime, controller = _runtime_controller(
+        request, engine, projection, request_ids=(),
+    )
+    controller.start_engine()
+    projection.set_state(state)
+    epoch = projection.presentation_session_id
+    preparations = tuple(engine.preparations)
+    takes = tuple(engine.takes)
+
+    if state["type"] == "image":
+        projection.update_image_transform((1.5, 0.1, 0.2), animate=True)
+    else:
+        projection.update_state(remaining=59)
+
+    assert projection.presentation_session_id == epoch
+    assert tuple(engine.preparations) == preparations
+    assert tuple(engine.takes) == takes
+
+
+def test_audio_over_idle_preserves_content_epoch_without_extra_takes(request) -> None:
+    from solin.core.projection.application import ProjectionSession
+
+    projection = ProjectionSession()
+    projection.set_idle_media_path("idle.png")
+    engine = _Engine()
+    _documents, runtime, controller = _runtime_controller(
+        request, engine, projection, request_ids=(),
+    )
+    runtime.take_program_scene(CONTENT_SCENE_ID)
+    controller.start_engine()
+    epoch = projection.presentation_session_id
+    preparations = tuple(engine.preparations)
+    takes = tuple(engine.takes)
+
+    projection.set_state({"type": "video", "path": "audio.mp3", "is_audio": True})
+    projection.update_state(position=10, paused=True)
+    projection.reset_state()
+
+    assert projection.presentation_session_id == epoch
+    assert tuple(engine.preparations) == preparations
+    assert tuple(engine.takes) == takes
+
+
+def test_same_scene_epoch_remains_pending_until_each_content_bus_accepts_take(
+    request, monkeypatch,
+) -> None:
+    projection = _Projection()
+    engine = _Engine()
+    _documents, _runtime, controller = _runtime_controller(
+        request, engine, projection, request_ids=(),
+    )
+    controller.start_engine()
+    projection.set_type("image")
+    take = engine.take_prepared
+    acknowledgements = []
+
+    def defer_take(*args, **kwargs):
+        ack = take(*args, **kwargs).result()
+        future = Future()
+        acknowledgements.append((future, ack))
+        return future
+
+    monkeypatch.setattr(engine, "take_prepared", defer_take)
+    projection.set_type("image")
+    epoch = projection.session_id
+
+    for index, bus in enumerate((BusId.VIRTUAL_CAMERA, BusId.MEDIA_WINDOWS, BusId.EDITOR)):
+        assert len(acknowledgements) == index + 1
+        assert controller._pending_content_presentation_epoch == epoch
+        assert bus in controller._take_reconciliation_required
+        future, ack = acknowledgements[index]
+        future.set_result(ack)
+        assert bus not in controller._take_reconciliation_required
+
+    assert controller._pending_content_presentation_epoch is None
+    assert controller._pending == {}
+
+
+@pytest.mark.parametrize("completion", ["accepted", "rejected", "failed", "cancelled"])
+def test_new_image_during_profile_hydration_waits_until_activation_finishes(
+    scene_workspace_factory, request, tmp_path: Path, completion: str,
+) -> None:
+    workspace, collection = _real_workspace(scene_workspace_factory, tmp_path)
+    projection = _Projection()
+    engine = _PendingGeometryEngine(defer_hydration=True)
+    controller = SceneRuntimeController(
+        workspace, projection, engine=engine, session_id="test-session",
+    )
+    request.addfinalizer(controller.close)
+    controller.start_engine()
+    engine.finish_hydration(0)
+    projection.set_type("image")
+    baseline = len(engine.preparations)
+    controller.activate_scene_profile(collection.id)
+
+    projection.set_type("image")
+
+    assert len(engine.preparations) == baseline
+    assert controller._pending_content_presentation_epoch == projection.session_id
+    if completion == "accepted":
+        engine.finish_hydration(1)
+    elif completion == "rejected":
+        request_id, snapshot = engine.snapshots[1]
+        engine.hydration_futures[1].set_result(replace(
+            engine._ack(request_id, snapshot.sequence, snapshot.document.revision),
+            applied=False, error_code="source_unavailable",
+        ))
+    elif completion == "failed":
+        engine.hydration_futures[1].set_exception(
+            SceneEngineCommandRejectedError("source_unavailable"),
+        )
+    else:
+        engine.hydration_futures[1].cancel()
+
+    expected_snapshot = engine.snapshots[1 if completion == "accepted" else 0][1]
+    assert controller.document.document_id == expected_snapshot.document.document_id
+    assert len(engine.preparations) == baseline + 3
+    assert engine.preparation_content_media_epochs[baseline:] == [projection.session_id] * 3
+    assert all(
+        prepared.document_revision == expected_snapshot.document.revision
+        for _, prepared in engine.takes[baseline:]
+    )
+    assert controller._pending_content_presentation_epoch is None
 
 
 def test_frame_egress_readiness_is_forwarded_without_marking_the_engine_failed(request) -> None:
@@ -2588,12 +2782,14 @@ def test_frame_egress_readiness_is_forwarded_without_marking_the_engine_failed(r
 
 
 @pytest.mark.parametrize("completion", ["prepared", "rejected", "timed_out"])
+@pytest.mark.parametrize("previous_type", ["video", "image"])
 @pytest.mark.parametrize("next_type", ["image", "video"])
 @pytest.mark.parametrize("stage", ["prepare", "take"])
-def test_replaced_video_preparation_is_reconciled_for_the_latest_presentation(
+def test_replaced_content_preparation_is_reconciled_for_the_latest_presentation(
     request,
     monkeypatch,
     completion: str,
+    previous_type: str,
     next_type: str,
     stage: str,
 ) -> None:
@@ -2623,7 +2819,8 @@ def test_replaced_video_preparation_is_reconciled_for_the_latest_presentation(
     monkeypatch.setattr(engine, method_name, defer_first_preparation)
     errors: list[str] = []
     controller.engine_error.connect(errors.append)
-    projection.set_type("video")
+    projection.set_type(previous_type)
+    previous_epoch = None if previous_type == "video" else projection.session_id
     projection.set_type(next_type)
     assert len(engine.preparations) == 1
     assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
@@ -2646,7 +2843,7 @@ def test_replaced_video_preparation_is_reconciled_for_the_latest_presentation(
     assert len(completed_takes) == 3
     assert all(prepared.request_id != obsolete[0].request_id for _, prepared in completed_takes)
     current_epoch = projection.session_id if next_type == "image" else None
-    assert engine.preparation_content_media_epochs == [None, *([current_epoch] * 3)]
+    assert engine.preparation_content_media_epochs == [previous_epoch, *([current_epoch] * 3)]
     assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
     assert errors == []
 

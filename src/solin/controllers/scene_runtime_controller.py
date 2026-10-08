@@ -259,8 +259,7 @@ class SceneRuntimeController(QObject):
         self._local_camera_future: Future[LocalCameraDiscovery] | None = None
         self._automatic_media_scene_selections: dict[BusId, _AutomaticMediaSceneSelection] = {}
         self._last_projection_session_id = self._projection_session_id()
-        self._last_projection_category = content_category_for_projection(projection.state)
-        self._content_restoration_epoch: int | None = None
+        self._pending_content_presentation_epoch: int | None = None
         self._last_content_playing = self.content_is_playing
         self._desired_scenes = self._resolve_desired_scenes()
         self._applied_scenes: tuple[tuple[BusId, str], ...] = ()
@@ -1203,22 +1202,10 @@ class SceneRuntimeController(QObject):
         session_id = self._projection_session_id()
         if session_id != self._last_projection_session_id:
             category = content_category_for_projection(self._projection.state)
-            if (
-                (self._last_projection_category is ContentCategory.VIDEO
-                 or self._content_restoration_epoch is not None)
-                and category is not ContentCategory.VIDEO
-            ):
-                self._content_restoration_epoch = session_id
-                # A new app presentation must prepare its uploaded epoch even
-                # when the scene stays Content (e.g. video -> image or a pinned
-                # content scene -> idle). Scene identity alone cannot commit it.
-                self._take_reconciliation_required.update(
-                    bus_id for bus_id, scene_id in self._applied_scenes
-                    if scene_uses_content_source(self._documents.document, scene_id)
-                )
-            elif category is ContentCategory.VIDEO:
-                self._content_restoration_epoch = None
-            self._last_projection_category = category
+            self._pending_content_presentation_epoch = (
+                session_id if category is not ContentCategory.VIDEO else None
+            )
+            self._require_pending_content_takes()
             self._last_projection_session_id = session_id
             # A failed content take belongs to that presentation, even when the
             # next playlist item uses the same scene. Keep unrelated failures.
@@ -1244,6 +1231,16 @@ class SceneRuntimeController(QObject):
                 })
         self._notify_content_playing()
         self._reconcile_desired(prepare=True)
+
+    def _require_pending_content_takes(self) -> None:
+        if self._pending_content_presentation_epoch is None:
+            return
+        # Scene identity does not commit uploaded pixels. Every new app-owned
+        # presentation, including idle, needs an accepted Take on content routes.
+        self._take_reconciliation_required.update(
+            bus_id for bus_id, scene_id in self._applied_scenes
+            if scene_uses_content_source(self._documents.document, scene_id)
+        )
 
     def _notify_content_playing(self) -> None:
         playing = self.content_is_playing
@@ -1354,6 +1351,7 @@ class SceneRuntimeController(QObject):
         if (
             not self._engine_ready
             or self._hydrate_in_flight is not None
+            or self._profile_activation is not None
             or not self._applied_scenes
             or self._pending
         ):
@@ -1850,13 +1848,9 @@ class SceneRuntimeController(QObject):
         self._engine_document_revision = snapshot.document.revision
         self._failed_takes.clear()
         self._set_applied_scenes(snapshot.active_scenes)
-        if self._content_restoration_epoch is not None:
-            # A hydrate records scene routes, not a committed content epoch.
-            # Retain this obligation across an empty applied cache/recovery.
-            self._take_reconciliation_required.update(
-                bus_id for bus_id, scene_id in snapshot.active_scenes
-                if scene_uses_content_source(self._documents.document, scene_id)
-            )
+        # Hydration records routes, not a committed content epoch. Restore the
+        # Take obligation even when recovery cleared the applied scene cache.
+        self._require_pending_content_takes()
         if self._hydrate_dirty:
             return
         self._schedule_next_take()
@@ -1880,6 +1874,7 @@ class SceneRuntimeController(QObject):
             self._report_rejection("profile_hydrate", ack)
             self._dispatch_layer_geometry()
             self.operational_state_changed.emit()
+            self._schedule_next_take()
             return
         self._committing_hydrated_profile = True
         try:
@@ -1893,11 +1888,13 @@ class SceneRuntimeController(QObject):
         self._failed_takes.clear()
         self._observed_graph_record = scene_engine_graph_signature(context.snapshot.document)
         self._set_applied_scenes(context.snapshot.active_scenes)
+        self._require_pending_content_takes()
         delete_collection_id = self._delete_after_profile_activation
         self._delete_after_profile_activation = ""
         if delete_collection_id:
             self._workspace.delete_collection(delete_collection_id)
         self.operational_state_changed.emit()
+        self._schedule_next_take()
 
     def _fail_profile_activation(self, context: object, error: object) -> None:
         if not isinstance(context, _PendingProfileActivation):
@@ -1913,6 +1910,7 @@ class SceneRuntimeController(QObject):
             self._report_exception("profile_hydrate", error)
         self._dispatch_layer_geometry()
         self.operational_state_changed.emit()
+        self._schedule_next_take()
 
     def _handle_prepared(self, context: object, result: object) -> None:
         bus_id, expected = _context_tuple(context, 2, "prepare")
@@ -1980,7 +1978,7 @@ class SceneRuntimeController(QObject):
         else:
             self._take_reconciliation_required.discard(bus_id)
         if not self._take_reconciliation_required:
-            self._content_restoration_epoch = None
+            self._pending_content_presentation_epoch = None
         applied = dict(self._applied_scenes)
         applied[bus_id] = expected.scene_id
         self._set_applied_scenes(

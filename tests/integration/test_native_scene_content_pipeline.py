@@ -16,7 +16,7 @@ from tempfile import TemporaryDirectory
 from threading import Event
 
 import pytest
-from PySide6.QtCore import QCoreApplication
+from PySide6.QtCore import QCoreApplication, QObject, Signal
 from PySide6.QtGui import QColor, QImage
 from PIL import Image
 
@@ -24,6 +24,7 @@ from solin.controllers.content_frame_ingress_controller import (
     ContentFrameIngressController,
 )
 from solin.controllers.scene_runtime_controller import SceneRuntimeController
+from solin.controllers.program_content_controller import ProgramContentController
 from solin.core.foundation.runtime_paths import ProfilePaths
 from solin.core.projection.application import ProjectionSession
 from solin.core.projection.image_framing import ImageTransform
@@ -206,6 +207,7 @@ def _program_pixel_matches(pixel: bytes, expected: bytes) -> bool:
 @contextmanager
 def _record_program_centers(
     subscriber: _BgraEgress,
+    *, sample_times: list[float] | None = None,
 ) -> Iterator[list[tuple[int, bytes]]]:
     """Observe egress while the control thread waits for prepare/Take replies."""
     samples: list[tuple[int, bytes]] = []
@@ -222,6 +224,8 @@ def _record_program_centers(
             assert frame.pixel_format is VideoPixelFormat.BGRA
             x, y = frame.width // 2, frame.height // 2
             samples.append((frame.sequence, _bgra_pixel(frame, x, y)))
+            if sample_times is not None:
+                sample_times.append(time.monotonic())
 
     with ThreadPoolExecutor(max_workers=1, thread_name_prefix="program-frame-recorder") as executor:
         recording = executor.submit(record)
@@ -534,6 +538,145 @@ def _content_document() -> tuple[SceneDocument, SceneDefinition]:
     )
 
 
+class _FontManager(QObject):
+    font_ready = Signal(str)
+
+    def ensure(self, _name: str) -> None:
+        pass
+
+    def family(self, _name: str) -> str:
+        return "Arial"
+
+
+@pytest.mark.parametrize(
+    "transition",
+    [TransitionSpec(TransitionKind.CUT, 0), TransitionSpec(TransitionKind.DISSOLVE, 600),
+     TransitionSpec(TransitionKind.FADE_TO_BLACK, 600)],
+    ids=["cut", "dissolve", "fade-to-black"],
+)
+@pytest.mark.parametrize("preview_content", [False, True], ids=["automatic-preview", "content-preview"])
+def test_closing_image_preserves_outgoing_pixels_until_default_transition(
+    tmp_path: Path, scene_workspace_factory, transition: TransitionSpec, preview_content: bool,
+) -> None:
+    paths = ProfilePaths.from_roots(
+        data_dir=tmp_path / "data", cache_dir=tmp_path / "cache", profile_id="image-return",
+    )
+    paths.ensure_dirs()
+    workspace = scene_workspace_factory(paths, seed_names=_seed_names())
+    workspace.documents.set_program_transition(transition)
+    content_scene_id = workspace.documents.program_media_scene_id
+    default_scene_id = workspace.documents.program_default_scene_id
+    default_layer = workspace.documents.document.scene(default_scene_id).layers[0]
+    workspace.documents.update_layer(
+        default_scene_id, default_layer.id, replace(default_layer, source_id=NO_SIGNAL_SOURCE_ID),
+    )
+    engine = create_libobs_scene_engine()
+    ingress = ContentFrameIngressController(publisher_factory=SharedMemoryContentPublisher)
+    program = _BgraEgress(1920, 1080, channel_id="solin-program")
+    scene_ids = tuple(scene.id for scene in workspace.documents.document.scenes)
+    thumbnails = (
+        _BgraEgress(160, 90 * len(scene_ids), channel_id="solin-thumbnails")
+        if preview_content else None
+    )
+    projection = ProjectionSession()
+    content = ProgramContentController(
+        projection, _FontManager(), ingress.submit_frame, lambda: ("", "", ""),
+        media_epoch_sink=ingress.begin_presentation, width=1920, height=1080,
+    )
+    controller = SceneRuntimeController(workspace, projection, engine=engine)
+    application = QCoreApplication.instance()
+    assert application is not None
+    probe = _PixelWaitProbe()
+
+    def green_on_air() -> bool:
+        frame = probe.read_latest(program)
+        return frame is not None and _program_pixel_matches(
+            _bgra_pixel(frame, frame.width // 2, frame.height // 2), bytes((0, 255, 0, 255)),
+        )
+
+    try:
+        controller.set_content_ingress(ingress.descriptor)
+        controller.set_program_egress(program.descriptor)
+        controller.start_engine()
+        assert _wait_for(
+            lambda: controller.applied_scene(BusId.VIRTUAL_CAMERA) == default_scene_id,
+            application=application, timeout=15,
+        )
+        if thumbnails is not None:
+            assert engine.set_thumbnail_egress(
+                thumbnails.descriptor, scene_ids, 160, 90, request_id="image-thumbnails",
+                sequence=controller._next_sequence(), deadline_ms=10_000,
+            ).result(15).applied
+        projection.set_state({"type": "image"})
+        image = QImage(160, 90, QImage.Format.Format_ARGB32)
+        image.fill(QColor("#00ff00"))
+        content.submit_frame(image)
+        assert _wait_for(green_on_air, application=application)
+        if preview_content:
+            controller.set_preview_scene(content_scene_id)
+            assert _wait_for(lambda: not controller._pending, application=application)
+            assert thumbnails is not None
+            assert _wait_for_pixel(
+                thumbnails, x=80, y=scene_ids.index(content_scene_id) * 90 + 45,
+                expected=bytes((0, 255, 0, 255)),
+            ) is not None
+        time.sleep(0.7)
+        sample_times: list[float] = []
+        with _record_program_centers(program, sample_times=sample_times) as samples:
+            projection.reset_state()
+            # Allow ingress to deliver idle's transparent frame while Qt has not
+            # yet processed the asynchronous default Take acknowledgement.
+            time.sleep(0.15)
+            outgoing = tuple(samples)
+            assert outgoing
+            if transition.kind is not TransitionKind.CUT:
+                # A fast preparation can finish synchronously while reset_state
+                # is still on the Qt thread. A legitimate fade may already have
+                # started, but cannot consume its green origin in 150 ms.
+                assert all(pixel[1] > 20 for _, pixel in outgoing), (
+                    f"Idle blank erased the image before its transition: {outgoing!r}"
+                )
+            assert _wait_for(
+                lambda: controller.applied_scene(BusId.VIRTUAL_CAMERA) == default_scene_id
+                and controller.applied_scene(BusId.MEDIA_WINDOWS) == default_scene_id
+                and not controller._pending,
+                application=application,
+            )
+            time.sleep(0.8)
+        if transition.kind is not TransitionKind.CUT:
+            assert any(20 < pixel[1] < 230 for _, pixel in samples), (
+                f"The outgoing image never faded into Default: {samples!r}"
+            )
+            phase_seconds = transition.duration_ms / 1000
+            if transition.kind is TransitionKind.FADE_TO_BLACK:
+                phase_seconds /= 2
+            # Bound each drop by elapsed time, allowing skipped output frames
+            # under load without accepting an abrupt replacement of the origin.
+            for index in range(1, len(samples)):
+                elapsed = sample_times[index] - sample_times[index - 1]
+                # Readback completion can lag composition. Account for native
+                # frame progression as well as the observer's wall clock.
+                frame_count = (samples[index][0] - samples[index - 1][0]) / 2
+                elapsed = max(elapsed, frame_count / 60)
+                previous_green, green = samples[index - 1][1][1], samples[index][1][1]
+                assert previous_green - green <= 20 + 3 * 255 * elapsed / phase_seconds, (
+                    f"Content replacement interrupted the outgoing fade: {samples!r}"
+                )
+        assert controller.applied_scene(BusId.VIRTUAL_CAMERA) != content_scene_id
+        if thumbnails is not None:
+            assert _wait_for_pixel(
+                thumbnails, x=80, y=scene_ids.index(content_scene_id) * 90 + 45,
+                expected=bytes((0, 0, 0, 255)),
+            ) is not None
+    finally:
+        controller.close()
+        content.close()
+        ingress.close()
+        program.close()
+        if thumbnails is not None:
+            thumbnails.close()
+
+
 @pytest.mark.parametrize("autoplay", [True, False], ids=["playing", "paused"])
 @pytest.mark.parametrize("return_kind", ["idle", "image"], ids=["default-return", "image-return"])
 @pytest.mark.parametrize(
@@ -790,6 +933,7 @@ def test_video_auto_switch_reaches_program_without_app_decoded_frames(
 )
 def test_return_to_cached_content_never_publishes_the_previous_presentation(
     retained_kind: str,
+    record_property,
 ) -> None:
     engine = create_libobs_scene_engine()
     ingress = ContentFrameIngressController(
@@ -832,6 +976,7 @@ def test_return_to_cached_content_never_publishes_the_previous_presentation(
 
     unsubscribe = engine.subscribe(on_engine_event)
     prepare_latencies: list[float] = []
+    take_latencies: list[float] = []
     program_probe = _PixelWaitProbe()
     sequence = 1
 
@@ -861,6 +1006,7 @@ def test_return_to_cached_content_never_publishes_the_previous_presentation(
     def take(prepared) -> None:
         nonlocal sequence
         sequence += 1
+        started_at = time.monotonic()
         assert (
             engine.take_prepared(
                 prepared,
@@ -871,6 +1017,8 @@ def test_return_to_cached_content_never_publishes_the_previous_presentation(
             .result(15)
             .applied
         )
+        if prepared.scene_id == content_scene.id:
+            take_latencies.append((time.monotonic() - started_at) * 1000)
 
     def program_matches(match: Callable[[_BgraFrame, int, int], bool]) -> bool:
         frame = program_probe.read_latest(program)
@@ -927,6 +1075,7 @@ def test_return_to_cached_content_never_publishes_the_previous_presentation(
             if cycle:
                 ingress.begin_presentation(cycle * 2 + 1)
                 ingress.submit_frame(retained_frame)
+                take(prepare(content_scene.id, content_media_epoch=cycle * 2 + 1))
             assert _wait_for(
                 lambda: program_matches(
                     lambda frame, x, y: _program_pixel_matches(
@@ -984,6 +1133,8 @@ def test_return_to_cached_content_never_publishes_the_previous_presentation(
                 f"Program egress sequence regressed or repeated: {sequences!r}"
             )
         assert prepare_latencies and max(prepare_latencies) < 1_500, prepare_latencies
+        assert take_latencies and max(take_latencies) < 1_500, take_latencies
+        record_property("content_presentation_take_ms", ",".join(f"{value:.3f}" for value in take_latencies))
     finally:
         ingress.close()
         preview.close()
@@ -1139,6 +1290,23 @@ def _assert_native_bgra_opacity_changes() -> None:
             source.release()
         shutdown()
         runtime.shutdown()
+
+
+def _take_content_presentation(
+    engine: SceneEngine, document: SceneDocument, scene: SceneDefinition, epoch: int,
+) -> None:
+    """Drive the explicit epoch handoff normally owned by SceneRuntimeController."""
+    for index, bus in enumerate((BusId.VIRTUAL_CAMERA, BusId.MEDIA_WINDOWS, BusId.EDITOR)):
+        sequence = epoch * 6 + index * 2 + 2
+        prepared = engine.prepare_scene(
+            bus, scene.id, transition=TransitionSpec(TransitionKind.CUT, 0),
+            document_revision=document.revision, request_id=f"content-prepare-{epoch}-{bus}",
+            sequence=sequence, deadline_ms=10_000, content_media_epoch=epoch,
+        ).result(15)
+        assert engine.take_prepared(
+            prepared, request_id=f"content-take-{epoch}-{bus}", sequence=sequence + 1,
+            deadline_ms=10_000,
+        ).result(15).applied
 
 
 def test_actual_size_content_reaches_composed_libobs_output() -> None:
@@ -1302,6 +1470,7 @@ def test_actual_size_content_reaches_composed_libobs_output() -> None:
             animate=False,
         )
         ingress.submit_frame(four_by_three)
+        _take_content_presentation(engine, document, content_scene, 1)
         framed_identity = _wait_for_pixel(
             egress,
             x=0,
@@ -1329,6 +1498,7 @@ def test_actual_size_content_reaches_composed_libobs_output() -> None:
 
         ingress.begin_presentation(2)
         ingress.submit_frame(four_by_three)
+        _take_content_presentation(engine, document, content_scene, 2)
         zoomed = _wait_for_pixel(
             egress,
             x=0,
@@ -1352,9 +1522,10 @@ def test_actual_size_content_reaches_composed_libobs_output() -> None:
         if still_preserved is not None:
             assert _bgra_pixel(still_preserved, 960, 540) == green
 
-        # The first frame commits the armed epoch and starts its transition from
-        # the preserved owner.
+        # The first frame makes the epoch ready; accepted Take commits it without
+        # altering the preserved owner's texture while pixels are in transit.
         ingress.submit_frame(sixteen_by_nine)
+        _take_content_presentation(engine, document, content_scene, 3)
         late = _wait_for_pixel(
             egress,
             x=960,
@@ -1376,6 +1547,7 @@ def test_actual_size_content_reaches_composed_libobs_output() -> None:
         )
         ingress.begin_presentation(4)
         ingress.submit_frame(four_by_three)
+        _take_content_presentation(engine, document, content_scene, 4)
         resumed = _wait_for_pixel(
             egress,
             x=960,

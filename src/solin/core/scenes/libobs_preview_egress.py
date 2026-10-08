@@ -99,6 +99,11 @@ class LibobsPreviewEgress:
             log.warning("could not register preview render callback", exc_info=True)
             self._detach_writer()
 
+    @property
+    def scene_source(self) -> Any:
+        with self._lock:
+            return self._scene_source
+
     def set_scene_source(self, source: Any) -> None:
         """Set the borrowed scene source to render (None to stop rendering).
 

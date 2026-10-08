@@ -343,9 +343,18 @@ class _FakeItem:
             self.scene.items.remove(self)
 
 
+class _FakeSceneSource(str):
+    def __new__(cls, name):
+        instance = super().__new__(cls, f"scene-source:{name}")
+        instance._ptr = object()
+        instance.showing = False
+        return instance
+
+
 class _FakeScene:
     def __init__(self, name: str) -> None:
         self.name = name
+        self._source = _FakeSceneSource(name)
         self.items: list[_FakeItem] = []
         self.released = 0
 
@@ -355,8 +364,8 @@ class _FakeScene:
         self.items.append(item)
         return item
 
-    def as_source(self) -> str:
-        return f"scene-source:{self.name}"
+    def as_source(self) -> _FakeSceneSource:
+        return self._source
 
     def release(self) -> None:
         self.released += 1
@@ -2991,6 +3000,187 @@ def test_engine_control_media_close_retires_a_silent_picture_and_stops_poller():
     assert media.released == 1
 
 
+class _PreparedContentConsumer:
+    def __init__(self, source, wait_for_epoch):
+        self.source = source
+        self.wait_for_epoch = wait_for_epoch
+
+    def source_for_epoch(self, epoch):
+        return self.source if self.wait_for_epoch(epoch, deadline=time.monotonic()) else None
+
+    def owns_source(self, source):
+        return source is self.source
+
+    def collect_unused_sources(self, _references):
+        pass
+
+    def stop(self):
+        pass
+
+
+def test_content_presentation_clones_nested_compositions_and_retains_borrowed_origin():
+    from copy import deepcopy
+    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+
+    document = deepcopy(_MEDIA_DOC)
+    for child, parent in (("s1", "s2"), ("s2", "s3")):
+        source_id = f"reference-{child}"
+        document["sources"].append({
+            "id": source_id, "type": "scene_reference",
+            "configuration": {"target_scene_id": child},
+        })
+        document["scenes"].append({"id": parent, "layers": [{
+            "id": f"layer-{parent}", "source_id": source_id, "visible": True,
+        }]})
+    runtime = _CompositingRuntime()
+    graph = LibobsSceneGraph(runtime)
+    first, second = object(), object()
+    graph.hydrate(document, {"virtual_camera": "s3"}, first)
+    origins = dict(graph._scenes)
+    original_items = {key: tuple(scene.items) for key, scene in origins.items()}
+    sources_created = len(runtime.sources)
+    try:
+        with graph.content_presentation(second) as preparation:
+            assert graph._scenes == origins  # staging does not publish new compositions
+            assert graph.content_source is first
+            assert preparation.scenes["s1"].items[0].source is second
+            assert preparation.scenes["s1"].items[1].source is origins["s1"].items[1].source
+            assert preparation.scenes["s2"].items[0].source is preparation.scene_source("s1")
+            assert preparation.scenes["s3"].items[0].source is preparation.scene_source("s2")
+            assert len(runtime.sources) == sources_created  # share cameras/overlay sources
+            preparation.commit()
+            preparation.commit()  # accepted handoff is idempotent
+        assert all(tuple(scene.items) == original_items[key] for key, scene in origins.items())
+        assert origins["s1"].items[0].source is first
+        assert all(graph._scenes[key] is not origins[key] for key in origins)
+        assert first in graph.content_sources and second in graph.content_sources
+        graph.collect_retired_scenes((origins["s3"].as_source(),))
+        assert all(scene.released == 0 for scene in origins.values())
+        origins["s2"].as_source().showing = True
+        graph.collect_retired_scenes(())
+        assert all(scene.released == 0 for scene in origins.values())
+        origins["s2"].as_source().showing = False
+        graph.collect_retired_scenes(())
+        assert all(scene.released == 1 for scene in origins.values())
+        assert first not in graph.content_sources and second in graph.content_sources
+        graph.collect_retired_scenes(())
+    finally:
+        graph.shutdown()
+    assert all(scene.released == 1 for scene in runtime.scenes)
+
+
+def test_cancelled_content_presentation_releases_candidates_without_changing_live_scenes():
+    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+
+    runtime = _CompositingRuntime()
+    graph = LibobsSceneGraph(runtime)
+    first, second = object(), object()
+    graph.hydrate(_MEDIA_DOC, {"virtual_camera": "s1"}, first)
+    origin = graph._scenes["s1"]
+    try:
+        with graph.content_presentation(second) as preparation:
+            candidate = preparation.scenes["s1"]
+            assert candidate.items[0].source is second
+        assert candidate.released == 1
+        assert origin.released == 0
+        assert graph._scenes["s1"] is origin and origin.items[0].source is first
+        assert graph.content_source is first
+        assert graph._retired_presentations == []
+    finally:
+        graph.shutdown()
+
+
+def test_program_rejected_content_take_never_publishes_staged_composition(monkeypatch):
+    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+
+    runtime = _CompositingRuntime()
+    graph = LibobsSceneGraph(runtime)
+    first, second = object(), object()
+    graph.hydrate(_MEDIA_DOC, {"virtual_camera": "s1"}, first)
+    origin = graph._scenes["s1"]
+    try:
+        prepared = graph.prepare("s1", "cut", 0)
+        monkeypatch.setattr(graph._transition, "start", lambda *_: False)
+        with graph.content_presentation(second) as presentation:
+            candidate = presentation.scenes["s1"]
+            assert not graph.take(prepared["token"], scene_source=presentation.scene_source("s1"))
+        assert graph.active_scene_source is origin.as_source()
+        assert graph._scenes["s1"] is origin
+        assert graph.content_source is first and candidate.released == 1
+    finally:
+        graph.shutdown()
+
+
+def test_content_epoch_superseded_while_staging_never_starts_take(monkeypatch):
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+    old_image, new_image = object(), object()
+    ready_epoch = 2
+    engine._content_consumer = _PreparedContentConsumer(
+        new_image, lambda epoch, **_: epoch == ready_epoch,
+    )
+    try:
+        graph = engine._scene_graph
+        graph.hydrate(_MEDIA_DOC, {"virtual_camera": "s1"}, old_image)
+        prepared = engine.handle(_request("prepare_scene", {
+            "bus_id": "virtual_camera", "scene_id": "s1", "content_media_epoch": 2,
+        }))
+        apply_geometry = graph._apply_item_geometry
+
+        def supersede(*args):
+            nonlocal ready_epoch
+            ready_epoch = 3
+            return apply_geometry(*args)
+
+        monkeypatch.setattr(graph, "_apply_item_geometry", supersede)
+        response = engine.handle(_request("take_prepared", {
+            "bus_id": "virtual_camera", "scene_id": "s1",
+            "preparation_token": prepared.payload["preparation_token"],
+        }))
+        assert not _ack_from_envelope(response).applied
+        assert response.payload["error_code"] == "source_unavailable"
+        assert graph._transition.starts == []
+        assert graph.content_source is old_image
+        assert runtime.scenes[0].released == 0 and runtime.scenes[1].released == 1
+    finally:
+        engine.shutdown()
+
+
+@pytest.mark.parametrize("accept", [False, True], ids=["cancelled", "accepted"])
+def test_new_ingress_epoch_keeps_committed_image_until_accepted_take(accept):
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+    old_image, new_image = object(), object()
+    consumer = _PreparedContentConsumer(new_image, lambda epoch, **_: epoch == 2)
+    consumer.owns_source = lambda source: source is old_image or source is new_image
+    engine._content_consumer = consumer
+    try:
+        graph = engine._scene_graph
+        graph.hydrate(_MEDIA_DOC, {"virtual_camera": "s1"}, old_image)
+        prepared = engine.handle(_request("prepare_scene", {
+            "bus_id": "virtual_camera", "scene_id": "s1", "content_media_epoch": 2,
+        }))
+        assert prepared.message_type == "scene_prepared"
+        assert engine._effective_content_source() is old_image
+        assert graph.content_source is old_image
+        assert old_image in graph.content_sources
+        if not accept:
+            engine.handle(_request("cancel_preparation"))
+        response = engine.handle(_request("take_prepared", {
+            "bus_id": "virtual_camera", "scene_id": "s1",
+            "preparation_token": prepared.payload["preparation_token"],
+        }))
+        assert _ack_from_envelope(response).applied is accept
+        expected = new_image if accept else old_image
+        assert graph.content_source is engine._effective_content_source() is expected
+        assert all(record["item"].source is expected for record in graph._content_items)
+        assert not engine._content_restore_pending
+    finally:
+        engine.shutdown()
+
+
 @pytest.mark.parametrize("replacement", ["ingress", "video", "shutdown"])
 def test_retired_media_never_restores_stale_ingress_and_releases_on_replacement(replacement):
     runtime = _CompositingRuntime()
@@ -3000,10 +3190,9 @@ def test_retired_media_never_restores_stale_ingress_and_releases_on_replacement(
                                         "active_scenes": {"virtual_camera": "s1"}}))
     frame_source = object()
     ready_epochs = set()
-    engine._content_consumer = types.SimpleNamespace(
+    engine._content_consumer = _PreparedContentConsumer(
         source=frame_source,
         wait_for_epoch=lambda epoch, **_: epoch in ready_epochs,
-        stop=lambda: None,
     )
     try:
         engine._scene_graph.set_content_source(frame_source)
@@ -3035,7 +3224,9 @@ def test_retired_media_never_restores_stale_ingress_and_releases_on_replacement(
             }))
             assert _ack_from_envelope(ack).applied
             assert engine._effective_content_source() is frame_source
-            assert any(i.source is frame_source for i in runtime.scenes[0].items)
+            assert any(
+                record["item"].source is frame_source for record in engine._scene_graph._content_items
+            )
         elif replacement == "video":
             assert _ack_from_envelope(engine.handle(_request("open_media", {"path": "/next.mp4"}))).applied
             assert engine._effective_content_source() is _media_sources(runtime)[-1]
@@ -3045,6 +3236,13 @@ def test_retired_media_never_restores_stale_ingress_and_releases_on_replacement(
             assert media.stops == media.released == 0  # an older graph may still show it
             media.showing = False
             engine.handle(_request("ping"))
+            if replacement == "ingress":
+                # Projection has not taken the new scene yet. Its retained
+                # origin must remain valid even while that output is disabled.
+                assert media.stops == media.released == 0
+                engine._projection_route.set_scene("", None)
+                engine._preview_egress.set_scene_source(None)
+                engine.handle(_request("ping"))
         assert media.stops == media.released == 1
         assert engine._retired_media_source is None
     finally:
@@ -3058,8 +3256,8 @@ def test_prepared_content_does_not_replace_retired_video_until_a_current_take(co
     engine.handle(_request("hello"))
     ready_epoch = 3
     frame = object()
-    engine._content_consumer = types.SimpleNamespace(
-        source=frame, wait_for_epoch=lambda epoch, **_: epoch == ready_epoch, stop=lambda: None,
+    engine._content_consumer = _PreparedContentConsumer(
+        source=frame, wait_for_epoch=lambda epoch, **_: epoch == ready_epoch,
     )
     try:
         engine._scene_graph.hydrate(_MEDIA_DOC, {"virtual_camera": "s1"}, frame)
@@ -3106,8 +3304,8 @@ def test_each_prepared_content_token_revalidates_its_epoch_after_another_take():
     engine.handle(_request("hello"))
     ready_epoch = 3
     frame = object()
-    engine._content_consumer = types.SimpleNamespace(
-        source=frame, wait_for_epoch=lambda epoch, **_: epoch == ready_epoch, stop=lambda: None,
+    engine._content_consumer = _PreparedContentConsumer(
+        source=frame, wait_for_epoch=lambda epoch, **_: epoch == ready_epoch,
     )
     try:
         engine._scene_graph.hydrate(_MEDIA_DOC, {"virtual_camera": "s1"}, frame)
@@ -3164,8 +3362,8 @@ def test_content_staging_failure_does_not_consume_take_or_discard_video(monkeypa
     engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
     engine.handle(_request("hello"))
     frame = object()
-    engine._content_consumer = types.SimpleNamespace(
-        source=frame, wait_for_epoch=lambda *_args, **_kwargs: True, stop=lambda: None,
+    engine._content_consumer = _PreparedContentConsumer(
+        source=frame, wait_for_epoch=lambda *_args, **_kwargs: True,
     )
     try:
         graph = engine._scene_graph
@@ -4267,11 +4465,14 @@ class _ShowRefLib:
 
     def __init__(self) -> None:
         self.counts: dict[object, int] = {}
+        self.events: list[tuple[str, object]] = []
 
     def obs_source_inc_showing(self, pointer) -> None:
+        self.events.append(("show", pointer))
         self.counts[pointer] = self.counts.get(pointer, 0) + 1
 
     def obs_source_dec_showing(self, pointer) -> None:
+        self.events.append(("hide", pointer))
         self.counts[pointer] = self.counts.get(pointer, 0) - 1
 
 
@@ -4322,6 +4523,39 @@ def test_thumbnail_show_refs_are_dropped_across_a_graph_rebuild(monkeypatch):
     assert all(count == 0 for count in lib.counts.values())
     block.close()
     block.unlink()
+
+
+@pytest.mark.parametrize("fail", [False, True], ids=["handoff", "resolver-failure"])
+def test_thumbnail_scene_handoff_keeps_shared_cameras_showing_and_balances_refs(monkeypatch, fail):
+    from solin.core.scenes.libobs_thumbnail_egress import LibobsThumbnailEgress
+
+    monkeypatch.setattr(LibobsThumbnailEgress, "_ensure_thread", lambda _: None)
+    egress, lib, block = _thumbnail_egress_with_show_refs(monkeypatch)
+    lib.events.clear()
+
+    def resolve(scene_id):
+        if fail and scene_id == "b":
+            raise RuntimeError("scene resolver failed")
+        return types.SimpleNamespace(_ptr="new-a" if scene_id == "a" else "ptr-b")
+
+    egress._scene_resolver = resolve
+    try:
+        egress.refresh_scene_sources()
+        if fail:
+            assert lib.counts == {"ptr-a": 1, "ptr-b": 1, "new-a": 0}
+            assert egress._show_refs == ["ptr-a", "ptr-b"]
+        else:
+            assert lib.events == [
+                ("show", "new-a"), ("show", "ptr-b"),
+                ("hide", "ptr-a"), ("hide", "ptr-b"),
+            ]
+            assert lib.counts == {"ptr-a": 0, "ptr-b": 1, "new-a": 1}
+            assert egress._show_refs == ["new-a", "ptr-b"]
+    finally:
+        egress.shutdown()
+        block.close()
+        block.unlink()
+    assert all(count == 0 for count in lib.counts.values())
 
 
 _FIT_DOCUMENT = {

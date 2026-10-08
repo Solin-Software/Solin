@@ -152,16 +152,27 @@ Changes to the media engine must preserve the following properties:
 - no silent fallback to a second playback engine when libobs is unavailable.
 
 Closing foreground transport silences audio immediately and retains its paused
-picture while any libobs output still shows it, including transition origins,
-previews and thumbnails. The sidecar collects retired sources on its control
-heartbeat after their showing references disappear; shutdown releases all
+picture while native routes or borrowed previews retain it, including transition
+origins and thumbnails. The sidecar collects retired sources on its control
+heartbeat after their scene and showing references disappear; shutdown releases all
 remaining references. Closing media never restores cached pixels from an earlier
 application presentation.
 
 Application-owned content replaces that picture only at Take, after preparation
 and revalidation of the requested uploaded presentation epoch. Cancellation leaves
-the live picture intact. A change from video to application-owned content must
-reconcile that epoch even when the scene ID stays the same or hydration is pending.
+the live picture intact. Every new application-owned presentation must reconcile
+its epoch even when the scene ID stays the same or hydration is pending.
+
+BGRA ingress allocates one native source per presentation epoch and reuses it for
+subsequent frames of that epoch. An idle blank or a new image cannot overwrite
+the outgoing presentation's texture before its transition. The scene graph keeps
+its committed source across hydration; new ingress sources attach only at an
+accepted Take. Content scenes and their referencing ancestors get new composition
+instances for a new presentation; shared cameras and other native sources are
+reused. This preserves an outgoing composition while another output or preview
+receives new content. The control heartbeat releases superseded compositions and
+sources after borrowed scene references and native showing references retire,
+without cleanup timers.
 
 ## Reconsideration triggers
 

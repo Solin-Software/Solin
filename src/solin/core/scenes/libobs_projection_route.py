@@ -54,6 +54,10 @@ class LibobsProjectionRoute:
         return self._scene_id
 
     @property
+    def scene_source(self) -> Any:
+        return self._scene_source
+
+    @property
     def source_ptr(self) -> object | None:
         """Raw pointer for a display draw callback, or None when unset.
 

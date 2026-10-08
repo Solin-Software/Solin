@@ -6,8 +6,9 @@ shared-memory channel (:mod:`content_frame_channel`), creates a
 channel into that source on a background thread so the app's rendered content
 (yeartext, timers, browser, framed images) composites like any other source.
 
-The frame source is exposed via :attr:`source` so the scene builder can place it
-for the content layer; the consumer owns its lifetime.
+Each presentation epoch has its own frame source. New epochs cannot overwrite
+pixels still used by an outgoing scene. The consumer owns the sources; the
+control thread collects them after scene and native showing references retire.
 """
 
 from __future__ import annotations
@@ -47,6 +48,7 @@ class ContentFrameConsumer:
         self._frame_source_factory = frame_source_factory or _default_frame_source_factory
         self._reader: Any | None = None
         self._frame_source: Any | None = None
+        self._sources: list[Any] = []
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()
         # Native uploads can wait for the graphics context. Keep their resource
@@ -62,7 +64,41 @@ class ContentFrameConsumer:
 
     @property
     def source(self) -> Any | None:
-        return self._frame_source.source if self._frame_source is not None else None
+        with self._condition:
+            return self._frame_source.source if self._frame_source is not None else None
+
+    def owns_source(self, source: Any) -> bool:
+        with self._condition:
+            return any(wrapper.source is source for wrapper in self._sources)
+
+    def source_for_epoch(self, media_epoch: int) -> Any | None:
+        """Borrow only an uploaded source matching the preparation's identity."""
+        with self._condition:
+            if self._stop.is_set() or self._media_epoch != media_epoch:
+                return None
+            return self._frame_source.source if self._frame_source is not None else None
+
+    def collect_unused_sources(self, referenced_sources: tuple[Any, ...]) -> None:
+        """Release old epochs on the control thread, after all renderers retire.
+
+        Scene references also pin hidden sources: pylibobs release marks its
+        source removed, so native reference counting alone cannot preserve them.
+        Never release under the condition used for preparation deadlines.
+        """
+        with self._condition:
+            retired = [
+                wrapper for wrapper in self._sources
+                if wrapper is not self._frame_source
+                and not any(wrapper.source is source for source in referenced_sources)
+                and not wrapper.source.showing
+            ]
+            for wrapper in retired:
+                self._sources.remove(wrapper)
+        for wrapper in retired:
+            try:
+                wrapper.release()
+            except Exception:  # noqa: BLE001 - cleanup must not break supervision
+                log.warning("Could not release a retired content source", exc_info=True)
 
     def start(self) -> bool:
         """Open the channel and start pumping. False if unusable or stopped."""
@@ -91,6 +127,7 @@ class ContentFrameConsumer:
             self._reader.close()
             self._reader = None
             return False
+        self._sources.append(self._frame_source)
         self._thread = threading.Thread(
             target=self._run, name="solin-content-pump", daemon=True
         )
@@ -111,14 +148,32 @@ class ContentFrameConsumer:
                 previous_epoch = self._media_epoch
             if previous_epoch is not None and frame.media_epoch < previous_epoch:
                 return False
-            if not frame_source.push_bgra(
-                frame.data, frame.width, frame.height, frame.stride,
-                reset=frame.media_epoch != previous_epoch,
-            ):
+            new_epoch = previous_epoch is not None and frame.media_epoch != previous_epoch
+            if new_epoch:
+                frame_source = self._frame_source_factory(
+                    self._runtime, f"solin-content-{frame.media_epoch}",
+                )
+                if frame_source is None:
+                    return False
+            try:
+                uploaded = frame_source.push_bgra(
+                    frame.data, frame.width, frame.height, frame.stride,
+                    reset=frame.media_epoch != previous_epoch,
+                )
+            except Exception:
+                if new_epoch:
+                    frame_source.release()
+                raise
+            if not uploaded:
+                if new_epoch:
+                    frame_source.release()
                 return False
             with self._condition:
+                if new_epoch:
+                    self._sources.append(frame_source)
                 if self._stop.is_set():
                     return False
+                self._frame_source = frame_source
                 self._media_epoch = frame.media_epoch
                 self._condition.notify_all()
                 return True
@@ -156,8 +211,10 @@ class ContentFrameConsumer:
             self._dispose()
 
     def _dispose(self) -> None:
-        frame_source, self._frame_source = self._frame_source, None
-        if frame_source is not None:
+        with self._condition:
+            sources, self._sources = self._sources, []
+            self._frame_source = None
+        for frame_source in sources:
             try:
                 frame_source.release()
             except Exception:  # noqa: BLE001 - libobs boundary
