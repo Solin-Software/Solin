@@ -28,27 +28,25 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-log = logging.getLogger(__name__)
-
-# Reuse the graph's model-kind -> obs id mapping so program and projection
-# animate identically for the same scene transition policy.
-from solin.core.scenes.libobs_scene_builder import (  # noqa: E402
-    _FALLBACK_KIND,
-    _TRANSITION_IDS,
+from solin.core.scenes.libobs_transitions import (
+    FALLBACK_TRANSITION_KIND,
+    TRANSITION_SOURCE_IDS,
+    LibobsTransitionPool,
 )
+
+log = logging.getLogger(__name__)
 
 
 class LibobsProjectionRoute:
     """Owns the projection transition and exposes it to the display callbacks."""
 
     def __init__(self, runtime: Any) -> None:
-        self._runtime = runtime
+        self._transitions = LibobsTransitionPool(runtime, "solin-projection")
         self._transition: Any = None
-        self._transition_kind: str | None = None
         self._showing = False
         self._scene_id = ""
-        # pylibobs' Transition exposes no getter, so remember what we last showed
-        # and carry it into a replacement transition instead of blanking the screen.
+        # Carry the last committed source into a prepared replacement so a kind
+        # change preserves the transition's origin.
         self._scene_source: Any = None
 
     @property
@@ -59,54 +57,42 @@ class LibobsProjectionRoute:
     def source_ptr(self) -> object | None:
         """Raw pointer for a display draw callback, or None when unset.
 
-        Read from the graphics thread, so it must never block: the transition is
-        created once and released only at shutdown, and libobs itself guards the
-        swap of its inner scene.
+        Read from the graphics thread, so it must never block. Prepared resources
+        remain owned until shutdown; libobs guards the swap of their inner scenes.
         """
         transition = self._transition
         return getattr(transition, "_ptr", None) if transition is not None else None
 
-    def _ensure_transition(self, model_kind: str | None = None) -> Any:
-        kind = model_kind if model_kind in _TRANSITION_IDS else _FALLBACK_KIND
-        if self._transition is not None and kind == self._transition_kind:
-            return self._transition
-        try:
-            transition = self._runtime.ob.Transition.create(
-                _TRANSITION_IDS[kind], f"solin-projection-{kind}", {}
-            )
-        except Exception:  # noqa: BLE001 - libobs boundary
-            log.warning("Could not create the projection transition", exc_info=True)
-            return self._transition
-        # Carry the live scene into the replacement so the room's screen does not
-        # blink when the transition kind changes.
-        old, self._transition = self._transition, transition
-        self._transition_kind = kind
-        if self._scene_source is not None:
-            try:
-                transition.set_source(self._scene_source)
-            except Exception:  # noqa: BLE001 - libobs boundary
-                log.debug("projection transition carry-over errored", exc_info=True)
-        self._inc_showing(transition)
-        self._release(old)
-        return transition
+    def prepare_transition(self, model_kind: str) -> None:
+        """Allocate a transition without changing what the projection shows."""
+        self._transitions.prepare(model_kind)
 
-    def _release(self, transition: Any) -> None:
-        if transition is None:
+    def prepare_document(self, document: dict) -> None:
+        """Prime the configured kinds before Program starts rendering them."""
+        self._transitions.prepare_document(document)
+
+    def _activate_transition(self, transition: Any) -> None:
+        if transition is self._transition:
             return
-        pointer = getattr(transition, "_ptr", None)
-        if pointer is not None:
-            try:
-                from pylibobs._ffi import get_lib
-
-                # CFFI resolves these unwrapped symbols dynamically.
-                lib: Any = get_lib()
-                lib.obs_source_dec_showing(pointer)
-            except Exception:  # noqa: BLE001 - unwrapped libobs symbol
-                log.debug("projection dec_showing errored", exc_info=True)
+        old = self._transition
+        showing = False
         try:
-            transition.release()
-        except Exception:  # noqa: BLE001 - libobs boundary
-            log.debug("projection transition release errored", exc_info=True)
+            if self._scene_source is not None:
+                transition.set_source(self._scene_source)
+            else:
+                transition.clear()
+            showing = self._inc_showing(transition)
+            if self._showing and old is not None:
+                self._dec_showing(old)
+        except Exception:
+            if showing:
+                self._dec_showing(transition)
+            transition.clear()
+            raise
+        self._transition = transition
+        self._showing = showing
+        if old is not None:
+            old.clear()
 
     def start(
         self,
@@ -116,72 +102,85 @@ class LibobsProjectionRoute:
         duration_ms: int,
     ) -> bool:
         """Animate the projection to ``scene_source`` with its own transition."""
-        transition = self._ensure_transition(model_kind)
-        if transition is None:
-            return False
         try:
-            transition.start(scene_source, int(duration_ms))
+            transition = self._transitions.prepared(model_kind)
+            self._activate_transition(transition)
+            if not transition.start(scene_source, int(duration_ms)):
+                # OBS declines an animation whose destination is already live.
+                # A repeated ready-content Take still successfully keeps it live.
+                return self._scene_id == scene_id and (
+                    getattr(self._scene_source, "_ptr", self._scene_source)
+                    == getattr(scene_source, "_ptr", scene_source)
+                )
         except Exception:  # noqa: BLE001 - libobs boundary
             log.warning("Could not transition the projection to %r", scene_id, exc_info=True)
             return False
         self._scene_id = scene_id
+        self._scene_source = scene_source
         return True
 
-    def _inc_showing(self, transition: Any) -> None:
+    def _inc_showing(self, transition: Any) -> bool:
         """Show-ref the transition so its scenes' sources actually run.
 
         Not an activate ref: projection stays out of the program audio mix.
         """
         pointer = getattr(transition, "_ptr", None)
         if pointer is None:
-            return
-        try:
-            from pylibobs._ffi import get_lib
+            return False
+        from pylibobs._ffi import get_lib
 
-            # CFFI resolves these unwrapped symbols dynamically.
-            lib: Any = get_lib()
-            lib.obs_source_inc_showing(pointer)
-        except Exception:  # noqa: BLE001 - unwrapped libobs symbol
-            log.warning("Could not show-ref the projection transition", exc_info=True)
+        # CFFI resolves these unwrapped symbols dynamically.
+        lib: Any = get_lib()
+        lib.obs_source_inc_showing(pointer)
+        return True
+
+    def _dec_showing(self, transition: Any) -> None:
+        pointer = getattr(transition, "_ptr", None)
+        if pointer is None:
             return
-        self._showing = True
+        from pylibobs._ffi import get_lib
+
+        lib: Any = get_lib()
+        lib.obs_source_dec_showing(pointer)
+
+    def _reset_inactive_sources(self) -> None:
+        for kind in TRANSITION_SOURCE_IDS:
+            try:
+                transition = self._transitions.prepared(kind)
+            except KeyError:
+                continue
+            if transition is not self._transition:
+                transition.clear()
 
     def set_scene(self, scene_id: str, scene_source: Any) -> bool:
         """Cut the projection to ``scene_source`` (None clears it)."""
-        transition = self._ensure_transition()
-        if transition is None:
-            return False
         try:
-            transition.set_source(scene_source)
+            transition = self._transitions.prepare(FALLBACK_TRANSITION_KIND)
+            self._activate_transition(transition)
+            if scene_source is None:
+                transition.clear()
+            else:
+                transition.set_source(scene_source)
+            self._scene_id = scene_id if scene_source is not None else ""
+            self._scene_source = scene_source
+            self._reset_inactive_sources()
         except Exception:  # noqa: BLE001 - libobs boundary
             log.warning("Could not point the projection at scene %r", scene_id, exc_info=True)
             return False
-        self._scene_id = scene_id if scene_source is not None else ""
-        self._scene_source = scene_source
         return True
 
     def shutdown(self) -> None:
         transition, self._transition = self._transition, None
         self._scene_id = ""
         self._scene_source = None
-        if transition is None:
-            return
-        pointer = getattr(transition, "_ptr", None)
-        if self._showing and pointer is not None:
+        if self._showing and transition is not None:
             try:
-                from pylibobs._ffi import get_lib
-
-                # CFFI resolves these unwrapped symbols dynamically.
-                lib: Any = get_lib()
-                lib.obs_source_dec_showing(pointer)
+                self._dec_showing(transition)
             except Exception:  # noqa: BLE001 - shutdown must not raise
                 log.debug("projection dec_showing errored", exc_info=True)
         self._showing = False
         try:
-            transition.set_source(None)  # drop the ref to the scene first
+            self._transitions.reset_sources()
         except Exception:  # noqa: BLE001 - shutdown must not raise
             log.debug("projection transition clear errored", exc_info=True)
-        try:
-            transition.release()
-        except Exception:  # noqa: BLE001 - shutdown must not raise
-            log.debug("projection transition release errored", exc_info=True)
+        self._transitions.shutdown()

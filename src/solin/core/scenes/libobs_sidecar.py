@@ -887,6 +887,7 @@ class LibobsSidecarEngine:
             if thumbnails is not None:
                 thumbnails.suspend()
             active_scenes = _payload_object(payload.get("active_scenes") or {})
+            document = _payload_object(payload.get("document") or {})
             # An open media source owns the content slot; otherwise the BGRA
             # frame-ingress source does (both may be absent → placeholder).
             # Hold the window-output lock so a per-scene draw callback on the
@@ -902,6 +903,8 @@ class LibobsSidecarEngine:
                 # its old scene refs; the rebuild guard protects per-scene draws.
                 # OBS registration takes the video-mix mutex, so configure before
                 # activating the new main Program.
+                if self._projection_route is not None:
+                    self._projection_route.prepare_document(document)
                 if self._program_egress is not None:
                     self._program_egress.configure(payload.get("program_egress"))
                 if self._preview_egress is not None:
@@ -909,7 +912,7 @@ class LibobsSidecarEngine:
 
             with rebuild_guard:
                 graph.hydrate(
-                    _payload_object(payload.get("document") or {}),
+                    document,
                     active_scenes,
                     self._effective_content_source(),
                     # Sent beside the document, never inside it: the document
@@ -1071,7 +1074,22 @@ class LibobsSidecarEngine:
                     "error_code": "source_unavailable",
                     "error_message": "The requested content presentation is not ready",
                 })
-        result = graph.prepare(scene_id, kind, duration_ms, str(bus_id or ""))
+        result = None
+        try:
+            result = graph.prepare(scene_id, kind, duration_ms, str(bus_id or ""))
+            if result is not None and bus_id == "media_windows":
+                route = self._projection_route
+                if route is None:
+                    raise RuntimeError("The projection route is not running")
+                route.prepare_transition(result["kind"])
+        except Exception:  # noqa: BLE001 - a resource failure must not alter live output
+            if result is not None:
+                graph.discard(result["token"])
+            log.warning("Could not prepare the scene transition", exc_info=True)
+            return _reply(request, "error", {
+                "error_code": "transition_unavailable",
+                "error_message": "The requested scene transition could not be prepared",
+            })
         if result is None:
             return _reply(request, "error", {
                 "error_code": "unknown_scene",
