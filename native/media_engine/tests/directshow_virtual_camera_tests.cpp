@@ -258,13 +258,15 @@ struct CapturedSample final {
     bool sync_point{false};
     bool discontinuity{false};
     std::uint64_t checksum{0U};
+    std::chrono::steady_clock::time_point received_at{};
 };
 
 class SampleCaptureRenderer final : public CBaseRenderer {
   public:
-    explicit SampleCaptureRenderer(HRESULT* result)
+    explicit SampleCaptureRenderer(
+        HRESULT* result, const std::chrono::milliseconds consumer_delay)
         : CBaseRenderer(kTestRendererClassId, NAME("Solin Test Renderer"),
-                        nullptr, result) {}
+                        nullptr, result), consumer_delay_(consumer_delay) {}
 
     HRESULT CheckMediaType(const CMediaType* media_type) override {
         return media_type != nullptr && *media_type->Type() == MEDIATYPE_Video &&
@@ -296,6 +298,7 @@ class SampleCaptureRenderer final : public CBaseRenderer {
                 .sync_point = sample->IsSyncPoint() == S_OK,
                 .discontinuity = sample->IsDiscontinuity() == S_OK,
                 .checksum = checksum,
+                .received_at = std::chrono::steady_clock::now(),
             });
         }
         samples_available_.notify_all();
@@ -303,6 +306,7 @@ class SampleCaptureRenderer final : public CBaseRenderer {
             stalled_once_ = true;
             std::this_thread::sleep_for(std::chrono::milliseconds{120});
         }
+        std::this_thread::sleep_for(consumer_delay_);
         return S_OK;
     }
 
@@ -320,6 +324,7 @@ class SampleCaptureRenderer final : public CBaseRenderer {
     std::condition_variable samples_available_{};
     std::vector<CapturedSample> samples_{};
     bool stalled_once_{false};
+    const std::chrono::milliseconds consumer_delay_;
 };
 
 [[nodiscard]] bool validate_profile(const AM_MEDIA_TYPE& media_type,
@@ -360,10 +365,16 @@ class SampleCaptureRenderer final : public CBaseRenderer {
 } // namespace
 
 int wmain(const int argument_count, wchar_t** arguments) {
-    if (argument_count != 2) {
-        std::cerr << "filter path required\n";
+    if (argument_count < 2 || argument_count > 3 ||
+        (argument_count == 3 &&
+         std::wstring{arguments[2]} != L"--slow-consumer")) {
+        std::cerr << "filter path [--slow-consumer] required\n";
         return 2;
     }
+    // Sustained backpressure exceeds a 30 fps slot. The graph must still make
+    // the live/stale transitions without requiring the consumer to run at 30 fps.
+    const auto consumer_delay = std::chrono::milliseconds{
+        argument_count == 3 ? 80 : 0};
     ComApartment apartment;
     if (!expect(SUCCEEDED(apartment.result()), "COM initialization failed")) {
         return 1;
@@ -644,7 +655,7 @@ int wmain(const int argument_count, wchar_t** arguments) {
                                   reinterpret_cast<void**>(graph.put()));
         if (SUCCEEDED(result)) {
             capture_renderer =
-                new (std::nothrow) SampleCaptureRenderer(&result);
+                new (std::nothrow) SampleCaptureRenderer(&result, consumer_delay);
             if (capture_renderer == nullptr) {
                 result = E_OUTOFMEMORY;
             }
@@ -706,6 +717,16 @@ int wmain(const int argument_count, wchar_t** arguments) {
             result = graph.get()->QueryInterface(
                 IID_IMediaControl, reinterpret_cast<void**>(control.put()));
         }
+        ComPtr<IMediaFilter> media_filter;
+        if (SUCCEEDED(result)) {
+            result = graph.get()->QueryInterface(
+                IID_IMediaFilter, reinterpret_cast<void**>(media_filter.put()));
+        }
+        if (SUCCEEDED(result)) {
+            // A clocked renderer can hide a missing source wait. Capture without
+            // a graph clock so this test exercises the filter's own pacing.
+            result = media_filter.get()->SetSyncSource(nullptr);
+        }
         if (SUCCEEDED(result)) {
             result = control.get()->Run();
         }
@@ -757,10 +778,15 @@ int wmain(const int argument_count, wchar_t** arguments) {
             // Both capture phases share the original three-second deadline.
             // Require the stale-producer transition before stopping the graph,
             // as Stop itself also closes the broker presence lease.
+            // Two subsequent standby samples prove stable fallback. Throughput
+            // under consumer backpressure is not a graph correctness condition;
+            // exact scheduling is tested independently with controlled time.
             samples = capture_renderer->wait_for_samples(
                 capture_deadline, [expected_live_checksum](const auto& captured) {
-                    return captured.size() >= 55U &&
+                    return captured.size() >= 4U &&
                            captured.back().checksum == captured.front().checksum &&
+                           captured[captured.size() - 2U].checksum ==
+                               captured.front().checksum &&
                            std::any_of(captured.begin(), captured.end(),
                                        [expected_live_checksum](const auto& sample) {
                                            return sample.checksum ==
@@ -786,11 +812,11 @@ int wmain(const int argument_count, wchar_t** arguments) {
         if (SUCCEEDED(result)) {
             const auto expected_size =
                 static_cast<LONG>(expected_profiles[2].sample_size);
-            if (samples.size() < 55U || samples[0].length != expected_size ||
+            if (samples.size() < 4U || samples[0].length != expected_size ||
                 !samples[0].sync_point || !samples[0].discontinuity ||
                 samples[0].start != 0 ||
-                samples[0].checksum == expected_live_checksum ||
-                capture_elapsed < std::chrono::milliseconds{1800}) {
+                samples[0].end != kFrameDuration ||
+                samples[0].checksum == expected_live_checksum) {
                 result = E_FAIL;
             }
             for (std::size_t index = 1U;
@@ -798,7 +824,24 @@ int wmain(const int argument_count, wchar_t** arguments) {
                 if (samples[index].length != expected_size ||
                     !samples[index].sync_point ||
                     samples[index].start != samples[index - 1U].end ||
-                    samples[index].end <= samples[index].start) {
+                    samples[index].start !=
+                        static_cast<REFERENCE_TIME>(index * 10'000'000ULL / 30U) ||
+                    samples[index].end !=
+                        static_cast<REFERENCE_TIME>((index + 1U) * 10'000'000ULL / 30U)) {
+                    result = E_FAIL;
+                }
+            }
+            if (SUCCEEDED(result)) {
+                const auto received_duration =
+                    samples.back().received_at - samples.front().received_at;
+                // Slow consumers may reduce throughput, but a clockless source
+                // must never deliver more media time than elapsed wall time
+                // (allow one slot for scheduling at the observation boundary).
+                if (std::chrono::nanoseconds{samples.back().start * 100LL} >
+                        received_duration + std::chrono::nanoseconds{
+                            1'000'000'000LL / 30LL} ||
+                    !samples[1].discontinuity) {
+                    std::cerr << "source pacing or stall discontinuity failed\n";
                     result = E_FAIL;
                 }
             }
@@ -828,7 +871,7 @@ int wmain(const int argument_count, wchar_t** arguments) {
                 }
             }
             if (SUCCEEDED(result) &&
-                (standby_index == samples.size() ||
+                (standby_index + 1U >= samples.size() ||
                  !samples[standby_index].discontinuity)) {
                 result = E_FAIL;
             }

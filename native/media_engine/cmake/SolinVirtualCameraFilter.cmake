@@ -229,6 +229,34 @@ function(solin_add_virtual_camera_filter)
             COMMAND solin-virtual-camera-filter-tests
                     $<TARGET_FILE:solin-virtual-camera>
         )
+        add_test(NAME directshow-virtual-camera-filter-backpressure
+            COMMAND solin-virtual-camera-filter-tests
+                    $<TARGET_FILE:solin-virtual-camera> --slow-consumer
+        )
+        # Both graph fixtures own the same per-user broker endpoint.
+        set_tests_properties(
+            directshow-virtual-camera-filter
+            directshow-virtual-camera-filter-backpressure
+            PROPERTIES RESOURCE_LOCK solin-directshow-broker
+        )
+        add_executable(solin-virtual-camera-frame-cadence-tests
+            tests/directshow_frame_cadence_tests.cpp
+        )
+        target_include_directories(solin-virtual-camera-frame-cadence-tests
+            PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/windows/directshow_virtual_camera"
+        )
+        target_compile_features(solin-virtual-camera-frame-cadence-tests
+            PRIVATE cxx_std_20
+        )
+        target_compile_options(solin-virtual-camera-frame-cadence-tests
+            PRIVATE /W4 /WX /permissive- /EHsc
+        )
+        set_property(TARGET solin-virtual-camera-frame-cadence-tests PROPERTY
+            MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>"
+        )
+        add_test(NAME directshow-virtual-camera-frame-cadence
+            COMMAND solin-virtual-camera-frame-cadence-tests
+        )
         add_executable(solin-virtual-camera-frame-adapter-tests
             tests/directshow_frame_adapter_tests.cpp
         )

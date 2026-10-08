@@ -118,6 +118,13 @@ build\native\media-engine-gstreamer\Release\solin-virtual-camera-frame-adapter-b
 
 CTest fails the Release build if any measured P95 exceeds the budget.
 
+DirectShow graph checks cover standby/live/stale-producer transitions with
+normal and deliberately slow consumers. They disable the renderer clock to
+verify the filter's own pacing, preserve exact sample timestamps and reject
+overproduction. Separate tests use controlled time to verify 30 fps deadlines,
+lateness boundaries and recovery without bursts; the graph watchdog bounds a
+stalled test rather than requiring a fixed frame count from a busy runner.
+
 For the historical QtMultimedia-to-native media route measurements, including
 fixture generation, explicit one-second CPU buckets, and provenance requirements, see
 [Native media performance measurements](native-media-performance.md).

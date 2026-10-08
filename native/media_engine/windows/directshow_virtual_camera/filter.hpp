@@ -2,6 +2,7 @@
 
 #include "broker_client.hpp"
 #include "frame_adapter.hpp"
+#include "frame_cadence.hpp"
 
 #include <streams.h>
 
@@ -66,8 +67,7 @@ class DirectShowCapturePin final : public CSourceStream,
     BrokerFrameProvider provider_{};
     std::vector<std::uint8_t> last_output_{};
     std::vector<std::uint8_t> staging_output_{};
-    std::chrono::steady_clock::time_point deadline_epoch_{};
-    std::uint64_t deadline_index_{0U};
+    DirectShowFrameCadence cadence_{};
     std::uint64_t frame_index_{0U};
     std::uint64_t last_generation_{0U};
     std::uint64_t last_input_sequence_{0U};
