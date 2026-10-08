@@ -50,7 +50,6 @@ def isolated_app_env(temp_root: Path) -> dict[str, str]:
         xdg_config_dir,
         xdg_data_dir,
         xdg_cache_dir,
-        temporary_dir,
     ):
         path.mkdir(parents=True, exist_ok=True)
 
@@ -62,13 +61,15 @@ def isolated_app_env(temp_root: Path) -> dict[str, str]:
     env["XDG_CONFIG_HOME"] = str(xdg_config_dir)
     env["XDG_DATA_HOME"] = str(xdg_data_dir)
     env["XDG_CACHE_HOME"] = str(xdg_cache_dir)
-    # Qt's Unix local sockets and AppImage extraction use the temporary directory.
-    # Keep it shared within one upgrade pair and private between separate tests.
-    env["TMPDIR"] = str(temporary_dir)
-    env["TMP"] = str(temporary_dir)
-    env["TEMP"] = str(temporary_dir)
     env["SOLIN_IPC_SERVER_NAME"] = f"sln-{uuid.uuid4().hex[:12]}"
-    if os.name == "posix":
+    if sys.platform != "win32":
+        # Unix sockets and AppImage extraction need a private temporary root.
+        # Windows IPC uses named pipes. Keep its system temporary directory:
+        # Inno's uninstaller owns self-deletion helpers beyond the test lifetime.
+        temporary_dir.mkdir(parents=True, exist_ok=True)
+        env["TMPDIR"] = str(temporary_dir)
+        env["TMP"] = str(temporary_dir)
+        env["TEMP"] = str(temporary_dir)
         ipc_path = temporary_dir / env["SOLIN_IPC_SERVER_NAME"]
         limit = 104 if sys.platform == "darwin" else 108
         if len(os.fsencode(ipc_path)) >= limit:
