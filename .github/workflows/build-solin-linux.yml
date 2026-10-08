@@ -167,6 +167,7 @@ jobs:
         shell: bash
         env:
           APPIMAGE_EXTRACT_AND_RUN: "1"
+          SOLIN_E2E_STARTUP_SECONDS: "15"
           SOLIN_PACKAGED_EXE: ${{ github.workspace }}/dist/Solin-${{ env.APP_VERSION }}-linux-x86_64.AppImage
         run: |
           xvfb-run --auto-servernum \

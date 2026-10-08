@@ -31,6 +31,7 @@ def _launcher(tmp_path: Path, *, early_exit: bool = False, ignore_term: bool = F
         "server = socket.socket(socket.AF_UNIX)\n"
         "server.bind(sys.argv[1])\n"
         "server.listen()\n"
+        "open(sys.argv[1] + '.ready', 'w').write('listening')\n"
         "print('ready', flush=True)\n"
         "while True: time.sleep(1)\n",
         encoding="utf-8",
@@ -49,7 +50,7 @@ def _launcher(tmp_path: Path, *, early_exit: bool = False, ignore_term: bool = F
 
 
 def _assert_no_listener(path: Path) -> None:
-    assert Path(str(path) + ".pid").is_file(), "The fixture must have started its IPC child."
+    assert Path(str(path) + ".ready").is_file(), "The fixture must have opened its IPC listener."
     deadline = time.monotonic() + 2
     while time.monotonic() < deadline:
         with socket.socket(socket.AF_UNIX) as client:

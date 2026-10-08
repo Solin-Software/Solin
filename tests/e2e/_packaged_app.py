@@ -68,6 +68,11 @@ def isolated_app_env(temp_root: Path) -> dict[str, str]:
     env["TMP"] = str(temporary_dir)
     env["TEMP"] = str(temporary_dir)
     env["SOLIN_IPC_SERVER_NAME"] = f"sln-{uuid.uuid4().hex[:12]}"
+    if os.name == "posix":
+        ipc_path = temporary_dir / env["SOLIN_IPC_SERVER_NAME"]
+        limit = 104 if sys.platform == "darwin" else 108
+        if len(os.fsencode(ipc_path)) >= limit:
+            raise ValueError("Packaged smoke temporary directory is too long for a Unix IPC socket.")
     env.setdefault(
         "QT_LOGGING_RULES",
         "qt.qpa.mime=false",
@@ -263,7 +268,10 @@ def assert_process_survives_startup(
             process.wait(timeout=shutdown_timeout)
         except subprocess.TimeoutExpired:
             if os.name == "posix":
-                os.killpg(process.pid, signal.SIGKILL)
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
             else:
                 process.kill()
             process.wait(timeout=5)
