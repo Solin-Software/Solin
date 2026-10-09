@@ -785,9 +785,9 @@ def test_video_auto_switch_reaches_program_without_app_decoded_frames(
             previous_image.fill(QColor("#00ff00"))
             ingress.submit_frame(previous_image)
             assert _wait_for(
-                lambda: (
+                lambda boundary=before_image: (
                     controller.applied_scene(BusId.VIRTUAL_CAMERA) == content_scene_id
-                    and program_is_color(bytes((0, 255, 0, 255)), before_image)
+                    and program_is_color(bytes((0, 255, 0, 255)), boundary)
                 ),
                 application=application,
             ), observation()

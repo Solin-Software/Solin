@@ -2866,6 +2866,14 @@ def _media_sources(runtime):
     return [s for s in runtime.sources if s.kind == "ffmpeg_source"]
 
 
+def _hydrate_media_graph(engine, content_source):
+    """Inject content while preserving preparation before Program activation."""
+    engine._scene_graph.hydrate(
+        _MEDIA_DOC, {"virtual_camera": "s1"}, content_source,
+        before_activate=engine._projection_route.prepare_all,
+    )
+
+
 def _take_native_content(engine, *, epoch=1, bus=None):
     for target in ("virtual_camera", "media_windows", "editor") if bus is None else (bus,):
         prepared = engine.handle(_request("prepare_scene", {
@@ -2951,7 +2959,7 @@ def test_native_prepare_before_open_publishes_only_at_take_and_preserves_other_o
     engine.handle(_request("hello"))
     graph = engine._scene_graph
     image = object()
-    graph.hydrate(_MEDIA_DOC, {"virtual_camera": "s1"}, image)
+    _hydrate_media_graph(engine, image)
     origin = graph._scenes["s1"]
     engine._projection_route.set_scene("s1", origin.as_source())
     engine._preview_egress.set_scene_source(origin.as_source())
@@ -2990,7 +2998,7 @@ def test_native_content_take_failure_never_replaces_the_live_image(failure, monk
     engine.handle(_request("hello"))
     graph = engine._scene_graph
     image = object()
-    graph.hydrate(_MEDIA_DOC, {"virtual_camera": "s1"}, image)
+    _hydrate_media_graph(engine, image)
     origin = graph._scenes["s1"]
     try:
         engine.handle(_request("open_media", {"path": "/video.mp4", "content_media_epoch": 7}))
@@ -3024,7 +3032,7 @@ def test_failed_video_replacement_keeps_the_committed_picture_alive(monkeypatch)
     engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
     engine.handle(_request("hello"))
     graph = engine._scene_graph
-    graph.hydrate(_MEDIA_DOC, {"virtual_camera": "s1"}, object())
+    _hydrate_media_graph(engine, object())
     try:
         engine.handle(_request("open_media", {"path": "/video.mp4", "content_media_epoch": 1}))
         _take_native_content(engine)
@@ -3057,7 +3065,7 @@ def test_audio_open_preserves_a_prepared_app_visual_presentation():
     engine.handle(_request("hello"))
     graph = engine._scene_graph
     first, image = object(), object()
-    graph.hydrate(_MEDIA_DOC, {"virtual_camera": "s1"}, first)
+    _hydrate_media_graph(engine, first)
     engine._content_consumer = _PreparedContentConsumer(image, lambda *_args, **_kwargs: True)
     try:
         prepared = engine.handle(_request("prepare_scene", {
@@ -3116,13 +3124,13 @@ def test_ingress_replacement_preserves_committed_source_ownership_until_a_new_ta
     try:
         engine._reconcile_content_ingress(descriptor(first_channel))
         origin = sources[0]
-        graph.hydrate(_MEDIA_DOC, {"virtual_camera": "s1"}, origin.source)
+        _hydrate_media_graph(engine, origin.source)
         # Removing/replacing the producer must not mark its published source removed.
         engine._reconcile_content_ingress(descriptor(next_channel) if replacement == "new_channel" else None)
         assert engine._effective_content_source() is origin.source
         assert origin.released == 0
         assert origin in engine._retired_frame_sources
-        graph.hydrate(_MEDIA_DOC, {"virtual_camera": "s1"}, engine._effective_content_source())
+        _hydrate_media_graph(engine, engine._effective_content_source())
         engine._collect_retired_presentations()
         assert graph.content_source is origin.source and origin.released == 0
         # Publish a new composition and advance all borrowed outputs.
@@ -3316,7 +3324,7 @@ def test_content_epoch_superseded_while_staging_never_starts_take(monkeypatch):
     )
     try:
         graph = engine._scene_graph
-        graph.hydrate(_MEDIA_DOC, {"virtual_camera": "s1"}, old_image)
+        _hydrate_media_graph(engine, old_image)
         prepared = engine.handle(_request("prepare_scene", {
             "bus_id": "virtual_camera", "scene_id": "s1", "content_media_epoch": 2,
         }))
@@ -3351,7 +3359,7 @@ def test_new_ingress_epoch_keeps_committed_image_until_accepted_take(accept):
     engine._content_consumer = consumer
     try:
         graph = engine._scene_graph
-        graph.hydrate(_MEDIA_DOC, {"virtual_camera": "s1"}, old_image)
+        _hydrate_media_graph(engine, old_image)
         prepared = engine.handle(_request("prepare_scene", {
             "bus_id": "virtual_camera", "scene_id": "s1", "content_media_epoch": 2,
         }))
@@ -3456,7 +3464,7 @@ def test_prepared_content_does_not_replace_retired_video_until_a_current_take(co
         source=frame, wait_for_epoch=lambda epoch, **_: epoch == ready_epoch,
     )
     try:
-        engine._scene_graph.hydrate(_MEDIA_DOC, {"virtual_camera": "s1"}, frame)
+        _hydrate_media_graph(engine, frame)
         engine.handle(_request("open_media", {"path": "/video.mp4", "content_media_epoch": 1}))
         _take_native_content(engine)
         media = engine._media_source.source
@@ -3505,7 +3513,7 @@ def test_each_prepared_content_token_revalidates_its_epoch_after_another_take():
         source=frame, wait_for_epoch=lambda epoch, **_: epoch == ready_epoch,
     )
     try:
-        engine._scene_graph.hydrate(_MEDIA_DOC, {"virtual_camera": "s1"}, frame)
+        _hydrate_media_graph(engine, frame)
         engine.handle(_request("open_media", {"path": "/video.mp4", "content_media_epoch": 1}))
         _take_native_content(engine)
         engine.handle(_request("control_media", {"action": "close"}))
@@ -3568,7 +3576,7 @@ def test_content_staging_failure_does_not_consume_take_or_discard_video(monkeypa
     )
     try:
         graph = engine._scene_graph
-        graph.hydrate(_MEDIA_DOC, {"virtual_camera": "s1"}, frame)
+        _hydrate_media_graph(engine, frame)
         engine.handle(_request("open_media", {"path": "/video.mp4", "content_media_epoch": 1}))
         _take_native_content(engine)
         media = engine._media_source.source
