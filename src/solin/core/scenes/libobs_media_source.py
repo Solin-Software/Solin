@@ -161,7 +161,7 @@ class LibobsMediaSource:
         texture. Prime a native frame before accepting the first visual Take.
         """
         source = self._source
-        self._require_startup_video()
+        self.require_video_frame()
         wake = threading.Event()
         while source is not None and source is self._source:
             self._apply_startup_transport()
@@ -170,10 +170,7 @@ class LibobsMediaSource:
                 state == STATE_STOPPED and self._startup is None
             ):
                 return False
-            if (
-                self._video_readiness is not None and self._video_readiness.ready
-                and self._startup is None
-            ):
+            if self.video_frame_ready:
                 return True
             remaining = deadline - time.monotonic()
             if remaining <= 0:
@@ -181,13 +178,23 @@ class LibobsMediaSource:
             wake.wait(min(1 / 120, remaining))
         return False
 
-    def _require_startup_video(self) -> None:
-        """Visual preparation needs a frame even when audio already acknowledged startup."""
+    @property
+    def video_frame_ready(self) -> bool:
+        """Whether visual startup has completed, without waiting on the decoder."""
+        with self._transport_lock:
+            return (
+                self._source is not None and self._video_readiness is not None
+                and self._video_readiness.ready and self._startup is None
+                and self._source.media_state in (STATE_PLAYING, STATE_PAUSED)
+            )
+
+    def require_video_frame(self) -> None:
+        """Arm nonblocking visual preparation, including an audio-first pause."""
         with self._transport_lock:
             source, watch = self._source, self._video_readiness
             if source is None or watch is None or watch.ready:
                 return
-            if source.media_state in (STATE_ERROR, STATE_ENDED, STATE_STOPPED):
+            if source.media_state in (STATE_ERROR, STATE_ENDED) and not watch.updating:
                 return
             intent = self._startup
             if intent is None:

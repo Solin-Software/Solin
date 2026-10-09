@@ -237,6 +237,8 @@ class LibobsSidecarEngine:
         self._retired_frame_sources: list[Any] = []
         self._prepared_content: dict[str, tuple[ContentSourceKind, int]] = {}
         self._media_epoch: int | None = None
+        self._requested_video_epoch: int | None = None
+        self._reported_video_epoch: int | None = None
         self._media_lock = threading.Lock()
         # slot -> the last (position, duration) actually observed, so a dropped
         # stream can be told apart from a video that reached its end.
@@ -595,6 +597,7 @@ class LibobsSidecarEngine:
                 if retired is not None:
                     self._retired_media_sources.append(retired)
                 self._media_epoch = None
+                self._reported_video_epoch = None
             opened = media.open(path, autoplay=autoplay, is_local_file=is_local,
                                 volume_percent=volume, speed_percent=speed)
             if opened and not slot:
@@ -613,6 +616,8 @@ class LibobsSidecarEngine:
                 self._media_trim_ended = False
                 if trim_start:
                     media.seek(trim_start)
+                if epoch is not None and epoch == self._requested_video_epoch:
+                    media.require_video_frame()
                 self._collect_retired_presentations()
         if not opened:
             self._emit_media_state(7, 0, 0, path, slot=slot, error_code="media_open_failed")
@@ -911,6 +916,35 @@ class LibobsSidecarEngine:
                 snapshot = self._sample_media(slot)
                 if snapshot is not None:
                     self._emit_media_state(*snapshot, slot=slot)
+            self._emit_video_ready()
+
+    def _emit_video_ready(self) -> None:
+        # Loading is asynchronous. Publish readiness from the control poller,
+        # keeping IPC writes and decoder waits out of the native render callback.
+        with self._media_lock:
+            epoch = self._media_epoch
+            media = self._media_source
+            if (
+                epoch is None or epoch != self._requested_video_epoch
+                or epoch == self._reported_video_epoch or media is None
+                or not media.video_frame_ready or self._event_sink is None
+            ):
+                return
+            sink = self._event_sink
+        try:
+            sink(SceneIpcEnvelope(
+                message_type="media_video_ready", request_id="event-media-video-ready",
+                session_id=self._session_id, process_generation=self._process_generation,
+                sequence=0, document_revision=0,
+                deadline_monotonic_ms=int(time.monotonic() * 1000) + 2000,
+                payload={"content_media_epoch": epoch},
+            ))
+        except Exception:  # noqa: BLE001 - an event write must not kill the media poller
+            log.debug("could not emit media video readiness", exc_info=True)
+            return
+        with self._media_lock:
+            if self._media_epoch == epoch:
+                self._reported_video_epoch = epoch
 
     def _handle_preview_layer_geometry(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope:
         graph = self._scene_graph
@@ -1206,6 +1240,11 @@ class LibobsSidecarEngine:
             })
         if expected_epoch is not None:
             self._prepared_content[result["token"]] = source_kind, expected_epoch
+            if source_kind is ContentSourceKind.NATIVE_MEDIA:
+                with self._media_lock:
+                    self._requested_video_epoch = expected_epoch
+                    if self._media_epoch == expected_epoch and self._media_source is not None:
+                        self._media_source.require_video_frame()
         return _reply(request, "scene_prepared", {
             "bus_id": bus_id,
             "scene_id": scene_id,

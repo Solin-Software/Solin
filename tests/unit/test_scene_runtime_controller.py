@@ -31,6 +31,7 @@ from solin.core.scenes.engine import (
     LocalCameraProbeStatus,
     LocalVideoFormat,
     MediaPlaybackEvent,
+    MediaVideoReadyEvent,
     OutputWindowTarget,
     SceneEngine,
     SceneEngineAck,
@@ -246,6 +247,7 @@ class _Engine:
         self.preparations: list[tuple[str, BusId, str, int, TransitionSpec]] = []
         self.preparation_content_media_epochs: list[int | None] = []
         self.preparation_content_source_kinds: list[ContentSourceKind] = []
+        self.video_ready = True
         self.takes: list[tuple[str, ScenePreparation]] = []
         self.outputs: list[tuple[str, BusId, bool]] = []
         self.renders: list[tuple[str, BusId, bool]] = []
@@ -369,6 +371,12 @@ class _Engine:
         self.preparations.append((request_id, bus_id, scene_id, sequence, transition))
         self.preparation_content_media_epochs.append(content_media_epoch)
         self.preparation_content_source_kinds.append(content_source_kind)
+        if (
+            self.video_ready and content_media_epoch is not None
+            and content_source_kind is ContentSourceKind.NATIVE_MEDIA
+        ):
+            assert self.listener is not None
+            self.listener(MediaVideoReadyEvent(self.session_id, self.generation, content_media_epoch))
         return _completed(
             ScenePreparation(
                 request_id=request_id,
@@ -3084,6 +3092,106 @@ def test_replaced_content_preparation_is_reconciled_for_the_latest_presentation(
     assert engine.preparation_content_source_kinds == [previous_kind, *([current_kind] * 3)]
     assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
     assert errors == []
+
+
+@pytest.mark.parametrize("ready_before_preparation", [False, True])
+def test_native_take_waits_for_frame_readiness_without_starting_an_ipc_deadline(
+    request, ready_before_preparation: bool,
+) -> None:
+    engine = _Engine()
+    engine.video_ready = False
+    projection = _Projection()
+    _documents, _runtime, controller = _runtime_controller(request, engine, projection, request_ids=())
+    controller.start_engine()
+    projection.set_type("image")
+    original_takes = len(engine.takes)
+    projection.set_type("video")
+    event = MediaVideoReadyEvent(engine.session_id, engine.generation, projection.session_id)
+    if ready_before_preparation:
+        controller._consume_engine_event(event)
+    _deliver_controller_results(controller)
+    if not ready_before_preparation:
+        assert len(engine.takes) == original_takes
+        assert controller._waiting_video_take is not None
+        assert controller._failed_takes == set()
+        controller._consume_engine_event(event)
+        _deliver_controller_results(controller)
+    assert [prepared.bus_id for _, prepared in engine.takes[original_takes:]] == [
+        BusId.VIRTUAL_CAMERA, BusId.MEDIA_WINDOWS, BusId.EDITOR,
+    ]
+    assert controller._pending == {} and controller._waiting_video_take is None
+    # Repeated notification cannot re-run Take or its entry actions.
+    controller._consume_engine_event(event)
+    assert len(engine.takes) == original_takes + 3
+
+
+@pytest.mark.parametrize("obsolete", ["session", "generation", "epoch"])
+def test_native_readiness_ignores_an_unrelated_presentation(request, obsolete: str) -> None:
+    engine = _Engine()
+    engine.video_ready = False
+    projection = _Projection()
+    _documents, _runtime, controller = _runtime_controller(request, engine, projection, request_ids=())
+    controller.start_engine()
+    projection.set_type("video")
+    _deliver_controller_results(controller)
+    event = MediaVideoReadyEvent(engine.session_id, engine.generation, projection.session_id)
+    stale = replace(event, **{
+        "session": {"session_id": "another-session"},
+        "generation": {"process_generation": "another-generation"},
+        "epoch": {"content_media_epoch": projection.session_id + 1},
+    }[obsolete])
+    controller._consume_engine_event(stale)
+    assert engine.takes == [] and controller._waiting_video_take is not None
+    controller._consume_engine_event(event)
+    _deliver_controller_results(controller)
+    assert len(engine.takes) == 3
+
+
+@pytest.mark.parametrize("replacement", ["image", "idle", "video"])
+def test_cancel_loading_video_does_not_take_its_late_ready_frame(request, replacement: str) -> None:
+    engine = _Engine()
+    engine.video_ready = False
+    projection = _Projection()
+    _documents, _runtime, controller = _runtime_controller(request, engine, projection, request_ids=())
+    controller.start_engine()
+    projection.set_type("video")
+    _deliver_controller_results(controller)
+    obsolete = engine.preparations[-1][0]
+    event = MediaVideoReadyEvent(engine.session_id, engine.generation, projection.session_id)
+    projection.set_type(replacement)
+    _deliver_controller_results(controller)
+    controller._consume_engine_event(event)
+    assert obsolete in engine.cancelled
+    assert all(prepared.request_id != obsolete for _, prepared in engine.takes)
+    if replacement == "video":
+        assert controller._waiting_video_take is not None
+        controller._consume_engine_event(replace(event, content_media_epoch=projection.session_id))
+        _deliver_controller_results(controller)
+    assert controller._pending == {} and controller._waiting_video_take is None
+
+
+def test_loading_video_retires_pending_preparation_when_the_engine_restarts(request) -> None:
+    engine = _Engine()
+    engine.video_ready = False
+    projection = _Projection()
+    _documents, _runtime, controller = _runtime_controller(request, engine, projection, request_ids=())
+    controller.start_engine()
+    projection.set_type("video")
+    _deliver_controller_results(controller)
+    old_event = MediaVideoReadyEvent(engine.session_id, engine.generation, projection.session_id)
+    engine.emit_health(SceneEngineStatus.FAILED)
+    assert controller._pending == {} and controller._waiting_video_take is None
+    controller._consume_engine_event(old_event)
+    assert engine.takes == []
+    engine.generation = "generation-2"
+    engine.emit_health(SceneEngineStatus.READY)
+    _deliver_controller_results(controller)
+    controller._consume_engine_event(old_event)
+    assert engine.takes == []
+    controller._consume_engine_event(replace(old_event, process_generation=engine.generation))
+    _deliver_controller_results(controller)
+    assert len(engine.takes) == 3
+    assert all(prepared.process_generation == engine.generation for _, prepared in engine.takes)
 
 
 def test_a_new_video_retries_a_failed_content_take_without_changing_the_scene(

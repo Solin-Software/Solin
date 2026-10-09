@@ -611,12 +611,27 @@ class MediaPlaybackEvent:
             raise ValueError("Invalid media playback event")
 
 
+@dataclass(frozen=True, slots=True)
+class MediaVideoReadyEvent:
+    """An opened media presentation has an uploaded frame and acknowledged transport."""
+
+    session_id: str
+    process_generation: str
+    content_media_epoch: int
+
+    def __post_init__(self) -> None:
+        _identity(self.session_id, "media video session id")
+        _identity(self.process_generation, "media video process generation")
+        _bounded_int(self.content_media_epoch, 0, 2**64 - 1, "media video epoch")
+
+
 SceneEngineEvent: TypeAlias = (
     SourceHealthEvent
     | EngineHealthEvent
     | FrameEgressReadyEvent
     | ProgramRecordingEvent
     | MediaPlaybackEvent
+    | MediaVideoReadyEvent
 )
 
 

@@ -39,6 +39,7 @@ from solin.core.scenes.content_frame_publisher import SharedMemoryContentPublish
 from solin.core.scenes.engine import (
     FrameEgressReadyEvent,
     MediaPlaybackEvent,
+    MediaVideoReadyEvent,
     SceneEngine,
     SceneEngineSnapshot,
 )
@@ -998,6 +999,138 @@ def test_video_auto_switch_reaches_program_without_app_decoded_frames(
         unsubscribe_engine()
         ingress.close()
         program.close()
+
+
+@pytest.mark.parametrize("autoplay", [True, False], ids=["playing", "paused"])
+def test_slow_native_video_loading_preserves_image_then_updates_every_bus(
+    tmp_path: Path, scene_workspace_factory, qt_object_owner: QObject, autoplay: bool, monkeypatch,
+) -> None:
+    from http.server import BaseHTTPRequestHandler
+    from socketserver import ThreadingMixIn
+    from threading import Thread
+    from tests._http import LoopbackHTTPServer
+
+    path = tmp_path / "slow-video.gif"
+    images = [Image.new("RGB", (160, 90), (255 - index % 2, 0, 0)) for index in range(40)]
+    try:
+        images[0].save(path, save_all=True, append_images=images[1:], duration=200, loop=0)
+    finally:
+        for image in images:
+            image.close()
+    payload = path.read_bytes()
+    requested = Event()
+    release = Event()
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            requested.set()
+            if not release.wait(10):
+                self.send_error(503)
+                return
+            start = int(self.headers.get("Range", "bytes=0-").split("=")[1].split("-")[0])
+            if start >= len(payload):
+                self.send_response(416)
+                self.send_header("Content-Range", f"bytes */{len(payload)}")
+                self.end_headers()
+                return
+            body = payload[start:]
+            self.send_response(206 if start else 200)
+            self.send_header("Content-Type", "image/gif")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Accept-Ranges", "bytes")
+            if start:
+                self.send_header("Content-Range", f"bytes {start}-{len(payload) - 1}/{len(payload)}")
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *_args):
+            pass
+
+    class Server(ThreadingMixIn, LoopbackHTTPServer):
+        daemon_threads = True
+
+    server = Server(Handler)
+    server_thread = Thread(target=server.serve_forever, daemon=True)
+    server_thread.start()
+    paths = ProfilePaths.from_roots(data_dir=tmp_path / "data", cache_dir=tmp_path / "cache",
+                                   profile_id="slow-video-route")
+    paths.ensure_dirs()
+    workspace = scene_workspace_factory(paths, seed_names=_seed_names())
+    workspace.documents.set_program_transition(TransitionSpec(TransitionKind.DISSOLVE, 350))
+    content_scene_id = workspace.documents.program_media_scene_id
+    engine = _create_native_transition_engine(tmp_path)
+    ingress = ContentFrameIngressController(publisher_factory=SharedMemoryContentPublisher,
+                                           canvas_width=_TRANSITION_CANVAS[0],
+                                           canvas_height=_TRANSITION_CANVAS[1])
+    program = _BgraEgress(*_TRANSITION_CANVAS, channel_id="solin-program")
+    projection = ProjectionSession()
+    unsubscribe = projection.subscribe(lambda: ingress.begin_presentation(projection.presentation_session_id))
+    controller = SceneRuntimeController(workspace, projection, engine=engine, parent=qt_object_owner)
+    application = QCoreApplication.instance()
+    errors = []
+    controller.engine_error.connect(errors.append)
+    events = []
+    unsubscribe_engine = engine.subscribe(events.append)
+    takes = []
+    take = engine.take_prepared
+
+    def record_take(prepared, **kwargs):
+        takes.append(prepared.bus_id)
+        return take(prepared, **kwargs)
+
+    monkeypatch.setattr(engine, "take_prepared", record_take)
+
+    def is_color(output, expected):
+        frame = output.read_latest()
+        return frame is not None and _program_pixel_matches(_bgra_pixel(frame, 160, 90), expected)
+
+    try:
+        controller.set_content_ingress(ingress.descriptor)
+        controller.set_program_egress(program.descriptor)
+        controller.start_engine()
+        assert _wait_for(lambda: bool(controller.applied_scenes), application=application, timeout=15)
+        projection.set_state({"type": "image", "title": "Outgoing image"})
+        image = QImage(160, 90, QImage.Format.Format_ARGB32)
+        image.fill(QColor("#00ff00"))
+        ingress.submit_frame(image)
+        assert _wait_for(lambda: is_color(program, bytes((0, 255, 0, 255))), application=application)
+        assert _wait_for(lambda: not controller._pending, application=application)
+        image_takes = len(takes)
+        projection.set_state({"type": "video", "title": "Slow video"})
+        assert engine.open_media(
+            f"http://127.0.0.1:{server.server_port}/video.gif", is_local_file=False,
+            autoplay=autoplay, content_media_epoch=projection.presentation_session_id,
+            request_id="slow-video-open", deadline_ms=4000,
+        ).result(5).applied
+        assert _wait_for(requested.is_set, application=application)
+        # Real loading outlasts the one-second Take budget. Keep Qt, IPC and the
+        # native renderer running while the origin deliberately withholds bytes.
+        loading_until = time.monotonic() + 1.3
+        assert _wait_for(lambda: time.monotonic() >= loading_until, application=application, timeout=2)
+        assert is_color(program, bytes((0, 255, 0, 255)))
+        assert len(takes) == image_takes, (takes, errors)
+        assert errors == []
+        release.set()
+        assert _wait_for(lambda: is_color(program, bytes((0, 0, 255, 255))),
+                         application=application, timeout=5), (
+            errors, controller._failed_takes, controller.applied_scenes,
+        )
+        assert not controller._pending
+        assert all(controller.applied_scene(bus) == content_scene_id for bus in BusId)
+        assert takes[image_takes:] == [BusId.VIRTUAL_CAMERA, BusId.MEDIA_WINDOWS, BusId.EDITOR]
+        ready = [event for event in events if isinstance(event, MediaVideoReadyEvent)]
+        assert len(ready) == 1 and ready[0].content_media_epoch == projection.presentation_session_id
+        assert errors == []
+    finally:
+        release.set()
+        controller.close()
+        unsubscribe()
+        unsubscribe_engine()
+        ingress.close()
+        program.close()
+        server.shutdown()
+        server.server_close()
+        server_thread.join(5)
 
 
 @pytest.mark.parametrize("autoplay", [True, False], ids=["playing", "paused"])

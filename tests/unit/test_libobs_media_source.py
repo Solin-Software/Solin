@@ -401,6 +401,35 @@ def test_visual_rearm_preserves_the_latest_explicit_seek_after_audio_first_pause
         media.close()
 
 
+def test_nonblocking_visual_demand_arms_before_decoder_update_and_waits_for_pause_ack():
+    runtime = _Runtime()
+    media = LibobsMediaSource(runtime)
+    assert media.open("/slow.mp4", autoplay=False)
+    source, watch = media.source, runtime.watches[-1]
+    try:
+        watch.updating = True
+        source.media_state = libobs_media_source.STATE_STOPPED
+        media.require_video_frame()
+        assert not media.video_frame_ready
+        watch.updating = False
+        source.media_state = STATE_PLAYING
+        source._media_time = 100  # Audio alone cannot satisfy visual preparation.
+        media.apply_pending_resume()
+        assert source.play_pause == []
+        watch.ready = True
+        media.apply_pending_resume()
+        assert source.play_pause == [True]
+        assert not media.video_frame_ready
+        source.media_state = STATE_PAUSED
+        media.apply_pending_resume()
+        assert media.video_frame_ready
+        media.stop()
+        assert not media.video_frame_ready
+    finally:
+        media.close()
+    assert not media.video_frame_ready
+
+
 def test_audio_only_initial_pause_uses_position_without_a_video_frame():
     runtime = _Runtime()
     media = LibobsMediaSource(runtime)

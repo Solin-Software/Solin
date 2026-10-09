@@ -14,6 +14,7 @@ import sys
 import tempfile
 import time
 import types
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -56,6 +57,7 @@ from solin.core.scenes.process_engine import (
     _heartbeat_from_envelope,
     _local_camera_discovery_from_envelope,
     _media_playback_event_from_envelope,
+    _media_video_ready_from_envelope,
     _program_recording_event_from_envelope,
 )
 
@@ -2986,6 +2988,84 @@ def test_engine_open_media_decodes_privately_without_changing_the_live_content()
     assert event.state.path == "/clip.mp4"
     assert event.state.state is MediaPlaybackState.PLAYING
     engine.shutdown()
+
+
+@pytest.mark.parametrize("prepare_first", [True, False])
+def test_native_readiness_notifies_once_after_upload_and_transport_ack(monkeypatch, prepare_first):
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    events = []
+    engine.set_event_sink(events.append)
+    monkeypatch.setattr(engine, "_ensure_media_poller", lambda: None)
+    engine.handle(_request("hello"))
+    _hydrate_media_graph(engine, object())
+
+    def prepare():
+        engine.handle(_request("prepare_scene", {
+            "bus_id": "virtual_camera", "scene_id": "s1", "content_media_epoch": 7,
+            "content_source_kind": "native_media",
+        }))
+
+    try:
+        if prepare_first:
+            prepare()
+        engine.handle(_request("open_media", {
+            "path": "/video.mp4", "content_media_epoch": 7, "autoplay": False,
+        }))
+        if not prepare_first:
+            prepare()
+        source = engine._media_source.source
+        source.readiness.ready = False
+        engine._emit_video_ready()
+        assert not any(event.message_type == "media_video_ready" for event in events)
+        source.readiness.ready = True
+        source._state = 1
+        engine._sample_media()
+        engine._emit_video_ready()
+        assert not any(event.message_type == "media_video_ready" for event in events)
+        source._state = 4
+        engine._sample_media()
+        engine._emit_video_ready()
+        engine._emit_video_ready()
+        ready = [event for event in events if event.message_type == "media_video_ready"]
+        assert len(ready) == 1
+        decoded = _media_video_ready_from_envelope(ready[0])
+        assert decoded.content_media_epoch == 7
+        assert decoded.session_id == "sess-1" and decoded.process_generation == "gen-1"
+        engine.handle(_request("control_media", {"action": "close"}))
+        engine._emit_video_ready()
+        assert len([event for event in events if event.message_type == "media_video_ready"]) == 1
+    finally:
+        engine.shutdown()
+
+
+@pytest.mark.parametrize("epoch", [True, -1, 2**64, "7", None])
+def test_media_video_readiness_rejects_invalid_epochs(epoch):
+    with pytest.raises(ValueError):
+        _media_video_ready_from_envelope(_request("media_video_ready", {"content_media_epoch": epoch}))
+
+
+@pytest.mark.parametrize("payload", [{}, {"content_media_epoch": 7, "extra": True}])
+def test_media_video_readiness_rejects_invalid_payload_fields(payload):
+    with pytest.raises(ValueError):
+        _media_video_ready_from_envelope(_request("media_video_ready", payload))
+
+
+def test_media_video_ready_is_an_unsolicited_event_from_only_the_current_sidecar():
+    engine = create_libobs_scene_engine()
+    engine._session_id, engine._process_generation = "sess-1", "gen-1"
+    events = []
+    unsubscribe = engine.subscribe(events.append)
+    event = _request("media_video_ready", {"content_media_epoch": 7})
+    try:
+        engine._receive(replace(event, process_generation="old-generation"), "old-generation")
+        engine._receive(replace(event, session_id="another-session"), "gen-1")
+        assert events == []
+        engine._receive(event, "gen-1")
+        assert events == [_media_video_ready_from_envelope(event)]
+        assert engine._pending == {}
+    finally:
+        unsubscribe()
 
 
 def test_native_prepare_before_open_publishes_only_at_take_and_preserves_other_outputs():

@@ -29,6 +29,7 @@ from solin.core.scenes.engine import (
     LocalCameraProbeStatus,
     LocalVideoFormat,
     MediaPlaybackEvent,
+    MediaVideoReadyEvent,
     OutputWindowTarget,
     SceneEngineAck,
     SceneEngineCapabilities,
@@ -1272,6 +1273,7 @@ class SubprocessSceneEngine:
                 "frame_egress_ready",
                 "program_recording_state",
                 "media_playback_state",
+                "media_video_ready",
             }:
                 pending = None
             else:
@@ -1287,6 +1289,9 @@ class SubprocessSceneEngine:
             return
         if envelope.message_type == "media_playback_state":
             self._emit_event(_media_playback_event_from_envelope(envelope))
+            return
+        if envelope.message_type == "media_video_ready":
+            self._emit_event(_media_video_ready_from_envelope(envelope))
             return
         if pending is None:
             return
@@ -2047,6 +2052,16 @@ def _program_recording_event_from_envelope(
                 "Program recording frame-feed P95",
             ),
         )
+    )
+
+
+def _media_video_ready_from_envelope(envelope: SceneIpcEnvelope) -> MediaVideoReadyEvent:
+    payload = require_payload_fields(
+        envelope.payload, frozenset({"content_media_epoch"}), message_type="Media video ready",
+    )
+    return MediaVideoReadyEvent(
+        envelope.session_id, envelope.process_generation,
+        require_non_negative_int(payload["content_media_epoch"], "Media video epoch"),
     )
 
 
