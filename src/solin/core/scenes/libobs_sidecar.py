@@ -25,7 +25,8 @@ import os
 import sys
 import threading
 import time
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager, nullcontext
 from typing import TYPE_CHECKING, Any, BinaryIO, Callable, Protocol
 
 if TYPE_CHECKING:
@@ -38,9 +39,12 @@ from solin.core.scenes.ipc_protocol import (
     SceneIpcEnvelope,
     SceneIpcError,
     read_envelope,
+    require_payload_fields,
+    require_text,
     write_envelope,
 )
 from solin.core.scenes.model import SceneValidationError
+from solin.core.scenes.engine import SceneSourcePreview
 from solin.core.scenes.media_control import ContentSourceKind
 
 log = logging.getLogger(__name__)
@@ -251,6 +255,9 @@ class LibobsSidecarEngine:
         self._event_sink: Callable[[SceneIpcEnvelope], None] | None = None
         self._session_id = "not-started"
         self._process_generation = "not-started"
+        self._document_revision: int | None = None
+        self._editor_scene_id = ""
+        self._editor_preview_sequence = -1
 
     @property
     def runtime_started(self) -> bool:
@@ -304,7 +311,7 @@ class LibobsSidecarEngine:
         # Let a window target render a specific scene directly (editor preview);
         # re-resolved every frame against the current graph.
         self._window_output.set_scene_resolver(
-            lambda scene_id: self._scene_graph.scene_source(scene_id)
+            lambda scene_id: self._scene_graph.editor_scene_source(scene_id)
             if self._scene_graph is not None else None
         )
         from solin.core.scenes.libobs_preview_egress import LibobsPreviewEgress
@@ -338,6 +345,8 @@ class LibobsSidecarEngine:
         self._bg_media_source = LibobsMediaSource(runtime)
 
     def handle(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope | None:
+        if request.message_type == "set_editor_source_preview":
+            return self._handle_editor_source_preview(request)
         # Remember correlation ids so unsolicited events (recording state) are
         # accepted by the client (it validates session + generation on events).
         self._session_id = request.session_id
@@ -395,6 +404,77 @@ class LibobsSidecarEngine:
         if message_type == "set_window_targets":
             return self._handle_set_window_targets(request)
         return build_response(request)
+
+    @contextmanager
+    def _editor_preview_update(self, *, preserve_scene: bool = False) -> Iterator[None]:
+        """Retire readback first, then exclude direct native editor borrowers."""
+        egress = self._preview_egress
+        previous = egress.scene_source if preserve_scene and egress is not None else None
+        if egress is not None:
+            egress.set_scene_source(None)
+        output = self._window_output
+        guard = output.hydrate_lock if output is not None else nullcontext()
+        try:
+            with guard:
+                yield
+        finally:
+            if egress is not None and self._scene_graph is not None:
+                egress.set_scene_source(
+                    previous if preserve_scene else
+                    self._scene_graph.editor_scene_source(self._editor_scene_id)
+                )
+
+    def _handle_editor_source_preview(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope:
+        def reply(result: SceneSourcePreview) -> SceneIpcEnvelope:
+            return _reply(request, "editor_source_preview", {
+                "width": result.width, "height": result.height, "error_code": result.error_code,
+            })
+
+        graph = self._scene_graph
+        if not self._runtime_started or graph is None:
+            return reply(SceneSourcePreview(error_code="runtime_unavailable"))
+        if (
+            request.session_id != self._session_id
+            or request.process_generation != self._process_generation
+        ):
+            return reply(SceneSourcePreview(error_code="session_mismatch"))
+        try:
+            payload = require_payload_fields(
+                request.payload, frozenset({"scene_id", "layer_id"}),
+                message_type="editor source preview",
+            )
+            scene_id = require_text(payload["scene_id"], "scene id", maximum=256)
+            layer_id = (
+                require_text(payload["layer_id"], "layer id", maximum=256)
+                if payload["layer_id"] is not None else None
+            )
+            if not scene_id or layer_id == "":
+                raise SceneIpcError("Missing editor source preview identity")
+        except SceneIpcError:
+            return reply(SceneSourcePreview(error_code="invalid_request"))
+        if request.sequence <= self._editor_preview_sequence:
+            return reply(SceneSourcePreview(error_code="stale_request"))
+        # Clears invalidate editor intent even after a document/scene changed.
+        # They borrow no new source, so cleanup also remains safe after deadline.
+        if layer_id is not None:
+            if request.document_revision != self._document_revision:
+                return reply(SceneSourcePreview(error_code="stale_revision"))
+            if scene_id != self._editor_scene_id or scene_id not in graph.scene_ids:
+                return reply(SceneSourcePreview(error_code="unknown_layer"))
+        # Even an expired request consumes its ordering position: an older set
+        # must not resurrect a preview after a newer clear timed out in transit.
+        self._editor_preview_sequence = request.sequence
+        if layer_id is not None and request.deadline_monotonic_ms <= int(time.monotonic() * 1000):
+            return reply(SceneSourcePreview(error_code="deadline_exceeded"))
+        try:
+            with self._editor_preview_update():
+                if layer_id is not None and request.deadline_monotonic_ms <= int(time.monotonic() * 1000):
+                    return reply(SceneSourcePreview(error_code="deadline_exceeded"))
+                result = graph.set_editor_source_preview(scene_id, layer_id)
+            return reply(result)
+        except Exception:  # noqa: BLE001 - native editing failure is a typed preview error
+            log.warning("Could not update editor source preview", exc_info=True)
+            return reply(SceneSourcePreview(error_code="source_unavailable"))
 
     def _handle_start_recording(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope:
         recorder = self._recorder
@@ -994,7 +1074,12 @@ class LibobsSidecarEngine:
         if not self._runtime_started or graph is None:
             return _ack(request, applied=False, error_code="runtime_unavailable",
                         error_message="the libobs runtime is not running")
+        if request.sequence < self._editor_preview_sequence:
+            return _ack(request, applied=False, error_code="stale_request",
+                        error_message="the graph update was superseded by newer editor state")
         try:
+            self._document_revision = None
+            self._editor_preview_sequence = max(self._editor_preview_sequence, request.sequence)
             payload = request.payload
             self._prepared_content.clear()
             # Stop the preview render on the old (about-to-be-released) scenes
@@ -1013,8 +1098,6 @@ class LibobsSidecarEngine:
             # frame-ingress source does (both may be absent → placeholder).
             # Hold the window-output lock so a per-scene draw callback on the
             # graphics thread can't resolve a scene while it is being released.
-            from contextlib import nullcontext
-
             output = self._window_output
             rebuild_guard = output.hydrate_lock if output is not None else nullcontext()
 
@@ -1042,6 +1125,7 @@ class LibobsSidecarEngine:
                     _payload_object(payload.get("source_credentials") or {}),
                     before_activate=configure_outputs,
                 )
+                self._document_revision = request.document_revision
             if thumbnails is not None:
                 thumbnails.resume()
             self._reconcile_projection(active_scenes)
@@ -1111,7 +1195,7 @@ class LibobsSidecarEngine:
     ) -> None:
         egress = self._preview_egress
         graph = self._scene_graph
-        if egress is None or graph is None:
+        if graph is None:
             return
         # The editor previews the MEDIA_WINDOWS (edit) bus scene.
         preview_scene_id = (
@@ -1119,7 +1203,10 @@ class LibobsSidecarEngine:
             or active_scenes.get("media_windows")
             or active_scenes.get("virtual_camera")
         )
-        source = graph.scene_source(str(preview_scene_id)) if preview_scene_id else None
+        self._editor_scene_id = str(preview_scene_id or "")
+        if egress is None:
+            return
+        source = graph.editor_scene_source(self._editor_scene_id)
         egress.set_scene_source(source)
         # Hydrate is the full-state sync: after a restart the sidecar is fresh and
         # the egress defaults to disabled, while the app's edge-triggered render
@@ -1272,6 +1359,11 @@ class LibobsSidecarEngine:
         if route != bus_id:
             return _ack(request, applied=False, error_code="bus_mismatch",
                         error_message="the prepared scene belongs to another output")
+        if bus_id == "editor" and request.sequence < self._editor_preview_sequence:
+            graph.discard(token)
+            self._prepared_content.pop(token, None)
+            return _ack(request, applied=False, error_code="stale_request",
+                        error_message="the editor selection was superseded")
         binding = self._prepared_content.get(token)
         content_source = None
         if binding is not None:
@@ -1283,8 +1375,6 @@ class LibobsSidecarEngine:
                 self._prepared_content.pop(token, None)
                 return _ack(request, applied=False, error_code="source_unavailable",
                             error_message="The prepared content presentation is no longer ready")
-        from contextlib import nullcontext
-
         replacement = (
             graph.content_presentation(content_source)
             if binding is not None
@@ -1306,10 +1396,10 @@ class LibobsSidecarEngine:
                 if not graph.discard(token):
                     return _ack(request, applied=False, error_code="unknown_preparation",
                                 error_message="no such prepared scene")
-                egress = self._preview_egress
-                if egress is not None:
-                    source = scene_source if presentation is not None else graph.scene_source(scene_id)
-                    egress.set_scene_source(source)
+                with self._editor_preview_update():
+                    graph.clear_editor_source_preview()
+                    self._editor_scene_id = scene_id
+                self._editor_preview_sequence = max(self._editor_preview_sequence, request.sequence)
                 applied = True
             elif bus_id == "media_windows":
                 # Projection animates on its OWN transition, independent of the program.
@@ -1320,10 +1410,13 @@ class LibobsSidecarEngine:
             if applied:
                 if presentation is not None:
                     if presentation.changes_graph:
-                        output = self._window_output
-                        guard = output.hydrate_lock if output is not None else nullcontext()
-                        with guard:
+                        with self._editor_preview_update(
+                            preserve_scene=bus_id != "editor" and not graph.has_editor_source_preview,
+                        ):
                             presentation.commit()
+                        self._editor_preview_sequence = max(
+                            self._editor_preview_sequence, request.sequence,
+                        )
                         thumbnails = self._thumbnail_egress
                         if thumbnails is not None:
                             thumbnails.refresh_scene_sources()
@@ -1369,6 +1462,9 @@ class LibobsSidecarEngine:
         return _ack(request, applied=True)
 
     def shutdown(self) -> None:
+        self._document_revision = None
+        self._editor_scene_id = ""
+        self._editor_preview_sequence = -1
         # Release in reverse dependency order: virtual-camera output → window
         # displays (they hold GL surfaces on the context) → scene graph → the
         # content consumer → the runtime/context itself.

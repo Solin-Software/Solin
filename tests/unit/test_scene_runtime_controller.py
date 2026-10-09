@@ -41,6 +41,7 @@ from solin.core.scenes.engine import (
     SceneEngineSnapshot,
     SceneEngineStatus,
     ScenePreparation,
+    SceneSourcePreview,
     SourceHealthEvent,
     SourceHealthStatus,
 )
@@ -255,6 +256,7 @@ class _Engine:
             tuple[str, tuple[OutputWindowTarget, ...]]
         ] = []
         self.preview_geometries = []
+        self.editor_source_previews = []
         self.cancelled: list[str] = []
         self.stopped = False
         self.listener: Callable[[SceneEngineEvent], None] | None = None
@@ -426,6 +428,13 @@ class _Engine:
         )
         return _completed(self._ack(request_id, sequence, document_revision))
 
+    def set_editor_source_preview(
+        self, scene_id, layer_id, *, document_revision, request_id, sequence, deadline_ms,
+    ):
+        assert deadline_ms > 0
+        self.editor_source_previews.append((scene_id, layer_id, document_revision, sequence))
+        return _completed(SceneSourcePreview(1920, 1080) if layer_id is not None else SceneSourcePreview())
+
     def set_output_enabled(
         self,
         bus_id: BusId,
@@ -491,6 +500,46 @@ def _failed(error: BaseException):
     future = Future()
     future.set_exception(error)
     return future
+
+
+def test_editor_full_source_preview_is_independent_from_authored_geometry(request) -> None:
+    engine = _Engine()
+    documents, _, controller = _runtime_controller(request, engine, _Projection(), request_ids=())
+    controller.start_engine()
+    scene = documents.document.scene(CONTENT_CAMERA_PIP_SCENE_ID)
+    layer = scene.layers[0]
+    revision = documents.document.revision
+    snapshots = len(engine.snapshots)
+    assert controller.set_editor_source_preview(scene.id, layer.id).result() == SceneSourcePreview(1920, 1080)
+    assert controller.set_editor_source_preview(scene.id, None).result() == SceneSourcePreview()
+    assert [call[:2] for call in engine.editor_source_previews] == [(scene.id, layer.id), (scene.id, None)]
+    assert documents.document.revision == revision
+    assert documents.document.scene(scene.id).layers[0] == layer
+    assert len(engine.snapshots) == snapshots
+    assert engine.preview_geometries == []
+
+
+def test_editor_source_preview_returns_unavailable_until_engine_is_ready(request) -> None:
+    engine = _Engine()
+    documents, _, controller = _runtime_controller(request, engine, _Projection(), request_ids=())
+    scene = documents.document.scene(CONTENT_CAMERA_PIP_SCENE_ID)
+    assert controller.set_editor_source_preview(scene.id, scene.layers[0].id).result().error_code == "runtime_unavailable"
+    assert controller.set_editor_source_preview(scene.id, None).result() == SceneSourcePreview()
+    assert engine.editor_source_previews == []
+
+
+def test_editor_source_preview_invalidates_when_content_or_engine_changes(request) -> None:
+    engine = _Engine()
+    projection = _Projection()
+    _, _, controller = _runtime_controller(request, engine, projection, request_ids=())
+    controller.start_engine()
+    invalidations = []
+    controller.editor_source_preview_invalidated.connect(lambda: invalidations.append(True))
+    projection.set_state({"type": "image"})
+    assert invalidations
+    invalidations.clear()
+    controller._set_engine_ready(False)
+    assert invalidations == [True]
 
 
 class _PendingGeometryEngine(_Engine):

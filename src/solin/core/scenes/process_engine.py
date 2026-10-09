@@ -39,6 +39,7 @@ from solin.core.scenes.engine import (
     SceneEngineSnapshot,
     SceneEngineStatus,
     ScenePreparation,
+    SceneSourcePreview,
     ProgramRecordingEvent,
     SourceHealthEvent,
     SourceHealthStatus,
@@ -721,6 +722,33 @@ class SubprocessSceneEngine:
                 "layer": layer.to_record(),
             },
             converter=_ack_from_envelope,
+        )
+
+    def set_editor_source_preview(
+        self,
+        scene_id: str,
+        layer_id: str | None,
+        *,
+        document_revision: int,
+        request_id: str,
+        sequence: int,
+        deadline_ms: int,
+    ) -> Future[SceneSourcePreview]:
+        try:
+            _validate_identity(scene_id, "scene id")
+            if layer_id is not None:
+                _validate_identity(layer_id, "layer id")
+        except (TypeError, ValueError) as exc:
+            return _failed_future(exc)
+        return self._request(
+            message_type="set_editor_source_preview",
+            expected_message_type="editor_source_preview",
+            request_id=request_id,
+            sequence=sequence,
+            document_revision=document_revision,
+            deadline_ms=deadline_ms,
+            payload={"scene_id": scene_id, "layer_id": layer_id},
+            converter=_editor_source_preview_from_envelope,
         )
 
     def set_output_enabled(
@@ -1671,6 +1699,19 @@ def _ack_from_envelope(envelope: SceneIpcEnvelope) -> SceneEngineAck:
             payload["error_message"],
             "acknowledgement error message",
         ),
+    )
+
+
+def _editor_source_preview_from_envelope(envelope: SceneIpcEnvelope) -> SceneSourcePreview:
+    payload = require_payload_fields(
+        envelope.payload,
+        frozenset({"width", "height", "error_code"}),
+        message_type="editor source preview",
+    )
+    return SceneSourcePreview(
+        width=require_non_negative_int(payload["width"], "source preview width"),
+        height=require_non_negative_int(payload["height"], "source preview height"),
+        error_code=require_text(payload["error_code"], "source preview error code", maximum=128),
     )
 
 

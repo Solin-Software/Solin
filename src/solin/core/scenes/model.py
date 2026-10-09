@@ -23,6 +23,7 @@ MAX_SOURCES = 256
 MAX_SCENES = 256
 MAX_LAYERS_PER_SCENE = 128
 MAX_CAMERA_PRESETS = 512
+MAXIMUM_CROP_FRACTION = 0.99
 
 CONTENT_SOURCE_ID = "solin.content.current"
 DEFAULT_CAMERA_SOURCE_ID = "solin.camera.default"
@@ -1268,7 +1269,9 @@ class Crop:
             ("right", self.right),
             ("bottom", self.bottom),
         ):
-            _validate_number(value, field_name=f"crop.{name}", minimum=0.0, maximum=0.99)
+            _validate_number(
+                value, field_name=f"crop.{name}", minimum=0.0, maximum=MAXIMUM_CROP_FRACTION,
+            )
         if self.left + self.right >= 1.0 or self.top + self.bottom >= 1.0:
             raise SceneValidationError("Crop must leave a visible area")
 

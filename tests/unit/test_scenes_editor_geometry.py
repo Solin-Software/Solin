@@ -13,8 +13,9 @@ from solin.core.scenes.editor_geometry import (
     resize_rect,
     scale_framing_rect,
     snap_move_rect,
+    source_framing_geometry,
 )
-from solin.core.scenes.model import Crop, NormalizedRect
+from solin.core.scenes.model import Crop, FitMode, NormalizedRect, SceneLayer
 
 
 def test_editor_resize_preserves_aspect_unless_free_resize_is_requested() -> None:
@@ -42,6 +43,82 @@ def test_editor_crop_changes_visible_bounds_without_rescaling_the_source() -> No
     assert rect.x == pytest.approx(0.3)
     assert rect.width == pytest.approx(0.6)
     assert crop.left == pytest.approx(0.25)
+
+
+@pytest.mark.parametrize("source_size", [(1920, 1080), (1440, 1080), (1080, 1920), (3840, 1080)])
+@pytest.mark.parametrize("canvas_size", [(1920, 1080), (1080, 1920), (1440, 1080)])
+@pytest.mark.parametrize("fit_mode", [FitMode.CONTAIN, FitMode.COVER, FitMode.STRETCH])
+def test_full_source_framing_fits_physical_aspect_and_proposes_a_canvas_aspect_focus(
+    source_size: tuple[int, int], canvas_size: tuple[int, int], fit_mode: FitMode,
+) -> None:
+    layer = SceneLayer(id="layer", source_id="source", name="Source", fit_mode=fit_mode,
+                       crop=Crop(left=0.1, top=0.2, right=0.3, bottom=0.1))
+    source_width, source_height = source_size
+    canvas_width, canvas_height = canvas_size
+    bounds, frame = source_framing_geometry(
+        layer, source_width=source_width, source_height=source_height,
+        canvas_width=canvas_width, canvas_height=canvas_height,
+    )
+    assert bounds.width * canvas_width / (bounds.height * canvas_height) == pytest.approx(
+        source_width / source_height,
+    )
+    assert 0 <= bounds.x < bounds.x + bounds.width <= 1
+    assert 0 <= bounds.y < bounds.y + bounds.height <= 1
+    assert frame.width == pytest.approx(frame.height)
+    crop = crop_for_framing_rect(bounds, Crop(), frame)
+    # The proposed frame lies in the current focus, without mutating its crop.
+    assert crop.left >= layer.crop.left - 1e-9
+    assert crop.top >= layer.crop.top - 1e-9
+    assert crop.right >= layer.crop.right - 1e-9
+    assert crop.bottom >= layer.crop.bottom - 1e-9
+
+
+def test_full_source_framing_includes_implicit_cover_crop_and_mirrored_focus() -> None:
+    layer = SceneLayer(id="layer", source_id="source", name="Portrait", fit_mode=FitMode.COVER)
+    bounds, frame = source_framing_geometry(
+        layer, source_width=1080, source_height=1920, canvas_width=1920, canvas_height=1080,
+    )
+    assert bounds.height == 1.0
+    assert bounds.width == pytest.approx((1080 / 1920) / (1920 / 1080))
+    crop = crop_for_framing_rect(bounds, Crop(), frame)
+    assert crop.left == crop.right == 0
+    assert crop.top == pytest.approx((1 - bounds.width) / 2)
+    assert crop.bottom == pytest.approx(crop.top)
+
+
+@pytest.mark.parametrize("dimensions", [(0, 1080, 1920, 1080), (1920, -1, 1920, 1080),
+                                         (1920, 1080, 0, 1080), (True, 1080, 1920, 1080)])
+def test_full_source_framing_rejects_unknown_or_invalid_dimensions(dimensions) -> None:
+    with pytest.raises(ValueError):
+        source_framing_geometry(
+            SceneLayer(id="layer", source_id="source", name="Source"),
+            source_width=dimensions[0], source_height=dimensions[1],
+            canvas_width=dimensions[2], canvas_height=dimensions[3],
+        )
+
+
+@pytest.mark.parametrize("delta", [-1.0, 1.0])
+def test_moving_a_tiny_source_focus_stays_within_valid_crop_edges(delta: float) -> None:
+    layer = SceneLayer(id="layer", source_id="source", name="Source",
+                       crop=Crop(left=0.99, top=0.99, right=0.0095, bottom=0.0095))
+    bounds, frame = source_framing_geometry(
+        layer, source_width=1920, source_height=1080, canvas_width=1920, canvas_height=1080,
+    )
+    moved = move_framing_rect(frame, bounds, delta, delta)
+    crop = crop_for_framing_rect(bounds, Crop(), moved)
+    assert max(crop.left, crop.top, crop.right, crop.bottom) <= 0.99
+
+
+@pytest.mark.parametrize("source_size", [(4096, 16), (16, 4096)])
+def test_scaling_extreme_source_aspects_keeps_crop_edges_representable(source_size) -> None:
+    bounds, frame = source_framing_geometry(
+        SceneLayer(id="layer", source_id="source", name="Source"),
+        source_width=source_size[0], source_height=source_size[1],
+        canvas_width=1920, canvas_height=1080,
+    )
+    scaled = scale_framing_rect(frame, bounds, 0.5, bounds.x, bounds.y)
+    crop = crop_for_framing_rect(bounds, Crop(), scaled)
+    assert max(crop.left, crop.top, crop.right, crop.bottom) <= 0.99
 
 
 def test_editor_safe_margin_is_five_percent_of_the_physical_short_edge() -> None:
