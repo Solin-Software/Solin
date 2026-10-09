@@ -546,16 +546,21 @@ def test_video_auto_switch_reaches_program_without_app_decoded_frames(
     autoplay: bool,
     transition: TransitionSpec,
 ) -> None:
-    # ffmpeg_source decodes this animated fixture without relying on an external
-    # fixture encoder. No app-owned pixels are published during video playback.
-    path = tmp_path / "video.gif"
-    colors = ("#ff0000", "#0000ff")
-    images = [Image.new("RGB", (160, 90), colors[index % 2]) for index in range(80)]
-    try:
-        images[0].save(path, save_all=True, append_images=images[1:], duration=200, loop=0)
-    finally:
-        for image in images:
-            image.close()
+    # Each clip has a persistent identity at its center and a changing corner.
+    # A latest-frame observer can skip any 200 ms interval under render load;
+    # verify identity and motion without requiring a particular playback phase.
+    media_paths = []
+    for cycle, color in enumerate(("#ff0000", "#0000ff")):
+        path = tmp_path / f"video-{cycle}.gif"
+        media_paths.append(path)
+        images = [Image.new("RGB", (160, 90), color) for _ in range(80)]
+        try:
+            for index, image in enumerate(images):
+                image.paste((index * 3,) * 3, (0, 0, 40, 30))
+            images[0].save(path, save_all=True, append_images=images[1:], duration=200, loop=0)
+        finally:
+            for image in images:
+                image.close()
 
     paths = ProfilePaths.from_roots(
         data_dir=tmp_path / "data",
@@ -578,15 +583,17 @@ def test_video_auto_switch_reaches_program_without_app_decoded_frames(
     controller = SceneRuntimeController(workspace, projection, engine=engine)
     events: list[object] = []
     errors: list[str] = []
+    fallbacks: list[str] = []
     unsubscribe_engine = engine.subscribe(events.append)
     controller.engine_error.connect(errors.append)
+    controller.transition_fallback.connect(fallbacks.append)
     application = QCoreApplication.instance()
     assert application is not None
     probe = _PixelWaitProbe()
 
-    def program_is_color(expected: bytes) -> bool:
+    def program_is_color(expected: bytes, after_sequence: int) -> bool:
         frame = probe.read_latest(program)
-        return frame is not None and _program_pixel_matches(
+        return frame is not None and frame.sequence > after_sequence and _program_pixel_matches(
             _bgra_pixel(frame, frame.width // 2, frame.height // 2),
             expected,
         )
@@ -595,6 +602,7 @@ def test_video_auto_switch_reaches_program_without_app_decoded_frames(
         return pformat(
             {
                 "errors": errors,
+                "fallbacks": fallbacks,
                 "events": events[-10:],
                 "program": probe.observation(),
                 "desired": controller.desired_scenes,
@@ -614,7 +622,8 @@ def test_video_auto_switch_reaches_program_without_app_decoded_frames(
             timeout=15,
         ), observation()
 
-        for cycle in range(2):
+        for cycle, path in enumerate(media_paths):
+            before_open = program.channel_sequence()
             # Match MediaProjectionController: commit presentation identity first,
             # immediately queue open_media next, without pumping Qt between them.
             # An ingress wait here blocks the decoder queued behind preparation.
@@ -631,8 +640,9 @@ def test_video_auto_switch_reaches_program_without_app_decoded_frames(
                 .applied
             )
             assert _wait_for(
-                lambda: any(
+                lambda current_path=str(path): any(
                     isinstance(event, MediaPlaybackEvent)
+                    and event.state.slot == 0 and event.state.path == current_path
                     and event.state.state
                     is (MediaPlaybackState.PLAYING if autoplay else MediaPlaybackState.PAUSED)
                     for event in events
@@ -656,15 +666,40 @@ def test_video_auto_switch_reaches_program_without_app_decoded_frames(
                     .result(5)
                     .applied
                 )
+            expected = bytes((0, 0, 255, 255)) if cycle == 0 else bytes((255, 0, 0, 255))
             assert _wait_for(
-                lambda: program_is_color(bytes((0, 0, 255, 255))),
+                lambda expected=expected, boundary=before_open: program_is_color(expected, boundary),
                 application=application,
             ), observation()
             assert _wait_for(
-                lambda: program_is_color(bytes((255, 0, 0, 255))),
-                application=application,
+                lambda current_path=str(path): any(
+                    isinstance(event, MediaPlaybackEvent)
+                    and event.state.slot == 0 and event.state.path == current_path
+                    and event.state.state is MediaPlaybackState.PLAYING
+                    and event.state.position_ms > 800 and not event.state.error_code
+                    for event in events
+                ), application=application,
             ), observation()
+
+            animation_origin: bytes | None = None
+
+            def animation_changed(expected=expected) -> bool:
+                nonlocal animation_origin
+                frame = probe.read_latest(program)
+                if frame is None or not _program_pixel_matches(
+                    _bgra_pixel(frame, frame.width // 2, frame.height // 2), expected,
+                ):
+                    return False
+                pixel = _bgra_pixel(frame, frame.width // 8, frame.height // 8)
+                if animation_origin is None:
+                    animation_origin = pixel
+                # Exclude limited-range conversion rounding from the motion check.
+                return abs(pixel[0] - animation_origin[0]) > 12
+
+            assert _wait_for(animation_changed, application=application), observation()
+            assert getattr(ingress._publisher, "_sequence", 0) == 0
             assert errors == [], observation()
+            assert fallbacks == [], observation()
 
             assert (
                 engine.control_media(
@@ -677,7 +712,8 @@ def test_video_auto_switch_reaches_program_without_app_decoded_frames(
             )
             projection.reset_state()
             assert _wait_for(
-                lambda: controller.applied_scene(BusId.VIRTUAL_CAMERA) == default_scene_id,
+                lambda: (controller.applied_scene(BusId.VIRTUAL_CAMERA) == default_scene_id
+                         and controller.applied_scene(BusId.MEDIA_WINDOWS) == default_scene_id),
                 application=application,
             ), observation()
             events.clear()
