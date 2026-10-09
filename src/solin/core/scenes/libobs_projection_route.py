@@ -63,13 +63,13 @@ class LibobsProjectionRoute:
         transition = self._transition
         return getattr(transition, "_ptr", None) if transition is not None else None
 
-    def prepare_transition(self, model_kind: str) -> None:
-        """Allocate a transition without changing what the projection shows."""
-        self._transitions.prepare(model_kind)
+    def require_prepared_transition(self, model_kind: str) -> None:
+        """Check readiness without allocating or changing the live projection."""
+        self._transitions.prepared(model_kind)
 
-    def prepare_document(self, document: dict) -> None:
-        """Prime the configured kinds before Program starts rendering them."""
-        self._transitions.prepare_document(document)
+    def prepare_all(self) -> None:
+        """Prime every supported kind before Program starts rendering."""
+        self._transitions.prepare_all()
 
     def _activate_transition(self, transition: Any) -> None:
         if transition is self._transition:
@@ -155,7 +155,7 @@ class LibobsProjectionRoute:
     def set_scene(self, scene_id: str, scene_source: Any) -> bool:
         """Cut the projection to ``scene_source`` (None clears it)."""
         try:
-            transition = self._transitions.prepare(FALLBACK_TRANSITION_KIND)
+            transition = self._transitions.prepared(FALLBACK_TRANSITION_KIND)
             self._activate_transition(transition)
             if scene_source is None:
                 transition.clear()

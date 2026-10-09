@@ -177,7 +177,7 @@ class LibobsSceneGraph:
                 if not layer.get("visible", True):
                     continue
                 self._add_layer(ob, scene_id, scene, layer, canvas, sources_by_id, content_source)
-        self._transitions.prepare_document(document)
+        self._transitions.prepare_all()
         if before_activate is not None:
             before_activate()
         self._setup_program(active_scenes)
@@ -581,7 +581,7 @@ class LibobsSceneGraph:
         fallback_applied = model_kind not in TRANSITION_SOURCE_IDS
         effective_kind = FALLBACK_TRANSITION_KIND if fallback_applied else model_kind
         if bus_id == _PROGRAM_BUS:
-            self._transitions.prepare(effective_kind)
+            self._transitions.prepared(effective_kind)
         self._token_seq += 1
         token = f"prep-{self._token_seq}"
         self._pending[token] = (scene_id, effective_kind, int(duration_ms), bus_id)

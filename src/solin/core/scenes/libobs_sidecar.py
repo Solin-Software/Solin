@@ -904,7 +904,7 @@ class LibobsSidecarEngine:
                 # OBS registration takes the video-mix mutex, so configure before
                 # activating the new main Program.
                 if self._projection_route is not None:
-                    self._projection_route.prepare_document(document)
+                    self._projection_route.prepare_all()
                 if self._program_egress is not None:
                     self._program_egress.configure(payload.get("program_egress"))
                 if self._preview_egress is not None:
@@ -1081,7 +1081,7 @@ class LibobsSidecarEngine:
                 route = self._projection_route
                 if route is None:
                     raise RuntimeError("The projection route is not running")
-                route.prepare_transition(result["kind"])
+                route.require_prepared_transition(result["kind"])
         except Exception:  # noqa: BLE001 - a resource failure must not alter live output
             if result is not None:
                 graph.discard(result["token"])
