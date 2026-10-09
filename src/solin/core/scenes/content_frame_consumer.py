@@ -156,7 +156,7 @@ class ContentFrameConsumer:
                     frame.data, frame.width, frame.height, frame.stride,
                     reset=frame.media_epoch != previous_epoch,
                 )
-            except Exception:
+            except Exception:  # noqa: BLE001 - release new epoch source before re-raising
                 if new_epoch:
                     frame_source.release()
                 raise
