@@ -43,6 +43,7 @@ from solin.core.scenes.engine import (
     SceneEngineSnapshot,
 )
 from solin.core.scenes.libobs_engine import create_libobs_scene_engine
+from solin.core.scenes.process_engine import SubprocessSceneEngine
 from solin.core.scenes.media_control import ContentSourceKind, MediaControlAction, MediaPlaybackState
 from solin.core.scenes.model import (
     BusId,
@@ -208,7 +209,6 @@ def _program_pixel_matches(pixel: bytes, expected: bytes) -> bool:
 @contextmanager
 def _record_program_centers(
     subscriber: _BgraEgress,
-    *, sample_times: list[float] | None = None,
 ) -> Iterator[list[tuple[int, bytes]]]:
     """Observe egress while the control thread waits for prepare/Take replies."""
     samples: list[tuple[int, bytes]] = []
@@ -227,8 +227,6 @@ def _record_program_centers(
             x, y = frame.width // 2, frame.height // 2
             offset = (y * frame.width + x) * 4
             samples.append((reader._last_seq, frame.data[offset:offset + 4]))
-            if sample_times is not None:
-                sample_times.append(time.monotonic())
 
     with ThreadPoolExecutor(max_workers=1, thread_name_prefix="program-frame-recorder") as executor:
         recording = executor.submit(record)
@@ -552,6 +550,39 @@ class _FontManager(QObject):
         return "Arial"
 
 
+_TRANSITION_CANVAS = (320, 180)
+
+
+def _create_native_transition_engine(tmp_path: Path) -> SubprocessSceneEngine:
+    """Measure transport/transition behavior at a bounded native render cost.
+
+    Full HD geometry/readback is qualified separately below. These tests need
+    actual intermediate pictures during a short transition, including when CI
+    renders through a software OpenGL driver.
+    """
+    width, height = _TRANSITION_CANVAS
+    script = tmp_path / "native_transition_engine.py"
+    script.write_text(textwrap.dedent(f'''
+        import sys
+        from solin.core.media.obs_runtime import ObsRuntime
+        from solin.core.scenes.libobs_sidecar import (
+            LibobsSidecarEngine, _reserve_protocol_stream, serve,
+        )
+
+        def runtime_factory():
+            runtime = ObsRuntime()
+            runtime.ensure_started(width={width}, height={height})
+            return runtime
+
+        serve(
+            sys.stdin.buffer, _reserve_protocol_stream(),
+            engine=LibobsSidecarEngine(runtime_factory),
+        )
+    '''), encoding="utf-8")
+    config = create_libobs_scene_engine()._config
+    return SubprocessSceneEngine(replace(config, arguments=(str(script),)))
+
+
 @pytest.mark.parametrize(
     "transition",
     [TransitionSpec(TransitionKind.CUT, 0), TransitionSpec(TransitionKind.DISSOLVE, 600),
@@ -560,7 +591,8 @@ class _FontManager(QObject):
 )
 @pytest.mark.parametrize("preview_content", [False, True], ids=["automatic-preview", "content-preview"])
 def test_closing_image_preserves_outgoing_pixels_until_default_transition(
-    tmp_path: Path, scene_workspace_factory, transition: TransitionSpec, preview_content: bool,
+    tmp_path: Path, scene_workspace_factory, qt_object_owner: QObject,
+    transition: TransitionSpec, preview_content: bool,
 ) -> None:
     paths = ProfilePaths.from_roots(
         data_dir=tmp_path / "data", cache_dir=tmp_path / "cache", profile_id="image-return",
@@ -574,9 +606,12 @@ def test_closing_image_preserves_outgoing_pixels_until_default_transition(
     workspace.documents.update_layer(
         default_scene_id, default_layer.id, replace(default_layer, source_id=NO_SIGNAL_SOURCE_ID),
     )
-    engine = create_libobs_scene_engine()
-    ingress = ContentFrameIngressController(publisher_factory=SharedMemoryContentPublisher)
-    program = _BgraEgress(1920, 1080, channel_id="solin-program")
+    engine = _create_native_transition_engine(tmp_path)
+    ingress = ContentFrameIngressController(
+        publisher_factory=SharedMemoryContentPublisher,
+        canvas_width=_TRANSITION_CANVAS[0], canvas_height=_TRANSITION_CANVAS[1],
+    )
+    program = _BgraEgress(*_TRANSITION_CANVAS, channel_id="solin-program")
     scene_ids = tuple(scene.id for scene in workspace.documents.document.scenes)
     thumbnails = (
         _BgraEgress(160, 90 * len(scene_ids), channel_id="solin-thumbnails")
@@ -585,9 +620,10 @@ def test_closing_image_preserves_outgoing_pixels_until_default_transition(
     projection = ProjectionSession()
     content = ProgramContentController(
         projection, _FontManager(), ingress.submit_frame, lambda: ("", "", ""),
-        media_epoch_sink=ingress.begin_presentation, width=1920, height=1080,
+        media_epoch_sink=ingress.begin_presentation,
+        width=_TRANSITION_CANVAS[0], height=_TRANSITION_CANVAS[1],
     )
-    controller = SceneRuntimeController(workspace, projection, engine=engine)
+    controller = SceneRuntimeController(workspace, projection, engine=engine, parent=qt_object_owner)
     application = QCoreApplication.instance()
     assert application is not None
     probe = _PixelWaitProbe()
@@ -625,8 +661,7 @@ def test_closing_image_preserves_outgoing_pixels_until_default_transition(
                 expected=bytes((0, 255, 0, 255)),
             ) is not None
         time.sleep(0.7)
-        sample_times: list[float] = []
-        with _record_program_centers(program, sample_times=sample_times) as samples:
+        with _record_program_centers(program) as samples:
             projection.reset_state()
             # Allow ingress to deliver idle's transparent frame while Qt has not
             # yet processed the asynchronous default Take acknowledgement.
@@ -647,25 +682,24 @@ def test_closing_image_preserves_outgoing_pixels_until_default_transition(
                 application=application,
             )
             time.sleep(0.8)
+        assert _program_pixel_matches(samples[-1][1], bytes((0, 0, 0, 255))), (
+            f"Program did not finish its return to Default: {samples!r}"
+        )
         if transition.kind is not TransitionKind.CUT:
-            assert any(20 < pixel[1] < 230 for _, pixel in samples), (
+            assert any(6 < pixel[1] < 249 for _, pixel in samples), (
                 f"The outgoing image never faded into Default: {samples!r}"
             )
-            phase_seconds = transition.duration_ms / 1000
-            if transition.kind is TransitionKind.FADE_TO_BLACK:
-                phase_seconds /= 2
-            # Bound each drop by elapsed time, allowing skipped output frames
-            # under load without accepting an abrupt replacement of the origin.
-            for index in range(1, len(samples)):
-                elapsed = sample_times[index] - sample_times[index - 1]
-                # Readback completion can lag composition. Account for native
-                # frame progression as well as the observer's wall clock.
-                frame_count = (samples[index][0] - samples[index - 1][0]) / 2
-                elapsed = max(elapsed, frame_count / 60)
-                previous_green, green = samples[index - 1][1][1], samples[index][1][1]
-                assert previous_green - green <= 20 + 3 * 255 * elapsed / phase_seconds, (
-                    f"Content replacement interrupted the outgoing fade: {samples!r}"
+            # Program egress can repeat an earlier GPU readback and subsequently
+            # publish a later render. Delivery cadence cannot bound the pixel
+            # slope of those renders. Observe the fade and its forward direction;
+            # the outgoing-picture checks above also cover the pre-Take boundary.
+            lowest_green = samples[0][1][1]
+            for _, pixel in samples[1:]:
+                green = pixel[1]
+                assert green <= lowest_green + 6, (
+                    f"The outgoing image reappeared during its fade: {samples!r}"
                 )
+                lowest_green = min(lowest_green, green)
         assert controller.applied_scene(BusId.VIRTUAL_CAMERA) != content_scene_id
         if thumbnails is not None:
             assert _wait_for_pixel(
@@ -695,6 +729,7 @@ def test_closing_image_preserves_outgoing_pixels_until_default_transition(
 def test_video_auto_switch_reaches_program_without_app_decoded_frames(
     tmp_path: Path,
     scene_workspace_factory,
+    qt_object_owner: QObject,
     autoplay: bool,
     transition: TransitionSpec,
     return_kind: str,
@@ -727,14 +762,17 @@ def test_video_auto_switch_reaches_program_without_app_decoded_frames(
     content_scene_id = workspace.documents.program_media_scene_id
     assert content_scene_id is not None
     default_scene_id = workspace.documents.program_default_scene_id
-    engine = create_libobs_scene_engine()
-    ingress = ContentFrameIngressController(publisher_factory=SharedMemoryContentPublisher)
-    program = _BgraEgress(1920, 1080, channel_id="solin-program")
+    engine = _create_native_transition_engine(tmp_path)
+    ingress = ContentFrameIngressController(
+        publisher_factory=SharedMemoryContentPublisher,
+        canvas_width=_TRANSITION_CANVAS[0], canvas_height=_TRANSITION_CANVAS[1],
+    )
+    program = _BgraEgress(*_TRANSITION_CANVAS, channel_id="solin-program")
     projection = ProjectionSession()
     unsubscribe_projection = projection.subscribe(
         lambda: ingress.begin_presentation(projection.presentation_session_id)
     )
-    controller = SceneRuntimeController(workspace, projection, engine=engine)
+    controller = SceneRuntimeController(workspace, projection, engine=engine, parent=qt_object_owner)
     events: list[object] = []
     errors: list[str] = []
     fallbacks: list[str] = []
@@ -879,20 +917,23 @@ def test_video_auto_switch_reaches_program_without_app_decoded_frames(
                 assert _wait_for(animation_changed, application=application), observation()
                 assert getattr(ingress._publisher, "_sequence", 0) == ingress_sequence
             if transition.kind is TransitionKind.DISSOLVE:
-                assert any(
-                    20 < pixel[1] < 230 and max(pixel[0], pixel[2]) > 20
-                    for _, pixel in entry_samples
-                ), f"Image to video bypassed the configured dissolve: {entry_samples!r}"
+                # Egress is a latest-frame mirror: a consumer may miss the
+                # entire 350 ms interval under software rendering. Native
+                # controlled-progress tests qualify the shader phases, and
+                # engine tests qualify AUTO mode and the configured duration.
+                # Every delivered dissolve picture must still contain the
+                # outgoing image, the prepared video, or their mixture.
                 assert all(
-                    not (20 < pixel[1] < 230 and max(pixel[0], pixel[2]) <= 6)
+                    pixel[1] + max(pixel[0], pixel[2]) >= 240
                     for _, pixel in entry_samples
                 ), f"Image faded to an empty decoder: {entry_samples!r}"
             elif transition.kind is TransitionKind.FADE_TO_BLACK:
-                assert any(20 < pixel[1] < 230 for _, pixel in entry_samples), entry_samples
-                assert any(
-                    pixel[1] <= 6 and 20 < max(pixel[0], pixel[2]) < 230
+                # Fade-to-black may deliver only its midpoint and endpoints.
+                # Its phases must never mix the incoming and outgoing colors.
+                assert all(
+                    pixel[1] <= 6 or max(pixel[0], pixel[2]) <= 6
                     for _, pixel in entry_samples
-                ), entry_samples
+                ), f"Fade-to-black mixed both presentations: {entry_samples!r}"
             assert errors == [], observation()
             assert fallbacks == [], observation()
 
@@ -973,8 +1014,8 @@ def test_replacing_native_video_preserves_the_outgoing_picture_during_dissolve(
             for image in images:
                 image.close()
         paths.append(path)
-    engine = create_libobs_scene_engine()
-    program = _BgraEgress(1920, 1080, channel_id="solin-program")
+    engine = _create_native_transition_engine(tmp_path)
+    program = _BgraEgress(*_TRANSITION_CANVAS, channel_id="solin-program")
     document, scene = _content_document()
     sequence = 1
     take_latencies_ms = []
@@ -1055,6 +1096,8 @@ def test_retired_native_presentations_unload_inputs_and_release_scenes(
     tmp_path: Path, local: bool, autoplay: bool,
 ) -> None:
     """Observe native destruction, not just Python bookkeeping or noisy RSS."""
+    from tests._paths import REPO_ROOT
+
     path = tmp_path / "retirement.gif"
     images = [Image.new("RGB", (160, 90), "red") for _ in range(40)]
     try:
@@ -1069,14 +1112,19 @@ def test_retired_native_presentations_unload_inputs_and_release_scenes(
     script.write_text(textwrap.dedent('''
         import sys
         import time
-        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+        from http.server import BaseHTTPRequestHandler
         from pathlib import Path
-        from threading import Thread
+        from queue import SimpleQueue
+        from socketserver import ThreadingMixIn
+        from threading import Event, Thread
         from pylibobs._ffi import ffi, get_lib
         from solin.core.media.obs_runtime import ObsRuntime
         from solin.core.media.obs_source_render import render_source_to_bgra
         from solin.core.scenes.ipc_protocol import SceneIpcEnvelope
         from solin.core.scenes.libobs_sidecar import LibobsSidecarEngine
+
+        sys.path.insert(0, sys.argv[4])
+        from tests._http import LoopbackHTTPServer
 
         lib = get_lib()
         get_weak = ffi.cast(
@@ -1115,15 +1163,43 @@ def test_retired_native_presentations_unload_inputs_and_release_scenes(
 
                 def log_message(self, *_args):
                     pass
-            server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+            class Server(ThreadingMixIn, LoopbackHTTPServer):
+                daemon_threads = True
+
+            server = Server(Handler)
             server_thread = Thread(target=server.serve_forever, daemon=True)
             server_thread.start()
             path = f"http://127.0.0.1:{server.server_port}/{Path(path).name}"
 
+        def capture(source, *, canvas_width, canvas_height):
+            # Observe pixels in the native render phase, as production egresses do.
+            # The control thread must not contend for the Cocoa graphics context.
+            result = SimpleQueue()
+            sampled = Event()
+
+            def sample(_width, _height):
+                if sampled.is_set():
+                    return
+                sampled.set()
+                try:
+                    result.put(render_source_to_bgra(
+                        source, 160, 90,
+                        canvas_width=canvas_width, canvas_height=canvas_height,
+                    ))
+                except Exception as error:  # noqa: BLE001 - report native callback errors to the test
+                    result.put(error)
+
+            callback = engine._runtime.ob.add_main_render_callback(sample)
+            try:
+                frame = result.get(timeout=4)
+                if isinstance(frame, Exception):
+                    raise frame
+                return frame
+            finally:
+                engine._runtime.ob.remove_main_render_callback(callback)
+
         def assert_picture(source):
-            frame = render_source_to_bgra(
-                source, 160, 90, canvas_width=160, canvas_height=90,
-            )
+            frame = capture(source, canvas_width=160, canvas_height=90)
             assert frame is not None, "Retired picture is no longer drawable"
             data, stride = frame
             pixel = data[45 * stride + 80 * 4:45 * stride + 80 * 4 + 4]
@@ -1177,8 +1253,8 @@ def test_retired_native_presentations_unload_inputs_and_release_scenes(
                         len(engine._retired_media_sources),
                     )
                     # This headless output needs its own render, like a room display.
-                    render_source_to_bgra(
-                        engine._projection_route._transition, 160, 90,
+                    capture(
+                        engine._projection_route._transition,
                         canvas_width=1920, canvas_height=1080,
                     )
                     time.sleep(.02)
@@ -1225,10 +1301,14 @@ def test_retired_native_presentations_unload_inputs_and_release_scenes(
                 server.server_close()
                 server_thread.join(timeout=2)
     '''), encoding="utf-8")
-    result = subprocess.run(
-        [sys.executable, str(script), str(path), str(local), str(autoplay)], capture_output=True, text=True,
-        errors="replace", timeout=45,
-    )
+    try:
+        result = subprocess.run(
+            [sys.executable, str(script), str(path), str(local), str(autoplay), str(REPO_ROOT)],
+            capture_output=True, text=True,
+            errors="replace", timeout=45,
+        )
+    except subprocess.TimeoutExpired as error:
+        pytest.fail(f"Native retirement timed out: {error.stdout!r}\n{error.stderr!r}")
     assert result.returncode == 0, result.stdout + result.stderr
 
 
@@ -1464,6 +1544,232 @@ def _run_native_readback(scenario: str) -> None:
 
 def test_native_readback_preserves_source_alpha_and_flattens_scene_background() -> None:
     _run_native_readback("_assert_native_readback_alpha")
+
+
+@pytest.mark.parametrize("scenario", ["dissolve", "fade_to_black"])
+def test_native_prepared_transition_composes_both_phases(scenario: str) -> None:
+    _run_native_readback(f"_assert_native_{scenario}_phases")
+
+
+def _assert_native_dissolve_phases() -> None:
+    _assert_native_transition_phases("dissolve")
+
+
+def _assert_native_fade_to_black_phases() -> None:
+    _assert_native_transition_phases("fade_to_black")
+
+
+def _assert_native_transition_phases(kind: str) -> None:
+    """Qualify real prepared-source composition independently of output cadence."""
+    from pylibobs._ffi import get_lib
+    from solin.core.media.obs_runtime import ObsRuntime
+    from solin.core.media.obs_source_render import render_source_to_bgra, shutdown
+    from solin.core.scenes.libobs_media_source import LibobsMediaSource
+    from solin.core.scenes.libobs_transitions import LibobsTransitionPool
+
+    runtime = ObsRuntime()
+    media = LibobsMediaSource(runtime)
+    pool = LibobsTransitionPool(runtime, "phase-qualification")
+    origin = transition = callback = None
+    showing = False
+    directory = TemporaryDirectory()
+    try:
+        runtime.ensure_started(width=64, height=64)
+        path = Path(directory.name) / "red.gif"
+        images = [Image.new("RGB", (64, 64), "#ff0000") for _ in range(8)]
+        try:
+            for index, image in enumerate(images):
+                image.putpixel((0, 0), (index * 30,) * 3)
+            images[0].save(path, save_all=True, append_images=images[1:], duration=200, loop=0)
+        finally:
+            for image in images:
+                image.close()
+        assert media.open(str(path), autoplay=False)
+        assert media.wait_for_video_frame(deadline=time.monotonic() + 4)
+        origin = runtime.ob.Source.create("color_source_v3", "phase-origin", {
+            "width": 64, "height": 64, "color": 0xFF00FF00,
+        })
+        pool.prepare_all()
+        transition = pool.prepared(kind)
+        transition.set_source(origin)
+        get_lib().obs_source_inc_showing(transition._ptr)
+        showing = True
+        get_lib().obs_transition_set_manual_torque(transition._ptr, 0.0, 0.0)
+        assert transition.start(media.source, 350, mode=runtime.ob.TransitionMode.MANUAL)
+        requested_phase = 0.0
+        captured = Event()
+        captured.set()
+        observations = SimpleQueue()
+
+        def sample(_width, _height):
+            if captured.is_set():
+                return
+            try:
+                if abs(transition.progress - requested_phase) > 0.0001:
+                    return
+                captured.set()
+                frame = render_source_to_bgra(
+                    transition, 64, 64, canvas_width=64, canvas_height=64,
+                )
+                assert frame is not None
+                pixels, stride = frame
+                observations.put(pixels[32 * stride + 32 * 4:32 * stride + 33 * 4])
+            except Exception as error:  # noqa: BLE001 - return native callback failures
+                captured.set()
+                observations.put(error)
+
+        callback = runtime.ob.add_main_render_callback(sample)
+        samples = []
+        for phase in (0.0, 0.25, 0.5, 0.75, 1.0):
+            requested_phase = phase
+            captured.clear()
+            if phase:
+                get_lib().obs_transition_set_manual_time(transition._ptr, phase)
+            pixel = observations.get(timeout=5)
+            if isinstance(pixel, Exception):
+                raise pixel
+            samples.append(pixel)
+            assert pixel[3] >= 249, (kind, phase, pixel)
+        assert _program_pixel_matches(samples[0], bytes((0, 255, 0, 255))), samples
+        assert _program_pixel_matches(samples[-1], bytes((0, 0, 255, 255))), samples
+        if kind == "fade_to_black":
+            assert 20 < samples[1][1] < 235 and max(samples[1][0], samples[1][2]) <= 6, samples
+            assert _program_pixel_matches(samples[2], bytes((0, 0, 0, 255))), samples
+            assert 20 < samples[3][2] < 235 and max(samples[3][0], samples[3][1]) <= 6, samples
+        else:
+            assert all(20 < p[1] < 235 and 20 < p[2] < 235 for p in samples[1:-1]), samples
+            assert samples[1][1] > samples[2][1] > samples[3][1], samples
+            assert samples[1][2] < samples[2][2] < samples[3][2], samples
+    finally:
+        if callback is not None:
+            runtime.ob.remove_main_render_callback(callback)
+        if showing:
+            get_lib().obs_source_dec_showing(transition._ptr)
+        pool.shutdown()
+        media.close()
+        if origin is not None:
+            origin.release()
+        shutdown()
+        runtime.shutdown()
+        directory.cleanup()
+
+
+def test_native_readiness_preserves_frames_queued_before_the_video_tick() -> None:
+    _run_native_readback("_assert_native_readiness_preserves_queued_frames")
+
+
+def test_native_audio_only_input_can_start_paused_without_a_video_frame() -> None:
+    _run_native_readback("_assert_native_audio_only_initial_pause")
+
+
+def _assert_native_audio_only_initial_pause() -> None:
+    import wave
+
+    from solin.core.media.obs_runtime import ObsRuntime
+    from solin.core.scenes.libobs_media_source import LibobsMediaSource, STATE_PAUSED
+
+    runtime = ObsRuntime()
+    media = LibobsMediaSource(runtime)
+    callback = None
+    observations = SimpleQueue()
+    directory = TemporaryDirectory()
+    try:
+        runtime.ensure_started(width=64, height=64)
+        path = Path(directory.name) / "audio.wav"
+        with wave.open(str(path), "wb") as output:
+            output.setnchannels(1)
+            output.setsampwidth(2)
+            output.setframerate(44100)
+            output.writeframes(b"\0\0" * 44100 * 6)
+        assert media.open(str(path), autoplay=False)
+
+        def paused():
+            media.apply_pending_resume()
+            return (
+                media.source.media_state == STATE_PAUSED
+                and media.state == STATE_PAUSED
+                and media.position_ms == 0
+            )
+
+        assert _wait_for(paused), "Audio-only startup never applied its pause"
+        assert media.source.width == media.source.height == 0
+
+        def sample(_width, _height):
+            observations.put((media.source.media_state, media.position_ms))
+
+        callback = runtime.ob.add_main_render_callback(sample)
+        samples = [observations.get(timeout=5) for _ in range(8)]
+        assert all(state == STATE_PAUSED for state, _ in samples), samples
+        assert len({position for _, position in samples}) == 1, samples
+        runtime.ob.remove_main_render_callback(callback)
+        callback = None
+        position = media.position_ms
+        media.play()
+        assert _wait_for(lambda: media.position_ms > position)
+        media.close()
+    finally:
+        if callback is not None:
+            runtime.ob.remove_main_render_callback(callback)
+        media.close()
+        runtime.shutdown()
+        directory.cleanup()
+
+
+def _assert_native_readiness_preserves_queued_frames() -> None:
+    from solin.core.media.obs_frame_source import create_frame_source
+    from solin.core.media.obs_runtime import ObsRuntime
+    from solin.core.media.obs_source_render import render_source_to_bgra, shutdown
+
+    runtime = ObsRuntime()
+    source = readiness = tick_callback = None
+    tick_entered = Event()
+    resume_tick = Event()
+
+    def hold_tick(_seconds):
+        if not tick_entered.is_set():
+            tick_entered.set()
+            assert resume_tick.wait(5), "The test never released the OBS tick"
+
+    try:
+        runtime.ensure_started(width=64, height=64)
+        # Include a fully transparent valid frame: readiness is a native upload
+        # acknowledgment and must not depend on pixel color or nonzero alpha.
+        for pixel in (bytes((0, 0, 255, 255)), bytes((0, 0, 0, 0))):
+            source = create_frame_source(runtime, "queued-readiness")
+            assert source is not None
+            readiness = runtime.watch_source_video(source.source)
+            tick_entered.clear()
+            resume_tick.clear()
+            tick_callback = runtime.ob.add_tick_callback(hold_tick)
+            assert tick_entered.wait(5), "OBS did not enter its video tick"
+            assert source.push_bgra(pixel * 64 * 64, 64, 64, 256)
+            # No selected frame exists yet; this check must preserve the queue.
+            assert not runtime.prime_source_video(source.source)
+            assert not readiness.ready
+            resume_tick.set()
+            assert _wait_for(lambda candidate=readiness: candidate.ready), "The queued frame was lost"
+            frame = render_source_to_bgra(
+                source.source, 64, 64, canvas_width=64, canvas_height=64,
+            )
+            assert frame is not None
+            data, stride = frame
+            assert data[32 * stride + 32 * 4:32 * stride + 33 * 4] == pixel
+            runtime.ob.remove_tick_callback(tick_callback)
+            tick_callback = None
+            readiness.close()
+            readiness = None
+            source.release()
+            source = None
+    finally:
+        resume_tick.set()
+        if tick_callback is not None:
+            runtime.ob.remove_tick_callback(tick_callback)
+        if readiness is not None:
+            readiness.close()
+        if source is not None:
+            source.release()
+        shutdown()
+        runtime.shutdown()
 
 
 def _assert_native_readback_alpha() -> None:

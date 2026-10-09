@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import sys
+from collections.abc import Iterator
 from contextlib import nullcontext
 from pathlib import Path
 
@@ -14,7 +15,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 # A QCoreApplication created by a model-only module cannot later be upgraded to
 # QApplication, which previously caused the complete QML host module to skip.
 from PySide6.QtCore import (  # noqa: E402
-    QCoreApplication, QEvent, QtMsgType, qFormatLogMessage, qInstallMessageHandler,
+    QCoreApplication, QEvent, QObject, QtMsgType, qFormatLogMessage, qInstallMessageHandler,
 )
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
@@ -78,6 +79,18 @@ def isolated_linked_sync_state(tmp_path, monkeypatch):
     monkeypatch.setattr(journal, "_default_state_dir", lambda: tmp_path / "replica-state")
     yield
     linked_folder._SERVICES.clear()
+
+
+@pytest.fixture
+def qt_object_owner() -> Iterator[QObject]:
+    """Keep QObject children owned until destruction on the Qt thread."""
+    owner = QObject(_QT_APPLICATION)
+    try:
+        yield owner
+    finally:
+        # The protocol hook completes DeferredDelete after all finalizers.
+        # Python cyclic GC must not choose a worker thread to destroy children.
+        owner.deleteLater()
 
 
 @pytest.fixture
