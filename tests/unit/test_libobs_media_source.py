@@ -24,40 +24,81 @@ class _FakeMediaSource:
         self.kind = kind
         self.name = name
         self.settings = dict(settings)
+        self.initial_settings = dict(settings)
+        self.lifecycle = ["create"]
         self._ptr = object()  # stands in for the raw obs_source_t*
         self.play_pause: list[bool] = []
         self.stops = 0
         self.restarts = 0
         self.updates: list[dict] = []
         self.released = 0
-        self.media_time = 0
+        self._media_time = 0
+        self.seeks: list[int] = []
+        self.width = self.height = 0
         self.media_duration = 0
         self.media_state = STATE_PLAYING
 
     def media_play_pause(self, pause: bool) -> None:
         self.play_pause.append(pause)
 
+    @property
+    def media_time(self) -> int:
+        return self._media_time
+
+    @media_time.setter
+    def media_time(self, value: int) -> None:
+        self.seeks.append(value)
+        self._media_time = value
+
     def media_stop(self) -> None:
+        self.lifecycle.append("stop")
         self.stops += 1
 
     def media_restart(self) -> None:
+        self.lifecycle.append("restart")
         self.restarts += 1
 
     def update(self, settings: dict) -> None:
+        self.lifecycle.append("update")
         self.updates.append(dict(settings))
         self.settings.update(settings)
 
     def release(self) -> None:
+        self.lifecycle.append("release")
         self.released += 1
 
 
-class _Runtime:
-    @staticmethod
-    def prime_source_video(source, *, allow_preloaded):
-        return source.width > 0 and source.height > 0
+class _FakeVideoReadiness:
+    def __init__(self, source) -> None:
+        self.source = source
+        self.ready = False
+        self.invalidations = 0
+        self.closed = False
+        self.updating = False
+        self._updated_once = False
+        source.lifecycle.append("watch")
 
+    def update(self, settings):
+        if self._updated_once:
+            self.invalidate()
+        self.source.update(settings)
+        self._updated_once = True
+
+    def invalidate(self) -> None:
+        self.invalidations += 1
+        self.ready = False
+        self.source.lifecycle.append("invalidate")
+
+    def close(self) -> None:
+        if not self.closed:
+            self.closed = True
+            self.source.lifecycle.append("unwatch")
+
+
+class _Runtime:
     def __init__(self) -> None:
         self.created: list[_FakeMediaSource] = []
+        self.watches: list[_FakeVideoReadiness] = []
         self.monitored: list = []
         runtime = self
 
@@ -69,6 +110,11 @@ class _Runtime:
                 return source
 
         self.ob = types.SimpleNamespace(Source=_SourceNS)
+
+    def watch_source_video(self, source):
+        watch = _FakeVideoReadiness(source)
+        self.watches.append(watch)
+        return watch
 
     def set_source_monitoring(self, source, monitoring_type) -> None:
         self.monitored.append((source, monitoring_type))
@@ -85,6 +131,8 @@ def test_visual_readiness_requires_a_decoded_frame_even_when_transport_is_ready(
     try:
         assert not media.wait_for_video_frame(deadline=time.monotonic())
         source.width, source.height = 160, 90
+        assert not media.wait_for_video_frame(deadline=time.monotonic())
+        runtime.watches[-1].ready = True
         assert media.wait_for_video_frame(deadline=time.monotonic())
     finally:
         media.close()
@@ -102,33 +150,26 @@ def test_visual_readiness_rejects_terminal_decoders_even_with_cached_dimensions(
     source = media.source
     source.width, source.height = 160, 90
     source.media_state = state
+    runtime.watches[-1].ready = True
     try:
         assert not media.wait_for_video_frame(deadline=time.monotonic() + 10)
     finally:
         media.close()
 
 
-def test_visual_readiness_waits_for_gpu_priming_and_reuses_the_primed_source(monkeypatch):
+def test_visual_readiness_waits_for_gpu_priming_and_reuses_the_primed_source():
     runtime = _Runtime()
     media = LibobsMediaSource(runtime)
     assert media.open("/video.mp4")
     source = media.source
     source.width, source.height = 160, 90
-    calls = []
-    ready = False
-
-    def prime(candidate, *, allow_preloaded):
-        assert candidate is source
-        calls.append(allow_preloaded)
-        return ready
-
-    monkeypatch.setattr(runtime, "prime_source_video", prime)
+    watch = runtime.watches[-1]
     try:
         assert not media.wait_for_video_frame(deadline=time.monotonic())
-        ready = True
+        watch.ready = True
         assert media.wait_for_video_frame(deadline=time.monotonic())
         assert media.wait_for_video_frame(deadline=time.monotonic())
-        assert calls == [False, False]
+        assert runtime.watches == [watch] and watch.source is source
         source.media_state = libobs_media_source.STATE_ERROR
         assert not media.wait_for_video_frame(deadline=time.monotonic())
     finally:
@@ -136,12 +177,14 @@ def test_visual_readiness_waits_for_gpu_priming_and_reuses_the_primed_source(mon
 
 
 @pytest.mark.parametrize("change", ["stop", "restart", "speed"])
-def test_decoder_reset_invalidates_priming_even_when_the_source_pointer_is_unchanged(change, monkeypatch):
+def test_decoder_reset_invalidates_priming_even_when_the_source_pointer_is_unchanged(change):
     runtime = _Runtime()
     media = LibobsMediaSource(runtime)
     assert media.open("https://cdn.example/video.mp4")
     source = media.source
     source.width, source.height = 160, 90
+    watch = runtime.watches[-1]
+    watch.ready = True
     try:
         assert media.wait_for_video_frame(deadline=time.monotonic())
         if change == "speed":
@@ -149,11 +192,12 @@ def test_decoder_reset_invalidates_priming_even_when_the_source_pointer_is_uncha
         else:
             getattr(media, change)()
         source.media_state = STATE_PLAYING
-        primed = []
-        monkeypatch.setattr(runtime, "prime_source_video", lambda *_args, **_kwargs: primed.append(True) or False)
         assert media.source is source
         assert not media.wait_for_video_frame(deadline=time.monotonic())
-        assert primed == [True]
+        assert watch.invalidations == 1 and not watch.ready
+        assert source.lifecycle[-2:] == ["invalidate", "update" if change == "speed" else change]
+        watch.ready = True
+        assert media.wait_for_video_frame(deadline=time.monotonic())
     finally:
         media.close()
 
@@ -171,10 +215,14 @@ def test_open_local_file_creates_ffmpeg_source_and_autoplays(monkeypatch):
         "is_local_file": True, "local_file": "/tmp/clip.mp4", "hw_decode": True,
         "restart_on_activate": False,
     }
-    assert source.play_pause == [False]  # autoplay → not paused
+    assert source.play_pause == []  # The input update starts native playback.
+    assert media.state == STATE_PLAYING
+    assert source.volume == 1.0
     assert runtime.monitored == [(source, runtime.monitored[0][1])]  # monitoring set
     assert media.source is source
     assert media.path == "/tmp/clip.mp4"
+    assert source.initial_settings == {**source.settings, "local_file": ""}
+    assert source.updates == [source.settings]
 
 
 def test_open_remote_url_uses_the_input_setting_and_can_start_paused(monkeypatch):
@@ -193,7 +241,281 @@ def test_open_remote_url_uses_the_input_setting_and_can_start_paused(monkeypatch
         "ffmpeg_options": _PROGRESSIVE_FFMPEG_OPTIONS,
         "reconnect_delay_sec": 2,
     }
-    assert source.play_pause == [True]  # paused
+    assert source.play_pause == []  # Pause must wait for the decoder's initial reset.
+    assert source.seeks == []
+    assert source.volume == 0.0
+    assert media.state == STATE_PAUSED and source.media_state == STATE_PLAYING
+    assert source.initial_settings == {**source.settings, "input": ""}
+    assert source.updates == [source.settings]
+
+
+@pytest.mark.parametrize("path, input_key", [
+    ("/clip.mp4", "local_file"),
+    ("https://cdn.example/clip.mp4", "input"),
+])
+def test_readiness_observer_is_installed_before_the_input_can_decode(path, input_key, monkeypatch):
+    runtime = _Runtime()
+    original_update = _FakeMediaSource.update
+
+    def update(source, settings):
+        assert source.initial_settings[input_key] == ""
+        assert source.lifecycle == ["create", "watch"]
+        assert len(runtime.watches) == 1
+        assert runtime.watches[0].source is source
+        assert not runtime.watches[0].closed
+        assert settings[input_key] == path
+        original_update(source, settings)
+
+    monkeypatch.setattr(_FakeMediaSource, "update", update)
+    media = LibobsMediaSource(runtime)
+    try:
+        assert media.open(path)
+        assert runtime.created[0].lifecycle == ["create", "watch", "update"]
+    finally:
+        media.close()
+
+
+@pytest.mark.parametrize("failure", ["watch", "update"])
+def test_failed_readiness_setup_releases_the_unopened_candidate(failure, monkeypatch, caplog):
+    runtime = _Runtime()
+    original_watch = runtime.watch_source_video
+    original_update = _FakeMediaSource.update
+
+    def fail(*_args):
+        raise RuntimeError("setup failed")
+
+    if failure == "watch":
+        monkeypatch.setattr(runtime, "watch_source_video", fail)
+    else:
+        monkeypatch.setattr(_FakeMediaSource, "update", fail)
+    media = LibobsMediaSource(runtime)
+    assert not media.open("/clip.mp4", autoplay=False)
+    source = runtime.created[0]
+    assert source.stops == source.released == 1
+    assert media.source is None and media.path == ""
+    assert "Could not open ffmpeg_source input" in caplog.text
+    if failure == "update":
+        assert runtime.watches[0].closed
+        assert source.lifecycle[-3:] == ["unwatch", "stop", "release"]
+    media.close()
+    assert source.released == 1
+    monkeypatch.setattr(runtime, "watch_source_video", original_watch)
+    monkeypatch.setattr(_FakeMediaSource, "update", original_update)
+    assert media.open("/next.mp4", autoplay=True)
+    assert media.source.volume == 1.0 and media.state == STATE_PLAYING
+    media.close()
+
+
+@pytest.mark.parametrize("poll", ["resume", "video_wait"])
+def test_initial_pause_waits_for_native_readiness_and_pause_acknowledgement(poll):
+    runtime = _Runtime()
+    media = LibobsMediaSource(runtime)
+    assert media.open("/clip.mp4", autoplay=False, volume_percent=70)
+    source = media.source
+    source.width, source.height = 160, 90
+
+    def tick():
+        if poll == "resume":
+            media.apply_pending_resume()
+            return None
+        return media.wait_for_video_frame(deadline=time.monotonic())
+
+    try:
+        tick()
+        assert source.play_pause == source.seeks == []
+        assert source.volume == 0.0 and media.state == STATE_PAUSED
+        runtime.watches[-1].ready = True
+        assert tick() is not True  # Native playback has not acknowledged the queued pause.
+        assert source.play_pause == [True] and source.seeks == [0]
+        media.set_volume(30)
+        tick()
+        assert source.volume == 0.0
+        assert source.play_pause == [True] and source.seeks == [0]
+        source.media_state = STATE_PAUSED
+        result = tick()
+        if poll == "video_wait":
+            assert result is True
+        assert source.volume == 0.3
+        tick()
+        assert source.play_pause == [True] and source.seeks == [0]
+    finally:
+        media.close()
+
+
+@pytest.mark.parametrize("early_pause", ["none", "queued", "acknowledged"])
+def test_visual_preparation_requires_a_frame_and_recovers_an_audio_first_pause(early_pause):
+    runtime = _Runtime()
+    media = LibobsMediaSource(runtime)
+    assert media.open("/offset.mkv", autoplay=False, volume_percent=60)
+    source, watch = media.source, runtime.watches[-1]
+    source._media_time = 1100  # Audio advanced; video has not published a frame.
+    try:
+        if early_pause != "none":
+            media.apply_pending_resume()
+            assert source.play_pause == [True]
+        if early_pause == "acknowledged":
+            source.media_state = STATE_PAUSED
+            media.apply_pending_resume()
+            assert source.volume == 0.6
+
+        assert not media.wait_for_video_frame(deadline=time.monotonic())
+        assert not watch.ready and source.width == source.height == 0
+        assert source.volume == 0.0 and media.state == STATE_PAUSED
+        assert source.play_pause == ([] if early_pause == "none" else [True, False])
+
+        source.media_state = STATE_PLAYING  # Private preroll has resumed.
+        watch.ready = True
+        assert not media.wait_for_video_frame(deadline=time.monotonic())
+        assert source.play_pause[-1] is True and source.volume == 0.0
+        source.media_state = STATE_PAUSED
+        assert media.wait_for_video_frame(deadline=time.monotonic())
+        assert source.volume == 0.6
+    finally:
+        media.close()
+
+
+def test_visual_rearm_preserves_the_latest_explicit_seek_after_audio_first_pause_ack():
+    runtime = _Runtime()
+    media = LibobsMediaSource(runtime)
+    assert media.open("/offset.mkv", autoplay=False)
+    source, watch = media.source, runtime.watches[-1]
+    try:
+        media.seek(2000)
+        media.seek(1000)
+        source._media_time = 1100  # Audio progress, not an operator seek.
+        media.apply_pending_resume()
+        assert source.seeks == [1000] and source.play_pause == [True]
+        source.media_state = STATE_PAUSED
+        media.apply_pending_resume()
+        assert media._startup is None and not watch.ready
+
+        assert not media.wait_for_video_frame(deadline=time.monotonic())
+        assert source.play_pause == [True, False] and source.volume == 0.0
+        source.media_state = STATE_PLAYING
+        watch.ready = True
+        assert not media.wait_for_video_frame(deadline=time.monotonic())
+        assert source.seeks == [1000, 1000]
+        source.media_state = STATE_PAUSED
+        assert media.wait_for_video_frame(deadline=time.monotonic())
+    finally:
+        media.close()
+
+
+def test_audio_only_initial_pause_uses_position_without_a_video_frame():
+    runtime = _Runtime()
+    media = LibobsMediaSource(runtime)
+    assert media.open("/song.mp3", autoplay=False, volume_percent=60)
+    source = media.source
+    source.width = source.height = 0
+    try:
+        media.apply_pending_resume()
+        assert source.play_pause == [] and source.volume == 0.0
+        source.media_time = 40
+        source.seeks.clear()  # Decoder progress is not a transport seek.
+        media.apply_pending_resume()
+        assert not runtime.watches[-1].ready
+        assert source.play_pause == [True] and source.seeks == [0]
+        assert source.volume == 0.0
+        source.media_state = STATE_PAUSED
+        media.apply_pending_resume()
+        assert source.volume == 0.6 and media.state == STATE_PAUSED
+        assert not media.wait_for_video_frame(deadline=time.monotonic())
+    finally:
+        media.close()
+
+
+@pytest.mark.parametrize("pause_queued", [False, True])
+def test_play_cancels_initial_pause_and_restores_volume(pause_queued):
+    runtime = _Runtime()
+    media = LibobsMediaSource(runtime)
+    assert media.open("/clip.mp4", autoplay=False, volume_percent=65)
+    source = media.source
+    try:
+        if pause_queued:
+            runtime.watches[-1].ready = True
+            media.apply_pending_resume()
+        media.play()
+        assert source.volume == 0.65 and media.state == STATE_PLAYING
+        assert source.play_pause == ([True, False] if pause_queued else [False])
+        runtime.watches[-1].ready = True
+        media.apply_pending_resume()
+        assert source.play_pause[-1] is False
+        assert source.seeks == ([0] if pause_queued else [])
+    finally:
+        media.close()
+
+
+def test_pause_requested_before_startup_is_deferred_and_muted():
+    runtime = _Runtime()
+    media = LibobsMediaSource(runtime)
+    assert media.open("/clip.mp4", volume_percent=80)
+    source = media.source
+    try:
+        media.pause()
+        assert source.play_pause == [] and source.seeks == []
+        assert source.volume == 0.0 and media.state == STATE_PAUSED
+        runtime.watches[-1].ready = True
+        media.apply_pending_resume()
+        assert source.play_pause == [True] and source.seeks == [0]
+        source.media_state = STATE_PAUSED
+        media.apply_pending_resume()
+        assert source.volume == 0.8
+    finally:
+        media.close()
+
+
+@pytest.mark.parametrize("command", ["stop", "restart"])
+@pytest.mark.parametrize("pause_queued", [False, True])
+def test_stop_and_restart_cancel_startup_pause(command, pause_queued):
+    runtime = _Runtime()
+    media = LibobsMediaSource(runtime)
+    assert media.open("/clip.mp4", autoplay=False)
+    source = media.source
+    try:
+        if pause_queued:
+            runtime.watches[-1].ready = True
+            media.apply_pending_resume()
+        getattr(media, command)()
+        source.play_pause.clear()
+        source.seeks.clear()
+        runtime.watches[-1].ready = True
+        source.media_state = STATE_PLAYING
+        source.media_time = 40
+        source.seeks.clear()
+        media.apply_pending_resume()
+        assert source.play_pause == source.seeks == []
+        if command == "stop":
+            assert media.state == libobs_media_source.STATE_STOPPED
+            assert source.stops == 1 and source.volume == 0.0
+            source.media_state = libobs_media_source.STATE_STOPPED
+            media.apply_pending_resume()
+            assert media._startup is None and source.volume == 1.0
+        else:
+            assert media.state == STATE_PLAYING
+        assert runtime.watches[-1].invalidations == 1
+    finally:
+        media.close()
+
+
+def test_speed_change_preserves_initial_pause_until_the_new_decoder_is_ready():
+    runtime = _Runtime()
+    media = LibobsMediaSource(runtime)
+    assert media.open("https://cdn.example/clip.mp4", autoplay=False, volume_percent=70)
+    source = media.source
+    try:
+        media.set_speed(150)
+        media.apply_pending_resume()
+        assert source.play_pause == source.seeks == []
+        assert media.state == STATE_PAUSED and source.volume == 0.0
+        assert runtime.watches[-1].invalidations == 1
+        runtime.watches[-1].ready = True
+        media.apply_pending_resume()
+        assert source.play_pause == [True] and source.seeks == [0]
+        source.media_state = STATE_PAUSED
+        media.apply_pending_resume()
+        assert source.volume == 0.7
+    finally:
+        media.close()
 
 
 def test_hardware_decode_requested_by_default(monkeypatch):
@@ -216,6 +538,8 @@ def test_transport_and_state():
     media = LibobsMediaSource(runtime)
     media.open("/tmp/clip.mp4")
     source = runtime.created[-1]
+    runtime.watches[-1].ready = True
+    media.apply_pending_resume()
     source.play_pause.clear()
 
     media.pause()
@@ -246,6 +570,7 @@ def test_reopen_releases_the_previous_source():
 
     assert first.stops == 1
     assert first.released == 1
+    assert runtime.watches[0].closed and not runtime.watches[1].closed
     assert media.path == "/tmp/b.mp4"
 
 
@@ -259,6 +584,8 @@ def test_close_stops_and_releases():
 
     assert source.stops == 1
     assert source.released == 1
+    assert runtime.watches[-1].closed
+    assert source.lifecycle[-3:] == ["unwatch", "stop", "release"]
     assert media.source is None
     assert media.state == STATE_NONE
 
@@ -360,6 +687,8 @@ def test_detach_presentation_unloads_transport_without_discarding_video(path, mo
     assert source.settings["clear_on_media_end"] is False
     assert source.stops == source.released == 0
     assert media.source is None and media.path == ""
+    assert runtime.watches[-1].closed
+    assert source.lifecycle[-1] == "unwatch"
     assert tempo_stops == [True]
     assert [kind for kind, _ in recorder.calls] == ["inc", "dec"]
     assert media.detach_presentation() is None
@@ -736,6 +1065,11 @@ def _opened(path="/tmp/clip.mp4", **kwargs):
     companion = _FakeCompanion()
     media._tempo_audio = companion
     assert media.open(path, **kwargs) is True
+    runtime.watches[-1].ready = True
+    media.apply_pending_resume()
+    if not kwargs.get("autoplay", True):
+        runtime.created[-1].media_state = STATE_PAUSED
+        media.apply_pending_resume()
     return media, runtime, companion
 
 
@@ -981,7 +1315,10 @@ def test_a_paused_media_gets_a_paused_stretch_and_stays_paused():
 
     _change_speed(media, 150)
 
-    assert companion.paused[-1] is True
+    assert companion.running
+    assert companion.starts[-1]["paused"] is True
+    assert all(companion.paused)  # Never resume the companion opened in a held state.
+    assert source.media_state == STATE_PAUSED
     assert False not in source.play_pause  # never nudged back into playing
 
 
@@ -1025,3 +1362,87 @@ def test_resuming_lets_the_picture_lead_before_the_audio_follows():
 
     assert companion.paused == [False]
     assert source.play_pause[-1] is False
+
+
+@pytest.mark.parametrize("startup_phase", ["complete", "decoding", "pause_queued"])
+def test_rejected_rate_update_preserves_metadata_startup_intent_and_companion(monkeypatch, startup_phase):
+    startup_pending = startup_phase != "complete"
+    if startup_pending:
+        runtime = _Runtime()
+        media = LibobsMediaSource(runtime)
+        companion = _FakeCompanion()
+        media._tempo_audio = companion
+        assert media.open("/clip.mp4", autoplay=False, volume_percent=70)
+        if startup_phase == "pause_queued":
+            runtime.watches[-1].ready = True
+            media.apply_pending_resume()
+            assert media.source.play_pause == [True]
+            assert media.source.media_state == STATE_PLAYING
+    else:
+        media, runtime, companion = _opened(autoplay=False, volume_percent=70)
+    source = media.source
+    previous_intent = media._startup
+    previous_stops = companion.stops
+    previous_updates = len(source.updates)
+
+    def reject(_settings):
+        raise RuntimeError("queue rejected")
+
+    monkeypatch.setattr(source, "update", reject)
+    media.set_speed(150)
+    assert media._speed_percent == 100
+    assert source.settings.get("speed_percent", 100) == 100
+    assert media._startup is previous_intent
+    assert len(source.updates) == previous_updates
+    assert companion.stops == previous_stops
+    assert media.state == STATE_PAUSED
+    assert source.volume == (0.0 if startup_pending else 0.7)
+
+
+@pytest.mark.parametrize("command", ["close", "detach_presentation"])
+def test_failed_readiness_close_retains_both_owners_for_explicit_retry(monkeypatch, command):
+    runtime = _Runtime()
+    media = LibobsMediaSource(runtime)
+    assert media.open("/clip.mp4")
+    source = media.source
+    watch = media._video_readiness
+    original_close = watch.close
+
+    def reject():
+        raise RuntimeError("callback removal failed")
+
+    monkeypatch.setattr(watch, "close", reject)
+    with pytest.raises(RuntimeError, match="callback removal failed"):
+        getattr(media, command)()
+    assert media.source is source and media._video_readiness is watch
+    assert source.stops == source.released == 0
+    monkeypatch.setattr(watch, "close", original_close)
+    result = getattr(media, command)()
+    assert media.source is None and media._video_readiness is None and watch.closed
+    if command == "detach_presentation":
+        assert result is source and source.released == 0
+        source.release()  # The caller now owns the retired presentation.
+    else:
+        assert result is None and source.stops == source.released == 1
+    media.close()
+    assert source.released == 1
+
+
+@pytest.mark.parametrize("url", ["rtsp://camera/live", "rtmp://server/live", "srt://host:9000"])
+def test_nonseekable_startup_ignores_trim_without_stranding_requested_pause(url):
+    runtime = _Runtime()
+    media = LibobsMediaSource(runtime)
+    assert media.open(url, autoplay=False)
+    source = media.source
+    try:
+        media.seek(2000)
+        assert media._requested_seek_ms == 0
+        runtime.watches[-1].ready = True
+        media.apply_pending_resume()
+        assert source.play_pause == [True] and source.seeks == [0]
+        source.media_state = STATE_PAUSED
+        media.apply_pending_resume()
+        assert media._startup is None and media.state == STATE_PAUSED
+        assert media.wait_for_video_frame(deadline=time.monotonic())
+    finally:
+        media.close()

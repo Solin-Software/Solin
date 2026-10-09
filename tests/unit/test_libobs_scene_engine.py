@@ -405,6 +405,7 @@ class _FakeMediaSource:
         self.showing = True
         self.width = 160
         self.height = 90
+        self.readiness = None
 
     def media_play_pause(self, pause: bool) -> None:
         self.play_pause_calls.append(pause)
@@ -429,6 +430,10 @@ class _FakeMediaSource:
 
     def update(self, settings: dict) -> None:
         self.settings.update(settings)
+        if self.readiness is not None and (settings.get("local_file") or settings.get("input")):
+            # Model the decoder's successful first native upload explicitly.
+            self.readiness.ready = True
+            self._state = 1  # The native input update starts playback.
 
     def release(self) -> None:
         self.released += 1
@@ -522,6 +527,7 @@ class _FakeTransition:
         self.settings = dict(settings)
         self.current_source = None
         self.starts: list[tuple] = []
+        self.start_modes: list[int] = []
         self.size = None
         self.released = 0
 
@@ -533,6 +539,7 @@ class _FakeTransition:
 
     def start(self, destination, duration_ms=500, mode=0) -> bool:
         self.starts.append((destination, duration_ms))
+        self.start_modes.append(mode)
         self.current_source = destination
         return True
 
@@ -549,11 +556,26 @@ class _FakeCanvas:
     fps = 30
 
 
-class _CompositingRuntime:
-    @staticmethod
-    def prime_source_video(source, *, allow_preloaded):
-        return source.width > 0 and source.height > 0
+class _FakeVideoReadiness:
+    def __init__(self, source) -> None:
+        self.source = source
+        self.updating = False
+        self.ready = False
+        self.invalidations = 0
+        self.closed = False
 
+    def update(self, settings):
+        self.source.update(settings)
+
+    def invalidate(self) -> None:
+        self.ready = False
+        self.invalidations += 1
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class _CompositingRuntime:
     """Fake ObsRuntime with just enough libobs surface for the scene builder."""
 
     def __init__(self) -> None:
@@ -691,6 +713,11 @@ class _CompositingRuntime:
             remove_main_render_callback=self._remove_main_render_callback,
         )
         self.render_callbacks = []
+
+    def watch_source_video(self, source):
+        readiness = _FakeVideoReadiness(source)
+        source.readiness = readiness
+        return readiness
 
     def _add_main_render_callback(self, callback):
         self.render_callbacks.append(callback)
@@ -1728,6 +1755,13 @@ def test_live_prepare_and_take_borrow_preprimed_transition_resources(
         assert runtime.channels[0] is live_program
         assert live_program.current_source == "scene-source:solin-scene-a"
     assert all(transition.released == 0 for transition in runtime.transitions)
+    selected = runtime.channels[0] if bus_id == "virtual_camera" else route._transition
+    assert selected.kind == {
+        "cut": "cut_transition", "dissolve": "fade_transition",
+        "fade_to_black": "fade_to_color_transition",
+    }[kind]
+    assert selected.starts[-1] == ("scene-source:solin-scene-b", 0 if kind == "cut" else 350)
+    assert selected.start_modes[-1] == 0  # OBS_TRANSITION_MODE_AUTO
     engine.shutdown()
     assert all(transition.released == 1 for transition in runtime.transitions)
 
@@ -2943,7 +2977,8 @@ def test_engine_open_media_decodes_privately_without_changing_the_live_content()
     assert ack.applied is True
     media = _media_sources(runtime)[-1]
     assert media.settings["local_file"] == "/clip.mp4"
-    assert media.play_pause_calls == [False]  # autoplay → play
+    assert media.play_pause_calls == []  # Input update starts playback, without an early action.
+    assert media.media_state == 1
     assert media.volume == 0.8
     assert all(i.source is not media for i in runtime.scenes[0].items)
     assert engine._effective_content_source() is None
@@ -3008,7 +3043,8 @@ def test_native_content_take_failure_never_replaces_the_live_image(failure, monk
         }))
         media = engine._media_source.source
         if failure == "unready":
-            media.width = media.height = 0
+            # Valid async dimensions do not establish a completed native upload.
+            media.readiness.ready = False
         elif failure == "superseded":
             engine.handle(_request("open_media", {"path": "/next.mp4", "content_media_epoch": 8}))
         elif failure == "closed":
@@ -3160,6 +3196,9 @@ def test_engine_control_media_drives_transport_with_trim_offset():
                                           "trim_start_ms": 2000}))
     media = _media_sources(runtime)[-1]
     assert media.media_time == 2000  # opened → seeked to trim start
+    # Model the requested trim frame arriving after the queued seek.
+    media.readiness.ready = True
+    engine._media_source.apply_pending_resume()
 
     engine.handle(_request("control_media", {"action": "pause"}))
     assert media.play_pause_calls[-1] is True
