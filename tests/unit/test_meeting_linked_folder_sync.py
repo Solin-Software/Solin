@@ -1045,6 +1045,7 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
                 revision=2,
             )
             controller = FakeController()
+            controller._sync_root = ""
             controller._nodes = [
                 {
                     "id": "media",
@@ -1098,6 +1099,7 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
             pass
 
         controller = FakeController()
+        controller._sync_root = ""
         controller._nodes = [
             {
                 "id": "section",
@@ -1463,6 +1465,7 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
             controller._meeting_folder_scan_operation_id = ""
             controller._sync_refresh_generation = 0
             controller._sync_refresh_operation_id = ""
+            controller._tree_session = SimpleNamespace(pending_nodes=lambda: ())
             controller._pending_sync_saves = {}
             controller._canonical_reset_generation = 0
             controller._hidden_canonical_media = {}
@@ -1511,6 +1514,9 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
                 lambda: MeetingTreeController._emit_section_counts(controller)
             )
             controller._watched_folder_file_store = WatchedFolderFileStore()
+            controller._request_meeting_folder_scan = (
+                lambda root: MeetingTreeController._request_meeting_folder_scan(controller, root)
+            )
             controller._apply_meeting_folder_scan = (
                 lambda folders, monday, pub_type: (
                     MeetingTreeController._apply_meeting_folder_scan(

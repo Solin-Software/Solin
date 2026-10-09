@@ -675,11 +675,11 @@ def test_received_disable_is_persisted_with_its_causal_snapshot(tmp_path):
     local_nodes = [_media("local")]
     controller = SimpleNamespace(
         _sync_enabled=True, _sync_folder=str(folder), _sync_snapshot=initial.snapshot,
-        _sync_identity=identity, _nodes=local_nodes,
+        _sync_identity=identity, _tree_key=identity.tree_key, _nodes=local_nodes,
         _pending_sync_saves={}, _sync_revision=initial.revision,
         _sync_transport_pending=True, _sync_busy_message="pending",
         _sync_root=str(tmp_path), _arm_sync_save_timer=lambda: None,
-        inject_linked_folder_media=lambda root: scans.append(root),
+        _request_meeting_folder_scan=lambda root: scans.append(root),
         _save_local_cache=lambda: persisted.append(True),
         chromeChanged=SimpleNamespace(emit=lambda: None),
         syncStateChanged=SimpleNamespace(emit=lambda: None),

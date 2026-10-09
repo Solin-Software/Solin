@@ -113,9 +113,39 @@ scans belong on background workers.
 
 ## Missing files and recoverable removal
 
-An absent file means unavailable media, not permission to delete the occurrence
-or converted outputs. Its organization remains available while transport catches
-up.
+An absent file in a synchronized document means unavailable media, not permission
+to delete the occurrence or converted outputs. Its organization remains available
+while transport catches up.
+
+### Meeting folders with synchronization disabled
+
+Turning off meeting synchronization preserves visible files and the local meeting
+tree. The linked folder continues to accept new sources: midweek media appears in
+**Living as Christians**, and weekend media appears in **Public Talk**. These
+imports and their processing records are persisted locally; they do not activate
+or publish a shared meeting journal.
+
+A successful scan of an available meeting folder removes local manual occurrences
+whose direct source files disappeared. It preserves official meeting content and
+converted or extracted outputs when their original document disappears. An
+unavailable root, a missing meeting folder, or a failed scan preserves the tree.
+
+Removing a direct source through the UI accepts the local deletion before
+attempting physical removal. If removal fails, the unchanged source stays
+suppressed while the operation can be retried. Successful removal, or a later
+scan observing that direct source's absence, clears its local processing record;
+adding the same bytes again can therefore create a new local occurrence.
+
+Activation discovery precedes source scanning. Detachment of shared cache files
+occurs only when leaving active synchronization, and its result is accepted only
+if the local tree has not changed during copying. Ordinary inactive refreshes
+reconcile the current local tree instead of replacing it with an earlier copy.
+Shared cache cleanup waits for successful local snapshot persistence and pending
+insertions. Media prepared before deactivation finishes through local detachment;
+late removals use the current activation marker and cannot remove a replacement
+document's resources.
+
+### Shared removal and recovery
 
 Physical removal follows durable logical deletion. Retired resources are copied
 and flushed into

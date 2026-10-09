@@ -645,9 +645,9 @@ class MeetingLinkedFolderSync:
         return persist()
 
     def deactivate_tree(
-        self, folder: Path, identity: MeetingSyncIdentity,
+        self, folder: Path, identity: MeetingSyncIdentity, *, cleanup: bool = True,
     ) -> MeetingSyncDeactivation:
-        """Remove activation first, then clean derived shared state."""
+        """Retire activation, optionally deferring cleanup until local state is durable."""
 
         replica = self._replica(folder)
         activation = self._activation(folder, identity)
@@ -669,7 +669,7 @@ class MeetingLinkedFolderSync:
         elif replica.document_id is not None:
             replica.retire_binding()
 
-        return self.cleanup_inactive_tree(folder)
+        return self.cleanup_inactive_tree(folder) if cleanup else MeetingSyncDeactivation(folder)
 
     def cleanup_inactive_tree(self, folder: Path) -> MeetingSyncDeactivation:
         """Idempotently remove all meeting sync metadata after deactivation."""
@@ -692,6 +692,25 @@ class MeetingLinkedFolderSync:
         errors.extend(self._cleanup_inactive_tree(folder))
         self._verified_legacy.discard(folder)
         return MeetingSyncDeactivation(folder, tuple(errors))
+
+    def remove_media_file(
+        self,
+        folder: Path,
+        identity: MeetingSyncIdentity,
+        file_path: str,
+        *,
+        document_id: str | None,
+        file_store: WatchedFolderFileStore,
+    ) -> bool:
+        """Apply a removal in the current mode without touching a replacement document."""
+        activation = self._activation(folder, identity)
+        if activation is None:
+            return file_store.remove_file_inside(file_path, folder)
+        if activation.document_id != document_id:
+            raise MeetingSyncInactive("Media removal belongs to another meeting sync generation")
+        return retire_file(
+            folder, portable_resource_key(file_path, folder), document_id=document_id,
+        )
 
     @staticmethod
     def _ensure_inactive_cleanup(folder: Path) -> None:
