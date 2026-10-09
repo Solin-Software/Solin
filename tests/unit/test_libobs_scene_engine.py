@@ -1583,6 +1583,41 @@ def test_engine_preview_layer_geometry_rejects_an_unbuilt_layer():
 _TWO_SCENE_DOC = {"scenes": [{"id": "a", "layers": []}, {"id": "b", "layers": []}]}
 
 
+@pytest.fixture
+def two_scene_wire_document():
+    from solin.core.scenes.engine import scene_engine_document_record
+    from solin.core.scenes.model import (
+        CONTENT_SOURCE_ID,
+        DELIVERY_BUSES,
+        NO_SIGNAL_SOURCE_ID,
+        AutomationMap,
+        ColorSourceConfig,
+        OutputRoute,
+        SceneDefinition,
+        SceneDocument,
+        SolinContentConfig,
+        SourceDefinition,
+        SourceKind,
+    )
+
+    document = SceneDocument(
+        document_id="transition-test",
+        revision=0,
+        sources=(
+            SourceDefinition(CONTENT_SOURCE_ID, SourceKind.SOLIN_CONTENT,
+                             "Content", SolinContentConfig()),
+            SourceDefinition(NO_SIGNAL_SOURCE_ID, SourceKind.COLOR,
+                             "No signal", ColorSourceConfig()),
+        ),
+        scenes=(SceneDefinition("a", "A"), SceneDefinition("b", "B")),
+        outputs=tuple(OutputRoute(bus_id, "a") for bus_id in DELIVERY_BUSES),
+        automation=tuple(AutomationMap(bus_id, ()) for bus_id in DELIVERY_BUSES),
+    )
+    record = scene_engine_document_record(document)
+    assert "transition_policy" not in record
+    return record
+
+
 def _graph_on_scene_a():
     from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
 
@@ -1606,9 +1641,12 @@ def test_prepare_and_take_dissolve_swaps_transition_and_animates():
 
 
 @pytest.mark.parametrize("bus_id", ["virtual_camera", "media_windows"])
-def test_prepare_allocates_transition_resources_without_changing_the_live_output(
+@pytest.mark.parametrize("kind", ["cut", "dissolve", "fade_to_black"])
+def test_live_prepare_and_take_borrow_preprimed_transition_resources(
     monkeypatch,
     bus_id,
+    kind,
+    two_scene_wire_document,
 ):
     runtime = _CompositingRuntime()
     engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
@@ -1617,7 +1655,7 @@ def test_prepare_allocates_transition_resources_without_changing_the_live_output
         _request(
             "hydrate",
             {
-                "document": _TWO_SCENE_DOC,
+                "document": two_scene_wire_document,
                 "active_scenes": {"virtual_camera": "a", "media_windows": "a"},
             },
         )
@@ -1625,7 +1663,14 @@ def test_prepare_allocates_transition_resources_without_changing_the_live_output
     route = engine._projection_route
     live_program = runtime.channels[0]
     live_projection = route._transition
-    before = len(runtime.transitions)
+    resources = tuple(runtime.transitions)
+    assert len(resources) == 6
+
+    def unexpected_creation(*_args, **_kwargs):
+        raise AssertionError("Live Prepare and Take must not allocate a native transition")
+
+    monkeypatch.setattr(runtime.ob.Transition, "create", unexpected_creation)
+    monkeypatch.setattr(_FakeTransition, "set_size", unexpected_creation)
 
     prepared = engine.handle(
         _request(
@@ -1633,22 +1678,18 @@ def test_prepare_allocates_transition_resources_without_changing_the_live_output
             {
                 "bus_id": bus_id,
                 "scene_id": "b",
-                "transition": {"kind": "dissolve", "duration_ms": 350},
+                "transition": {"kind": kind, "duration_ms": 0 if kind == "cut" else 350},
             },
         )
     )
 
     assert prepared.message_type == "scene_prepared"
-    assert len(runtime.transitions) == before + 1
+    assert tuple(runtime.transitions) == resources
     assert runtime.channels[0] is live_program
     assert route._transition is live_projection
     assert live_program.current_source == "scene-source:solin-scene-a"
     assert live_projection.current_source == "scene-source:solin-scene-a"
 
-    def unexpected_creation(*_args, **_kwargs):
-        raise AssertionError("Take must not allocate a native transition")
-
-    monkeypatch.setattr(runtime.ob.Transition, "create", unexpected_creation)
     taken = engine.handle(
         _request(
             "take_prepared",
@@ -1660,12 +1701,25 @@ def test_prepare_allocates_transition_resources_without_changing_the_live_output
         )
     )
     assert _ack_from_envelope(taken).applied
+    assert tuple(runtime.transitions) == resources
+    if bus_id == "virtual_camera":
+        assert runtime.channels[0].current_source == "scene-source:solin-scene-b"
+        assert route._transition is live_projection
+        assert live_projection.current_source == "scene-source:solin-scene-a"
+    else:
+        assert route._transition.current_source == "scene-source:solin-scene-b"
+        assert runtime.channels[0] is live_program
+        assert live_program.current_source == "scene-source:solin-scene-a"
     assert all(transition.released == 0 for transition in runtime.transitions)
     engine.shutdown()
     assert all(transition.released == 1 for transition in runtime.transitions)
 
 
-def test_hydration_primes_both_outputs_before_program_activation(monkeypatch):
+def test_hydration_primes_both_outputs_before_program_activation(
+    monkeypatch, two_scene_wire_document,
+):
+    from solin.core.scenes.libobs_transitions import TRANSITION_SOURCE_IDS
+
     runtime = _CompositingRuntime()
     engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
     engine.handle(_request("hello"))
@@ -1674,7 +1728,7 @@ def test_hydration_primes_both_outputs_before_program_activation(monkeypatch):
 
     def observe_activation(channel, source):
         if source is not None:
-            primed.append({transition.name for transition in runtime.transitions})
+            primed.append({transition.name: transition.size for transition in runtime.transitions})
         set_channel(channel, source)
 
     monkeypatch.setattr(runtime, "set_channel_source", observe_activation)
@@ -1682,95 +1736,136 @@ def test_hydration_primes_both_outputs_before_program_activation(monkeypatch):
         _request(
             "hydrate",
             {
-                "document": {
-                    **_TWO_SCENE_DOC,
-                    "transition_policy": {
-                        "default": {"kind": "dissolve", "duration_ms": 350},
-                        "overrides": {"b": {"kind": "fade_to_black", "duration_ms": 500}},
-                    },
-                },
+                "document": two_scene_wire_document,
                 "active_scenes": {"virtual_camera": "a", "media_windows": "a"},
             },
         )
     )
     assert _ack_from_envelope(ack).applied
-    assert {
-        "solin-transition-dissolve",
-        "solin-projection-dissolve",
-        "solin-transition-fade_to_black",
-        "solin-projection-fade_to_black",
-    } <= primed[0]
+    assert primed == [{
+        f"{prefix}-{kind}": (runtime.video.width, runtime.video.height)
+        for prefix in ("solin-transition", "solin-projection")
+        for kind in TRANSITION_SOURCE_IDS
+    }]
     engine.shutdown()
 
 
 @pytest.mark.parametrize("bus_id", ["virtual_camera", "media_windows"])
 @pytest.mark.parametrize("failure_stage", ["create", "size"])
-def test_transition_preparation_failure_preserves_output_and_allows_retry(
+@pytest.mark.parametrize("retry", [False, True])
+def test_transition_priming_failure_aborts_activation_cleans_up_and_allows_retry(
+    request,
     monkeypatch,
     bus_id,
     failure_stage,
+    retry,
+    two_scene_wire_document,
 ):
     runtime = _CompositingRuntime()
     engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+
+    def close_engine():
+        engine.shutdown()
+        engine.shutdown()
+        assert all(transition.released == 1 for transition in runtime.transitions)
+        assert all(scene.released == 1 for scene in runtime.scenes)
+
+    request.addfinalizer(close_engine)
     engine.handle(_request("hello"))
-    engine.handle(
-        _request(
-            "hydrate",
-            {
-                "document": _TWO_SCENE_DOC,
-                "active_scenes": {"virtual_camera": "a", "media_windows": "a"},
-            },
-        )
-    )
-    live_program = runtime.channels[0]
-    live_projection = engine._projection_route._transition
+    hydrate_payload = {
+        "document": two_scene_wire_document,
+        "active_scenes": {"virtual_camera": "a", "media_windows": "a"},
+    }
     payload = {
         "bus_id": bus_id,
         "scene_id": "b",
         "transition": {"kind": "dissolve", "duration_ms": 350},
     }
 
-    def fail(*_args, **_kwargs):
-        raise RuntimeError("Synthetic native resource failure")
+    prefix = "solin-transition" if bus_id == "virtual_camera" else "solin-projection"
+    failed_name = f"{prefix}-dissolve"
+    create = runtime.ob.Transition.create
+    set_size = _FakeTransition.set_size
+
+    def fail_creation(kind, name, settings):
+        if name == failed_name:
+            raise RuntimeError("Synthetic native creation failure")
+        return create(kind, name, settings)
+
+    def fail_size(transition, width, height):
+        if transition.name == failed_name:
+            raise RuntimeError("Synthetic native sizing failure")
+        set_size(transition, width, height)
 
     with monkeypatch.context() as patch:
         if failure_stage == "create":
-            patch.setattr(runtime.ob.Transition, "create", fail)
+            patch.setattr(runtime.ob.Transition, "create", fail_creation)
         else:
-            patch.setattr(_FakeTransition, "set_size", fail)
-        rejected = engine.handle(_request("prepare_scene", payload))
+            patch.setattr(_FakeTransition, "set_size", fail_size)
+        ack = _ack_from_envelope(engine.handle(_request("hydrate", hydrate_payload)))
 
+    assert not ack.applied and ack.error_code == "hydrate_failed"
+    assert engine._scene_graph._pending == {}
+    assert runtime.channels == {}
+    assert engine._projection_route._transition is None
+    retained = tuple(transition for transition in runtime.transitions if transition.released == 0)
+    assert len(retained) == (1 if bus_id == "virtual_camera" else 4)
+    if failure_stage == "size":
+        assert runtime.transitions[-1].released == 1
+
+    native_calls = []
+
+    def unexpected_creation(*_args, **_kwargs):
+        native_calls.append("create")
+        raise AssertionError("Live Prepare must not retry failed native priming")
+
+    def unexpected_sizing(*_args, **_kwargs):
+        native_calls.append("set_size")
+        raise AssertionError("Live Prepare must not resize a native transition")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(runtime.ob.Transition, "create", unexpected_creation)
+        patch.setattr(_FakeTransition, "set_size", unexpected_sizing)
+        rejected = engine.handle(_request("prepare_scene", payload))
+    assert native_calls == []
     assert rejected.message_type == "error"
     assert rejected.payload["error_code"] == "transition_unavailable"
     assert engine._scene_graph._pending == {}
-    assert runtime.channels[0] is live_program
-    assert engine._projection_route._transition is live_projection
-    assert live_program.current_source == "scene-source:solin-scene-a"
-    assert live_projection.current_source == "scene-source:solin-scene-a"
-    if failure_stage == "size":
-        assert runtime.transitions[-1].released == 1
-    assert engine.handle(_request("prepare_scene", payload)).message_type == "scene_prepared"
-    engine.shutdown()
-    assert all(transition.released == 1 for transition in runtime.transitions)
+    assert runtime.channels == {}
+    assert engine._projection_route._transition is None
+
+    if retry:
+        assert _ack_from_envelope(engine.handle(_request("hydrate", hydrate_payload))).applied
+        ready = tuple(transition for transition in runtime.transitions if transition.released == 0)
+        assert len(ready) == 6
+        assert all(transition in ready for transition in retained)
+        assert runtime.channels[0].current_source == "scene-source:solin-scene-a"
+        assert engine._projection_route._transition.current_source == "scene-source:solin-scene-a"
+        assert engine.handle(_request("prepare_scene", payload)).message_type == "scene_prepared"
 
 
-def test_repeated_transition_kinds_reuse_resources_and_rehydrate_drops_scene_refs():
+def test_repeated_transition_kinds_reuse_resources_and_rehydrate_drops_scene_refs(
+    monkeypatch, two_scene_wire_document,
+):
+    from solin.core.scenes.libobs_transitions import TRANSITION_SOURCE_IDS
+
     runtime = _CompositingRuntime()
     engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
     engine.handle(_request("hello"))
     payload = {
-        "document": {
-            **_TWO_SCENE_DOC,
-            "transition_policy": {
-                "default": {"kind": "dissolve", "duration_ms": 350},
-                "overrides": {"b": {"kind": "fade_to_black", "duration_ms": 500}},
-            },
-        },
+        "document": two_scene_wire_document,
         "active_scenes": {"virtual_camera": "a", "media_windows": "a"},
     }
-    engine.handle(_request("hydrate", payload))
+    assert _ack_from_envelope(engine.handle(_request("hydrate", payload))).applied
     resources = tuple(runtime.transitions)
-    for index, kind in enumerate(("dissolve", "cut", "fade_to_black", "cut") * 2):
+    assert len(resources) == 6
+
+    def unexpected_creation(*_args, **_kwargs):
+        raise AssertionError("Prepared transitions must remain reusable until shutdown")
+
+    monkeypatch.setattr(runtime.ob.Transition, "create", unexpected_creation)
+    monkeypatch.setattr(_FakeTransition, "set_size", unexpected_creation)
+    for index, kind in enumerate(tuple(TRANSITION_SOURCE_IDS) * 3):
         for bus_id in ("virtual_camera", "media_windows"):
             scene_id = "b" if index % 2 == 0 else "a"
             prepared = engine.handle(
@@ -1779,7 +1874,7 @@ def test_repeated_transition_kinds_reuse_resources_and_rehydrate_drops_scene_ref
                     {
                         "bus_id": bus_id,
                         "scene_id": scene_id,
-                        "transition": {"kind": kind, "duration_ms": 350},
+                        "transition": {"kind": kind, "duration_ms": 0 if kind == "cut" else 350},
                     },
                 )
             )
@@ -1797,7 +1892,7 @@ def test_repeated_transition_kinds_reuse_resources_and_rehydrate_drops_scene_ref
     assert tuple(runtime.transitions) == resources
     assert all(transition.released == 0 for transition in resources)
 
-    engine.handle(_request("hydrate", payload))
+    assert _ack_from_envelope(engine.handle(_request("hydrate", payload))).applied
 
     assert tuple(runtime.transitions) == resources
     assert all(
@@ -3271,7 +3366,7 @@ def test_scene_graph_rehydrate_keeps_old_resources_if_program_detachment_fails(r
     old_channels = dict(runtime.channels)
     old_scenes = tuple(runtime.scenes)
     old_sources = tuple(runtime.sources)
-    old_transition = runtime.transitions[-1]
+    old_transition = runtime.channels[0]
     set_channel = runtime.set_channel_source
     calls = []
 
@@ -3820,10 +3915,10 @@ class _FakeProjectionRoute:
         self.scenes.append((scene_id, source))
         return True
 
-    def prepare_document(self, document: dict) -> None:
+    def prepare_all(self) -> None:
         pass
 
-    def prepare_transition(self, kind: str) -> None:
+    def require_prepared_transition(self, kind: str) -> None:
         pass
 
     def shutdown(self) -> None:

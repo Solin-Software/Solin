@@ -18,8 +18,8 @@ FALLBACK_TRANSITION_KIND = "cut"
 class LibobsTransitionPool:
     """Keep at most one ready resource per supported kind for one render bus.
 
-    Creation can acquire the graphics context and compile effects. Hydration and
-    preparation own that work; Take only borrows an already prepared resource.
+    Creation can acquire the graphics context and compile effects. Hydration
+    primes every supported kind; live Prepare and Take only borrow ready resources.
     """
 
     def __init__(self, runtime: Any, name_prefix: str) -> None:
@@ -27,8 +27,7 @@ class LibobsTransitionPool:
         self._name_prefix = name_prefix
         self._transitions: dict[str, Any] = {}
 
-    def prepare(self, model_kind: str) -> Any:
-        kind = model_kind if model_kind in TRANSITION_SOURCE_IDS else FALLBACK_TRANSITION_KIND
+    def _prepare(self, kind: str) -> Any:
         existing = self._transitions.get(kind)
         if existing is not None:
             return existing
@@ -46,17 +45,18 @@ class LibobsTransitionPool:
         return transition
 
     def prepared(self, model_kind: str) -> Any:
-        """Borrow a ready resource; never allocate on the live Take path."""
+        """Borrow a ready resource; never allocate on live Prepare or Take."""
         kind = model_kind if model_kind in TRANSITION_SOURCE_IDS else FALLBACK_TRANSITION_KIND
         return self._transitions[kind]
 
-    def prepare_document(self, document: dict) -> None:
-        self.prepare(FALLBACK_TRANSITION_KIND)
-        policy = document.get("transition_policy") or {}
-        default = policy.get("default") or {}
-        self.prepare(str(default.get("kind") or FALLBACK_TRANSITION_KIND))
-        for spec in (policy.get("overrides") or {}).values():
-            self.prepare(str(spec.get("kind") or FALLBACK_TRANSITION_KIND))
+    def prepare_all(self) -> None:
+        """Prime the bounded set before rendering, independent of controller policy.
+
+        Retain successful resources if creation fails so a hydration retry only
+        prepares the remaining kinds. Ownership lasts until shutdown.
+        """
+        for kind in TRANSITION_SOURCE_IDS:
+            self._prepare(kind)
 
     def reset_sources(self) -> None:
         """Drop graph references while retaining ready graphics resources."""
