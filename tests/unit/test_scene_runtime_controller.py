@@ -2547,7 +2547,7 @@ def test_native_preparation_delivery_does_not_take_before_open_media(
         return pending
 
     def take_after_open(preparation, **kwargs):
-        assert QThread.currentThread() == controller.thread()
+        assert QThread.isMainThread()
         events.append(("take", preparation.bus_id))
         return take(preparation, **kwargs)
 
