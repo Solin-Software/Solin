@@ -207,6 +207,7 @@ def main() -> int:
                 "scene_id",
                 "transition",
                 "content_media_epoch",
+                "content_source_kind",
             } or set(
                 request.payload.get("transition", {})
             ) != {"kind", "duration_ms"}:

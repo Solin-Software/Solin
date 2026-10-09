@@ -17,6 +17,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
+import time
 from typing import Any
 
 from solin.core.scenes.audio_tempo import (
@@ -105,6 +106,7 @@ class LibobsMediaSource:
     def __init__(self, runtime: Any) -> None:
         self._runtime = runtime
         self._source: Any = None
+        self._video_ready_source: Any = None
         self._path = ""
         self._local = True
         # True while this source holds an activate ref (see _set_active).
@@ -132,6 +134,30 @@ class LibobsMediaSource:
     @property
     def path(self) -> str:
         return self._path
+
+    def wait_for_video_frame(self, *, deadline: float) -> bool:
+        """Wait for a native video texture, bounded by IPC expiry.
+
+        ffmpeg transport state can be PLAYING before any frame exists. For an
+        asynchronous source libobs can expose dimensions before uploading its
+        texture. Prime a native frame before accepting the first visual Take.
+        """
+        source = self._source
+        wake = threading.Event()
+        while source is not None and source is self._source:
+            state = source.media_state
+            if state in (STATE_ERROR, STATE_ENDED, STATE_STOPPED):
+                return False
+            if self._video_ready_source is source and source.width > 0 and source.height > 0:
+                return True
+            if self._runtime.prime_source_video(source, allow_preloaded=state == STATE_PAUSED):
+                self._video_ready_source = source
+                return True
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return False
+            wake.wait(min(1 / 120, remaining))
+        return False
 
     def open(
         self,
@@ -211,6 +237,11 @@ class LibobsMediaSource:
             log.warning("Could not set media source monitoring", exc_info=True)
         self._set_active(source, True)
         source.media_play_pause(not autoplay)
+        if not autoplay:
+            # A paused decoder can cache its first frame without uploading it.
+            # Native seek publishes that frame via ffmpeg_source's seek callback
+            # while preserving PAUSED; the scene can then transition to it.
+            source.media_time = 0
         self._reconcile_tempo_audio(0)
         return True
 
@@ -276,6 +307,7 @@ class LibobsMediaSource:
         self._resume_ms = self.position_ms
         self._resume_paused = self.state == STATE_PAUSED
         self._speed_percent = speed
+        self._video_ready_source = None
         try:
             source.update({"speed_percent": speed})
         except Exception:  # noqa: BLE001 - libobs boundary
@@ -496,6 +528,7 @@ class LibobsMediaSource:
             self._tempo_audio.set_paused(True)
 
     def stop(self) -> None:
+        self._video_ready_source = None
         if self._source is not None:
             try:
                 self._source.media_stop()
@@ -503,6 +536,7 @@ class LibobsMediaSource:
                 log.debug("media_stop errored", exc_info=True)
 
     def restart(self) -> None:
+        self._video_ready_source = None
         if self._source is not None:
             self._source.media_restart()
 
@@ -559,6 +593,7 @@ class LibobsMediaSource:
 
     def _detach_source(self) -> Any | None:
         source, self._source = self._source, None
+        self._video_ready_source = None
         self._path = ""
         self._local = True
         self._speed_percent = 100

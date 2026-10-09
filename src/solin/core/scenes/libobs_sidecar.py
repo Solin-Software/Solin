@@ -41,6 +41,7 @@ from solin.core.scenes.ipc_protocol import (
     write_envelope,
 )
 from solin.core.scenes.model import SceneValidationError
+from solin.core.scenes.media_control import ContentSourceKind
 
 log = logging.getLogger(__name__)
 
@@ -124,6 +125,13 @@ def _payload_int(payload: Mapping[str, object], field: str, default: int = 0) ->
     if not isinstance(value, (int, float, str)):
         raise SceneIpcError(f"Invalid {field}")
     return int(value)
+
+
+def _content_media_epoch(payload: Mapping[str, object]) -> int | None:
+    epoch = payload.get("content_media_epoch")
+    if epoch is not None and (type(epoch) is not int or not 0 <= epoch < 2**64):
+        raise SceneIpcError("Invalid content media epoch")
+    return epoch
 
 
 def _payload_object(value: object) -> dict[str, object]:
@@ -224,11 +232,11 @@ class LibobsSidecarEngine:
         self._media_source: Any | None = None
         self._bg_media_source: Any | None = None
         # Transport close must not replace the outgoing picture with old ingress
-        # pixels. Keep silent sources only while libobs still shows them.
-        self._retired_media_source: Any | None = None
+        # pixels. Keep sources while compositions or native outputs reference them.
         self._retired_media_sources: list[Any] = []
-        self._content_restore_pending = False
-        self._prepared_content_epochs: dict[str, int] = {}
+        self._retired_frame_sources: list[Any] = []
+        self._prepared_content: dict[str, tuple[ContentSourceKind, int]] = {}
+        self._media_epoch: int | None = None
         self._media_lock = threading.Lock()
         # slot -> the last (position, duration) actually observed, so a dropped
         # stream can be told apart from a video that reached its end.
@@ -367,7 +375,7 @@ class LibobsSidecarEngine:
             graph = self._scene_graph
             if graph is not None:
                 graph.cancel_all()
-            self._prepared_content_epochs.clear()
+            self._prepared_content.clear()
             return None  # a notification — no response
         if message_type == "reload_yeartext":
             graph = self._scene_graph
@@ -580,29 +588,32 @@ class LibobsSidecarEngine:
         speed = _payload_int(payload, "speed_percent", 100) or 100
         trim_start = max(0, _payload_int(payload, "trim_start_ms"))
         trim_end = max(0, _payload_int(payload, "trim_end_ms"))
+        epoch = _content_media_epoch(payload)
         with self._media_lock:
+            if not slot:
+                retired = media.detach_presentation()
+                if retired is not None:
+                    self._retired_media_sources.append(retired)
+                self._media_epoch = None
             opened = media.open(path, autoplay=autoplay, is_local_file=is_local,
                                 volume_percent=volume, speed_percent=speed)
             if opened and not slot:
                 if self._scene_graph is not None:
-                    for token in self._prepared_content_epochs:
-                        self._scene_graph.discard(token)
-                self._prepared_content_epochs.clear()
-                self._content_restore_pending = True
-                # Foreground slot: apply trim and composite into the scene content.
+                    for token, binding in tuple(self._prepared_content.items()):
+                        if binding != (ContentSourceKind.NATIVE_MEDIA, epoch) and (
+                            epoch is not None or binding[0] is ContentSourceKind.NATIVE_MEDIA
+                        ):
+                            self._scene_graph.discard(token)
+                            self._prepared_content.pop(token, None)
+                self._media_epoch = epoch
+                # Decode privately. Only an accepted Take publishes this source;
+                # replacing a live Content item would erase the transition origin.
                 self._media_trim_start_ms = trim_start
                 self._media_trim_end_from_ms = trim_end  # from the end
                 self._media_trim_ended = False
                 if trim_start:
                     media.seek(trim_start)
-                if self._scene_graph is not None:
-                    try:
-                        self._scene_graph.set_content_source(media.source)
-                        self._retired_media_source = None
-                        self._collect_retired_presentations()
-                    except Exception:  # noqa: BLE001 - a scene error must not kill the sidecar
-                        log.warning("could not route media into the content slot",
-                                    exc_info=True)
+                self._collect_retired_presentations()
         if not opened:
             self._emit_media_state(7, 0, 0, path, slot=slot, error_code="media_open_failed")
             return _ack(request, applied=False, error_code="media_open_failed",
@@ -643,8 +654,8 @@ class LibobsSidecarEngine:
                     media.close()
                 else:
                     retired = media.detach_presentation()
+                    self._media_epoch = None
                     if retired is not None:
-                        self._retired_media_source = retired
                         self._retired_media_sources.append(retired)
                 if not slot:
                     self._media_trim_start_ms = 0
@@ -679,15 +690,9 @@ class LibobsSidecarEngine:
         return consumer.source if consumer is not None else None
 
     def _effective_content_source(self) -> Any | None:
-        """Keep the outgoing presentation until current ingress is prepared."""
-        media = self._media_source
-        if media is not None and media.source is not None:
-            return media.source
-        if self._content_restore_pending:
-            return self._retired_media_source
+        """Hydration preserves the committed presentation, including staged media."""
         graph = self._scene_graph
-        consumer = self._content_consumer
-        if graph is not None and consumer is not None and consumer.owns_source(graph.content_source):
+        if graph is not None and graph.content_source is not None:
             return graph.content_source
         return self._frame_content_source()
 
@@ -701,8 +706,6 @@ class LibobsSidecarEngine:
         except Exception:  # noqa: BLE001 - libobs boundary
             log.warning("Could not release the retired media presentation", exc_info=True)
         self._retired_media_sources.remove(source)
-        if source is self._retired_media_source:
-            self._retired_media_source = None
 
     def _collect_retired_presentations(self) -> None:
         """Collect on the control thread after all libobs showing refs disappear.
@@ -730,8 +733,6 @@ class LibobsSidecarEngine:
             try:
                 if source.showing:
                     continue
-                if source is self._retired_media_source and graph is not None:
-                    graph.set_content_source(None)
                 if graph is not None and any(reference is source for reference in graph.content_sources):
                     continue
                 self._release_retired_media_source(source)
@@ -742,6 +743,17 @@ class LibobsSidecarEngine:
                 consumer.collect_unused_sources(graph.content_sources if graph is not None else ())
             except Exception:  # noqa: BLE001 - cleanup must not break supervision
                 log.warning("Could not collect retired content presentations", exc_info=True)
+        for wrapper in tuple(self._retired_frame_sources):
+            try:
+                source = wrapper.source
+                if source.showing or graph is not None and any(
+                    reference is source for reference in graph.content_sources
+                ):
+                    continue
+                wrapper.release()
+                self._retired_frame_sources.remove(wrapper)
+            except Exception:  # noqa: BLE001 - cleanup must not break supervision
+                log.warning("Could not collect a detached content source", exc_info=True)
 
     def _sample_media(self, slot: int = 0) -> tuple[int, int, int, str] | None:
         """Read (state, position_ms, duration_ms, path) for ``slot``, or None.
@@ -950,7 +962,7 @@ class LibobsSidecarEngine:
                         error_message="the libobs runtime is not running")
         try:
             payload = request.payload
-            self._prepared_content_epochs.clear()
+            self._prepared_content.clear()
             # Stop the preview render on the old (about-to-be-released) scenes
             # before rebuilding — the egress renders a borrowed scene source.
             if self._preview_egress is not None:
@@ -1100,24 +1112,49 @@ class LibobsSidecarEngine:
         )
 
         if not isinstance(descriptor, dict) or descriptor.get("transport") != SHARED_MEMORY_BGRA:
-            self._stop_content_consumer()  # no supported content channel
+            self._stop_content_consumer(retain_sources=True)  # no supported content channel
             return
         token = descriptor.get("handle_token")
         current = self._content_consumer
         if current is not None and current.handle_token == token:
             return  # already consuming this exact channel
-        self._stop_content_consumer()
+        self._stop_content_consumer(retain_sources=True)
         consumer = ContentFrameConsumer(self._runtime, descriptor)
         if consumer.start():
             self._content_consumer = consumer
 
-    def _stop_content_consumer(self) -> None:
+    def _stop_content_consumer(self, *, retain_sources: bool = False) -> None:
         consumer, self._content_consumer = self._content_consumer, None
         if consumer is not None:
             try:
-                consumer.stop()
+                if retain_sources:
+                    self._retired_frame_sources.extend(consumer.detach_sources())
+                else:
+                    consumer.stop()
             except Exception:  # noqa: BLE001 - shutdown must not raise
                 log.warning("content frame consumer stop errored", exc_info=True)
+
+    def _current_content_source(self, binding: tuple[ContentSourceKind, int]) -> Any | None:
+        kind, epoch = binding
+        if kind is ContentSourceKind.NATIVE_MEDIA:
+            media = self._media_source
+            return media.source if media is not None and self._media_epoch == epoch else None
+        consumer = self._content_consumer
+        return consumer.source_for_epoch(epoch) if consumer is not None else None
+
+    def _resolve_content_source(
+        self, binding: tuple[ContentSourceKind, int], *, deadline: float,
+    ) -> Any | None:
+        kind, epoch = binding
+        if kind is ContentSourceKind.NATIVE_MEDIA:
+            media = self._media_source
+            if media is None or self._media_epoch != epoch or not media.wait_for_video_frame(deadline=deadline):
+                return None
+        else:
+            consumer = self._content_consumer
+            if consumer is None or not consumer.wait_for_epoch(epoch, deadline=deadline):
+                return None
+        return self._current_content_source(binding)
 
     def _handle_prepare_scene(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope:
         graph = self._scene_graph
@@ -1132,16 +1169,12 @@ class LibobsSidecarEngine:
         transition = _payload_object(payload.get("transition") or {})
         kind = str(transition.get("kind", "cut"))
         duration_ms = _payload_int(transition, "duration_ms")
-        expected_epoch = payload.get("content_media_epoch")
-        if expected_epoch is not None and (
-            isinstance(expected_epoch, bool)
-            or not isinstance(expected_epoch, int)
-            or not 0 <= expected_epoch < 2**64
-        ):
-            raise SceneIpcError("Invalid content media epoch")
-        media = self._media_source
-        restore_content = expected_epoch is not None and (media is None or media.source is None)
-        if restore_content:
+        expected_epoch = _content_media_epoch(payload)
+        try:
+            source_kind = ContentSourceKind(str(payload.get("content_source_kind", "frames")))
+        except ValueError as error:
+            raise SceneIpcError("Invalid content source kind") from error
+        if expected_epoch is not None and source_kind is ContentSourceKind.FRAMES:
             consumer = self._content_consumer
             if consumer is None or not consumer.wait_for_epoch(
                 expected_epoch, deadline=request.deadline_monotonic_ms / 1000,
@@ -1171,8 +1204,8 @@ class LibobsSidecarEngine:
                 "error_code": "unknown_scene",
                 "error_message": f"no scene {scene_id!r}",
             })
-        if restore_content and expected_epoch is not None:
-            self._prepared_content_epochs[result["token"]] = expected_epoch
+        if expected_epoch is not None:
+            self._prepared_content[result["token"]] = source_kind, expected_epoch
         return _reply(request, "scene_prepared", {
             "bus_id": bus_id,
             "scene_id": scene_id,
@@ -1200,34 +1233,28 @@ class LibobsSidecarEngine:
         if route != bus_id:
             return _ack(request, applied=False, error_code="bus_mismatch",
                         error_message="the prepared scene belongs to another output")
-        expected_epoch = self._prepared_content_epochs.get(token)
+        binding = self._prepared_content.get(token)
         content_source = None
-        if expected_epoch is not None:
-            consumer = self._content_consumer
-            if consumer is None or not consumer.wait_for_epoch(
-                expected_epoch, deadline=request.deadline_monotonic_ms / 1000,
-            ):
-                graph.discard(token)
-                self._prepared_content_epochs.pop(token, None)
-                return _ack(request, applied=False, error_code="source_unavailable",
-                            error_message="The prepared content presentation is no longer ready")
-            content_source = consumer.source_for_epoch(expected_epoch)
+        if binding is not None:
+            content_source = self._resolve_content_source(
+                binding, deadline=request.deadline_monotonic_ms / 1000,
+            )
             if content_source is None:
                 graph.discard(token)
-                self._prepared_content_epochs.pop(token, None)
+                self._prepared_content.pop(token, None)
                 return _ack(request, applied=False, error_code="source_unavailable",
                             error_message="The prepared content presentation is no longer ready")
         from contextlib import nullcontext
 
         replacement = (
             graph.content_presentation(content_source)
-            if expected_epoch is not None
+            if binding is not None
             else nullcontext(None)
         )
         with replacement as presentation:
-            if expected_epoch is not None and consumer.source_for_epoch(expected_epoch) is not content_source:
+            if binding is not None and self._current_content_source(binding) is not content_source:
                 graph.discard(token)
-                self._prepared_content_epochs.pop(token, None)
+                self._prepared_content.pop(token, None)
                 return _ack(request, applied=False, error_code="source_unavailable",
                             error_message="The prepared content presentation was superseded while staging")
             scene_id = graph.pending_scene(token) or ""
@@ -1250,7 +1277,7 @@ class LibobsSidecarEngine:
                 applied = graph.take_projection(token, self._projection_route, scene_source=scene_source)
             else:
                 applied = graph.take(token, scene_source=scene_source)
-            self._prepared_content_epochs.pop(token, None)
+            self._prepared_content.pop(token, None)
             if applied:
                 if presentation is not None:
                     if presentation.changes_graph:
@@ -1261,8 +1288,6 @@ class LibobsSidecarEngine:
                         thumbnails = self._thumbnail_egress
                         if thumbnails is not None:
                             thumbnails.refresh_scene_sources()
-                    self._content_restore_pending = False
-                    self._retired_media_source = None
                     self._collect_retired_presentations()
                 return _ack(request, applied=True)
         return _ack(request, applied=False, error_code="unknown_preparation",
@@ -1376,9 +1401,15 @@ class LibobsSidecarEngine:
         # referenced it are gone.
         for source in tuple(self._retired_media_sources):
             self._release_retired_media_source(source)
-        self._content_restore_pending = False
-        self._prepared_content_epochs.clear()
+        self._prepared_content.clear()
         self._stop_content_consumer()
+        for wrapper in self._retired_frame_sources:
+            try:
+                wrapper.release()
+            except Exception:  # noqa: BLE001 - shutdown must release remaining sources
+                log.warning("Could not release a detached content source", exc_info=True)
+        self._retired_frame_sources.clear()
+        self._media_epoch = None
         runtime, self._runtime = self._runtime, None
         self._runtime_started = False
         if runtime is None:

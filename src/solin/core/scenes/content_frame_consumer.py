@@ -67,10 +67,6 @@ class ContentFrameConsumer:
         with self._condition:
             return self._frame_source.source if self._frame_source is not None else None
 
-    def owns_source(self, source: Any) -> bool:
-        with self._condition:
-            return any(wrapper.source is source for wrapper in self._sources)
-
     def source_for_epoch(self, media_epoch: int) -> Any | None:
         """Borrow only an uploaded source matching the preparation's identity."""
         with self._condition:
@@ -198,6 +194,18 @@ class ContentFrameConsumer:
                 log.debug("content frame pump errored", exc_info=True)
 
     def stop(self) -> None:
+        for frame_source in self.detach_sources():
+            try:
+                frame_source.release()
+            except Exception:  # noqa: BLE001 - libobs boundary
+                log.debug("content frame source release errored", exc_info=True)
+
+    def detach_sources(self) -> tuple[Any, ...]:
+        """Stop ingress and transfer its frozen native sources to the caller.
+
+        Channel replacement must not release presentations still borrowed by
+        scenes or outputs. The new owner retires them after those references end.
+        """
         self._stop.set()
         with self._condition:
             self._condition.notify_all()
@@ -208,20 +216,13 @@ class ContentFrameConsumer:
         # resources. A timeout cannot make an unfinished native upload safe.
         with self._pump_lock:
             self._thread = None
-            self._dispose()
-
-    def _dispose(self) -> None:
-        with self._condition:
-            sources, self._sources = self._sources, []
-            self._frame_source = None
-        for frame_source in sources:
-            try:
-                frame_source.release()
-            except Exception:  # noqa: BLE001 - libobs boundary
-                log.debug("content frame source release errored", exc_info=True)
-        reader, self._reader = self._reader, None
-        if reader is not None:
-            try:
-                reader.close()
-            except Exception:  # noqa: BLE001 - shm boundary
-                log.debug("content frame channel close errored", exc_info=True)
+            with self._condition:
+                sources, self._sources = self._sources, []
+                self._frame_source = None
+            reader, self._reader = self._reader, None
+            if reader is not None:
+                try:
+                    reader.close()
+                except Exception:  # noqa: BLE001 - shm boundary
+                    log.debug("content frame channel close errored", exc_info=True)
+            return tuple(sources)

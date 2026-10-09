@@ -1,11 +1,82 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+import sys
 import weakref
 
 import pytest
 
 from solin.core.media import obs_runtime
+
+
+@pytest.mark.parametrize("upload_fails", [False, True])
+def test_native_frame_priming_releases_the_frame_after_upload(monkeypatch, upload_fails):
+    events = []
+    frame = object()
+    source = SimpleNamespace(_ptr=object())
+
+    def get_frame(pointer):
+        assert pointer is source._ptr
+        return frame
+
+    def upload(pointer, selected):
+        assert pointer is source._ptr and selected is frame
+        events.append("upload")
+        if upload_fails:
+            raise RuntimeError("upload failed")
+
+    def release(pointer, selected):
+        assert pointer is source._ptr and selected is frame
+        events.append("release")
+
+    def cast(signature, function):
+        assert signature == "struct obs_source_frame *(*)(obs_source_t *)"
+        return function
+
+    lib = SimpleNamespace(
+        obs_source_get_frame=get_frame, obs_source_set_video_frame=upload,
+        obs_source_release_frame=release,
+    )
+    monkeypatch.setitem(sys.modules, "pylibobs._ffi", SimpleNamespace(
+        ffi=SimpleNamespace(NULL=None, cast=cast), get_lib=lambda: lib,
+    ))
+    runtime = obs_runtime.ObsRuntime()
+    if upload_fails:
+        with pytest.raises(RuntimeError, match="upload failed"):
+            runtime.prime_source_video(source, allow_preloaded=False)
+    else:
+        assert runtime.prime_source_video(source, allow_preloaded=False)
+    assert events == ["upload", "release"]
+
+
+@pytest.mark.parametrize("preloaded", [False, True])
+def test_native_preload_priming_does_not_mistake_cached_dimensions_for_a_texture(monkeypatch, preloaded):
+    source = SimpleNamespace(_ptr=object(), width=160, height=90)
+    events = []
+
+    def clear(pointer, frame):
+        assert pointer is source._ptr and frame is None
+        events.append("clear")
+        source.width = source.height = 0
+
+    def show(pointer):
+        assert pointer is source._ptr
+        events.append("show")
+        if preloaded:
+            source.width, source.height = 160, 90
+
+    lib = SimpleNamespace(
+        obs_source_get_frame=lambda _: None,
+        obs_source_output_video=clear, obs_source_show_preloaded_video=show,
+    )
+    monkeypatch.setitem(sys.modules, "pylibobs._ffi", SimpleNamespace(
+        ffi=SimpleNamespace(NULL=None, cast=lambda _, function: function), get_lib=lambda: lib,
+    ))
+    runtime = obs_runtime.ObsRuntime()
+    assert not runtime.prime_source_video(source, allow_preloaded=False)
+    assert events == []
+    assert runtime.prime_source_video(source, allow_preloaded=True) is preloaded
+    assert events == ["clear", "show"]
 
 
 @pytest.mark.parametrize("audio_failure", [False, True])

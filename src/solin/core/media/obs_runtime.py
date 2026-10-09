@@ -395,6 +395,37 @@ class ObsRuntime:
                 log.debug("Error releasing shared camera source", exc_info=True)
         self._camera_sources.clear()
 
+    def prime_source_video(self, source: Any, *, allow_preloaded: bool) -> bool:
+        """Upload a decoder frame before exposing its source to a transition.
+
+        Async dimensions can become valid before the first render uploads the
+        texture. Consume a native frame and upload it through libobs' synchronous
+        frame API; no pixels cross the process boundary. Paused decoders can
+        instead publish their native preloaded frame.
+        """
+        from pylibobs._ffi import ffi, get_lib
+
+        lib: Any = get_lib()
+        # The generated binding declares this pointer-returning API as void(void).
+        # Use the public libobs signature at this native boundary.
+        get_frame = ffi.cast(
+            "struct obs_source_frame *(*)(obs_source_t *)", lib.obs_source_get_frame,
+        )
+        frame = get_frame(source._ptr)
+        if frame != ffi.NULL:
+            try:
+                lib.obs_source_set_video_frame(source._ptr, frame)
+            finally:
+                lib.obs_source_release_frame(source._ptr, frame)
+            return True
+        if allow_preloaded:
+            # Clearing this private candidate makes nonzero dimensions evidence
+            # of a successfully uploaded preload, rather than cached async size.
+            lib.obs_source_output_video(source._ptr, ffi.NULL)
+            lib.obs_source_show_preloaded_video(source._ptr)
+            return source.width > 0 and source.height > 0
+        return False
+
     def ensure_started(
         self,
         *,

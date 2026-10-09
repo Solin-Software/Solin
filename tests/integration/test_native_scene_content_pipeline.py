@@ -4,6 +4,7 @@ import struct
 import re
 import subprocess
 import sys
+import textwrap
 from collections import Counter, deque
 from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
@@ -42,7 +43,7 @@ from solin.core.scenes.engine import (
     SceneEngineSnapshot,
 )
 from solin.core.scenes.libobs_engine import create_libobs_scene_engine
-from solin.core.scenes.media_control import MediaControlAction, MediaPlaybackState
+from solin.core.scenes.media_control import ContentSourceKind, MediaControlAction, MediaPlaybackState
 from solin.core.scenes.model import (
     BusId,
     CONTENT_SOURCE_ID,
@@ -211,19 +212,21 @@ def _record_program_centers(
 ) -> Iterator[list[tuple[int, bytes]]]:
     """Observe egress while the control thread waits for prepare/Take replies."""
     samples: list[tuple[int, bytes]] = []
+    descriptor = subscriber.descriptor
+    reader = SharedFrameChannelReader(descriptor.handle_token, descriptor.width, descriptor.height)
     started = Event()
     stopped = Event()
 
     def record() -> None:
         started.set()
         while not stopped.is_set():
-            frame = subscriber.read_latest()
+            frame = reader.read_latest()
             if frame is None:
                 stopped.wait(1 / 240)
                 continue
-            assert frame.pixel_format is VideoPixelFormat.BGRA
             x, y = frame.width // 2, frame.height // 2
-            samples.append((frame.sequence, _bgra_pixel(frame, x, y)))
+            offset = (y * frame.width + x) * 4
+            samples.append((reader._last_seq, frame.data[offset:offset + 4]))
             if sample_times is not None:
                 sample_times.append(time.monotonic())
 
@@ -235,6 +238,7 @@ def _record_program_centers(
         finally:
             stopped.set()
             recording.result(2)
+            reader.close()
 
 
 def _wait_for_pixel(
@@ -681,8 +685,12 @@ def test_closing_image_preserves_outgoing_pixels_until_default_transition(
 @pytest.mark.parametrize("return_kind", ["idle", "image"], ids=["default-return", "image-return"])
 @pytest.mark.parametrize(
     "transition",
-    [TransitionSpec(TransitionKind.CUT, 0), TransitionSpec(TransitionKind.DISSOLVE, 350)],
-    ids=["cut", "dissolve"],
+    [
+        TransitionSpec(TransitionKind.CUT, 0),
+        TransitionSpec(TransitionKind.DISSOLVE, 350),
+        TransitionSpec(TransitionKind.FADE_TO_BLACK, 350),
+    ],
+    ids=["cut", "dissolve", "fade-to-black"],
 )
 def test_video_auto_switch_reaches_program_without_app_decoded_frames(
     tmp_path: Path,
@@ -789,77 +797,102 @@ def test_video_auto_switch_reaches_program_without_app_decoded_frames(
             # Match MediaProjectionController: commit presentation identity first,
             # immediately queue open_media next, without pumping Qt between them.
             # An ingress wait here blocks the decoder queued behind preparation.
-            projection.set_state({"type": "video", "title": f"Video {cycle}"})
-            assert (
-                engine.open_media(
-                    str(path),
-                    is_local_file=True,
-                    autoplay=autoplay,
-                    request_id=f"video-open-{cycle}",
-                    deadline_ms=4000,
-                )
-                .result(5)
-                .applied
-            )
-            assert _wait_for(
-                lambda current_path=str(path): any(
-                    isinstance(event, MediaPlaybackEvent)
-                    and event.state.slot == 0 and event.state.path == current_path
-                    and event.state.state
-                    is (MediaPlaybackState.PLAYING if autoplay else MediaPlaybackState.PAUSED)
-                    for event in events
-                ),
-                application=application,
-            ), observation()
-            assert _wait_for(
-                lambda: (
-                    controller.applied_scene(BusId.VIRTUAL_CAMERA) == content_scene_id
-                    and controller.applied_scene(BusId.MEDIA_WINDOWS) == content_scene_id
-                ),
-                application=application,
-            ), observation()
-            if not autoplay:
+            expected = bytes((0, 0, 255, 255)) if cycle == 0 else bytes((255, 0, 0, 255))
+            with _record_program_centers(program) as entry_samples:
+                projection.set_state({"type": "video", "title": f"Video {cycle}"})
                 assert (
-                    engine.control_media(
-                        MediaControlAction.PLAY,
-                        request_id=f"video-play-{cycle}",
+                    engine.open_media(
+                        str(path),
+                        content_media_epoch=projection.presentation_session_id,
+                        is_local_file=True,
+                        autoplay=autoplay,
+                        request_id=f"video-open-{cycle}",
                         deadline_ms=4000,
                     )
                     .result(5)
                     .applied
                 )
-            expected = bytes((0, 0, 255, 255)) if cycle == 0 else bytes((255, 0, 0, 255))
-            assert _wait_for(
-                lambda expected=expected, boundary=before_open: program_is_color(expected, boundary),
-                application=application,
-            ), observation()
-            assert _wait_for(
-                lambda current_path=str(path): any(
-                    isinstance(event, MediaPlaybackEvent)
-                    and event.state.slot == 0 and event.state.path == current_path
-                    and event.state.state is MediaPlaybackState.PLAYING
-                    and event.state.position_ms > 800 and not event.state.error_code
-                    for event in events
-                ), application=application,
-            ), observation()
+                assert _wait_for(
+                    lambda current_path=str(path): any(
+                        isinstance(event, MediaPlaybackEvent)
+                        and event.state.slot == 0 and event.state.path == current_path
+                        and event.state.state
+                        is (MediaPlaybackState.PLAYING if autoplay else MediaPlaybackState.PAUSED)
+                        for event in events
+                    ),
+                    application=application,
+                ), observation()
+                assert _wait_for(
+                    lambda: (
+                        controller.applied_scene(BusId.VIRTUAL_CAMERA) == content_scene_id
+                        and controller.applied_scene(BusId.MEDIA_WINDOWS) == content_scene_id
+                    ),
+                    application=application,
+                ), observation()
+                if not autoplay:
+                    assert _wait_for(
+                        lambda expected=expected, boundary=before_open: program_is_color(
+                            expected, boundary,
+                        ),
+                        application=application,
+                    ), f"Paused video never published its first frame: {observation()}"
+                    assert (
+                        engine.control_media(
+                            MediaControlAction.PLAY,
+                            request_id=f"video-play-{cycle}",
+                            deadline_ms=4000,
+                        )
+                        .result(5)
+                        .applied
+                    )
+                assert _wait_for(
+                    lambda expected=expected, boundary=before_open: program_is_color(
+                        expected, boundary,
+                    ),
+                    application=application,
+                ), observation()
+                assert _wait_for(
+                    lambda current_path=str(path): any(
+                        isinstance(event, MediaPlaybackEvent)
+                        and event.state.slot == 0 and event.state.path == current_path
+                        and event.state.state is MediaPlaybackState.PLAYING
+                        and event.state.position_ms > 800 and not event.state.error_code
+                        for event in events
+                    ), application=application,
+                ), observation()
 
-            animation_origin: bytes | None = None
+                animation_origin: bytes | None = None
 
-            def animation_changed(expected=expected) -> bool:
-                nonlocal animation_origin
-                frame = probe.read_latest(program)
-                if frame is None or not _program_pixel_matches(
-                    _bgra_pixel(frame, frame.width // 2, frame.height // 2), expected,
-                ):
-                    return False
-                pixel = _bgra_pixel(frame, frame.width // 8, frame.height // 8)
-                if animation_origin is None:
-                    animation_origin = pixel
-                # Exclude limited-range conversion rounding from the motion check.
-                return abs(pixel[0] - animation_origin[0]) > 12
+                def animation_changed(expected=expected) -> bool:
+                    nonlocal animation_origin
+                    frame = probe.read_latest(program)
+                    if frame is None or not _program_pixel_matches(
+                        _bgra_pixel(frame, frame.width // 2, frame.height // 2), expected,
+                    ):
+                        return False
+                    pixel = _bgra_pixel(frame, frame.width // 8, frame.height // 8)
+                    if animation_origin is None:
+                        animation_origin = pixel
+                    # Exclude limited-range conversion rounding from the motion check.
+                    return abs(pixel[0] - animation_origin[0]) > 12
 
-            assert _wait_for(animation_changed, application=application), observation()
-            assert getattr(ingress._publisher, "_sequence", 0) == ingress_sequence
+                assert _wait_for(animation_changed, application=application), observation()
+                assert getattr(ingress._publisher, "_sequence", 0) == ingress_sequence
+            if transition.kind is TransitionKind.DISSOLVE:
+                assert any(
+                    20 < pixel[1] < 230 and max(pixel[0], pixel[2]) > 20
+                    for _, pixel in entry_samples
+                ), f"Image to video bypassed the configured dissolve: {entry_samples!r}"
+                assert all(
+                    not (20 < pixel[1] < 230 and max(pixel[0], pixel[2]) <= 6)
+                    for _, pixel in entry_samples
+                ), f"Image faded to an empty decoder: {entry_samples!r}"
+            elif transition.kind is TransitionKind.FADE_TO_BLACK:
+                assert any(20 < pixel[1] < 230 for _, pixel in entry_samples), entry_samples
+                assert any(
+                    pixel[1] <= 6 and 20 < max(pixel[0], pixel[2]) < 230
+                    for _, pixel in entry_samples
+                ), entry_samples
             assert errors == [], observation()
             assert fallbacks == [], observation()
 
@@ -924,6 +957,209 @@ def test_video_auto_switch_reaches_program_without_app_decoded_frames(
         unsubscribe_engine()
         ingress.close()
         program.close()
+
+
+@pytest.mark.parametrize("autoplay", [True, False], ids=["playing", "paused"])
+def test_replacing_native_video_preserves_the_outgoing_decoder_during_dissolve(
+    tmp_path: Path, autoplay: bool, record_property,
+) -> None:
+    paths = []
+    for name, colors in (("red", ("#ff0000", "#fe0000")), ("blue", ("#0000ff", "#0000fe"))):
+        path = tmp_path / f"{name}.gif"
+        images = [Image.new("RGB", (160, 90), colors[index % 2]) for index in range(40)]
+        try:
+            images[0].save(path, save_all=True, append_images=images[1:], duration=200, loop=0)
+        finally:
+            for image in images:
+                image.close()
+        paths.append(path)
+    engine = create_libobs_scene_engine()
+    program = _BgraEgress(1920, 1080, channel_id="solin-program")
+    document, scene = _content_document()
+    sequence = 1
+    take_latencies_ms = []
+
+    def prepare(epoch: int, bus: BusId):
+        nonlocal sequence
+        sequence += 1
+        return engine.prepare_scene(
+            bus, scene.id, document_revision=document.revision,
+            transition=TransitionSpec(TransitionKind.DISSOLVE, 600),
+            content_media_epoch=epoch, content_source_kind=ContentSourceKind.NATIVE_MEDIA,
+            request_id=f"video-replacement-prepare-{sequence}", sequence=sequence,
+            deadline_ms=4000,
+        ).result(5)
+
+    def take(prepared):
+        nonlocal sequence
+        sequence += 1
+        started = time.monotonic()
+        assert engine.take_prepared(
+            prepared, request_id=f"video-replacement-take-{sequence}",
+            sequence=sequence, deadline_ms=4000,
+        ).result(5).applied
+        take_latencies_ms.append((time.monotonic() - started) * 1000)
+
+    def is_color(color: bytes):
+        frame = program.read_latest()
+        return frame is not None and _program_pixel_matches(
+            _bgra_pixel(frame, frame.width // 2, frame.height // 2), color,
+        )
+
+    try:
+        engine.start(session_id="native-video-replacement", deadline_ms=10_000).result(15)
+        assert engine.hydrate(
+            SceneEngineSnapshot(
+                session_id="native-video-replacement", sequence=sequence, document=document,
+                active_scenes=tuple((bus, scene.id) for bus in BusId),
+                render_enabled=tuple((bus, True) for bus in BusId),
+                output_enabled=tuple((bus, False) for bus in BusId),
+                program_egress=program.descriptor,
+            ),
+            request_id="native-video-replacement-hydrate", deadline_ms=10_000,
+        ).result(15).applied
+        assert engine.open_media(
+            str(paths[0]), is_local_file=True, content_media_epoch=1,
+            request_id="native-video-first", deadline_ms=4000,
+        ).result(5).applied
+        for bus in (BusId.VIRTUAL_CAMERA, BusId.MEDIA_WINDOWS, BusId.EDITOR):
+            take(prepare(1, bus))
+        assert _wait_for(lambda: is_color(bytes((0, 0, 255, 255))))
+        # Preparation precedes opening on the ordered stream, as in production.
+        prepared = prepare(2, BusId.VIRTUAL_CAMERA)
+        with _record_program_centers(program) as samples:
+            assert engine.open_media(
+                str(paths[1]), is_local_file=True, autoplay=autoplay, content_media_epoch=2,
+                request_id="native-video-second", deadline_ms=4000,
+            ).result(5).applied
+            time.sleep(0.1)
+            assert samples and all(pixel[2] >= 240 and pixel[0] <= 6 for _, pixel in samples)
+            take(prepared)
+            for bus in (BusId.MEDIA_WINDOWS, BusId.EDITOR):
+                take(prepare(2, bus))
+            assert _wait_for(lambda: any(
+                _program_pixel_matches(pixel, bytes((255, 0, 0, 255)))
+                for _, pixel in tuple(samples)
+            ))
+        assert any(20 < pixel[0] < 230 and 20 < pixel[2] < 230 for _, pixel in samples), samples
+        assert all(pixel[0] + pixel[2] >= 230 for _, pixel in samples), samples
+        record_property("native_presentation_take_ms", ",".join(f"{value:.3f}" for value in take_latencies_ms))
+    finally:
+        engine.stop()
+        program.close()
+
+
+def test_replaced_native_presentations_release_scenes_and_decoders(tmp_path: Path) -> None:
+    """Observe native destruction, not just Python bookkeeping or noisy RSS."""
+    path = tmp_path / "retirement.gif"
+    images = [Image.new("RGB", (160, 90), ("red", "blue")[index % 2]) for index in range(40)]
+    try:
+        images[0].save(path, save_all=True, append_images=images[1:], duration=100, loop=0)
+    finally:
+        for image in images:
+            image.close()
+    # Native libobs belongs in a separate process, including its weak references.
+    script = tmp_path / "native_retirement.py"
+    script.write_text(textwrap.dedent('''
+        import sys
+        import time
+        from pylibobs._ffi import ffi, get_lib
+        from solin.core.media.obs_runtime import ObsRuntime
+        from solin.core.media.obs_source_render import render_source_to_bgra
+        from solin.core.scenes.ipc_protocol import SceneIpcEnvelope
+        from solin.core.scenes.libobs_sidecar import LibobsSidecarEngine
+
+        lib = get_lib()
+        get_weak = ffi.cast(
+            "obs_weak_source_t *(*)(obs_source_t *)", lib.obs_source_get_weak_source,
+        )
+        engine = LibobsSidecarEngine(runtime_factory=ObsRuntime)
+        sequence = 0
+        weak_refs = []
+        buses = ("virtual_camera", "media_windows", "editor")
+
+        def send(kind, payload=None):
+            global sequence
+            sequence += 1
+            result = engine.handle(SceneIpcEnvelope(
+                message_type=kind, request_id=f"retire-{sequence}",
+                session_id="native-retirement", process_generation="native-retirement",
+                sequence=sequence, document_revision=0,
+                deadline_monotonic_ms=int(time.monotonic() * 1000) + 4000,
+                payload=payload or {},
+            ))
+            assert result.message_type != "error", result
+            assert result.payload.get("applied", True), result
+            return result
+
+        try:
+            send("hello")
+            send("hydrate", {"document": {
+                "sources": [{"id": "solin.content.current", "type": "content"}],
+                "scenes": [{"id": "idle", "layers": []}, {"id": "content", "layers": [{
+                    "id": "picture", "source_id": "solin.content.current",
+                }]}],
+            }, "active_scenes": dict.fromkeys(buses, "idle")})
+            previous = []
+            for epoch in range(1, 7):
+                send("open_media", {
+                    "path": sys.argv[1], "autoplay": True,
+                    "is_local_file": True, "content_media_epoch": epoch,
+                })
+                for bus in buses:
+                    prepared = send("prepare_scene", {
+                        "bus_id": bus, "scene_id": "content",
+                        "content_media_epoch": epoch, "content_source_kind": "native_media",
+                        "transition": {"kind": "cut", "duration_ms": 0},
+                    })
+                    send("take_prepared", {
+                        "bus_id": bus,
+                        "preparation_token": prepared.payload["preparation_token"],
+                    })
+                deadline = time.monotonic() + 4
+                while previous and not all(lib.obs_weak_source_expired(weak) for weak in previous):
+                    assert time.monotonic() < deadline, (
+                        "Retired native scene/decoder is still alive",
+                        [bool(lib.obs_weak_source_expired(weak)) for weak in previous],
+                        [[(key, scene.as_source().showing) for key, scene in scenes.items()]
+                         for scenes, _ in engine._scene_graph._retired_presentations],
+                        len(engine._retired_media_sources),
+                    )
+                    # This headless output needs its own render, like a room display.
+                    render_source_to_bgra(
+                        engine._projection_route._transition, 160, 90,
+                        canvas_width=1920, canvas_height=1080,
+                    )
+                    time.sleep(.02)
+                    send("ping")
+                graph = engine._scene_graph
+                previous = [get_weak(engine._media_source.source._ptr)] + [
+                    get_weak(graph._scenes["content"].as_source()._ptr)
+                ]
+                weak_refs.extend(previous)
+                assert not any(lib.obs_weak_source_expired(weak) for weak in previous)
+                send("control_media", {"action": "close"})
+                for bus in buses:
+                    prepared = send("prepare_scene", {
+                        "bus_id": bus, "scene_id": "idle",
+                        "transition": {"kind": "cut", "duration_ms": 0},
+                    })
+                    send("take_prepared", {
+                        "bus_id": bus,
+                        "preparation_token": prepared.payload["preparation_token"],
+                    })
+            engine.shutdown()
+            assert all(lib.obs_weak_source_expired(weak) for weak in weak_refs)
+        finally:
+            for weak in weak_refs:
+                lib.obs_weak_source_release(weak)
+            engine.shutdown()
+    '''), encoding="utf-8")
+    result = subprocess.run(
+        [sys.executable, str(script), str(path)], capture_output=True, text=True,
+        errors="replace", timeout=45,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 @pytest.mark.parametrize(

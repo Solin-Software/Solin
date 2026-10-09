@@ -33,6 +33,7 @@ class _ServiceStub:
         self.stopped = 0
         self.played = []
         self.paused = 0
+        self.replayed = 0
         self.requests = []
         self.events = events
         self.name = name
@@ -52,6 +53,9 @@ class _ServiceStub:
         self.paused += 1
         if self.events is not None:
             self.events.append((self.name, "pause"))
+
+    def replay(self):
+        self.replayed += 1
 
 
 class _SettingsStub:
@@ -904,6 +908,20 @@ def test_reprojecting_same_image_without_framing_animates_back_to_identity(tmp_p
         assert surface.cleared == 1
         assert len(surface.images) == 1
         assert surface.transforms == [(1.0, 0.0, 0.0, True)]
+
+
+def test_automatic_replay_keeps_the_current_decoder_and_presentation():
+    window = _WindowStub()
+    controller = _controller(window)
+    window.projection_session.set_state({"type": "video", "title": "Current"})
+    epoch = window.projection_session.presentation_session_id
+
+    controller.project_next_auto({"url": "__replay__", "type": "video"})
+
+    assert window.media_ctrl.replayed == 1
+    assert window.media_ctrl.stopped == 0
+    assert window.media_ctrl.requests == []
+    assert window.projection_session.presentation_session_id == epoch
 
 
 def test_automatic_advance_keeps_complete_image_item_framing(tmp_path):

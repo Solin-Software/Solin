@@ -44,6 +44,7 @@ from solin.core.scenes.engine import (
     scene_engine_document_record,
 )
 from solin.core.scenes.media_control import (
+    ContentSourceKind,
     MAXIMUM_MEDIA_PATH_LENGTH,
     MediaControlAction,
     MediaPlaybackNativeState,
@@ -614,11 +615,14 @@ class SubprocessSceneEngine:
         sequence: int,
         deadline_ms: int,
         content_media_epoch: int | None = None,
+        content_source_kind: ContentSourceKind = ContentSourceKind.FRAMES,
     ) -> Future[ScenePreparation]:
         if not isinstance(bus_id, BusId):
             return _failed_future(TypeError("Invalid output bus"))
         if not isinstance(transition, TransitionSpec):
             return _failed_future(TypeError("Invalid scene transition"))
+        if not isinstance(content_source_kind, ContentSourceKind):
+            return _failed_future(TypeError("Invalid content source kind"))
         if content_media_epoch is not None and (
             isinstance(content_media_epoch, bool)
             or not isinstance(content_media_epoch, int)
@@ -640,6 +644,7 @@ class SubprocessSceneEngine:
                 "scene_id": scene_id,
                 "transition": transition.to_record(),
                 "content_media_epoch": content_media_epoch,
+                "content_source_kind": content_source_kind.value,
             },
             converter=_preparation_from_envelope,
         )
@@ -927,11 +932,18 @@ class SubprocessSceneEngine:
         trim_start_ms: int = 0,
         trim_end_ms: int = 0,
         slot: int = 0,
+        content_media_epoch: int | None = None,
         request_id: str,
         deadline_ms: int,
     ) -> Future[SceneEngineAck]:
         if not isinstance(path, str) or not path:
             return _failed_future(ValueError("Media path is required"))
+        if content_media_epoch is not None and (
+            isinstance(content_media_epoch, bool)
+            or not isinstance(content_media_epoch, int)
+            or not 0 <= content_media_epoch < 2**64
+        ):
+            return _failed_future(ValueError("Invalid content media epoch"))
         with self._lock:
             document_revision = self._document_revision
         return self._request(
@@ -950,6 +962,7 @@ class SubprocessSceneEngine:
                 "trim_start_ms": int(trim_start_ms),
                 "trim_end_ms": int(trim_end_ms),
                 "slot": int(slot),
+                "content_media_epoch": content_media_epoch,
             },
             converter=_ack_from_envelope,
         )

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import types
+import time
 
 import pytest
 
@@ -51,6 +52,10 @@ class _FakeMediaSource:
 
 
 class _Runtime:
+    @staticmethod
+    def prime_source_video(source, *, allow_preloaded):
+        return source.width > 0 and source.height > 0
+
     def __init__(self) -> None:
         self.created: list[_FakeMediaSource] = []
         self.monitored: list = []
@@ -67,6 +72,90 @@ class _Runtime:
 
     def set_source_monitoring(self, source, monitoring_type) -> None:
         self.monitored.append((source, monitoring_type))
+
+
+@pytest.mark.parametrize("state", [STATE_PLAYING, STATE_PAUSED])
+def test_visual_readiness_requires_a_decoded_frame_even_when_transport_is_ready(state):
+    runtime = _Runtime()
+    media = LibobsMediaSource(runtime)
+    assert media.open("/video.mp4")
+    source = media.source
+    source.media_state = state
+    source.width = source.height = 0
+    try:
+        assert not media.wait_for_video_frame(deadline=time.monotonic())
+        source.width, source.height = 160, 90
+        assert media.wait_for_video_frame(deadline=time.monotonic())
+    finally:
+        media.close()
+
+
+@pytest.mark.parametrize("state", [
+    libobs_media_source.STATE_ERROR,
+    libobs_media_source.STATE_ENDED,
+    libobs_media_source.STATE_STOPPED,
+])
+def test_visual_readiness_rejects_terminal_decoders_even_with_cached_dimensions(state):
+    runtime = _Runtime()
+    media = LibobsMediaSource(runtime)
+    assert media.open("/invalid.mp4")
+    source = media.source
+    source.width, source.height = 160, 90
+    source.media_state = state
+    try:
+        assert not media.wait_for_video_frame(deadline=time.monotonic() + 10)
+    finally:
+        media.close()
+
+
+def test_visual_readiness_waits_for_gpu_priming_and_reuses_the_primed_source(monkeypatch):
+    runtime = _Runtime()
+    media = LibobsMediaSource(runtime)
+    assert media.open("/video.mp4")
+    source = media.source
+    source.width, source.height = 160, 90
+    calls = []
+    ready = False
+
+    def prime(candidate, *, allow_preloaded):
+        assert candidate is source
+        calls.append(allow_preloaded)
+        return ready
+
+    monkeypatch.setattr(runtime, "prime_source_video", prime)
+    try:
+        assert not media.wait_for_video_frame(deadline=time.monotonic())
+        ready = True
+        assert media.wait_for_video_frame(deadline=time.monotonic())
+        assert media.wait_for_video_frame(deadline=time.monotonic())
+        assert calls == [False, False]
+        source.media_state = libobs_media_source.STATE_ERROR
+        assert not media.wait_for_video_frame(deadline=time.monotonic())
+    finally:
+        media.close()
+
+
+@pytest.mark.parametrize("change", ["stop", "restart", "speed"])
+def test_decoder_reset_invalidates_priming_even_when_the_source_pointer_is_unchanged(change, monkeypatch):
+    runtime = _Runtime()
+    media = LibobsMediaSource(runtime)
+    assert media.open("https://cdn.example/video.mp4")
+    source = media.source
+    source.width, source.height = 160, 90
+    try:
+        assert media.wait_for_video_frame(deadline=time.monotonic())
+        if change == "speed":
+            media.set_speed(150)
+        else:
+            getattr(media, change)()
+        source.media_state = STATE_PLAYING
+        primed = []
+        monkeypatch.setattr(runtime, "prime_source_video", lambda *_args, **_kwargs: primed.append(True) or False)
+        assert media.source is source
+        assert not media.wait_for_video_frame(deadline=time.monotonic())
+        assert primed == [True]
+    finally:
+        media.close()
 
 
 def test_open_local_file_creates_ffmpeg_source_and_autoplays(monkeypatch):
@@ -209,6 +298,12 @@ def _with_activation(monkeypatch):
     recorder = _ActivationRecorder()
     monkeypatch.setattr(ffi_module, "get_lib", lambda: recorder)
     return recorder
+
+
+@pytest.fixture(autouse=True)
+def _isolate_native_activation(monkeypatch):
+    """Fake sources must never load the real libobs library into Qt unit tests."""
+    _with_activation(monkeypatch)
 
 
 def test_open_media_holds_an_activate_ref_so_it_can_be_heard(monkeypatch):

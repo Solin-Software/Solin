@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 from concurrent.futures import Future
+from collections.abc import Callable
 from typing import Any
 from uuid import uuid4
 
@@ -35,10 +36,12 @@ class SceneEngineMediaRoute:
         *,
         deadline_ms: int = _DEFAULT_DEADLINE_MS,
         slot: int = 0,
+        presentation_id: Callable[[], int | None] | None = None,
     ) -> None:
         self._engine = engine
         self._deadline_ms = deadline_ms
         self._slot = int(slot)
+        self._presentation_id = presentation_id
 
     def is_ready(self) -> bool:
         """True when the sidecar is READY to accept media commands."""
@@ -86,6 +89,7 @@ class SceneEngineMediaRoute:
                 trim_start_ms=trim_start_ms,
                 trim_end_ms=trim_end_ms,
                 slot=self._slot,
+                content_media_epoch=(self._presentation_id() if self._presentation_id is not None else None),
                 request_id=self._request_id("open"),
                 deadline_ms=self._deadline_ms,
             ),

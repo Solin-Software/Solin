@@ -158,19 +158,32 @@ heartbeat after their scene and showing references disappear; shutdown releases 
 remaining references. Closing media never restores cached pixels from an earlier
 application presentation.
 
-Application-owned content replaces that picture only at Take, after preparation
-and revalidation of the requested uploaded presentation epoch. Cancellation leaves
-the live picture intact. Every new application-owned presentation must reconcile
-its epoch even when the scene ID stays the same or hydration is pending.
+Every visual producer publishes only at Take, after preparation and revalidation
+of its requested presentation epoch. Native media opens its decoder privately;
+opening transport never retargets a live Content layer. Preparation declares the
+producer and does not wait for a native decoder queued behind it on the ordered
+IPC stream. Take resolves the exact decoder epoch and primes a native video frame
+on the GPU within its deadline; cached dimensions alone do not prove readiness.
+Paused opens request a native seek to the initial position so the decoder
+publishes its first frame without starting playback. Transport retains its own
+clock and does not depend on an output selecting a Content scene. Audio-only opens
+do not supersede preparations for application-owned visual content.
+Cancellation or unavailable content leaves the live picture intact. Every new
+presentation must reconcile its epoch even when the scene ID stays the same or
+hydration is pending. Replaying the current media restarts its existing decoder.
 
 BGRA ingress allocates one native source per presentation epoch and reuses it for
 subsequent frames of that epoch. An idle blank or a new image cannot overwrite
 the outgoing presentation's texture before its transition. The scene graph keeps
 its committed source across hydration; new ingress sources attach only at an
-accepted Take. Content scenes and their referencing ancestors get new composition
+accepted Take. Both native media and BGRA use the same Content presentation
+transaction. Content scenes and their referencing ancestors get new composition
 instances for a new presentation; shared cameras and other native sources are
-reused. This preserves an outgoing composition while another output or preview
-receives new content. The control heartbeat releases superseded compositions and
+reused. All compositions are private libobs scenes owned by the graph. Public
+canvas scenes retain an additional native reference in OBS 32, so releasing only
+the graph reference would keep their items and decoders alive. This preserves an
+outgoing composition while another output or preview receives new content. The
+control heartbeat releases superseded compositions and
 sources after borrowed scene references and native showing references retire,
 without cleanup timers.
 

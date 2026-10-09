@@ -160,13 +160,61 @@ def test_stop_wakes_epoch_waiter_and_drains_upload_before_disposal(consumer):
     source.resume.set()
     assert stopped.wait(1)
     assert pump_result == [False]
-    assert events[-3:] == ["upload completed", "source released", "reader closed"]
+    assert events[-3] == "upload completed"
+    assert set(events[-2:]) == {"source released", "reader closed"}
     assert not instance.pump_once()
     assert not instance.start()
     assert not instance.wait_for_epoch(1, deadline=time.monotonic() + 1)
     assert reader.read_count == 1
     instance.stop()
     assert events.count("source released") == events.count("reader closed") == 1
+
+
+def test_detach_sources_stops_transport_and_transfers_uploaded_wrappers_without_double_release(
+    consumer,
+):
+    instance, reader, first, events, _run = consumer
+    reader.frames.append(_frame(1, 1))
+    assert instance.pump_once()
+    reader.frames.append(_frame(2, 2))
+    assert instance.pump_once()
+    second = first.created_sources[1]
+    assert instance.source_for_epoch(2) is second.source
+    pump_thread = instance._thread
+    assert pump_thread is not None and pump_thread.is_alive()
+
+    detached = instance.detach_sources()
+    try:
+        assert tuple(detached) == (first, second)
+        assert first.uploads == [(1, True)] and second.uploads == [(2, True)]
+        assert first.released == second.released == 0
+        assert not pump_thread.is_alive()
+        assert events.count("reader closed") == 1
+        assert instance.source is None
+        assert instance.source_for_epoch(2) is None
+        assert not instance.wait_for_epoch(2, deadline=time.monotonic() + 1)
+
+        read_count = reader.read_count
+        reader.frames.append(_frame(3, 3))
+        assert not instance.pump_once()
+        assert not instance.start()
+        assert reader.read_count == read_count
+        assert list(reader.frames) == [_frame(3, 3)]
+
+        instance.collect_unused_sources(())
+        instance.stop()
+        instance.stop()
+        assert not instance.detach_sources()
+        assert first.released == second.released == 0
+        assert events.count("reader closed") == 1
+    finally:
+        for wrapper in detached:
+            wrapper.release()
+
+    instance.stop()
+    assert first.released == second.released == 1
+    assert events.count("source released") == 2
+    assert events.count("reader closed") == 1
 
 
 def test_concurrent_pumps_serialize_reader_and_upload_in_epoch_order(consumer):
@@ -228,7 +276,6 @@ def test_retired_epochs_wait_for_scene_and_showing_references(consumer):
     assert instance.source is second.source
     assert instance.source_for_epoch(1) is None
     assert instance.source_for_epoch(2) is second.source
-    assert instance.owns_source(first.source)
     instance.collect_unused_sources((first.source,))
     assert first.released == second.released == 0
     first.source.showing = True
@@ -237,7 +284,6 @@ def test_retired_epochs_wait_for_scene_and_showing_references(consumer):
     first.source.showing = False
     instance.collect_unused_sources(())
     assert first.released == 1 and second.released == 0
-    assert not instance.owns_source(first.source)
     instance.collect_unused_sources(())
     instance.stop()
     assert first.released == second.released == 1

@@ -6,7 +6,7 @@ from concurrent.futures import CancelledError, Future
 from dataclasses import dataclass, replace
 from typing import Any, Protocol
 
-from PySide6.QtCore import QObject, Signal, Slot
+from PySide6.QtCore import QObject, Qt, Signal, Slot
 
 from solin.core.foundation.constants import MEMORIZE_PRE_MEDIA_SCENE
 from solin.core.projection.application import projection_presentation_type
@@ -32,6 +32,7 @@ from solin.core.scenes.engine import (
     SourceHealthStatus,
     scene_engine_graph_signature,
 )
+from solin.core.scenes.media_control import ContentSourceKind
 from solin.core.scenes.model import (
     DELIVERY_BUSES,
     AUTOMATIC_MEDIA_CATEGORIES,
@@ -204,6 +205,7 @@ class SceneRuntimeController(QObject):
     scene_profiles_changed = Signal(object)
     runtime_changed = Signal(object)
     _async_result = Signal(object)
+    _queued_async_result = Signal(object)
     _async_engine_event = Signal(object)
 
     def __init__(
@@ -272,6 +274,9 @@ class SceneRuntimeController(QObject):
         self._last_render_enabled = self._render_enabled()
         self._last_content_ingress_required = self._content_ingress_required()
         self._async_result.connect(self._consume_async_result)
+        self._queued_async_result.connect(
+            self._consume_async_result, Qt.ConnectionType.QueuedConnection,
+        )
         self._async_engine_event.connect(self._consume_engine_event)
         self._unsubscribe_document = self._documents.subscribe(self._on_document_changed)
         self._unsubscribe_runtime = self._runtime.subscribe(self._on_runtime_changed)
@@ -1202,9 +1207,7 @@ class SceneRuntimeController(QObject):
         session_id = self._projection_session_id()
         if session_id != self._last_projection_session_id:
             category = content_category_for_projection(self._projection.state)
-            self._pending_content_presentation_epoch = (
-                session_id if category is not ContentCategory.VIDEO else None
-            )
+            self._pending_content_presentation_epoch = session_id
             self._require_pending_content_takes()
             self._last_projection_session_id = session_id
             # A failed content take belongs to that presentation, even when the
@@ -1235,8 +1238,8 @@ class SceneRuntimeController(QObject):
     def _require_pending_content_takes(self) -> None:
         if self._pending_content_presentation_epoch is None:
             return
-        # Scene identity does not commit uploaded pixels. Every new app-owned
-        # presentation, including idle, needs an accepted Take on content routes.
+        # Scene identity does not commit a content presentation. Every new
+        # presentation, including native media and idle, needs an accepted Take.
         self._take_reconciliation_required.update(
             bus_id for bus_id, scene_id in self._applied_scenes
             if scene_uses_content_source(self._documents.document, scene_id)
@@ -1605,9 +1608,13 @@ class SceneRuntimeController(QObject):
             if bus_id is BusId.EDITOR
             else self._documents.effective_transition(scene_id)
         )
-        # Epochs guard app-owned ingress frames. Video is decoded in the sidecar;
-        # waiting for ingress would block open_media on the same ordered command
-        # stream and reject the Program take before the decoder can open.
+        # Both producers use the visual presentation identity. Native media must
+        # resolve its source at Take, without waiting for app ingress in Prepare.
+        content_source_kind = (
+            ContentSourceKind.NATIVE_MEDIA
+            if content_category_for_projection(self._projection.state) is ContentCategory.VIDEO
+            else ContentSourceKind.FRAMES
+        )
         future = self._engine.prepare_scene(
             bus_id,
             scene_id,
@@ -1616,14 +1623,16 @@ class SceneRuntimeController(QObject):
             request_id=request_id,
             sequence=sequence,
             deadline_ms=_PREPARE_DEADLINE_MS,
-            content_media_epoch=(
-                pending.content_presentation_id
-                if content_category_for_projection(self._projection.state)
-                is not ContentCategory.VIDEO
-                else None
-            ),
+            content_media_epoch=pending.content_presentation_id,
+            content_source_kind=content_source_kind,
         )
-        self._track_future(future, "prepare", (bus_id, pending))
+        # Projection publishes its identity before enqueueing open_media. Even
+        # an already-completed native Prepare must yield to that caller before
+        # Take can wait for the decoder on the engine's ordered command stream.
+        self._track_future(
+            future, "prepare", (bus_id, pending),
+            queued=content_source_kind is ContentSourceKind.NATIVE_MEDIA,
+        )
 
     def _run_ptz_entry_actions(
         self,
@@ -1728,7 +1737,11 @@ class SceneRuntimeController(QObject):
         future: Future[Any],
         operation: str,
         context: object,
+        *,
+        queued: bool = False,
     ) -> None:
+        delivery = self._queued_async_result if queued else self._async_result
+
         def completed(result_future: Future[Any]) -> None:
             try:
                 result = result_future.result()
@@ -1736,10 +1749,11 @@ class SceneRuntimeController(QObject):
             except BaseException as exc:  # noqa: BLE001 - async process boundary
                 result = None
                 error = exc
-            self._async_result.emit((operation, context, result, error))
+            delivery.emit((operation, context, result, error))
 
         future.add_done_callback(completed)
 
+    @Slot(object)
     def _consume_async_result(self, payload: object) -> None:
         values = _context_tuple(payload, 4, "async result")
         operation, context, result, error = values

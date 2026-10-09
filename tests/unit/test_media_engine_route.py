@@ -325,6 +325,17 @@ def test_scene_engine_route_translates_to_engine_calls():
     assert engine.calls[4][1]["volume_percent"] == 50
 
 
+def test_foreground_open_binds_the_current_visual_presentation():
+    engine = _FakeEngine()
+    epoch = 4
+    route = SceneEngineMediaRoute(engine, presentation_id=lambda: epoch)
+    for expected in (4, 5):
+        epoch = expected
+        route.open("/c.mp4", is_local_file=True, autoplay=False, volume_percent=80,
+                   speed_percent=100, trim_start_ms=0, trim_end_ms=0)
+        assert engine.calls[-1][2]["content_media_epoch"] == expected
+
+
 # ── routed metadata / cover-art ───────────────────────────────────────────────
 
 

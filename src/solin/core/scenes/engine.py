@@ -22,7 +22,7 @@ from solin.core.scenes.model import (
     VideoColorSpace,
     VideoPixelFormat,
 )
-from solin.core.scenes.media_control import MediaControlAction, MediaPlaybackNativeState
+from solin.core.scenes.media_control import ContentSourceKind, MediaControlAction, MediaPlaybackNativeState
 from solin.core.scenes.recording import (
     AudioDeviceDiscovery,
     AudioDeviceSelection,
@@ -672,6 +672,7 @@ class SceneEngine(Protocol):
         sequence: int,
         deadline_ms: int,
         content_media_epoch: int | None = None,
+        content_source_kind: ContentSourceKind = ContentSourceKind.FRAMES,
     ) -> Future[ScenePreparation]: ...
 
     def take_prepared(
@@ -781,6 +782,7 @@ class SceneEngine(Protocol):
         trim_start_ms: int = 0,
         trim_end_ms: int = 0,
         slot: int = 0,
+        content_media_epoch: int | None = None,
         request_id: str,
         deadline_ms: int,
     ) -> Future[SceneEngineAck]: ...
