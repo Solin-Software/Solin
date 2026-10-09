@@ -6,7 +6,7 @@ from concurrent.futures import CancelledError, Future
 from dataclasses import dataclass, replace
 from typing import Any, Protocol
 
-from PySide6.QtCore import QObject, Signal, Slot
+from PySide6.QtCore import QObject, Qt, Signal, Slot
 
 from solin.core.foundation.constants import MEMORIZE_PRE_MEDIA_SCENE
 from solin.core.projection.application import projection_presentation_type
@@ -19,6 +19,7 @@ from solin.core.scenes.engine import (
     FrameEgressReadyEvent,
     LocalCameraDiscovery,
     MediaPlaybackEvent,
+    MediaVideoReadyEvent,
     OutputWindowTarget,
     ProgramRecordingEvent,
     SceneEngine,
@@ -32,6 +33,7 @@ from solin.core.scenes.engine import (
     SourceHealthStatus,
     scene_engine_graph_signature,
 )
+from solin.core.scenes.media_control import ContentSourceKind
 from solin.core.scenes.model import (
     DELIVERY_BUSES,
     AUTOMATIC_MEDIA_CATEGORIES,
@@ -108,6 +110,7 @@ class _PendingTake:
     prepare_sequence: int
     document_revision: int
     content_presentation_id: int | None = None
+    content_source_kind: ContentSourceKind = ContentSourceKind.FRAMES
     take_request_id: str = ""
     take_sequence: int = -1
 
@@ -204,6 +207,7 @@ class SceneRuntimeController(QObject):
     scene_profiles_changed = Signal(object)
     runtime_changed = Signal(object)
     _async_result = Signal(object)
+    _queued_async_result = Signal(object)
     _async_engine_event = Signal(object)
 
     def __init__(
@@ -259,10 +263,13 @@ class SceneRuntimeController(QObject):
         self._local_camera_future: Future[LocalCameraDiscovery] | None = None
         self._automatic_media_scene_selections: dict[BusId, _AutomaticMediaSceneSelection] = {}
         self._last_projection_session_id = self._projection_session_id()
+        self._pending_content_presentation_epoch: int | None = None
         self._last_content_playing = self.content_is_playing
         self._desired_scenes = self._resolve_desired_scenes()
         self._applied_scenes: tuple[tuple[BusId, str], ...] = ()
         self._pending: dict[BusId, _PendingTake] = {}
+        self._waiting_video_take: tuple[ScenePreparation, _PendingTake] | None = None
+        self._ready_video_epoch: int | None = None
         self._failed_takes: set[tuple[BusId, str]] = set()
         self._take_reconciliation_required: set[BusId] = set()
         self._ptz_batches: dict[BusId, _PendingPtzBatch] = {}
@@ -271,6 +278,9 @@ class SceneRuntimeController(QObject):
         self._last_render_enabled = self._render_enabled()
         self._last_content_ingress_required = self._content_ingress_required()
         self._async_result.connect(self._consume_async_result)
+        self._queued_async_result.connect(
+            self._consume_async_result, Qt.ConnectionType.QueuedConnection,
+        )
         self._async_engine_event.connect(self._consume_engine_event)
         self._unsubscribe_document = self._documents.subscribe(self._on_document_changed)
         self._unsubscribe_runtime = self._runtime.subscribe(self._on_runtime_changed)
@@ -1086,6 +1096,7 @@ class SceneRuntimeController(QObject):
         )
 
     def stop_engine(self) -> None:
+        self._ready_video_epoch = None
         self._take_reconciliation_required.clear()
         if self._profile_activation is not None:
             self._workspace.discard_collection_activation(
@@ -1200,6 +1211,9 @@ class SceneRuntimeController(QObject):
     def _on_projection_changed(self) -> None:
         session_id = self._projection_session_id()
         if session_id != self._last_projection_session_id:
+            category = content_category_for_projection(self._projection.state)
+            self._pending_content_presentation_epoch = session_id
+            self._require_pending_content_takes()
             self._last_projection_session_id = session_id
             # A failed content take belongs to that presentation, even when the
             # next playlist item uses the same scene. Keep unrelated failures.
@@ -1214,7 +1228,6 @@ class SceneRuntimeController(QObject):
                 for bus_id, selection in self._automatic_media_scene_selections.items()
                 if self._runtime.state.output(bus_id).mode is OutputMode.MANUAL
             }
-            category = content_category_for_projection(self._projection.state)
             if (
                 not MEMORIZE_PRE_MEDIA_SCENE
                 and category in AUTOMATIC_MEDIA_CATEGORIES
@@ -1226,6 +1239,16 @@ class SceneRuntimeController(QObject):
                 })
         self._notify_content_playing()
         self._reconcile_desired(prepare=True)
+
+    def _require_pending_content_takes(self) -> None:
+        if self._pending_content_presentation_epoch is None:
+            return
+        # Scene identity does not commit a content presentation. Every new
+        # presentation, including native media and idle, needs an accepted Take.
+        self._take_reconciliation_required.update(
+            bus_id for bus_id, scene_id in self._applied_scenes
+            if scene_uses_content_source(self._documents.document, scene_id)
+        )
 
     def _notify_content_playing(self) -> None:
         playing = self.content_is_playing
@@ -1246,11 +1269,27 @@ class SceneRuntimeController(QObject):
                 FrameEgressReadyEvent,
                 ProgramRecordingEvent,
                 MediaPlaybackEvent,
+                MediaVideoReadyEvent,
             ),
         ):
             self._report_exception("event", RuntimeError("Invalid scene engine event"))
             return
         self.engine_event.emit(event)
+        if isinstance(event, MediaVideoReadyEvent):
+            if (
+                not self._engine_ready or event.session_id != self._session_id
+                or event.process_generation != self._process_generation
+                or event.content_media_epoch != self._projection_session_id()
+                or content_category_for_projection(self._projection.state) is not ContentCategory.VIDEO
+            ):
+                return
+            self._ready_video_epoch = event.content_media_epoch
+            waiting, self._waiting_video_take = self._waiting_video_take, None
+            if waiting is not None:
+                preparation, pending = waiting
+                if not self._discard_superseded_take(preparation.bus_id, pending):
+                    self._run_ptz_entry_actions(preparation, pending)
+            return
         if isinstance(event, (FrameEgressReadyEvent, ProgramRecordingEvent, MediaPlaybackEvent)):
             return
         if isinstance(event, SourceHealthEvent):
@@ -1273,6 +1312,7 @@ class SceneRuntimeController(QObject):
             generation_changed = health.process_generation != self._process_generation
             was_ready = self._engine_ready
             if generation_changed:
+                self._ready_video_epoch = None
                 self._cancel_all_pending(cancel_native=False)
                 self._failed_takes.clear()
                 self._layer_geometry_in_flight = None
@@ -1292,6 +1332,7 @@ class SceneRuntimeController(QObject):
             SceneEngineStatus.FAILED,
             SceneEngineStatus.STOPPED,
         }:
+            self._ready_video_epoch = None
             self._cancel_all_pending(cancel_native=False)
             self._local_camera_request_id = ""
             self._local_camera_future = None
@@ -1316,6 +1357,10 @@ class SceneRuntimeController(QObject):
         self._reconcile_content_ingress_demand()
         if not prepare or not self._engine_ready:
             return
+        if self._waiting_video_take is not None:
+            preparation, pending = self._waiting_video_take
+            if self._discard_superseded_take(preparation.bus_id, pending):
+                return
         if self._hydrate_in_flight is not None or not self._applied_scenes:
             self._hydrate_if_ready()
             return
@@ -1336,6 +1381,7 @@ class SceneRuntimeController(QObject):
         if (
             not self._engine_ready
             or self._hydrate_in_flight is not None
+            or self._profile_activation is not None
             or not self._applied_scenes
             or self._pending
         ):
@@ -1580,6 +1626,11 @@ class SceneRuntimeController(QObject):
                 if scene_uses_content_source(self._documents.document, scene_id)
                 else None
             ),
+            content_source_kind=(
+                ContentSourceKind.NATIVE_MEDIA
+                if content_category_for_projection(self._projection.state) is ContentCategory.VIDEO
+                else ContentSourceKind.FRAMES
+            ),
         )
         self._pending[bus_id] = pending
         # The editor canvas wants an instant cut to whatever is selected; the
@@ -1589,9 +1640,9 @@ class SceneRuntimeController(QObject):
             if bus_id is BusId.EDITOR
             else self._documents.effective_transition(scene_id)
         )
-        # Epochs guard app-owned ingress frames. Video is decoded in the sidecar;
-        # waiting for ingress would block open_media on the same ordered command
-        # stream and reject the Program take before the decoder can open.
+        # Both producers use the visual presentation identity. Native media must
+        # resolve its source at Take, without waiting for app ingress in Prepare.
+        content_source_kind = pending.content_source_kind
         future = self._engine.prepare_scene(
             bus_id,
             scene_id,
@@ -1600,14 +1651,16 @@ class SceneRuntimeController(QObject):
             request_id=request_id,
             sequence=sequence,
             deadline_ms=_PREPARE_DEADLINE_MS,
-            content_media_epoch=(
-                pending.content_presentation_id
-                if content_category_for_projection(self._projection.state)
-                is not ContentCategory.VIDEO
-                else None
-            ),
+            content_media_epoch=pending.content_presentation_id,
+            content_source_kind=content_source_kind,
         )
-        self._track_future(future, "prepare", (bus_id, pending))
+        # Projection publishes its identity before enqueueing open_media. Even
+        # an already-completed native Prepare must yield to that caller before
+        # Take can wait for the decoder on the engine's ordered command stream.
+        self._track_future(
+            future, "prepare", (bus_id, pending),
+            queued=content_source_kind is ContentSourceKind.NATIVE_MEDIA,
+        )
 
     def _run_ptz_entry_actions(
         self,
@@ -1712,7 +1765,11 @@ class SceneRuntimeController(QObject):
         future: Future[Any],
         operation: str,
         context: object,
+        *,
+        queued: bool = False,
     ) -> None:
+        delivery = self._queued_async_result if queued else self._async_result
+
         def completed(result_future: Future[Any]) -> None:
             try:
                 result = result_future.result()
@@ -1720,10 +1777,11 @@ class SceneRuntimeController(QObject):
             except BaseException as exc:  # noqa: BLE001 - async process boundary
                 result = None
                 error = exc
-            self._async_result.emit((operation, context, result, error))
+            delivery.emit((operation, context, result, error))
 
         future.add_done_callback(completed)
 
+    @Slot(object)
     def _consume_async_result(self, payload: object) -> None:
         values = _context_tuple(payload, 4, "async result")
         operation, context, result, error = values
@@ -1832,6 +1890,9 @@ class SceneRuntimeController(QObject):
         self._engine_document_revision = snapshot.document.revision
         self._failed_takes.clear()
         self._set_applied_scenes(snapshot.active_scenes)
+        # Hydration records routes, not a committed content epoch. Restore the
+        # Take obligation even when recovery cleared the applied scene cache.
+        self._require_pending_content_takes()
         if self._hydrate_dirty:
             return
         self._schedule_next_take()
@@ -1855,6 +1916,7 @@ class SceneRuntimeController(QObject):
             self._report_rejection("profile_hydrate", ack)
             self._dispatch_layer_geometry()
             self.operational_state_changed.emit()
+            self._schedule_next_take()
             return
         self._committing_hydrated_profile = True
         try:
@@ -1868,11 +1930,13 @@ class SceneRuntimeController(QObject):
         self._failed_takes.clear()
         self._observed_graph_record = scene_engine_graph_signature(context.snapshot.document)
         self._set_applied_scenes(context.snapshot.active_scenes)
+        self._require_pending_content_takes()
         delete_collection_id = self._delete_after_profile_activation
         self._delete_after_profile_activation = ""
         if delete_collection_id:
             self._workspace.delete_collection(delete_collection_id)
         self.operational_state_changed.emit()
+        self._schedule_next_take()
 
     def _fail_profile_activation(self, context: object, error: object) -> None:
         if not isinstance(context, _PendingProfileActivation):
@@ -1888,6 +1952,7 @@ class SceneRuntimeController(QObject):
             self._report_exception("profile_hydrate", error)
         self._dispatch_layer_geometry()
         self.operational_state_changed.emit()
+        self._schedule_next_take()
 
     def _handle_prepared(self, context: object, result: object) -> None:
         bus_id, expected = _context_tuple(context, 2, "prepare")
@@ -1926,6 +1991,16 @@ class SceneRuntimeController(QObject):
             self.transition_fallback.emit(
                 self.tr("The selected transition is unavailable. The scene was cut instead.")
             )
+        if (
+            expected.content_presentation_id is not None
+            and expected.content_source_kind is ContentSourceKind.NATIVE_MEDIA
+            and expected.content_presentation_id != self._ready_video_epoch
+        ):
+            # A prepared transition does not mean its decoder has a first frame.
+            # Keep the ordered transaction pending while loading; Take's deadline
+            # bounds application of a ready presentation, not network startup.
+            self._waiting_video_take = result, expected
+            return
         self._run_ptz_entry_actions(result, expected)
 
     def _handle_taken(self, context: object, result: object) -> None:
@@ -1954,6 +2029,8 @@ class SceneRuntimeController(QObject):
             self._take_reconciliation_required.add(bus_id)
         else:
             self._take_reconciliation_required.discard(bus_id)
+        if not self._take_reconciliation_required:
+            self._pending_content_presentation_epoch = None
         applied = dict(self._applied_scenes)
         applied[bus_id] = expected.scene_id
         self._set_applied_scenes(
@@ -2144,6 +2221,8 @@ class SceneRuntimeController(QObject):
         self.applied_scenes_changed.emit(scenes)
 
     def _cancel_pending(self, bus_id: BusId, *, cancel_native: bool) -> None:
+        if self._waiting_video_take is not None and self._waiting_video_take[0].bus_id is bus_id:
+            self._waiting_video_take = None
         pending = self._pending.pop(bus_id, None)
         batch = self._ptz_batches.pop(bus_id, None)
         if batch is not None and self._ptz is not None:
@@ -2197,7 +2276,7 @@ class SceneRuntimeController(QObject):
             return
         if self._engine is not None:
             self._engine.cancel_preparation(expected.prepare_request_id)
-        self._pending.pop(bus_id, None)
+        self._cancel_pending(bus_id, cancel_native=False)
         self._failed_takes.add((bus_id, expected.scene_id))
         self._continue_pending_reconciliation(bus_id, expected.scene_id)
 

@@ -9,7 +9,7 @@ from solin.core.timer.models import MediaCountdownPresentation
 from solin.core.projection.image_framing import IDENTITY_IMAGE_TRANSFORM
 from solin.projection.window import BaseProjectionView
 from solin.projection.yearly_text import YearlyTextWidget
-from tests._qt import dispose_widget, wait_until
+from tests._qt import dispose_widget
 
 
 _APP = QApplication.instance() or QApplication([])
@@ -137,18 +137,23 @@ def test_clearing_yearly_timer_fades_whole_page_before_restoring_idle(request):
     assert view._yearly_anim.duration() == view._YEARLY_TIMER_EXIT_FADE_DURATION_MS
     assert view._yearly_widget.graphicsEffect() is view._yearly_opacity
 
-    # Keep the original total wait budget, but observe both animation phases.
-    wait_until(
-        lambda: len(finished) == 2,
-        timeout_ms=(
-            view._YEARLY_TIMER_EXIT_FADE_DURATION_MS + view._YEARLY_FADE_IN_DURATION_MS + 100
-        ),
-        description=lambda: (
-            f"yearly page fade-out and idle fade-in: state={snapshot()}, "
-            f"animation_time={view._yearly_anim.currentTime()}, "
-            f"values={values}, finished={finished}"
-        ),
-    )
+    # Exercise the real Qt animation and its finished handlers using its public
+    # clock. Starting the unified animation timer is queued; wall-clock time
+    # spent exposing/painting a window cannot measure these two logical phases.
+    exit_ms = view._YEARLY_TIMER_EXIT_FADE_DURATION_MS
+    idle_ms = view._YEARLY_FADE_IN_DURATION_MS
+    assert view._yearly_anim.state() is QAbstractAnimation.State.Running
+    view._yearly_anim.setCurrentTime(exit_ms // 2)
+    assert snapshot() == (True, 55, view._PAGE_YEARLY, 0.5, exit_ms)
+    assert finished == []
+    view._yearly_anim.setCurrentTime(exit_ms)
+    assert finished == [(False, None, view._PAGE_YEARLY, 0.0, idle_ms)]
+    assert view._yearly_anim.state() is QAbstractAnimation.State.Running
+    view._yearly_anim.setCurrentTime(idle_ms // 2)
+    assert snapshot() == (False, None, view._PAGE_YEARLY, 0.5, idle_ms)
+    assert len(finished) == 1
+    view._yearly_anim.setCurrentTime(idle_ms)
+    assert len(finished) == 2
     fade_out = [state for state in values if state[0]]
     assert any(0.0 < state[3] < 1.0 for state in fade_out)
     assert all(state[1] == 55 and state[2] == view._PAGE_YEARLY for state in fade_out)

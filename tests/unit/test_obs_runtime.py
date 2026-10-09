@@ -1,11 +1,103 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+import sys
 import weakref
 
 import pytest
 
 from solin.core.media import obs_runtime
+
+
+@pytest.mark.parametrize("failure", [None, "upload", "show"])
+@pytest.mark.parametrize("timestamp", [0, 123])
+def test_native_frame_priming_releases_the_frame_after_upload(monkeypatch, failure, timestamp):
+    events = []
+    frame = SimpleNamespace(timestamp=timestamp)
+    source = SimpleNamespace(_ptr=object())
+
+    def get_frame(pointer):
+        assert pointer is source._ptr
+        return frame
+
+    def upload(pointer, selected):
+        assert pointer is source._ptr and selected is frame
+        events.append("upload")
+        if failure == "upload":
+            raise RuntimeError("upload failed")
+
+    def show(pointer):
+        assert pointer is source._ptr
+        events.append("show")
+        if failure == "show":
+            raise RuntimeError("show failed")
+
+    def release(pointer, selected):
+        assert pointer is source._ptr and selected is frame
+        events.append("release")
+
+    def cast(signature, function):
+        assert signature == "struct obs_source_frame *(*)(obs_source_t *)"
+        return function
+
+    lib = SimpleNamespace(
+        obs_source_get_frame=get_frame, obs_source_set_video_frame=upload,
+        obs_source_release_frame=release, obs_source_show_preloaded_video=show,
+    )
+    monkeypatch.setitem(sys.modules, "pylibobs._ffi", SimpleNamespace(
+        ffi=SimpleNamespace(NULL=None, cast=cast), get_lib=lambda: lib,
+    ))
+    runtime = obs_runtime.ObsRuntime()
+    if failure:
+        with pytest.raises(RuntimeError, match=f"{failure} failed"):
+            runtime.prime_source_video(source)
+    else:
+        assert runtime.prime_source_video(source) is True
+    assert events == (["upload", "release"] if failure == "upload" else ["upload", "show", "release"])
+
+
+@pytest.mark.parametrize("preloaded", [False, True])
+def test_native_preload_priming_preserves_a_frame_queued_before_its_tick(monkeypatch, preloaded):
+    source = SimpleNamespace(_ptr=object(), width=0, height=0)
+    events = []
+    queued_frames = [object()]
+
+    def get_frame(pointer):
+        assert pointer is source._ptr
+        assert queued_frames  # Published, but not yet selected by the next native tick.
+        return None
+
+    def clear(pointer, frame):
+        pytest.fail("Readiness must not clear a frame waiting for the next OBS tick")
+
+    def show(pointer):
+        assert pointer is source._ptr
+        events.append("show")
+        if preloaded:
+            source.width, source.height = 160, 90
+
+    lib = SimpleNamespace(
+        obs_source_get_frame=get_frame,
+        obs_source_output_video=clear, obs_source_show_preloaded_video=show,
+    )
+    monkeypatch.setitem(sys.modules, "pylibobs._ffi", SimpleNamespace(
+        ffi=SimpleNamespace(NULL=None, cast=lambda _, function: function), get_lib=lambda: lib,
+    ))
+    runtime = obs_runtime.ObsRuntime()
+    assert not runtime.prime_source_video(source)
+    assert events == []
+    assert runtime.prime_source_video(source) is False
+    assert events == []
+    assert len(queued_frames) == 1
+
+
+def test_native_probe_without_a_new_frame_rejects_cached_dimensions_after_invalidation(monkeypatch):
+    source = SimpleNamespace(_ptr=object(), width=160, height=90)
+    lib = SimpleNamespace(obs_source_get_frame=lambda _: None)
+    monkeypatch.setitem(sys.modules, "pylibobs._ffi", SimpleNamespace(
+        ffi=SimpleNamespace(NULL=None, cast=lambda _, function: function), get_lib=lambda: lib,
+    ))
+    assert not obs_runtime.ObsRuntime().prime_source_video(source)
 
 
 @pytest.mark.parametrize("audio_failure", [False, True])

@@ -395,6 +395,66 @@ class ObsRuntime:
                 log.debug("Error releasing shared camera source", exc_info=True)
         self._camera_sources.clear()
 
+    def prime_source_video(self, source: Any) -> bool:
+        """Upload a decoder frame before exposing its source to a transition.
+
+        Accept only a selected native frame after its synchronous upload.
+        Dimensions and cached preloads cannot acknowledge a frame.
+        """
+        from pylibobs._ffi import ffi, get_lib
+
+        lib: Any = get_lib()
+        # The generated binding declares this pointer-returning API as void(void).
+        # Use the public libobs signature at this native boundary.
+        get_frame = ffi.cast(
+            "struct obs_source_frame *(*)(obs_source_t *)", lib.obs_source_get_frame,
+        )
+        frame = get_frame(source._ptr)
+        if frame != ffi.NULL:
+            try:
+                lib.obs_source_set_video_frame(source._ptr, frame)
+                lib.obs_source_show_preloaded_video(source._ptr)
+                return True
+            finally:
+                lib.obs_source_release_frame(source._ptr, frame)
+        return False
+
+    def discard_selected_source_video(self, source: Any) -> None:
+        """Release the tick's selected frame without clearing its async queue."""
+        from pylibobs._ffi import ffi, get_lib
+
+        lib: Any = get_lib()
+        get_frame = ffi.cast(
+            "struct obs_source_frame *(*)(obs_source_t *)", lib.obs_source_get_frame,
+        )
+        frame = get_frame(source._ptr)
+        if frame != ffi.NULL:
+            lib.obs_source_release_frame(source._ptr, frame)
+
+    def observe_source_updates(self, source: Any, callback: Any):
+        """Subscribe to the public signal emitted after the native deferred update."""
+        from pylibobs._ffi import ffi, get_lib
+
+        lib: Any = get_lib()
+        handler = lib.obs_source_get_signal_handler(source._ptr)
+
+        @ffi.callback("void(void *, calldata_t *)")
+        def updated(_data, _calldata):
+            callback()
+
+        lib.signal_handler_connect(handler, b"update", updated, ffi.NULL)
+
+        def close():
+            lib.signal_handler_disconnect(handler, b"update", updated, ffi.NULL)
+
+        return close
+
+    def watch_source_video(self, source: Any):
+        """Prepare a source's video before its decoder/input is opened."""
+        from .obs_video_readiness import ObsSourceVideoReadiness
+
+        return ObsSourceVideoReadiness(self, source)
+
     def ensure_started(
         self,
         *,

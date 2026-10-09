@@ -22,7 +22,7 @@ from solin.core.scenes.model import (
     VideoColorSpace,
     VideoPixelFormat,
 )
-from solin.core.scenes.media_control import MediaControlAction, MediaPlaybackNativeState
+from solin.core.scenes.media_control import ContentSourceKind, MediaControlAction, MediaPlaybackNativeState
 from solin.core.scenes.recording import (
     AudioDeviceDiscovery,
     AudioDeviceSelection,
@@ -611,12 +611,27 @@ class MediaPlaybackEvent:
             raise ValueError("Invalid media playback event")
 
 
+@dataclass(frozen=True, slots=True)
+class MediaVideoReadyEvent:
+    """An opened media presentation has an uploaded frame and acknowledged transport."""
+
+    session_id: str
+    process_generation: str
+    content_media_epoch: int
+
+    def __post_init__(self) -> None:
+        _identity(self.session_id, "media video session id")
+        _identity(self.process_generation, "media video process generation")
+        _bounded_int(self.content_media_epoch, 0, 2**64 - 1, "media video epoch")
+
+
 SceneEngineEvent: TypeAlias = (
     SourceHealthEvent
     | EngineHealthEvent
     | FrameEgressReadyEvent
     | ProgramRecordingEvent
     | MediaPlaybackEvent
+    | MediaVideoReadyEvent
 )
 
 
@@ -672,6 +687,7 @@ class SceneEngine(Protocol):
         sequence: int,
         deadline_ms: int,
         content_media_epoch: int | None = None,
+        content_source_kind: ContentSourceKind = ContentSourceKind.FRAMES,
     ) -> Future[ScenePreparation]: ...
 
     def take_prepared(
@@ -781,6 +797,7 @@ class SceneEngine(Protocol):
         trim_start_ms: int = 0,
         trim_end_ms: int = 0,
         slot: int = 0,
+        content_media_epoch: int | None = None,
         request_id: str,
         deadline_ms: int,
     ) -> Future[SceneEngineAck]: ...

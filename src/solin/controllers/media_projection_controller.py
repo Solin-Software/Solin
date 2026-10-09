@@ -290,18 +290,7 @@ class MediaProjectionController:
         title = str(item.get("title") or "")
         media_type = str(item.get("type") or "video")
         if url == "__replay__":
-            context.media_controller.stop()
-            context.ndi_service.stop()
-            if context.camera_service is not None:
-                context.camera_service.stop()
-            current = context.projection_bar.current_playlist_item()
-            if current is None:
-                return
-            current_ext = os.path.splitext(current.get("url", ""))[1].lower()
-            if current_ext not in AUDIO_EXTS:
-                for projection_window in context.projection_windows():
-                    projection_window.begin_video()
-            context.media_controller.start_playback(self._playback_request(current, autoplay=True))
+            context.media_controller.replay()
             return
 
         if media_type == "image":

@@ -167,6 +167,31 @@ class LibobsThumbnailEgress:
             self._suspended = True
             self._release_show_refs()
 
+    def refresh_scene_sources(self) -> None:
+        """Rebind retained scene generations without hiding shared cameras.
+
+        The graph still owns the old scenes. Acquire the new showing references
+        before dropping old ones, and exclude atlas rendering during the swap.
+        """
+        with self._lock:
+            if self._suspended or self._writer is None:
+                return
+            previous, self._show_refs = self._show_refs, []
+            try:
+                self._acquire_show_refs()
+            except Exception:  # noqa: BLE001 - retain the previous references on failure
+                self._release_show_refs()
+                self._show_refs = previous
+                log.warning("Could not refresh thumbnail scene references", exc_info=True)
+                return
+            if len(self._show_refs) < len(previous):
+                self._release_show_refs()
+                self._show_refs = previous
+                return
+            current, self._show_refs = self._show_refs, previous
+            self._release_show_refs()
+            self._show_refs = current
+
     def resume(self) -> None:
         """Re-resolve the rebuilt scenes and take fresh show refs."""
         with self._lock:

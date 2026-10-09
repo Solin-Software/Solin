@@ -24,6 +24,13 @@ MINIMUM_SPEED_PERCENT = 1
 MAXIMUM_SPEED_PERCENT = 1000
 
 
+class ContentSourceKind(StrEnum):
+    """Producer to resolve for a prepared visual presentation."""
+
+    FRAMES = "frames"
+    NATIVE_MEDIA = "native_media"
+
+
 class MediaPlaybackState(IntEnum):
     """obs_media_state values (obs/media-io), reported by the sidecar."""
 

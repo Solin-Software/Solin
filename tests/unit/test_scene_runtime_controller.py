@@ -5,10 +5,12 @@ from contextlib import ExitStack
 from concurrent.futures import CancelledError, Future
 from dataclasses import replace
 from pathlib import Path
+from threading import Thread
 from types import SimpleNamespace
 from typing import cast
 
 import pytest
+from PySide6.QtCore import QCoreApplication, QEvent, QThread
 
 from solin.controllers.scene_runtime_controller import (
     ScenePtzEvent,
@@ -29,6 +31,7 @@ from solin.core.scenes.engine import (
     LocalCameraProbeStatus,
     LocalVideoFormat,
     MediaPlaybackEvent,
+    MediaVideoReadyEvent,
     OutputWindowTarget,
     SceneEngine,
     SceneEngineAck,
@@ -78,7 +81,11 @@ from solin.core.scenes.process_engine import (
     SceneEngineCommandRejectedError,
     SceneEngineRequestTimeoutError,
 )
-from solin.core.scenes.media_control import MediaPlaybackNativeState, MediaPlaybackState
+from solin.core.scenes.media_control import (
+    ContentSourceKind,
+    MediaPlaybackNativeState,
+    MediaPlaybackState,
+)
 from solin.core.scenes.presets import (
     CAMERA_SCENE_ID,
     CONTENT_CAMERA_PIP_SCENE_ID,
@@ -239,6 +246,8 @@ class _Engine:
         self.snapshots: list[tuple[str, SceneEngineSnapshot]] = []
         self.preparations: list[tuple[str, BusId, str, int, TransitionSpec]] = []
         self.preparation_content_media_epochs: list[int | None] = []
+        self.preparation_content_source_kinds: list[ContentSourceKind] = []
+        self.video_ready = True
         self.takes: list[tuple[str, ScenePreparation]] = []
         self.outputs: list[tuple[str, BusId, bool]] = []
         self.renders: list[tuple[str, BusId, bool]] = []
@@ -356,10 +365,18 @@ class _Engine:
         sequence: int,
         deadline_ms: int,
         content_media_epoch: int | None = None,
+        content_source_kind: ContentSourceKind = ContentSourceKind.FRAMES,
     ) -> Future[ScenePreparation]:
         assert deadline_ms > 0
         self.preparations.append((request_id, bus_id, scene_id, sequence, transition))
         self.preparation_content_media_epochs.append(content_media_epoch)
+        self.preparation_content_source_kinds.append(content_source_kind)
+        if (
+            self.video_ready and content_media_epoch is not None
+            and content_source_kind is ContentSourceKind.NATIVE_MEDIA
+        ):
+            assert self.listener is not None
+            self.listener(MediaVideoReadyEvent(self.session_id, self.generation, content_media_epoch))
         return _completed(
             ScenePreparation(
                 request_id=request_id,
@@ -1178,6 +1195,16 @@ def _runtime_controller(
     return documents, runtime, controller
 
 
+def _deliver_controller_results(controller: SceneRuntimeController) -> None:
+    """Deliver this controller's queued callbacks until transactions stop advancing."""
+    for _ in range(100):
+        previous = dict(controller._pending)
+        QCoreApplication.sendPostedEvents(controller, QEvent.Type.MetaCall)
+        if controller._pending == previous:
+            return
+    pytest.fail("Scene controller did not settle after delivering queued results")
+
+
 def test_runtime_controller_cleanup_releases_subscriptions_after_an_assertion() -> None:
     engine = _Engine()
     projection = _Projection()
@@ -1334,6 +1361,7 @@ def test_content_transport_retirement_waits_for_the_animated_program_exit(reques
         )
     )
     controller.start_engine()
+    _deliver_controller_results(controller)
     assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
     engine.defer_preparation = True
 
@@ -1882,10 +1910,12 @@ def test_session_routing_reaches_engine_and_right_override_preserves_live_scene(
     _documents, runtime, controller = _runtime_controller(request, engine, projection, request_ids=())
     controller.start_engine()
     projection.set_type("video")
+    _deliver_controller_results(controller)
     other_bus = BusId.VIRTUAL_CAMERA if bus_id is BusId.MEDIA_WINDOWS else BusId.MEDIA_WINDOWS
     other_before = runtime.state.output(other_bus)
 
     controller.select_scene(bus_id, NO_SIGNAL_SCENE_ID)
+    _deliver_controller_results(controller)
     assert controller.applied_scene(bus_id) == NO_SIGNAL_SCENE_ID
     assert controller.applied_scene(other_bus) == CONTENT_SCENE_ID
     assert not controller.return_scene_override_available(bus_id)
@@ -1893,14 +1923,18 @@ def test_session_routing_reaches_engine_and_right_override_preserves_live_scene(
         controller.set_return_scene(bus_id, CONTENT_CAMERA_PIP_SCENE_ID)
     controller.select_scene(bus_id, CONTENT_CAMERA_PIP_SCENE_ID)
     controller.set_return_scene(bus_id, CONTENT_CAMERA_PIP_SCENE_ID)
+    _deliver_controller_results(controller)
     assert controller.applied_scene(bus_id) == CONTENT_CAMERA_PIP_SCENE_ID
     assert runtime.state.output(other_bus) == other_before
     controller.select_scene(bus_id, CAMERA_SCENE_ID)
+    _deliver_controller_results(controller)
     assert controller.applied_scene(bus_id) == CAMERA_SCENE_ID
     controller.select_scene(bus_id, CONTENT_SCENE_ID)
+    _deliver_controller_results(controller)
     projection.set_type("idle")
     assert controller.applied_scene(bus_id) == CONTENT_CAMERA_PIP_SCENE_ID
     projection.set_type("video")
+    _deliver_controller_results(controller)
     assert controller.applied_scene(bus_id) == CONTENT_SCENE_ID
 
 
@@ -2379,6 +2413,7 @@ def test_transition_fallback_is_reported_without_marking_engine_failed(request) 
             sequence: int,
             deadline_ms: int,
             content_media_epoch: int | None = None,
+            content_source_kind: ContentSourceKind = ContentSourceKind.FRAMES,
         ) -> Future[ScenePreparation]:
             prepared = super().prepare_scene(
                 bus_id,
@@ -2389,6 +2424,7 @@ def test_transition_fallback_is_reported_without_marking_engine_failed(request) 
                 sequence=sequence,
                 deadline_ms=deadline_ms,
                 content_media_epoch=content_media_epoch,
+                content_source_kind=content_source_kind,
             ).result()
             if bus_id is BusId.VIRTUAL_CAMERA:
                 prepared = replace(
@@ -2492,8 +2528,145 @@ def test_auto_switch_resolves_transition_for_each_destination_scene(request) -> 
     assert [targets for _request_id, targets in engine.window_target_updates] == [(target,)]
 
 
+@pytest.mark.parametrize("completion", ["already_completed", "gui_thread", "worker_thread"])
+@pytest.mark.parametrize("paused", [False, True])
+def test_native_preparation_delivery_does_not_take_before_open_media(
+    request, monkeypatch, completion: str, paused: bool,
+) -> None:
+    from solin.core.projection.application import ProjectionSession
+
+    projection = ProjectionSession()
+    engine = _Engine()
+    _documents, _runtime, controller = _runtime_controller(
+        request, engine, projection, request_ids=(),
+    )
+    controller.start_engine()
+    events = []
+    take = engine.take_prepared
+    prepare = engine.prepare_scene
+    completions = []
+
+    def prepare_native(*args, **kwargs):
+        result = prepare(*args, **kwargs)
+        if completion == "already_completed" or completions:
+            return result
+        pending = Future()
+        completions.append((pending, result.result()))
+        return pending
+
+    def take_after_open(preparation, **kwargs):
+        assert QThread.isMainThread()
+        events.append(("take", preparation.bus_id))
+        return take(preparation, **kwargs)
+
+    monkeypatch.setattr(engine, "take_prepared", take_after_open)
+    monkeypatch.setattr(engine, "prepare_scene", prepare_native)
+
+    # The production caller commits the identity before enqueueing open_media.
+    projection.set_state({"type": "video", "is_audio": False, "paused": paused})
+    assert len(engine.preparations) == 1
+    assert events == []
+    if completion != "already_completed":
+        future, result = completions[0]
+        if completion == "gui_thread":
+            future.set_result(result)
+        else:
+            worker = Thread(target=future.set_result, args=(result,))
+            worker.start()
+            worker.join(timeout=5)
+            assert not worker.is_alive()
+        assert events == []
+    events.append(("open_media", projection.presentation_session_id))
+
+    _deliver_controller_results(controller)
+
+    assert events == [
+        ("open_media", projection.presentation_session_id),
+        ("take", BusId.VIRTUAL_CAMERA),
+        ("take", BusId.MEDIA_WINDOWS),
+        ("take", BusId.EDITOR),
+    ]
+    assert controller._pending == {}
+
+
+@pytest.mark.parametrize("next_type", ["video", "image", "idle"])
+def test_queued_native_preparation_cannot_take_a_replacement_presentation(
+    request, next_type: str,
+) -> None:
+    from solin.core.projection.application import ProjectionSession
+
+    projection = ProjectionSession()
+    engine = _Engine()
+    _documents, _runtime, controller = _runtime_controller(
+        request, engine, projection, request_ids=(),
+    )
+    controller.start_engine()
+    errors = []
+    controller.engine_error.connect(errors.append)
+    projection.set_state({"type": "video", "is_audio": False})
+    obsolete_request_id = engine.preparations[0][0]
+
+    # Both callers enqueue their media before returning control to Qt. Delivery
+    # of the first completed Prepare must still check the newest visual identity.
+    projection.set_state({"type": next_type})
+    assert engine.takes == []
+    assert len(engine.preparations) == 1
+    _deliver_controller_results(controller)
+
+    assert engine.cancelled == [obsolete_request_id]
+    assert all(prepared.request_id != obsolete_request_id for _, prepared in engine.takes)
+    if next_type == "idle":
+        assert engine.takes == []
+        assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
+    else:
+        expected_kind = (
+            ContentSourceKind.NATIVE_MEDIA if next_type == "video" else ContentSourceKind.FRAMES
+        )
+        assert len(engine.takes) == 3
+        assert engine.preparation_content_media_epochs[1:] == [
+            projection.presentation_session_id,
+        ] * 3
+        assert engine.preparation_content_source_kinds[1:] == [expected_kind] * 3
+    assert controller._pending == {}
+    assert errors == []
+
+
+@pytest.mark.parametrize("restart", [False, True])
+def test_queued_native_preparation_is_retired_when_the_engine_stops(
+    request, restart: bool,
+) -> None:
+    from solin.core.projection.application import ProjectionSession
+
+    projection = ProjectionSession()
+    engine = _Engine()
+    _documents, _runtime, controller = _runtime_controller(
+        request, engine, projection, request_ids=(),
+    )
+    controller.start_engine()
+    projection.set_state({"type": "video", "is_audio": False})
+    obsolete_request_id = engine.preparations[0][0]
+    controller.stop_engine()
+    if restart:
+        engine.generation = "engine-generation-2"
+        controller.start_engine()
+
+    _deliver_controller_results(controller)
+
+    assert obsolete_request_id in engine.cancelled
+    assert all(prepared.request_id != obsolete_request_id for _, prepared in engine.takes)
+    if restart:
+        assert len(engine.takes) == 3
+        assert all(
+            prepared.process_generation == engine.generation for _, prepared in engine.takes
+        )
+    else:
+        assert engine.takes == []
+        assert controller.applied_scenes == ()
+    assert controller._pending == {}
+
+
 @pytest.mark.parametrize("state_type", ["video", "image", "timer", "browser", "ndi"])
-def test_auto_switch_waits_for_app_frames_only_for_app_owned_presentations(
+def test_auto_switch_identifies_the_content_producer_and_presentation(
     request,
     state_type: str,
 ) -> None:
@@ -2511,12 +2684,313 @@ def test_auto_switch_waits_for_app_frames_only_for_app_owned_presentations(
     # submitting the first app-owned frame. The video decoder is in the sidecar;
     # it cannot produce a frame in the app's ingress channel.
     projection.set_type(state_type)
+    _deliver_controller_results(controller)
 
     assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
     assert controller.applied_scene(BusId.MEDIA_WINDOWS) == CONTENT_SCENE_ID
     assert len(engine.preparations) == 3
-    expected_epoch = None if state_type == "video" else projection.session_id
-    assert engine.preparation_content_media_epochs == [expected_epoch] * 3
+    assert engine.preparation_content_media_epochs == [projection.session_id] * 3
+    expected_kind = (
+        ContentSourceKind.NATIVE_MEDIA if state_type == "video" else ContentSourceKind.FRAMES
+    )
+    assert engine.preparation_content_source_kinds == [expected_kind] * 3
+
+
+@pytest.mark.parametrize("previous_type", ["video", "image", "timer", "browser", "ndi"])
+@pytest.mark.parametrize("next_type", ["video", "image", "timer", "browser", "ndi"])
+def test_new_content_takes_the_current_presentation_when_the_scene_is_unchanged(
+    request, previous_type: str, next_type: str,
+) -> None:
+    projection = _Projection()
+    engine = _Engine()
+    _documents, _runtime, controller = _runtime_controller(
+        request, engine, projection, request_ids=(),
+    )
+    controller.start_engine()
+    projection.set_type(previous_type)
+    _deliver_controller_results(controller)
+    assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
+    engine.preparations.clear()
+    engine.preparation_content_media_epochs.clear()
+    engine.preparation_content_source_kinds.clear()
+    engine.takes.clear()
+
+    projection.set_type(next_type)
+    _deliver_controller_results(controller)
+
+    assert len(engine.preparations) == 3
+    assert all(scene_id == CONTENT_SCENE_ID for _, _, scene_id, _, _ in engine.preparations)
+    assert engine.preparation_content_media_epochs == [projection.session_id] * 3
+    expected_kind = (
+        ContentSourceKind.NATIVE_MEDIA if next_type == "video" else ContentSourceKind.FRAMES
+    )
+    assert engine.preparation_content_source_kinds == [expected_kind] * 3
+    assert [prepared.bus_id for _, prepared in engine.takes] == [
+        BusId.VIRTUAL_CAMERA, BusId.MEDIA_WINDOWS, BusId.EDITOR,
+    ]
+    assert controller._take_reconciliation_required == set()
+    assert len(engine.snapshots) == 1
+
+
+@pytest.mark.parametrize("previous_type", ["video", "image", "timer"])
+@pytest.mark.parametrize("next_type", ["image", "video"])
+def test_new_content_during_hydration_commits_the_presentation_after_the_snapshot(
+    request, previous_type: str, next_type: str,
+) -> None:
+    projection = _Projection()
+    projection.set_type(previous_type)
+    engine = _PendingGeometryEngine(defer_hydration=True)
+    _documents, _runtime, controller = _runtime_controller(
+        request, engine, projection, request_ids=(),
+    )
+    controller.start_engine()
+    assert controller.applied_scenes == ()
+    projection.set_type(next_type)  # same Content scene, but a new presentation
+    assert engine.preparations == []
+    engine.finish_hydration(0)
+    _deliver_controller_results(controller)
+
+    assert engine.preparation_content_media_epochs == [projection.session_id] * 3
+    expected_kind = (
+        ContentSourceKind.NATIVE_MEDIA if next_type == "video" else ContentSourceKind.FRAMES
+    )
+    assert engine.preparation_content_source_kinds == [expected_kind] * 3
+    assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
+    assert controller._take_reconciliation_required == set()
+    assert controller._pending_content_presentation_epoch is None
+
+
+@pytest.mark.parametrize("state_type", ["image", "timer", "video"])
+@pytest.mark.parametrize("idle_media_path", ["", "idle.png"])
+def test_return_to_idle_commits_current_epoch_on_pinned_content_routes(
+    request, state_type: str, idle_media_path: str,
+) -> None:
+    projection = _Projection()
+    projection.idle_media_path = idle_media_path
+    engine = _Engine()
+    _documents, runtime, controller = _runtime_controller(
+        request, engine, projection, request_ids=(),
+    )
+    controller.start_engine()
+    projection.set_type(state_type)
+    _deliver_controller_results(controller)
+    runtime.take_program_scene(CONTENT_SCENE_ID)
+    engine.preparations.clear()
+    engine.preparation_content_media_epochs.clear()
+
+    projection.set_type("idle")
+
+    assert [bus for _, bus, _, _, _ in engine.preparations] == [
+        BusId.VIRTUAL_CAMERA, BusId.MEDIA_WINDOWS, BusId.EDITOR,
+    ]
+    assert engine.preparation_content_media_epochs == [projection.session_id] * 3
+    assert controller._pending_content_presentation_epoch is None
+    assert controller._take_reconciliation_required == set()
+
+
+def test_timer_return_to_custom_content_default_prepares_idle_pixels(request) -> None:
+    document = _document()
+    content = next(scene for scene in document.scenes if scene.id == CONTENT_SCENE_ID)
+    custom_idle = replace(content, id="custom-idle", name="Custom idle")
+    document = replace(
+        document,
+        scenes=document.scenes + (custom_idle,),
+        outputs=tuple(
+            replace(output, default_scene_id=custom_idle.id) for output in document.outputs
+        ),
+    )
+    projection = _Projection()
+    projection.idle_media_path = "idle.png"
+    engine = _Engine()
+    _documents, _runtime, controller = _runtime_controller(
+        request, engine, projection, request_ids=(), document=document,
+    )
+    controller.start_engine()
+    projection.set_type("timer")
+    engine.preparations.clear()
+    engine.preparation_content_media_epochs.clear()
+
+    projection.set_type("idle")
+
+    assert len(engine.preparations) == 3
+    assert all(scene == custom_idle.id for _, _, scene, _, _ in engine.preparations)
+    assert engine.preparation_content_media_epochs == [projection.session_id] * 3
+
+
+@pytest.mark.parametrize("state", [
+    {"type": "image", "path": "image.png"},
+    {"type": "timer", "remaining": 60},
+    {"type": "video", "is_audio": False, "title": "Clip"},
+])
+def test_content_updates_within_an_epoch_do_not_take_again(request, state) -> None:
+    from solin.core.projection.application import ProjectionSession
+
+    projection = ProjectionSession()
+    engine = _Engine()
+    _documents, _runtime, controller = _runtime_controller(
+        request, engine, projection, request_ids=(),
+    )
+    controller.start_engine()
+    projection.set_state(state)
+    _deliver_controller_results(controller)
+    epoch = projection.presentation_session_id
+    preparations = tuple(engine.preparations)
+    takes = tuple(engine.takes)
+
+    if state["type"] == "image":
+        projection.update_image_transform((1.5, 0.1, 0.2), animate=True)
+    elif state["type"] == "video":
+        projection.update_state(title="Metadata title", position=10, paused=True)
+    else:
+        projection.update_state(remaining=59)
+
+    assert projection.presentation_session_id == epoch
+    assert tuple(engine.preparations) == preparations
+    assert tuple(engine.takes) == takes
+
+
+def test_representing_the_same_video_commits_a_new_visual_epoch(request) -> None:
+    from solin.core.projection.application import ProjectionSession
+
+    projection = ProjectionSession()
+    engine = _Engine()
+    _documents, _runtime, controller = _runtime_controller(
+        request, engine, projection, request_ids=(),
+    )
+    controller.start_engine()
+    video = {"type": "video", "is_audio": False, "title": "Clip", "paused": True}
+
+    for _ in range(2):
+        preparation_count = len(engine.preparations)
+        take_count = len(engine.takes)
+        projection.set_state(video)
+        _deliver_controller_results(controller)
+
+        assert len(engine.preparations) == preparation_count + 3
+        assert len(engine.takes) == take_count + 3
+        assert engine.preparation_content_media_epochs[preparation_count:] == [
+            projection.presentation_session_id,
+        ] * 3
+        assert engine.preparation_content_source_kinds[preparation_count:] == [
+            ContentSourceKind.NATIVE_MEDIA,
+        ] * 3
+        assert controller._pending_content_presentation_epoch is None
+
+
+def test_audio_over_idle_preserves_content_epoch_without_extra_takes(request) -> None:
+    from solin.core.projection.application import ProjectionSession
+
+    projection = ProjectionSession()
+    projection.set_idle_media_path("idle.png")
+    engine = _Engine()
+    _documents, runtime, controller = _runtime_controller(
+        request, engine, projection, request_ids=(),
+    )
+    runtime.take_program_scene(CONTENT_SCENE_ID)
+    controller.start_engine()
+    epoch = projection.presentation_session_id
+    preparations = tuple(engine.preparations)
+    takes = tuple(engine.takes)
+
+    projection.set_state({"type": "video", "path": "audio.mp3", "is_audio": True})
+    projection.update_state(position=10, paused=True)
+    projection.reset_state()
+
+    assert projection.presentation_session_id == epoch
+    assert tuple(engine.preparations) == preparations
+    assert tuple(engine.takes) == takes
+
+
+@pytest.mark.parametrize("state_type", ["image", "video"])
+def test_same_scene_epoch_remains_pending_until_each_content_bus_accepts_take(
+    request, monkeypatch, state_type,
+) -> None:
+    projection = _Projection()
+    engine = _Engine()
+    _documents, _runtime, controller = _runtime_controller(
+        request, engine, projection, request_ids=(),
+    )
+    controller.start_engine()
+    projection.set_type(state_type)
+    _deliver_controller_results(controller)
+    take = engine.take_prepared
+    acknowledgements = []
+
+    def defer_take(*args, **kwargs):
+        ack = take(*args, **kwargs).result()
+        future = Future()
+        acknowledgements.append((future, ack))
+        return future
+
+    monkeypatch.setattr(engine, "take_prepared", defer_take)
+    projection.set_type(state_type)
+    _deliver_controller_results(controller)
+    epoch = projection.session_id
+
+    for index, bus in enumerate((BusId.VIRTUAL_CAMERA, BusId.MEDIA_WINDOWS, BusId.EDITOR)):
+        assert len(acknowledgements) == index + 1
+        assert controller._pending_content_presentation_epoch == epoch
+        assert bus in controller._take_reconciliation_required
+        future, ack = acknowledgements[index]
+        future.set_result(ack)
+        _deliver_controller_results(controller)
+        assert bus not in controller._take_reconciliation_required
+
+    assert controller._pending_content_presentation_epoch is None
+    assert controller._pending == {}
+
+
+@pytest.mark.parametrize("completion", ["accepted", "rejected", "failed", "cancelled"])
+@pytest.mark.parametrize("state_type", ["image", "video"])
+def test_new_content_during_profile_hydration_waits_until_activation_finishes(
+    scene_workspace_factory, request, tmp_path: Path, completion: str, state_type: str,
+) -> None:
+    workspace, collection = _real_workspace(scene_workspace_factory, tmp_path)
+    projection = _Projection()
+    engine = _PendingGeometryEngine(defer_hydration=True)
+    controller = SceneRuntimeController(
+        workspace, projection, engine=engine, session_id="test-session",
+    )
+    request.addfinalizer(controller.close)
+    controller.start_engine()
+    engine.finish_hydration(0)
+    projection.set_type("image")
+    baseline = len(engine.preparations)
+    controller.activate_scene_profile(collection.id)
+
+    projection.set_type(state_type)
+
+    assert len(engine.preparations) == baseline
+    assert controller._pending_content_presentation_epoch == projection.session_id
+    if completion == "accepted":
+        engine.finish_hydration(1)
+    elif completion == "rejected":
+        request_id, snapshot = engine.snapshots[1]
+        engine.hydration_futures[1].set_result(replace(
+            engine._ack(request_id, snapshot.sequence, snapshot.document.revision),
+            applied=False, error_code="source_unavailable",
+        ))
+    elif completion == "failed":
+        engine.hydration_futures[1].set_exception(
+            SceneEngineCommandRejectedError("source_unavailable"),
+        )
+    else:
+        engine.hydration_futures[1].cancel()
+
+    _deliver_controller_results(controller)
+    expected_snapshot = engine.snapshots[1 if completion == "accepted" else 0][1]
+    assert controller.document.document_id == expected_snapshot.document.document_id
+    assert len(engine.preparations) == baseline + 3
+    assert engine.preparation_content_media_epochs[baseline:] == [projection.session_id] * 3
+    expected_kind = (
+        ContentSourceKind.NATIVE_MEDIA if state_type == "video" else ContentSourceKind.FRAMES
+    )
+    assert engine.preparation_content_source_kinds[baseline:] == [expected_kind] * 3
+    assert all(
+        prepared.document_revision == expected_snapshot.document.revision
+        for _, prepared in engine.takes[baseline:]
+    )
+    assert controller._pending_content_presentation_epoch is None
 
 
 def test_frame_egress_readiness_is_forwarded_without_marking_the_engine_failed(request) -> None:
@@ -2545,12 +3019,14 @@ def test_frame_egress_readiness_is_forwarded_without_marking_the_engine_failed(r
 
 
 @pytest.mark.parametrize("completion", ["prepared", "rejected", "timed_out"])
+@pytest.mark.parametrize("previous_type", ["video", "image"])
 @pytest.mark.parametrize("next_type", ["image", "video"])
 @pytest.mark.parametrize("stage", ["prepare", "take"])
-def test_replaced_video_preparation_is_reconciled_for_the_latest_presentation(
+def test_replaced_content_preparation_is_reconciled_for_the_latest_presentation(
     request,
     monkeypatch,
     completion: str,
+    previous_type: str,
     next_type: str,
     stage: str,
 ) -> None:
@@ -2580,7 +3056,9 @@ def test_replaced_video_preparation_is_reconciled_for_the_latest_presentation(
     monkeypatch.setattr(engine, method_name, defer_first_preparation)
     errors: list[str] = []
     controller.engine_error.connect(errors.append)
-    projection.set_type("video")
+    projection.set_type(previous_type)
+    _deliver_controller_results(controller)
+    previous_epoch = projection.session_id
     projection.set_type(next_type)
     assert len(engine.preparations) == 1
     assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
@@ -2592,6 +3070,7 @@ def test_replaced_video_preparation_is_reconciled_for_the_latest_presentation(
     else:
         pending.set_exception(SceneEngineRequestTimeoutError("obsolete preparation"))
 
+    _deliver_controller_results(controller)
     # A new presentation can use the same scene. The previous preparation must
     # neither take that scene nor block its replacement with a stale failure.
     assert len(engine.preparations) == 4
@@ -2602,10 +3081,117 @@ def test_replaced_video_preparation_is_reconciled_for_the_latest_presentation(
     completed_takes = engine.takes if stage == "prepare" else engine.takes[1:]
     assert len(completed_takes) == 3
     assert all(prepared.request_id != obsolete[0].request_id for _, prepared in completed_takes)
-    current_epoch = projection.session_id if next_type == "image" else None
-    assert engine.preparation_content_media_epochs == [None, *([current_epoch] * 3)]
+    current_epoch = projection.session_id
+    assert engine.preparation_content_media_epochs == [previous_epoch, *([current_epoch] * 3)]
+    previous_kind = (
+        ContentSourceKind.NATIVE_MEDIA if previous_type == "video" else ContentSourceKind.FRAMES
+    )
+    current_kind = (
+        ContentSourceKind.NATIVE_MEDIA if next_type == "video" else ContentSourceKind.FRAMES
+    )
+    assert engine.preparation_content_source_kinds == [previous_kind, *([current_kind] * 3)]
     assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
     assert errors == []
+
+
+@pytest.mark.parametrize("ready_before_preparation", [False, True])
+def test_native_take_waits_for_frame_readiness_without_starting_an_ipc_deadline(
+    request, ready_before_preparation: bool,
+) -> None:
+    engine = _Engine()
+    engine.video_ready = False
+    projection = _Projection()
+    _documents, _runtime, controller = _runtime_controller(request, engine, projection, request_ids=())
+    controller.start_engine()
+    projection.set_type("image")
+    original_takes = len(engine.takes)
+    projection.set_type("video")
+    event = MediaVideoReadyEvent(engine.session_id, engine.generation, projection.session_id)
+    if ready_before_preparation:
+        controller._consume_engine_event(event)
+    _deliver_controller_results(controller)
+    if not ready_before_preparation:
+        assert len(engine.takes) == original_takes
+        assert controller._waiting_video_take is not None
+        assert controller._failed_takes == set()
+        controller._consume_engine_event(event)
+        _deliver_controller_results(controller)
+    assert [prepared.bus_id for _, prepared in engine.takes[original_takes:]] == [
+        BusId.VIRTUAL_CAMERA, BusId.MEDIA_WINDOWS, BusId.EDITOR,
+    ]
+    assert controller._pending == {} and controller._waiting_video_take is None
+    # Repeated notification cannot re-run Take or its entry actions.
+    controller._consume_engine_event(event)
+    assert len(engine.takes) == original_takes + 3
+
+
+@pytest.mark.parametrize("obsolete", ["session", "generation", "epoch"])
+def test_native_readiness_ignores_an_unrelated_presentation(request, obsolete: str) -> None:
+    engine = _Engine()
+    engine.video_ready = False
+    projection = _Projection()
+    _documents, _runtime, controller = _runtime_controller(request, engine, projection, request_ids=())
+    controller.start_engine()
+    projection.set_type("video")
+    _deliver_controller_results(controller)
+    event = MediaVideoReadyEvent(engine.session_id, engine.generation, projection.session_id)
+    stale = replace(event, **{
+        "session": {"session_id": "another-session"},
+        "generation": {"process_generation": "another-generation"},
+        "epoch": {"content_media_epoch": projection.session_id + 1},
+    }[obsolete])
+    controller._consume_engine_event(stale)
+    assert engine.takes == [] and controller._waiting_video_take is not None
+    controller._consume_engine_event(event)
+    _deliver_controller_results(controller)
+    assert len(engine.takes) == 3
+
+
+@pytest.mark.parametrize("replacement", ["image", "idle", "video"])
+def test_cancel_loading_video_does_not_take_its_late_ready_frame(request, replacement: str) -> None:
+    engine = _Engine()
+    engine.video_ready = False
+    projection = _Projection()
+    _documents, _runtime, controller = _runtime_controller(request, engine, projection, request_ids=())
+    controller.start_engine()
+    projection.set_type("video")
+    _deliver_controller_results(controller)
+    obsolete = engine.preparations[-1][0]
+    event = MediaVideoReadyEvent(engine.session_id, engine.generation, projection.session_id)
+    projection.set_type(replacement)
+    _deliver_controller_results(controller)
+    controller._consume_engine_event(event)
+    assert obsolete in engine.cancelled
+    assert all(prepared.request_id != obsolete for _, prepared in engine.takes)
+    if replacement == "video":
+        assert controller._waiting_video_take is not None
+        controller._consume_engine_event(replace(event, content_media_epoch=projection.session_id))
+        _deliver_controller_results(controller)
+    assert controller._pending == {} and controller._waiting_video_take is None
+
+
+def test_loading_video_retires_pending_preparation_when_the_engine_restarts(request) -> None:
+    engine = _Engine()
+    engine.video_ready = False
+    projection = _Projection()
+    _documents, _runtime, controller = _runtime_controller(request, engine, projection, request_ids=())
+    controller.start_engine()
+    projection.set_type("video")
+    _deliver_controller_results(controller)
+    old_event = MediaVideoReadyEvent(engine.session_id, engine.generation, projection.session_id)
+    engine.emit_health(SceneEngineStatus.FAILED)
+    assert controller._pending == {} and controller._waiting_video_take is None
+    controller._consume_engine_event(old_event)
+    assert engine.takes == []
+    engine.generation = "generation-2"
+    engine.emit_health(SceneEngineStatus.READY)
+    _deliver_controller_results(controller)
+    controller._consume_engine_event(old_event)
+    assert engine.takes == []
+    controller._consume_engine_event(replace(old_event, process_generation=engine.generation))
+    _deliver_controller_results(controller)
+    assert len(engine.takes) == 3
+    assert all(prepared.process_generation == engine.generation for _, prepared in engine.takes)
 
 
 def test_a_new_video_retries_a_failed_content_take_without_changing_the_scene(
@@ -2634,15 +3220,24 @@ def test_a_new_video_retries_a_failed_content_take_without_changing_the_scene(
 
     monkeypatch.setattr(engine, "prepare_scene", fail_first_content_prepare)
     projection.set_type("video")
+    _deliver_controller_results(controller)
     assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
     assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
+    first_presentation_epoch = projection.session_id
+    assert len(engine.preparations) == 3
 
     # Advancing a playlist can open another video without visiting idle or
     # changing the scene. A failure belongs to the old presentation only.
     projection.set_type("video")
+    _deliver_controller_results(controller)
 
     assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
-    assert len(engine.preparations) == 4
+    # The other buses accepted the first video; they must also commit its replacement.
+    assert len(engine.preparations) == 6
+    assert engine.preparation_content_media_epochs == [
+        *([first_presentation_epoch] * 3), *([projection.session_id] * 3),
+    ]
+    assert engine.preparation_content_source_kinds == [ContentSourceKind.NATIVE_MEDIA] * 6
 
 
 @pytest.mark.parametrize("completion", ["applied", "timed_out"])
@@ -2673,6 +3268,7 @@ def test_obsolete_video_take_is_reconciled_after_returning_to_idle(
 
     monkeypatch.setattr(engine, "take_prepared", defer_first_take)
     projection.set_type("video")
+    _deliver_controller_results(controller)
     projection.set_type("idle")
     assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
     assert len(engine.takes) == 1
@@ -2726,6 +3322,7 @@ def test_applied_obsolete_video_take_remains_known_when_replacement_preparation_
     monkeypatch.setattr(engine, "take_prepared", defer_first_take)
     monkeypatch.setattr(engine, "prepare_scene", fail_replacement_preparation)
     projection.set_type("video")
+    _deliver_controller_results(controller)
     projection.set_type("image")
     pending.set_result(acknowledgements[0])
 
@@ -2763,6 +3360,7 @@ def test_graph_hydration_preserves_readiness_for_a_replaced_video_take(
 
     monkeypatch.setattr(engine, "take_prepared", defer_first_take)
     projection.set_type("video")
+    _deliver_controller_results(controller)
     projection.set_type("image")
     controller.set_program_egress(
         replace(
@@ -2786,7 +3384,7 @@ def test_graph_hydration_preserves_readiness_for_a_replaced_video_take(
         )
         if preparation[1] is BusId.VIRTUAL_CAMERA
     ]
-    assert program_epochs == [None, projection.session_id]
+    assert program_epochs == [1, projection.session_id]
     assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
     assert controller._take_reconciliation_required == set()
     assert controller._pending == {}
@@ -2809,10 +3407,12 @@ def test_runtime_coalesces_rapid_scene_selection_while_prepare_is_in_flight(requ
             sequence: int,
             deadline_ms: int,
             content_media_epoch: int | None = None,
+            content_source_kind: ContentSourceKind = ContentSourceKind.FRAMES,
         ) -> Future[ScenePreparation]:
             assert deadline_ms > 0
             self.preparations.append((request_id, bus_id, scene_id, sequence, transition))
             self.preparation_content_media_epochs.append(content_media_epoch)
+            self.preparation_content_source_kinds.append(content_source_kind)
             future: Future[ScenePreparation] = Future()
             self.pending_preparations.append(future)
             return future
@@ -3436,6 +4036,7 @@ def test_failed_preparation_cancels_its_native_resource(request) -> None:
             sequence: int,
             deadline_ms: int,
             content_media_epoch: int | None = None,
+            content_source_kind: ContentSourceKind = ContentSourceKind.FRAMES,
         ) -> Future[ScenePreparation]:
             assert deadline_ms > 0
             assert document_revision >= 0
@@ -3479,6 +4080,7 @@ def test_rejected_preparation_preserves_the_native_error_code(request) -> None:
             sequence: int,
             deadline_ms: int,
             content_media_epoch: int | None = None,
+            content_source_kind: ContentSourceKind = ContentSourceKind.FRAMES,
         ) -> Future[ScenePreparation]:
             self.preparations.append((request_id, bus_id, scene_id, sequence, transition))
             return _failed(SceneEngineCommandRejectedError("source_unavailable"))
@@ -3519,6 +4121,7 @@ def test_cancelled_preparation_does_not_publish_a_sticky_engine_error(request) -
             sequence: int,
             deadline_ms: int,
             content_media_epoch: int | None = None,
+            content_source_kind: ContentSourceKind = ContentSourceKind.FRAMES,
         ) -> Future[ScenePreparation]:
             return _failed(CancelledError())
 
@@ -3655,6 +4258,7 @@ def test_replaced_video_ptz_batch_cannot_take_or_block_the_next_presentation(
     controller.engine_error.connect(errors.append)
     controller.start_engine()
     projection.set_type("video")
+    _deliver_controller_results(controller)
     obsolete_request_id = engine.preparations[0][0]
     projection.set_type("image")
 
@@ -3662,7 +4266,10 @@ def test_replaced_video_ptz_batch_cannot_take_or_block_the_next_presentation(
 
     assert len(ptz.futures) == 2
     assert engine.cancelled == [obsolete_request_id]
-    assert engine.preparation_content_media_epochs == [None, projection.session_id]
+    assert engine.preparation_content_media_epochs == [1, projection.session_id]
+    assert engine.preparation_content_source_kinds == [
+        ContentSourceKind.NATIVE_MEDIA, ContentSourceKind.FRAMES,
+    ]
     assert engine.takes == []
     assert errors == []
 
@@ -3694,6 +4301,7 @@ def test_ptz_event_can_return_to_idle_without_leaving_a_pending_video_take(
     controller.ptz_event.connect(lambda _event: projection.set_type("idle"))
     controller.start_engine()
     projection.set_type("video")
+    _deliver_controller_results(controller)
 
     ptz.futures[0].set_result(_ptz_result(status))
 

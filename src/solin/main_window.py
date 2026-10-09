@@ -366,7 +366,13 @@ class MainWindow(QWidget):
             from .controllers.media_engine_route import SceneEngineMediaRoute
             from .core.scenes.media_control import MEDIA_SLOT_BACKGROUND
 
-            self.media_ctrl.set_engine_media_route(SceneEngineMediaRoute(scene_engine))
+            self.media_ctrl.set_engine_media_route(SceneEngineMediaRoute(
+                scene_engine,
+                presentation_id=lambda: (
+                    self.projection_session.presentation_session_id
+                    if not self.projection_session.state.get("is_audio", False) else None
+                ),
+            ))
             # The background song plays through a second, monitored-only sidecar
             # audio slot (not composited into the scene).
             self._background_media_controller.set_engine_media_route(

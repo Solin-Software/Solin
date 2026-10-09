@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import deque
 import threading
 import time
+from types import SimpleNamespace
 
 import pytest
 
@@ -29,14 +30,15 @@ class _Reader:
 
 
 class _Source:
-    source = "content-source"
-
     def __init__(self, events: list[str]) -> None:
+        self.source = SimpleNamespace(showing=False)
         self.events = events
         self.uploads: list[tuple[int, bool]] = []
         self.block = False
         self.entered = threading.Event()
         self.resume = threading.Event()
+        self.released = 0
+        self.created_sources: list[_Source] = []
 
     def push_bgra(self, data, width, height, stride, *, reset=False) -> bool:
         assert (width, height, stride) == (2, 2, 8)
@@ -49,6 +51,7 @@ class _Source:
         return data[0] != 99
 
     def release(self) -> None:
+        self.released += 1
         self.events.append("source released")
 
 
@@ -57,13 +60,22 @@ def consumer(monkeypatch):
     events: list[str] = []
     reader = _Reader(events)
     source = _Source(events)
+    sources = [source]
+    source.created_sources = sources
+
+    def create_source(*_):
+        if instance._frame_source is None:
+            return source
+        candidate = _Source(events)
+        sources.append(candidate)
+        return candidate
     # Park the automatic pump; each scenario owns its explicit pumping threads.
     monkeypatch.setattr(content_frame_consumer, "_POLL_SECONDS", 60)
     monkeypatch.setattr(content_frame_channel, "SharedFrameChannelReader", lambda *_: reader)
     instance = content_frame_consumer.ContentFrameConsumer(
         None,
         {"handle_token": "unit-content", "width": 2, "height": 2},
-        frame_source_factory=lambda *_: source,
+        frame_source_factory=create_source,
     )
     threads: list[threading.Thread] = []
     errors: list[Exception] = []
@@ -148,13 +160,61 @@ def test_stop_wakes_epoch_waiter_and_drains_upload_before_disposal(consumer):
     source.resume.set()
     assert stopped.wait(1)
     assert pump_result == [False]
-    assert events[-3:] == ["upload completed", "source released", "reader closed"]
+    assert events[-3] == "upload completed"
+    assert set(events[-2:]) == {"source released", "reader closed"}
     assert not instance.pump_once()
     assert not instance.start()
     assert not instance.wait_for_epoch(1, deadline=time.monotonic() + 1)
     assert reader.read_count == 1
     instance.stop()
     assert events.count("source released") == events.count("reader closed") == 1
+
+
+def test_detach_sources_stops_transport_and_transfers_uploaded_wrappers_without_double_release(
+    consumer,
+):
+    instance, reader, first, events, _run = consumer
+    reader.frames.append(_frame(1, 1))
+    assert instance.pump_once()
+    reader.frames.append(_frame(2, 2))
+    assert instance.pump_once()
+    second = first.created_sources[1]
+    assert instance.source_for_epoch(2) is second.source
+    pump_thread = instance._thread
+    assert pump_thread is not None and pump_thread.is_alive()
+
+    detached = instance.detach_sources()
+    try:
+        assert tuple(detached) == (first, second)
+        assert first.uploads == [(1, True)] and second.uploads == [(2, True)]
+        assert first.released == second.released == 0
+        assert not pump_thread.is_alive()
+        assert events.count("reader closed") == 1
+        assert instance.source is None
+        assert instance.source_for_epoch(2) is None
+        assert not instance.wait_for_epoch(2, deadline=time.monotonic() + 1)
+
+        read_count = reader.read_count
+        reader.frames.append(_frame(3, 3))
+        assert not instance.pump_once()
+        assert not instance.start()
+        assert reader.read_count == read_count
+        assert list(reader.frames) == [_frame(3, 3)]
+
+        instance.collect_unused_sources(())
+        instance.stop()
+        instance.stop()
+        assert not instance.detach_sources()
+        assert first.released == second.released == 0
+        assert events.count("reader closed") == 1
+    finally:
+        for wrapper in detached:
+            wrapper.release()
+
+    instance.stop()
+    assert first.released == second.released == 1
+    assert events.count("source released") == 2
+    assert events.count("reader closed") == 1
 
 
 def test_concurrent_pumps_serialize_reader_and_upload_in_epoch_order(consumer):
@@ -178,7 +238,10 @@ def test_concurrent_pumps_serialize_reader_and_upload_in_epoch_order(consumer):
     second.join(1)
     assert not first.is_alive() and not second.is_alive()
     assert results == [True, True]
-    assert source.uploads == [(1, True), (2, True)]
+    assert [upload for item in source.created_sources for upload in item.uploads] == [
+        (1, True), (2, True),
+    ]
+    assert source.uploads == [(1, True)]  # second epoch must not mutate the first texture
     assert instance.wait_for_epoch(2, deadline=time.monotonic() - 1)
     assert not instance.wait_for_epoch(1, deadline=time.monotonic() + 1)
 
@@ -194,6 +257,63 @@ def test_failed_upload_and_stale_frames_never_publish_an_epoch(consumer):
         if value == 99:
             assert not instance.wait_for_epoch(2, deadline=time.monotonic() - 1)
             assert instance.wait_for_epoch(1, deadline=time.monotonic() - 1)
-    assert source.uploads == [(1, True), (2, False), (99, True), (4, True)]
+    assert [upload for item in source.created_sources for upload in item.uploads] == [
+        (1, True), (2, False), (99, True), (4, True),
+    ]
+    assert source.uploads == [(1, True), (2, False)]
+    assert source.created_sources[1].released == 1
     assert instance.wait_for_epoch(2, deadline=time.monotonic() - 1)
     assert not instance.wait_for_epoch(1, deadline=time.monotonic() + 1)
+
+
+def test_retired_epochs_wait_for_scene_and_showing_references(consumer):
+    instance, reader, first, _events, _run = consumer
+    reader.frames.append(_frame(1, 1))
+    assert instance.pump_once()
+    reader.frames.append(_frame(2, 2))
+    assert instance.pump_once()
+    second = first.created_sources[1]
+    assert instance.source is second.source
+    assert instance.source_for_epoch(1) is None
+    assert instance.source_for_epoch(2) is second.source
+    instance.collect_unused_sources((first.source,))
+    assert first.released == second.released == 0
+    first.source.showing = True
+    instance.collect_unused_sources(())
+    assert first.released == 0  # transition retained a scene from an earlier hydration
+    first.source.showing = False
+    instance.collect_unused_sources(())
+    assert first.released == 1 and second.released == 0
+    instance.collect_unused_sources(())
+    instance.stop()
+    assert first.released == second.released == 1
+    assert instance.source_for_epoch(2) is None
+
+
+def test_epoch_allocation_failure_preserves_current_picture_and_can_retry(consumer):
+    instance, reader, first, _events, _run = consumer
+    reader.frames.append(_frame(1, 1))
+    assert instance.pump_once()
+    factory = instance._frame_source_factory
+    instance._frame_source_factory = lambda *_: None
+    reader.frames.append(_frame(2, 2))
+    assert not instance.pump_once()
+    assert instance.source is first.source
+    assert instance.source_for_epoch(1) is first.source
+    assert first.uploads == [(1, True)] and first.released == 0
+    instance._frame_source_factory = factory
+    reader.frames.append(_frame(2, 2))
+    assert instance.pump_once()
+    assert instance.source_for_epoch(2) is first.created_sources[1].source
+
+
+def test_same_epoch_stream_reuses_source_and_superseded_epochs_are_collected(consumer):
+    instance, reader, first, _events, _run = consumer
+    for epoch in range(1, 30):
+        reader.frames.extend((_frame(1, epoch), _frame(2, epoch)))
+        assert instance.pump_once() and instance.pump_once()
+        instance.collect_unused_sources(())
+        assert len(instance._sources) == 1
+    assert len(first.created_sources) == 29
+    assert all(source.uploads == [(1, True), (2, False)] for source in first.created_sources)
+    assert sum(source.released for source in first.created_sources) == 28

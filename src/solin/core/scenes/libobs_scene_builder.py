@@ -7,7 +7,9 @@ their geometry, and routes the active program onto a global output channel.
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from dataclasses import dataclass
 from threading import RLock
 from urllib.parse import quote, urlsplit, urlunsplit
 from typing import Any, Protocol
@@ -40,6 +42,17 @@ class _SceneTransition(Protocol):
     def start(self, destination: object, duration_ms: int) -> bool: ...
 
     def clear(self) -> None: ...
+
+
+@dataclass(frozen=True)
+class PreparedContentPresentation:
+    scenes: dict[str, Any]
+    commit: Callable[[], None]
+    changes_graph: bool = True
+
+    def scene_source(self, scene_id: str) -> Any | None:
+        scene = self.scenes.get(scene_id)
+        return scene.as_source() if scene is not None else None
 
 
 def _parse_color(hex_color: str) -> int:
@@ -94,6 +107,9 @@ class LibobsSceneGraph:
         # Item records keyed by (scene_id, layer_id), so a layer's geometry can be
         # updated live (obs_sceneitem transform) without rebuilding the graph.
         self._layer_items: dict[tuple[str, str], Any] = {}
+        self._scene_layers: dict[str, list[dict[str, Any]]] = {}
+        self._retired_presentations: list[tuple[dict[str, Any], tuple[Any, ...]]] = []
+        self._content_generation = 0
         # source id -> {"username", "password"}; never persisted, see hydrate().
         self._source_credentials: dict[str, Any] = {}
         # libobs crops in source pixels; the document crops in source fractions.
@@ -109,12 +125,49 @@ class LibobsSceneGraph:
         self._transitions = LibobsTransitionPool(runtime, "solin-transition")
         self._transition_kind: str | None = None
         self._active_scene_id: str | None = None
+        self._active_scene_source: Any = None
         self._pending: dict[str, tuple[str, str, int, str]] = {}
         self._token_seq = 0
 
     @property
     def scene_ids(self) -> tuple[str, ...]:
         return tuple(self._scenes)
+
+    @property
+    def content_source(self) -> Any | None:
+        """The committed presentation, independent of frames awaiting a Take."""
+        return self._content_source
+
+    @property
+    def content_sources(self) -> tuple[Any, ...]:
+        """Borrowed content references, including partially committed replacements."""
+        return tuple(
+            record["content_source"] for record in self._content_items
+            if record["content_source"] is not None
+        ) + ((self._content_source,) if self._content_source is not None else ()) + tuple(
+            source for _scenes, sources in self._retired_presentations for source in sources
+        )
+
+    @property
+    def active_scene_source(self) -> Any:
+        return self._active_scene_source
+
+    def collect_retired_scenes(self, borrowed_sources: tuple[Any, ...]) -> None:
+        """Retain origins and borrowed previews until their native users retire."""
+        def same_source(left, right):
+            return getattr(left, "_ptr", left) == getattr(right, "_ptr", right)
+
+        for scenes, sources in tuple(self._retired_presentations):
+            views = [scene.as_source() for scene in scenes.values()]
+            if any(
+                source.showing or any(same_source(source, borrowed) for borrowed in borrowed_sources)
+                for source in views
+            ):
+                continue
+            for scene_id, scene in tuple(scenes.items()):
+                scene.release()
+                del scenes[scene_id]
+            self._retired_presentations.remove((scenes, sources))
 
     def scene_source(self, scene_id: str) -> Any | None:
         """Borrowed source of a built scene (for off-screen preview readback)."""
@@ -168,7 +221,9 @@ class LibobsSceneGraph:
         # any target — including a forward reference — in pass 2.
         for scene_record in scene_records:
             scene_id = scene_record["id"]
-            self._scenes[scene_id] = ob.Scene.create(f"solin-scene-{scene_id}")
+            # Compositions belong to this graph, not libobs' public canvas.
+            # Public canvas scenes retain an extra native reference in OBS 32.
+            self._scenes[scene_id] = ob.Scene.create_private(f"solin-scene-{scene_id}")
         # Pass 2: populate each scene's layers.
         for scene_record in scene_records:
             scene_id = scene_record["id"]
@@ -205,11 +260,22 @@ class LibobsSceneGraph:
         item = scene.add(source)
         self._apply_item_geometry(item, layer, canvas, ob)
         record = {
+            "scene_id": scene_id,
             "scene": scene,
             "item": item,
             "layer": layer,
             "placeholder": placeholder,
+            "content_source": content_source if is_content else None,
+            "is_content": is_content,
+            "referenced_scene_id": (
+                str((sources_by_id[layer["source_id"]].get("configuration") or {}).get(
+                    "target_scene_id", "",
+                ))
+                if (sources_by_id.get(layer.get("source_id")) or {}).get("type") == "scene_reference"
+                else ""
+            ),
         }
+        self._scene_layers.setdefault(scene_id, []).append(record)
         layer_id = str(layer.get("id") or "")
         if layer_id:
             self._layer_items[(scene_id, layer_id)] = record
@@ -483,61 +549,96 @@ class LibobsSceneGraph:
              parsed.fragment)
         )
 
-    def set_content_source(self, new_source: Any | None) -> None:
-        """Retarget the content-slot items to ``new_source`` without re-hydrating.
+    @contextmanager
+    def content_presentation(self, new_source: Any) -> Iterator[PreparedContentPresentation]:
+        """Prepare new scene instances without mutating any transition origin.
 
-        Used to swap between the BGRA frame source and a libobs-decoded media
-        source live. Each content item is re-created with the new source at its
-        original z-order and geometry; an owned placeholder (used when there was
-        no content) is released once replaced.
+        Sources and cameras are shared; only composition instances change. Clone
+        content scenes and their ancestors so nested scenes also preserve pixels.
+        The accepted destination routes to a staged scene before publishing the
+        new graph. Cancellation releases the candidates, leaving live routes intact.
         """
         if new_source is self._content_source:
+            yield PreparedContentPresentation(self._scenes, lambda: None, changes_graph=False)
             return
-        self._content_source = new_source
-        ob = self._runtime.ob
-        canvas = self._runtime.video
-        for record in self._content_items:
-            scene = record["scene"]
-            old_item = record["item"]
-            layer = record["layer"]
-            old_placeholder = record["placeholder"]
-            try:
-                order = int(old_item.order_position)
-            except Exception:  # noqa: BLE001 - libobs boundary
-                order = None
-            if new_source is not None:
-                source = new_source
-                new_placeholder = None
-            else:  # reverting to "no content" — stand in with a placeholder
-                source = self._create_color(ob, layer, canvas,
-                                            _PLACEHOLDER_COLOR)
-                new_placeholder = source
-            new_item = scene.add(source)  # added on top; restore its z-order below
-            self._apply_item_geometry(new_item, layer, canvas, ob)
-            if order is not None:
-                try:
-                    new_item.order_position = order
-                except Exception:  # noqa: BLE001 - libobs boundary
-                    log.debug("content item order restore errored", exc_info=True)
-            with self._crop_lock:
-                self._cropped_items.pop(id(old_item), None)
-            try:
-                old_item.remove()
-            except Exception:  # noqa: BLE001 - libobs boundary
-                log.debug("content item remove errored", exc_info=True)
-            record["item"] = new_item
-            record["placeholder"] = new_placeholder
-            if old_placeholder is not None:
-                try:
-                    old_placeholder.release()
-                except Exception:  # noqa: BLE001 - libobs boundary
-                    log.debug("content placeholder release errored", exc_info=True)
-                try:
-                    self._sources.remove(old_placeholder)
-                except ValueError:
-                    pass
-            if new_placeholder is not None:
-                self._sources.append(new_placeholder)
+        affected = {record["scene_id"] for record in self._content_items}
+        while True:
+            ancestors = {
+                scene_id for scene_id, records in self._scene_layers.items()
+                if any(record["referenced_scene_id"] in affected for record in records)
+            }
+            expanded = affected | ancestors
+            if expanded == affected:
+                break
+            affected = expanded
+        candidates: dict[str, Any] = {}
+        candidate_records: dict[str, list[dict[str, Any]]] = {}
+        committed = False
+        self._content_generation += 1
+        try:
+            for scene_id in self._scenes:
+                if scene_id not in affected:
+                    continue
+                candidates[scene_id] = self._runtime.ob.Scene.create_private(
+                    f"solin-content-{self._content_generation}-{scene_id}",
+                )
+            for scene_id, scene in candidates.items():
+                records = candidate_records.setdefault(scene_id, [])
+                for previous in self._scene_layers.get(scene_id, []):
+                    target = previous["referenced_scene_id"]
+                    source = (
+                        new_source if previous["is_content"] else
+                        candidates[target].as_source() if target in candidates else
+                        previous["item"].source
+                    )
+                    item = scene.add(source)
+                    record = dict(previous, scene=scene, item=item)
+                    records.append(record)
+                    if previous["is_content"]:
+                        record.update(content_source=new_source, placeholder=None)
+                    self._apply_item_geometry(
+                        item, previous["layer"], self._runtime.video, self._runtime.ob,
+                    )
+
+            def commit():
+                nonlocal committed
+                if committed:
+                    return
+                with self._crop_lock:
+                    retired = {scene_id: self._scenes[scene_id] for scene_id in candidates}
+                    retired_sources = tuple(
+                        record["content_source"] for scene_id in candidates
+                        for record in self._scene_layers.get(scene_id, [])
+                        if record["content_source"] is not None
+                    )
+                    self._retired_presentations.append((retired, retired_sources))
+                    for scene_id in candidates:
+                        records = self._scene_layers.get(scene_id, [])
+                        for record in records:
+                            self._cropped_items.pop(id(record["item"]), None)
+                            if record["is_content"]:
+                                self._content_items.remove(record)
+                        for record in candidate_records[scene_id]:
+                            layer_id = str(record["layer"].get("id") or "")
+                            if layer_id:
+                                self._layer_items[(scene_id, layer_id)] = record
+                            if record["is_content"]:
+                                self._content_items.append(record)
+                        self._scene_layers[scene_id] = candidate_records[scene_id]
+                    self._scenes.update(candidates)
+                    self._content_source = new_source
+                    committed = True
+
+            yield PreparedContentPresentation({**self._scenes, **candidates}, commit)
+        finally:
+            if not committed:
+                with self._crop_lock:
+                    for records in candidate_records.values():
+                        for record in records:
+                            self._cropped_items.pop(id(record["item"]), None)
+                for scene in candidates.values():
+                    scene.release()
+
 
     def _create_color(self, ob: Any, layer: dict, canvas: Any, color: int) -> Any:
         rect = layer.get("rect") or {}
@@ -559,7 +660,8 @@ class LibobsSceneGraph:
         transition = self._transitions.prepared(FALLBACK_TRANSITION_KIND)
         self._transition = transition
         self._transition_kind = FALLBACK_TRANSITION_KIND
-        transition.set_source(scene.as_source())
+        self._active_scene_source = scene.as_source()
+        transition.set_source(self._active_scene_source)
         self._active_scene_id = program_scene_id
         self._runtime.set_channel_source(self._program_channel, self._transition)
 
@@ -597,7 +699,11 @@ class LibobsSceneGraph:
         pending = self._pending.get(token)
         return pending[3] if pending is not None else None
 
-    def take_projection(self, token: str, route: Any) -> bool:
+    def pending_scene(self, token: str) -> str | None:
+        pending = self._pending.get(token)
+        return pending[0] if pending is not None else None
+
+    def take_projection(self, token: str, route: Any, *, scene_source: Any = None) -> bool:
         """Execute a prepared switch on the projection output's own transition."""
         pending = self._pending.pop(token, None)
         if pending is None or route is None:
@@ -606,9 +712,12 @@ class LibobsSceneGraph:
         scene = self._scenes.get(scene_id)
         if scene is None:
             return False
-        return bool(route.start(scene_id, scene.as_source(), model_kind, duration_ms))
+        return bool(route.start(
+            scene_id, scene_source if scene_source is not None else scene.as_source(),
+            model_kind, duration_ms,
+        ))
 
-    def take(self, token: str) -> bool:
+    def take(self, token: str, *, scene_source: Any = None) -> bool:
         """Execute a prepared switch, animating the program transition."""
         pending = self._pending.pop(token, None)
         if pending is None:
@@ -619,8 +728,14 @@ class LibobsSceneGraph:
             return False
         if model_kind != self._transition_kind:
             self._swap_transition(model_kind)
-        self._transition.start(scene.as_source(), duration_ms)
+        source = scene_source if scene_source is not None else scene.as_source()
+        if not self._transition.start(source, duration_ms):
+            if getattr(source, "_ptr", source) != getattr(
+                self._active_scene_source, "_ptr", self._active_scene_source,
+            ):
+                return False
         self._active_scene_id = scene_id
+        self._active_scene_source = source
         return True
 
     def discard(self, token: str) -> bool:
@@ -636,9 +751,8 @@ class LibobsSceneGraph:
     def _swap_transition(self, model_kind: str) -> None:
         # Carry the live scene into the prepared transition before routing it.
         new_transition = self._transitions.prepared(model_kind)
-        active = self._scenes.get(self._active_scene_id) if self._active_scene_id else None
-        if active is not None:
-            new_transition.set_source(active.as_source())
+        if self._active_scene_source is not None:
+            new_transition.set_source(self._active_scene_source)
         old, self._transition = self._transition, new_transition
         self._transition_kind = model_kind
         if self._program_channel is not None:
@@ -683,9 +797,11 @@ class LibobsSceneGraph:
         self._content_source = None
         self._yeartext_sources = []
         self._layer_items = {}
+        self._scene_layers = {}
         self._transition = None
         self._transition_kind = None
         self._active_scene_id = None
+        self._active_scene_source = None
         for source in self._sources:
             try:
                 source.release()
@@ -696,6 +812,13 @@ class LibobsSceneGraph:
                 scene.release()
             except Exception:  # noqa: BLE001 - libobs boundary
                 log.debug("scene release errored", exc_info=True)
+        for scenes, _sources in self._retired_presentations:
+            for scene in scenes.values():
+                try:
+                    scene.release()
+                except Exception:  # noqa: BLE001 - libobs boundary
+                    log.debug("retired scene release errored", exc_info=True)
+        self._retired_presentations.clear()
         self._sources.clear()
         self._scenes.clear()
 

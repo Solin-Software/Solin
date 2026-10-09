@@ -17,6 +17,9 @@ from __future__ import annotations
 import logging
 import os
 import threading
+import time
+from dataclasses import dataclass
+from enum import Enum, auto
 from typing import Any
 
 from solin.core.scenes.audio_tempo import (
@@ -99,12 +102,29 @@ def _is_seekable_remote(path: str) -> bool:
     return path.startswith(_SEEKABLE_REMOTE_SCHEMES)
 
 
+class _StartupPhase(Enum):
+    DECODING = auto()
+    ACKNOWLEDGING = auto()
+
+
+@dataclass
+class _StartupTransport:
+    state: int
+    phase: _StartupPhase = _StartupPhase.DECODING
+    require_video: bool = False
+
+
 class LibobsMediaSource:
     """An ``ffmpeg_source`` wrapper with Qt-free transport + state."""
 
     def __init__(self, runtime: Any) -> None:
         self._runtime = runtime
         self._source: Any = None
+        self._video_readiness: Any = None
+        self._startup: _StartupTransport | None = None
+        # The last explicit transport target survives startup acknowledgement.
+        self._requested_seek_ms = 0
+        self._transport_lock = threading.RLock()
         self._path = ""
         self._local = True
         # True while this source holds an activate ref (see _set_active).
@@ -132,6 +152,64 @@ class LibobsMediaSource:
     @property
     def path(self) -> str:
         return self._path
+
+    def wait_for_video_frame(self, *, deadline: float) -> bool:
+        """Wait for a native video texture, bounded by IPC expiry.
+
+        ffmpeg transport state can be PLAYING before any frame exists. For an
+        asynchronous source libobs can expose dimensions before uploading its
+        texture. Prime a native frame before accepting the first visual Take.
+        """
+        source = self._source
+        self.require_video_frame()
+        wake = threading.Event()
+        while source is not None and source is self._source:
+            self._apply_startup_transport()
+            state = source.media_state
+            if state in (STATE_ERROR, STATE_ENDED) or (
+                state == STATE_STOPPED and self._startup is None
+            ):
+                return False
+            if self.video_frame_ready:
+                return True
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return False
+            wake.wait(min(1 / 120, remaining))
+        return False
+
+    @property
+    def video_frame_ready(self) -> bool:
+        """Whether visual startup has completed, without waiting on the decoder."""
+        with self._transport_lock:
+            return (
+                self._source is not None and self._video_readiness is not None
+                and self._video_readiness.ready and self._startup is None
+                and self._source.media_state in (STATE_PLAYING, STATE_PAUSED)
+            )
+
+    def require_video_frame(self) -> None:
+        """Arm nonblocking visual preparation, including an audio-first pause."""
+        with self._transport_lock:
+            source, watch = self._source, self._video_readiness
+            if source is None or watch is None or watch.ready:
+                return
+            if source.media_state in (STATE_ERROR, STATE_ENDED) and not watch.updating:
+                return
+            intent = self._startup
+            if intent is None:
+                if source.media_state != STATE_PAUSED:
+                    return
+                intent = self._startup = _StartupTransport(STATE_PAUSED)
+            if intent.state == STATE_STOPPED:
+                return
+            intent.require_video = True
+            if intent.phase is _StartupPhase.ACKNOWLEDGING or source.media_state == STATE_PAUSED:
+                # Resume after an audio-first pause, including one still in the
+                # native action queue. Keep the requested transport state muted.
+                intent.phase = _StartupPhase.DECODING
+                self._apply_source_volume()
+                source.media_play_pause(False)
 
     def open(
         self,
@@ -185,13 +263,24 @@ class LibobsMediaSource:
         if speed_percent and speed_percent != 100:
             settings["speed_percent"] = int(speed_percent)
         try:
-            source = self._runtime.ob.Source.create("ffmpeg_source", "solin-content-media", settings)
+            initial_settings = dict(settings)
+            initial_settings["local_file" if local else "input"] = ""
+            source = self._runtime.ob.Source.create(
+                "ffmpeg_source", "solin-content-media", initial_settings,
+            )
         except Exception:  # noqa: BLE001 - source creation boundary
             log.warning("Could not create ffmpeg_source for %r", path, exc_info=True)
             return False
         if source is None:
             return False
         self._source = source
+        self._startup = _StartupTransport(STATE_PLAYING if autoplay else STATE_PAUSED)
+        try:
+            self._video_readiness = self._runtime.watch_source_video(source)
+        except Exception:  # noqa: BLE001 - release a candidate whose preparation could not start
+            self.close()
+            log.warning("Could not open ffmpeg_source input for %r", path, exc_info=True)
+            return False
         self._path = path
         self._local = local
         self._tempo_pending = False
@@ -210,9 +299,53 @@ class LibobsMediaSource:
         except Exception:  # noqa: BLE001 - monitoring is best-effort
             log.warning("Could not set media source monitoring", exc_info=True)
         self._set_active(source, True)
-        source.media_play_pause(not autoplay)
+        try:
+            # Configure observation, monitoring and mute before the deferred
+            # update can start the decoder on the OBS video thread.
+            self._video_readiness.update(settings)
+        except Exception:  # noqa: BLE001 - release a candidate whose input could not open
+            self.close()
+            log.warning("Could not open ffmpeg_source input for %r", path, exc_info=True)
+            return False
         self._reconcile_tempo_audio(0)
         return True
+
+    def _apply_startup_transport(self) -> None:
+        """Apply operator intent after decoder creation and native transport ack.
+
+        A visual wait requires an uploaded native frame. Other startup polling
+        can use position advancement, allowing audio-only sources to pause.
+        Native transport acknowledgement does not acknowledge seek completion.
+        """
+        with self._transport_lock:
+            source, intent, watch = self._source, self._startup, self._video_readiness
+            if source is None or intent is None or watch is None or watch.updating:
+                return
+            state = source.media_state
+            if state in (STATE_ERROR, STATE_ENDED):
+                self._startup = None
+                self._apply_source_volume()
+                return
+            if intent.phase is _StartupPhase.ACKNOWLEDGING:
+                if state == intent.state:
+                    self._startup = None
+                    self._apply_source_volume()
+                return
+            if not watch.ready and (intent.require_video or self.position_ms <= 0):
+                return
+            if intent.state == STATE_PLAYING:
+                if self._requested_seek_ms > 0:
+                    source.media_time = self._requested_seek_ms
+                self._startup = None
+                self._apply_source_volume()
+                return
+            if intent.state == STATE_STOPPED:
+                source.media_stop()
+                watch.invalidate()
+            else:
+                source.media_play_pause(True)
+                source.media_time = self._requested_seek_ms
+            intent.phase = _StartupPhase.ACKNOWLEDGING
 
     def _set_active(self, source: Any, active: bool) -> None:
         """Hold an activate ref while the media is open, so it can be heard.
@@ -269,19 +402,31 @@ class LibobsMediaSource:
         an async source, so obs_source_update only marks the source for a deferred
         update and the media object is still the old one.
         """
+        with self._transport_lock:
+            self._set_speed(speed_percent)
+
+    def _set_speed(self, speed_percent: int) -> None:
         speed = max(1, int(speed_percent))
         source = self._source
         if source is None or speed == self._speed_percent:
             return
-        self._resume_ms = self.position_ms
-        self._resume_paused = self.state == STATE_PAUSED
-        self._speed_percent = speed
+        self._apply_startup_transport()
+        resume_ms = self.position_ms
+        resume_paused = self.state == STATE_PAUSED
         try:
-            source.update({"speed_percent": speed})
+            self._video_readiness.update({"speed_percent": speed})
         except Exception:  # noqa: BLE001 - libobs boundary
-            self._resume_ms = 0
             log.debug("could not set media speed", exc_info=True)
             return
+        self._resume_ms = resume_ms
+        self._resume_paused = resume_paused
+        if self._startup is not None:
+            self._startup = _StartupTransport(
+                self._startup.state,
+                require_video=self._startup.require_video,
+            )
+            self._resume_ms = 0
+        self._speed_percent = speed
         # The stretch is a second decode with its own clock, so it is started
         # only once the rebuilt decoder has taken the position back — otherwise the
         # audio would begin while the video is still winding back to meet it.
@@ -401,7 +546,12 @@ class LibobsMediaSource:
         source = self._source
         if source is None:
             return
-        carried_elsewhere = self._tempo_audio_running or self._tempo_pending
+        carried_elsewhere = (
+            self._tempo_audio_running or self._tempo_pending
+            or (self._startup is not None and (
+                self._startup.state != STATE_PLAYING or self._requested_seek_ms > 0
+            ))
+        )
         percent = 0 if carried_elsewhere else self._volume_percent
         try:
             source.volume = max(0.0, int(percent) / 100.0)
@@ -415,7 +565,8 @@ class LibobsMediaSource:
         because the decoder is rebuilt on a later tick — a seek issued here and now
         would be applied to the media object about to be destroyed.
         """
-        if self._source is None:
+        self._apply_startup_transport()
+        if self._source is None or self._startup is not None:
             return
         if self._resume_ms <= 0 and not self._tempo_pending:
             return
@@ -478,6 +629,10 @@ class LibobsMediaSource:
 
     def play(self) -> None:
         resuming = self.state == STATE_PAUSED
+        with self._transport_lock:
+            if self._startup is not None:
+                self._startup.state = STATE_PLAYING
+            self._apply_source_volume()
         at = self.position_ms
         if self._source is not None:
             self._source.media_play_pause(False)
@@ -490,12 +645,28 @@ class LibobsMediaSource:
             self._tempo_audio.set_paused(False)
 
     def pause(self) -> None:
+        with self._transport_lock:
+            if self._source is not None and self._startup is not None:
+                self._startup.state = STATE_PAUSED
+                self._apply_source_volume()
+                return
         if self._source is not None:
             self._source.media_play_pause(True)
         if self._tempo_audio_running:
             self._tempo_audio.set_paused(True)
 
+    def _invalidate_video_readiness(self) -> None:
+        if self._video_readiness is not None:
+            self._video_readiness.invalidate()
+
     def stop(self) -> None:
+        with self._transport_lock:
+            self._requested_seek_ms = 0
+            if self._startup is not None:
+                self._startup = _StartupTransport(STATE_STOPPED)
+                self._apply_source_volume()
+                return
+        self._invalidate_video_readiness()
         if self._source is not None:
             try:
                 self._source.media_stop()
@@ -503,6 +674,12 @@ class LibobsMediaSource:
                 log.debug("media_stop errored", exc_info=True)
 
     def restart(self) -> None:
+        with self._transport_lock:
+            self._requested_seek_ms = 0
+            if self._startup is not None:
+                self._startup = _StartupTransport(STATE_PLAYING)
+            self._apply_source_volume()
+        self._invalidate_video_readiness()
         if self._source is not None:
             self._source.media_restart()
 
@@ -510,6 +687,14 @@ class LibobsMediaSource:
         if self._source is None:
             return
         target = max(0, int(milliseconds))
+        if not self._local and not _is_seekable_remote(self._path):
+            return
+        with self._transport_lock:
+            self._requested_seek_ms = target
+            if self._startup is not None:
+                self._startup.phase = _StartupPhase.DECODING
+                self._apply_source_volume()
+                return
         self._source.media_time = target
         if self._tempo_audio_running:
             # The companion decodes its own timeline, so it has to be restarted at
@@ -529,7 +714,13 @@ class LibobsMediaSource:
         if self._source is None:
             return STATE_NONE
         try:
-            return int(self._source.media_state)
+            state = int(self._source.media_state)
+            if (
+                self._startup is not None
+                and state not in (STATE_ERROR, STATE_ENDED)
+            ):
+                return self._startup.state
+            return state
         except Exception:  # noqa: BLE001 - libobs boundary
             return STATE_ERROR
 
@@ -541,8 +732,46 @@ class LibobsMediaSource:
         except Exception:  # noqa: BLE001 - libobs boundary
             return 0
 
-    def close(self) -> None:
+    def detach_presentation(self) -> Any | None:
+        """Unload transport while leaving its silent last picture drawable.
+
+        The caller owns the returned source and must release it after the scene
+        outputs stop showing it, or when ready content replaces it. Keeping the
+        source for a transition must not keep its decoder or input open.
+        """
+        source = self._source
+        if source is not None:
+            try:
+                source.volume = 0.0
+                source.media_play_pause(True)
+            except Exception:  # noqa: BLE001 - do not orphan a failed native source
+                self.close()
+                raise
+            try:
+                # ffmpeg_source unloads the decoder when its input changes;
+                # an empty input leaves the native video texture intact. Disable
+                # end clearing before teardown callbacks and leave an empty local
+                # input so a retired network source cannot schedule reconnection.
+                source.update({
+                    "is_local_file": True,
+                    "local_file": "",
+                    "input": "",
+                    "clear_on_media_end": False,
+                })
+            except Exception:  # noqa: BLE001 - borrowed scenes still own the picture
+                log.warning("Could not unload retired media input", exc_info=True)
+        return self._detach_source()
+
+    def _detach_source(self) -> Any | None:
+        readiness = self._video_readiness
+        if readiness is not None:
+            # Retain both owners if native unregistration fails. close() keeps
+            # failed handles alive so an explicit cleanup retry is safe.
+            readiness.close()
+        self._video_readiness = None
         source, self._source = self._source, None
+        self._startup = None
+        self._requested_seek_ms = 0
         self._path = ""
         self._local = True
         self._speed_percent = 100
@@ -554,9 +783,14 @@ class LibobsMediaSource:
             self._tempo_audio.stop()
         self._tempo_audio_running = False
         self._tempo_pending = False
+        if source is not None:
+            self._set_active(source, False)
+        return source
+
+    def close(self) -> None:
+        source = self._detach_source()
         if source is None:
             return
-        self._set_active(source, False)  # symmetrical: never leak an activate ref
         try:
             source.media_stop()
         except Exception:  # noqa: BLE001 - libobs boundary
