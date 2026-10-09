@@ -42,10 +42,16 @@ from solin.core.ingest.sync.activation import (
 )
 from solin.core.ingest.sync.tree import flatten_nodes, rebuild_nodes
 from solin.core.ingest.sync.discovery import (
-    AUXILIARY, RESOURCE, SUPPRESSED, reconcile_discoveries, record_discovery_edits,
+    AUXILIARY, CONTENT, DISCOVERED, RESOURCE, SUPPRESSED, SUPPRESSED_CONTENTS,
+    ResourceSuppressions, reconcile_discoveries, record_discovery_edits,
 )
-from solin.core.ingest.sync.resources import portable_resource_key, recover_file, retire_file, resource_identity_key
-from solin.core.ingest.watched_folder_files import WatchedFolderCopyRequest, WatchedFolderFileStore
+from solin.core.ingest.sync.resources import (
+    archived_content_signatures, content_identity, content_signature, portable_resource_key,
+    recover_file, retire_file, resource_identity_key,
+)
+from solin.core.ingest.watched_folder_files import (
+    WatchedFolderCopyRequest, WatchedFolderCopyResult, WatchedFolderFileStore,
+)
 
 from .folder_matcher import match_meeting_folder
 from .tree_types import Node, clean_dict, clone_nodes, iter_nodes
@@ -312,6 +318,7 @@ class MeetingLinkedFolderSync:
         metadata = snapshot.entities.get(_MEETING_META, {})
         if not metadata:
             raise MeetingSyncPending("Activated meeting journal has not arrived yet")
+        snapshot = self._bind_resource_contents(folder, snapshot)
         record = self._record_from_snapshot(folder, identity, snapshot)
         record = replace(record, resource_error=self._reconcile_resource_files(folder, snapshot))
         self._remove_legacy_manifest(folder)
@@ -437,6 +444,7 @@ class MeetingLinkedFolderSync:
             resource_identity_key(str(node[SUPPRESSED])): str(node[SUPPRESSED])
             for node in projected.values() if node.get(SUPPRESSED)
         }
+        suppressions = ResourceSuppressions(snapshot.entities)
         error = ""
         # Suppression records are the durable cleanup queue. Retrying after a
         # restart never requires guessing from a missing filesystem entry.
@@ -447,11 +455,92 @@ class MeetingLinkedFolderSync:
                 if identity in active:
                     recover_file(folder, resource, document_id=snapshot.document_id)
                 else:
-                    retire_file(folder, resource, document_id=snapshot.document_id)
+                    versions = suppressions.versions(resource)
+                    if versions is None:
+                        # Legacy deletions must not claim today's replacement bytes.
+                        raise OSError("Deleted resource content is not yet known")
+                    retire_file(
+                        folder, resource, document_id=snapshot.document_id,
+                        expected_contents=versions,
+                    )
             except (OSError, ValueError) as exc:
                 error = str(exc)
                 log.warning("Meeting resource reconciliation pending: %s", resource, exc_info=True)
         return error
+
+    def _bind_resource_contents(
+        self, folder: Path, snapshot: ReplicaSnapshot,
+    ) -> ReplicaSnapshot:
+        """Persist observed active content and verified legacy deletion versions."""
+        updates: dict[str, dict] = {}
+        unbound = {
+            key for key, node in snapshot.entities.items()
+            if node.get(RESOURCE) and not node.get(AUXILIARY) and CONTENT not in node
+        }
+        projected = reconcile_discoveries(snapshot.entities) if unbound else {}
+        for key in unbound & projected.keys():
+            node = projected[key]
+            resource = str(node.get(RESOURCE) or "")
+            if (
+                not resource or node.get(AUXILIARY) or content_identity(node.get(CONTENT)) is not None
+                or resource.startswith(("http://", "https://"))
+            ):
+                continue
+            try:
+                path = Path(from_manifest_url(portable_resource_key(resource, folder), folder))
+                if path.is_file():
+                    updates[key] = {**snapshot.entities[key], CONTENT: content_signature(path)}
+            except (OSError, ValueError):
+                continue  # Missing media never changes the visible occurrence.
+        archives: dict[str, list[dict[str, str | int]]] = {}
+        legacy = {
+            key for key, node in snapshot.entities.items()
+            if node.get(SUPPRESSED) and SUPPRESSED_CONTENTS not in node
+        }
+        contexts = self._replica(folder).entity_creation_contexts(snapshot, legacy) if legacy else {}
+        for key, node in snapshot.entities.items():
+            resource = str(node.get(SUPPRESSED) or "")
+            if not resource or SUPPRESSED_CONTENTS in node or resource.startswith(("http://", "https://")):
+                continue
+            identity = resource_identity_key(resource)
+            try:
+                if identity not in archives:
+                    archives[identity] = archived_content_signatures(
+                        folder, resource, document_id=snapshot.document_id,
+                    )
+            except (OSError, ValueError):
+                continue  # Cleanup reports errors and retries when transport catches up.
+            signatures: set[tuple[int, str]] = set()
+            creation_views = contexts.get(key, [])
+            for before in creation_views:
+                occurrence_id = str(node.get("occurrence_id") or "")
+                occurrence = before.entities.get(occurrence_id, {})
+                signature = content_identity(occurrence.get(CONTENT))
+                if signature is None:
+                    records = before.entities.get(_MEETING_META, {})
+                    candidates = {
+                        content_identity(record.get("signature"))
+                        for field, record in records.items()
+                        if field.startswith("meeting_folder_imports:") and isinstance(record, dict)
+                        and record.get("kind") == "media" and occurrence_id in record.get("node_ids", [])
+                        and resource_identity_key(str(record.get("path") or "")) == identity
+                    }
+                    if len(candidates) == 1:
+                        signature = next(iter(candidates))
+                if signature is None:
+                    break
+                signatures.add(signature)
+            else:
+                if len(signatures) == 1 and len(archives[identity]) == 1:
+                    signature = next(iter(signatures))
+                    if content_identity(archives[identity][0]) == signature:
+                        updates[key] = {**node, SUPPRESSED_CONTENTS: archives[identity]}
+        if not updates:
+            return snapshot
+        try:
+            return self._replica(folder).commit(snapshot, {**snapshot.entities, **updates})
+        except JournalError as exc:
+            raise MeetingSyncError(str(exc)) from exc
 
     def _entities_from_block(
         self, block: dict[str, Any], baseline: ReplicaSnapshot | None = None,
@@ -600,6 +689,18 @@ class MeetingLinkedFolderSync:
                             node[RESOURCE] = portable_resource_key(url, folder)
                         elif not node.get(RESOURCE):
                             node[RESOURCE] = url.replace("\\", "/")
+                        previous = base.entities.get(str(node.get("id") or ""), {})
+                        if (
+                            content_identity(node.get(CONTENT)) is None
+                            and content_identity(previous.get(CONTENT)) is not None
+                            and resource_identity_key(str(previous.get(RESOURCE) or ""))
+                            == resource_identity_key(str(node.get(RESOURCE) or ""))
+                        ):
+                            node[CONTENT] = dict(previous[CONTENT])
+                        if not stage_only and content_identity(node.get(CONTENT)) is None:
+                            path = Path(from_manifest_url(node[RESOURCE], folder))
+                            if path.is_file():
+                                node[CONTENT] = content_signature(path)
                     except ValueError as exc:
                         raise MeetingSyncError(str(exc)) from exc
             desired = record_discovery_edits(base.entities, self._entities_from_block(block, base))
@@ -645,9 +746,9 @@ class MeetingLinkedFolderSync:
         return persist()
 
     def deactivate_tree(
-        self, folder: Path, identity: MeetingSyncIdentity,
+        self, folder: Path, identity: MeetingSyncIdentity, *, cleanup: bool = True,
     ) -> MeetingSyncDeactivation:
-        """Remove activation first, then clean derived shared state."""
+        """Retire activation, optionally deferring cleanup until local state is durable."""
 
         replica = self._replica(folder)
         activation = self._activation(folder, identity)
@@ -669,7 +770,7 @@ class MeetingLinkedFolderSync:
         elif replica.document_id is not None:
             replica.retire_binding()
 
-        return self.cleanup_inactive_tree(folder)
+        return self.cleanup_inactive_tree(folder) if cleanup else MeetingSyncDeactivation(folder)
 
     def cleanup_inactive_tree(self, folder: Path) -> MeetingSyncDeactivation:
         """Idempotently remove all meeting sync metadata after deactivation."""
@@ -692,6 +793,39 @@ class MeetingLinkedFolderSync:
         errors.extend(self._cleanup_inactive_tree(folder))
         self._verified_legacy.discard(folder)
         return MeetingSyncDeactivation(folder, tuple(errors))
+
+    def remove_media_file(
+        self,
+        folder: Path,
+        identity: MeetingSyncIdentity,
+        file_path: str,
+        *,
+        document_id: str | None,
+        file_store: WatchedFolderFileStore,
+    ) -> bool:
+        """Apply a removal in the current mode without touching a replacement document."""
+        activation = self._activation(folder, identity)
+        if activation is None:
+            return file_store.remove_file_inside(file_path, folder)
+        if activation.document_id != document_id:
+            raise MeetingSyncInactive("Media removal belongs to another meeting sync generation")
+        replica = self._replica(folder)
+        replica.require_document(activation.document_id)
+        snapshot = self._bind_resource_contents(folder, replica.read())
+        resource = portable_resource_key(file_path, folder)
+        projected = reconcile_discoveries(snapshot.entities)
+        if any(
+            resource_identity_key(str(node.get(RESOURCE) or "")) == resource_identity_key(resource)
+            and not node.get(AUXILIARY) for node in projected.values()
+        ):
+            return False
+        versions = ResourceSuppressions(snapshot.entities).versions(resource)
+        if versions is None:
+            return False
+        return retire_file(
+            folder, resource, document_id=document_id,
+            expected_contents=versions,
+        )
 
     @staticmethod
     def _ensure_inactive_cleanup(folder: Path) -> None:
@@ -722,13 +856,13 @@ class MeetingLinkedFolderSync:
         *,
         generated_roots: Iterable[str],
         cancellation: CancellationFlag | None = None,
-        created_paths_out: list[Path] | None = None,
+        created_files_out: list[WatchedFolderCopyResult] | None = None,
     ) -> tuple[list[Node], dict[str, str]]:
         copied: dict[tuple[str, str], Path] = {}
         materialized = clone_nodes(nodes)
         linked_files: dict[str, str] = {}
         roots = [Path(root) for root in generated_roots if root]
-        created_paths: list[Path] = []
+        created_files: list[WatchedFolderCopyResult] = []
 
         try:
             for node in iter_nodes(materialized):
@@ -763,17 +897,27 @@ class MeetingLinkedFolderSync:
                                 source_path,
                                 dest_dir,
                                 cancellation=cancellation,
-                                created_paths=created_paths,
+                                created_files=created_files,
                             )
                             copied[cache_key] = dest_path
                     owner[field] = str(dest_path)
                     if node_id and field != "thumbnail_local_path":
                         linked_files.setdefault(str(dest_path), node_id)
+                url = str(node.get("media_ref", {}).get("file_path") or node.get("resolved_url") or "")
+                if self._copyable_local_url(url) and Path(url).is_file():
+                    signature = content_signature(Path(url))
+                    if (
+                        node.get(DISCOVERED) and content_identity(node.get(CONTENT)) is not None
+                        and content_identity(node[CONTENT]) != content_identity(signature)
+                    ):
+                        raise MediaOperationCancelled("Meeting source changed during media preparation")
+                    node[CONTENT] = signature
+                    node[RESOURCE] = portable_resource_key(url, folder)
         except BaseException:  # noqa: BLE001 - materialization transaction rollback
-            self.rollback_materialized_files(folder, created_paths)
+            self.rollback_materialized_files(folder, created_files)
             raise
-        if created_paths_out is not None:
-            created_paths_out.extend(created_paths)
+        if created_files_out is not None:
+            created_files_out.extend(created_files)
         return materialized, linked_files
 
     def detach_cache_references(
@@ -821,10 +965,10 @@ class MeetingLinkedFolderSync:
                 node.pop("linked_folder_source", None)
         return detached
 
-    def rollback_materialized_files(self, folder: Path, paths: Iterable[str | Path]) -> None:
+    def rollback_materialized_files(self, folder: Path, files: Iterable[WatchedFolderCopyResult]) -> None:
         """Retain published bytes recoverably: another terminal may reference them."""
-        paths = tuple(paths)
-        if not paths:
+        files = tuple(files)
+        if not files:
             return
         try:
             snapshot = self._replica(folder).read()
@@ -836,12 +980,14 @@ class MeetingLinkedFolderSync:
             for entity in reconcile_discoveries(snapshot.entities).values()
             if entity.get(RESOURCE) and not entity.get(AUXILIARY)
         }
-        for value in reversed(paths):
-            path = Path(value)
+        for value in reversed(files):
+            path = value.destination
             try:
                 resource = portable_resource_key(str(path), folder)
-                if resource_identity_key(resource) not in active:
-                    retire_file(folder, resource, document_id=snapshot.document_id)
+                if value.content is not None and resource_identity_key(resource) not in active:
+                    retire_file(
+                        folder, resource, document_id=snapshot.document_id, expected_contents={value.content},
+                    )
             except (OSError, ValueError):
                 log.warning("Could not archive cancelled meeting copy %s", path, exc_info=True)
 
@@ -1159,7 +1305,7 @@ class MeetingLinkedFolderSync:
         dest_dir: Path,
         *,
         cancellation: CancellationFlag | None = None,
-        created_paths: list[Path] | None = None,
+        created_files: list[WatchedFolderCopyResult] | None = None,
     ) -> Path:
         dest_dir.mkdir(parents=True, exist_ok=True)
         try:
@@ -1170,6 +1316,8 @@ class MeetingLinkedFolderSync:
         except OSError as exc:
             raise MeetingSyncError(f"Could not copy '{source.name}' into linked folder.") from exc
         destination = dest_dir / result.destination.relative_to(dest_dir.resolve())
-        if not result.already_present and created_paths is not None:
-            created_paths.append(destination)
+        if not result.already_present and created_files is not None:
+            created_files.append(result)
+        if result.content is not None and content_identity(content_signature(destination)) != result.content:
+            raise MediaOperationCancelled("Meeting copied resource changed during media preparation")
         return destination

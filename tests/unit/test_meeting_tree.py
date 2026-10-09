@@ -2409,6 +2409,10 @@ class MeetingTreeControllerMeetingFolderImportTests(unittest.TestCase):
                 return True
 
         controller._watched_folder_file_store = WatchedFolderFileStore()
+        controller._tree_key = "mwb:2026-05-25:T:issue"
+        controller._sync_enabled = False
+        controller._sync_identity = None
+        controller._save = lambda: setattr(controller, "saved", True) or True
         controller._tree_session = SimpleNamespace(
             owner_id="meeting:test",
             remove_pending_node=lambda _item_id: False,
@@ -2748,6 +2752,8 @@ class MeetingTreeControllerMeetingFolderImportTests(unittest.TestCase):
         self.assertEqual(duplicate_events[0][0], "pending")
 
     def test_sync_commit_rejects_media_converging_to_existing_linked_file(self):
+        from solin.core.ingest.sync.journal import ReplicaSnapshot
+
         class ImmediateOperations:
             @staticmethod
             def submit(spec):
@@ -2778,8 +2784,10 @@ class MeetingTreeControllerMeetingFolderImportTests(unittest.TestCase):
             controller = SimpleNamespace(
                 _nodes=[existing],
                 _tree_key="mwb:2026-05-25:T:20260500",
+                _sync_enabled=True,
                 _sync_folder=str(folder),
                 _sync_service=MeetingLinkedFolderSync(lambda _pub_type: 2),
+                _sync_snapshot=ReplicaSnapshot(),
                 _linked_folder_files={str(linked): "existing"},
                 _generated_asset_roots=lambda: (),
                 _tree_session=SimpleNamespace(
@@ -2882,7 +2890,7 @@ class MeetingTreeControllerMeetingFolderImportTests(unittest.TestCase):
 
             controller._import_meeting_folder_source = fake_import
 
-            MeetingTreeController.inject_linked_folder_media(controller, str(root))
+            MeetingTreeController._request_meeting_folder_scan(controller, str(root))
 
             self.assertEqual(captured["source"]["path"], str(source))
             self.assertEqual(captured["list_id"], "section:lac")
@@ -2907,7 +2915,7 @@ class MeetingTreeControllerMeetingFolderImportTests(unittest.TestCase):
 
             self.assertIs(record, records["old-machine-key"])
 
-    def test_remove_linked_root_media_retains_discovery_suppression_record(self):
+    def test_remove_local_linked_root_media_clears_record_after_physical_removal(self):
         class FakeController:
             pass
 
@@ -2948,7 +2956,7 @@ class MeetingTreeControllerMeetingFolderImportTests(unittest.TestCase):
             self.assertFalse(source.exists())
             self.assertEqual(controller._nodes, [])
             self.assertEqual(controller._linked_folder_files, {})
-            self.assertEqual(controller._meeting_folder_imports["source-key"]["node_ids"], [])
+            self.assertEqual(controller._meeting_folder_imports, {})
             self.assertTrue(controller.saved)
 
     def test_remove_linked_derived_output_keeps_source_record(self):

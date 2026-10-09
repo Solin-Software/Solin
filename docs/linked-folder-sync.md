@@ -102,6 +102,24 @@ later cannot recreate an automatic occurrence. A deliberate new inclusion
 acknowledges previously observed suppression. Repeated explicit occurrences
 remain separate.
 
+Meeting media records its portable size and SHA256 alongside the resource path.
+A deletion suppresses that content version: different bytes copied to the same
+name can be imported automatically, while previously deleted versions remain
+blocked. Automatic meeting occurrences include the source content identity so
+a replacement does not reuse a deleted occurrence. Pending removal and import
+completion use the same content rule. This policy does not expire by time and
+does not change linked playlist suppression.
+
+Older meeting occurrences acquire their content identity when available media
+is read in the background. A path-only deletion can be narrowed only when its
+active document contains one complete, validated archived content version.
+That version must match the occurrence or direct-source processing signature
+in the causal view preceding its deletion. An archive from a cancelled copy
+cannot establish that deletion's content identity.
+Missing, incomplete, corrupt or ambiguous recovery evidence keeps that path
+suppressed and preserves any visible replacement until the deleted version is
+known. Binding is persisted in the journal and survives reopening.
+
 Content comparison shares only file size and SHA256. Hashes are cached against
 local filesystem revisions; inode, device, and timestamps are never shared as
 content identity. Windows additionally checks the file's change time because
@@ -113,9 +131,39 @@ scans belong on background workers.
 
 ## Missing files and recoverable removal
 
-An absent file means unavailable media, not permission to delete the occurrence
-or converted outputs. Its organization remains available while transport catches
-up.
+An absent file in a synchronized document means unavailable media, not permission
+to delete the occurrence or converted outputs. Its organization remains available
+while transport catches up.
+
+### Meeting folders with synchronization disabled
+
+Turning off meeting synchronization preserves visible files and the local meeting
+tree. The linked folder continues to accept new sources: midweek media appears in
+**Living as Christians**, and weekend media appears in **Public Talk**. These
+imports and their processing records are persisted locally; they do not activate
+or publish a shared meeting journal.
+
+A successful scan of an available meeting folder removes local manual occurrences
+whose direct source files disappeared. It preserves official meeting content and
+converted or extracted outputs when their original document disappears. An
+unavailable root, a missing meeting folder, or a failed scan preserves the tree.
+
+Removing a direct source through the UI accepts the local deletion before
+attempting physical removal. If removal fails, the unchanged source stays
+suppressed while the operation can be retried. Successful removal, or a later
+scan observing that direct source's absence, clears its local processing record;
+adding the same bytes again can therefore create a new local occurrence.
+
+Activation discovery precedes source scanning. Detachment of shared cache files
+occurs only when leaving active synchronization, and its result is accepted only
+if the local tree has not changed during copying. Ordinary inactive refreshes
+reconcile the current local tree instead of replacing it with an earlier copy.
+Shared cache cleanup waits for successful local snapshot persistence and pending
+insertions. Media prepared before deactivation finishes through local detachment;
+late removals use the current activation marker and cannot remove a replacement
+document's resources.
+
+### Shared removal and recovery
 
 Physical removal follows durable logical deletion. Retired resources are copied
 and flushed into
