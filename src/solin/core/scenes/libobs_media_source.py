@@ -576,10 +576,11 @@ class LibobsMediaSource:
             return 0
 
     def detach_presentation(self) -> Any | None:
-        """End transport ownership while leaving a silent, paused picture drawable.
+        """Unload transport while leaving its silent last picture drawable.
 
         The caller owns the returned source and must release it after the scene
-        outputs stop showing it, or when ready content replaces it.
+        outputs stop showing it, or when ready content replaces it. Keeping the
+        source for a transition must not keep its decoder or input open.
         """
         source = self._source
         if source is not None:
@@ -589,6 +590,19 @@ class LibobsMediaSource:
             except Exception:  # noqa: BLE001 - do not orphan a failed native source
                 self.close()
                 raise
+            try:
+                # ffmpeg_source unloads the decoder when its input changes;
+                # an empty input leaves the native video texture intact. Disable
+                # end clearing before teardown callbacks and leave an empty local
+                # input so a retired network source cannot schedule reconnection.
+                source.update({
+                    "is_local_file": True,
+                    "local_file": "",
+                    "input": "",
+                    "clear_on_media_end": False,
+                })
+            except Exception:  # noqa: BLE001 - borrowed scenes still own the picture
+                log.warning("Could not unload retired media input", exc_info=True)
         return self._detach_source()
 
     def _detach_source(self) -> Any | None:

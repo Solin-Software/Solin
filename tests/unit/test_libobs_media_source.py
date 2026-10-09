@@ -342,11 +342,12 @@ def test_the_activate_ref_is_taken_once_and_released_once(monkeypatch):
     assert [kind for kind, _ in recorder.calls] == ["inc", "dec"]
 
 
-def test_detach_presentation_relinquishes_transport_without_discarding_video(monkeypatch):
+@pytest.mark.parametrize("path", ["/clip.mp4", "https://cdn.example/clip.mp4"])
+def test_detach_presentation_unloads_transport_without_discarding_video(path, monkeypatch):
     recorder = _with_activation(monkeypatch)
     runtime = _Runtime()
     media = LibobsMediaSource(runtime)
-    media.open("/clip.mp4")
+    media.open(path)
     source = runtime.created[-1]
     tempo_stops = []
     media._tempo_audio.stop = lambda: tempo_stops.append(True)
@@ -354,6 +355,9 @@ def test_detach_presentation_relinquishes_transport_without_discarding_video(mon
     assert media.detach_presentation() is source
     assert source.volume == 0.0
     assert source.play_pause[-1] is True
+    assert source.settings["is_local_file"] is True
+    assert source.settings["local_file"] == source.settings["input"] == ""
+    assert source.settings["clear_on_media_end"] is False
     assert source.stops == source.released == 0
     assert media.source is None and media.path == ""
     assert tempo_stops == [True]
@@ -379,6 +383,24 @@ def test_failed_presentation_pause_closes_the_source_instead_of_orphaning_it(mon
         media.detach_presentation()
     assert media.source is None
     assert source.stops == source.released == 1
+
+
+def test_failed_input_unload_transfers_the_borrowed_picture_without_stopping_it(monkeypatch, caplog):
+    runtime = _Runtime()
+    media = LibobsMediaSource(runtime)
+    media.open("/clip.mp4")
+    source = runtime.created[-1]
+
+    def fail_update(_settings):
+        raise RuntimeError("update failed")
+
+    monkeypatch.setattr(source, "update", fail_update)
+    assert media.detach_presentation() is source
+    assert media.source is None
+    assert source.volume == 0.0 and source.play_pause[-1] is True
+    assert source.stops == source.released == 0
+    assert "Could not unload retired media input" in caplog.text
+    source.release()
 
 
 def test_a_wrapper_without_a_raw_pointer_does_not_break_playback(monkeypatch):

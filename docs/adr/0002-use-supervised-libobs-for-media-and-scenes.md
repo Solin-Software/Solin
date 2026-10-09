@@ -151,9 +151,12 @@ Changes to the media engine must preserve the following properties:
   paths when those paths change materially;
 - no silent fallback to a second playback engine when libobs is unavailable.
 
-Closing foreground transport silences audio immediately and retains its paused
-picture while native routes or borrowed previews retain it, including transition
-origins and thumbnails. The sidecar collects retired sources on its control
+Closing foreground transport silences audio immediately and removes its media
+input through the native source settings. This unloads the decoder and closes the
+file or network input while retaining the last native video texture for transition
+origins and borrowed previews, including thumbnails. Retired media uses an empty
+local input with end clearing disabled, so teardown cannot erase the picture or
+schedule network reconnection. The sidecar collects retired sources on its control
 heartbeat after their scene and showing references disappear; shutdown releases all
 remaining references. Closing media never restores cached pixels from an earlier
 application presentation.

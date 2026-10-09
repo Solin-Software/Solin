@@ -3019,7 +3019,7 @@ def test_native_content_take_failure_never_replaces_the_live_image(failure, monk
         engine.shutdown()
 
 
-def test_failed_video_replacement_keeps_the_committed_decoder_alive(monkeypatch):
+def test_failed_video_replacement_keeps_the_committed_picture_alive(monkeypatch):
     runtime = _CompositingRuntime()
     engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
     engine.handle(_request("hello"))

@@ -960,7 +960,7 @@ def test_video_auto_switch_reaches_program_without_app_decoded_frames(
 
 
 @pytest.mark.parametrize("autoplay", [True, False], ids=["playing", "paused"])
-def test_replacing_native_video_preserves_the_outgoing_decoder_during_dissolve(
+def test_replacing_native_video_preserves_the_outgoing_picture_during_dissolve(
     tmp_path: Path, autoplay: bool, record_property,
 ) -> None:
     paths = []
@@ -1049,11 +1049,17 @@ def test_replacing_native_video_preserves_the_outgoing_decoder_during_dissolve(
         program.close()
 
 
-def test_replaced_native_presentations_release_scenes_and_decoders(tmp_path: Path) -> None:
+@pytest.mark.parametrize("local", [True, False], ids=["local", "http"])
+@pytest.mark.parametrize("autoplay", [True, False], ids=["playing", "paused"])
+def test_retired_native_presentations_unload_inputs_and_release_scenes(
+    tmp_path: Path, local: bool, autoplay: bool,
+) -> None:
     """Observe native destruction, not just Python bookkeeping or noisy RSS."""
     path = tmp_path / "retirement.gif"
-    images = [Image.new("RGB", (160, 90), ("red", "blue")[index % 2]) for index in range(40)]
+    images = [Image.new("RGB", (160, 90), "red") for _ in range(40)]
     try:
+        for index, image in enumerate(images):
+            image.putpixel((0, 0), (0, 0, index * 6))  # retain distinct GIF frames
         images[0].save(path, save_all=True, append_images=images[1:], duration=100, loop=0)
     finally:
         for image in images:
@@ -1063,6 +1069,9 @@ def test_replaced_native_presentations_release_scenes_and_decoders(tmp_path: Pat
     script.write_text(textwrap.dedent('''
         import sys
         import time
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+        from pathlib import Path
+        from threading import Thread
         from pylibobs._ffi import ffi, get_lib
         from solin.core.media.obs_runtime import ObsRuntime
         from solin.core.media.obs_source_render import render_source_to_bgra
@@ -1077,6 +1086,48 @@ def test_replaced_native_presentations_release_scenes_and_decoders(tmp_path: Pat
         sequence = 0
         weak_refs = []
         buses = ("virtual_camera", "media_windows", "editor")
+        local = sys.argv[2] == "True"
+        autoplay = sys.argv[3] == "True"
+        server = None
+        server_thread = None
+        path = sys.argv[1]
+        if not local:
+            payload = Path(path).read_bytes()
+            class Handler(BaseHTTPRequestHandler):
+                protocol_version = "HTTP/1.1"
+
+                def do_GET(self):
+                    start, end = 0, len(payload) - 1
+                    byte_range = self.headers.get("Range")
+                    if byte_range:
+                        first, last = byte_range.removeprefix("bytes=").split("-", 1)
+                        start = int(first)
+                        if last:
+                            end = min(int(last), end)
+                    self.send_response(206 if byte_range else 200)
+                    self.send_header("Accept-Ranges", "bytes")
+                    self.send_header("Content-Type", "image/gif")
+                    self.send_header("Content-Length", str(end - start + 1))
+                    if byte_range:
+                        self.send_header("Content-Range", f"bytes {start}-{end}/{len(payload)}")
+                    self.end_headers()
+                    self.wfile.write(payload[start:end + 1])
+
+                def log_message(self, *_args):
+                    pass
+            server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+            server_thread = Thread(target=server.serve_forever, daemon=True)
+            server_thread.start()
+            path = f"http://127.0.0.1:{server.server_port}/{Path(path).name}"
+
+        def assert_picture(source):
+            frame = render_source_to_bgra(
+                source, 160, 90, canvas_width=160, canvas_height=90,
+            )
+            assert frame is not None, "Retired picture is no longer drawable"
+            data, stride = frame
+            pixel = data[45 * stride + 80 * 4:45 * stride + 80 * 4 + 4]
+            assert pixel[0] < 8 and pixel[1] < 8 and pixel[2] > 245 and pixel[3] == 255, pixel
 
         def send(kind, payload=None):
             global sequence
@@ -1103,8 +1154,8 @@ def test_replaced_native_presentations_release_scenes_and_decoders(tmp_path: Pat
             previous = []
             for epoch in range(1, 7):
                 send("open_media", {
-                    "path": sys.argv[1], "autoplay": True,
-                    "is_local_file": True, "content_media_epoch": epoch,
+                    "path": path, "autoplay": autoplay,
+                    "is_local_file": local, "content_media_epoch": epoch,
                 })
                 for bus in buses:
                     prepared = send("prepare_scene", {
@@ -1133,12 +1184,25 @@ def test_replaced_native_presentations_release_scenes_and_decoders(tmp_path: Pat
                     time.sleep(.02)
                     send("ping")
                 graph = engine._scene_graph
-                previous = [get_weak(engine._media_source.source._ptr)] + [
+                media = engine._media_source.source
+                assert media.media_duration > 0, "Input never became ready"
+                assert_picture(media)
+                previous = [get_weak(media._ptr)] + [
                     get_weak(graph._scenes["content"].as_source()._ptr)
                 ]
                 weak_refs.extend(previous)
                 assert not any(lib.obs_weak_source_expired(weak) for weak in previous)
                 send("control_media", {"action": "close"})
+                deadline = time.monotonic() + 4
+                while media.media_duration != 0:
+                    assert time.monotonic() < deadline, "Closed presentation still owns its decoder/input"
+                    time.sleep(.02)
+                # The same native source remains borrowed; only its input is gone.
+                assert graph.content_source is media
+                for _ in range(5):
+                    assert_picture(media)
+                    time.sleep(.02)
+                assert not lib.obs_weak_source_expired(previous[0])
                 for bus in buses:
                     prepared = send("prepare_scene", {
                         "bus_id": bus, "scene_id": "idle",
@@ -1148,15 +1212,21 @@ def test_replaced_native_presentations_release_scenes_and_decoders(tmp_path: Pat
                         "bus_id": bus,
                         "preparation_token": prepared.payload["preparation_token"],
                     })
+                assert media.media_duration == 0
+                assert_picture(media)
             engine.shutdown()
             assert all(lib.obs_weak_source_expired(weak) for weak in weak_refs)
         finally:
             for weak in weak_refs:
                 lib.obs_weak_source_release(weak)
             engine.shutdown()
+            if server is not None:
+                server.shutdown()
+                server.server_close()
+                server_thread.join(timeout=2)
     '''), encoding="utf-8")
     result = subprocess.run(
-        [sys.executable, str(script), str(path)], capture_output=True, text=True,
+        [sys.executable, str(script), str(path), str(local), str(autoplay)], capture_output=True, text=True,
         errors="replace", timeout=45,
     )
     assert result.returncode == 0, result.stdout + result.stderr
