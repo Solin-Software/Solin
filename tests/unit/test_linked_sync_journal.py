@@ -200,6 +200,44 @@ def test_fresh_identity_can_be_added_after_delete(transport):
     assert result.entities == {"new-image": {"resource": "picture.jpg"}}
 
 
+def test_entity_creation_context_preserves_original_causal_evidence(transport):
+    first = transport.replicas[0]
+    initial = first.read({"media": {"signature": "old"}, "metadata": {"signature": "old"}})
+    deleted = first.commit(initial, {"deletion": {"occurrence_id": "media"}, "metadata": {"signature": "old"}})
+    current = first.commit(deleted, {"deletion": {"occurrence_id": "media"}, "metadata": {"signature": "new"}})
+    contexts = first.entity_creation_contexts(current, {"deletion"})
+    assert contexts["deletion"] == [initial]
+    assert first.read() == current
+
+
+def test_content_scoped_deletion_and_replacement_converge_with_stale_delivery(transport):
+    from solin.core.ingest.sync.discovery import (
+        CONTENT, DISCOVERED, RESOURCE, reconcile_discoveries, record_discovery_edits,
+    )
+    from solin.core.ingest.sync.resources import automatic_occurrence_id
+
+    first, second, _ = transport.replicas
+    old = {"size": 8, "sha256": "a" * 64}
+    new = {"size": 8, "sha256": "b" * 64}
+    old_id = automatic_occurrence_id("photo.jpg", content=old)
+    new_id = automatic_occurrence_id("photo.jpg", content=new)
+    initial = first.read({old_id: {RESOURCE: "photo.jpg", CONTENT: old, DISCOVERED: True}})
+    transport.deliver(0, 1)
+    stale = second.read()
+    first.commit(initial, record_discovery_edits(initial.entities, {}))
+    second.commit(stale, {
+        **stale.entities, new_id: {RESOURCE: "PHOTO.JPG", CONTENT: new, DISCOVERED: True},
+    })
+    merged = transport.converge()
+    assert old_id not in reconcile_discoveries(merged.entities)
+    assert new_id in reconcile_discoveries(merged.entities)
+    second.commit(merged, record_discovery_edits(merged.entities, {
+        key: node for key, node in reconcile_discoveries(merged.entities).items() if key != new_id
+    }))
+    merged = transport.converge()
+    assert not any(node.get(RESOURCE) for node in reconcile_discoveries(merged.entities).values())
+
+
 def test_offline_commit_and_restart_preserve_outbox(transport, tmp_path):
     first = transport.replicas[0]
     baseline = first.read({"image": {"title": "Original"}})

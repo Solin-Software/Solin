@@ -541,6 +541,41 @@ class JournalReplica:
                 raise JournalCorrupt("Local history belongs to another document")
             return self._materialize(operations)
 
+    def entity_creation_contexts(
+        self, snapshot: ReplicaSnapshot, entity_ids: set[str],
+    ) -> dict[str, list[ReplicaSnapshot]]:
+        """Read the causal views preceding entity creation from validated history.
+
+        A current field value cannot establish the provenance of an older edit.
+        Concurrent independent creations retain their separate contexts.
+        """
+        with self._lock, self._stage_lock:
+            snapshot = self._normalize_base(snapshot)
+            operations = {**self._operations, **self._local_operations}
+            if any(key not in operations for key in snapshot.operation_ids):
+                raise JournalCorrupt("Local causal history is missing")
+            operations = {key: operations[key] for key in snapshot.operation_ids}
+            contexts: dict[str, list[ReplicaSnapshot]] = {}
+            projection_ids, projection, waiting_count = self._projection_ids, self._projection, self.waiting_count
+            try:
+                for operation in operations.values():
+                    patched = entity_ids & operation.get("entities", operation.get("patches", {})).keys()
+                    if not patched:
+                        continue
+                    ancestors: set[str] = set()
+                    pending = list(operation["dependencies"])
+                    while pending:
+                        dependency = pending.pop()
+                        if dependency not in ancestors:
+                            ancestors.add(dependency)
+                            pending.extend(operations[dependency]["dependencies"])
+                    before = self._materialize({key: operations[key] for key in ancestors})
+                    for entity_id in patched - before.entities.keys():
+                        contexts.setdefault(entity_id, []).append(before)
+            finally:
+                self._projection_ids, self._projection, self.waiting_count = projection_ids, projection, waiting_count
+            return contexts
+
     def _read(self, seed: dict[str, dict] | None) -> ReplicaSnapshot:
         if seed is not None and not self.document_id:
             self._initialize_document(migration_id=_digest([self.namespace, _entities(seed)]))

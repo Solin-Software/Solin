@@ -7,6 +7,7 @@ this module. Retirement must follow a durable logical deletion in the journal.
 from __future__ import annotations
 
 from collections import OrderedDict
+from collections.abc import Collection, Mapping
 import ctypes
 import hashlib
 import json
@@ -141,10 +142,26 @@ def portable_resource_key(url: str, folder: Path) -> str:
     return key
 
 
-def automatic_occurrence_id(resource_key: str) -> str:
+def content_identity(value: object) -> tuple[int, str] | None:
+    """Validate the portable size/digest pair; filesystem metadata is not identity."""
+    if not isinstance(value, Mapping):
+        return None
+    size, digest = value.get("size"), value.get("sha256")
+    if (
+        not isinstance(size, int) or isinstance(size, bool) or size < 0
+        or not isinstance(digest, str) or len(digest) != 64
+        or any(char not in "0123456789abcdef" for char in digest)
+    ):
+        return None
+    return size, digest
+
+
+def automatic_occurrence_id(resource_key: str, *, content: object = None) -> str:
     """Give replicas the same fallback identity for a single document resource."""
     key = resource_identity_key(resource_key)
-    return str(uuid5(NAMESPACE_URL, f"solin:linked-folder:automatic:{key}"))
+    version = content_identity(content)
+    suffix = f":{version[0]}:{version[1]}" if version is not None else ""
+    return str(uuid5(NAMESPACE_URL, f"solin:linked-folder:automatic:{key}{suffix}"))
 
 
 def _revision(descriptor: int) -> tuple[int, ...]:
@@ -289,19 +306,10 @@ def _copy_durable(source: Path, destination: Path, *, replace: bool = True) -> N
         staging.unlink(missing_ok=True)
 
 
-def retire_file(folder: Path, relative_key: str, *, document_id: str | None = None) -> bool:
-    """Archive every content version before deleting its visible source.
-
-    Errors propagate for retry. An unlink failure leaves the visible source and
-    a recoverable copy; journal tombstones must suppress its rediscovery.
-    """
-    key = portable_resource_key(relative_key, folder)
-    if key.lower().startswith(("https://", "http://")):
-        return False
-    source = _contained_path(folder, key)
-    if not source.exists():
-        return False
-    signature = content_signature(source)
+def _archive_resource(
+    source: Path, folder: Path, key: str, document_id: str | None,
+    signature: dict[str, str | int],
+) -> None:
     directory = _archive_directory(folder, key, document_id)
     directory.mkdir(parents=True, exist_ok=True)
     archived = _archive_child(directory, str(signature["sha256"]))
@@ -336,9 +344,116 @@ def retire_file(folder: Path, relative_key: str, *, document_id: str | None = No
         if current == root:
             break
         current = current.parent
-    source.unlink()
+
+
+def _finish_retirement(
+    candidate: Path, destination: Path, folder: Path, key: str, document_id: str | None,
+    expected_contents: Collection[tuple[int, str]],
+) -> bool:
+    """Validate the atomically captured file, preserving any concurrent replacement."""
+    candidate = _archive_child(candidate.parent, candidate.name)
+    signature = content_signature(candidate)
+    _archive_resource(candidate, folder, key, document_id, signature)
+    removed = content_identity(signature) in expected_contents
+    if not removed:
+        try:
+            _copy_durable(candidate, destination, replace=False)
+        except FileExistsError:
+            pass  # Both replacements survive: visible destination and verified archive.
+    if content_signature(candidate) != signature:
+        raise OSError("Resource changed during retirement")
+    candidate.unlink()
+    _sync_directory(candidate.parent)
+    _sync_directory(destination.parent)
+    return removed
+
+
+def retire_file(
+    folder: Path, relative_key: str, *, document_id: str | None = None,
+    expected_contents: Collection[tuple[int, str]] | None = None,
+) -> bool:
+    """Archive before removal; conditional cleanup owns bytes, never a reused path.
+
+    Captured retirement files survive interruption and are resumed on retry.
+    Different captured content is restored without overwriting a concurrent file.
+    """
+    key = portable_resource_key(relative_key, folder)
+    if key.lower().startswith(("https://", "http://")):
+        return False
+    source = _contained_path(folder, key)
+    directory = _archive_directory(folder, key, document_id)
+    removed = False
+    if expected_contents is not None and directory.is_dir():
+        for candidate in directory.glob(f".retiring-*{WATCHED_FOLDER_STAGING_SUFFIX}"):
+            candidate = _archive_child(directory, candidate.name)
+            removed = _finish_retirement(
+                candidate, source, folder, key, document_id, expected_contents,
+            ) or removed
+    if not source.exists():
+        return removed
+    signature = content_signature(source)
+    if expected_contents is not None and content_identity(signature) not in expected_contents:
+        return removed
+    _archive_resource(source, folder, key, document_id, signature)
+    if expected_contents is None:
+        if content_signature(source) != signature:
+            raise OSError("Resource changed during retirement")
+        source.unlink()
+        _sync_directory(source.parent)
+        return True
+    candidate = _archive_child(directory, f".retiring-{uuid4().hex}{WATCHED_FOLDER_STAGING_SUFFIX}")
+    try:
+        source.rename(candidate)
+    except FileNotFoundError:
+        return removed
+    _sync_directory(directory)
     _sync_directory(source.parent)
-    return True
+    return _finish_retirement(candidate, source, folder, key, document_id, expected_contents) or removed
+
+
+def _archived_versions(
+    folder: Path, key: str, document_id: str | None, *, require_complete: bool = False,
+) -> dict[tuple[int, str], Path]:
+    directory = _archive_directory(folder, key, document_id)
+    if not directory.is_dir():
+        return {}
+    if require_complete and any(directory.glob(f".retiring-*{WATCHED_FOLDER_STAGING_SUFFIX}")):
+        raise OSError("Resource retirement has not completed")
+    versions: dict[tuple[int, str], Path] = {}
+    for metadata in directory.glob("*.json"):
+        metadata = _archive_child(directory, metadata.name)
+        try:
+            record = json.loads(metadata.read_text(encoding="utf-8"))
+        except (ValueError, UnicodeError) as error:
+            raise OSError("Incomplete resource archive metadata") from error
+        if (
+            not isinstance(record, dict)
+            or record.get("version") != 1
+            or _name_key(str(record.get("resource", ""))) != _name_key(key)
+        ):
+            raise OSError("Invalid resource archive metadata")
+        signature = content_identity(record)
+        if signature is None:
+            raise OSError("Invalid archived resource digest")
+        digest = signature[1]
+        archived = _archive_child(directory, digest)
+        if not archived.exists():
+            if require_complete:
+                raise OSError("Archived resource content has not arrived")
+            continue  # Cloud transport may deliver the metadata first.
+        if content_signature(archived) != {"size": record.get("size"), "sha256": digest}:
+            raise OSError("Archived resource content does not match metadata")
+        versions[signature] = archived
+    return versions
+
+
+def archived_content_signatures(
+    folder: Path, relative_key: str, *, document_id: str | None,
+) -> list[dict[str, str | int]]:
+    """Identify legacy deleted content only from complete, verified recovery copies."""
+    key = portable_resource_key(relative_key, folder)
+    versions = _archived_versions(folder, key, document_id, require_complete=True)
+    return [{"size": size, "sha256": digest} for size, digest in sorted(versions)]
 
 
 def recover_file(folder: Path, relative_key: str, *, document_id: str | None = None) -> bool:
@@ -354,42 +469,21 @@ def recover_file(folder: Path, relative_key: str, *, document_id: str | None = N
     if destination.exists():
         return destination.is_file()
     directory = _archive_directory(folder, key, document_id)
-    if not directory.is_dir():
-        return False
-    versions: list[Path] = []
-    for metadata in directory.glob("*.json"):
-        metadata = _archive_child(directory, metadata.name)
-        try:
-            record = json.loads(metadata.read_text(encoding="utf-8"))
-        except (ValueError, UnicodeError) as error:
-            raise OSError("Incomplete resource archive metadata") from error
-        if (
-            not isinstance(record, dict)
-            or record.get("version") != 1
-            or _name_key(str(record.get("resource", ""))) != _name_key(key)
-        ):
-            raise OSError("Invalid resource archive metadata")
-        digest = record.get("sha256", "")
-        if (
-            not isinstance(digest, str)
-            or len(digest) != 64
-            or any(char not in "0123456789abcdef" for char in digest)
-        ):
-            raise OSError("Invalid archived resource digest")
-        archived = _archive_child(directory, digest)
-        if not archived.exists():
-            continue  # Cloud transport may deliver the metadata first.
-        if content_signature(archived) != {"size": record.get("size"), "sha256": digest}:
-            raise OSError("Archived resource content does not match metadata")
-        if archived not in versions:
-            versions.append(archived)
+    if directory.is_dir():
+        for candidate in directory.glob(f".retiring-*{WATCHED_FOLDER_STAGING_SUFFIX}"):
+            _finish_retirement(
+                _archive_child(directory, candidate.name), destination, folder, key, document_id, set(),
+            )
+        if destination.exists():
+            return destination.is_file()
+    versions = _archived_versions(folder, key, document_id)
     if not versions:
         return False
     if len(versions) > 1:
         raise OSError("Multiple archived resource versions require conflict resolution")
     destination.parent.mkdir(parents=True, exist_ok=True)
     try:
-        _copy_durable(versions[0], destination, replace=False)
+        _copy_durable(next(iter(versions.values())), destination, replace=False)
     except FileExistsError:
         return destination.is_file()
     return True

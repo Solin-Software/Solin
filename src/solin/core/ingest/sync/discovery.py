@@ -11,13 +11,15 @@ from collections.abc import Mapping
 from copy import deepcopy
 import hashlib
 
-from solin.core.ingest.sync.resources import resource_identity_key
+from solin.core.ingest.sync.resources import content_identity, resource_identity_key
 
 
 RESOURCE = "__sync_resource"
+CONTENT = "__sync_resource_content"
 DISCOVERED = "__sync_discovered"
 AUXILIARY = "__sync_auxiliary"
 SUPPRESSED = "__sync_suppressed_resource"
+SUPPRESSED_CONTENTS = "__sync_suppressed_contents"
 OVERRIDE_PREFIX = "__sync_override:"
 ACKNOWLEDGED = "__sync_acknowledged_deletions"
 REPEATABLE = "__sync_repeatable"
@@ -43,14 +45,55 @@ def _record_override(source: dict, destination: dict, key: str) -> None:
     )
 
 
-def suppression_record(node_id: str, resource: str, *, automatic: bool = False) -> tuple[str, dict]:
-    digest = hashlib.sha256(f"{node_id}\0{resource_identity_key(resource)}".encode()).hexdigest()
-    return f"$deleted-resource:{digest}", {
+def suppression_record(
+    node_id: str, resource: str, *, automatic: bool = False, content: object = None,
+) -> tuple[str, dict]:
+    signature = content_identity(content)
+    version = f"\0{signature[0]}:{signature[1]}" if signature is not None else ""
+    digest = hashlib.sha256(f"{node_id}\0{resource_identity_key(resource)}{version}".encode()).hexdigest()
+    record = {
         AUXILIARY: True,
         SUPPRESSED: resource,
         "occurrence_id": node_id,
         "automatic": automatic,
     }
+    if signature is not None:
+        record[SUPPRESSED_CONTENTS] = [{"size": signature[0], "sha256": signature[1]}]
+    return f"$deleted-resource:{digest}", record
+
+
+class ResourceSuppressions:
+    """Index deleted versions once; unknown deletion content remains path-scoped."""
+
+    def __init__(self, entities: Mapping[str, dict]):
+        self._versions: dict[str, set[tuple[int, str]] | None] = {}
+        for node in entities.values():
+            if not node.get(SUPPRESSED):
+                continue
+            resource = resource_identity_key(str(node[SUPPRESSED]))
+            values = node.get(SUPPRESSED_CONTENTS)
+            signatures = [content_identity(value) for value in values] if isinstance(values, list) else []
+            if not signatures or any(signature is None for signature in signatures):
+                self._versions[resource] = None
+            else:
+                previous = self._versions.get(resource, set())
+                if previous is not None:
+                    self._versions[resource] = previous | {
+                        signature for signature in signatures if signature is not None
+                    }
+
+    def versions(self, resource: str) -> set[tuple[int, str]] | None:
+        return self._versions.get(resource_identity_key(resource), set())
+
+    def blocks(self, resource: str, content: object = None) -> bool:
+        versions = self.versions(resource)
+        signature = content_identity(content)
+        return versions is None or bool(versions) and (signature is None or signature in versions)
+
+
+def _compatible_content(left: dict, right: dict) -> bool:
+    a, b = content_identity(left.get(CONTENT)), content_identity(right.get(CONTENT))
+    return a is None or b is None or a == b
 
 
 def suppressed_resources(entities: Mapping[str, dict]) -> set[str]:
@@ -65,18 +108,35 @@ def reconcile_discoveries(entities: Mapping[str, dict]) -> dict[str, dict]:
     """Project observations onto explicit occurrences without changing history."""
     result = deepcopy(dict(entities))
     explicit: dict[str, list[str]] = {}
-    suppressed = suppressed_resources(entities)
+    suppressed = ResourceSuppressions(entities)
     for node_id, node in entities.items():
         resource = resource_identity_key(str(node.get(RESOURCE) or ""))
         if resource and not node.get(DISCOVERED) and not node.get(AUXILIARY):
             explicit.setdefault(resource, []).append(node_id)
     for ids in explicit.values():
         ids.sort()
+    # Removing a provisional occurrence also removes its subsequently delivered
+    # primary claim. A deliberate re-add acknowledges the observed deletion.
+    for deletion_id, deletion in entities.items():
+        if not deletion.get(SUPPRESSED):
+            continue
+        deleted_versions = ResourceSuppressions({deletion_id: deletion})
+        claims = explicit.get(resource_identity_key(str(deletion[SUPPRESSED])), [])
+        unacknowledged = [key for key in claims
+                          if deletion_id not in entities[key].get(ACKNOWLEDGED, [])
+                          and deleted_versions.blocks(str(deletion[SUPPRESSED]), entities[key].get(CONTENT))]
+        for index, claim in enumerate(unacknowledged):
+            if not entities[claim].get(REPEATABLE) or (deletion.get("automatic") and index == 0):
+                result.pop(claim, None)
     for node_id, node in entities.items():
         if not node.get(DISCOVERED):
             continue
         resource = resource_identity_key(str(node.get(RESOURCE) or ""))
-        claims = explicit.get(resource, [])
+        if suppressed.blocks(resource, node.get(CONTENT)):
+            result.pop(node_id, None)
+            continue
+        claims = [key for key in explicit.get(resource, [])
+                  if key in result and _compatible_content(node, entities[key])]
         if claims:
             target = result[claims[0]]
             for field, intent in node.items():
@@ -87,19 +147,8 @@ def reconcile_discoveries(entities: Mapping[str, dict]) -> dict[str, dict]:
                     target[key] = deepcopy(intent["value"])
                 else:
                     target.pop(key, None)
-        if claims or resource in suppressed:
+        if claims or suppressed.blocks(resource, node.get(CONTENT)):
             result.pop(node_id, None)
-    # Removing a provisional occurrence also removes its subsequently delivered
-    # primary claim. A deliberate re-add acknowledges the observed deletion.
-    for deletion_id, deletion in entities.items():
-        if not deletion.get(SUPPRESSED):
-            continue
-        claims = explicit.get(resource_identity_key(str(deletion[SUPPRESSED])), [])
-        unacknowledged = [key for key in claims
-                          if deletion_id not in entities[key].get(ACKNOWLEDGED, [])]
-        for index, claim in enumerate(unacknowledged):
-            if not entities[claim].get(REPEATABLE) or (deletion.get("automatic") and index == 0):
-                result.pop(claim, None)
     # Preserve the existing domain occurrence policy across concurrent writers:
     # independently discovering/adding the same image is still one occurrence;
     # explicit repeatable video occurrences remain distinct.
@@ -118,10 +167,14 @@ def record_discovery_edits(
     """Translate edits of the visible projection back to durable intentions."""
     result = deepcopy(dict(desired))
     visible = reconcile_discoveries(base)
+    suppressions = ResourceSuppressions(base)
     for node_id, node in base.items():
         if node.get(AUXILIARY) or node_id not in visible:
             result.setdefault(node_id, deepcopy(node))
-            if node.get(DISCOVERED) and node_id not in visible:
+            if (
+                node.get(DISCOVERED) and node_id not in visible
+                and not suppressions.blocks(str(node.get(RESOURCE) or ""), node.get(CONTENT))
+            ):
                 # Continue editing the same per-field intentions after the
                 # explicit claim absorbs the observation. Clearing every
                 # override here would discard concurrent edits of unrelated
@@ -133,6 +186,7 @@ def record_discovery_edits(
                     == resource_identity_key(str(node.get(RESOURCE) or ""))
                     and not candidate.get(DISCOVERED)
                     and not candidate.get(AUXILIARY)
+                    and _compatible_content(node, candidate)
                 ]
                 if claims and min(claims) in desired:
                     claim = min(claims)
@@ -140,7 +194,7 @@ def record_discovery_edits(
                     overridden = {field.removeprefix(OVERRIDE_PREFIX) for field in node
                                   if field.startswith(OVERRIDE_PREFIX)}
                     for key in before.keys() | after.keys() | overridden:
-                        if key.startswith(OVERRIDE_PREFIX) or key in {RESOURCE, DISCOVERED}:
+                        if key.startswith(OVERRIDE_PREFIX) or key in {RESOURCE, CONTENT, DISCOVERED}:
                             continue
                         changed = not _same_field(before, after, key)
                         if changed:
@@ -160,6 +214,7 @@ def record_discovery_edits(
                     node_id,
                     resource,
                     automatic=bool(before.get(DISCOVERED)),
+                    content=before.get(CONTENT),
                 )
                 result[key] = record
             continue
@@ -171,7 +226,7 @@ def record_discovery_edits(
                 if key.startswith(OVERRIDE_PREFIX):
                     after.setdefault(key, deepcopy(value))
             for key in before.keys() | after.keys():
-                if key.startswith(OVERRIDE_PREFIX) or key in {RESOURCE, DISCOVERED}:
+                if key.startswith(OVERRIDE_PREFIX) or key in {RESOURCE, CONTENT, DISCOVERED}:
                     continue
                 if _same_field(before, after, key):
                     continue

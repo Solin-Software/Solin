@@ -106,6 +106,7 @@ class _LocalMeeting:
     _queue_linked_media_removal = MeetingTreeController._queue_linked_media_removal
     _save_and_emit_replace = MeetingTreeController._save_and_emit_replace
     _save = MeetingTreeController._save
+    _schedule_sync_manifest_save = MeetingTreeController._schedule_sync_manifest_save
     _save_local_cache = MeetingTreeController._save_local_cache
     _snapshot_storage_key = MeetingTreeController._snapshot_storage_key
     _on_snapshot_write_completed = MeetingTreeController._on_snapshot_write_completed
@@ -170,7 +171,6 @@ class _LocalMeeting:
         self._cancel_media_info_requests_for_item = lambda _id: None
         self._current_overview = lambda: None
         self._warn_sync_failed = lambda message: pytest.fail(message)
-        self._schedule_sync_manifest_save = lambda: None
         self._generated_asset_roots = lambda: (str(root.parent / "generated"),)
 
     def refresh(self):
@@ -212,6 +212,77 @@ def local_meeting(tmp_path):
     folder = root / "2026-05-25 MW"
     folder.mkdir(parents=True)
     return _LocalMeeting(root), folder
+
+
+@pytest.mark.parametrize("pub_type, tag", [("mwb", "MW"), ("wt", "WE")])
+def test_active_sync_accepts_new_content_at_deleted_name(tmp_path, pub_type, tag):
+    import os
+
+    root = tmp_path / "linked"
+    folder = root / f"2026-05-25 {tag}"
+    folder.mkdir(parents=True)
+    meeting = _LocalMeeting(root, pub_type)
+    image = folder / "photo.jpg"
+    image.write_bytes(b"original")
+    original_revision = image.stat()
+    meeting.refresh()
+    meeting.activate(folder)
+    first_id = meeting.media()[0]["id"]
+    meeting.removeItem(first_id)
+    meeting.operations.drain()
+    assert not image.exists()
+
+    image.write_bytes(b"original")
+    meeting.refresh()
+    assert not image.exists()
+    assert meeting.media() == []
+
+    image.write_bytes(b"replaced")
+    os.utime(image, ns=(original_revision.st_atime_ns, original_revision.st_mtime_ns))
+    meeting.refresh()
+    assert image.read_bytes() == b"replaced"
+    assert len(meeting.media()) == 1
+    assert meeting.media()[0]["id"] != first_id
+    assert meeting._nodes[0]["children"][0]["id"] == meeting.media()[0]["id"]
+    meeting.refresh()
+    assert len(meeting.media()) == 1
+
+
+def test_queued_active_removal_preserves_replacement_content(local_meeting):
+    meeting, folder = local_meeting
+    image = folder / "photo.jpg"
+    image.write_bytes(b"original")
+    meeting.refresh()
+    meeting.activate(folder)
+    meeting.removeItem(meeting.media()[0]["id"])
+    removal = meeting.operations.take("meeting_linked_media_remove")
+    image.write_bytes(b"replaced")
+    meeting.operations.finish(removal)
+    assert image.read_bytes() == b"replaced"
+    meeting.refresh()
+    assert len(meeting.media()) == 1
+
+
+def test_discovery_copy_rejects_content_changed_after_scan(local_meeting):
+    from solin.core.media.operations import MediaOperationCancelled
+
+    meeting, folder = local_meeting
+    meeting.activate(folder)
+    image = folder / "photo.jpg"
+    image.write_bytes(b"original")
+    meeting.inject_linked_folder_media(meeting._sync_root)
+    meeting.operations.finish(meeting.operations.take("meeting_sync_refresh"))
+    meeting.operations.finish(meeting.operations.take("meeting_folder_scan"))
+    preparation = meeting.operations.take("meeting_media_copy")
+    image.write_bytes(b"replaced")
+    with pytest.raises(MediaOperationCancelled, match="source changed"):
+        preparation.runner(lambda _progress: None, CancellationFlag())
+    preparation.cancelled()
+    assert not meeting._meeting_folder_pending_sources
+    assert not meeting._tree_session.pending_nodes()
+    assert not meeting.media()
+    meeting.refresh()
+    assert len(meeting.media()) == 1
 
 
 def test_inactive_refresh_quiesces_and_persists_new_media(local_meeting):

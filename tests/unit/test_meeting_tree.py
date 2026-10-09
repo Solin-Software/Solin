@@ -2752,6 +2752,8 @@ class MeetingTreeControllerMeetingFolderImportTests(unittest.TestCase):
         self.assertEqual(duplicate_events[0][0], "pending")
 
     def test_sync_commit_rejects_media_converging_to_existing_linked_file(self):
+        from solin.core.ingest.sync.journal import ReplicaSnapshot
+
         class ImmediateOperations:
             @staticmethod
             def submit(spec):
@@ -2785,6 +2787,7 @@ class MeetingTreeControllerMeetingFolderImportTests(unittest.TestCase):
                 _sync_enabled=True,
                 _sync_folder=str(folder),
                 _sync_service=MeetingLinkedFolderSync(lambda _pub_type: 2),
+                _sync_snapshot=ReplicaSnapshot(),
                 _linked_folder_files={str(linked): "existing"},
                 _generated_asset_roots=lambda: (),
                 _tree_session=SimpleNamespace(

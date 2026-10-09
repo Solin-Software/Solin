@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
+import hashlib
 import os
 import shutil
 from pathlib import Path
@@ -62,6 +63,7 @@ class WatchedFolderCopyResult:
     destination: Path
     bytes_copied: int
     already_present: bool = False
+    content: tuple[int, str] | None = None
 
 
 class WatchedFolderFileStore:
@@ -118,6 +120,7 @@ class WatchedFolderFileStore:
         staging = folder / f".{source.name}.{operation_id}{WATCHED_FOLDER_STAGING_SUFFIX}"
         safe_remove(staging)
         copied = 0
+        digest = hashlib.sha256()
         try:
             if progress is not None:
                 progress(0, total)
@@ -129,6 +132,7 @@ class WatchedFolderFileStore:
                     if not chunk:
                         break
                     staging_file.write(chunk)
+                    digest.update(chunk)
                     copied += len(chunk)
                     if progress is not None:
                         progress(copied, total)
@@ -149,7 +153,7 @@ class WatchedFolderFileStore:
         except Exception:  # noqa: BLE001 - transaction cleanup before callback propagation
             safe_remove(staging)
             raise
-        return WatchedFolderCopyResult(source, destination, copied)
+        return WatchedFolderCopyResult(source, destination, copied, content=(copied, digest.hexdigest()))
 
     def rename_folder(self, folder: str | Path, new_name: str) -> str:
         if Path(new_name).name != new_name or not new_name.strip():

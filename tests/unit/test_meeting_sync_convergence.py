@@ -520,6 +520,126 @@ def test_resource_removal_retries_on_load_without_reimport(tmp_path, monkeypatch
     assert loaded.snapshot.token == deleted.snapshot.token
 
 
+@pytest.mark.parametrize("replacement", [b"after!", b"a larger replacement", b""])
+def test_different_content_at_deleted_resource_path_survives_refresh(tmp_path, replacement):
+    from solin.core.ingest.sync.discovery import DISCOVERED
+
+    folder = tmp_path / "2026-05-25 MW"
+    folder.mkdir()
+    image = folder / "photo.jpg"
+    image.write_bytes(b"before")
+    service = MeetingLinkedFolderSync(lambda _: 0)
+    initial = _save(service, folder, [{**_media("automatic", str(image)), DISCOVERED: True}])
+    deleted = _save(service, folder, [], initial)
+    assert not image.exists()
+
+    image.write_bytes(replacement)
+    service = MeetingLinkedFolderSync(lambda _: 0)
+    identity = MeetingSyncIdentity(initial.tree_key, initial.pub_type, initial.monday)
+    loaded = service.load_tree(str(tmp_path), identity)
+
+    assert image.exists(), "Deletion of old content must not remove a different version"
+    assert image.read_bytes() == replacement
+    assert loaded.nodes == []
+    assert loaded.snapshot.token == deleted.snapshot.token
+
+
+@pytest.mark.parametrize("replacement", [b"original", b"replaced"])
+@pytest.mark.parametrize("conflicting_archive", [False, True])
+def test_legacy_deletion_binds_verified_archive_once(tmp_path, replacement, conflicting_archive):
+    import hashlib
+    from solin.core.ingest.sync.discovery import SUPPRESSED_CONTENTS, suppression_record
+    from solin.core.ingest.sync.resources import retire_file
+
+    folder = tmp_path / "2026-05-25 MW"
+    folder.mkdir()
+    service = MeetingLinkedFolderSync(lambda _: 0)
+    image = folder / "photo.jpg"
+    initial = service.save_tree(
+        folder, MeetingSyncIdentity("mwb:2026-05-25:T:issue", "mwb", date(2026, 5, 25)),
+        nodes=[_media("old", str(image))], deleted_source_keys=set(), linked_folder_files={}, enable=True,
+        meeting_folder_imports={str(image): {"path": str(image), "kind": "media", "node_ids": ["old"],
+            "signature": {"size": 8, "sha256": hashlib.sha256(b"original").hexdigest()}}},
+    )
+    image.write_bytes(b"cancelled copy" if conflicting_archive else b"original")
+    retire_file(folder, image.name, document_id=initial.snapshot.document_id)
+    replica = service._replica(folder)
+    key, deletion = suppression_record("old", image.name, automatic=True)
+    replica.commit(initial.snapshot, {
+        **{key: node for key, node in initial.snapshot.entities.items() if key != "old"}, key: deletion,
+    })
+    image.write_bytes(replacement)
+    service = MeetingLinkedFolderSync(lambda _: 0)
+    identity = MeetingSyncIdentity(initial.tree_key, initial.pub_type, initial.monday)
+    loaded = service.load_tree(str(tmp_path), identity)
+    if conflicting_archive:
+        assert SUPPRESSED_CONTENTS not in loaded.snapshot.entities[key]
+        assert image.read_bytes() == replacement
+    else:
+        assert loaded.snapshot.entities[key][SUPPRESSED_CONTENTS]
+        assert image.exists() == (replacement != b"original")
+    again = service.load_tree(str(tmp_path), identity)
+    assert again.snapshot.token == loaded.snapshot.token
+
+
+@pytest.mark.parametrize("archive_state", ["missing", "corrupt", "pending", "multiple", "wrong-document"])
+def test_unknown_legacy_deletion_preserves_visible_replacement(tmp_path, archive_state):
+    from solin.core.ingest.sync.discovery import SUPPRESSED_CONTENTS, suppression_record
+    from solin.core.ingest.sync.resources import retire_file
+
+    folder = tmp_path / "2026-05-25 MW"
+    folder.mkdir()
+    service = MeetingLinkedFolderSync(lambda _: 0)
+    initial = _save(service, folder, [])
+    image = folder / "photo.jpg"
+    if archive_state != "missing":
+        image.write_bytes(b"original")
+        retire_file(folder, image.name, document_id=(
+            "f" * 64 if archive_state == "wrong-document" else initial.snapshot.document_id
+        ))
+        if archive_state == "multiple":
+            image.write_bytes(b"another version")
+            retire_file(folder, image.name, document_id=initial.snapshot.document_id)
+        elif archive_state in {"corrupt", "pending"}:
+            metadata = next((folder / ".solin_sync" / "resources").rglob("*.json"))
+            if archive_state == "corrupt":
+                metadata.write_text("{broken", encoding="utf-8")
+            else:
+                metadata.with_suffix("").unlink()
+    key, deletion = suppression_record("old", image.name, automatic=True)
+    replica = service._replica(folder)
+    replica.commit(initial.snapshot, {**initial.snapshot.entities, key: deletion})
+    image.write_bytes(b"replaced")
+    identity = MeetingSyncIdentity(initial.tree_key, initial.pub_type, initial.monday)
+    loaded = service.load_tree(str(tmp_path), identity)
+    assert SUPPRESSED_CONTENTS not in loaded.snapshot.entities[key]
+    assert loaded.resource_error
+    assert image.read_bytes() == b"replaced"
+
+
+def test_legacy_visible_media_gets_content_identity_before_local_deletion(tmp_path):
+    from solin.core.ingest.sync.discovery import CONTENT, SUPPRESSED_CONTENTS
+
+    folder = tmp_path / "2026-05-25 MW"
+    folder.mkdir()
+    service = MeetingLinkedFolderSync(lambda _: 0)
+    image = folder / "photo.jpg"
+    initial = _save(service, folder, [_media("legacy", str(image))])
+    assert CONTENT not in initial.snapshot.entities["legacy"]
+    image.write_bytes(b"original")
+    identity = MeetingSyncIdentity(initial.tree_key, initial.pub_type, initial.monday)
+    loaded = service.load_tree(str(tmp_path), identity)
+    assert loaded.nodes[0][CONTENT]
+    staged = service.save_tree(
+        folder, identity, nodes=[], deleted_source_keys=set(), linked_folder_files={},
+        meeting_folder_imports={}, base_snapshot=loaded.snapshot, stage_only=True,
+    )
+    assert any(node.get(SUPPRESSED_CONTENTS) for node in staged.snapshot.entities.values())
+    loaded = service.load_tree(str(tmp_path), identity)
+    assert not image.exists()
+    assert not loaded.resource_error
+
+
 def test_pending_publish_keeps_retry_for_background_meeting(tmp_path):
     import os
     from dataclasses import replace
@@ -643,19 +763,44 @@ def test_remote_migration_does_not_hide_incompatible_local_baseline(tmp_path):
 
 
 def test_cancelled_published_copy_remains_recoverable_for_unknown_remote_reference(tmp_path):
-    from solin.core.ingest.sync.resources import recover_file
+    from solin.core.ingest.sync.resources import content_identity, content_signature, recover_file
+    from solin.core.ingest.watched_folder_files import WatchedFolderCopyResult
     service = MeetingLinkedFolderSync(lambda _: 0)
     folder = tmp_path / "2026-05-25 MW"
     folder.mkdir()
     copied = folder / "photo.jpg"
     copied.write_bytes(b"photo")
-    service.rollback_materialized_files(folder, [copied])
+    result = WatchedFolderCopyResult(copied, copied, 5, content=content_identity(content_signature(copied)))
+    service.rollback_materialized_files(folder, [result])
     assert not copied.exists()
     assert recover_file(folder, "photo.jpg")
     assert copied.read_bytes() == b"photo"
     _save(service, folder, [_media("remote-ref", str(copied))])
-    service.rollback_materialized_files(folder, [copied])
+    service.rollback_materialized_files(folder, [result])
     assert copied.read_bytes() == b"photo"
+
+
+def test_preparation_rollback_preserves_replaced_copy(tmp_path, monkeypatch):
+    from solin.core.ingest.watched_folder_files import WatchedFolderFileStore
+    from solin.core.media.operations import MediaOperationCancelled
+
+    folder = tmp_path / "2026-05-25 MW"
+    folder.mkdir()
+    source = tmp_path / "photo.jpg"
+    source.write_bytes(b"original")
+    service = MeetingLinkedFolderSync(lambda _: 0)
+    _save(service, folder, [])
+    copy = WatchedFolderFileStore.copy_file_transaction
+
+    def replace_after_copy(store, request, **kwargs):
+        result = copy(store, request, **kwargs)
+        result.destination.write_bytes(b"replaced")
+        return result
+
+    monkeypatch.setattr(WatchedFolderFileStore, "copy_file_transaction", replace_after_copy)
+    with pytest.raises(MediaOperationCancelled, match="copied resource changed"):
+        service.materialize_tree_files([_media("new", str(source))], folder, generated_roots=())
+    assert (folder / "photo.jpg").read_bytes() == b"replaced"
 
 
 def test_received_disable_is_persisted_with_its_causal_snapshot(tmp_path):

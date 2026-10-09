@@ -85,8 +85,9 @@ from ...core.ingest.manifest import (
 from ...core.meetings.models import MemorialData
 from ...core.meetings.tree_migrations import migrate_publication_subsections
 from ...core.ingest.sync.journal import ReplicaSnapshot
-from ...core.ingest.sync.discovery import DISCOVERED, RESOURCE, suppressed_resources
-from ...core.ingest.sync.resources import automatic_occurrence_id, portable_resource_key, resource_identity_key
+from ...core.ingest.watched_folder_files import WatchedFolderCopyResult
+from ...core.ingest.sync.discovery import CONTENT, DISCOVERED, RESOURCE, ResourceSuppressions
+from ...core.ingest.sync.resources import automatic_occurrence_id, content_identity, portable_resource_key
 from ...core.meetings.linked_folder_sync import (
     MeetingLinkedFolderSync,
     MeetingSyncCleanupPending,
@@ -272,7 +273,7 @@ class _MeetingSyncDiscovery:
 class _PreparedMeetingNodes:
     nodes: list[Node]
     linked_files: dict[str, str]
-    created_paths: tuple[Path, ...]
+    created_files: tuple[WatchedFolderCopyResult, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -1312,6 +1313,8 @@ class MeetingTreeController(QObject):
         tree_pub_type: str,
     ) -> None:
         touched = False
+        snapshot = getattr(self, "_sync_snapshot", ReplicaSnapshot())
+        suppressions = ResourceSuppressions(snapshot.entities)
         for folder in folders:
             if not meeting_folder_matches_tree(
                 folder,
@@ -1343,8 +1346,7 @@ class MeetingTreeController(QObject):
                 except ValueError:
                     log.warning("Skipping nonportable meeting source %s", source.get("name"))
                     continue
-                snapshot = getattr(self, "_sync_snapshot", ReplicaSnapshot())
-                if resource_identity_key(resource) in suppressed_resources(snapshot.entities):
+                if suppressions.blocks(resource, source.get("signature")):
                     continue
                 record = find_meeting_folder_import_record(
                     source,
@@ -1457,6 +1459,9 @@ class MeetingTreeController(QObject):
             if node.get("linked_folder_source") != folder_path:
                 node["linked_folder_source"] = folder_path
                 changed = True
+            if content_identity(source.get("signature")) is not None and node.get(CONTENT) != source["signature"]:
+                node[CONTENT] = dict(source["signature"])
+                changed = True
             if node_id and self._linked_folder_files.get(source_path) != node_id:
                 self._linked_folder_files[source_path] = node_id
                 changed = True
@@ -1516,11 +1521,15 @@ class MeetingTreeController(QObject):
         folder_path = str(source.get("folder_path") or "")
         previous = find_meeting_folder_import_record(source, getattr(self, "_meeting_folder_imports", {}))
         previous_ids = list((previous or {}).get("node_ids", []))
+        changed_content = (
+            content_identity(source.get("signature")) is not None
+            and content_identity((previous or {}).get("signature")) != content_identity(source["signature"])
+        )
         resource = ""
         if source.get("path") and folder_path:
             resource = portable_resource_key(str(source["path"]), Path(folder_path))
         snapshot = getattr(self, "_sync_snapshot", ReplicaSnapshot())
-        if resource and resource_identity_key(resource) in suppressed_resources(snapshot.entities):
+        if resource and ResourceSuppressions(snapshot.entities).blocks(resource, source.get("signature")):
             self._meeting_folder_pending_sources.discard(source_key)
             return
         accepted_existing: list[Node] = []
@@ -1537,11 +1546,15 @@ class MeetingTreeController(QObject):
                         existing[field] = copy.deepcopy(node[field])
                 accepted_existing.append(existing)
                 continue
-            if node_id:
+            if node_id and not changed_content:
                 continue  # Removed while conversion was running.
             if resource:
-                node["id"] = automatic_occurrence_id(f"{resource}#output:{index}")
+                node["id"] = automatic_occurrence_id(
+                    f"{resource}#output:{index}", content=source.get("signature"),
+                )
                 node[DISCOVERED] = True
+                if source.get("kind") == "media" and content_identity(source.get("signature")) is not None:
+                    node[CONTENT] = dict(source["signature"])
                 url = self._url_for_node(node)
                 if url and Path(url).resolve().is_relative_to(Path(folder_path).resolve()):
                     node[RESOURCE] = portable_resource_key(url, Path(folder_path))
@@ -3833,21 +3846,21 @@ class MeetingTreeController(QObject):
                     stage=stage,
                 )
             )
-            created_paths: list[Path] = []
+            created_files: list[WatchedFolderCopyResult] = []
             prepared, linked_files = self._sync_service.materialize_tree_files(
                 pending_nodes,
                 Path(sync_folder),
                 generated_roots=self._generated_asset_roots(),
                 cancellation=cancellation,
-                created_paths_out=created_paths,
+                created_files_out=created_files,
             )
             if cancellation.is_set():
-                self._sync_service.rollback_materialized_files(Path(sync_folder), created_paths)
+                self._sync_service.rollback_materialized_files(Path(sync_folder), created_files)
                 raise MediaOperationCancelled("Meeting media copy cancelled")
             return _PreparedMeetingNodes(
                 prepared,
                 linked_files,
-                tuple(created_paths),
+                tuple(created_files),
             )
 
         def commit(value: object) -> None:
@@ -3875,6 +3888,14 @@ class MeetingTreeController(QObject):
                     list_id, insert_index, pending_nodes,
                     signal_name=signal_name, on_completed=on_completed,
                 )
+                return
+            suppressions = ResourceSuppressions(self._sync_snapshot.entities)
+            if any(
+                node.get(DISCOVERED) and node.get(RESOURCE)
+                and suppressions.blocks(str(node[RESOURCE]), node.get(CONTENT))
+                for node in iter_nodes(value.nodes)
+            ):
+                discard(value)
                 return
             accepted_nodes, duplicates = _partition_meeting_media_nodes(
                 _media_identity_records_for_nodes(self._nodes),
@@ -3914,7 +3935,7 @@ class MeetingTreeController(QObject):
                 return
             self._media_tree_runtime.snapshots.request(
                 f"meeting-copy-rollback:{uuid.uuid4().hex}",
-                lambda: self._sync_service.rollback_materialized_files(Path(sync_folder), value.created_paths),
+                lambda: self._sync_service.rollback_materialized_files(Path(sync_folder), value.created_files),
                 conflict_key=child_folder_resource_claim(sync_folder),
             )
 

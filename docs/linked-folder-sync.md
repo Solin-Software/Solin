@@ -102,6 +102,24 @@ later cannot recreate an automatic occurrence. A deliberate new inclusion
 acknowledges previously observed suppression. Repeated explicit occurrences
 remain separate.
 
+Meeting media records its portable size and SHA256 alongside the resource path.
+A deletion suppresses that content version: different bytes copied to the same
+name can be imported automatically, while previously deleted versions remain
+blocked. Automatic meeting occurrences include the source content identity so
+a replacement does not reuse a deleted occurrence. Pending removal and import
+completion use the same content rule. This policy does not expire by time and
+does not change linked playlist suppression.
+
+Older meeting occurrences acquire their content identity when available media
+is read in the background. A path-only deletion can be narrowed only when its
+active document contains one complete, validated archived content version.
+That version must match the occurrence or direct-source processing signature
+in the causal view preceding its deletion. An archive from a cancelled copy
+cannot establish that deletion's content identity.
+Missing, incomplete, corrupt or ambiguous recovery evidence keeps that path
+suppressed and preserves any visible replacement until the deleted version is
+known. Binding is persisted in the journal and survives reopening.
+
 Content comparison shares only file size and SHA256. Hashes are cached against
 local filesystem revisions; inode, device, and timestamps are never shared as
 content identity. Windows additionally checks the file's change time because

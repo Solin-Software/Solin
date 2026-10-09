@@ -358,3 +358,172 @@ def test_http_resource_identity_preserves_case():
     assert resources.resource_identity_key(
         "https://example.org/Image.jpg"
     ) != resources.resource_identity_key("https://example.org/image.jpg")
+
+
+def test_content_scoped_deletion_preserves_different_discovery_and_late_placement():
+    from solin.core.ingest.sync.discovery import CONTENT, ResourceSuppressions
+
+    old = {"size": 5, "sha256": "a" * 64}
+    new = {"size": 5, "sha256": "b" * 64}
+    deletion_id, deletion = suppression_record("old", "Image.jpg", automatic=True, content=old)
+    entities = {
+        deletion_id: deletion,
+        "late-old": {RESOURCE: "IMAGE.JPG", CONTENT: old},
+        "new": {RESOURCE: "image.jpg", CONTENT: new, DISCOVERED: True},
+    }
+    blocked = ResourceSuppressions(entities)
+    assert blocked.blocks("IMAGE.JPG", old)
+    assert not blocked.blocks("image.jpg", new)
+    assert "late-old" not in reconcile_discoveries(entities)
+    assert "new" in reconcile_discoveries(entities)
+    entities["organized-new"] = {RESOURCE: "image.jpg", CONTENT: new, "title": "Explicit"}
+    assert set(reconcile_discoveries(entities)) == {deletion_id, "organized-new"}
+
+
+def test_multiple_deleted_versions_and_unknown_signature_remain_blocked():
+    from solin.core.ingest.sync.discovery import ResourceSuppressions
+
+    first = {"size": 5, "sha256": "a" * 64}
+    second = {"size": 5, "sha256": "b" * 64}
+    entities = dict([
+        suppression_record("same-id", "photo.jpg", content=first),
+        suppression_record("same-id", "photo.jpg", content=second),
+    ])
+    assert len(entities) == 2
+    blocked = ResourceSuppressions(entities)
+    assert blocked.blocks("photo.jpg", first)
+    assert blocked.blocks("photo.jpg", second)
+    assert blocked.blocks("photo.jpg")
+    assert not blocked.blocks("photo.jpg", {"size": 0, "sha256": "c" * 64})
+    entities.update([suppression_record("legacy", "photo.jpg")])
+    assert ResourceSuppressions(entities).blocks("photo.jpg", {"size": 0, "sha256": "c" * 64})
+
+
+def test_conditional_retirement_does_not_archive_replacement(tmp_path):
+    source = tmp_path / "photo.jpg"
+    source.write_bytes(b"original")
+    original = resources.content_identity(resources.content_signature(source))
+    source.write_bytes(b"replaced")
+    assert not resources.retire_file(tmp_path, source.name, expected_contents={original})
+    assert source.read_bytes() == b"replaced"
+    assert not (tmp_path / ".solin_sync").exists()
+
+
+def test_automatic_content_identity_is_portable_and_distinguishes_versions():
+    content = {"size": 5, "sha256": "a" * 64}
+    new = {"size": 5, "sha256": "b" * 64}
+    assert resources.automatic_occurrence_id("Image.jpg", content=content) == resources.automatic_occurrence_id(
+        "IMAGE.JPG", content=content,
+    )
+    assert resources.automatic_occurrence_id("image.jpg", content=content) != resources.automatic_occurrence_id(
+        "image.jpg", content=new,
+    )
+
+
+@pytest.mark.parametrize("moment", ["flush", "capture", "after-capture"])
+def test_conditional_retirement_preserves_concurrent_replacement(tmp_path, monkeypatch, moment):
+    source = tmp_path / "photo.jpg"
+    source.write_bytes(b"original")
+    original = resources.content_identity(resources.content_signature(source))
+    rename = Path.rename
+    flush = resources._sync_directory
+    replaced = False
+
+    def replace():
+        nonlocal replaced
+        if not replaced:
+            replacement = tmp_path / "replacement"
+            replacement.write_bytes(b"replaced")
+            replacement.replace(source)
+            replaced = True
+
+    def capture(path, target):
+        if path == source and moment == "capture":
+            replace()
+        result = rename(path, target)
+        if path == source and moment == "after-capture":
+            replace()
+        return result
+
+    def sync(directory):
+        if moment == "flush":
+            replace()
+        flush(directory)
+
+    monkeypatch.setattr(Path, "rename", capture)
+    monkeypatch.setattr(resources, "_sync_directory", sync)
+    if moment == "flush":
+        with pytest.raises(OSError, match="changed"):
+            resources.retire_file(tmp_path, source.name, expected_contents={original})
+    else:
+        resources.retire_file(tmp_path, source.name, expected_contents={original})
+    assert source.read_bytes() == b"replaced"
+    assert not list(tmp_path.rglob("*.solin-stage"))
+
+
+@pytest.mark.parametrize("recover", [False, True])
+def test_interrupted_capture_preserves_replacement_on_retry(tmp_path, monkeypatch, recover):
+    source = tmp_path / "photo.jpg"
+    source.write_bytes(b"original")
+    original = resources.content_identity(resources.content_signature(source))
+    rename = Path.rename
+
+    def interrupt(path, target):
+        if path == source:
+            replacement = tmp_path / "replacement"
+            replacement.write_bytes(b"replaced")
+            replacement.replace(source)
+            rename(path, target)
+            raise OSError("interrupted after capture")
+        return rename(path, target)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "rename", interrupt)
+        with pytest.raises(OSError, match="interrupted"):
+            resources.retire_file(tmp_path, source.name, expected_contents={original})
+    assert not source.exists()
+    assert list(tmp_path.rglob("*.solin-stage"))
+    if recover:
+        assert resources.recover_file(tmp_path, source.name)
+    else:
+        assert not resources.retire_file(tmp_path, source.name, expected_contents={original})
+    assert source.read_bytes() == b"replaced"
+    assert not list(tmp_path.rglob("*.solin-stage"))
+
+
+def test_replacement_edit_is_not_routed_to_deleted_fallback():
+    from copy import deepcopy
+    from solin.core.ingest.sync.discovery import CONTENT
+
+    old = {"size": 5, "sha256": "a" * 64}
+    new = {"size": 5, "sha256": "b" * 64}
+    deletion_id, deletion = suppression_record("fallback", "photo.jpg", automatic=True, content=old)
+    base = {
+        deletion_id: deletion,
+        "fallback": {RESOURCE: "photo.jpg", CONTENT: old, DISCOVERED: True, "title": "Old"},
+        "explicit": {RESOURCE: "photo.jpg", CONTENT: new, "title": "New"},
+    }
+    desired = deepcopy(reconcile_discoveries(base))
+    desired["explicit"]["title"] = "User edit"
+    result = reconcile_discoveries(record_discovery_edits(base, desired))
+    assert result["explicit"]["title"] == "User edit"
+
+
+def test_suppressed_legacy_fallback_does_not_override_replacement():
+    from copy import deepcopy
+    from solin.core.ingest.sync.discovery import CONTENT
+
+    old = {"size": 5, "sha256": "a" * 64}
+    new = {"size": 5, "sha256": "b" * 64}
+    deletion_id, deletion = suppression_record("fallback", "photo.jpg", automatic=True, content=old)
+    base = {
+        deletion_id: deletion,
+        "fallback": {RESOURCE: "photo.jpg", DISCOVERED: True,
+            OVERRIDE_PREFIX + "title": {"present": True, "value": "Old override"}},
+        "explicit": {RESOURCE: "photo.jpg", CONTENT: new, "title": "Replacement"},
+    }
+    projected = reconcile_discoveries(base)
+    assert projected["explicit"]["title"] == "Replacement"
+    desired = deepcopy(projected)
+    desired["explicit"]["title"] = "User edit"
+    assert reconcile_discoveries(record_discovery_edits(base, desired))["explicit"]["title"] == "User edit"
