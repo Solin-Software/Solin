@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any, BinaryIO, Callable, Protocol, cast
 
 if TYPE_CHECKING:
     from solin.core.scenes.libobs_projection_route import LibobsProjectionRoute
-    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph, PreparedContentPresentation
     from solin.core.scenes.libobs_thumbnail_egress import LibobsThumbnailEgress
     from solin.core.scenes.libobs_window_output import LibobsWindowOutput
 
@@ -223,6 +223,8 @@ class LibobsSidecarEngine:
         self._retired_media_sources: list[Any] = []
         self._retired_frame_sources: list[Any] = []
         self._prepared_content: dict[str, tuple[ContentSourceKind, int]] = {}
+        self._empty_content_source: Any | None = None
+        self._content_presentation_epoch: int | None = None
         self._media_epoch: int | None = None
         self._requested_video_epoch: int | None = None
         self._reported_video_epoch: int | None = None
@@ -341,6 +343,8 @@ class LibobsSidecarEngine:
     def handle(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope | None:
         if request.message_type == "set_editor_source_preview":
             return self._handle_editor_source_preview(request)
+        if request.message_type == "clear_content_presentation":
+            return self._handle_clear_content_presentation(request)
         # Remember correlation ids so unsolicited events (recording state) are
         # accepted by the client (it validates session + generation on events).
         self._session_id = request.session_id
@@ -1451,6 +1455,62 @@ class LibobsSidecarEngine:
                 return None
         return self._current_content_source(binding)
 
+    def _commit_content_presentation(
+        self, presentation: PreparedContentPresentation, *, preserve_editor: bool,
+    ) -> None:
+        """Publish the canonical graph and rebind its offscreen borrowers."""
+        graph = self._scene_graph
+        assert graph is not None
+        if presentation.changes_graph:
+            with self._editor_preview_update(
+                preserve_scene=preserve_editor and not graph.has_editor_source_preview,
+            ):
+                presentation.commit()
+            thumbnails = self._thumbnail_egress
+            if thumbnails is not None:
+                thumbnails.refresh_scene_sources()
+        self._collect_retired_presentations()
+
+    def _handle_clear_content_presentation(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope:
+        graph = self._scene_graph
+        if not self._runtime_started or graph is None:
+            return _ack(request, applied=False, error_code="runtime_unavailable",
+                        error_message="the libobs runtime is not running")
+        if request.session_id != self._session_id or request.process_generation != self._process_generation:
+            return _ack(request, applied=False, error_code="session_mismatch",
+                        error_message="the content presentation belongs to another process")
+        payload = require_payload_fields(
+            request.payload, frozenset({"content_media_epoch"}),
+            message_type="clear content presentation",
+        )
+        epoch = _content_media_epoch(payload)
+        if epoch is None:
+            raise SceneIpcError("A content media epoch is required")
+        if (
+            request.document_revision != self._document_revision
+            or self._content_presentation_epoch is not None and epoch < self._content_presentation_epoch
+        ):
+            return _ack(request, applied=False, error_code="stale_request",
+                        error_message="the content presentation was superseded")
+        if self._empty_content_source is None:
+            runtime = cast(Any, self._runtime)
+            try:
+                self._empty_content_source = runtime.ob.Source.create(
+                    "color_source_v3", "solin-empty-content",
+                    {"color": 0, "width": runtime.video.width, "height": runtime.video.height},
+                )
+            except Exception:  # noqa: BLE001 - preserve committed content on native allocation failure
+                log.warning("Could not create the empty content source", exc_info=True)
+            if self._empty_content_source is None:
+                return _ack(request, applied=False, error_code="source_unavailable",
+                            error_message="the empty content source could not be created")
+        with graph.content_presentation(self._empty_content_source) as presentation:
+            # Empty is canonical state, not an output Take. Existing output scenes
+            # keep their immutable origin until their native transitions retire.
+            self._commit_content_presentation(presentation, preserve_editor=False)
+        self._content_presentation_epoch = epoch
+        return _ack(request, applied=True)
+
     def _handle_prepare_scene(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope:
         graph = self._scene_graph
         if not self._runtime_started or graph is None:
@@ -1539,6 +1599,14 @@ class LibobsSidecarEngine:
             return _ack(request, applied=False, error_code="stale_request",
                         error_message="the editor selection was superseded")
         binding = self._prepared_content.get(token)
+        if binding is not None and (
+            self._content_presentation_epoch is not None
+            and binding[1] < self._content_presentation_epoch
+        ):
+            graph.discard(token)
+            self._prepared_content.pop(token, None)
+            return _ack(request, applied=False, error_code="source_unavailable",
+                        error_message="The prepared content presentation was superseded")
         content_source = None
         if binding is not None:
             content_source = self._resolve_content_source(
@@ -1583,18 +1651,11 @@ class LibobsSidecarEngine:
             self._prepared_content.pop(token, None)
             if applied:
                 if presentation is not None:
+                    self._commit_content_presentation(presentation, preserve_editor=bus_id != "editor")
+                    assert binding is not None
+                    self._content_presentation_epoch = binding[1]
                     if presentation.changes_graph:
-                        with self._editor_preview_update(
-                            preserve_scene=bus_id != "editor" and not graph.has_editor_source_preview,
-                        ):
-                            presentation.commit()
-                        self._editor_preview_sequence = max(
-                            self._editor_preview_sequence, request.sequence,
-                        )
-                        thumbnails = self._thumbnail_egress
-                        if thumbnails is not None:
-                            thumbnails.refresh_scene_sources()
-                    self._collect_retired_presentations()
+                        self._editor_preview_sequence = max(self._editor_preview_sequence, request.sequence)
                 return _ack(request, applied=True)
         return _ack(request, applied=False, error_code="unknown_preparation",
                     error_message="no such prepared scene")
@@ -1725,6 +1786,13 @@ class LibobsSidecarEngine:
             except Exception:  # noqa: BLE001 - shutdown must release remaining sources
                 log.warning("Could not release a detached content source", exc_info=True)
         self._retired_frame_sources.clear()
+        empty, self._empty_content_source = self._empty_content_source, None
+        if empty is not None:
+            try:
+                empty.release()
+            except Exception:  # noqa: BLE001 - shutdown must release the remaining runtime
+                log.warning("Could not release the empty content source", exc_info=True)
+        self._content_presentation_epoch = None
         self._media_epoch = None
         idle, self._idle_source = self._idle_source, None
         self._idle_scene_source = None

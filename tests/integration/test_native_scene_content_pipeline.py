@@ -590,10 +590,13 @@ def _create_native_transition_engine(tmp_path: Path) -> SubprocessSceneEngine:
      TransitionSpec(TransitionKind.FADE_TO_BLACK, 600)],
     ids=["cut", "dissolve", "fade-to-black"],
 )
-@pytest.mark.parametrize("preview_content", [False, True], ids=["automatic-preview", "content-preview"])
+@pytest.mark.parametrize(
+    "preview_content", ["none", "thumbnails", "editor"],
+    ids=["automatic-preview", "thumbnail-only", "content-preview"],
+)
 def test_closing_image_preserves_outgoing_pixels_until_default_transition(
     tmp_path: Path, scene_workspace_factory, qt_object_owner: QObject,
-    transition: TransitionSpec, preview_content: bool,
+    transition: TransitionSpec, preview_content: str,
 ) -> None:
     paths = ProfilePaths.from_roots(
         data_dir=tmp_path / "data", cache_dir=tmp_path / "cache", profile_id="image-return",
@@ -616,7 +619,7 @@ def test_closing_image_preserves_outgoing_pixels_until_default_transition(
     scene_ids = tuple(scene.id for scene in workspace.documents.document.scenes)
     thumbnails = (
         _BgraEgress(160, 90 * len(scene_ids), channel_id="solin-thumbnails")
-        if preview_content else None
+        if preview_content != "none" else None
     )
     projection = ProjectionSession()
     content = ProgramContentController(
@@ -653,9 +656,10 @@ def test_closing_image_preserves_outgoing_pixels_until_default_transition(
         image.fill(QColor("#00ff00"))
         content.submit_frame(image)
         assert _wait_for(green_on_air, application=application)
-        if preview_content:
+        if preview_content == "editor":
             controller.set_preview_scene(content_scene_id)
             assert _wait_for(lambda: not controller._pending, application=application)
+        if thumbnails is not None:
             assert thumbnails is not None
             assert _wait_for_pixel(
                 thumbnails, x=80, y=scene_ids.index(content_scene_id) * 90 + 45,
@@ -769,6 +773,8 @@ def test_video_auto_switch_reaches_program_without_app_decoded_frames(
         canvas_width=_TRANSITION_CANVAS[0], canvas_height=_TRANSITION_CANVAS[1],
     )
     program = _BgraEgress(*_TRANSITION_CANVAS, channel_id="solin-program")
+    scene_ids = tuple(scene.id for scene in workspace.documents.document.scenes)
+    thumbnails = _BgraEgress(160, 90 * len(scene_ids), channel_id="solin-thumbnails")
     projection = ProjectionSession()
     unsubscribe_projection = projection.subscribe(
         lambda: ingress.begin_presentation(projection.presentation_session_id)
@@ -816,6 +822,11 @@ def test_video_auto_switch_reaches_program_without_app_decoded_frames(
             application=application,
             timeout=15,
         ), observation()
+
+        assert engine.set_thumbnail_egress(
+            thumbnails.descriptor, scene_ids, 160, 90, request_id="video-thumbnails",
+            sequence=controller._next_sequence(), deadline_ms=10_000,
+        ).result(15).applied
 
         for cycle, path in enumerate(media_paths):
             before_image = program.channel_sequence()
@@ -937,6 +948,10 @@ def test_video_auto_switch_reaches_program_without_app_decoded_frames(
                 ), f"Fade-to-black mixed both presentations: {entry_samples!r}"
             assert errors == [], observation()
             assert fallbacks == [], observation()
+            assert _wait_for_pixel(
+                thumbnails, x=80, y=scene_ids.index(content_scene_id) * 90 + 45,
+                expected=expected,
+            ) is not None
 
             with _record_program_centers(program) as samples:
                 close_started_at = time.monotonic()
@@ -987,6 +1002,10 @@ def test_video_auto_switch_reaches_program_without_app_decoded_frames(
             assert all(pixel[1] <= max(pixel[0], pixel[2]) + 6 for _, pixel in samples), (
                 f"The previous green image reappeared while closing video: {samples!r}"
             )
+            assert _wait_for_pixel(
+                thumbnails, x=80, y=scene_ids.index(content_scene_id) * 90 + 45,
+                expected=bytes((255, 0, 255, 255)) if return_kind == "image" else bytes((0, 0, 0, 255)),
+            ) is not None
             events.clear()
         record_property("media_close_ms", ",".join(f"{value:.3f}" for value in close_latencies_ms))
         record_property(
@@ -999,6 +1018,7 @@ def test_video_auto_switch_reaches_program_without_app_decoded_frames(
         unsubscribe_engine()
         ingress.close()
         program.close()
+        thumbnails.close()
 
 
 @pytest.mark.parametrize("autoplay", [True, False], ids=["playing", "paused"])

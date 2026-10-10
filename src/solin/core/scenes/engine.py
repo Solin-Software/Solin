@@ -694,6 +694,18 @@ class SceneEngine(Protocol):
         deadline_ms: int,
     ) -> Future[SceneEngineAck]: ...
 
+    def clear_content_presentation(
+        self,
+        content_media_epoch: int,
+        *,
+        document_revision: int,
+        request_id: str,
+        sequence: int,
+        deadline_ms: int,
+    ) -> Future[SceneEngineAck]:
+        """Publish empty content while retaining presentations borrowed by outputs."""
+        ...
+
     def prepare_scene(
         self,
         bus_id: BusId,

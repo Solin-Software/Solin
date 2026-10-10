@@ -97,6 +97,29 @@ def _snapshot(
     )
 
 
+@pytest.mark.parametrize("epoch", [0, 2**64 - 1])
+def test_empty_content_presentation_roundtrips_without_an_output_take(epoch):
+    engine = _engine()
+    try:
+        engine.start(session_id="clear-content", deadline_ms=2000).result(3)
+        response = engine.clear_content_presentation(
+            epoch, request_id="clear-1", sequence=7, document_revision=11, deadline_ms=1000,
+        ).result(2)
+        assert response.applied
+        assert (response.request_id, response.sequence, response.document_revision) == ("clear-1", 7, 11)
+    finally:
+        engine.stop()
+
+
+@pytest.mark.parametrize("epoch", [None, True, -1, 2**64, "1"])
+def test_empty_content_presentation_rejects_invalid_epoch_before_ipc(epoch):
+    engine = _engine()
+    with pytest.raises(ValueError, match="epoch"):
+        engine.clear_content_presentation(
+            epoch, request_id="clear-1", sequence=1, document_revision=0, deadline_ms=1000,
+        ).result()
+
+
 def test_idle_state_roundtrip_and_profile_switch_keep_document_revision_independent(tmp_path):
     transcript = tmp_path / "idle-ipc.jsonl"
     engine = _engine("idle_contract", str(transcript))
