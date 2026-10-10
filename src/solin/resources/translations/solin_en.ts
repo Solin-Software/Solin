@@ -7960,13 +7960,14 @@ Add one when you are ready.</translation>
     <message>
         <location line="+12"/>
         <location line="+18"/>
-        <source>Advanced</source>
+        <source>Assignments</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="-18"/>
         <location line="+18"/>
-        <source>Media countdown</source>
+        <source>Timer</source>
+        <comment>countdown mode</comment>
         <translation type="unfinished"></translation>
     </message>
 </context>

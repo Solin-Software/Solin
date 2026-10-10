@@ -9158,14 +9158,15 @@ Aggiungine uno quando vuoi.</translation>
     <message>
         <location line="+12"/>
         <location line="+18"/>
-        <source>Advanced</source>
-        <translation>Avanzato</translation>
+        <source>Assignments</source>
+        <translation>Incarichi</translation>
     </message>
     <message>
         <location line="-18"/>
         <location line="+18"/>
-        <source>Media countdown</source>
-        <translation>Conto alla rovescia media</translation>
+        <source>Timer</source>
+        <comment>countdown mode</comment>
+        <translation>Timer</translation>
     </message>
 </context>
 <context>

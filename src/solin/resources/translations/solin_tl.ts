@@ -9158,14 +9158,15 @@ Magdagdag kapag handa ka na.</translation>
     <message>
         <location line="+12"/>
         <location line="+18"/>
-        <source>Advanced</source>
-        <translation>Advanced</translation>
+        <source>Assignments</source>
+        <translation>Mga atas</translation>
     </message>
     <message>
         <location line="-18"/>
         <location line="+18"/>
-        <source>Media countdown</source>
-        <translation>Media countdown</translation>
+        <source>Timer</source>
+        <comment>countdown mode</comment>
+        <translation>Timer</translation>
     </message>
 </context>
 <context>

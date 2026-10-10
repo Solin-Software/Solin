@@ -9158,14 +9158,15 @@ Ongeza moja ukiwa tayari.</translation>
     <message>
         <location line="+12"/>
         <location line="+18"/>
-        <source>Advanced</source>
-        <translation>Mipangilio ya juu</translation>
+        <source>Assignments</source>
+        <translation>Migawo</translation>
     </message>
     <message>
         <location line="-18"/>
         <location line="+18"/>
-        <source>Media countdown</source>
-        <translation>Hesabu ya media</translation>
+        <source>Timer</source>
+        <comment>countdown mode</comment>
+        <translation>Kipima Muda</translation>
     </message>
 </context>
 <context>

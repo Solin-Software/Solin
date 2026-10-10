@@ -9126,14 +9126,15 @@ Add one when you are ready.</source>
     <message>
         <location line="+12"/>
         <location line="+18"/>
-        <source>Advanced</source>
-        <translation>高级</translation>
+        <source>Assignments</source>
+        <translation>任务</translation>
     </message>
     <message>
         <location line="-18"/>
         <location line="+18"/>
-        <source>Media countdown</source>
-        <translation>媒体倒计时</translation>
+        <source>Timer</source>
+        <comment>countdown mode</comment>
+        <translation>计时器</translation>
     </message>
 </context>
 <context>

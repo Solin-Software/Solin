@@ -96,7 +96,7 @@ Rectangle {
                     objectName: "timerModeSelectorWide"
                     visible: !root.compactHeader
                     Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
-                    options: [qsTr("Advanced"), qsTr("Media countdown")]
+                    options: [qsTr("Assignments"), qsTr("Timer", "countdown mode")]
                     current: root.mode
                     accent: root.accent
                     segWidth: 140
@@ -114,7 +114,7 @@ Rectangle {
                 anchors.leftMargin: root.sideMargin
                 anchors.rightMargin: root.sideMargin
                 anchors.bottomMargin: 8
-                options: [qsTr("Advanced"), qsTr("Media countdown")]
+                options: [qsTr("Assignments"), qsTr("Timer", "countdown mode")]
                 current: root.mode
                 accent: root.accent
                 stretch: true

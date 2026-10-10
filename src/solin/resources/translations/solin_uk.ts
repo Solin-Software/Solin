@@ -9190,14 +9190,15 @@ Add one when you are ready.</source>
     <message>
         <location line="+12"/>
         <location line="+18"/>
-        <source>Advanced</source>
-        <translation>Додатково</translation>
+        <source>Assignments</source>
+        <translation>Завдання</translation>
     </message>
     <message>
         <location line="-18"/>
         <location line="+18"/>
-        <source>Media countdown</source>
-        <translation>Зворотний відлік медіа</translation>
+        <source>Timer</source>
+        <comment>countdown mode</comment>
+        <translation>Таймер</translation>
     </message>
 </context>
 <context>

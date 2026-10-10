@@ -9190,14 +9190,15 @@ Dodaj warstwę, gdy zechcesz.</translation>
     <message>
         <location line="+12"/>
         <location line="+18"/>
-        <source>Advanced</source>
-        <translation>Zaawansowane</translation>
+        <source>Assignments</source>
+        <translation>Zadania</translation>
     </message>
     <message>
         <location line="-18"/>
         <location line="+18"/>
-        <source>Media countdown</source>
-        <translation>Odliczanie multimediów</translation>
+        <source>Timer</source>
+        <comment>countdown mode</comment>
+        <translation>Minutnik</translation>
     </message>
 </context>
 <context>
