@@ -56,8 +56,11 @@ Run focused tests while developing, then run the complete applicable suite
 before requesting review. Packaged-app and installer tests are run when their
 platform or delivery contract changes.
 
-Pull requests run application tests on Windows, Linux, Intel macOS, and Apple
-Silicon. Native protocol tests and benchmarks run on the Linux reference runner;
+Application changes run tests on Windows, Linux, Intel macOS, and Apple Silicon.
+Documentation-only changes and verified version-only increases use static checks;
+version increases also validate release metadata and the matching release notes.
+Release tags always run the complete platform suite.
+Native protocol tests and benchmarks run on the Linux reference runner;
 Windows builds also qualify the native camera components. Lint, locale validation,
 release-note validation, and workflow validation run once. Branch protection should require the aggregate
 `Quality Gate` result.
