@@ -2955,6 +2955,134 @@ def _take_native_content(engine, *, epoch=1, bus=None):
         assert _ack_from_envelope(response).applied
 
 
+def test_clearing_content_publishes_empty_composition_without_mutating_outputs():
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+    engine.handle(_request("hydrate", {"document": _MEDIA_DOC, "active_scenes": {}}))
+    image = _FakeColorSource("content", "image", {"width": 1920, "height": 1080})
+    _hydrate_media_graph(engine, image)
+    graph = engine._scene_graph
+    origin = graph.active_scene_source
+    old_scene = graph._scenes["s1"]
+    overlay = old_scene.items[1].source
+    engine._content_presentation_epoch = 1
+    try:
+        response = engine.handle(_request("clear_content_presentation", {"content_media_epoch": 2}))
+        assert _ack_from_envelope(response).applied
+        empty = graph.content_source
+        assert empty.settings["color"] == 0  # transparent: underlying scene layers survive
+        assert graph.active_scene_source is origin
+        assert old_scene.items[0].source is image and old_scene.released == 0
+        assert graph._scenes["s1"].items[0].source is empty
+        assert graph._scenes["s1"].items[1].source is overlay
+        assert engine._effective_content_source() is empty
+        scenes_after_clear = len(runtime.scenes)
+        response = engine.handle(_request("clear_content_presentation", {"content_media_epoch": 2}))
+        assert _ack_from_envelope(response).applied
+        assert len(runtime.scenes) == scenes_after_clear
+        # Full-state synchronization must keep empty, not resurrect ingress.
+        engine.handle(_request("hydrate", {"document": _MEDIA_DOC, "active_scenes": {}}))
+        assert engine._scene_graph.content_source is empty
+        assert empty.released == 0
+    finally:
+        engine.shutdown()
+    assert empty.released == 1
+
+
+@pytest.mark.parametrize("failure", ["none", "exception"])
+def test_empty_source_allocation_failure_preserves_committed_content(monkeypatch, failure):
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+    engine.handle(_request("hydrate", {"document": _MEDIA_DOC, "active_scenes": {}}))
+    graph = engine._scene_graph
+    before = graph.scene_source("s1")
+
+    def fail(*_args, **_kwargs):
+        if failure == "exception":
+            raise RuntimeError("allocation failed")
+        return None
+
+    monkeypatch.setattr(runtime.ob.Source, "create", fail)
+    try:
+        response = engine.handle(_request("clear_content_presentation", {"content_media_epoch": 2}))
+        assert not _ack_from_envelope(response).applied
+        assert response.payload["error_code"] == "source_unavailable"
+        assert graph.scene_source("s1") is before
+        assert engine._content_presentation_epoch is None
+    finally:
+        engine.shutdown()
+
+
+@pytest.mark.parametrize("invalid", [None, True, -1, 2**64, "2"])
+def test_clear_content_validates_epoch_before_native_mutation(invalid):
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+    engine.handle(_request("hydrate", {"document": _MEDIA_DOC, "active_scenes": {}}))
+    try:
+        with pytest.raises(SceneIpcError):
+            engine.handle(_request("clear_content_presentation", {"content_media_epoch": invalid}))
+        assert engine._empty_content_source is None
+    finally:
+        engine.shutdown()
+
+
+@pytest.mark.parametrize("stale", ["epoch", "revision", "session", "generation"])
+def test_clear_content_rejects_stale_identity_without_replacing_current_presentation(stale):
+    from dataclasses import replace
+
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+    engine.handle(_request("hydrate", {"document": _MEDIA_DOC, "active_scenes": {}}))
+    engine._content_presentation_epoch = 3
+    request = _request("clear_content_presentation", {"content_media_epoch": 3})
+    if stale == "epoch":
+        request = replace(request, payload={"content_media_epoch": 2})
+    elif stale == "revision":
+        request = replace(request, document_revision=1)
+    elif stale == "session":
+        request = replace(request, session_id="old-session")
+    else:
+        request = replace(request, process_generation="old-generation")
+    before = engine._scene_graph.content_source
+    try:
+        response = engine.handle(request)
+        assert not _ack_from_envelope(response).applied
+        assert engine._scene_graph.content_source is before
+        assert engine._empty_content_source is None
+        assert engine._session_id == "sess-1" and engine._process_generation == "gen-1"
+    finally:
+        engine.shutdown()
+
+
+def test_content_prepared_before_a_clear_cannot_restore_the_retired_presentation():
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+    engine.handle(_request("hydrate", {"document": _MEDIA_DOC, "active_scenes": {}}))
+    image = _FakeColorSource("content", "image", {})
+    engine._content_consumer = _PreparedContentConsumer(image, lambda *_args, **_options: True)
+    try:
+        prepared = engine.handle(_request("prepare_scene", {
+            "bus_id": "virtual_camera", "scene_id": "s1", "content_media_epoch": 1,
+        }))
+        assert prepared.message_type == "scene_prepared"
+        cleared = engine.handle(_request("clear_content_presentation", {"content_media_epoch": 2}))
+        assert _ack_from_envelope(cleared).applied
+        empty = engine._scene_graph.content_source
+        taken = engine.handle(_request("take_prepared", {
+            "bus_id": "virtual_camera", "preparation_token": prepared.payload["preparation_token"],
+        }))
+        assert not _ack_from_envelope(taken).applied
+        assert engine._scene_graph.content_source is empty
+        assert engine._scene_graph.active_scene_source is None
+    finally:
+        engine.shutdown()
+
+
 def test_content_presentation_preserves_layer_order_and_keeps_outgoing_placeholder():
     from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
 

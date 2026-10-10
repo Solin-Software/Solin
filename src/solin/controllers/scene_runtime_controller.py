@@ -4,7 +4,7 @@ import logging
 from collections.abc import Callable, Mapping
 from concurrent.futures import CancelledError, Future
 from dataclasses import dataclass, field, replace
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 from PySide6.QtCore import QObject, Qt, Signal, Slot
 
@@ -289,6 +289,9 @@ class SceneRuntimeController(QObject):
         self._pending: dict[BusId, _PendingTake] = {}
         self._waiting_video_take: tuple[ScenePreparation, _PendingTake] | None = None
         self._ready_video_epoch: int | None = None
+        self._empty_content_sent: tuple[str, int, int] | None = None
+        self._empty_content_in_flight: tuple[tuple[str, int, int], str, int] | None = None
+        self._empty_content_epoch: int | None = None
         self._failed_takes: set[tuple[BusId, str]] = set()
         self._take_reconciliation_required: set[BusId] = set()
         self._ptz_batches: dict[BusId, _PendingPtzBatch] = {}
@@ -1260,6 +1263,7 @@ class SceneRuntimeController(QObject):
             self._profile_idle_waiter.cancel()
             self._profile_idle_waiter = None
         self._ready_video_epoch = None
+        self._empty_content_in_flight = None
         self._take_reconciliation_required.clear()
         if self._profile_activation is not None:
             self._workspace.discard_collection_activation(
@@ -1384,6 +1388,7 @@ class SceneRuntimeController(QObject):
         if session_id != self._last_projection_session_id:
             self.editor_source_preview_invalidated.emit()
             category = content_category_for_projection(self._projection.state)
+            self._empty_content_epoch = session_id if category is ContentCategory.IDLE else None
             self._pending_content_presentation_epoch = session_id
             self._require_pending_content_takes()
             self._last_projection_session_id = session_id
@@ -1532,6 +1537,7 @@ class SceneRuntimeController(QObject):
             SceneEngineStatus.STOPPED,
         }:
             self._ready_video_epoch = None
+            self._empty_content_in_flight = None
             self._cancel_all_pending(cancel_native=False)
             self._local_camera_request_id = ""
             self._local_camera_future = None
@@ -1585,6 +1591,7 @@ class SceneRuntimeController(QObject):
             or self._pending
         ):
             return
+        self._reconcile_empty_content()
         for bus_id in (BusId.VIRTUAL_CAMERA, BusId.MEDIA_WINDOWS, BusId.EDITOR):
             desired_scene_id = self.desired_scene(bus_id)
             if skip == (bus_id, desired_scene_id):
@@ -1597,6 +1604,50 @@ class SceneRuntimeController(QObject):
             ):
                 self._prepare_take(bus_id, desired_scene_id)
                 return
+
+    def _reconcile_empty_content(self) -> None:
+        """Retire canonical content independently of which scenes outputs select."""
+        if self._engine is None or self._empty_content_epoch is None:
+            return
+        identity = (self._process_generation, self._projection_session_id(), self._engine_document_revision)
+        if identity == self._empty_content_sent or self._empty_content_in_flight is not None:
+            return
+        request_id = self._request_id_factory()
+        sequence = self._next_sequence()
+        future = self._engine.clear_content_presentation(
+            identity[1], document_revision=identity[2], request_id=request_id,
+            sequence=sequence, deadline_ms=_TAKE_DEADLINE_MS,
+        )
+        context = (identity, request_id, sequence)
+        self._empty_content_in_flight = context
+        self._track_future(future, "clear_content", context, queued=True)
+
+    def _finish_empty_content(self, context: object, result: object, error: object) -> None:
+        if context != self._empty_content_in_flight:
+            return
+        self._empty_content_in_flight = None
+        identity, request_id, sequence = _context_tuple(context, 3, "clear content")
+        if identity != (
+            self._process_generation, self._projection_session_id(), self._engine_document_revision,
+        ) or projection_presentation_type(self._projection.state) != "idle":
+            self._schedule_next_take()
+            return
+        if error is not None:
+            if not isinstance(error, CancelledError):
+                self._report_exception("clear_content", error)
+            return
+        try:
+            ack = self._validated_ack(
+                result, request_id=cast(str, request_id), sequence=cast(int, sequence),
+                document_revision=self._engine_document_revision,
+            )
+        except Exception as exc:  # noqa: BLE001 - untrusted engine response boundary
+            self._report_exception("clear_content", exc)
+            return
+        if not ack.applied:
+            self._report_rejection("clear_content", ack)
+        else:
+            self._empty_content_sent = cast(tuple[str, int, int], identity)
 
     def _reconcile_engine_outputs(self) -> None:
         destinations = self._destination_enabled()
@@ -1988,6 +2039,9 @@ class SceneRuntimeController(QObject):
     def _consume_async_result(self, payload: object) -> None:
         values = _context_tuple(payload, 4, "async result")
         operation, context, result, error = values
+        if operation == "clear_content":
+            self._finish_empty_content(context, result, error)
+            return
         if operation == "idle_screen":
             self._finish_idle_screen(context, result, error)
             return

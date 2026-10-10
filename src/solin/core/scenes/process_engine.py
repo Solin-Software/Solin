@@ -608,6 +608,32 @@ class SubprocessSceneEngine:
                 self._document_revision = document_revision
         return acknowledgement
 
+    def clear_content_presentation(
+        self,
+        content_media_epoch: int,
+        *,
+        document_revision: int,
+        request_id: str,
+        sequence: int,
+        deadline_ms: int,
+    ) -> Future[SceneEngineAck]:
+        if (
+            isinstance(content_media_epoch, bool)
+            or not isinstance(content_media_epoch, int)
+            or not 0 <= content_media_epoch <= 2**64 - 1
+        ):
+            return _failed_future(ValueError("Invalid content media epoch"))
+        return self._request(
+            message_type="clear_content_presentation",
+            expected_message_type="ack",
+            request_id=request_id,
+            sequence=sequence,
+            document_revision=document_revision,
+            deadline_ms=deadline_ms,
+            payload={"content_media_epoch": content_media_epoch},
+            converter=_ack_from_envelope,
+        )
+
     def prepare_scene(
         self,
         bus_id: BusId,

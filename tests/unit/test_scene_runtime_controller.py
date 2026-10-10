@@ -46,6 +46,7 @@ from solin.core.scenes.engine import (
     SourceHealthStatus,
 )
 from solin.core.scenes.model import (
+    DELIVERY_BUSES,
     BusId,
     CameraPreset,
     CameraMediaType,
@@ -255,6 +256,7 @@ class _Engine:
         self.preparation_content_media_epochs: list[int | None] = []
         self.preparation_content_source_kinds: list[ContentSourceKind] = []
         self.video_ready = True
+        self.cleared_content_epochs: list[int] = []
         self.takes: list[tuple[str, ScenePreparation]] = []
         self.outputs: list[tuple[str, BusId, bool]] = []
         self.renders: list[tuple[str, BusId, bool]] = []
@@ -361,6 +363,14 @@ class _Engine:
                 ),
             )
         )
+
+    def clear_content_presentation(
+        self, content_media_epoch: int, *, document_revision: int,
+        request_id: str, sequence: int, deadline_ms: int,
+    ) -> Future[SceneEngineAck]:
+        assert deadline_ms > 0
+        self.cleared_content_epochs.append(content_media_epoch)
+        return _completed(self._ack(request_id, sequence, document_revision))
 
     def prepare_scene(
         self,
@@ -3229,6 +3239,126 @@ def test_new_content_during_hydration_commits_the_presentation_after_the_snapsho
     assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
     assert controller._take_reconciliation_required == set()
     assert controller._pending_content_presentation_epoch is None
+
+
+@pytest.mark.parametrize("state_type", ["image", "timer", "video", "browser"])
+def test_closing_content_clears_canonical_presentation_when_outputs_are_already_elsewhere(
+    request, state_type,
+) -> None:
+    projection = _Projection()
+    engine = _Engine()
+    _documents, runtime, controller = _runtime_controller(request, engine, projection, request_ids=())
+    controller.start_engine()
+    projection.set_type(state_type)
+    _deliver_controller_results(controller)
+    for bus in DELIVERY_BUSES:
+        runtime.take_scene(bus, CAMERA_SCENE_ID)
+    _deliver_controller_results(controller)
+    assert all(scene == CAMERA_SCENE_ID for _, scene in controller.applied_scenes)
+    prepared_before = len(engine.preparations)
+
+    projection.set_type("idle")
+    _deliver_controller_results(controller)
+
+    assert len(engine.preparations) == prepared_before
+    assert engine.cleared_content_epochs == [projection.session_id]
+    controller._reconcile_desired(prepare=True)
+    assert engine.cleared_content_epochs == [projection.session_id]
+
+
+@pytest.mark.parametrize("failure", ["rejected", "exception"])
+def test_failed_content_clear_is_not_remembered_as_accepted(request, monkeypatch, failure) -> None:
+    projection = _Projection()
+    engine = _Engine()
+    _documents, _runtime, controller = _runtime_controller(request, engine, projection, request_ids=())
+    controller.start_engine()
+    projection.set_type("image")
+    _deliver_controller_results(controller)
+    pending: Future[SceneEngineAck] = Future()
+    calls = []
+
+    def clear(epoch, **arguments):
+        calls.append((epoch, arguments))
+        return pending
+
+    monkeypatch.setattr(engine, "clear_content_presentation", clear)
+    projection.set_type("idle")
+    controller._reconcile_desired(prepare=True)
+    assert len(calls) == 1  # an in-flight publication is never duplicated
+    _, arguments = calls[0]
+    if failure == "exception":
+        pending.set_exception(RuntimeError("publication failed"))
+    else:
+        pending.set_result(replace(engine._ack(
+            arguments["request_id"], arguments["sequence"], arguments["document_revision"],
+        ), applied=False, error_code="source_unavailable"))
+    _deliver_controller_results(controller)
+    assert controller._empty_content_sent is None
+    monkeypatch.setattr(engine, "clear_content_presentation", _Engine.clear_content_presentation.__get__(engine))
+    controller._reconcile_desired(prepare=True)
+    _deliver_controller_results(controller)
+    assert engine.cleared_content_epochs == [projection.session_id]
+
+
+def test_engine_recovery_republishes_empty_content_and_ignores_previous_generation_ack(
+    request, monkeypatch,
+) -> None:
+    projection = _Projection()
+    engine = _Engine()
+    _documents, _runtime, controller = _runtime_controller(request, engine, projection, request_ids=())
+    controller.start_engine()
+    projection.set_type("image")
+    _deliver_controller_results(controller)
+    requests = []
+
+    def clear(epoch, **arguments):
+        future: Future[SceneEngineAck] = Future()
+        ack = engine._ack(arguments["request_id"], arguments["sequence"], arguments["document_revision"])
+        requests.append((epoch, future, ack))
+        return future
+
+    monkeypatch.setattr(engine, "clear_content_presentation", clear)
+    projection.set_type("idle")
+    assert len(requests) == 1
+    engine.emit_health(SceneEngineStatus.DEGRADED)
+    _deliver_controller_results(controller)
+    engine.generation = "engine-generation-2"
+    engine.emit_health(SceneEngineStatus.READY)
+    _deliver_controller_results(controller)
+    assert len(requests) == 2
+    requests[0][1].set_result(requests[0][2])
+    _deliver_controller_results(controller)
+    assert controller._empty_content_sent is None
+    requests[1][1].set_result(requests[1][2])
+    _deliver_controller_results(controller)
+    assert controller._empty_content_sent == (
+        engine.generation, projection.session_id, controller._engine_document_revision,
+    )
+
+
+def test_superseded_clear_ack_cannot_mark_a_new_presentation_empty(request, monkeypatch) -> None:
+    projection = _Projection()
+    engine = _Engine()
+    _documents, _runtime, controller = _runtime_controller(request, engine, projection, request_ids=())
+    controller.start_engine()
+    projection.set_type("image")
+    _deliver_controller_results(controller)
+    pending: Future[SceneEngineAck] = Future()
+    arguments = {}
+
+    def clear(_epoch, **options):
+        arguments.update(options)
+        return pending
+
+    monkeypatch.setattr(engine, "clear_content_presentation", clear)
+    projection.set_type("idle")
+    projection.set_type("image")
+    pending.set_result(engine._ack(
+        arguments["request_id"], arguments["sequence"], arguments["document_revision"],
+    ))
+    _deliver_controller_results(controller)
+    assert controller._empty_content_sent is None
+    assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
 
 
 @pytest.mark.parametrize("state_type", ["image", "timer", "video"])
