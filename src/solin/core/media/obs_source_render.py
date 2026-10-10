@@ -205,7 +205,7 @@ def resolve_render_source_to_bgra(
     Use the cached readback for an explicit background or when preparation must run
     inside the graphics context.
     Otherwise prefer the helper supplied by ``pylibobs`` when available. Resolve
-    once per egress loop rather than per frame.
+    once per egress configuration rather than per frame.
     """
     if before_render is not None or opaque_background:
         # Preparation and readback must share the graphics mutex so a source

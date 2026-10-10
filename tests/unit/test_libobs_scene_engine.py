@@ -5551,9 +5551,6 @@ def test_thumbnail_show_refs_are_dropped_across_a_graph_rebuild(monkeypatch):
 
 @pytest.mark.parametrize("fail", [False, True], ids=["handoff", "resolver-failure"])
 def test_thumbnail_scene_handoff_keeps_shared_cameras_showing_and_balances_refs(monkeypatch, fail):
-    from solin.core.scenes.libobs_thumbnail_egress import LibobsThumbnailEgress
-
-    monkeypatch.setattr(LibobsThumbnailEgress, "_ensure_thread", lambda _: None)
     egress, lib, block = _thumbnail_egress_with_show_refs(monkeypatch)
     lib.events.clear()
 
