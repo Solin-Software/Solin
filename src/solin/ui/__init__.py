@@ -1,3 +1,1 @@
-"""
-solin.ui — sub-pacote para telas de nível de aplicação (profile screen, etc.)
-"""
+"""solin.ui — subpackage for application-level screens (profile screen, etc.)."""

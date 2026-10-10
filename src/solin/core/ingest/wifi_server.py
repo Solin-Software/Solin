@@ -1,21 +1,21 @@
 """
-wifi_server.py — Servidor HTTP local para recepção de mídias via Wi-Fi.
+wifi_server.py — Local HTTP server for receiving media over Wi-Fi.
 
-Funcionalidades:
-  • Sobe um HTTPServer na interface LAN/Wi-Fi (IPv4 local)
-  • URL única por sessão com token UUID4 (segurança básica contra varredura)
-  • Inatividade ≥ 15 min → para automaticamente (QTimer no main thread)
-  • Arquivos recebidos salvos em data/embedded/<uuid><ext>
-  • Sinais Qt para atualizar a UI sem bloqueio
+Features:
+  • Runs an HTTPServer on the LAN/Wi-Fi interface (local IPv4).
+  • Unique session URL with a UUID4 token (basic protection against scanning).
+  • Inactivity ≥ 15 min → automatic shutdown (QTimer on the main thread).
+  • Received files saved in data/embedded/<uuid><ext>.
+  • Qt signals update the UI without blocking.
 
-Decisões técnicas:
-  • O HTTPServer roda em thread daemon pura (stdlib threading).
-  • A detecção de inatividade usa _last_activity (float, atomic via GIL)
-    e um QTimer de polling no main thread — nenhuma chamada Qt
-    é feita diretamente da thread do servidor.
-  • Upload multipart parseado manualmente (sem dependências extras):
-    lê boundary do Content-Type, itera partes, extrai filename e body.
-  • Arquivo salvo atomicamente: write → temp → rename.
+Technical decisions:
+  • HTTPServer runs in a plain daemon thread (stdlib threading).
+  • Inactivity detection uses _last_activity (float, atomic via the GIL)
+    and a polling QTimer on the main thread; the server thread never
+    makes direct Qt calls.
+  • Multipart uploads are parsed manually without extra dependencies:
+    read the Content-Type boundary, iterate parts, and extract filename/body.
+  • Files are saved atomically: write → temporary file → rename.
 """
 from __future__ import annotations
 
@@ -41,10 +41,10 @@ from solin.core.ingest.wifi_uploads import (
 
 log = logging.getLogger(__name__)
 
-# ── Constantes ────────────────────────────────────────────────────────────────
+# Constants
 
-_INACTIVITY_SECS: int = 15 * 60          # 15 minutos
-_POLL_INTERVAL_MS: int = 30_000          # checa inatividade a cada 30 s
+_INACTIVITY_SECS: int = 15 * 60          # 15 minutes
+_POLL_INTERVAL_MS: int = 30_000          # check inactivity every 30 s
 _PORT_RANGE: tuple[int, int] = (8766, 8865)
 
 _UPLOAD_THEME_KEYS = frozenset(
@@ -67,10 +67,10 @@ _UPLOAD_THEME_KEYS = frozenset(
     }
 )
 
-# ── Helpers de rede ───────────────────────────────────────────────────────────
+# Network helpers
 
 def get_local_ip() -> str:
-    """Retorna o IP da interface LAN/Wi-Fi (não loopback)."""
+    """Return the LAN/Wi-Fi interface IP address (excluding loopback)."""
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
             s.settimeout(0.5)
@@ -92,7 +92,7 @@ def _find_free_port(start: int, end: int) -> Optional[int]:
     return None
 
 
-# ── HTML da página de upload ──────────────────────────────────────────────────
+# Upload page HTML
 
 def _upload_theme(theme: dict[str, str]) -> dict[str, str]:
     missing = sorted(key for key in _UPLOAD_THEME_KEYS if not theme.get(key))
@@ -122,10 +122,10 @@ def build_upload_html(
     theme: dict[str, str],
 ) -> str:
     """
-    Gera o HTML da página de upload com textos localizados e tema injetado.
+    Generate upload page HTML with localized text and an injected theme.
 
-    Chaves esperadas: lang, title, subtitle, btn_label, success, error,
-    drop_hint e no_port.
+    Expected keys: lang, title, subtitle, btn_label, success, error,
+    drop_hint, and no_port.
     """
     lang = _html_language_tag(labels.get("lang", "en"))
     title = html.escape(labels.get("title", "Send Media"), quote=True)
@@ -337,8 +337,8 @@ def make_handler(token: str, html: str,
                   on_activity: Callable[[], None],
                   embedded_dir: str | Path) -> type:
     """
-    Fábrica que retorna uma classe handler com token/callbacks injetados.
-    Usar fábrica em vez de classe global evita estado compartilhado entre sessões.
+    Factory returning a handler class with injected token/callbacks.
+    Using a factory instead of a global class avoids shared state between sessions.
     """
     target_dir = Path(embedded_dir)
 
@@ -349,7 +349,7 @@ def make_handler(token: str, html: str,
         _on_file    = staticmethod(on_file)
         _on_act     = staticmethod(on_activity)
 
-        def log_message(self, fmt, *args):  # silencia log do servidor
+        def log_message(self, fmt, *args):  # Suppress server logging.
             pass
 
         def _send(self, status: int, ct: str, body: bytes):
@@ -375,7 +375,7 @@ def make_handler(token: str, html: str,
                 self._send(404, "text/plain", b"Not found")
                 return
 
-            # Lê Content-Length e Content-Type
+            # Read Content-Length and Content-Type.
             try:
                 length = int(self.headers.get("Content-Length", 0))
             except (ValueError, TypeError):
@@ -394,7 +394,7 @@ def make_handler(token: str, html: str,
 
             boundary = bnd_match.group(1).strip('"').encode("ascii")
 
-            # Lê corpo completo em buffer (evita ataques de slow-loris com timeout do SO)
+            # Buffer the entire body (OS timeout guards against slow-loris attacks).
             body = self.rfile.read(length)
 
             parts = parse_multipart(body, boundary)
@@ -408,7 +408,7 @@ def make_handler(token: str, html: str,
                 if not data:
                     continue
 
-                # Salva atomicamente: escreve em .tmp → renomeia
+                # Save atomically: write to .tmp → rename.
                 target_dir.mkdir(parents=True, exist_ok=True)
                 uid       = uuid.uuid4().hex
                 final     = target_dir / f"{uid}{ext}"
@@ -436,14 +436,14 @@ def make_handler(token: str, html: str,
 
 class WifiReceiveServer(QObject):
     """
-    Gerencia o ciclo de vida do servidor HTTP de recepção via Wi-Fi.
+    Manage the Wi-Fi receive HTTP server lifecycle.
 
-    Sinais:
-      server_started(ip, port, url)   emitido quando o servidor sobe com sucesso
-      server_stopped()                emitido quando o servidor para (manual ou inatividade)
-      file_received(path, orig_name)  emitido para cada arquivo recebido com sucesso
-      error_occurred(message)         emitido quando não é possível iniciar o servidor
-      inactivity_stopped()            emitido especificamente quando para por inatividade
+    Signals:
+      server_started(ip, port, url) — server started successfully
+      server_stopped() — server stopped manually or due to inactivity
+      file_received(path, orig_name) — each successfully received file
+      error_occurred(message) — server could not start
+      inactivity_stopped() — server stopped specifically due to inactivity
     """
 
     server_started    = Signal(str, int, str)   # ip, port, url
@@ -472,18 +472,18 @@ class WifiReceiveServer(QObject):
         self._pending_start: Optional[
             dict[str, str] | tuple[dict[str, str], dict[str, str]]
         ] = None
-        # True enquanto a janela de recepção Wi-Fi estiver visível ao usuário.
-        # Quando aberta, o contador de inatividade é suspenso; ao fechar, recomeça
-        # do zero (i.e. _last_activity é atualizado no momento em que fecha).
+        # True while the Wi-Fi receive window is visible to the user.
+        # Suspend the inactivity timer while open; restart it on close
+        # (i.e. update _last_activity when the window closes).
         self._window_open:   bool                       = False
 
-        # QTimer de polling de inatividade (roda no main thread — seguro)
+        # Inactivity polling QTimer (runs safely on the main thread).
         self._inactivity_timer = QTimer(self)
         self._inactivity_timer.setInterval(_POLL_INTERVAL_MS)
         self._inactivity_timer.timeout.connect(self._check_inactivity)
         self._shutdown_complete.connect(self._finish_shutdown)
 
-    # ── API pública ───────────────────────────────────────────────────────
+    # Public API
 
     @property
     def is_running(self) -> bool:
@@ -495,24 +495,24 @@ class WifiReceiveServer(QObject):
 
     def set_window_visible(self, visible: bool) -> None:
         """
-        Informa ao servidor se a janela de recepção Wi-Fi está visível ou não.
+        Tell the server whether the Wi-Fi receive window is visible.
 
-        Regras de inatividade:
-          • Enquanto visible=True  → o contador NÃO avança (nada vai desligar por inatividade).
-          • Ao chamar visible=False → o relógio começa a correr a partir de agora.
-          • Ao chamar visible=True  novamente → o relógio é zerado (fresh 15 min).
+        Inactivity rules:
+          • While visible=True, the timer does NOT advance.
+          • Calling visible=False starts the clock from now.
+          • Calling visible=True again resets the clock to a fresh 15 minutes.
 
-        Isso garante que o usuário nunca perca o servidor enquanto está olhando para
-        a tela, e que sempre tenha 15 minutos completos depois que sair.
+        This keeps the server available while the user is looking at the screen
+        and always allows a full 15 minutes after they leave.
         """
         self._window_open = visible
         if not self.is_running:
             return
         if visible:
-            # Janela reaberta → zera o contador para dar 15 min completos novamente
+            # Window reopened: reset the timer to allow another full 15 minutes.
             self._last_activity = time.monotonic()
         else:
-            # Janela fechada → começa a contar a partir de agora
+            # Window closed: start counting from now.
             self._last_activity = time.monotonic()
 
     def update_upload_page(
@@ -532,8 +532,8 @@ class WifiReceiveServer(QObject):
         html_theme: dict[str, str],
     ) -> bool:
         """
-        Inicia o servidor. Retorna True se bem-sucedido.
-        Se já estiver rodando, retorna True sem reiniciar.
+        Start the server. Return True on success.
+        If already running, return True without restarting.
         """
         if self.is_running:
             return True
@@ -554,7 +554,7 @@ class WifiReceiveServer(QObject):
             )
             return False
 
-        self._token = uuid.uuid4().hex[:12]   # token curto mas suficientemente aleatório
+        self._token = uuid.uuid4().hex[:12]   # short but sufficiently random token
         self._generation += 1
         generation = self._generation
         html = build_upload_html(html_labels, html_theme)
@@ -591,7 +591,7 @@ class WifiReceiveServer(QObject):
         return True
 
     def stop(self, *, wait: bool = False, timeout: float = 5.0) -> None:
-        """Para o servidor; server_stopped só é emitido após o término real."""
+        """Stop the server; emit server_stopped only after it has actually stopped."""
         self._pending_start = None
         self._begin_shutdown(inactivity=False, wait=wait, timeout=timeout)
 
@@ -658,17 +658,17 @@ class WifiReceiveServer(QObject):
             else:
                 self._finish_shutdown(generation, inactivity)
 
-    # ── Callbacks do handler (chamados da thread do servidor) ─────────────
+    # Handler callbacks (called from the server thread)
 
     def _on_activity(self, generation: int) -> None:
-        """Atualiza timestamp de última atividade (GIL garante atomicidade)."""
+        """Update the last activity timestamp (the GIL guarantees atomicity)."""
         if generation == self._generation and self.is_running:
             self._last_activity = time.monotonic()
 
     def _on_file_received(self, generation: int, path: str, orig_name: str) -> None:
         """
-        Chamado da thread do servidor após salvar o arquivo.
-        PySide6 enfileira o sinal automaticamente para o main thread.
+        Called from the server thread after saving a file.
+        PySide6 automatically queues the signal to the main thread.
         """
         if generation != self._generation or not self.is_running:
             return
@@ -681,8 +681,8 @@ class WifiReceiveServer(QObject):
         if not self.is_running:
             self._inactivity_timer.stop()
             return
-        # Enquanto a janela de recepção estiver aberta, suspende o contador:
-        # não deve desligar o servidor com o usuário olhando para a tela.
+        # Suspend the timer while the receive window is open:
+        # do not stop the server while the user is looking at the screen.
         if self._window_open:
             self._last_activity = time.monotonic()
             return

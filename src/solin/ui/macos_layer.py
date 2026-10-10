@@ -1,34 +1,28 @@
 """
-macos_layer.py — Arredonda os cantos de um widget via CALayer no macOS.
+macos_layer.py — Round widget corners through CALayer on macOS.
 
-Contexto
-────────
-No macOS um ``QQuickWidget`` com ``WA_AlwaysStackOnTop`` compõe os pixels
-transparentes da cena QML como **preto opaco** (diferente do Windows, onde o
-DWM compõe com alpha por-pixel). Por isso, no macOS, a toolbar roda em "modo
-sólido": a pílula é opaca e preenche o widget inteiro (zero pixels
-transparentes → zero preto).
+Context:
+On macOS, ``QQuickWidget`` with ``WA_AlwaysStackOnTop`` composites transparent
+QML scene pixels as opaque black. Windows DWM uses per-pixel alpha. Therefore
+the macOS toolbar uses solid mode: the opaque pill fills the entire widget
+(no transparent pixels, no black).
 
-Para recuperar os cantos arredondados sem reintroduzir transparência no nível
-do QML, pedimos ao **compositor** (CoreAnimation) para recortar a layer da
-NSView raiz num retângulo arredondado: ``cornerRadius`` + ``masksToBounds``.
-O recorte é feito em hardware, com antialiasing — liso, sem serrilhado, e os
-cantos recortados ficam genuinamente transparentes (não pretos).
+To restore rounded corners without QML-level transparency, CoreAnimation
+clips the root NSView layer to a rounded rectangle using ``cornerRadius``
+and ``masksToBounds``. Hardware clipping is antialiased, with smooth edges
+and transparent rather than black clipped corners.
 
-Segurança
-─────────
-- Só roda no macOS com o plugin Qt Cocoa ativo. Backends headless como
-  ``offscreen`` não possuem um ``NSView`` válido por trás de ``winId()``.
-- Falhas Python/ObjC representadas como exceções viram no-op. O guard do
-  backend acontece antes de interpretar ``winId()`` como ``NSView`` porque um
-  ponteiro nativo inválido pode abortar o processo antes de Python conseguir
-  transformar a falha em exceção.
-- Em qualquer outra plataforma é um no-op silencioso (nem importa pyobjc).
+Safety:
+- Runs only on macOS with the Qt Cocoa plugin active. Headless backends such
+  as ``offscreen`` have no valid ``NSView`` behind ``winId()``.
+- Python/ObjC exceptions become no-ops. Check the backend before interpreting
+  ``winId()`` as an ``NSView``: an invalid native pointer may abort the process
+  before Python can turn the failure into an exception.
+- Silently does nothing on other platforms, without importing pyobjc.
 
-Uso
-───
+Usage:
     from solin.ui.macos_layer import apply_corner_radius
-    apply_corner_radius(self, 20)   # após o widget ter handle nativo (winId)
+    apply_corner_radius(self, 20)  # after the widget has a native handle (winId)
 """
 
 from __future__ import annotations
@@ -42,9 +36,9 @@ from PySide6.QtWidgets import QWidget
 log = logging.getLogger(__name__)
 
 
-# Borda da toolbar (#30363d @ 70%), em componentes RGBA 0–1, desenhada na
-# própria CALayer para acompanhar o cornerRadius — o QML não desenha borda no
-# modo sólido (uma borda retangular do QML seria recortada nos cantos).
+# Toolbar border (#30363d @ 70%), in 0–1 RGBA components, drawn on
+# the CALayer itself to follow cornerRadius; QML draws no border in
+# solid mode (a rectangular QML border would be clipped at the corners).
 _BORDER_RGBA: tuple[float, float, float, float] = (0.1882, 0.2118, 0.2392, 0.7)
 _BORDER_WIDTH: float = 1.0
 
@@ -56,15 +50,16 @@ def apply_corner_radius(
     border_width: float = _BORDER_WIDTH,
     border_rgba: tuple[float, float, float, float] | None = _BORDER_RGBA,
 ) -> bool:
-    """Recorta a CALayer raiz do widget num retângulo arredondado no macOS.
+    """
+    Clip the widget's root CALayer to a rounded rectangle on macOS.
 
-    ``masksToBounds`` propaga o recorte às sub-layers (inclusive a layer Metal
-    onde o conteúdo opaco é desenhado), então o recorte arredondado vale para
-    tudo que estiver dentro do widget. A borda é desenhada na própria layer
-    (``borderWidth``/``borderColor``), de modo que acompanha a curva dos cantos.
+    ``masksToBounds`` propagates clipping to sublayers, including the Metal
+    layer rendering opaque content, so all widget content follows the rounded
+    clip. Draw the border on the layer itself (``borderWidth``/``borderColor``)
+    so it follows the corner curves.
 
-    Retorna ``True`` se aplicou, ``False`` caso contrário (inclusive fora do
-    macOS). Nunca levanta exceção.
+    Return ``True`` if applied, otherwise ``False`` (including outside macOS).
+    Never raise an exception.
     """
     if sys.platform != "darwin":
         return False
@@ -73,14 +68,14 @@ def apply_corner_radius(
         return False
 
     try:
-        import objc  # pyobjc-core, trazido por pyobjc-framework-Quartz
+        import objc  # pyobjc-core, included by pyobjc-framework-Quartz
         from ctypes import c_void_p
-    except (ImportError, OSError):  # pragma: no cover - só ocorre se pyobjc faltar
+    except (ImportError, OSError):  # pragma: no cover - only occurs when pyobjc is missing
         log.debug("pyobjc unavailable; rounded corners on macOS ignored")
         return False
 
     try:
-        handle = int(widget.winId())  # força criação do NSView nativo
+        handle = int(widget.winId())  # force creation of the native NSView
     except Exception:  # noqa: BLE001 - Qt/Cocoa bridge boundary
         log.debug("winId() unavailable while rounding corners", exc_info=True)
         return False
@@ -104,8 +99,9 @@ def apply_corner_radius(
 
 
 def _apply_layer_border(layer, border_width: float, border_rgba) -> None:
-    """Desenha a borda na CALayer (acompanha o cornerRadius). Isolada e segura:
-    se a criação do CGColor falhar, o recorte arredondado é mantido sem borda.
+    """
+    Draw the border on CALayer, following cornerRadius.
+    Isolated and safe: if CGColor creation fails, retain rounded clipping without a border.
     """
     if border_rgba is None or border_width <= 0:
         try:

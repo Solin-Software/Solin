@@ -1,19 +1,19 @@
 """
-SongDownloader — baixa mídia em background enquanto o player toca da URL.
+SongDownloader — download media in the background while the player streams the URL.
 
-Modos de operação
------------------
-persist=True  (padrão / download automático LIGADO)
-    Salva em MEDIA_CACHE_DIR/<filename> + marcador .done
-    Em cache -> re-usa na próxima reprodução
+Operating modes
+---------------
+persist=True (default / automatic downloads ON):
+    Save in MEDIA_CACHE_DIR/<filename> with a .done marker.
+    Cached files are reused on the next playback.
 
-persist=False (download automático DESLIGADO)
-    Salva em tempfile do SO (ex: /tmp/Solin_stream_XXXX.mp4)
-    NENHUM arquivo permanente criado
-    Mesmo sinal progress -> barra de buffer funciona igual
-    Mesmo sinal finished -> player chaveia para arquivo local
-    -> protegido contra queda de CDN, sem cache persistente
-    Arquivo temp apagado via cleanup_temp() / cancel()
+persist=False (automatic downloads OFF):
+    Save in an OS temporary file (e.g. /tmp/Solin_stream_XXXX.mp4).
+    Create NO permanent files.
+    The same progress signal drives the buffer bar.
+    The same finished signal switches playback to the local file,
+    protecting against CDN outages without a persistent cache.
+    Delete the temporary file through cleanup_temp() / cancel().
 """
 import os
 import logging
@@ -44,10 +44,10 @@ class _DownloadJob:
 
 class SongDownloader(QObject):
     """
-    Sinais:
-      progress(downloaded_bytes, total_bytes) - atualizacao de progresso
-      finished(local_path)                    - download completo
-      error(msg)                              - falha no download
+    Signals:
+      progress(downloaded_bytes, total_bytes) - progress update
+      finished(local_path)                    - download complete
+      error(msg)                              - download failure
     """
     progress = Signal(int, int)
     finished = Signal(str)
@@ -77,14 +77,14 @@ class SongDownloader(QObject):
     # -- API publica ----------------------------------------------------------
 
     def get_cached_path(self, url: str):
-        """Retorna caminho local se arquivo persistente ja existe."""
+        """Return the local path if the persistent file already exists."""
         return completed_cached_path(url, self._media_cache_dir)
 
     def start(self, url: str, persist: bool = True) -> int:
         """
-        Inicia download em background.
-        persist=True  -> salva permanentemente em MEDIA_CACHE_DIR
-        persist=False -> salva em tempfile (apagado em cleanup_temp/cancel)
+        Start a background download.
+        persist=True → save permanently in MEDIA_CACHE_DIR.
+        persist=False → save in a temporary file, deleted by cleanup_temp/cancel.
         """
         self.cancel()
         with self._lock:
@@ -107,7 +107,7 @@ class SongDownloader(QObject):
         return job.job_id
 
     def cancel(self) -> None:
-        """Cancela o job atual e invalida todos os callbacks ainda enfileirados."""
+        """Cancel the current job and invalidate all callbacks still queued."""
         with self._lock:
             job = self._job
             self._job = None
@@ -122,8 +122,8 @@ class SongDownloader(QObject):
 
     def cleanup_temp(self) -> None:
         """
-        Apaga o tempfile entregue ao player (persist=False).
-        Deve ser chamado pelo MediaController em stop() e no playback seguinte.
+        Delete the temporary file handed to the player (persist=False).
+        MediaController must call this in stop() and before the next playback.
         """
         with self._lock:
             path = self._finished_temp
@@ -131,7 +131,7 @@ class SongDownloader(QObject):
         safe_remove(path)
 
     def take_finished_temp(self):
-        """Retorna (e limpa) o caminho do temp finalizado para rastreamento externo."""
+        """Return and clear the completed temporary file path for external tracking."""
         with self._lock:
             path = self._finished_temp
             self._finished_temp = None

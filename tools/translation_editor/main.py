@@ -1,23 +1,23 @@
 """
-translation_editor.py — Solin Translation Editor
-─────────────────────────────────────────────────
-Editor visual para arquivos .ts do Qt.
+Solin Translation Editor
+========================
+Visual editor for Qt .ts files.
 
-Fluxo:
-  1. "↻ Extrair strings (lupdate)"  →  cria/atualiza o .ts a partir do código
-  2. Traduzir na tabela
-  3. "✦ Preencher vazios"           →  auto-tradução via Gemini genai SDK
-  4. "💾 Salvar"                     →  grava o .ts
-  5. "▶ Compilar .qm (lrelease)"    →  gera o binário para produção
+Workflow:
+  1. Extract strings (lupdate) → create/update .ts from source code.
+  2. Translate in the table.
+  3. Fill empty entries → automatic translation via the Gemini genai SDK.
+  4. Save → write .ts.
+  5. Compile .qm (lrelease) → generate the production binary.
 
-Conceito fundamental:
-  • O idioma FONTE (inglês) é o que está escrito em self.tr("...").
-    O texto literal é o fallback nativo para mensagens comuns.
-  • O catálogo inglês ainda é necessário para mensagens numerus: ele contém
-    as formas reais "item"/"items" usadas no lugar do source neutro
-    "%n item(s)". Portanto, todos os idiomas disponíveis têm .ts/.qm.
+Core concept:
+  • The SOURCE language (English) is the literal text in self.tr("...").
+    This is the native fallback for ordinary messages.
+  • The English catalog is still required for numerus messages: it holds
+    the actual "item"/"items" forms replacing the neutral "%n item(s)" source.
+    All available languages therefore have .ts/.qm catalogs.
 
-Uso:
+Usage:
     python tools/translation_editor/main.py
 """
 from __future__ import annotations
@@ -308,14 +308,14 @@ def _run_ts_auto_translate(
 
 def _find_tool(name: str) -> list[str]:
     """
-    Retorna lista de tokens de comando para a ferramenta PySide6.
+    Return command tokens for a PySide6 tool.
 
-    Estratégia:
-      1. Wrapper script no PATH (pip normal)
-      2. Binário direto dentro do pacote PySide6
-         (Anaconda instala lupdate.exe em site-packages/PySide6/)
-      3. python -m PySide6.<tool>  (fallback universal)
-    Retorna [] se não encontrado.
+    Strategy:
+      1. Wrapper script on PATH (standard pip installation).
+      2. Binary directly inside the PySide6 package
+         (Anaconda installs lupdate.exe in site-packages/PySide6/).
+      3. python -m PySide6.<tool> (universal fallback).
+    Return [] if not found.
     """
     import shutil, importlib.util
 
@@ -335,7 +335,7 @@ def _find_tool(name: str) -> list[str]:
         if shutil.which(candidate):
             return [candidate]
 
-    # 2. binário dentro do pacote PySide6 (Anaconda/conda)
+    # 2. Binary inside the PySide6 package (Anaconda/conda)
     spec = importlib.util.find_spec("PySide6")
     if spec and spec.submodule_search_locations:
         pdir = list(spec.submodule_search_locations)[0]
@@ -344,7 +344,7 @@ def _find_tool(name: str) -> list[str]:
             if os.path.isfile(full):
                 return [full]
 
-    # 3. módulo Python — funciona em qualquer ambiente
+    # 3. Python module: works in any environment.
     try:
         importlib.import_module(f"PySide6.{short}")
         return [sys.executable, "-m", f"PySide6.{short}"]
@@ -355,19 +355,19 @@ def _find_tool(name: str) -> list[str]:
 
 
 def _collect_translation_sources(root: str) -> list[str]:
-    # Adicionamos "venv_solin" e outros padrões comuns de ignorar
+    # Include "venv_solin" and other common ignore patterns.
     skip = {"__pycache__", ".git", "build", "dist", "venv", ".venv",
             ".mypy_cache", ".tox", "node_modules", "venv_solin"}
     
     result = []
     for dirpath, dirs, files in os.walk(root):
-        # 1. Ignora pastas exatas listadas no skip e qualquer pasta que comece com "venv" ou "env"
+        # 1. Skip exact folder names in the list and folders starting with "venv" or "env".
         dirs[:] = sorted(
             d for d in dirs 
             if d not in skip and not d.startswith("venv") and not d.startswith("env")
         )
         
-        # 2. Segurança extra: ignora se por acaso entrar em um site-packages
+        # 2. Extra protection: skip any site-packages directory encountered.
         if "site-packages" in dirpath.lower():
             continue
             
@@ -399,8 +399,8 @@ def run_lupdate(project_root: str, ts_path: str) -> tuple[bool, str]:
     lst_path: str | None = None
 
     try:
-        # O arquivo de resposta precisa estar fechado no Windows antes de o
-        # lupdate abri-lo. Um nome único também permite execuções concorrentes.
+        # Close the response file on Windows before lupdate opens it.
+        # A unique name also supports concurrent runs.
         with tempfile.NamedTemporaryFile(
             mode="w",
             encoding="utf-8",
@@ -469,13 +469,13 @@ def run_lrelease(ts_path: str) -> tuple[bool, str]:
         return False, f"Erro: {exc}"
 
 
-# ── Worker (subprocess em thread separada) ────────────────────────────────────
+# Worker (subprocess in a separate thread)
 
 class _Sig(QObject):
     done = Signal(bool, str)
 
 class _SigAT(QObject):
-    """Signal para auto-translate worker (inclui resultados serializados)."""
+    """Signal for the automatic translation worker, including serialized results."""
     done = Signal(bool, str, str)   # (success, message, json_results)
 
 class _Worker(QRunnable):
@@ -557,17 +557,17 @@ def _validated_translation(entry: "Entry", value: object) -> str | list[str] | N
 
 class Entry:
     """
-    Uma <message> do .ts com referência viva ao Element XML.
+    A .ts <message> with a live reference to its XML Element.
 
-    Entradas plurais (numerus="yes"):
-      • self.is_plural  = True
-      • self.forms      = ["forma singular", "forma plural", ...]
-      • self.translation = "" (não usado — use forms)
+    Plural entries (numerus="yes"):
+      • self.is_plural = True
+      • self.forms = ["singular form", "plural form", ...]
+      • self.translation = "" (unused; use forms).
 
-    Entradas simples:
-      • self.is_plural  = False
-      • self.forms      = []
-      • self.translation = "texto traduzido"
+    Single entries:
+      • self.is_plural = False
+      • self.forms = []
+      • self.translation = "translated text".
     """
     def __init__(
         self,
@@ -612,13 +612,13 @@ class Entry:
         if self.translation == self.source: return "same"
         return "ok"
 
-    # Para exibição resumida na tabela (coluna Tradução)
+    # for the table's abbreviated display (Translation column)
     @property
     def display_translation(self) -> str:
         if self.is_plural:
             if not self.forms:
                 return ""
-            # Mostra a primeira forma preenchida seguida de indicador
+            # Show the first populated form followed by an indicator.
             filled = [f for f in self.forms if f]
             if not filled:
                 return ""
@@ -676,13 +676,13 @@ class TsFile:
 
                 finished = tr_el.get("type") != "unfinished"
 
-                # ── Detecta entrada plural ────────────────────────────────────
+                # Detect plural entry.
                 is_plural = msg.get("numerus") == "yes"
                 forms: list[str] = []
                 if is_plural:
                     for nf in tr_el.findall("numerusform"):
                         forms.append(nf.text or "")
-                    translation = ""   # não usado para plurais
+                    translation = ""   # not used for plurals
                 else:
                     translation = tr_el.text or ""
 
@@ -818,13 +818,13 @@ class TsFile:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Detecção de idiomas
+# Language detection
 # ══════════════════════════════════════════════════════════════════════════════
 
 def load_languages() -> list[dict]:
     """
-    Retorna todos os idiomas definidos em translations/locales/*.json.
-    Campos: code, name, is_source, ts (path|None), qm (path|None).
+    Return all languages defined in translations/locales/*.json.
+    Fields: code, name, is_source, ts (path|None), qm (path|None).
     """
     import glob
     langs: dict[str, dict] = {}
@@ -860,7 +860,7 @@ def save_lang_json(code: str, name: str,
                    api_code: str, wol_lang: str, wol_region: str,
                    wol_lp: str, date_format: str,
                    time_with_seconds_format: str) -> str:
-    """Cria translations/locales/<code>.json e retorna o path."""
+    """Create translations/locales/<code>.json and return its path."""
     os.makedirs(_LANG_DIR, exist_ok=True)
     path = os.path.join(_LANG_DIR, f"{code}.json")
     data = {"meta": {
@@ -876,7 +876,7 @@ def save_lang_json(code: str, name: str,
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Modelo de tabela
+# Table model
 # ══════════════════════════════════════════════════════════════════════════════
 
 _SL = {"ok":"✓  OK","same":"≈  Igual","unfinished":"○  Pendente","empty":"!  Vazia"}
@@ -937,9 +937,9 @@ class Model(QAbstractTableModel):
 
     def update_entry(self, row: int, value: "str | list[str]"):
         """
-        Atualiza a tradução de uma entrada.
-        Para entradas simples: value é str.
-        Para entradas plurais: value é list[str] com uma string por forma.
+        Update an entry's translation.
+        For single entries, value is str.
+        For plural entries, value is list[str], one string per form.
         """
         e = self._rows[row]
         if e.is_plural:
@@ -955,7 +955,7 @@ class Model(QAbstractTableModel):
             e.modified = True
             tr_el = e._elem.find("translation")
             if tr_el is not None:
-                # Atualiza cada <numerusform> individualmente
+                # Update each <numerusform> individually.
                 existing = tr_el.findall("numerusform")
                 for i, form_text in enumerate(new_forms):
                     existing[i].text = form_text or None
@@ -985,9 +985,10 @@ class Model(QAbstractTableModel):
             self.dirty_changed.emit(v)
 
     def mark_clean(self) -> None:
-        """Marca o modelo como sem alterações pendentes (chamar após save).
-        Também limpa o flag `modified` de todas as entradas para que o filtro
-        'Só alterados' fique vazio depois de salvar — comportamento esperado.
+        """
+        Mark the model as having no pending changes (call after saving).
+        Also clear every entry's `modified` flag so the modified-only filter
+        is empty after saving, as expected.
         """
         for e in self._rows:
             e.modified = False
@@ -1054,18 +1055,18 @@ class Proxy(QSortFilterProxyModel):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Painel de detalhe
+# Detail panel
 # ══════════════════════════════════════════════════════════════════════════════
 
-# ── Rótulos de forma plural por idioma ───────────────────────────────────────
-# Muitos idiomas têm 2 formas (singular/plural). Alguns (russo, árabe, polonês)
-# têm 3+. Usamos os rótulos genéricos como fallback seguro.
+# Plural form labels by language
+# Many languages have two forms (singular/plural); some (Russian, Arabic, Polish)
+# have three or more. Use generic labels as a safe fallback.
 _PLURAL_LABELS: dict[int, list[str]] = {
     1: ["Singular"],
     2: ["Singular (1)", "Plural (n ≠ 1)"],
     3: ["Forma 1 (1)", "Forma 2 (2–4)", "Forma 3 (n=0, 5+)"],
     4: ["Forma 1", "Forma 2", "Forma 3", "Forma 4"],
-    6: ["Zero", "Um", "Dois", "Poucos", "Muitos", "Outro"],  # árabe
+    6: ["Zero", "Um", "Dois", "Poucos", "Muitos", "Outro"],  # Arabic
 }
 
 def _plural_labels(n: int) -> list[str]:
@@ -1076,15 +1077,15 @@ def _plural_labels(n: int) -> list[str]:
 
 class DetailPanel(QFrame):
     """
-    Painel lateral de edição.
+    Editing side panel.
 
-    Modo simples (entry.is_plural=False):
-      Exibe um único QTextEdit para a tradução.
+    Single mode (entry.is_plural=False):
+      Show one QTextEdit for the translation.
 
-    Modo plural (entry.is_plural=True):
-      Exibe N QTextEdits — um por <numerusform> — com rótulos
-      (Singular, Plural, …) derivados da quantidade de formas no arquivo.
-      Qualquer edição em qualquer campo habilita o botão Salvar.
+    Plural mode (entry.is_plural=True):
+      Show N QTextEdits, one per <numerusform>, with labels
+      (Singular, Plural, …) derived from the file's form count.
+      Editing any field enables the Save button.
     """
     committed = Signal(int, object)   # (row, str | list[str])
 
@@ -1093,10 +1094,10 @@ class DetailPanel(QFrame):
         self._row: Optional[int] = None
         self._loading = False
         self._is_plural = False
-        self._plural_edits: list[QTextEdit] = []   # edits ativos no modo plural
+        self._plural_edits: list[QTextEdit] = []   # editors active in plural mode
         self._build()
 
-    # ── construção base (widgets permanentes) ─────────────────────────────
+    # Base construction (permanent widgets)
 
     def _build(self):
         self.setObjectName("Side")
@@ -1121,9 +1122,9 @@ class DetailPanel(QFrame):
             f"border:1px solid {C['bg3']};border-radius:6px;padding:8px;}}")
         self._lay.addWidget(self._src)
 
-        # ── Área de tradução (simples ou plural) ─────────────────────────
-        # Usamos um QWidget container para poder trocar os widgets internos
-        # sem reconstruir o layout inteiro.
+        # Translation area (single or plural)
+        # Use a QWidget container to swap internal widgets
+        # without rebuilding the entire layout.
         self._tr_container = QWidget()
         self._tr_container.setObjectName("tr_container")
         self._tr_layout = QVBoxLayout(self._tr_container)
@@ -1131,7 +1132,7 @@ class DetailPanel(QFrame):
         self._tr_layout.setSpacing(6)
         self._lay.addWidget(self._tr_container)
 
-        # Tradução simples (default — sempre presente, ocultado no modo plural)
+        # Single translation (default: always present, hidden in plural mode)
         self._tr_label = self._section("TRADUÇÃO")
         self._tr_layout.addWidget(self._tr_label)
         self._tr = QTextEdit()
@@ -1185,14 +1186,14 @@ class DetailPanel(QFrame):
         return lbl, ed
 
     def _clear_plural_widgets(self):
-        """Remove todos os widgets de formas plurais do container."""
+        """Remove all plural form widgets from the container."""
         for ed in self._plural_edits:
-            # Remove do layout e destrói
+            # Remove from the layout and destroy.
             self._tr_layout.removeWidget(ed)
             ed.setParent(None)
             ed.deleteLater()
         self._plural_edits.clear()
-        # Remove também os labels das formas (ficam antes de cada edit)
+        # Also remove form labels, which precede each editor.
         while self._tr_layout.count() > 0:
             item = self._tr_layout.itemAt(self._tr_layout.count() - 1)
             if item and item.widget():
@@ -1207,7 +1208,7 @@ class DetailPanel(QFrame):
                 break
 
     def _show_simple_mode(self):
-        """Mostra o QTextEdit simples, esconde formas plurais."""
+        """Show the single QTextEdit and hide plural forms."""
         self._clear_plural_widgets()
         self._tr_label.setText("TRADUÇÃO")
         self._tr_label.show()
@@ -1216,16 +1217,16 @@ class DetailPanel(QFrame):
 
     def _show_plural_mode(self, forms: list[str]):
         """
-        Esconde o QTextEdit simples e cria um QTextEdit por forma plural.
-        As formas são: [singular_text, plural_text, ...].
+        Hide the single QTextEdit and create one QTextEdit per plural form.
+        Forms are [singular_text, plural_text, ...].
         """
-        # Oculta widgets simples
+        # Hide single-form widgets.
         self._tr_label.hide()
         self._tr.hide()
         self._copy_btn.hide()
         self._clear_plural_widgets()
 
-        # Cabeçalho do bloco plural
+        # Plural block header
         header = self._section(f"TRADUÇÃO  ({len(forms)} formas plurais)")
         self._tr_layout.addWidget(header)
         self._plural_edits_labels: list[QLabel] = []
@@ -1240,7 +1241,7 @@ class DetailPanel(QFrame):
             self._tr_layout.addWidget(ed)
             self._plural_edits.append(ed)
 
-    # ── API pública ────────────────────────────────────────────────────────
+    # Public API
 
     def load(self, row: int, entry: "Entry"):
         self._row, self._loading = row, True
@@ -1279,7 +1280,7 @@ class DetailPanel(QFrame):
             f"⚠ Placeholders inconsistentes: {' | '.join(mv)}" if mv else "")
 
     def _do_copy_source(self):
-        """Copia o source para o campo de tradução simples."""
+        """Copy the source into the single translation field."""
         self._tr.setPlainText(self._src.toPlainText())
 
     def _changed(self):
@@ -1292,7 +1293,7 @@ class DetailPanel(QFrame):
         if self._is_plural:
             if not self._plural_edits:
                 return
-            # Coleta todas as formas
+            # Collect all forms.
             value: list[str] = [ed.toPlainText() for ed in self._plural_edits]
         else:
             value: str = self._tr.toPlainText()
@@ -1300,7 +1301,7 @@ class DetailPanel(QFrame):
         self._save_btn.setEnabled(False)
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Diálogo "Novo idioma"
+# "New language" dialog
 # ══════════════════════════════════════════════════════════════════════════════
 
 class NewLangDialog(QDialog):
@@ -1390,7 +1391,7 @@ class NewLangDialog(QDialog):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Diálogo de output de processo
+# Process output dialog
 # ══════════════════════════════════════════════════════════════════════════════
 
 class OutputDialog(QDialog):
@@ -1421,7 +1422,7 @@ class OutputDialog(QDialog):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Janela principal
+# Main window
 # ══════════════════════════════════════════════════════════════════════════════
 
 class TranslationEditor(QMainWindow):
@@ -1494,7 +1495,7 @@ class TranslationEditor(QMainWindow):
         self._combo.currentIndexChanged.connect(self._on_lang_changed)
         lay.addWidget(self._combo)
 
-        # Novo idioma
+        # New language
         self._btn_new = QPushButton("＋  Novo idioma")
         self._btn_new.setObjectName("New")
         self._btn_new.setMinimumHeight(34)
@@ -1558,12 +1559,12 @@ class TranslationEditor(QMainWindow):
         self._search.setMinimumWidth(280)
         lay.addWidget(self._search, 1)
 
-        # ── Filtro: só pendentes ──────────────────────────────────────────
+        # Filter: pending only
         self._chk = QCheckBox("Só pendentes")
         self._chk.toggled.connect(self._on_filter_pending)
         lay.addWidget(self._chk)
 
-        # ── Filtro: só alterados (não salvo) ─────────────────────────────
+        # Filter: modified only (unsaved)
         self._chk_mod = QCheckBox("Só alterados")
         self._chk_mod.setToolTip(
             "Mostra apenas as entradas modificadas desde o último salvamento.\n"
@@ -1583,7 +1584,7 @@ class TranslationEditor(QMainWindow):
         return w
 
     def _on_filter_pending(self, checked: bool):
-        """Ativa filtro 'pendentes'; desativa 'alterados' se necessário."""
+        """Enable the pending filter; disable the modified filter if necessary."""
         if checked and self._chk_mod.isChecked():
             self._chk_mod.blockSignals(True)
             self._chk_mod.setChecked(False)
@@ -1592,7 +1593,7 @@ class TranslationEditor(QMainWindow):
         self._proxy.set_pending(checked)
 
     def _on_filter_modified(self, checked: bool):
-        """Ativa filtro 'alterados'; desativa 'pendentes' se necessário."""
+        """Enable the modified filter; disable the pending filter if necessary."""
         if checked and self._chk.isChecked():
             self._chk.blockSignals(True)
             self._chk.setChecked(False)
@@ -1614,7 +1615,7 @@ class TranslationEditor(QMainWindow):
         hh.setHighlightSections(False)
         t.verticalHeader().setDefaultSectionSize(32)
         t.selectionModel().currentRowChanged.connect(self._on_row)
-        # Atalhos de navegação
+        # Navigation shortcuts
         QShortcut(QKeySequence("j"), t,
                   lambda: self._move_row(1))
         QShortcut(QKeySequence("k"), t,
@@ -1625,7 +1626,7 @@ class TranslationEditor(QMainWindow):
     # ── Combo ──────────────────────────────────────────────────────────────
 
     def _refresh_combo(self, select_code: Optional[str] = None):
-        """Reconstrói o combo a partir de self._langs."""
+        """Rebuild the combo box from self._langs."""
         self._combo.blockSignals(True)
         self._combo.clear()
         for lg in self._langs:
@@ -1634,7 +1635,7 @@ class TranslationEditor(QMainWindow):
             self._combo.addItem(f"{lg['name']}  ({lg['code']}){badge}{ts_ok}")
         self._combo.blockSignals(False)
 
-        # Seleciona idioma desejado
+        # Select the requested language.
         idx = 0
         if select_code:
             idx = next((i for i,lg in enumerate(self._langs)
@@ -1643,10 +1644,10 @@ class TranslationEditor(QMainWindow):
         if self._langs:
             self._load_lang(self._langs[idx])
 
-    # ── Dados ──────────────────────────────────────────────────────────────
+    # Data
 
     def _load_lang(self, lang: dict):
-        """Carrega idioma. Trata idioma fonte e .ts ausente."""
+        """Load a language, handling the source language and a missing .ts file."""
         self._current = lang
         self._tsfile = None
         self._model.load([])
@@ -1672,7 +1673,7 @@ class TranslationEditor(QMainWindow):
 
         self._tsfile = tsfile
         self._model.load(self._tsfile.entries)
-        # Força atualização completa do proxy e da view
+        # Force a complete proxy and view refresh.
         self._proxy.invalidateFilter()
         self._table.reset()
         self._detail.clear()
@@ -1741,7 +1742,7 @@ class TranslationEditor(QMainWindow):
                                 sm.SelectionFlag.Rows)
         self._table.scrollTo(new)
 
-    # ── Novo idioma ────────────────────────────────────────────────────────
+    # New language
 
     def _do_new_lang(self):
         dlg = NewLangDialog(self)
@@ -1754,7 +1755,7 @@ class TranslationEditor(QMainWindow):
             QMessageBox.critical(self, "Erro", f"Não foi possível criar o JSON:\n{exc}")
             return
 
-        # Recarrega lista e seleciona novo idioma
+        # Reload the list and select the new language.
         self._langs = load_languages()
         self._refresh_combo(select_code=v["code"])
         self._set_status(
@@ -1796,14 +1797,14 @@ class TranslationEditor(QMainWindow):
                      output, ok, self).exec()
 
         if ok:
-            # Atualiza a referência em ambos os lugares de forma consistente
+            # Update the reference consistently in both places.
             for lg in self._langs:
                 if lg is self._current:
                     lg["ts"] = ts_path
                     break
             self._current["ts"] = ts_path
             self._load_lang(self._current)
-            # Atualiza badge no combo
+            # Update the badge in the combo box.
             idx  = self._combo.currentIndex()
             self._combo.setItemText(
                 idx,

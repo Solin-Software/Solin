@@ -34,16 +34,16 @@ from .publication_content import (
 log = logging.getLogger(__name__)
 
 
-# ── Worker — toda lógica bloqueante aqui, nunca na main thread ────────────────
+# Worker: all blocking logic runs here, never on the main thread.
 
 
 class JwpubWorker(QObject):
     """
-    Roda num QThread dedicado. Toda operação bloqueante (HTTP, zip, SQLite)
-    acontece aqui. Comunica com JwpubService exclusivamente via sinais —
-    QThread garante QueuedConnection automática, sem moveToThread manual.
+    Run in a dedicated QThread. All blocking operations (HTTP, ZIP, SQLite)
+    happen here. Communicate with JwpubService exclusively through signals;
+    QThread provides automatic QueuedConnection without manual moveToThread.
 
-    Sinais emitidos para a main thread:
+    Signals emitted to the main thread:
       mwb_done(key, WeekData)
       wt_done(key, WeekData)
       cbs_done(key, WeekData)
@@ -119,7 +119,7 @@ class JwpubWorker(QObject):
 
     @Slot(bool)
     def set_sign_language(self, is_sign: bool):
-        """Informa se o idioma de mídia é gestual (afeta resolução de cânticos)."""
+        """Indicate whether the media language is a sign language (affects song resolution)."""
         self._is_sign_language = is_sign
 
     # ── Load week ─────────────────────────────────────────────────────────────
@@ -138,21 +138,19 @@ class JwpubWorker(QObject):
         repair_cache_paths: object = None,
     ):
         """
-        Entry point: carrega MWB + WT para a semana dada.
+        Entry point: load MWB + WT for the given week.
 
-        Stale-while-revalidate (SWR)
-        ────────────────────────────
-        Fase 1 — MATERIALIZAR: se a árvore persistida daquela publicação ainda
-                 não existe ou não possui baseline canônico, usa uma cópia local
-                 confirmada. Uma árvore com baseline já persistido é a fonte de
-                 verdade e não é reconstruída a partir do JWPUB cacheado.
-        Fase 2 — REVALIDAR: consulta a API em segundo plano (thread do worker).
-                 Só baixa, lê e re-emite quando o checksum do servidor realmente
-                 mudou. Árvores antigas sem baseline recebem uma única
-                 materialização confirmada para registrar a estrutura oficial.
+        Stale-while-revalidate (SWR):
+        Phase 1 — MATERIALIZE: if the persisted publication tree is missing or lacks
+                  a canonical baseline, use a confirmed local copy. A tree with a
+                  persisted baseline is authoritative and is not rebuilt from cached JWPUB.
+        Phase 2 — REVALIDATE: query the API in the background (worker thread). Download,
+                  read, and emit again only when the server checksum actually changes.
+                  Older trees without a baseline receive one confirmed materialization
+                  to record the official structure.
 
-        force=True (retry de erro / troca de idioma) pula a fase de servir e faz
-        uma revalidação limpa, mantendo a semântica de "recarregar de verdade".
+        force=True (error retry / language change) skips serving cached content and
+        performs a clean revalidation, preserving a full reload's semantics.
         """
         if self._cancelled.is_set():
             return
@@ -217,7 +215,7 @@ class JwpubWorker(QObject):
     # ── MWB ───────────────────────────────────────────────────────────────────
 
     def _serve_mwb_cached(self, monday: date) -> bool:
-        """Fase 1 (SWR): renderiza o MWB do cache local sem rede. True se servido."""
+        """Phase 1 (SWR): render MWB from local cache without network access. True if served."""
         issue = mwb_issue_for_week(monday)
         lang = self._lang
         if not self._cache.can_materialize("mwb", lang, issue):
@@ -244,8 +242,8 @@ class JwpubWorker(QObject):
         persisted_source_checksum: str,
     ):
         """
-        Fase 2 (SWR): consulta a API e só re-emite se o conteúdo do servidor
-        mudou. ``served`` indica se a fase 1 já mostrou uma cópia do cache.
+        Phase 2 (SWR): query the API and emit again only if server content changed.
+        ``served`` indicates whether phase 1 already displayed a cached copy.
         """
         key = monday.isoformat()
         issue = mwb_issue_for_week(monday)
@@ -257,9 +255,9 @@ class JwpubWorker(QObject):
         not_found = archive_info.not_found
 
         if not url:
-            # API inalcançável, ou a publicação não existe para esta semana/idioma.
+            # API unreachable, or publication unavailable for this week/language.
             if served or not materialize_cached:
-                return  # já mostramos o cache — nada a fazer
+                return  # Cache already displayed; nothing to do.
             if self._cache.can_materialize("mwb", lang, issue):
                 log.warning("mwb %s: API unreachable, falling back to cached copy", issue)
                 self._parse_mwb(
@@ -301,7 +299,7 @@ class JwpubWorker(QObject):
                 )
             return
 
-        # Conteúdo mudou no servidor (ou nada em cache ainda) → baixa e re-renderiza.
+        # Server content changed (or cache still empty): download and render again.
         if not self._download(
             "mwb",
             lang,
@@ -311,7 +309,7 @@ class JwpubWorker(QObject):
             "mwb",
             emit_error=not (served or not materialize_cached),
         ):
-            return  # falhou; se já servimos cache, ele permanece na tela
+            return  # Failed; if cached content was already served, it stays on screen.
         self._checksum_store.save("mwb", lang, issue, checksum)
         self._parse_mwb(
             self._new_week_data(
@@ -377,12 +375,12 @@ class JwpubWorker(QObject):
 
     def _serve_wt_cached(self, monday: date) -> Optional[str]:
         """
-        Fase 1 (SWR): renderiza o WT do cache local sem rede.
+        Phase 1 (SWR): render WT from local cache without network access.
 
-        A edição de A Sentinela que contém a semana de estudo não é determinística
-        (a edição de um mês pode conter estudos de outro), então tentamos cada
-        candidato em ordem e servimos o PRIMEIRO que já está em cache E contém a
-        semana. Retorna a edição servida, ou None se nenhuma cópia local serve.
+        The Watchtower issue containing the study week is not deterministic
+        (one month's issue may contain studies for another). Try each candidate
+        in order and serve the FIRST cached issue containing the week.
+        Return the issue served, or None if no local copy is suitable.
         """
         lang = self._lang
         for issue in watchtower_issue_candidates(monday):
@@ -407,9 +405,9 @@ class JwpubWorker(QObject):
         persisted_source_checksum: str,
     ):
         """
-        Fase 2 (SWR). Revalida a edição servida do cache ou a edição registrada
-        na árvore persistida e só re-emite se mudou. Sem uma edição conhecida,
-        cai no resolvedor frio que sonda os candidatos pela rede.
+        Phase 2 (SWR): revalidate the issue served from cache or recorded in the
+        persisted tree and emit again only if it changed. Without a known issue,
+        fall back to the cold resolver that probes candidates over the network.
         """
         lang = self._lang
         issue = served_issue or known_issue
@@ -463,7 +461,7 @@ class JwpubWorker(QObject):
             return
         if not materialize_cached:
             return
-        # Caminho frio: sem cache utilizável → sonda candidatos e baixa pela rede.
+        # Cold path: no usable cache; probe candidates and download over the network.
         self._download_wt_chain(
             monday,
             lang,
@@ -632,7 +630,7 @@ class JwpubWorker(QObject):
                     out.append(ref)
             return out, downloaded
 
-        # ── Fase 1 (SWR): monta as referências do cache, sem rede ─────────────
+        # Phase 1 (SWR): build references from cache, without network access.
         cached, _ = build(cache_only=True)
         if cached:
             wd.mwb_publication_refs = list(cached)
@@ -640,7 +638,7 @@ class JwpubWorker(QObject):
             wd.cbs_status = "ready"
             self._emit_if_active(self.cbs_done, key, wd)
 
-        # ── Fase 2 (SWR): revalida/baixa; só re-emite se algo mudou ───────────
+        # Phase 2 (SWR): revalidate/download; emit again only if something changed.
         loaded, downloaded = build(cache_only=False)
         if loaded and (downloaded or len(loaded) != len(cached)):
             wd.mwb_publication_refs = loaded
@@ -660,13 +658,13 @@ class JwpubWorker(QObject):
         cache_only: bool = False,
     ) -> tuple[list[meeting_models.MeetingMedia], bool]:
         """
-        Resolve os itens de mídia de uma referência de publicação.
+        Resolve media items for a publication reference.
 
-        cache_only=True  → fase de servir (SWR): usa só o cache local, sem rede.
-        cache_only=False → fase de revalidar: consulta a API e baixa se mudou.
+        cache_only=True → SWR serving phase: use local cache only, no network.
+        cache_only=False → revalidation phase: query the API and download if changed.
 
-        Retorna (items, downloaded) — downloaded indica se um arquivo novo foi
-        baixado nesta chamada (usado para decidir se re-emitir o lote).
+        Return (items, downloaded). downloaded indicates whether this call downloaded
+        a new file, which determines whether to emit the batch again.
         """
         pub = ref.pub
         issue = ref.issue or "0"
@@ -767,12 +765,12 @@ class JwpubWorker(QObject):
         emit_error: bool = True,
     ) -> bool:
         """
-        Baixa o arquivo, emitindo progress. Retorna True se sucesso.
+        Download the file, emitting progress. Return True on success.
 
-        emit_error: quando False, uma falha de download NÃO emite o sinal de
-        erro. Usado no caminho stale-while-revalidate: se já servimos uma cópia
-        local e a revalidação em segundo plano falha (ex.: rede caiu no meio do
-        download), mantemos o que já está na tela em vez de sobrescrever com erro.
+        emit_error=False suppresses the error signal on download failure.
+        Used for stale-while-revalidate: if a local copy was already served and
+        background revalidation fails (e.g. network loss during download),
+        keep the displayed content instead of replacing it with an error.
         """
         dest = self._cache.jwpub_path(pub, lang, issue)
         try:

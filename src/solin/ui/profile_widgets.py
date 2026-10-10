@@ -41,7 +41,7 @@ PROFILE_DANGER = PALETTE.danger
 # ── ProfileCard ───────────────────────────────────────────────────────────────
 
 class ProfileCard(QWidget):
-    """Card de perfil clicável com avatar e nome."""
+    """Clickable profile card with avatar and name."""
 
     clicked = Signal(str)   # profile_id
     context_requested = Signal(str, object)   # profile_id, global QPoint
@@ -97,7 +97,7 @@ class ProfileCard(QWidget):
         p.scale(scale, scale)
         p.translate(-cx, -cy)
 
-        # Fundo do card
+        # Card background
         bg_color = QColor(PALETTE.bg2) if self._hovered else QColor(PROFILE_CARD)
         border_c = QColor(PROFILE_ACCENT if self._hovered else PROFILE_BORDER)
         path     = QPainterPath()
@@ -106,7 +106,7 @@ class ProfileCard(QWidget):
         p.setPen(QPen(border_c, 1.5))
         p.drawPath(path)
 
-        # Avatar (círculo gradiente)
+        # Avatar (gradient circle)
         av_x  = (self._W - self._AVATAR_R * 2) / 2
         av_y  = 28
         grad  = QLinearGradient(av_x, av_y, av_x + self._AVATAR_R * 2, av_y + self._AVATAR_R * 2)
@@ -126,7 +126,7 @@ class ProfileCard(QWidget):
             initials(self.profile.name),
         )
 
-        # Nome
+        # Name
         name_y  = av_y + self._AVATAR_R * 2 + 14
         name_h  = self._H - name_y - 12
         font2   = QFont("Segoe UI", 11, QFont.Weight.Normal)
@@ -145,7 +145,7 @@ class ProfileCard(QWidget):
 # ── AddProfileCard ────────────────────────────────────────────────────────────
 
 class AddProfileCard(QWidget):
-    """Card pontilhado para criar novo perfil."""
+    """Dashed card for creating a profile."""
 
     clicked = Signal()
 
@@ -202,7 +202,7 @@ class AddProfileCard(QWidget):
         path.addRoundedRect(QRectF(4, 4, self._W - 8, self._H - 8), self._BORDER_R, self._BORDER_R)
         p.drawPath(path)
 
-        # Ícone +
+        # Plus icon
         c = QColor(PROFILE_ACCENT if self._hovered else PROFILE_DIM)
         p.setPen(QPen(c, 2.5))
         cx2, cy2 = self._W / 2, self._H / 2 - 12
@@ -354,13 +354,13 @@ class ProfileNameDialog(QDialog):
 
 class ProfileFlowLayout(QHBoxLayout):
     """
-    Layout de fluxo simples (linha única) para os cards de perfil.
-    Usa QHBoxLayout wrappado num QWidget; para grades maiores considere
-    um layout de fluxo customizado.
+    Simple single-row flow layout for profile cards.
+    Use QHBoxLayout wrapped in QWidget; consider a custom flow layout
+    for larger grids.
     """
 
     def __init__(self, parent=None, h_spacing=16, v_spacing=16):
-        # Usamos um grid simples centrado em vez de flow real
+        # Use a simple centered grid rather than a full flow layout.
         super().__init__(parent)
         self.setSpacing(h_spacing)
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)

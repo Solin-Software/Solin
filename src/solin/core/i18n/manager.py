@@ -1,39 +1,32 @@
 """
-language_manager.py
-───────────────────
-Motor de i18n do Solin — baseado no sistema nativo Qt (QTranslator / .qm).
+Solin i18n engine based on the native Qt system (QTranslator / .qm).
 
-Responsabilidades
-─────────────────
-• Carregar metadados de idioma dos arquivos JSON (code, name, api_code,
-  wol_*, date_format, time_with_seconds_format) — dados que não passam pelo Qt i18n.
-• Instalar/desinstalar QTranslators no QCoreApplication quando o idioma
-  muda, garantindo que:
-    – strings da aplicação  (solin_<code>.qm)  sejam traduzidas via tr();
-    – strings nativas do Qt (qtbase_<code>.qm) também mudem.
+Responsibilities:
+• Load language metadata from JSON files (code, name, api_code, wol_*,
+  date_format, time_with_seconds_format), which bypasses Qt i18n.
+• Install/remove QTranslators on QCoreApplication when the language changes:
+    – translate application strings (solin_<code>.qm) via tr();
+    – update native Qt strings (qtbase_<code>.qm) as well.
 
-Strings de UI
-─────────────
-Todos os widgets usam self.tr("English source") diretamente — o padrão nativo
-do Qt. O método t(key) foi removido. O fluxo de atualização de traduções é:
+UI strings:
+All widgets use self.tr("English source") directly, following Qt conventions.
+The t(key) method has been removed. The translation update workflow is:
 
-    código com self.tr("…")
-      → lupdate  → .ts (atualiza entradas automaticamente)
-      → Qt Linguist (traduzir)
+    code using self.tr("…")
+      → lupdate → .ts (updates entries automatically)
+      → Qt Linguist (translate)
       → lrelease → .qm
 
-O catálogo inglês também é carregado. Strings comuns podem usar o fallback do
-source, mas mensagens numerus precisam do solin_en.qm para converter sources
-neutros como "%n item(s)" nas formas inglesas "item" e "items".
+The English catalog is also loaded. Common strings can fall back to their
+source, but numerus messages need solin_en.qm to turn neutral sources such
+as "%n item(s)" into the English forms "item" and "items".
 
-Arquivos necessários em produção
-─────────────────────────────────
-  src/solin/resources/translations/solin_<code>.qm   ← binários compilados pelo lrelease
-  src/solin/resources/translations/locales/<code>.json ← metadados (code, name, api_code…)
+Production files:
+  src/solin/resources/translations/solin_<code>.qm ← compiled by lrelease
+  src/solin/resources/translations/locales/<code>.json ← language metadata
 
-Arquivos de desenvolvimento (NÃO embarcados em produção)
-─────────────────────────────────────────────────────────
-  src/solin/resources/translations/solin_<code>.ts   ← fonte para lupdate / Qt Linguist / lrelease
+Development files (NOT included in production):
+  src/solin/resources/translations/solin_<code>.ts ← lupdate / Qt Linguist / lrelease source
 """
 
 from __future__ import annotations
@@ -60,12 +53,12 @@ from solin.core.profiles.settings import ProfileSettings
 
 log = logging.getLogger(__name__)
 
-# Importação lazy para evitar ciclo (jw.languages importa constants)
+# Lazy import to avoid a cycle (jw.languages imports constants).
 def _get_jw_language_service_class():
     from solin.core.jw.languages import JWLanguageService
     return JWLanguageService
 
-# ── resolução de caminhos ─────────────────────────────────────────────────────
+# Path resolution
 def _translation_root() -> Path:
     return application_translation_root()
 
@@ -79,13 +72,13 @@ _QT_TRANS_DIR = QLibraryInfo.path(QLibraryInfo.LibraryPath.TranslationsPath)
 
 class LanguageManager(QObject):
     """
-    Gerencia o idioma ativo e os QTranslators instalados na aplicação.
+    Manage the active language and the application's installed QTranslators.
 
     Signals
     -------
     language_changed(code: str)
-        Emitido DEPOIS de os translators serem instalados, para que
-        os widgets chamem retranslateUi() conforme necessário.
+        Emitted AFTER translators are installed so widgets can call
+        retranslateUi() as needed.
     """
 
     language_changed = Signal(str)
@@ -110,7 +103,7 @@ class LanguageManager(QObject):
         self._profile_settings: ProfileSettings | None = None
         self._jw_language_settings_store_factory = jw_language_settings_store_factory
 
-        # Serviço de idiomas JW.org (lista completa para mídia)
+        # JW.org language service (complete media language list)
         JWLanguageService  = _get_jw_language_service_class()
         self._jw_lang_svc = JWLanguageService(
             cache_file=jw_languages_cache_file,
@@ -120,10 +113,10 @@ class LanguageManager(QObject):
         self._load_meta()
         self._restore_saved_language()
 
-    # ── inicialização ─────────────────────────────────────────────────────────
+    # Initialization
 
     def _load_meta(self) -> None:
-        """Carrega apenas a seção 'meta' de cada JSON (leve, sem strings de UI)."""
+        """Load only the 'meta' section of each JSON file (lightweight, no UI strings)."""
         for path in sorted(glob.glob(os.path.join(_LANG_DIR, "*.json"))):
             try:
                 with open(path, encoding="utf-8") as f:
@@ -175,10 +168,10 @@ class LanguageManager(QObject):
                 return code
         return "en" if "en" in self._meta else next(iter(self._meta), "pt_BR")
 
-    # ── troca de idioma ───────────────────────────────────────────────────────
+    # Language switching
 
     def set_language(self, code: str) -> None:
-        """Troca o idioma, instala QTranslators e emite language_changed."""
+        """Switch language, install QTranslators, and emit language_changed."""
         if code not in self._meta:
             log.warning("Unknown language: %r", code)
             return
@@ -205,9 +198,9 @@ class LanguageManager(QObject):
 
     def _install_translators(self, code: str) -> None:
         """
-        Substitui os QTranslators ativos:
-          1. solin_<code>.qm  — strings da aplicação
-          2. qtbase_<code>.qm — strings nativas do Qt (botões, diálogos, etc.)
+        Replace the active QTranslators:
+          1. solin_<code>.qm — application strings
+          2. qtbase_<code>.qm — native Qt strings (buttons, dialogs, etc.)
         """
         from PySide6.QtCore import QTranslator
 
@@ -222,7 +215,7 @@ class LanguageManager(QObject):
             app.removeTranslator(self._qt_translator)
             self._qt_translator = None
 
-        # 1. Translator da aplicação (solin_<code>.qm)
+        # 1. Application translator (solin_<code>.qm)
         qm_path = os.path.join(_TRANS_DIR, f"solin_{code}.qm")
         app_tr  = QTranslator(app)
         if os.path.isfile(qm_path) and app_tr.load(qm_path):
@@ -231,25 +224,25 @@ class LanguageManager(QObject):
         else:
             log.info("Application translation not found: %s", qm_path)
 
-        # 2. Translator nativo do Qt — tenta qtbase_* depois qt_*
+        # 2. Native Qt translator: try qtbase_* before qt_*.
         qt_tr = QTranslator(app)
         if (qt_tr.load(f"qtbase_{code}", _QT_TRANS_DIR) or
                 qt_tr.load(f"qt_{code}",     _QT_TRANS_DIR)):
             app.installTranslator(qt_tr)
             self._qt_translator = qt_tr
 
-    # ── serviço de idiomas JW.org ─────────────────────────────────────────────
+    # JW.org language service
 
     @property
     def jw_lang_service(self):
-        """Retorna o JWLanguageService (lista de idiomas JW para mídia)."""
+        """Return the JWLanguageService (JW media language list)."""
         return self._jw_lang_svc
 
     @property
     def media_api_code(self) -> str:
         """
-        Código api JW do idioma de mídia selecionado.
-        Retorna o api_code da interface se nenhum idioma de mídia for definido.
+        JW API code for the selected media language.
+        Fall back to the interface's api_code if no media language is set.
         """
         stored = (
             self._jw_lang_svc.media_api_code
@@ -261,9 +254,9 @@ class LanguageManager(QObject):
     @property
     def is_media_sign_language(self) -> bool:
         """
-        True se o idioma de mídia selecionado for uma língua gestual.
-        Consulta JWLanguageService.is_media_sign_language.
-        Os idiomas da interface (fallback) NUNCA são gestuais.
+        True if the selected media language is a sign language.
+        Consult JWLanguageService.is_media_sign_language.
+        Interface languages used as fallbacks are NEVER sign languages.
         """
         return (
             self._jw_lang_svc.is_media_sign_language
@@ -271,7 +264,7 @@ class LanguageManager(QObject):
             else False
         )
 
-    # ── metadados (não passam pelo Qt i18n) ───────────────────────────────────
+    # Metadata (outside Qt i18n)
 
     @property
     def meta(self) -> dict:
@@ -298,7 +291,7 @@ class LanguageManager(QObject):
         return self.meta.get("time_with_seconds_format", "HH:mm:ss")
 
     def available_languages(self) -> list[tuple[str, str]]:
-        """Retorna [(code, name)] para todos os idiomas disponíveis."""
+        """Return [(code, name)] for all available languages."""
         return [(code, m.get("name", code))
                 for code, m in self._meta.items()]
 

@@ -123,7 +123,7 @@ class YearlyTextWidget(QWidget):
         ref_text = self._reference if self._reference else ""
         all_lines = quote_lines + ([ref_text] if ref_text else [])
 
-        # Proporções
+        # Proportions
         max_base_size = max(12, int(w * 0.040))
         max_text_w = int(w * 0.70)
         max_text_h = int(h * 0.80)
@@ -165,7 +165,7 @@ class YearlyTextWidget(QWidget):
                     break
             best_size = collision_safe_size
 
-        # ── Aplicação do Tamanho Calculado (Matemática Original) ──────────
+        # Apply the calculated size (original formula).
         font.setPixelSize(best_size)
         fm = QFontMetrics(font)
 
@@ -185,7 +185,7 @@ class YearlyTextWidget(QWidget):
             ly = start_y + i * line_height + best_size
             painter.drawText(lx, ly, line)
 
-        # Desenhar a referência (Agora alinhado na próxima linha normal, sem pulo extra)
+        # Draw the reference on the next regular line, without an extra gap.
         if ref_text:
             ref_y = start_y + len(quote_lines) * line_height + best_size
             rw = fm.horizontalAdvance(ref_text)

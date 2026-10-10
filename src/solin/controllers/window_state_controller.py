@@ -53,10 +53,10 @@ class WindowStateController:
 
     def bring_to_front(self) -> None:
         """
-        Traz a janela principal para frente de forma robusta.
+        Bring the main window to the foreground reliably.
 
-        No Windows, main.py chama AllowSetForegroundWindow() na segunda
-        instancia; aqui finalizamos com SetForegroundWindow() direto.
+        On Windows, main.py calls AllowSetForegroundWindow() in the second
+        instance; finish here with a direct SetForegroundWindow() call.
         """
         context = self._context
         if context.is_minimized():

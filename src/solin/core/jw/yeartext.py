@@ -34,7 +34,7 @@ class _FetchCompletion:
 
 class YeartextService(QObject):
     """
-    Servico de Texto Anual com fetch automatico e cache por idioma/ano.
+    Yeartext service with automatic fetching and caching by language/year.
 
     Signals
     -------
@@ -89,19 +89,19 @@ class YeartextService(QObject):
 
     def get_cached(self, api_code: str, year: int) -> Optional[tuple[str, str]]:
         """
-        Retorna (quote, reference) se o cache for valido para api_code + ano.
-        Retorna None se ausente, desatualizado ou vazio.
-        Migra automaticamente entradas no formato legado (full_text).
+        Return (quote, reference) if the cache is valid for api_code + year.
+        Return None if missing, outdated, or empty.
+        Automatically migrate legacy entries (full_text).
         """
         entry = self._cache.get(api_code)
         if not entry or entry.get("year") != year:
             return None
 
-        # Formato atual: quote + reference separados
+        # Current format: separate quote and reference.
         if entry.get("quote"):
             return entry["quote"], entry.get("reference", "")
 
-        # Formato legado (full_text) -- migra silenciosamente
+        # Legacy format (full_text); migrate silently.
         full_text = entry.get("full_text", "")
         if full_text:
             quote, ref = parse_yeartext_html(full_text)
@@ -115,7 +115,7 @@ class YeartextService(QObject):
         return api_code in self._fetches
 
     def fetch_async(self, api_code: str, year: int) -> None:
-        """Dispara fetch em background. Idempotente."""
+        """Start an idempotent background fetch."""
         if self._closed or self.is_fetching(api_code):
             return
         self._next_generation += 1
@@ -155,7 +155,7 @@ class YeartextService(QObject):
         return None
 
     def override_cache(self, api_code: str, year: int, quote: str, reference: str) -> None:
-        """Sobrescreve o cache com texto editado manualmente."""
+        """Overwrite the cache with manually edited text."""
         # The worker may finish after a manual save. Invalidate its generation
         # before it can update the cache or emit an obsolete success/error.
         self._fetches.pop(api_code, None)

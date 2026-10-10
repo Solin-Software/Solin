@@ -1,14 +1,14 @@
 """
 profile_switch_overlay.py — Solin
-===================================
-Overlay de troca de perfil que cobre o MainWindow inteiro.
-Exibido como widget-filho (não uma nova janela) ao clicar no avatar de perfil.
+================================
+Profile switching overlay covering the entire MainWindow.
+Displayed as a child widget, rather than a new window, when the profile avatar is clicked.
 
-Fluxo:
-  • Usuário clica no avatar → overlay cobre o MainWindow inteiro
-  • Clica em perfil diferente  → emite `profile_selected(profile_id)`
-  • Clica no card pontilhado   → emite `create_profile_requested`
-  • Clica no mesmo perfil / X / Esc → emite `cancelled`
+Workflow:
+  • Click the avatar → overlay covers the entire MainWindow.
+  • Click a different profile → emit `profile_selected(profile_id)`.
+  • Click the dashed card → emit `create_profile_requested`.
+  • Click the same profile / X / Esc → emit `cancelled`.
 """
 from __future__ import annotations
 
@@ -151,7 +151,7 @@ class _SwitchProfileCard(QWidget):
 
 
 class _SwitchAddProfileCard(QWidget):
-    """Card pontilhado para criar novo perfil, igual ao seletor inicial."""
+    """Dashed card for creating a profile, matching the initial selector."""
 
     clicked = Signal()
 
@@ -227,7 +227,7 @@ class _SwitchAddProfileCard(QWidget):
 
 
 class _CloseButton(QPushButton):
-    """Botão X com ícone SVG — muda de cor no hover."""
+    """X button with an SVG icon that changes color on hover."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -263,16 +263,16 @@ class _CloseButton(QPushButton):
 
 class ProfileSwitchOverlay(QWidget):
     """
-    Overlay de troca de perfil. Deve ser filho direto do MainWindow.
+    Profile switching overlay; must be a direct child of MainWindow.
 
     Signals
     -------
     cancelled
-        Usuário cancelou (X / Esc / mesmo perfil).
+        User canceled via X, Esc, or the same profile.
     profile_selected(str)
-        Um perfil diferente foi selecionado — emite o profile_id.
+        A different profile was selected; emit its profile_id.
     create_profile_requested
-        Usuário pediu criação de novo perfil.
+        User requested a new profile.
     """
 
     cancelled        = Signal()

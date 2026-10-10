@@ -1,20 +1,19 @@
 """
 notifications.py
-======================
-Dialog não-modal de notificação remota para o Solin.
+================
+Non-modal remote notification dialog for Solin.
 
-Características:
-  - Não bloqueia a janela principal (show(), não exec()).
-  - Não usa WindowStaysOnTopHint para não irritar o usuário.
-  - Fila automática: se houver múltiplas notificações, exibe uma por vez
-    e avança para a próxima ao fechar.
-  - Tipo info / warning / error com cores e ícones distintos.
-  - Botão de ação opcional — abre URL no browser padrão do sistema.
-    Com URL: exibe "Sim" (abre link) + "Não" (descarta).
-    Sem URL: exibe apenas "OK".
-  - Posicionada centralmente sobre a janela pai (não no canto, para
-    notificações que merecem atenção).
-  - Pequena animação de fade-in para não assustar o usuário.
+Features:
+  - Does not block the main window (show(), not exec()).
+  - Avoids WindowStaysOnTopHint to keep interaction unobtrusive.
+  - Automatically queues multiple notifications, showing one at a time
+    and advancing when the current one closes.
+  - Distinct colors/icons for info / warning / error.
+  - Optional action button opens a URL in the system's default browser.
+    With URL: "Yes" opens the link; "No" dismisses.
+    Without URL: "OK" only.
+  - Centered over the parent window for notifications requiring attention.
+  - Brief fade-in animation for a gentle appearance.
 """
 
 from __future__ import annotations
@@ -58,7 +57,7 @@ _C = {
     "success": PALETTE.success,
 }
 
-# Ícone SVG inline para cada tipo de notificação
+# Inline SVG icon for each notification type
 _ICONS: dict[str, str] = {
     "info": f"""
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
@@ -195,8 +194,8 @@ def _make_stylesheet(accent: str) -> str:
 
 class NotificationDialog(QDialog):
     """
-    Dialog não-modal para uma única notificação.
-    A fila de múltiplas notificações é gerenciada pelo RemoteNotificationQueue.
+    Non-modal dialog for a single notification.
+    RemoteNotificationQueue manages the queue of multiple notifications.
     """
 
     def __init__(
@@ -209,7 +208,7 @@ class NotificationDialog(QDialog):
         self._notif = notification
         self._lang = lang
 
-        # ── Flags de janela ───────────────────────────────────────────────
+        # Window flags
         self.setWindowFlags(
             Qt.WindowType.Dialog
             | Qt.WindowType.CustomizeWindowHint
@@ -235,14 +234,14 @@ class NotificationDialog(QDialog):
         root.setContentsMargins(20, 20, 20, 20)
         root.setSpacing(0)
 
-        # ── Área rolável: ícone + título + detail ─────────────────────────
+        # Scrollable area: icon, title, and detail
         scroll_content = QWidget()
         scroll_content.setObjectName("scroll_content")
         scroll_layout = QVBoxLayout(scroll_content)
-        scroll_layout.setContentsMargins(0, 0, 8, 0)  # margem direita p/ scrollbar
+        scroll_layout.setContentsMargins(0, 0, 8, 0)  # right margin for the scrollbar
         scroll_layout.setSpacing(0)
 
-        # Cabeçalho: ícone + título
+        # Header: icon and title
         header = QHBoxLayout()
         header.setSpacing(10)
         header.setContentsMargins(0, 0, 0, 0)
@@ -265,7 +264,7 @@ class NotificationDialog(QDialog):
             detail_label.setObjectName("detail")
             detail_label.setWordWrap(True)
             detail_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-            # Garante que o label respeite a largura do scroll
+            # Ensure the label respects the scroll area's width.
             detail_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
             scroll_layout.addWidget(detail_label)
 
@@ -276,7 +275,7 @@ class NotificationDialog(QDialog):
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        # Altura máxima antes de ativar scroll (~40% da tela ou 280px)
+        # Maximum height before scrolling (~40% of the screen or 280 px).
         scroll.setMaximumHeight(280)
         scroll.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
@@ -291,13 +290,13 @@ class NotificationDialog(QDialog):
         root.addWidget(sep)
         root.addSpacing(12)
 
-        # ── Botões (sempre visíveis, fora do scroll) ──────────────────────
+        # Buttons (always visible, outside the scroll area)
         btn_row = QHBoxLayout()
         btn_row.setSpacing(8)
         btn_row.addStretch()
 
         if n.action_url:
-            # Com URL: botão de ação (Sim / label) + botão de fechar (Não)
+            # With URL: action button (Yes / label) and close button (No).
             action_label = n.action_label or self.tr("Open Link")
             action_btn = QPushButton(action_label)
             action_btn.setObjectName("action_btn")
@@ -311,7 +310,7 @@ class NotificationDialog(QDialog):
             btn_row.addWidget(close_btn)
             btn_row.addWidget(action_btn)
         else:
-            # Sem URL: apenas OK
+            # Without URL: OK only.
             ok_btn = QPushButton(self.tr("OK"))
             ok_btn.setCursor(Qt.CursorShape.PointingHandCursor)
             ok_btn.clicked.connect(self.close)
@@ -319,7 +318,7 @@ class NotificationDialog(QDialog):
 
         root.addLayout(btn_row)
 
-        # Ajusta o scroll para a altura real do conteúdo (evita scroll quando desnecessário)
+        # Fit the scroll area to the actual content height to avoid unnecessary scrolling.
         scroll_content.adjustSize()
         natural_h = scroll_content.sizeHint().height()
         scroll.setFixedHeight(min(natural_h, 280))
@@ -343,10 +342,10 @@ class NotificationDialog(QDialog):
         anim.setEasingCurve(QEasingCurve.Type.OutCubic)
         anim.start()
 
-    # ── Posicionamento ────────────────────────────────────────────────────
+    # Positioning
 
     def show_centered_on_parent(self) -> None:
-        """Centraliza sobre a janela pai (ou tela) e exibe."""
+        """Center over the parent window (or screen) and show."""
         self.show()
         self.adjustSize()
 
@@ -373,10 +372,10 @@ class NotificationDialog(QDialog):
 
 class RemoteNotificationQueue(QObject):
     """
-    Gerencia a exibição sequencial de múltiplas notificações.
-    Quando uma dialog é fechada, exibe a próxima da fila.
+    Manage sequential display of multiple notifications.
+    Show the next queued notification when a dialog closes.
 
-    Uso:
+    Usage:
         queue = RemoteNotificationQueue(lang_manager, parent_window)
         queue.enqueue(list_of_notifications)
     """
@@ -395,7 +394,7 @@ class RemoteNotificationQueue(QObject):
         self._current: NotificationDialog | None = None
 
     def enqueue(self, notifications: list["Notification"]) -> None:
-        """Adiciona notificações à fila e inicia exibição se ociosa."""
+        """Add notifications to the queue and start displaying if idle."""
         self._queue.extend(notifications)
         if self._current is None:
             self._show_next()
@@ -410,11 +409,11 @@ class RemoteNotificationQueue(QObject):
         dlg.finished.connect(self._on_dialog_closed)
         self._current = dlg
 
-        # Pequeno delay entre notificações encadeadas para evitar sobreposição de animações
+        # Brief delay between queued notifications to avoid overlapping animations.
         QTimer.singleShot(50, dlg.show_centered_on_parent)
 
     def _on_dialog_closed(self) -> None:
         self._current = None
-        # Aguarda um tick antes de abrir a próxima (UX mais suave)
+        # Wait one tick before opening the next notification for smoother interaction.
         if self._queue:
             QTimer.singleShot(300, self._show_next)

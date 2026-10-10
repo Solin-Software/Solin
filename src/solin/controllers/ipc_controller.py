@@ -25,7 +25,7 @@ class IpcController:
         self._server: QLocalServer | None = None
 
     def start(self) -> None:
-        # Remove um socket residual de uma execução anterior (Linux/macOS).
+        # Remove a stale socket left by a previous run (Linux/macOS).
         QLocalServer.removeServer(IPC_SERVER_NAME)
         self._server = QLocalServer(self._parent)
         self._server.newConnection.connect(self._on_connection)

@@ -1,23 +1,23 @@
 """
 writer.py
-─────────────────────
-Escreve arquivos .jwlplaylist compatíveis com JW Library ≥ 14.
+=========
+Write .jwlplaylist files compatible with JW Library ≥ 14.
 
-Formato de saída:
-  • ZIP contendo userData.db (SQLite) + mídias embutidas (se houver)
+Output format:
+  • ZIP containing userData.db (SQLite) and embedded media, if any.
 
-Suporta:
-  • Itens de vídeo/áudio do JW.org → tabela Location + Tag/TagMap
-  • Arquivos locais (vídeo, imagem, áudio) → tabela IndependentMedia + arquivo embutido no ZIP
+Supported items:
+  • JW.org video/audio → Location and Tag/TagMap tables.
+  • Local video/image/audio → IndependentMedia table and file embedded in the ZIP.
 
-BUGS CORRIGIDOS:
-  1. Regex de URL reescritas para cobrir os formatos reais do JW CDN:
-       - sjjm_T_002_r720P.mp4   (qualidade com prefixo 'r')
-       - osg_T_108.mp3          (sem sufixo de qualidade)
-       - pub-sjjm_T_1_r720P     (formato pub- antigo)
-  2. Tabelas Tag + TagMap criadas e preenchidas (sem elas o JW Library não abre).
-  3. BaseDurationTicks na PlaylistItemLocationMap preservado / estimado.
-  4. ThumbnailFilePath definido para itens com IndependentMedia.
+Fixed bugs:
+  1. URL regexes cover actual JW CDN formats:
+       - sjjm_T_002_r720P.mp4 (quality with an 'r' prefix).
+       - osg_T_108.mp3 (no quality suffix).
+       - pub-sjjm_T_1_r720P (older pub- format).
+  2. Tag and TagMap tables are created/populated; JW Library requires them to open files.
+  3. BaseDurationTicks in PlaylistItemLocationMap is preserved/estimated.
+  4. ThumbnailFilePath is set for IndependentMedia items.
 """
 
 from __future__ import annotations
@@ -37,7 +37,7 @@ from typing import Optional
 
 log = logging.getLogger(__name__)
 
-# ── Resolução de metadados JW.org ────────────────────────────────────────────
+# JW.org metadata resolution
 from solin.core.jw.identifiers import is_jw_url
 from solin.core.jw.metadata import ResolvedMediaMetadata, resolve_jworg_meta
 from solin.core.media.download_storage import completed_cached_path
@@ -48,15 +48,15 @@ from .schema import create_jwlplaylist_schema
 
 def _mp4_read_title(data: bytes) -> Optional[str]:
     """
-    Extrai o título (átomo ©nam / iTunes) de bytes MP4/M4A/MOV.
-    Navega: moov → udta → meta (FullBox) → ilst → ©nam → data
+    Extract the title (©nam / iTunes atom) from MP4/M4A/MOV bytes.
+    Navigate moov → udta → meta (FullBox) → ilst → ©nam → data.
 
-    Retorna None se o arquivo não tiver metadado de título.
+    Return None if the file has no title metadata.
     """
     size = len(data)
 
     def _boxes(start: int, end: int):
-        """Gera (type_bytes, inner_start, box_end) para cada box em [start, end)."""
+        """Yield (type_bytes, inner_start, box_end) for each box in [start, end)."""
         pos = start
         while pos + 8 <= end:
             try:
@@ -66,7 +66,7 @@ def _mp4_read_title(data: bytes) -> Optional[str]:
                     if pos + 16 > end: return
                     bsz   = struct.unpack_from(">Q", data, pos + 8)[0]
                     inner = pos + 16
-                elif bsz == 0:                        # last box até fim
+                elif bsz == 0:                        # last box extends to the end
                     bsz   = end - pos
                     inner = pos + 8
                 else:
@@ -90,7 +90,7 @@ def _mp4_read_title(data: bytes) -> Optional[str]:
     if udta_s < 0: return None
     meta_s, meta_e = _find(udta_s, udta_e, b'meta')
     if meta_s < 0: return None
-    # meta é um FullBox: 4 bytes (version + flags) antes dos filhos
+    # meta is a FullBox: 4 bytes (version + flags) before its children.
     ilst_s, ilst_e = _find(meta_s + 4, meta_e, b'ilst')
     if ilst_s < 0: return None
     # ©nam = 0xa9 'n' 'a' 'm'
@@ -98,7 +98,7 @@ def _mp4_read_title(data: bytes) -> Optional[str]:
     if cnam_s < 0: return None
     dbox_s, dbox_e = _find(cnam_s, cnam_e, b'data')
     if dbox_s < 0: return None
-    # data FullBox: 4 bytes tipo (well-known type) + 4 bytes locale → depois UTF-8
+    # data FullBox: 4 type bytes (well-known type) + 4 locale bytes, then UTF-8.
     text_start = dbox_s + 8
     if text_start >= dbox_e: return None
     raw_text = data[text_start:dbox_e]
@@ -110,18 +110,18 @@ def _mp4_read_title(data: bytes) -> Optional[str]:
 
 def _mp3_read_title(data: bytes) -> Optional[str]:
     """
-    Extrai o título (frame TIT2) de tags ID3v2 em bytes MP3.
-    Suporta ID3v2.3 e ID3v2.4 (os formatos mais comuns).
-    Retorna None se não encontrar.
+    Extract the title (TIT2 frame) from ID3v2 tags in MP3 bytes.
+    Support ID3v2.3 and ID3v2.4 (the most common formats).
+    Return None if not found.
     """
     if len(data) < 10 or data[:3] != b"ID3":
         return None
 
     version_major = data[3]
     if version_major < 3:
-        return None   # ID3v2.2 usa frame IDs de 3 bytes — não suportado
+        return None   # ID3v2.2 uses three-byte frame IDs and is not supported.
 
-    # Tamanho da tag (syncsafe integer — bit 7 de cada byte é zero)
+    # Tag size (syncsafe integer: bit 7 of each byte is zero)
     raw = data[6:10]
     tag_size = (
         (raw[0] & 0x7F) << 21 |
@@ -165,9 +165,9 @@ def _mp3_read_title(data: bytes) -> Optional[str]:
 
 def _read_label_from_local(data: bytes, ext: str) -> Optional[str]:
     """
-    Tenta extrair o título oficial dos metadados de um arquivo de mídia local.
-    Suporta MP4/M4A/MOV (iTunes ©nam) e MP3 (ID3v2 TIT2).
-    Retorna None se não encontrar ou se o formato não for suportado.
+    Try to extract the official title from local media file metadata.
+    Support MP4/M4A/MOV (iTunes ©nam) and MP3 (ID3v2 TIT2).
+    Return None if missing or the format is unsupported.
     """
     if not data:
         return None
@@ -198,26 +198,26 @@ _MIME_FROM_EXT: dict[str, str] = {
     ".bmp":  "image/bmp",
 }
 
-# Mapa reverso: mime_type → extensão
+# Reverse map: mime_type → extension
 _MIME_FROM_EXT_REV: dict[str, str] = {v: k for k, v in _MIME_FROM_EXT.items()}
 
 def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-# ── Leitura de duração de arquivos de mídia locais ────────────────────────────
+# Reading local media file duration
 #
-# Usado como fallback no export quando base_duration_ticks não foi preenchido
-# pelo player (item adicionado mas nunca reproduzido).
+# Used as an export fallback when the player has not populated
+# base_duration_ticks (item added but never played).
 #
 # Suporte:
 #   MP4 / MOV / M4A / M4V  →  box moov/mvhd
 #   WebM / MKV              →  EBML Segment/Info/Duration
-# Outros formatos retornam 0 (sem dependências externas).
+# Other formats return 0 (no external dependencies).
 
 
 def _mp4_duration_ms(data: bytes) -> int:
-    """Busca o box mvhd dentro do box moov e retorna duração em ms. 0 se falhar."""
+    """Find mvhd inside moov and return duration in ms, or 0 on failure."""
     size = len(data)
 
     def _scan(start: int, end: int) -> int:
@@ -266,7 +266,7 @@ def _mp4_duration_ms(data: bytes) -> int:
 
 
 def _ebml_read_vint(data: bytes, pos: int) -> tuple[int, int]:
-    """Lê um VINT do EBML. Retorna (value, bytes_consumed)."""
+    """Read an EBML VINT. Return (value, bytes_consumed)."""
     if pos >= len(data):
         return 0, 0
     b = data[pos]
@@ -289,8 +289,8 @@ def _ebml_read_vint(data: bytes, pos: int) -> tuple[int, int]:
 
 def _webm_duration_ms(data: bytes) -> int:
     """
-    Busca o elemento Duration no bloco Info do Segment (WebM/MKV).
-    Retorna duração em ms. 0 se falhar.
+    Find Duration in the Segment's Info block (WebM/MKV).
+    Return duration in ms, or 0 on failure.
     """
     SEGMENT_ID   = 0x18538067
     INFO_ID      = 0x1549A966
@@ -301,7 +301,7 @@ def _webm_duration_ms(data: bytes) -> int:
     timescale_ns = 1_000_000  # default MKV: 1ms per tick
 
     def _read_element_id(pos: int) -> tuple[int, int]:
-        """Retorna (element_id, bytes_consumed)."""
+        """Return (element_id, bytes_consumed)."""
         if pos >= size:
             return 0, 0
         b = data[pos]
@@ -323,7 +323,7 @@ def _webm_duration_ms(data: bytes) -> int:
         return 0, 0
 
     def _scan(start: int, end: int, target_ids: set) -> dict:
-        """Varre elementos EBML e retorna {id: bytes_data} para os IDs alvo."""
+        """Scan EBML elements and return {id: bytes_data} for the target IDs."""
         pos = start
         found: dict[int, bytes] = {}
         while pos + 2 <= end:
@@ -356,11 +356,11 @@ def _webm_duration_ms(data: bytes) -> int:
         if eid == SEGMENT_ID:
             seg_start = pos
             seg_end   = pos + dsize if dsize < (1 << 56) else size
-            # Dentro do Segment, busca Info
+            # Find Info inside Segment.
             info_found = _scan(seg_start, min(seg_end, size), {INFO_ID})
             if INFO_ID in info_found:
                 info_data = info_found[INFO_ID]
-                # Dentro de Info, busca TimecodeScale e Duration
+                # Find TimecodeScale and Duration inside Info.
                 inner = _scan(0, len(info_data), {TIMESCALE_ID, DURATION_ID})
                 if TIMESCALE_ID in inner and len(inner[TIMESCALE_ID]) >= 1:
                     ts_bytes = inner[TIMESCALE_ID]
@@ -373,7 +373,7 @@ def _webm_duration_ms(data: bytes) -> int:
                     dur_bytes = inner[DURATION_ID]
                     fmt = ">f" if len(dur_bytes) == 4 else ">d"
                     dur_ticks = struct.unpack(fmt, dur_bytes)[0]
-                    # dur_ticks está em unidades de timescale_ns nanosegundos
+                    # dur_ticks is measured in units of timescale_ns nanoseconds.
                     return int(dur_ticks * timescale_ns / 1_000_000)
             break
         pos += dsize
@@ -383,8 +383,8 @@ def _webm_duration_ms(data: bytes) -> int:
 
 def _read_duration_ms_from_bytes(data: bytes, ext: str) -> int:
     """
-    Tenta extrair a duração em ms de bytes de arquivo de mídia local.
-    Suporta MP4/MOV/M4A/M4V e WebM/MKV. Retorna 0 em caso de falha.
+    Try to extract duration in ms from local media file bytes.
+    Support MP4/MOV/M4A/M4V and WebM/MKV. Return 0 on failure.
     """
     if not data:
         return 0
@@ -399,7 +399,7 @@ def _read_duration_ms_from_bytes(data: bytes, ext: str) -> int:
 
 
 def _new_uuid() -> str:
-    """Gera um UUID v4 como string (sem hífens em alguns campos, com em outros)."""
+    """Generate a UUID v4 string (without hyphens in some fields, with them in others)."""
     return str(uuid.uuid4())
 
 
@@ -439,31 +439,31 @@ def _write_jwlplaylist(
     should_cancel: CancelCallback | None = None,
 ) -> None:
     """
-    Escreve um arquivo .jwlplaylist compatível com JW Library ≥ 14.
+    Write a .jwlplaylist file compatible with JW Library ≥ 14.
 
-      • Itens JW.org  → usa Location + PlaylistItemLocationMap (referência canônica).
-                        Consulta a API pub-media para título oficial e duração.
-                        NUNCA embute o arquivo de mídia JW — apenas a referência.
-      • Arquivos locais (vídeo/áudio/imagem) → embute no ZIP via IndependentMedia.
-        - título resolvido dos metadados do arquivo (©nam / ID3v2 TIT2)
-        - para imagens: ThumbnailFilePath = o próprio arquivo embarcado
-        - para vídeo/áudio: thumbnail separado se disponível
-      • URL remota em cache local → equivalente a arquivo local (usa o arquivo em cache)
-      • URL remota sem cache e sem key_symbol → não pode ser exportada; item inserido
-        sem mídia associada (o JW Library mostrará como item vazio/inválido)
+    • JW.org items → Location + PlaylistItemLocationMap (canonical reference).
+      Query pub-media for the official title and duration.
+      NEVER embed JW media files; include only the reference.
+    • Local video/audio/images → embed in the ZIP via IndependentMedia.
+      - Resolve title from file metadata (©nam / ID3v2 TIT2).
+      - Images: ThumbnailFilePath is the embedded file itself.
+      - Video/audio: separate thumbnail if available.
+    • Remote URL in local cache → treat as a local file using the cached file.
+    • Remote URL without cache or key_symbol → cannot be exported; insert
+      without associated media (JW Library displays an empty/invalid item).
 
-    Parâmetros por item em `items`:
-      title         : str  – usado como fallback se não resolvido
-      url           : str  – URL http(s) do JW CDN, URL genérica, ou caminho local
-      type          : "video" | "audio" | "image"
-      key_symbol    : str  | None
-      track         : int  | None
-      issue_tag     : int  | None
-      doc_id        : int  | None
-      meps_language : int  (ID MEPS, ex: 5 = pt_BR)
+    Per-item parameters in `items`:
+      title: str — fallback if title cannot be resolved.
+      url: str — JW CDN HTTP(S) URL, generic URL, or local path.
+      type: "video" | "audio" | "image"
+      key_symbol: str | None
+      track: int | None
+      issue_tag: int | None
+      doc_id: int | None
+      meps_language: int — MEPS ID (e.g. 5 = pt_BR).
 
-    fallback_lang_code: código de língua JW.org (ex: "T") usado como fallback
-    quando meps_language não está no mapa interno.
+    fallback_lang_code: JW.org language code (e.g. "T") used when
+    meps_language is absent from the internal map.
     """
     output_path = Path(output_path)
 
@@ -511,10 +511,10 @@ def _write_jwlplaylist(
 
         thumbnail_path = None
 
-        # ── PASSO 1: tenta extrair key_symbol/doc_id da URL se não fornecido ──
-        # parse_jw_media_reference funciona para URLs JW e caminhos locais como
+        # STEP 1: try extracting key_symbol/doc_id from the URL if not provided.
+        # parse_jw_media_reference handles JW URLs and local paths such as
         # "C:/Downloads/rr_T_43.mp3".
-        # original_filename: nome antes de ser renomeado para hash (ex: via WiFi).
+        # original_filename: name before hash renaming (e.g. via Wi-Fi).
         orig_filename = item.get("original_filename", "")
         if not key_symbol and url:
             parsed = parse_jw_media_reference(
@@ -529,17 +529,17 @@ def _write_jwlplaylist(
                 if not meps_lang:
                     meps_lang = parsed.get("meps_language", 0)
 
-        # ── PASSO 2: determina se é item JW.org (exporta como referência) ────
-        # JW.org quando tem key_symbol (publicação simbólica) OU doc_id de CDN JW.
-        # Arquivos locais com nome JW (ex: rr_T_43.mp3) TAMBÉM são JW quando
+        # STEP 2: determine whether this is a JW.org item (export as a reference).
+        # JW.org if key_symbol exists (publication symbol) OR doc_id comes from a JW CDN.
+        # Local files with JW names (e.g. rr_T_43.mp3) are ALSO JW when
         # parse_jw_media_reference extraiu um key_symbol/doc_id deles.
         is_jworg = bool(key_symbol) or bool(
             doc_id and url and is_jw_url(url)
         )
 
-        # ── PASSO 3: para URLs http, verifica cache local ─────────────────────
-        # Permite usar o arquivo cacheado para duração/metadados mesmo em JW.org.
-        # Para não-JW, permite tratar URLs remotas baixadas como arquivos locais.
+        # STEP 3: check the local cache for HTTP URLs.
+        # Use the cached file for duration/metadata, even for JW.org media.
+        # For non-JW media, treat downloaded remote URLs as local files.
         is_http = url.startswith(("http://", "https://"))
         local_cached_path: Optional[str] = None
         if is_http:
@@ -547,7 +547,7 @@ def _write_jwlplaylist(
 
         # ─────────────────────────────────────────────────────────────────────
         # RAMO A: Item JW.org → Location + PlaylistItemLocationMap
-        # Nunca embute o arquivo de mídia — apenas a referência canônica.
+        # Never embed the media file; include only the canonical reference.
         # ─────────────────────────────────────────────────────────────────────
         if is_jworg:
             mmt = item.get("major_multimedia_type")
@@ -582,7 +582,7 @@ def _write_jwlplaylist(
                 ):
                     base_duration = jw_meta["duration_ticks"]
 
-            # Fallback de duração: arquivo em cache local (item baixado mas API offline)
+            # Duration fallback: locally cached file (item downloaded but API offline).
             if base_duration is None and local_cached_path:
                 try:
                     ext_c = Path(local_cached_path).suffix.lower()
@@ -621,7 +621,7 @@ def _write_jwlplaylist(
                 (playlist_item_id, location_id, mmt, base_duration),
             )
 
-            # Thumbnail: embute se disponível (sem extensão — padrão JW Library)
+            # Thumbnail: embed if available (no extension, following JW Library conventions).
             thumb_data = item.get("thumbnail_data")
             if thumb_data:
                 t_file_uuid = _new_uuid()
@@ -640,13 +640,13 @@ def _write_jwlplaylist(
                 thumbnail_path = item.get("thumbnail_file_path")
 
         # ─────────────────────────────────────────────────────────────────────
-        # RAMO B: Arquivo local OU URL remota com cache local → embute no ZIP
+        # BRANCH B: local file OR remote URL with local cache → embed in the ZIP.
         # ─────────────────────────────────────────────────────────────────────
         elif item.get("data") or (url and not is_http) or local_cached_path:
-            # Resolve o caminho/dados do arquivo
+            # Resolve the file path/data.
             embedded_source: bytes | Path
             if item.get("data"):
-                # Bytes já em memória (item importado via reader)
+                # Bytes already in memory (item imported through the reader)
                 file_data = item["data"]
                 embedded_source = file_data
                 mime_type = item.get("mime_type") or "application/octet-stream"
@@ -655,7 +655,7 @@ def _write_jwlplaylist(
                 if not ext:
                     ext = _MIME_FROM_EXT_REV.get(mime_type, "")
             elif local_cached_path:
-                # URL remota cacheada → usa arquivo local
+                # Cached remote URL → use the local file.
                 lp        = Path(local_cached_path)
                 file_data = lp.read_bytes()
                 embedded_source = lp
@@ -663,7 +663,7 @@ def _write_jwlplaylist(
                 orig_name = lp.name
                 mime_type = _MIME_FROM_EXT.get(ext, "application/octet-stream")
             else:
-                # Caminho local direto
+                # Direct local path.
                 lp = Path(url)
                 if not lp.exists():
                     log.warning(
@@ -683,9 +683,9 @@ def _write_jwlplaylist(
                 orig_name = lp.name
                 mime_type = _MIME_FROM_EXT.get(ext, "application/octet-stream")
 
-            # ── Corrige mime_type pela extensão real ───────────────────────────
-            # Evita "imagem exportada como vídeo" quando item_type está errado.
-            # A extensão do arquivo é a fonte de verdade para o mime_type.
+            # Correct mime_type using the actual extension.
+            # Avoid "image exported as video" when item_type is incorrect.
+            # The file extension is authoritative for mime_type.
             if ext in _MIME_FROM_EXT:
                 detected_mime = _MIME_FROM_EXT[ext]
                 if detected_mime != mime_type:
@@ -697,7 +697,7 @@ def _write_jwlplaylist(
 
             is_image = mime_type.startswith("image/")
 
-            # ── Resolve título dos metadados do arquivo ───────────────────────
+            # Resolve the title from file metadata.
             if not is_image:
                 resolved = _read_label_from_local(file_data, ext)
                 if resolved:
@@ -721,7 +721,7 @@ def _write_jwlplaylist(
             else:
                 media_id, zip_name, _ = existing_asset
 
-            # Duração: 0 para imagens; real para vídeo/áudio
+            # Duration: 0 for images; actual duration for video/audio.
             if is_image:
                 duration_ticks = 0
             elif base_duration is not None:
@@ -744,10 +744,10 @@ def _write_jwlplaylist(
 
             # Thumbnail
             if is_image:
-                # Para imagens, o próprio arquivo embutido é a thumbnail
+                # For images, the embedded file itself is the thumbnail.
                 thumbnail_path = zip_name
             else:
-                # Para vídeo/áudio: embute thumbnail separado se disponível
+                # For video/audio, embed a separate thumbnail if available.
                 thumb_data = item.get("thumbnail_data")
                 if thumb_data:
                     t_file_uuid = _new_uuid()
@@ -769,7 +769,7 @@ def _write_jwlplaylist(
                 file_data = b""
 
         # ─────────────────────────────────────────────────────────────────────
-        # RAMO C: URL remota sem cache e sem referência JW → não exportável
+        # BRANCH C: remote URL without cache or JW reference → cannot be exported.
         # ─────────────────────────────────────────────────────────────────────
         else:
             log.warning(
@@ -778,7 +778,7 @@ def _write_jwlplaylist(
                 "url=%r  key_symbol=%r  doc_id=%r",
                 title, position, url, key_symbol, doc_id,
             )
-            # Insere PlaylistItem sem mídia — JW Library mostrará como item vazio.
+            # Insert PlaylistItem without media; JW Library displays an empty item.
 
         # ── Insere PlaylistItem ───────────────────────────────────────────────
         con.execute(
@@ -915,10 +915,10 @@ def write_jwlplaylist(
         raise PlaylistWriteError(f"Could not write playlist to {output_path}") from exc
 
 
-# ── Thumbnail padrão (1×1 pixel PNG cinza) ────────────────────────────────────
+# Default thumbnail (1×1 gray PNG pixel)
 #
-# Incluído no ZIP como "default_thumbnail.png" — idêntico ao comportamento
-# real do JW Library para playlists sem thumbnail global.
+# Included in the ZIP as "default_thumbnail.png", matching JW Library's
+# actual behavior for playlists without a global thumbnail.
 _DEFAULT_THUMBNAIL_PNG: bytes = (
     b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01'
     b'\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc\xf8\x0f\x00'
@@ -928,11 +928,11 @@ _DEFAULT_THUMBNAIL_PNG: bytes = (
 
 def _build_manifest(playlist_name: str, db_bytes: bytes) -> str:
     """
-    Gera o manifest.json idêntico ao gerado pelo JW Library (versão ≥ 14).
+    Generate manifest.json matching JW Library ≥ 14.
 
-    Formato real (verificado contra pacote gerado pelo JW Library):
+    Actual format, checked against a JW Library package:
     {
-        "name": "<nome>.jwlplaylist",
+        "name": "<name>.jwlplaylist",
         "creationDate": "2026-03-11T17:09:31.3479402-03:00",
         "version": 1,
         "type": 1,
@@ -940,29 +940,29 @@ def _build_manifest(playlist_name: str, db_bytes: bytes) -> str:
             "lastModifiedDate": "2026-03-11T20:09:31+00:00",
             "deviceName": "PC",
             "databaseName": "userData.db",
-            "hash": "<sha256 do userData.db>",
+            "hash": "<sha256 of userData.db>",
             "schemaVersion": 14
         }
     }
 
-    Notas importantes:
-      - type = 1 (não 14; 14 é a versão do schema do DB, não o tipo do pacote)
-      - creationDate = datetime local com offset de fuso (ex: -03:00)
-      - lastModifiedDate = datetime UTC com sufixo +00:00 (não Z)
-      - databaseName = "userData.db" (campo obrigatório)
-      - schemaVersion = 14 (nome correto; "databaseVersion" causa falha de importação)
-      - name inclui a extensão ".jwlplaylist"
-      - hash = SHA-256 do userData.db serializado
+    Notes:
+      - type = 1 (not 14; 14 is the database schema version, not the package type).
+      - creationDate = local datetime with a time zone offset (e.g. -03:00).
+      - lastModifiedDate = UTC datetime with +00:00 (not Z).
+      - databaseName = "userData.db" (required).
+      - schemaVersion = 14 (correct name; "databaseVersion" causes import failure).
+      - name includes the ".jwlplaylist" extension.
+      - hash = SHA-256 of the serialized userData.db.
     """
     import datetime
     import json
 
     now_utc   = datetime.datetime.now(datetime.timezone.utc)
-    now_local = now_utc.astimezone()   # converte para o fuso local da máquina
+    now_local = now_utc.astimezone()   # convert to the machine's local time zone
 
-    # JW Library usa formato com microssegundos e offset local, ex:
+    # JW Library uses microseconds and a local offset, e.g.:
     # "2026-03-11T17:09:31.3479402-03:00"
-    # Python strftime não suporta 7 dígitos fracionários; usamos 6 (microsegundos)
+    # Python strftime does not support 7 fractional digits; use 6 (microseconds).
     # e acrescentamos o offset de fuso manualmente.
     local_offset = now_local.strftime("%z")            # ex: "-0300"
     if local_offset:
@@ -973,10 +973,10 @@ def _build_manifest(playlist_name: str, db_bytes: bytes) -> str:
 
     creation_date = now_local.strftime("%Y-%m-%dT%H:%M:%S.%f") + "0" + local_offset
 
-    # lastModifiedDate em UTC com "+00:00" (não "Z")
+    # lastModifiedDate in UTC with "+00:00" (not "Z")
     last_modified = now_utc.strftime("%Y-%m-%dT%H:%M:%S+00:00")
 
-    # O nome inclui a extensão .jwlplaylist (comportamento real do JW Library)
+    # The name includes .jwlplaylist, matching JW Library's actual behavior.
     name_with_ext = (
         playlist_name if playlist_name.lower().endswith(".jwlplaylist")
         else playlist_name + ".jwlplaylist"
@@ -1001,17 +1001,18 @@ def _build_manifest(playlist_name: str, db_bytes: bytes) -> str:
 
 
 def _create_schema(con: sqlite3.Connection) -> None:
-    """Cria o schema SQLite compatível com JW Library (baseado no userData.db real).
+    """
+    Create a JW Library-compatible SQLite schema, based on actual userData.db.
 
-    PRAGMA user_version = 14 é obrigatório: o JW Library verifica este valor
-    ao importar o pacote para confirmar compatibilidade de schema (= schemaVersion
-    no manifest.json). Sem ele, a importação falha silenciosamente.
+    PRAGMA user_version = 14 is required: JW Library checks it on import
+    to confirm schema compatibility (schemaVersion in manifest.json).
+    Without it, importing fails silently.
     """
     create_jwlplaylist_schema(con)
 
 
 def _serialize_db(con: sqlite3.Connection) -> bytes:
-    """Serializa conexão SQLite para bytes."""
+    """Serialize a SQLite connection to bytes."""
     if hasattr(con, "serialize"):
         return con.serialize()
     import tempfile

@@ -1,14 +1,14 @@
 """
 constants.py — Solin
-========================
-Fonte única de verdade para constantes estáticas compartilhadas do projeto.
-Importe daqui em vez de redefinir em cada módulo.
+====================
+Single source of truth for shared static project constants.
+Import them from here instead of redefining them in each module.
 
-ATENÇÃO — caminhos de dados/cache:
-    Caminhos de runtime pertencem a RuntimePaths/ProfilePaths e devem ser
-    injetados pelo bootstrap. Constantes neste módulo devem permanecer puras.
+Data/cache paths:
+    Runtime paths belong to RuntimePaths/ProfilePaths and must be
+    injected by the bootstrap. Constants in this module must remain pure.
 
-Uso:
+Usage:
     from solin.core.foundation.constants import APP_VERSION, QSETTINGS_ORG_NAME, ...
 """
 
@@ -21,15 +21,15 @@ from solin.version import VERSION
 IS_DEV: bool = "__compiled__" not in globals()
 LIBOBS_SIDECAR_ARGUMENT: str = "--scene-engine-sidecar"
 
-# ── Identidade Qt / QSettings ─────────────────────────────────────────────────
-# Em desenvolvimento, usa outro namespace para nao misturar registros, dados
-# em QStandardPaths, cache e perfis com a instalacao de producao.
+# Qt / QSettings identity
+# Use a separate development namespace to keep registry entries and data
+# in QStandardPaths, caches, and profiles separate from the production installation.
 DISPLAY_APP_NAME: str = "Solin"
 QT_ORGANIZATION_NAME: str = "SolinDev" if IS_DEV else "Solin"
 QT_APPLICATION_NAME: str = "SolinDev" if IS_DEV else "Solin"
 
-# QSettings usa (organization, application). Mantemos os nomes de "application"
-# internos estaveis, e isolamos dev/prod pelo organization.
+# QSettings uses (organization, application). Keep the "application" names as
+# stable internal identifiers, and isolate development/production by organization.
 QSETTINGS_ORG_NAME: str = QT_ORGANIZATION_NAME
 QSETTINGS_PROFILE_ORG_PREFIX: str = f"{QSETTINGS_ORG_NAME}_"
 QSETTINGS_PREFS_APP: str = "ProjectionPrefs"
@@ -48,12 +48,12 @@ QSETTINGS_PROFILE_SCOPED_APPS: tuple[str, ...] = (
     QSETTINGS_NOTIFICATIONS_APP,
 )
 
-# ── Versão do aplicativo ────────────────────────────────────────────────────────
+# Application version
 # Public CalVer; native package metadata is derived by core.releases.version.
 APP_VERSION: str = VERSION
 
-# Identificador estável enviado às APIs do Solin. Não use sys.platform cru no
-# backend: "win32"/"darwin" são nomes Python, não nomes de produto.
+# Stable identifier sent to Solin APIs. Do not pass raw sys.platform values to the
+# backend: "win32"/"darwin" are Python names, not product names.
 if sys.platform == "win32":
     APP_PLATFORM: str = "windows"
 elif sys.platform == "darwin":
@@ -68,42 +68,42 @@ else:
 # its engine, and selecting the legacy Qt camera workflow on other platforms.
 NATIVE_SCENES_SUPPORTED: bool = APP_PLATFORM == "windows"
 
-# ── Arquivos temporários de stream (cache OFF) ─────────────────────────────────
-# Prefixo obrigatório em todo tempfile e lockfile gerado pelo Solin.
-# A limpeza de órfãos na inicialização filtra EXCLUSIVAMENTE por este prefixo,
-# evitando interferência em lockfiles de outros aplicativos.
+# Temporary streaming files (cache OFF)
+# Required prefix for every temporary file and lock file created by Solin.
+# Startup cleanup of orphaned files filters EXCLUSIVELY by this prefix,
+# avoiding interference with other applications' lock files.
 TEMP_STREAM_PREFIX: str = "Solin_stream_"
 
 # ── IPC ────────────────────────────────────────────────────────────────────────
 IPC_SERVER_NAME: str = "SolinDev_IPC_v1" if IS_DEV else "Solin_IPC_v1"
 IPC_TIMEOUT_MS: int = 800
 
-# ── Notificações remotas ────────────────────────────────────────────────────────
-# URL do endpoint JSON de notificações. Substitua pelo seu servidor em produção.
+# Remote notifications
+# JSON notification endpoint URL.
 if IS_DEV:
     NOTIFICATION_API_URL: str = "http://localhost:5000/v1/notifications"
 else:
     NOTIFICATION_API_URL: str = "https://solinav.vercel.app/v1/notifications"
-# Delay (ms) após a janela principal ser exibida antes de checar notificações.
-# Garante que a UI já está visível e responsiva ao usuário antes do fetch.
+# Delay (ms) between showing the main window and checking notifications.
+# Ensure the UI is visible and responsive before fetching.
 NOTIFICATION_CHECK_DELAY_MS: int = 1500
 
-# ── Ordem de reprodução ────────────────────────────────────────────────────────
+# Playback order
 ORDER_OFF: str = "off"
 ORDER_NEXT: str = "next"
 ORDER_RANDOM: str = "random"
 
-# ── Recursos de projeção ────────────────────────────────────────────────────────
-# Se True, permite zoom/pan interativo ao projetar uma aba ao vivo do browser.
-# Se False (padrão), o recurso é desabilitado para projeções ao vivo.
+# Projection features
+# If True, enable interactive zoom/pan when projecting a live browser tab.
+# If False (the default), disable this feature for live projections.
 ALLOW_ZOOM_PAN_ON_LIVE_TAB: bool = False
 
-# ── Retorno após cena de mídia ──────────────────────────────────────────────────
-# Contrato compartilhado pelo Scenes nativo e pela integração OBS. Se True
-# (padrão), a cena-base anterior continua sendo o destino ao fim da mídia. Se
-# False, a automação redefine a cena-base para a cena default configurada ao
-# entrar em uma nova sessão de mídia. Um override explícito do operador ainda
-# pode escolher outro retorno para a sessão atual.
+# Return after a media scene
+# Shared contract for native Scenes and the OBS integration. If True
+# (the default), the previous base scene remains the destination when media ends. If
+# False, automation resets the base scene to the configured default when
+# entering a new media session. An explicit operator override can still
+# select a different return destination for the current session.
 MEMORIZE_PRE_MEDIA_SCENE: bool = True
 
 JWL_PLAYLIST_EXTS: frozenset[str] = frozenset({".jwlplaylist"})
@@ -116,24 +116,24 @@ JWPUB_EXTS: frozenset[str] = frozenset({".jwpub"})
 PPTX_EXTS: frozenset[str] = frozenset({".pptx", ".ppt", ".odp"})
 DOCX_EXTS: frozenset[str] = frozenset({".docx", ".doc", ".odt", ".rtf"})
 
-# ── Qualidade de imagem ────────────────────────────────────────────────────────
-THUMB_JPEG_QUALITY: int = 85  # 0-100; usado em todos os saves de thumbnail
+# Image quality
+THUMB_JPEG_QUALITY: int = 85  # 0–100; used whenever a thumbnail is saved
 
-# ── Cache de API ───────────────────────────────────────────────────────────────
+# API cache
 CACHE_TTL_DAYS: int = 10
 
-# ── Qualidade de vídeo JW (GETPUBMEDIALINKS) ───────────────────────────────────
-# Resolução preferida para todos os vídeos buscados da API JW.org.
-# Usada em jw/media_api.py (cânticos sjjm/sjj e clipes osg).
+# JW video quality (GETPUBMEDIALINKS)
+# Preferred resolution for all videos fetched from the JW.org API.
+# Used in jw/media_api.py (sjjm/sjj songs and osg clips).
 VIDEO_PREFERRED_QUALITY: str = "720p"
 
-# Direção do fallback quando a resolução preferida não estiver disponível:
-#   "below" → tenta resoluções menores primeiro, depois maiores (padrão conservador)
-#   "above" → tenta resoluções maiores primeiro, depois menores
+# Fallback direction when the preferred resolution is unavailable:
+# "below" → try lower resolutions first, then higher ones (conservative default)
+# "above" → try higher resolutions first, then lower ones
 VIDEO_QUALITY_FALLBACK_DIR: str = "below"
 
-# Ordem canônica de qualidades conhecidas, da mais alta para a mais baixa.
-# Usada por pick_quality() em jw/media_api.py.
+# Canonical order of known quality levels, from highest to lowest.
+# Used by pick_quality() in jw/media_api.py.
 VIDEO_QUALITY_ORDER: tuple[str, ...] = (
     "1080p",
     "720p",
@@ -143,5 +143,5 @@ VIDEO_QUALITY_ORDER: tuple[str, ...] = (
     "180p",
 )
 
-# Delay (ms) após a janela principal para checar atualizações (após notificações).
+# Delay (ms) after showing the main window before checking updates (after notifications).
 UPDATE_CHECK_DELAY_MS: int = 5000

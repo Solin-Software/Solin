@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 # ─────────────────────────────────────────────────────────────────
-#  Configuracao de idioma (PT-BR)
-#  Altere aqui se o Zoom estiver em outro idioma ou versao diferente.
+#  Language configuration (PT-BR)
+# Adjust these labels if Zoom uses a different language or version.
 #
-#  LOGICA: o texto do botao descreve a ACAO que vai ocorrer ao clicar,
-#          que e o OPOSTO do estado atual.
-#  Exemplo: botao "Desativar som" significa audio ESTA ativo (unmuted)
-#           botao "Ativar som"   significa audio ESTA mudo  (muted)
+# LOGIC: button text describes the ACTION performed on click,
+# which is the OPPOSITE of the current state.
+#  Example: button "Desativar som" means audio IS active (unmuted).
+#           Button "Ativar som" means audio IS muted.
 # ─────────────────────────────────────────────────────────────────
 
-# Texto do botao quando audio JA ESTA MUDO (clicar desmuta)
+# Button text when audio IS ALREADY MUTED (click to unmute)
 AUDIO_MUTED_TEXT: list[str] = [
     "ativar som",
     "ativar áudio",
@@ -33,7 +33,7 @@ AUDIO_MUTED_TEXT: list[str] = [
     "aktivera mikrofonen – mikrofonen är för närvarande inaktiverad",
 ]
 
-# Texto do botao quando audio ESTA ATIVO (clicar muta)
+# Button text when audio IS ACTIVE (click to mute)
 AUDIO_UNMUTED_TEXT: list[str] = [
     "desativar som",
     "desativar áudio",
@@ -56,7 +56,7 @@ AUDIO_UNMUTED_TEXT: list[str] = [
     "inaktivera mikrofonen – mikrofonen är för närvarande aktiverad",
 ]
 
-# Texto do botao quando video JA ESTA PARADO (clicar inicia)
+# Button text when video IS ALREADY STOPPED (click to start)
 VIDEO_STOPPED_TEXT: list[str] = [
     "iniciar vídeo",
     "iniciar video",
@@ -83,7 +83,7 @@ VIDEO_STOPPED_TEXT: list[str] = [
     "starta min video",
 ]
 
-# Texto do botao quando video JA ESTA ATIVO (clicar para)
+# Button text when video IS ALREADY ACTIVE (click to stop)
 VIDEO_STARTED_TEXT: list[str] = [
     "interromper vídeo",
     "interromper video",
@@ -129,7 +129,7 @@ PARTICIPANTS_TEXT: list[str] = [
     "deltagare",
 ]
 
-# Texto do btn_muteAudio quando audio esta DESCONECTADO (sem audio nenhum)
+# btn_muteAudio text when audio is DISCONNECTED (no audio at all)
 CONNECT_AUDIO_TEXT: list[str] = [
     "conectar áudio",
     "conectar audio",
@@ -139,7 +139,7 @@ CONNECT_AUDIO_TEXT: list[str] = [
     "join audio",
 ]
 
-# Texto do botao dentro do popup "Entrar com Audio" (zJoinAudioWndClass)
+# Button text inside the "Join Audio" popup (zJoinAudioWndClass)
 _JOIN_AUDIO_BTN_PATTERNS: list[str] = [
     "junte-se com o áudio do computador",
     "junte-se com o audio do computador",
@@ -151,8 +151,8 @@ _JOIN_AUDIO_BTN_PATTERNS: list[str] = [
     "join computer audio",
 ]
 
-# ── Itens de menu SEM controlID (MenuItems genericos do Windows) ─
-# Texto e a unica alternativa para identifica-los.
+# Menu items WITHOUT controlID (generic Windows MenuItems)
+# Text is the only alternative for identifying them.
 _LEAVE_AUDIO_PATTERNS: list[str] = [
     "sair do áudio",
     "sair do audio",
@@ -161,7 +161,7 @@ _LEAVE_AUDIO_PATTERNS: list[str] = [
     "leave audio",
 ]
 
-# ── Separadores para contagem de pessoas em nomes de participantes ─
-# Ordem de prioridade: o PRIMEIRO separador encontrado no nome é usado.
-# Recomendado usar " & " nos nomes do Zoom (ex: "Felipe & Júlia").
+# Separators for counting people in participant names
+# Priority order: use the FIRST separator found in the name.
+# Use " & " in Zoom names (e.g. "Felipe & Júlia").
 PEOPLE_SEPARATORS: list[str] = [" & ", " | ", " + "]

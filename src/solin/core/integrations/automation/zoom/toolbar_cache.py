@@ -3,9 +3,9 @@ from __future__ import annotations
 import time
 from typing import Any
 
-# ── Cache de elementos da toolbar ──────────────────────────────
-# Evita re-scan de descendants + legacy_properties() a cada operacao.
-# Invalidado quando o handle da janela principal muda.
+# Toolbar element cache
+# Avoid rescanning descendants and legacy_properties() on every operation.
+# Invalidated when the main window handle changes.
 
 TOOLBAR_CACHE_RECHECK_SECONDS = 5.0
 TOOLBAR_CORE_CONTROL_IDS = {
@@ -16,7 +16,7 @@ TOOLBAR_CORE_CONTROL_IDS = {
     "btn_muteVideo",
 }
 
-# Controles do painel de participantes — cache proativo
+# Participant panel controls: proactive cache
 PARTICIPANTS_PANEL_CONTROL_IDS = {
     "mute_all_btn",
     "more_btn",

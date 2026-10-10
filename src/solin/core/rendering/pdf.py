@@ -1,15 +1,15 @@
 """
-pdf_converter.py — Solin
-============================
-Converte páginas de um PDF em imagens JPEG, com cache persistente.
+pdf.py — Solin
+==============
+Convert PDF pages to JPEG images with a persistent cache.
 
 Cache:
-    {pdf_pages_dir}/{sha256_12}_{stem}/page_001.jpg  …  page_NNN.jpg
+    {pdf_pages_dir}/{sha256_12}_{stem}/page_001.jpg … page_NNN.jpg
 
-Motor:
-    PySide6.QtPdf.QPdfDocument — usa o runtime Qt já embarcado com o app.
+Engine:
+    PySide6.QtPdf.QPdfDocument, using the application's bundled Qt runtime.
 
-DPI padrão: 150  (boa qualidade p/ projetor, JPEG ~100-300 KB / página)
+Default DPI: 150 (good projector quality, JPEG ~100–300 KB per page).
 """
 
 from __future__ import annotations
@@ -32,11 +32,11 @@ _JPEG_QUALITY = 85
 _PAGE_FMT = "page_{n:03d}.jpg"  # page_001.jpg, page_002.jpg …
 
 
-# ── Funções utilitárias ────────────────────────────────────────────────────────
+# Utility functions
 
 
 def _pdf_hash(path: str | Path) -> str:
-    """SHA-256 (primeiros 12 chars) do conteúdo do PDF — base do nome do cache."""
+    """SHA-256 of the PDF contents (first 12 characters), used for the cache name."""
     h = hashlib.sha256()
     with open(path, "rb") as f:
         while chunk := f.read(65536):
@@ -49,12 +49,12 @@ def _cache_dir(
     pdf_pages_dir: str | os.PathLike[str],
 ) -> Path:
     """
-    Retorna o diretório de cache para um PDF específico.
-    ``pdf_pages_dir`` é fornecido pelo composition root.
-    Exemplo: cache/pdf_pages/a3f8c201ee9d_relatorio
+    Return the cache directory for a specific PDF.
+    ``pdf_pages_dir`` is supplied by the composition root.
+    Example: cache/pdf_pages/a3f8c201ee9d_report
     """
     pdf_path = Path(pdf_path)
-    stem = pdf_path.stem[:40]  # limita tamanho do nome
+    stem = pdf_path.stem[:40]  # limit name length
     h = _pdf_hash(pdf_path)
     return Path(pdf_pages_dir) / f"{h}_{stem}"
 
@@ -64,8 +64,8 @@ def cached_pages(
     pdf_pages_dir: str | os.PathLike[str],
 ) -> list[str] | None:
     """
-    Retorna lista de caminhos JPEG se o PDF já foi convertido e o cache
-    está completo. Retorna None se conversão ainda não foi feita.
+    Return JPEG paths if the PDF was converted and its cache is complete.
+    Return None if conversion has not yet been performed.
     """
     d = _cache_dir(pdf_path, pdf_pages_dir)
     marker = d / ".done"
@@ -162,25 +162,25 @@ def convert_pdf_sync(
     progress_cb: Callable[[int, int], None] | None = None,
 ) -> list[str]:
     """
-    Converte um PDF em imagens JPEG de forma síncrona.
+    Convert a PDF to JPEG images synchronously.
 
     Args:
-        pdf_path:    Caminho para o arquivo PDF.
-        pdf_pages_dir: Diretório raiz explícito do cache de páginas PDF.
-        dpi:         Resolução de renderização (padrão 150).
-        progress_cb: Callback opcional (página_atual, total_páginas).
+        pdf_path: PDF file path.
+        pdf_pages_dir: Explicit PDF page cache root directory.
+        dpi: Rendering resolution (default 150).
+        progress_cb: Optional callback (current_page, total_pages).
 
     Returns:
-        Lista de caminhos JPEG ordenados (page_001.jpg …).
+        Ordered JPEG paths (page_001.jpg …).
 
     Raises:
-        RuntimeError: Se o PDF não puder ser aberto ou convertido.
+        RuntimeError: PDF could not be opened or converted.
     """
     pdf_path = Path(pdf_path)
     cache_dir = _cache_dir(pdf_path, pdf_pages_dir)
     marker = cache_dir / ".done"
 
-    # Cache hit: retorna imediatamente
+    # Cache hit: return immediately.
     if marker.exists():
         pages = sorted(cache_dir.glob("page_*.jpg"), key=lambda p: p.name)
         if pages:
@@ -206,27 +206,27 @@ def convert_pdf_sync(
         return paths
 
     except Exception as exc:  # noqa: BLE001 - rendering API normalizes Qt/native failures
-        # Remove cache parcial para evitar estado corrompido
+        # Remove partial cache to avoid corrupted state.
         import shutil
 
         shutil.rmtree(str(cache_dir), ignore_errors=True)
         raise RuntimeError(f"Could not convert PDF: {exc}") from exc
 
 
-# ── Thread assíncrona ──────────────────────────────────────────────────────────
+# Asynchronous thread
 
 
 class PdfConvertThread(QThread):
     """
-    Converte PDF em JPEG em background.
+    Convert PDF to JPEG in the background.
 
-    Sinais:
-        progress(atual, total)          — atualização de progresso
-        pages_ready(paths, pdf_stem)    — conversão concluída com sucesso
-        conversion_failed(error_msg)    — erro de conversão
+    Signals:
+        progress(current, total) — progress update
+        pages_ready(paths, pdf_stem) — conversion completed successfully
+        conversion_failed(error_msg) — conversion error
     """
 
-    progress = Signal(int, int)  # (página_atual, total)
+    progress = Signal(int, int)  # (current_page, total)
     pages_ready = Signal(list, str)  # (list[str] paths, pdf_stem)
     conversion_failed = Signal(str)  # mensagem de erro
 
@@ -259,7 +259,7 @@ class PdfConvertThread(QThread):
             self.conversion_failed.emit(f"Erro inesperado: {exc}")
 
 
-# ── Limpeza de cache órfão ─────────────────────────────────────────────────────
+# Orphaned cache cleanup
 
 
 def flush_pdf_pages_dir(
@@ -267,13 +267,13 @@ def flush_pdf_pages_dir(
     pdf_pages_dir: str | os.PathLike[str],
 ) -> None:
     """
-    Remove subdirectórios de data/pdf_pages cujas imagens não são
-    referenciadas por nenhuma playlist.
+    Remove subdirectories of data/pdf_pages whose images are not referenced
+    by any playlist.
 
     Args:
-        referenced_paths: Conjunto de caminhos de imagem presentes em pelo
-            menos uma playlist (``item["url"]``).
-        pdf_pages_dir: Diretório raiz explícito do cache de páginas PDF.
+        referenced_paths: Image paths present in at least one playlist
+            (``item["url"]``).
+        pdf_pages_dir: Explicit PDF page cache root directory.
     """
     pages_root = Path(pdf_pages_dir)
     if not pages_root.is_dir():
@@ -287,10 +287,10 @@ def flush_pdf_pages_dir(
         images = list(sub.glob("page_*.jpg"))
         if not images:
             continue
-        # Mantém o subdir se QUALQUER imagem sua for referenciada
+        # Keep the subdirectory if ANY of its images is referenced.
         if any(os.path.normpath(str(img)) in norm_ref for img in images):
             continue
-        # Órfão — remove
+        # Orphaned: remove.
         import shutil
 
         shutil.rmtree(str(sub), ignore_errors=True)

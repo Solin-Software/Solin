@@ -1,25 +1,24 @@
 """
-publications.py ─ Solin
-==========================
+publications.py — Solin
+=======================
 Main-thread Qt service facade for meeting JWPUB publications.
 
-Threading model (production-grade):
-────────────────────────────────────
-REGRA ABSOLUTA: nada que bloqueie (HTTP, disk I/O pesado, SQLite) roda na
-main thread. Toda comunicação entre worker e UI é via Signal/Slot com
-QueuedConnection automática (QThread garante a thread affinity correta).
+Threading model:
+No blocking work (HTTP, heavy disk I/O, SQLite) runs on the main thread.
+All worker/UI communication uses signals/slots with automatic QueuedConnection;
+QThread guarantees correct thread affinity.
 
-JwpubWorker    — QObject que vive num QThread dedicado.
-                 Faz toda a lógica: fetch de URL, download, extração zip,
-                 parse SQLite. Emite sinais de resultado para a main thread.
-JwpubService   — QObject na main thread. Cria/gerencia o worker thread,
-                 recebe sinais e repassa para a UI.
+JwpubWorker — QObject in a dedicated QThread. Handles URL fetching,
+              downloads, ZIP extraction, and SQLite parsing. Emits
+              result signals to the main thread.
+JwpubService — QObject on the main thread. Creates/manages the worker
+               thread, receives signals, and forwards them to the UI.
 
-Isso elimina:
-  • HTTP bloqueante na main thread (_get_jwpub_url era síncrono)
-  • QRunnable + _Signals com moveToThread (AutoConnection frágil)
-  • threading.Thread emitindo signals (sem QThread wrapper = DirectConnection)
-  • resolução síncrona de mídia durante construção da UI
+This eliminates:
+  • Blocking HTTP on the main thread (_get_jwpub_url was synchronous).
+  • QRunnable + _Signals with moveToThread (fragile AutoConnection).
+  • threading.Thread emitting signals without a QThread wrapper (DirectConnection).
+  • Synchronous media resolution during UI construction.
 """
 
 from __future__ import annotations
@@ -63,15 +62,15 @@ class _WeekLoadRequest:
     repair_cache_paths: tuple[str, ...] = ()
 
 
-# ── JwpubService — vive na main thread, gerencia o worker thread ──────────────
+# JwpubService: runs on the main thread and manages the worker thread.
 
 
 class JwpubService(QObject):
     """
-    API pública para a UI. Vive na main thread.
-    Cria um JwpubWorker num QThread dedicado e encaminha pedidos via sinais.
+    Public UI API running on the main thread.
+    Create a JwpubWorker in a dedicated QThread and forward requests through signals.
 
-    Sinais para a UI:
+    UI signals:
       mwb_ready(key, WeekData)
       wt_ready(key, WeekData)
       cbs_ready(key, WeekData)
@@ -92,7 +91,7 @@ class JwpubService(QObject):
     context_load_finished = Signal(str, str, bool, int)
     media_resolved = Signal(str, object)  # request_id, resolved metadata
 
-    # Sinais internos para o worker (despacham para a worker thread)
+    # Internal signals dispatched to the worker thread
     _sig_load_week = Signal(object, bool, str, bool, int, object, str, object, object)
     _sig_set_lang = Signal(str)
     _sig_set_sign_language = Signal(bool)
@@ -115,7 +114,7 @@ class JwpubService(QObject):
         ] = {}
         self._active_load_key: tuple[str, str, bool, int] | None = None
 
-        # Cria worker + thread dedicada
+        # Create the worker and its dedicated thread.
         self._thread = QThread(self)
         self._worker = JwpubWorker(
             jwpub_cache_dir,
@@ -124,7 +123,7 @@ class JwpubService(QObject):
         self._worker.moveToThread(self._thread)
         self._thread.finished.connect(self._worker.deleteLater)
 
-        # Worker → JwpubService (main thread, QueuedConnection automática)
+        # Worker → JwpubService (main thread, automatic QueuedConnection)
         self._worker.mwb_done.connect(self._on_mwb_done)
         self._worker.wt_done.connect(self._on_wt_done)
         self._worker.cbs_done.connect(self._on_cbs_done)
@@ -133,7 +132,7 @@ class JwpubService(QObject):
         self._worker.load_finished.connect(self._on_load_finished)
         self._worker.media_resolved.connect(self.media_resolved)
 
-        # JwpubService → Worker (worker thread, QueuedConnection automática)
+        # JwpubService → Worker (worker thread, automatic QueuedConnection)
         self._sig_load_week.connect(self._worker.load_week)
         self._sig_set_lang.connect(self._worker.set_lang)
         self._sig_set_sign_language.connect(self._worker.set_sign_language)
@@ -142,7 +141,7 @@ class JwpubService(QObject):
         self._thread.start()
 
     def shutdown(self, wait_ms: int = 3000, delete_when_stopped: bool = False) -> None:
-        """Encerra explicitamente a worker thread de reuniões."""
+        """Explicitly stop the meeting worker thread."""
         self._pending_loads.clear()
         worker = getattr(self, "_worker", None)
         if worker is not None:
@@ -188,9 +187,9 @@ class JwpubService(QObject):
 
     def set_sign_language(self, is_sign: bool) -> None:
         """
-        Informa ao worker se o idioma de mídia é gestual.
-        Quando True, cânticos com key_symbol='sjjm' são resolvidos como 'sjj'.
-        Deve ser chamado sempre que o idioma de mídia mudar.
+        Tell the worker whether the media language is a sign language.
+        If True, songs with key_symbol='sjjm' resolve as 'sjj'.
+        Call whenever the media language changes.
         """
         self._is_sign_language = bool(is_sign)
         self._sig_set_sign_language.emit(is_sign)
@@ -242,7 +241,7 @@ class JwpubService(QObject):
         if self._active_load_key == key:
             return
         if not force and key in self._active:
-            # Já existe entrada — só recarrega se alguma metade da semana falhou.
+            # Entry already exists; reload only if either half of the week failed.
             existing = self._active[key]
             if existing.mwb_status not in ("error",) and existing.wt_status not in ("error",):
                 return
@@ -419,7 +418,7 @@ class JwpubService(QObject):
             wd.request_generation,
         )
 
-    # ── Worker callbacks (chegam na main thread via QueuedConnection) ─────────
+    # Worker callbacks (reach the main thread via QueuedConnection)
 
     @Slot(str, object)
     def _on_mwb_done(self, key: str, wd: meeting_models.WeekData):

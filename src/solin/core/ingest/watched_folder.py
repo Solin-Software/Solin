@@ -1,33 +1,33 @@
 """
 watched_folder.py — Solin
-===================================
-Serviço de Pasta Monitorada.
+=========================
+Watched folder service.
 
-Responsabilidades:
-  - Escanear a pasta raiz configurada e retornar subpastas de nível 1 como playlists
-  - Escanear uma subpasta e retornar seus arquivos de mídia como itens de playlist
-  - Converter documentos (PDF/PPTX/DOCX) salvando JPEGs na cache da subpasta
-  - Processar .jwpub (extrair imagens + resolver vídeos)
-  - Processar .jwlplaylist (extrair embedded media + resolver URLs)
-  - Observar alterações no filesystem via QFileSystemWatcher
-  - Registrar importações e organização no journal compartilhado
+Responsibilities:
+  - Scan the configured root folder and return immediate subfolders as playlists.
+  - Scan a subfolder and return its media files as playlist items.
+  - Convert documents (PDF/PPTX/DOCX), saving JPEGs in the subfolder cache.
+  - Process .jwpub files (extract images and resolve videos).
+  - Process .jwlplaylist files (extract embedded media and resolve URLs).
+  - Watch filesystem changes with QFileSystemWatcher.
+  - Record imports and organization in the shared journal.
 
-Regras de escaneamento:
-  - Apenas subpastas imediatas (1 nível) da raiz são playlists
-  - Arquivos diretamente na raiz são ignorados
-  - Arquivos em sub-subdiretórios são ignorados (exceto .solin_cache)
-  - Formatos suportados como itens: VIDEO_EXTS | AUDIO_EXTS | IMAGE_EXTS
-  - .jwpub, .jwlplaylist, PDF, PPTX, DOCX são processados e seus outputs aparecem
+Scanning rules:
+  - Only immediate subfolders (one level) of the root are playlists.
+  - Files directly in the root are ignored.
+  - Files in nested subdirectories are ignored (except .solin_cache).
+  - Supported item formats: VIDEO_EXTS | AUDIO_EXTS | IMAGE_EXTS.
+  - .jwpub, .jwlplaylist, PDF, PPTX, and DOCX files are processed and their outputs appear.
 
 Journal (.solin_sync/playlist/):
-  - Operações imutáveis preservam edições concorrentes e exclusões
-  - Rastreia arquivos processados com assinatura portável (size + sha256)
-  - Lista outputs gerados e ocorrências virtuais (URLs ou mídia embutida)
-  - O manifesto antigo é importado uma vez como baseline de migração
+  - Immutable operations preserve concurrent edits and deletions.
+  - Tracks processed files using a portable signature (size + sha256).
+  - Lists generated outputs and virtual occurrences (URLs or embedded media).
+  - Imports the old manifest once as a migration baseline.
 
 Cache (.solin_cache/):
-  - Subpasta dentro de cada subpasta monitorada
-  - Armazena outputs gerados (JPEGs de PDF, imagens de JWPUB, embedded de JWLPLAYLIST)
+  - A subdirectory within each watched subfolder.
+  - Stores generated outputs (PDF JPEGs, JWPUB images, embedded JWLPLAYLIST media).
 """
 from __future__ import annotations
 
@@ -92,10 +92,10 @@ _PAGE_FMT = "{stem}-page_{n:03d}.jpg"
 _PAGE_CACHE_VERSION = 1
 
 
-# ── Utilitários ────────────────────────────────────────────────────────────────
+# Utilities
 
 def _path_id(path: str | Path) -> str:
-    """ID estável derivado do caminho absoluto normalizado (16 chars hex)."""
+    """Stable ID derived from the normalized absolute path (16 hex characters)."""
     return hashlib.md5(os.path.normpath(str(path)).encode()).hexdigest()[:16]
 
 
@@ -172,10 +172,10 @@ def _playlist_cache_references(manifest: dict) -> set[str]:
 
 def scan_root(folder_path: str) -> list[dict]:
     """
-    Escaneia a pasta raiz e retorna subpastas imediatas como playlists virtuais.
-    Subpastas cujo nome segue o padrão de reunião (YYYY-MM-DD MW|WE) são
-    excluídas — são tratadas pelo meeting auto-assignment.
-    Returns: Lista de dicts: {id, name, path, item_count}
+    Scan the root folder and return immediate subfolders as virtual playlists.
+    Exclude subfolders matching the meeting pattern (YYYY-MM-DD MW|WE);
+    meeting auto-assignment handles them.
+    Returns a list of dicts: {id, name, path, item_count}.
     """
     from solin.core.meetings.folder_matcher import is_meeting_folder
 
@@ -200,11 +200,11 @@ def scan_root(folder_path: str) -> list[dict]:
 
 def scan_subfolder(subfolder_path: str) -> list[dict]:
     """
-    Escaneia uma subpasta e retorna todos os itens de mídia:
-    1. Arquivos de mídia na raiz da subpasta
-    2. Arquivos de mídia em .solin_cache/ (outputs de processamento)
-    3. Ocorrências virtuais do manifesto (.jwpub/.jwlplaylist)
-    Ordenados por título (case-insensitive).
+    Scan a subfolder and return all media items:
+    1. Media files at the subfolder root.
+    2. Media files in .solin_cache/ (processing outputs).
+    3. Virtual occurrences from the manifest (.jwpub/.jwlplaylist).
+    Sort by title (case-insensitive).
     """
     sub = Path(subfolder_path)
     if not sub.is_dir():
@@ -218,7 +218,7 @@ def _scan_subfolder(sub: Path, manifest: dict) -> list[dict]:
 
     items: list[dict] = []
 
-    # Coleta todos os arquivos permitidos no cache (gerados pelo Solin)
+    # Collect all allowed cache files generated by Solin.
     allowed_cache_files = set()
     output_sources: dict[str, list[tuple[str, int]]] = {}
     for _src_name, entry in manifest.get("processed", {}).items():
@@ -233,7 +233,7 @@ def _scan_subfolder(sub: Path, manifest: dict) -> list[dict]:
         if vi.get("url") and not str(vi["url"]).startswith(("http://", "https://"))
     }
 
-    # 1. Arquivos de mídia na raiz da subpasta
+    # 1. Media files at the subfolder root
     for f in sub.iterdir():
         if is_watched_folder_staging_path(f):
             continue
@@ -245,7 +245,7 @@ def _scan_subfolder(sub: Path, manifest: dict) -> list[dict]:
         if ext in SCAN_EXTS:
             items.append(_physical_playlist_item(f))
 
-    # 2. Arquivos de mídia em .solin_cache/ (apenas os legítimos)
+    # 2. Media files in .solin_cache/ (legitimate files only)
     cache = sub / CACHE_DIR_NAME
     if cache.is_dir():
         for f in cache.iterdir():
@@ -294,7 +294,7 @@ def _scan_subfolder(sub: Path, manifest: dict) -> list[dict]:
                     virtual_item[field] = vi[field]
             items.append(virtual_item)
 
-    # Ordena por título
+    # Sort by title.
     items.sort(key=lambda it: it.get("title", "").lower())
     return items
 
@@ -653,17 +653,17 @@ def _imported_occurrence_id(source: Path, item: dict, ordinals: dict[str, int]) 
     return str(uuid.uuid5(uuid.NAMESPACE_URL, f"solin:source-occurrence:{name}"))
 
 
-# ── Thread de conversão de documentos ─────────────────────────────────────────
+# Document conversion thread
 
 class WatchedFolderDocConverter(QThread):
     """
-    Converte PDF/PPTX/DOCX em imagens JPEG e salva na pasta de destino.
+    Convert PDF/PPTX/DOCX files to JPEG images and save them in the destination folder.
     Page names use a stable source-specific cache key to avoid collisions.
 
-    Sinais:
-        progress(current, total)     — progresso de página
-        pages_ready(paths, stem)     — conversão concluída
-        conversion_failed(error)     — erro
+    Signals:
+        progress(current, total) — page progress
+        pages_ready(paths, stem) — conversion completed
+        conversion_failed(error) — error
     """
     progress          = Signal(int, int)   # (current, total)
     pages_ready       = Signal(list, str)  # (jpeg_paths, stem)
@@ -680,7 +680,7 @@ class WatchedFolderDocConverter(QThread):
         dest_dir.mkdir(parents=True, exist_ok=True)
         stem = doc_path.stem
 
-        # Verifica se já foi convertido anteriormente
+        # Check whether the file has already been converted.
         existing = pages_already_exist(doc_path, dest_dir)
         if existing:
             self.pages_ready.emit(existing, stem)
@@ -761,17 +761,17 @@ class WatchedFolderDocConverter(QThread):
                 expected_signature=source_signature,
             )
 
-# ── Thread de sincronização (processa arquivos pendentes) ─────────────────────
+# Synchronization thread (processes pending files)
 
 class WatchedFolderSyncThread(QThread):
     """
-    Processa todos os arquivos pendentes (PDF/JWPUB/JWLPLAYLIST/PPTX/DOCX)
-    em uma subpasta monitorada. Atualiza o manifesto ao final.
+    Process all pending files (PDF/JWPUB/JWLPLAYLIST/PPTX/DOCX)
+    in a watched subfolder. Update the manifest when finished.
 
-    Sinais:
-        progress(filename, message)  — progresso por arquivo
-        sync_complete()              — todos os arquivos processados
-        sync_failed(error)           — erro fatal
+    Signals:
+        progress(filename, message) — progress per file
+        sync_complete() — all files processed
+        sync_failed(error) — fatal error
     """
     progress      = Signal(str, str)    # (filename, message)
     sync_complete = Signal()
@@ -1079,16 +1079,16 @@ class WatchedFolderSyncThread(QThread):
         )
 
 
-# ── Observador de pasta ────────────────────────────────────────────────────────
+# Folder watcher
 
 class WatchedFolderWatcher(QObject):
     """
-    Observa a pasta raiz monitorada e seus subdiretórios imediatos.
-    Emite `changed` quando qualquer mudança de arquivo ou pasta é detectada.
-    Emite `subfolder_changed(path)` quando uma subpasta específica muda.
+    Watch the root folder and its immediate subdirectories.
+    Emit `changed` whenever a file or folder change is detected.
+    Emit `subfolder_changed(path)` when a specific subfolder changes.
     """
-    changed           = Signal()        # qualquer mudança
-    subfolder_changed = Signal(str)     # subpasta específica
+    changed           = Signal()        # any change
+    subfolder_changed = Signal(str)     # specific subfolder
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -1098,7 +1098,7 @@ class WatchedFolderWatcher(QObject):
         self._watcher.fileChanged.connect(self._on_file_changed)
 
     def set_root(self, path: str) -> None:
-        """Define ou troca a pasta raiz sendo observada."""
+        """Set or replace the root folder being watched."""
         old = self._watcher.directories() + self._watcher.files()
         if old:
             self._watcher.removePaths(old)

@@ -1,20 +1,14 @@
-"""
-catalog.py - Solin
-====================================
-Reusable JW.org media catalog fetch and cache policies.
+"""JW.org media retrieval, normalization, and catalog caching.
 
-This module is intentionally independent from playlists and QML.  It provides
-one normalized contract for future UI surfaces that need to browse JW videos,
-show thumbnails, and later decide what to do with the selected item.
+This module provides the UI-independent data layer used to browse JW media. It
+supports publication/document requests through GETPUBMEDIALINKS, category
+requests through the Mediator API, and full video-catalog discovery across the
+known category hierarchy.
 
-Public layers:
-  - JWMediaQuery / JWMediaItem dataclasses for synchronous, testable code.
-  - fetch_jw_videos() for direct callers and framework adapters.
-
-Thumbnail policy:
-  API thumbnails are cached under cache/thumbs/jw_catalog/ using a SHA-256 of
-  the source URL.  The original API URL remains on the item, while
-  thumbnail_path points to the local cached file when available.
+Network responses, resumable catalog snapshots, and thumbnails use separate
+caches rooted at :class:`JWMediaCatalogCachePaths`. Public callers receive
+normalized :class:`JWMediaItem` objects while the original remote thumbnail URL
+is preserved alongside any local cached path.
 """
 
 from __future__ import annotations
@@ -69,7 +63,7 @@ _MIME_EXT = {
 
 @dataclass(frozen=True)
 class JWMediaCatalogCachePaths:
-    """Filesystem roots used by the JW media catalog cache."""
+    """Filesystem roots from which catalog and thumbnail cache paths are derived."""
 
     cache_dir: Path
     thumb_cache_dir: Path
@@ -88,7 +82,7 @@ class JWMediaCatalogCachePaths:
 
 
 class JWMediaCatalogFetchCancelled(Exception):
-    """Sentinel used to stop cooperative catalog fetches."""
+    """Raised when a cooperative catalog fetch is cancelled."""
 
 
 _EXPECTED_FETCH_ERRORS = (
@@ -104,7 +98,10 @@ def is_catalog_refresh_due(
     *,
     now: float | None = None,
 ) -> bool:
-    """Return whether a completed catalog snapshot should be revalidated."""
+    """Return whether a completed catalog snapshot is due for revalidation.
+
+    Missing, zero, or negative timestamps are treated as immediately stale.
+    """
     checked_at = float(fetched_at or 0.0)
     if checked_at <= 0:
         return True
@@ -114,11 +111,12 @@ def is_catalog_refresh_due(
 
 @dataclass(frozen=True)
 class JWMediaQuery:
-    """Identifies a JW media request.
+    """Describe a normalized JW media lookup.
 
-    Use pub for regular publication symbols (for example "sjjm", "osg").
-    Use docid for document-addressed media.  If track is omitted, all tracks
-    returned by GETPUBMEDIALINKS are grouped and normalized.
+    ``pub`` addresses a publication symbol such as ``sjjm`` or ``osg``;
+    ``docid`` addresses document-based media. If ``track`` is omitted, all
+    tracks returned by GETPUBMEDIALINKS are normalized. Setting ``category``
+    selects category-based retrieval instead of the publication endpoint.
     """
 
     language: str
@@ -145,7 +143,7 @@ class JWMediaQuery:
 
 @dataclass(frozen=True)
 class JWMediaItem:
-    """Normalized JW video metadata for UI and playlist-adjacent callers."""
+    """Normalized JW media metadata shared by catalog consumers."""
 
     id: str
     title: str
@@ -210,11 +208,13 @@ def fetch_jw_videos(
     force: bool = False,
     cache_thumbnails: bool = True,
 ) -> tuple[list[JWMediaItem], float, bool]:
-    """Fetch and normalize JW videos.
+    """Fetch and normalize media for a single JW query.
 
-    Returns (items, fetched_at, from_cache).  The cache applies to API JSON
-    responses.  Thumbnails have their own independent file cache and are reused
-    whenever possible.
+    Category queries use the Mediator API; publication and document queries use
+    GETPUBMEDIALINKS. The return value is ``(items, fetched_at, from_cache)``,
+    where ``from_cache`` reports whether the API payload came from the JSON
+    cache. Thumbnail files use an independent cache and are reused whenever
+    possible.
     """
 
     normalized = query.normalized()
@@ -252,17 +252,22 @@ def fetch_jw_video_catalog(
     progress_callback: Callable[[list[JWMediaItem], int, int], None] | None = None,
     should_cancel: Callable[[], bool] | None = None,
 ) -> tuple[list[JWMediaItem], float, bool]:
-    """Fetch the full JW video catalog for *language*.
+    """Build or refresh the complete JW video catalog for *language*.
 
-    This mirrors the production flow used by M3:
-      1. Start with LatestVideos.
-      2. Discover first-level VideoOnDemand subcategories.
-      3. Discover one additional subcategory level.
-      4. Fetch every discovered category, dedupe by guid/id, and sort newest first.
+    Category discovery follows a bounded hierarchy:
+      1. Seed the catalog with LatestVideos.
+      2. Enumerate first-level VideoOnDemand subcategories.
+      3. Inspect those categories for one additional nested level.
+      4. Fetch all discovered categories and merge their media entries.
 
-    A partial snapshot is written after every category.  If the app closes mid
-    fetch, the next run reuses completed category caches and the partial
-    snapshot before continuing the remaining categories.
+    Results are deduplicated by stable media identities and ordered newest
+    first. Complete snapshots are reused within the catalog freshness window;
+    stale snapshots remain available while refresh work runs. Partial snapshots
+    act as resumable checkpoints so interrupted fetches can continue from the
+    completed category set instead of starting over.
+
+    ``should_cancel`` is checked cooperatively throughout network and category
+    work. Cancellation raises :class:`JWMediaCatalogFetchCancelled`.
     """
 
     lang = (language or "E").upper()
@@ -565,7 +570,11 @@ def ensure_thumbnail_cached(
     cache_paths: JWMediaCatalogCachePaths,
     force: bool = False,
 ) -> str:
-    """Return a local cached thumbnail path, downloading it if needed."""
+    """Return a local thumbnail path, downloading and caching it when needed.
+
+    ``force`` bypasses an existing cached file. An empty URL or a recoverable
+    download/cache failure returns an empty string.
+    """
 
     if not thumbnail_url:
         return ""
@@ -624,7 +633,10 @@ def cached_thumbnail_path(
     *,
     cache_paths: JWMediaCatalogCachePaths,
 ) -> str:
-    """Return an existing thumbnail cache path, or an empty string."""
+    """Return an existing cached thumbnail path without performing network I/O.
+
+    Returns an empty string when the URL is empty or no cached file exists.
+    """
 
     if not thumbnail_url:
         return ""
