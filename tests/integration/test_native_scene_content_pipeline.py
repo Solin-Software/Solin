@@ -564,7 +564,9 @@ def _create_native_transition_engine(tmp_path: Path) -> SubprocessSceneEngine:
     width, height = _TRANSITION_CANVAS
     script = tmp_path / "native_transition_engine.py"
     script.write_text(textwrap.dedent(f'''
+        import faulthandler
         import sys
+        import time
         from solin.core.media.obs_runtime import ObsRuntime
         from solin.core.scenes.libobs_sidecar import (
             LibobsSidecarEngine, _reserve_protocol_stream, serve,
@@ -574,6 +576,21 @@ def _create_native_transition_engine(tmp_path: Path) -> SubprocessSceneEngine:
             runtime = ObsRuntime()
             runtime.ensure_started(width={width}, height={height})
             return runtime
+
+        original_take = LibobsSidecarEngine._handle_take_prepared
+
+        def traced_take(self, request):
+            started = time.monotonic()
+            print("TAKE START", request.payload, flush=True, file=sys.stderr)
+            faulthandler.dump_traceback_later(0.5, repeat=True)
+            try:
+                return original_take(self, request)
+            finally:
+                faulthandler.cancel_dump_traceback_later()
+                print("TAKE END", request.payload, time.monotonic() - started,
+                      flush=True, file=sys.stderr)
+
+        LibobsSidecarEngine._handle_take_prepared = traced_take
 
         serve(
             sys.stdin.buffer, _reserve_protocol_stream(),
