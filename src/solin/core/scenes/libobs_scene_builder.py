@@ -15,6 +15,7 @@ from urllib.parse import quote, urlsplit, urlunsplit
 from typing import Any, Protocol
 
 from solin.core.scenes.model import Crop, NormalizedRect
+from solin.core.scenes.engine import SceneSourcePreview
 from solin.core.scenes.libobs_transitions import (
     FALLBACK_TRANSITION_KIND,
     TRANSITION_SOURCE_IDS,
@@ -94,6 +95,8 @@ class LibobsSceneGraph:
     def __init__(self, runtime: Any) -> None:
         self._runtime = runtime
         self._scenes: dict[str, Any] = {}
+        self._editor_preview_scene: Any | None = None
+        self._editor_preview_layer: tuple[str, str] | None = None
         self._sources: list[Any] = []
         # Scene items bound to the content slot, tracked so the content source can
         # be swapped live (BGRA frame source <-> libobs-decoded media) without a
@@ -174,6 +177,74 @@ class LibobsSceneGraph:
         scene = self._scenes.get(scene_id)
         return scene.as_source() if scene is not None else None
 
+    def editor_scene_source(self, scene_id: str) -> Any | None:
+        """Resolve the isolated full source only for its owning editor scene."""
+        if (
+            self._editor_preview_scene is not None
+            and self._editor_preview_layer is not None
+            and self._editor_preview_layer[0] == scene_id
+        ):
+            return self._editor_preview_scene.as_source()
+        return self.scene_source(scene_id)
+
+    @property
+    def has_editor_source_preview(self) -> bool:
+        return self._editor_preview_scene is not None
+
+    def clear_editor_source_preview(self) -> None:
+        """Release after callers detach readback and guard native window draws."""
+        scene = self._editor_preview_scene
+        if scene is not None:
+            scene.release()
+        self._editor_preview_scene = None
+        self._editor_preview_layer = None
+
+    def set_editor_source_preview(self, scene_id: str, layer_id: str | None) -> SceneSourcePreview:
+        """Borrow a built item's source into one private, uncropped composition.
+
+        The caller synchronizes all editor borrowers before replacing the scene.
+        The source remains owned by the authored graph or its runtime provider.
+        """
+        if layer_id is None:
+            self.clear_editor_source_preview()
+            return SceneSourcePreview()
+        key = (scene_id, layer_id)
+        record = self._layer_items.get(key)
+        if record is None:
+            self.clear_editor_source_preview()
+            return SceneSourcePreview(error_code="unknown_layer")
+        candidate = None
+        try:
+            if not record["source_available"]:
+                self.clear_editor_source_preview()
+                return SceneSourcePreview(error_code="source_unavailable")
+            source = record["item"].source
+            dimensions = SceneSourcePreview(width=source.width, height=source.height)
+            if dimensions.width == 0:
+                self.clear_editor_source_preview()
+                return SceneSourcePreview(error_code="source_unavailable")
+            if self._editor_preview_scene is not None and self._editor_preview_layer == key:
+                return dimensions
+            candidate = self._runtime.ob.Scene.create_private("solin-editor-source-preview")
+            item = candidate.add(source)
+            self._apply_item_geometry(
+                item,
+                {"fit_mode": "contain", "mirror_x": record["layer"].get("mirror_x", False),
+                 "mirror_y": record["layer"].get("mirror_y", False)},
+                self._runtime.video,
+                self._runtime.ob,
+            )
+            self.clear_editor_source_preview()
+            self._editor_preview_scene = candidate
+            self._editor_preview_layer = key
+            return dimensions
+        except Exception:  # noqa: BLE001 - unavailable native sources must not crash editing
+            if candidate is not None:
+                candidate.release()
+            self.clear_editor_source_preview()
+            log.warning("Could not build editor source preview", exc_info=True)
+            return SceneSourcePreview(error_code="source_unavailable")
+
     def hydrate(
         self,
         document: dict,
@@ -248,6 +319,7 @@ class LibobsSceneGraph:
         content_source: Any | None,
     ) -> None:
         source, owned = self._resolve_source(ob, layer, canvas, sources_by_id, content_source)
+        source_available = source is not None
         is_content = self._is_content_layer(layer, sources_by_id)
         placeholder = None
         if source is None:
@@ -267,6 +339,7 @@ class LibobsSceneGraph:
             "placeholder": placeholder,
             "content_source": content_source if is_content else None,
             "is_content": is_content,
+            "source_available": source_available,
             "referenced_scene_id": (
                 str((sources_by_id[layer["source_id"]].get("configuration") or {}).get(
                     "target_scene_id", "",
@@ -595,7 +668,8 @@ class LibobsSceneGraph:
                     record = dict(previous, scene=scene, item=item)
                     records.append(record)
                     if previous["is_content"]:
-                        record.update(content_source=new_source, placeholder=None)
+                        record.update(content_source=new_source, placeholder=None,
+                                      source_available=new_source is not None)
                     self._apply_item_geometry(
                         item, previous["layer"], self._runtime.video, self._runtime.ob,
                     )
@@ -605,6 +679,9 @@ class LibobsSceneGraph:
                 if committed:
                     return
                 with self._crop_lock:
+                    # The caller detaches editor readback and holds hydrate_lock.
+                    # A preview must never retain an obsolete content generation.
+                    self.clear_editor_source_preview()
                     retired = {scene_id: self._scenes[scene_id] for scene_id in candidates}
                     retired_sources = tuple(
                         record["content_source"] for scene_id in candidates
@@ -790,6 +867,7 @@ class LibobsSceneGraph:
         if self._program_channel is not None:
             self._runtime.set_channel_source(self._program_channel, None)
         self._transitions.reset_sources()
+        self.clear_editor_source_preview()
         with self._crop_lock:
             self._cropped_items.clear()
         self._pending.clear()

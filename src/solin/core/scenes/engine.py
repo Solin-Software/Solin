@@ -424,6 +424,20 @@ class SceneEngineSnapshot:
 
 
 @dataclass(frozen=True, slots=True)
+class SceneSourcePreview:
+    width: int = 0
+    height: int = 0
+    error_code: str = ""
+
+    def __post_init__(self) -> None:
+        _non_negative_int(self.width, "source preview width")
+        _non_negative_int(self.height, "source preview height")
+        _bounded_text(self.error_code, 128, "source preview error code")
+        if bool(self.width) != bool(self.height) or (self.error_code and self.width):
+            raise ValueError("Source preview requires paired dimensions or a dimensionless error")
+
+
+@dataclass(frozen=True, slots=True)
 class SceneEngineAck:
     request_id: str
     session_id: str
@@ -720,6 +734,17 @@ class SceneEngine(Protocol):
         sequence: int,
         deadline_ms: int,
     ) -> Future[SceneEngineAck]: ...
+
+    def set_editor_source_preview(
+        self,
+        scene_id: str,
+        layer_id: str | None,
+        *,
+        document_revision: int,
+        request_id: str,
+        sequence: int,
+        deadline_ms: int,
+    ) -> Future[SceneSourcePreview]: ...
 
     def set_output_enabled(
         self,

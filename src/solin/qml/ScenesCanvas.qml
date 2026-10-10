@@ -24,45 +24,36 @@ Item {
         ? bridge.outputWidth / bridge.outputHeight : 16 / 9
     property real guideX: -1
     property real guideY: -1
-    property var framingDraft: ({})
+    readonly property var framingDraft: bridge ? bridge.framingDraft : ({})
     readonly property bool hasSelectedLayer: bridge && bridge.selectedLayerId.length > 0
     readonly property bool framingAvailable: hasSelectedLayer
         && bridge.selectedLayer.framing_available === true
 
     function iconHex(colorValue) { return String(colorValue).replace("#", "") }
 
-    function acceptFramingDraft(values) {
-        if (!values || !values.layerId)
-            return false
-        framingDraft = values
-        return true
-    }
-
     function beginFraming() {
         if (!framingAvailable)
             return
-        if (acceptFramingDraft(bridge.beginLayerFraming(bridge.selectedLayerId)))
+        bridge.beginLayerFraming(bridge.selectedLayerId)
+        if (bridge.framingActive)
             forceActiveFocus()
     }
 
     function updateFraming(values) {
         if (bridge && bridge.framingActive)
-            acceptFramingDraft(bridge.updateLayerFraming(values))
+            bridge.updateLayerFraming(values)
     }
 
     function commitFraming() {
         if (!bridge || !bridge.framingActive)
             return
         bridge.commitLayerFraming()
-        if (!bridge.framingActive)
-            framingDraft = ({})
         forceActiveFocus()
     }
 
     function cancelFraming() {
         if (bridge && bridge.framingActive)
             bridge.cancelLayerFraming()
-        framingDraft = ({})
         forceActiveFocus()
     }
 
@@ -72,10 +63,6 @@ Item {
         function onDocumentGenerationChanged() {
             root.guideX = -1
             root.guideY = -1
-        }
-        function onFramingChanged() {
-            if (!root.bridge.framingActive)
-                root.framingDraft = ({})
         }
     }
 
@@ -120,6 +107,7 @@ Item {
         MouseArea {
             anchors.fill: parent
             acceptedButtons: Qt.LeftButton
+            enabled: !root.bridge || !root.bridge.framingActive
             onPressed: {
                 root.forceActiveFocus()
                 if (root.bridge)
@@ -187,6 +175,7 @@ Item {
                 anchors.fill: parent
                 z: 0
                 acceptedButtons: Qt.LeftButton | Qt.RightButton
+                enabled: !root.bridge || !root.bridge.framingActive
                 preventStealing: true
                 onPressed: function(mouse) {
                     root.forceActiveFocus()
@@ -255,7 +244,7 @@ Item {
                     y: displayY * canvasFrame.height
                     width: displayWidth * canvasFrame.width
                     height: displayHeight * canvasFrame.height
-                    visible: layerVisible
+                    visible: layerVisible && (!root.bridge || !root.bridge.framingActive)
                     z: 1000 - index
 
                     function beginInteraction(handleName, mouseArea, mouse) {
@@ -748,6 +737,7 @@ Item {
                     label: qsTr("Apply")
                     showLabel: root.width >= 480
                     accentButton: true
+                    actionEnabled: root.bridge && root.bridge.framingReady
                     toolTipText: qsTr("Apply framing (Enter)")
                     onClicked: root.commitFraming()
                 }

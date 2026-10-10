@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 
-from solin.core.scenes.model import Crop, NormalizedRect
+from solin.core.scenes.model import MAXIMUM_CROP_FRACTION, Crop, FitMode, NormalizedRect, SceneLayer
 
 
 HANDLE_NAMES = (
@@ -28,6 +29,23 @@ NORMALIZED_CANVAS_ASPECT = 1.0
 _GEOMETRY_EPSILON = 1e-9
 
 
+@dataclass(frozen=True, slots=True)
+class FramingRect:
+    """Temporary source coordinates, independent of persisted layer size limits."""
+
+    x: float = 0.0
+    y: float = 0.0
+    width: float = 1.0
+    height: float = 1.0
+
+    def __post_init__(self) -> None:
+        if any(
+            isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value)
+            for value in (self.x, self.y, self.width, self.height)
+        ) or self.width <= 0 or self.height <= 0:
+            raise ValueError("Framing geometry must be finite with positive dimensions")
+
+
 def intersect_rect(left: NormalizedRect, right: NormalizedRect) -> NormalizedRect | None:
     x = max(left.x, right.x)
     y = max(left.y, right.y)
@@ -40,11 +58,11 @@ def intersect_rect(left: NormalizedRect, right: NormalizedRect) -> NormalizedRec
     return NormalizedRect(x=x, y=y, width=width, height=height)
 
 
-def inscribed_aspect_rect(
-    bounds: NormalizedRect,
+def inscribed_aspect_rect[RectT: (NormalizedRect, FramingRect)](
+    bounds: RectT,
     *,
     aspect: float = NORMALIZED_CANVAS_ASPECT,
-) -> NormalizedRect:
+) -> RectT:
     """Return the largest centered aspect rectangle inside ``bounds``.
 
     The aspect is expressed in normalized canvas coordinates. An aspect of 1
@@ -58,7 +76,7 @@ def inscribed_aspect_rect(
     else:
         width = bounds.width
         height = width / aspect
-    return NormalizedRect(
+    return type(bounds)(
         x=bounds.x + (bounds.width - width) / 2.0,
         y=bounds.y + (bounds.height - height) / 2.0,
         width=width,
@@ -87,6 +105,39 @@ def recover_uncropped_rect(
         width=_clean_geometry_value(width),
         height=_clean_geometry_value(height),
     )
+
+
+def source_framing_geometry(
+    layer: SceneLayer,
+    *,
+    source_width: int,
+    source_height: int,
+    canvas_width: int,
+    canvas_height: int,
+) -> tuple[FramingRect, FramingRect]:
+    """Place the full source and its current visible focus in the editor.
+
+    Coordinates use the output canvas axes. The source keeps its physical
+    aspect; the proposed focus fits the output aspect inside the current crop.
+    COVER's implicit clipping is included before proposing the output focus.
+    """
+    dimensions = (source_width, source_height, canvas_width, canvas_height)
+    if any(type(value) is not int or value <= 0 for value in dimensions):
+        raise ValueError("Framing requires positive source and canvas dimensions")
+    bounds = inscribed_aspect_rect(
+        FramingRect(),
+        aspect=(source_width / source_height) / (canvas_width / canvas_height),
+    )
+    crop = layer.crop
+    focus = FramingRect(
+        x=bounds.x + (crop.right if layer.mirror_x else crop.left) * bounds.width,
+        y=bounds.y + (crop.bottom if layer.mirror_y else crop.top) * bounds.height,
+        width=(1.0 - crop.left - crop.right) * bounds.width,
+        height=(1.0 - crop.top - crop.bottom) * bounds.height,
+    )
+    if layer.fit_mode is FitMode.COVER:
+        focus = inscribed_aspect_rect(focus, aspect=layer.rect.width / layer.rect.height)
+    return bounds, inscribed_aspect_rect(focus)
 
 
 def expand_focus_rect_to_aspect(
@@ -149,9 +200,9 @@ def expand_focus_rect_to_aspect(
 
 
 def crop_for_framing_rect(
-    source_rect: NormalizedRect,
+    source_rect: NormalizedRect | FramingRect,
     source_crop: Crop,
-    frame: NormalizedRect,
+    frame: NormalizedRect | FramingRect,
     *,
     mirror_x: bool = False,
     mirror_y: bool = False,
@@ -221,30 +272,39 @@ def fill_crop_to_canvas(
     )
 
 
-def move_framing_rect(
-    rect: NormalizedRect,
-    bounds: NormalizedRect,
+def move_framing_rect[RectT: (NormalizedRect, FramingRect)](
+    rect: RectT,
+    bounds: RectT,
     dx: float,
     dy: float,
-) -> NormalizedRect:
-    return NormalizedRect(
-        x=min(bounds.x + bounds.width - rect.width, max(bounds.x, rect.x + dx)),
-        y=min(bounds.y + bounds.height - rect.height, max(bounds.y, rect.y + dy)),
+) -> RectT:
+    # Tiny authored crops can be narrower than the per-edge crop limit. Keep
+    # both edges representable while preserving the existing selection size.
+    edge_visibility = 1.0 - MAXIMUM_CROP_FRACTION
+    minimum_x = max(bounds.x, bounds.x + edge_visibility * bounds.width - rect.width)
+    maximum_x = min(bounds.x + bounds.width - rect.width,
+                    bounds.x + MAXIMUM_CROP_FRACTION * bounds.width)
+    minimum_y = max(bounds.y, bounds.y + edge_visibility * bounds.height - rect.height)
+    maximum_y = min(bounds.y + bounds.height - rect.height,
+                    bounds.y + MAXIMUM_CROP_FRACTION * bounds.height)
+    return type(rect)(
+        x=min(maximum_x, max(minimum_x, rect.x + dx)),
+        y=min(maximum_y, max(minimum_y, rect.y + dy)),
         width=rect.width,
         height=rect.height,
     )
 
 
-def resize_framing_rect(
-    rect: NormalizedRect,
-    bounds: NormalizedRect,
+def resize_framing_rect[RectT: (NormalizedRect, FramingRect)](
+    rect: RectT,
+    bounds: RectT,
     handle: str,
     dx: float,
     dy: float,
     *,
     aspect: float = NORMALIZED_CANVAS_ASPECT,
     minimum_width: float = MINIMUM_LAYER_SIZE,
-) -> NormalizedRect:
+) -> RectT:
     if handle not in {"top_left", "top_right", "bottom_right", "bottom_left"}:
         raise ValueError(f"Unknown framing handle: {handle}")
     _require_aspect(aspect)
@@ -267,24 +327,25 @@ def resize_framing_rect(
     minimum_width = max(minimum_width, MINIMUM_LAYER_SIZE * aspect)
     width = min(maximum_width, max(minimum_width, width))
     height = width / aspect
-    return NormalizedRect(
+    resized = type(rect)(
         x=fixed_x - width if moves_left else fixed_x,
         y=fixed_y - height if moves_top else fixed_y,
         width=width,
         height=height,
     )
+    return move_framing_rect(resized, bounds, 0.0, 0.0)
 
 
-def scale_framing_rect(
-    rect: NormalizedRect,
-    bounds: NormalizedRect,
+def scale_framing_rect[RectT: (NormalizedRect, FramingRect)](
+    rect: RectT,
+    bounds: RectT,
     scale: float,
     anchor_x: float,
     anchor_y: float,
     *,
     aspect: float = NORMALIZED_CANVAS_ASPECT,
     minimum_width: float = MINIMUM_LAYER_SIZE,
-) -> NormalizedRect:
+) -> RectT:
     _require_aspect(aspect)
     if not math.isfinite(scale) or scale <= 0.0:
         raise ValueError("Framing scale must be finite and positive")
@@ -296,12 +357,13 @@ def scale_framing_rect(
     relative_y = min(1.0, max(0.0, (anchor_y - rect.y) / rect.height))
     x = anchor_x - relative_x * width
     y = anchor_y - relative_y * height
-    return NormalizedRect(
-        x=min(bounds.x + bounds.width - width, max(bounds.x, x)),
-        y=min(bounds.y + bounds.height - height, max(bounds.y, y)),
+    scaled = type(rect)(
+        x=x,
+        y=y,
         width=width,
         height=height,
     )
+    return move_framing_rect(scaled, bounds, 0.0, 0.0)
 
 
 def _require_aspect(aspect: float) -> None:
@@ -314,6 +376,8 @@ def _clean_crop_value(value: float) -> float:
         return 0.0
     if abs(value - 1.0) <= _GEOMETRY_EPSILON:
         return 1.0
+    if abs(value - MAXIMUM_CROP_FRACTION) <= _GEOMETRY_EPSILON:
+        return MAXIMUM_CROP_FRACTION
     return min(1.0, max(0.0, value))
 
 
@@ -545,6 +609,7 @@ def crop_geometry(
 
 
 __all__ = [
+    "FramingRect",
     "HANDLE_NAMES",
     "NORMALIZED_CANVAS_ASPECT",
     "crop_for_framing_rect",
@@ -559,4 +624,5 @@ __all__ = [
     "resize_rect",
     "scale_framing_rect",
     "snap_move_rect",
+    "source_framing_geometry",
 ]

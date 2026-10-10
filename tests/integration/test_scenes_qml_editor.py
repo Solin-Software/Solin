@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from concurrent.futures import Future
 from pathlib import Path
 import time
 from contextlib import ExitStack
@@ -16,6 +17,7 @@ from PySide6.QtWidgets import QApplication
 
 from solin.controllers.scene_runtime_controller import SceneRuntimeController
 from solin.core.foundation.runtime_paths import ProfilePaths
+from solin.core.scenes.engine import SceneSourcePreview
 from solin.core.scenes.model import BusId, NormalizedRect, TransitionKind
 from solin.core.scenes.presets import SceneSeedNames
 from solin.core.scenes.recording import (
@@ -28,6 +30,7 @@ from solin.core.scenes.recording import (
     SceneRecordingConfig,
 )
 from solin.ui.qml.scenes import ScenesEditorWidget
+from tests.fixtures.editor_source_preview import EditorSourcePreview
 from tests._qt import mouse_move, mouse_press, mouse_release, show_and_activate, wait_until
 
 
@@ -138,11 +141,12 @@ def _seed_names() -> SceneSeedNames:
 
 @pytest.fixture
 def scene_editor_factory(request, scene_workspace_factory):
-    def create(paths: ProfilePaths, *, recording=None, engine_ready=False):
+    def create(paths: ProfilePaths, *, recording=None, engine_ready=False, source_preview=None):
         cleanup = ExitStack()
         request.addfinalizer(cleanup.close)
         workspace = scene_workspace_factory(paths, seed_names=_seed_names())
         controller = SceneRuntimeController(workspace, _Projection())
+        controller.set_editor_source_preview = source_preview or EditorSourcePreview()
         cleanup.callback(controller.close)
         if engine_ready:
             controller._set_engine_ready(True)
@@ -423,6 +427,54 @@ def test_canvas_framing_shortcuts_overlay_and_responsive_actions(
     widget.resize(450, 620)
     QCoreApplication.processEvents()
     assert begin_button.property("showLabel") is False
+
+
+def test_framing_waits_for_full_source_and_reopens_the_applied_overlay(
+    scene_editor_factory, tmp_path: Path,
+) -> None:
+    source_preview = EditorSourcePreview()
+    pending: Future[SceneSourcePreview] = Future()
+    source_preview.responses.append(pending)
+    _, controller, widget, _ = scene_editor_factory(_profile_paths(tmp_path), source_preview=source_preview)
+    widget.resize(1280, 760)
+    widget.show()
+    assert _wait_until(lambda: widget._qml.status() is QQuickWidget.Status.Ready)
+    layer = controller.document.scene(widget.bridge.selectedSceneId).layers[0]
+    widget.bridge.selectLayer(layer.id)
+    root = widget._qml.rootObject()
+    canvas = root.findChild(QQuickItem, "scenesCanvas")
+    overlay = root.findChild(QQuickItem, "scenesFramingOverlay")
+    apply_button = root.findChild(QQuickItem, "scenesCommitFramingButton")
+    layer_item = _find_quick_item(root, f"scenesCanvasLayer-{layer.id}")
+    assert canvas is not None and overlay is not None and apply_button is not None and layer_item is not None
+    canvas.forceActiveFocus()
+    QTest.keyClick(widget._qml, Qt.Key.Key_F)
+    assert widget.bridge.framingActive and not widget.bridge.framingReady
+    assert not apply_button.property("actionEnabled")
+    assert not overlay.isVisible()
+    assert not layer_item.isVisible()
+    center = canvas.mapToScene(QPointF(canvas.width() / 2, canvas.height() / 2))
+    QTest.mouseClick(widget._qml, Qt.MouseButton.LeftButton, pos=center.toPoint())
+    assert widget.bridge.framingActive
+
+    pending.set_result(SceneSourcePreview(1920, 1080))
+    assert _wait_until(lambda: widget.bridge.framingReady)
+    assert overlay.isVisible()
+    assert apply_button.property("actionEnabled")
+    widget.bridge.updateLayerFraming({"operation": "scale", "scale": 0.5})
+    QTest.keyClick(widget._qml, Qt.Key.Key_Return)
+    assert not widget.bridge.framingActive
+    revision = controller.document.revision
+    QTest.keyClick(widget._qml, Qt.Key.Key_F)
+    assert widget.bridge.framingActive
+    assert canvas.property("framingDraft")["width"] == pytest.approx(0.5)
+    assert canvas.property("framingDraft")["x"] == pytest.approx(0.25)
+    widget.bridge.updateLayerFraming({"operation": "scale", "scale": 2.0})
+    assert canvas.property("framingDraft")["width"] == pytest.approx(1.0)
+    QTest.keyClick(widget._qml, Qt.Key.Key_Escape)
+    assert not widget.bridge.framingActive
+    assert controller.document.revision == revision
+    assert layer_item.isVisible()
 
 
 def test_alt_handle_drag_crops_and_framing_keyboard_commits_the_crop(

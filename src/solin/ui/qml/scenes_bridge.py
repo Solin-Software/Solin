@@ -12,12 +12,13 @@ from pathlib import Path
 import time
 from typing import Any, Protocol
 
-from PySide6.QtCore import QObject, Property, Signal, Slot
+from PySide6.QtCore import QObject, Property, Qt, Signal, Slot
 from PySide6.QtGui import QImage
 
 from solin.controllers.program_recording_controller import ProgramRecordingController
 from solin.controllers.scene_runtime_controller import SceneRuntimeController
 from solin.core.scenes.editor_geometry import (
+    FramingRect,
     MINIMUM_LAYER_SIZE,
     MINIMUM_VISIBLE_SOURCE,
     NORMALIZED_CANVAS_ASPECT,
@@ -25,18 +26,19 @@ from solin.core.scenes.editor_geometry import (
     crop_geometry,
     fill_crop_to_canvas,
     inscribed_aspect_rect,
-    intersect_rect,
     move_framing_rect,
     resize_framing_rect,
     resize_rect,
     scale_framing_rect,
     snap_move_rect,
+    source_framing_geometry,
 )
 from solin.core.scenes.engine import (
     LocalCameraDevice,
     LocalCameraProbeStatus,
     LocalVideoFormat,
     SourceHealthStatus,
+    SceneSourcePreview,
 )
 from solin.core.scenes.model import (
     CONTENT_SOURCE_ID,
@@ -126,9 +128,20 @@ class _LayerFramingSession:
     document_revision: int
     scene_id: str
     layer: SceneLayer
-    bounds: NormalizedRect
-    frame: NormalizedRect
-    minimum_width: float
+    bounds: FramingRect | None = None
+    frame: FramingRect | None = None
+    authored_frame: FramingRect | None = None
+    minimum_width: float = MINIMUM_LAYER_SIZE
+    source_width: int = 0
+    source_height: int = 0
+    busy: bool = True
+
+
+@dataclass(frozen=True, slots=True)
+class _FramingPreviewResult:
+    session: _LayerFramingSession
+    commit: bool
+    future: Future[SceneSourcePreview]
 
 
 class ScenesBridge(QObject):
@@ -138,6 +151,7 @@ class ScenesBridge(QObject):
     previewChanged = Signal()
     documentGenerationChanged = Signal()
     framingChanged = Signal()
+    _framing_result = Signal(object)
     contentIdleChanged = Signal()
     pointerCursorEntered = Signal(str, int)
     pointerCursorChanged = Signal(str, int)
@@ -181,6 +195,9 @@ class ScenesBridge(QObject):
         self._document_generation = 0
         self._active_guides: tuple[tuple[str, float], ...] = ()
         self._framing_session: _LayerFramingSession | None = None
+        self._framing_result.connect(
+            self._consume_framing_result, Qt.ConnectionType.QueuedConnection,
+        )
         self._ptz_recall_futures: set[Future[PtzRecallResult]] = set()
         self._controller_connections: tuple[tuple[Any, Any], ...] = ()
         self._recording_connections: tuple[tuple[Any, Any], ...] = ()
@@ -203,6 +220,7 @@ class ScenesBridge(QObject):
             (controller.local_cameras_changed, self._runtime_changed),
             (controller.source_health_changed, self._runtime_changed),
             (controller.content_playing_changed, self._on_content_playing_changed),
+            (controller.editor_source_preview_invalidated, self._clear_framing_session),
         )
         for signal, handler in self._controller_connections:
             signal.connect(handler)
@@ -263,6 +281,16 @@ class ScenesBridge(QObject):
     @Property(bool, notify=framingChanged)
     def framingActive(self) -> bool:
         return self._framing_session is not None
+
+    @Property(bool, notify=framingChanged)
+    def framingReady(self) -> bool:
+        session = self._framing_session
+        return session is not None and session.frame is not None and not session.busy
+
+    @Property("QVariantMap", notify=framingChanged)  # type: ignore[arg-type]
+    def framingDraft(self) -> dict[str, object]:
+        session = self._framing_session
+        return {} if session is None else self._framing_record(session)
 
     @Property(str, notify=previewChanged)
     def previewUrl(self) -> str:
@@ -1180,31 +1208,24 @@ class ScenesBridge(QObject):
         layer = self._layer(layer_id)
         if layer is None or self._framing_unavailable_reason(layer):
             return {}
-        bounds = intersect_rect(layer.rect, NormalizedRect())
-        if bounds is None:
-            return {}
-        frame = inscribed_aspect_rect(bounds, aspect=NORMALIZED_CANVAS_ASPECT)
-        minimum_width = self._minimum_framing_width(layer)
-        if frame.width < minimum_width:
-            return {}
         self._clear_framing_session()
+        self._selected_layer_id = layer.id
         document = self._controller.document
         self._framing_session = _LayerFramingSession(
             document_id=document.document_id,
             document_revision=document.revision,
             scene_id=self._selected_scene_id,
             layer=layer,
-            bounds=bounds,
-            frame=frame,
-            minimum_width=minimum_width,
         )
         self.framingChanged.emit()
-        return self._framing_record(self._framing_session)
+        self._request_framing_preview(self._framing_session, commit=False)
+        session = self._framing_session
+        return {} if session is None else self._framing_record(session)
 
     @Slot("QVariantMap", result="QVariantMap")  # type: ignore[arg-type]
     def updateLayerFraming(self, values: dict[str, object]) -> dict[str, object]:
         session = self._validated_framing_session()
-        if session is None:
+        if session is None or session.busy or session.frame is None or session.bounds is None:
             return {}
         try:
             operation = str(values.get("operation", ""))
@@ -1239,22 +1260,45 @@ class ScenesBridge(QObject):
                 return self._framing_record(session)
         except (TypeError, ValueError, SceneValidationError):
             log.debug("Rejected invalid layer framing update", exc_info=True)
+        self.framingChanged.emit()
         return self._framing_record(session)
 
     @Slot(result=bool)
     def commitLayerFraming(self) -> bool:
         session = self._validated_framing_session()
-        if session is None:
+        if session is None or not self.framingReady:
+            return False
+        session.busy = True
+        self.framingChanged.emit()
+        return self._request_framing_preview(session, commit=True)
+
+    def _apply_framing_session(self, session: _LayerFramingSession) -> bool:
+        if session.bounds is None or session.frame is None:
             return False
         layer = session.layer
+        if (
+            layer.rect == NormalizedRect() and layer.fit_mode is FitMode.COVER
+            and session.authored_frame is not None
+            and all(
+                math.isclose(getattr(session.frame, axis), getattr(session.authored_frame, axis), abs_tol=1e-9)
+                for axis in ("x", "y", "width", "height")
+            )
+        ):
+            self._clear_framing_session()
+            return False
         try:
             crop = crop_for_framing_rect(
-                layer.rect,
-                layer.crop,
+                session.bounds,
+                Crop(),
                 session.frame,
                 mirror_x=layer.mirror_x,
                 mirror_y=layer.mirror_y,
             )
+            if all(
+                math.isclose(getattr(crop, edge), getattr(layer.crop, edge), abs_tol=1e-9)
+                for edge in ("left", "top", "right", "bottom")
+            ):
+                crop = layer.crop
             updated = replace(
                 layer,
                 rect=NormalizedRect(),
@@ -1263,6 +1307,7 @@ class ScenesBridge(QObject):
             )
         except (ValueError, SceneValidationError):
             log.exception("Could not finalize layer framing geometry")
+            self._fail_framing_preview("source_unavailable")
             return False
         self._clear_framing_session()
         if updated == layer:
@@ -1274,6 +1319,70 @@ class ScenesBridge(QObject):
                 layer.id,
                 updated,
             )
+        )
+
+    def _request_framing_preview(self, session: _LayerFramingSession, *, commit: bool) -> bool:
+        try:
+            future = self._controller.set_editor_source_preview(session.scene_id, session.layer.id)
+        except Exception:  # noqa: BLE001 - engine dispatch boundary
+            log.exception("Could not request the full source for framing")
+            self._fail_framing_preview("source_unavailable")
+            return False
+        if future.done():
+            return self._consume_framing_result(_FramingPreviewResult(session, commit, future))
+
+        def completed(done: Future[SceneSourcePreview]) -> None:
+            if not self._closed:
+                self._framing_result.emit(_FramingPreviewResult(session, commit, done))
+
+        future.add_done_callback(completed)
+        return False
+
+    def _consume_framing_result(self, values: object) -> bool:
+        if not isinstance(values, _FramingPreviewResult):
+            return False
+        session, commit, future = values.session, values.commit, values.future
+        if self._closed or self._validated_framing_session() is not session:
+            return False
+        try:
+            result = future.result()
+            if not isinstance(result, SceneSourcePreview):
+                raise TypeError("Invalid framing preview result")
+            if result.error_code or result.width <= 0 or result.height <= 0:
+                self._fail_framing_preview(result.error_code or "source_unavailable")
+                return False
+            if commit:
+                if (result.width, result.height) != (session.source_width, session.source_height):
+                    self._fail_framing_preview("source_dimensions_changed")
+                    return False
+                return self._apply_framing_session(session)
+            canvas = self._controller.document.output(BusId.MEDIA_WINDOWS).video_format
+            bounds, frame = source_framing_geometry(
+                session.layer,
+                source_width=result.width, source_height=result.height,
+                canvas_width=canvas.width, canvas_height=canvas.height,
+            )
+            session.bounds = bounds
+            session.authored_frame = frame
+            session.minimum_width = min(
+                inscribed_aspect_rect(bounds).width,
+                max(MINIMUM_LAYER_SIZE, bounds.width * MINIMUM_VISIBLE_SOURCE,
+                    bounds.height * MINIMUM_VISIBLE_SOURCE),
+            )
+            session.frame = move_framing_rect(frame, bounds, 0.0, 0.0)
+            session.source_width, session.source_height = result.width, result.height
+            session.busy = False
+            self.framingChanged.emit()
+        except Exception:  # noqa: BLE001 - engine result boundary
+            log.exception("Could not prepare the full source for framing")
+            self._fail_framing_preview("source_unavailable")
+        return False
+
+    def _fail_framing_preview(self, error_code: str) -> None:
+        self._clear_framing_session()
+        self._notify_failure(
+            scene_engine_error_summary(error_code),
+            dedupe_key="scenes-framing-preview-failed",
         )
 
     @Slot()
@@ -2025,25 +2134,7 @@ class ScenesBridge(QObject):
         rotation = layer.rotation_degrees % 360.0
         if not math.isclose(rotation, 0.0, abs_tol=1e-6):
             return self.tr("Reset rotation before framing.")
-        bounds = intersect_rect(layer.rect, NormalizedRect())
-        if bounds is None:
-            return self.tr("Move or resize the source into the canvas first.")
-        frame = inscribed_aspect_rect(bounds, aspect=NORMALIZED_CANVAS_ASPECT)
-        if frame.width < self._minimum_framing_width(layer):
-            return self.tr("The visible source area is too small to frame.")
         return ""
-
-    @staticmethod
-    def _minimum_framing_width(layer: SceneLayer) -> float:
-        visible_x = 1.0 - layer.crop.left - layer.crop.right
-        visible_y = 1.0 - layer.crop.top - layer.crop.bottom
-        minimum_source_width = layer.rect.width * MINIMUM_VISIBLE_SOURCE / visible_x
-        minimum_source_height = layer.rect.height * MINIMUM_VISIBLE_SOURCE / visible_y
-        return max(
-            MINIMUM_LAYER_SIZE,
-            minimum_source_width,
-            minimum_source_height * NORMALIZED_CANVAS_ASPECT,
-        )
 
     def _validated_framing_session(self) -> _LayerFramingSession | None:
         session = self._framing_session
@@ -2063,12 +2154,28 @@ class ScenesBridge(QObject):
     def _clear_framing_session(self) -> None:
         if self._framing_session is None:
             return
-        self._framing_session = None
+        session, self._framing_session = self._framing_session, None
+        try:
+            future = self._controller.set_editor_source_preview(session.scene_id, None)
+            future.add_done_callback(self._observe_framing_clear)
+        except Exception:  # noqa: BLE001 - cleanup must still close the edit session
+            log.exception("Could not restore the scene preview after framing")
         self.framingChanged.emit()
+
+    @staticmethod
+    def _observe_framing_clear(future: Future[SceneSourcePreview]) -> None:
+        try:
+            result = future.result()
+            if result.error_code:
+                log.warning("Could not clear framing preview: %s", result.error_code)
+        except Exception:  # noqa: BLE001 - asynchronous engine cleanup boundary
+            log.exception("Could not clear the framing preview")
 
     @staticmethod
     def _framing_record(session: _LayerFramingSession) -> dict[str, object]:
         frame = session.frame
+        if frame is None:
+            return {}
         return {
             "layerId": session.layer.id,
             "x": frame.x,

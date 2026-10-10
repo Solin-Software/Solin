@@ -9,7 +9,7 @@ import time
 
 import pytest
 
-from PySide6.QtCore import QObject, Qt, Signal
+from PySide6.QtCore import QCoreApplication, QObject, Qt, Signal
 from PySide6.QtGui import QImage
 from PySide6.QtTest import QSignalSpy
 
@@ -23,6 +23,7 @@ from solin.core.scenes.engine import (
     LocalVideoFormat,
     SourceHealthEvent,
     SourceHealthStatus,
+    SceneSourcePreview,
 )
 from solin.core.scenes.model import (
     BusId,
@@ -62,6 +63,7 @@ from solin.core.scenes.ptz import PtzControlKind, PtzControlResult, PtzRecallSta
 from solin.core.scenes.workspace import SceneWorkspaceService
 from solin.styles.icons import ICON_FOLDER, ICON_FOLDER_LINK, make_icon
 from solin.ui.qml.scenes_bridge import ScenesBridge
+from tests.fixtures.editor_source_preview import EditorSourcePreview
 
 
 class _Projection:
@@ -252,6 +254,7 @@ def scene_bridge_factory(request, scene_workspace_factory, tmp_path):
         recording=None,
         recording_directory_picker=None,
         recording_directory_opener=None,
+        source_preview=None,
     ) -> tuple[SceneWorkspaceService, SceneRuntimeController, ScenesBridge, _PreviewStore]:
         cleanup = ExitStack()
         request.addfinalizer(cleanup.close)
@@ -263,6 +266,7 @@ def scene_bridge_factory(request, scene_workspace_factory, tmp_path):
         paths.ensure_dirs()
         workspace = scene_workspace_factory(paths, seed_names=_seed_names())
         controller = SceneRuntimeController(workspace, _Projection(), ptz=ptz)
+        controller.set_editor_source_preview = source_preview or EditorSourcePreview()
         cleanup.callback(controller.close)
         preview_store = _PreviewStore()
         bridge = ScenesBridge(
@@ -789,6 +793,213 @@ def test_bridge_cancels_and_invalidates_framing_without_document_mutation(
 
     assert not bridge.framingActive
     assert bridge.updateLayerFraming({"operation": "move", "dx": 0.1, "dy": 0.1}) == {}
+
+
+def test_reopening_framing_restores_full_source_and_can_remove_previous_zoom(
+    scene_bridge_factory,
+) -> None:
+    preview = EditorSourcePreview()
+    _, controller, bridge, _ = scene_bridge_factory(source_preview=preview)
+    layer_id = controller.document.scene(bridge.selectedSceneId).layers[0].id
+    bridge.selectLayer(layer_id)
+    bridge.beginLayerFraming(layer_id)
+    bridge.updateLayerFraming({"operation": "scale", "scale": 0.5})
+    assert bridge.commitLayerFraming()
+    revision = controller.document.revision
+
+    reopened = bridge.beginLayerFraming(layer_id)
+    assert reopened["x"] == pytest.approx(0.25)
+    assert reopened["y"] == pytest.approx(0.25)
+    assert reopened["width"] == pytest.approx(0.5)
+    assert controller.document.revision == revision
+    assert preview.requests[-1] == (bridge.selectedSceneId, layer_id)
+    expanded = bridge.updateLayerFraming({"operation": "scale", "scale": 2.0})
+    assert expanded["width"] == pytest.approx(1.0)
+    assert bridge.commitLayerFraming()
+    assert controller.document.scene(bridge.selectedSceneId).layers[0].crop == Crop()
+    assert controller.document.revision == revision + 1
+    bridge.undo()
+    assert controller.document.scene(bridge.selectedSceneId).layers[0].crop == Crop(
+        left=0.25, top=0.25, right=0.25, bottom=0.25,
+    )
+
+
+@pytest.mark.parametrize("mirror_x,mirror_y", [(False, False), (True, False), (False, True), (True, True)])
+def test_reopening_asymmetric_framing_preserves_focus_and_does_not_create_history(
+    scene_bridge_factory, mirror_x: bool, mirror_y: bool,
+) -> None:
+    _, controller, bridge, _ = scene_bridge_factory()
+    scene_id = bridge.selectedSceneId
+    layer = controller.document.scene(scene_id).layers[0]
+    original = replace(layer, crop=Crop(left=0.1, top=0.2, right=0.5, bottom=0.4),
+                       mirror_x=mirror_x, mirror_y=mirror_y, fit_mode=FitMode.COVER)
+    controller.documents.update_layer(scene_id, layer.id, original)
+    bridge.selectLayer(layer.id)
+    revision = controller.document.revision
+
+    for _ in range(3):
+        draft = bridge.beginLayerFraming(layer.id)
+        assert draft["x"] == pytest.approx(0.5 if mirror_x else 0.1)
+        assert draft["y"] == pytest.approx(0.4 if mirror_y else 0.2)
+        assert draft["width"] == pytest.approx(0.4)
+        assert not bridge.commitLayerFraming()
+        assert not bridge.framingActive
+    assert controller.document.revision == revision
+    assert controller.document.scene(scene_id).layers[0] == original
+
+
+@pytest.mark.parametrize("source_size", [(1080, 1920), (1440, 1080), (3840, 1080)])
+def test_unchanged_implicit_cover_framing_does_not_create_history(
+    scene_bridge_factory, source_size: tuple[int, int],
+) -> None:
+    preview = EditorSourcePreview(*source_size)
+    _, controller, bridge, _ = scene_bridge_factory(source_preview=preview)
+    scene_id = bridge.selectedSceneId
+    layer = controller.document.scene(scene_id).layers[0]
+    layer = replace(layer, fit_mode=FitMode.COVER)
+    controller.documents.update_layer(scene_id, layer.id, layer)
+    bridge.selectLayer(layer.id)
+    revision = controller.document.revision
+    for _ in range(3):
+        assert bridge.beginLayerFraming(layer.id)
+        assert not bridge.commitLayerFraming()
+        assert not bridge.framingActive
+    assert controller.document.scene(scene_id).layers[0] == layer
+    assert controller.document.revision == revision
+
+
+def test_manual_crop_is_proposed_at_output_aspect_and_cancel_preserves_it(scene_bridge_factory) -> None:
+    preview = EditorSourcePreview()
+    _, controller, bridge, _ = scene_bridge_factory(source_preview=preview)
+    scene_id = bridge.selectedSceneId
+    layer = controller.document.scene(scene_id).layers[0]
+    original = replace(layer, crop=Crop(left=0.2, top=0.1, right=0.4, bottom=0.1),
+                       rect=NormalizedRect(x=0.2, y=0.1, width=0.4, height=0.8),
+                       fit_mode=FitMode.CONTAIN)
+    controller.documents.update_layer(scene_id, layer.id, original)
+    bridge.selectLayer(layer.id)
+    revision = controller.document.revision
+    draft = bridge.beginLayerFraming(layer.id)
+    assert draft["x"] == pytest.approx(0.2)
+    assert draft["y"] == pytest.approx(0.3)
+    assert draft["width"] == pytest.approx(0.4)
+    assert draft["height"] == pytest.approx(0.4)
+    bridge.cancelLayerFraming()
+    assert preview.requests[-1] == (scene_id, None)
+    assert controller.document.revision == revision
+    assert controller.document.scene(scene_id).layers[0] == original
+
+
+@pytest.mark.parametrize("cancel", ["cancel", "document", "engine", "content", "close"])
+def test_pending_source_preview_cannot_restore_a_cancelled_session(
+    scene_bridge_factory, cancel: str,
+) -> None:
+    preview = EditorSourcePreview()
+    pending: Future[SceneSourcePreview] = Future()
+    preview.responses.append(pending)
+    _, controller, bridge, _ = scene_bridge_factory(source_preview=preview)
+    scene_id = bridge.selectedSceneId
+    layer = controller.document.scene(scene_id).layers[0]
+    bridge.selectLayer(layer.id)
+    assert bridge.beginLayerFraming(layer.id) == {}
+    assert bridge.framingActive and not bridge.framingReady
+    assert not bridge.commitLayerFraming()
+    if cancel == "document":
+        controller.documents.update_layer(scene_id, layer.id, replace(layer, opacity=0.8))
+    elif cancel in {"engine", "content"}:
+        controller.editor_source_preview_invalidated.emit()
+    elif cancel == "close":
+        bridge.close()
+    else:
+        bridge.cancelLayerFraming()
+    revision = controller.document.revision
+    pending.set_result(SceneSourcePreview(1920, 1080))
+    QCoreApplication.processEvents()
+    assert not bridge.framingActive
+    assert bridge.framingDraft == {}
+    assert controller.document.revision == revision
+    assert preview.requests[-1] == (scene_id, None)
+
+
+@pytest.mark.parametrize("failure", ["exception", "unavailable", "dimensions_changed"])
+def test_framing_apply_validates_source_before_saving(scene_bridge_factory, failure: str) -> None:
+    preview = EditorSourcePreview()
+    notifications = _Notifications()
+    _, controller, bridge, _ = scene_bridge_factory(source_preview=preview, notifications=notifications)
+    layer = controller.document.scene(bridge.selectedSceneId).layers[0]
+    bridge.selectLayer(layer.id)
+    bridge.beginLayerFraming(layer.id)
+    bridge.updateLayerFraming({"operation": "scale", "scale": 0.5})
+    pending: Future[SceneSourcePreview] = Future()
+    preview.responses.append(pending)
+    revision = controller.document.revision
+    assert not bridge.commitLayerFraming()
+    assert bridge.framingActive and not bridge.framingReady
+    if failure == "exception":
+        pending.set_exception(RuntimeError("source disconnected"))
+    else:
+        pending.set_result(
+            SceneSourcePreview(error_code="source_unavailable") if failure == "unavailable"
+            else SceneSourcePreview(1080, 1920)
+        )
+    QCoreApplication.processEvents()
+    assert not bridge.framingActive
+    assert controller.document.revision == revision
+    assert controller.document.scene(bridge.selectedSceneId).layers[0] == layer
+    assert len(notifications.errors) == 1
+
+
+@pytest.mark.parametrize("crop", [Crop(left=0.495, top=0.495, right=0.495, bottom=0.495),
+                                   Crop(left=0.99, top=0.99, right=0.0095, bottom=0.0095)])
+def test_framing_preserves_a_tiny_authored_crop_until_user_expands_it(scene_bridge_factory, crop: Crop) -> None:
+    _, controller, bridge, _ = scene_bridge_factory()
+    scene_id = bridge.selectedSceneId
+    layer = controller.document.scene(scene_id).layers[0]
+    original = replace(layer, crop=crop, fit_mode=FitMode.COVER)
+    controller.documents.update_layer(scene_id, layer.id, original)
+    bridge.selectLayer(layer.id)
+    revision = controller.document.revision
+    draft = bridge.beginLayerFraming(layer.id)
+    assert draft
+    assert draft["width"] == pytest.approx(1 - crop.left - crop.right)
+    assert not bridge.commitLayerFraming()
+    assert controller.document.revision == revision
+    assert controller.document.scene(scene_id).layers[0] == original
+    assert bridge.beginLayerFraming(layer.id)
+    bridge.updateLayerFraming({"operation": "scale", "scale": 10000.0})
+    assert bridge.commitLayerFraming()
+    assert controller.document.scene(scene_id).layers[0].crop == Crop()
+
+
+def test_applying_a_shifted_crop_proposal_updates_the_authored_focus(scene_bridge_factory) -> None:
+    _, controller, bridge, _ = scene_bridge_factory()
+    scene_id = bridge.selectedSceneId
+    layer = controller.document.scene(scene_id).layers[0]
+    original = replace(layer, crop=Crop(left=0.99, top=0.4998, bottom=0.4998),
+                       fit_mode=FitMode.COVER)
+    controller.documents.update_layer(scene_id, layer.id, original)
+    bridge.selectLayer(layer.id)
+    revision = controller.document.revision
+    draft = bridge.beginLayerFraming(layer.id)
+    assert draft["x"] == pytest.approx(0.99)
+    assert bridge.commitLayerFraming()
+    assert controller.document.revision == revision + 1
+    assert controller.document.scene(scene_id).layers[0].crop.right == pytest.approx(0.0096)
+
+
+def test_framing_can_recover_an_off_canvas_or_tiny_layer(scene_bridge_factory) -> None:
+    _, controller, bridge, _ = scene_bridge_factory()
+    layer = controller.document.scene(bridge.selectedSceneId).layers[0]
+    controller.documents.update_layer(bridge.selectedSceneId, layer.id, replace(
+        layer, rect=NormalizedRect(x=-2.0, y=-2.0, width=0.01, height=0.01),
+        crop=Crop(left=0.99),
+    ))
+    bridge.selectLayer(layer.id)
+    assert bridge.selectedLayer["framing_available"]
+    assert bridge.beginLayerFraming(layer.id)
+    assert bridge.updateLayerFraming({"operation": "scale", "scale": 100.0})["width"] == 1.0
+    assert bridge.commitLayerFraming()
+    assert controller.document.scene(bridge.selectedSceneId).layers[0].crop == Crop()
 
 
 def test_bridge_fill_from_crop_expands_then_fills_without_source_kind_coupling(

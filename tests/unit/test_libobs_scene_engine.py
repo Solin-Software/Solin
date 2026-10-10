@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-from solin.core.scenes.engine import FrameEgressReadyEvent, SceneEngineStatus
+from solin.core.scenes.engine import FrameEgressReadyEvent, SceneEngineStatus, SceneSourcePreview
 from solin.core.scenes.recording import (
     AudioDeviceSelection,
     AudioSelectionMode,
@@ -28,6 +28,7 @@ from solin.core.scenes.recording import (
 from solin.core.scenes.ipc_protocol import (
     PROTOCOL_VERSION,
     SceneIpcEnvelope,
+    SceneIpcError,
     encode_envelope,
     read_envelope,
 )
@@ -54,6 +55,7 @@ from solin.core.scenes.process_engine import (
     _capabilities_from_envelope,
     _command_error_from_envelope,
     _frame_egress_ready_from_envelope,
+    _editor_source_preview_from_envelope,
     _heartbeat_from_envelope,
     _local_camera_discovery_from_envelope,
     _media_playback_event_from_envelope,
@@ -3877,6 +3879,10 @@ class _FakePreviewEgress:
         self.enabled: list = []
         self.shutdowns = 0
 
+    @property
+    def scene_source(self):
+        return self.sources[-1] if self.sources else None
+
     def configure(self, descriptor) -> None:
         self.configured.append(descriptor)
 
@@ -4312,6 +4318,538 @@ def test_scene_graph_scene_source_returns_built_scene():
     graph.hydrate(_MEDIA_DOC, {"virtual_camera": "s1"}, object())
     assert graph.scene_source("s1") == "scene-source:solin-scene-s1"
     assert graph.scene_source("missing") is None
+
+
+def test_editor_source_preview_borrows_source_without_changing_authored_item():
+    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+
+    runtime = _CompositingRuntime()
+    graph = LibobsSceneGraph(runtime)
+    document = {
+        "sources": [{"id": "camera", "type": "rtsp_camera",
+                     "configuration": {"uri": "rtsp://camera.local/live"}}],
+        "scenes": [{"id": "edit", "layers": [{
+            "id": "camera-layer", "source_id": "camera", "visible": True,
+            "rect": {"x": 0.2, "y": 0.1, "width": 0.4, "height": 0.5},
+            "crop": {"left": 0.2, "top": 0.1, "right": 0.3, "bottom": 0.2},
+            "mirror_x": True, "mirror_y": True, "fit_mode": "cover",
+        }]}],
+    }
+    graph.hydrate(document, {"virtual_camera": "edit"})
+    authored = graph._layer_items[("edit", "camera-layer")]["item"]
+    authored.source.width, authored.source.height = 1280, 960
+    before = dict(vars(authored))
+    program = graph.active_scene_source
+    try:
+        result = graph.set_editor_source_preview("edit", "camera-layer")
+        assert (result.width, result.height, result.error_code) == (1280, 960, "")
+        private = runtime.scenes[-1]
+        assert private is not graph._scenes["edit"]
+        assert len(private.items) == 1
+        item = private.items[0]
+        assert item.source is authored.source
+        assert item.crop == (0, 0, 0, 0)
+        assert item.bounds_type == runtime.ob.BoundsType.SCALE_INNER
+        assert item.bounds == (1920, 1080)
+        assert item.pos == (960, 540)
+        assert item.scale == (-1, -1)
+        assert item.rotation == 0 and not item.crop_to_bounds
+        assert vars(authored) == before
+        assert len(runtime.rtsp_requests) == len(runtime.rtsp_sources) == 1
+        assert graph.active_scene_source is program
+        assert graph.scene_source("edit") is program
+        assert graph.editor_scene_source("edit") is private.as_source()
+        assert graph.editor_scene_source("missing") is None
+    finally:
+        graph.shutdown()
+
+
+@pytest.fixture
+def editor_source_preview_engine():
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+    egress = _FakePreviewEgress()
+    engine._preview_egress = egress
+    document = {
+        "revision": 7,
+        "sources": [{"id": "color", "type": "color",
+                     "configuration": {"color": "#336699"}}],
+        "scenes": [{"id": "edit", "layers": [
+            {"id": "layer", "source_id": "color", "mirror_x": True},
+            {"id": "hidden", "source_id": "color", "visible": False},
+            {"id": "content", "source_id": "solin.content.current"},
+        ]}, {"id": "other", "layers": [{"id": "layer", "source_id": "color"}]}],
+    }
+    payload = {"document": document, "active_scenes": {
+        "editor": "edit", "media_windows": "other", "virtual_camera": "edit",
+    }}
+    assert _ack_from_envelope(engine.handle(_request(
+        "hydrate", payload, document_revision=7, sequence=1,
+    ))).applied
+    try:
+        yield runtime, engine, egress, payload
+    finally:
+        engine.shutdown()
+
+
+def _editor_preview_request(layer_id="layer", *, sequence=10, revision=7, scene_id="edit"):
+    return replace(_request(
+        "set_editor_source_preview", {"scene_id": scene_id, "layer_id": layer_id},
+        request_id=f"preview-{sequence}", document_revision=revision, sequence=sequence,
+    ), deadline_monotonic_ms=int(time.monotonic() * 1000) + 60_000)
+
+
+@pytest.mark.parametrize("width,height,error", [
+    (0, 0, ""), (1280, 960, ""), (0, 0, "source_unavailable"),
+])
+def test_source_preview_value_and_wire_contract_accept_valid_states(width, height, error):
+    expected = SceneSourcePreview(width, height, error)
+    envelope = replace(_request("editor_source_preview"), payload={
+        "width": width, "height": height, "error_code": error,
+    })
+    assert _editor_source_preview_from_envelope(envelope) == expected
+
+
+@pytest.mark.parametrize("width,height,error", [
+    (1, 0, ""), (0, 1, ""), (-1, 1, ""), (True, 1, ""),
+    (1.0, 1, ""), (1, 1, "failure"), (0, 0, None), (0, 0, "e" * 129),
+])
+def test_source_preview_value_and_wire_contract_reject_invalid_states(width, height, error):
+    with pytest.raises(ValueError):
+        SceneSourcePreview(width, height, error)
+    envelope = replace(_request("editor_source_preview"), payload={
+        "width": width, "height": height, "error_code": error,
+    })
+    with pytest.raises((SceneIpcError, ValueError)):
+        _editor_source_preview_from_envelope(envelope)
+
+
+@pytest.mark.parametrize("payload", [
+    {}, {"width": 0, "height": 0},
+    {"width": "1", "height": 1, "error_code": ""},
+    {"width": 0, "height": 0, "error_code": "", "unexpected": 1},
+])
+def test_source_preview_wire_converter_requires_exact_fields(payload):
+    with pytest.raises(SceneIpcError):
+        _editor_source_preview_from_envelope(replace(_request("editor_source_preview"), payload=payload))
+
+
+def test_editor_preview_repeat_revalidates_dimensions_and_reuses_private_scene(editor_source_preview_engine):
+    runtime, engine, egress, _payload = editor_source_preview_engine
+    graph = engine._scene_graph
+    source = graph._layer_items[("edit", "layer")]["item"].source
+    source.width, source.height = 1280, 960
+    request = _editor_preview_request()
+    response = engine.handle(request)
+    assert response.message_type == "editor_source_preview"
+    _assert_correlation_echoed(response, request)
+    assert _editor_source_preview_from_envelope(response) == SceneSourcePreview(1280, 960)
+    private = graph._editor_preview_scene
+    count = len(runtime.scenes), len(runtime.sources)
+    source.width, source.height = 3840, 2160
+    result = _editor_source_preview_from_envelope(engine.handle(_editor_preview_request(sequence=11)))
+    assert result == SceneSourcePreview(3840, 2160)
+    assert graph._editor_preview_scene is private
+    assert private.released == 0
+    assert (len(runtime.scenes), len(runtime.sources)) == count
+    assert egress.scene_source is graph.editor_scene_source("edit")
+    assert graph.editor_scene_source("other") is graph.scene_source("other")
+    assert engine._thumbnail_egress._scene_resolver("edit") is graph.scene_source("edit")
+    assert engine._projection_route.scene_source is graph.scene_source("other")
+
+
+@pytest.mark.parametrize("layer_id", ["missing", "hidden"])
+def test_editor_preview_unknown_layer_clears_old_preview(editor_source_preview_engine, layer_id):
+    _runtime, engine, egress, _payload = editor_source_preview_engine
+    graph = engine._scene_graph
+    engine.handle(_editor_preview_request())
+    private = graph._editor_preview_scene
+    result = _editor_source_preview_from_envelope(engine.handle(_editor_preview_request(layer_id, sequence=11)))
+    assert result == SceneSourcePreview(error_code="unknown_layer")
+    assert private.released == 1 and not graph.has_editor_source_preview
+    assert egress.scene_source is graph.scene_source("edit")
+
+
+@pytest.mark.parametrize("width,height", [(0, 0), (0, 1080), (-1, 1080)])
+def test_editor_preview_requires_actual_positive_source_dimensions(editor_source_preview_engine, width, height):
+    _runtime, engine, egress, _payload = editor_source_preview_engine
+    graph = engine._scene_graph
+    source = graph._layer_items[("edit", "layer")]["item"].source
+    source.width, source.height = width, height
+    result = _editor_source_preview_from_envelope(engine.handle(_editor_preview_request()))
+    assert result == SceneSourcePreview(error_code="source_unavailable")
+    assert not graph.has_editor_source_preview
+    assert egress.scene_source is graph.scene_source("edit")
+
+
+def test_editor_preview_rejects_content_placeholder(editor_source_preview_engine):
+    _runtime, engine, _egress, _payload = editor_source_preview_engine
+    result = _editor_source_preview_from_envelope(engine.handle(_editor_preview_request("content")))
+    assert result == SceneSourcePreview(error_code="source_unavailable")
+
+
+def test_editor_preview_runtime_unavailable_has_typed_response():
+    engine = LibobsSidecarEngine()
+    result = _editor_source_preview_from_envelope(engine.handle(_editor_preview_request()))
+    assert result == SceneSourcePreview(error_code="runtime_unavailable")
+
+
+@pytest.mark.parametrize("change,error", [
+    ({"session_id": "other"}, "session_mismatch"),
+    ({"process_generation": "other"}, "session_mismatch"),
+    ({"document_revision": 6}, "stale_revision"),
+    ({"document_revision": 8}, "stale_revision"),
+    ({"payload": {"scene_id": "edit", "layer_id": 123}}, "invalid_request"),
+    ({"payload": {"scene_id": "edit", "layer_id": ""}}, "invalid_request"),
+    ({"payload": {"scene_id": "", "layer_id": "layer"}}, "invalid_request"),
+    ({"payload": {"scene_id": "edit"}}, "invalid_request"),
+    ({"payload": {"scene_id": "other", "layer_id": "layer"}}, "unknown_layer"),
+    ({"deadline_monotonic_ms": 1}, "deadline_exceeded"),
+])
+def test_editor_preview_validates_request_before_replacing_live_preview(editor_source_preview_engine, change, error):
+    _runtime, engine, egress, _payload = editor_source_preview_engine
+    graph = engine._scene_graph
+    engine.handle(_editor_preview_request())
+    private = graph._editor_preview_scene
+    result = _editor_source_preview_from_envelope(engine.handle(replace(
+        _editor_preview_request(sequence=11), **change,
+    )))
+    assert result == SceneSourcePreview(error_code=error)
+    assert private.released == 0
+    assert egress.scene_source is private.as_source()
+    assert engine._session_id == "sess-1" and engine._process_generation == "gen-1"
+
+
+def test_editor_preview_stale_clear_cancels_and_late_begin_cannot_restore_it(editor_source_preview_engine):
+    _runtime, engine, egress, _payload = editor_source_preview_engine
+    graph = engine._scene_graph
+    engine.handle(_editor_preview_request())
+    private = graph._editor_preview_scene
+    clear = replace(_editor_preview_request(None, sequence=12, revision=6, scene_id="deleted"),
+                    deadline_monotonic_ms=1)
+    assert _editor_source_preview_from_envelope(engine.handle(clear)) == SceneSourcePreview()
+    assert private.released == 1
+    assert egress.scene_source is graph.scene_source("edit")
+    for sequence in (10, 11, 12):
+        result = _editor_source_preview_from_envelope(engine.handle(_editor_preview_request(sequence=sequence)))
+        assert result == SceneSourcePreview(error_code="stale_request")
+        assert not graph.has_editor_source_preview
+    assert not _editor_source_preview_from_envelope(engine.handle(_editor_preview_request(sequence=13))).error_code
+
+
+def test_editor_preview_late_clear_cannot_cancel_newer_preview(editor_source_preview_engine):
+    _runtime, engine, egress, _payload = editor_source_preview_engine
+    engine.handle(_editor_preview_request(sequence=12))
+    private = engine._scene_graph._editor_preview_scene
+    result = _editor_source_preview_from_envelope(engine.handle(_editor_preview_request(None, sequence=11)))
+    assert result.error_code == "stale_request"
+    assert egress.scene_source is private.as_source() and private.released == 0
+
+
+def test_editor_preview_native_draw_and_readback_use_isolated_source(editor_source_preview_engine, monkeypatch):
+    _runtime, engine, egress, _payload = editor_source_preview_engine
+    graph = engine._scene_graph
+    draws = []
+    monkeypatch.setattr("pylibobs.display.render_source_letterboxed",
+                        lambda ptr, *_: draws.append(ptr), raising=False)
+    output = engine._window_output
+    output._display_factory = _FakeDisplay
+    target = dict(_window_target(101, bus_id="editor"), scene_id="edit")
+    output.set_targets([target])
+    draw = output._displays[101].draw_callbacks[0]
+    draw(640, 360)
+    assert draws[-1] is graph.scene_source("edit")._ptr
+    engine.handle(_editor_preview_request())
+    private = graph._editor_preview_scene
+    draw(640, 360)
+    assert draws[-1] is egress.scene_source._ptr is private.as_source()._ptr
+    assert draws[-1] is not graph.scene_source("edit")._ptr
+    engine.handle(_editor_preview_request(None, sequence=11))
+    draw(640, 360)
+    assert draws[-1] is egress.scene_source._ptr is graph.scene_source("edit")._ptr
+
+
+@pytest.mark.parametrize("operation", ["clear", "hydrate", "scene_change", "content_commit"])
+def test_editor_preview_release_detaches_readback_and_holds_existing_window_lock(
+    editor_source_preview_engine, monkeypatch, operation,
+):
+    _runtime, engine, egress, payload = editor_source_preview_engine
+    graph = engine._scene_graph
+    engine.handle(_editor_preview_request())
+    private = graph._editor_preview_scene
+    output = engine._window_output
+    released = []
+    release = private.release
+
+    def guarded_release():
+        assert egress.scene_source is None
+        assert output.hydrate_lock._is_owned()
+        released.append(private)
+        release()
+
+    monkeypatch.setattr(private, "release", guarded_release)
+    if operation == "clear":
+        response = engine.handle(_editor_preview_request(None, sequence=11))
+        assert not _editor_source_preview_from_envelope(response).error_code
+    elif operation == "hydrate":
+        response = engine.handle(_request("hydrate", payload, sequence=11, document_revision=8))
+        assert _ack_from_envelope(response).applied
+        late = engine.handle(_editor_preview_request(sequence=12))
+        assert _editor_source_preview_from_envelope(late).error_code == "stale_revision"
+    else:
+        prepared = engine.handle(_request("prepare_scene", {
+            "bus_id": "editor" if operation == "scene_change" else "virtual_camera",
+            "scene_id": "other" if operation == "scene_change" else "edit",
+            **({"content_source_kind": "native_media", "content_media_epoch": 3}
+               if operation == "content_commit" else {}),
+        }, document_revision=7, sequence=11))
+        if operation == "content_commit":
+            assert _ack_from_envelope(engine.handle(_request("open_media", {
+                "path": "/new-video.mp4", "content_media_epoch": 3,
+            }))).applied
+        assert prepared.message_type == "scene_prepared"
+        response = engine.handle(_request("take_prepared", {
+            "bus_id": "editor" if operation == "scene_change" else "virtual_camera",
+            "preparation_token": prepared.payload["preparation_token"],
+        }, document_revision=7, sequence=12))
+        assert _ack_from_envelope(response).applied
+    assert released == [private] and private.released == 1
+    assert not graph.has_editor_source_preview
+    assert egress.scene_source is graph.editor_scene_source(engine._editor_scene_id)
+    assert _editor_source_preview_from_envelope(engine.handle(_editor_preview_request())).error_code == "stale_request"
+
+
+def test_editor_preview_clear_waits_for_native_borrower_before_release(editor_source_preview_engine, monkeypatch):
+    import threading
+
+    _runtime, engine, egress, _payload = editor_source_preview_engine
+    engine.handle(_editor_preview_request())
+    private = engine._scene_graph._editor_preview_scene
+    output = engine._window_output
+    output._display_factory = _FakeDisplay
+    output.set_targets([dict(_window_target(101, bus_id="editor"), scene_id="edit")])
+    rendering = threading.Event()
+    finish_render = threading.Event()
+    detached = threading.Event()
+    errors = []
+    results = []
+    set_source = egress.set_scene_source
+
+    def observe_detach(source):
+        set_source(source)
+        if source is None:
+            detached.set()
+
+    def render(pointer, *_):
+        assert pointer is private.as_source()._ptr
+        rendering.set()
+        assert finish_render.wait(5)
+        assert private.released == 0
+
+    def run(action):
+        try:
+            action()
+        except Exception as exc:  # noqa: BLE001 - capture worker failures for the test thread
+            errors.append(exc)
+
+    monkeypatch.setattr(egress, "set_scene_source", observe_detach)
+    monkeypatch.setattr("pylibobs.display.render_source_letterboxed", render, raising=False)
+    draw_thread = threading.Thread(target=run, args=(lambda: output._displays[101].draw_callbacks[0](640, 360),))
+    clear_thread = threading.Thread(target=run, args=(lambda: results.append(
+        engine.handle(_editor_preview_request(None, sequence=11)),
+    ),))
+    draw_thread.start()
+    try:
+        assert rendering.wait(5)
+        clear_thread.start()
+        assert detached.wait(5)
+        assert egress.scene_source is None and private.released == 0
+        assert clear_thread.is_alive()
+    finally:
+        finish_render.set()
+        draw_thread.join(5)
+        if clear_thread.ident is not None:
+            clear_thread.join(5)
+    assert not draw_thread.is_alive() and not clear_thread.is_alive()
+    assert errors == []
+    assert _editor_source_preview_from_envelope(results[0]) == SceneSourcePreview()
+    assert private.released == 1
+
+
+def test_editor_preview_content_swap_drops_obsolete_source_and_apply_reads_replacement(editor_source_preview_engine):
+    _runtime, engine, egress, _payload = editor_source_preview_engine
+    graph = engine._scene_graph
+    assert _ack_from_envelope(engine.handle(_request("open_media", {
+        "path": "/first-video.mp4", "content_media_epoch": 1,
+    }))).applied
+    prepared = engine.handle(_request("prepare_scene", {
+        "bus_id": "editor", "scene_id": "edit", "content_source_kind": "native_media",
+        "content_media_epoch": 1,
+    }))
+    assert _ack_from_envelope(engine.handle(_request("take_prepared", {
+        "bus_id": "editor", "preparation_token": prepared.payload["preparation_token"],
+    }, sequence=2))).applied
+    first = graph.content_source
+    assert _editor_source_preview_from_envelope(engine.handle(_editor_preview_request("content"))) == SceneSourcePreview(160, 90)
+    private = graph._editor_preview_scene
+    assert private.items[0].source is first
+    assert _ack_from_envelope(engine.handle(_request("control_media", {"action": "close"}))).applied
+    assert _ack_from_envelope(engine.handle(_request("open_media", {
+        "path": "/second-video.mp4", "content_media_epoch": 2,
+    }))).applied
+    prepared = engine.handle(_request("prepare_scene", {
+        "bus_id": "editor", "scene_id": "edit", "content_source_kind": "native_media",
+        "content_media_epoch": 2,
+    }))
+    assert _ack_from_envelope(engine.handle(_request("take_prepared", {
+        "bus_id": "editor", "preparation_token": prepared.payload["preparation_token"],
+    }, sequence=11))).applied
+    assert private.released == 1 and not graph.has_editor_source_preview
+    assert graph.content_source is not first
+    assert egress.scene_source is graph.scene_source("edit")
+    assert _editor_source_preview_from_envelope(engine.handle(_editor_preview_request("content", sequence=12))) == SceneSourcePreview(160, 90)
+    assert graph._editor_preview_scene.items[0].source is graph.content_source
+
+
+def test_editor_preview_hydrate_failure_invalidates_preview_until_rebuilt(editor_source_preview_engine, monkeypatch):
+    _runtime, engine, egress, payload = editor_source_preview_engine
+    graph = engine._scene_graph
+    engine.handle(_editor_preview_request())
+    private = graph._editor_preview_scene
+    with monkeypatch.context() as patch:
+        patch.setattr(engine._runtime.ob.Scene, "create_private", lambda *_: (_ for _ in ()).throw(RuntimeError("scene unavailable")))
+        assert not _ack_from_envelope(engine.handle(_request(
+            "hydrate", payload, sequence=11, document_revision=8,
+        ))).applied
+    assert private.released == 1 and not graph.has_editor_source_preview
+    assert egress.scene_source is None
+    assert _editor_source_preview_from_envelope(engine.handle(_editor_preview_request(sequence=12))).error_code == "stale_revision"
+    assert _ack_from_envelope(engine.handle(_request("hydrate", payload, sequence=13, document_revision=8))).applied
+    assert not _editor_source_preview_from_envelope(engine.handle(_editor_preview_request(sequence=14, revision=8))).error_code
+
+
+def test_editor_preview_shutdown_releases_private_before_authored_sources(editor_source_preview_engine, monkeypatch):
+    _runtime, engine, egress, _payload = editor_source_preview_engine
+    graph = engine._scene_graph
+    engine.handle(_editor_preview_request())
+    private = graph._editor_preview_scene
+    source = private.items[0].source
+    output = engine._window_output
+    release = private.release
+
+    def observe_release():
+        assert egress.shutdowns == 1
+        assert not output.handles
+        assert source.released == 0
+        release()
+
+    monkeypatch.setattr(private, "release", observe_release)
+    engine.shutdown()
+    assert private.released == source.released == 1
+    assert engine._scene_graph is None and not engine.runtime_started
+
+
+def test_stale_editor_take_cannot_invalidate_newer_source_preview(editor_source_preview_engine):
+    _runtime, engine, egress, _payload = editor_source_preview_engine
+    prepared = engine.handle(_request("prepare_scene", {
+        "bus_id": "editor", "scene_id": "other",
+    }, document_revision=7, sequence=8))
+    assert prepared.message_type == "scene_prepared"
+    engine.handle(_editor_preview_request(sequence=10))
+    private = engine._scene_graph._editor_preview_scene
+    result = _ack_from_envelope(engine.handle(_request("take_prepared", {
+        "bus_id": "editor", "preparation_token": prepared.payload["preparation_token"],
+    }, document_revision=7, sequence=9)))
+    assert not result.applied and result.error_code == "stale_request"
+    assert private.released == 0 and egress.scene_source is private.as_source()
+    assert engine._editor_scene_id == "edit"
+
+
+def test_stale_hydrate_cannot_destroy_newer_source_preview(editor_source_preview_engine):
+    _runtime, engine, egress, payload = editor_source_preview_engine
+    engine.handle(_editor_preview_request(sequence=10))
+    private = engine._scene_graph._editor_preview_scene
+    result = _ack_from_envelope(engine.handle(_request(
+        "hydrate", payload, document_revision=6, sequence=9,
+    )))
+    assert not result.applied and result.error_code == "stale_request"
+    assert private.released == 0 and egress.scene_source is private.as_source()
+    assert engine._document_revision == 7
+    assert not _editor_source_preview_from_envelope(engine.handle(_editor_preview_request(sequence=11))).error_code
+
+
+def test_editor_preview_partial_build_failure_releases_candidate_and_old_preview(editor_source_preview_engine, monkeypatch):
+    runtime, engine, egress, _payload = editor_source_preview_engine
+    graph = engine._scene_graph
+    engine.handle(_editor_preview_request())
+    private = graph._editor_preview_scene
+    with graph.content_presentation(_FakeColorSource("image_source", "image", {})) as presentation:
+        # The control plane must guard every commit which may release a preview.
+        with engine._editor_preview_update():
+            presentation.commit()
+    engine.handle(_editor_preview_request(sequence=11))
+    private = graph._editor_preview_scene
+    item_sources = tuple(runtime.sources)
+    with monkeypatch.context() as patch:
+        def fail_transform(*_):
+            raise RuntimeError("cannot set native transform")
+
+        patch.setattr(_FakeItem, "set_transform", fail_transform)
+        result = _editor_source_preview_from_envelope(engine.handle(_editor_preview_request("content", sequence=12)))
+    assert result.error_code == "source_unavailable"
+    assert private.released == runtime.scenes[-1].released == 1
+    assert not graph.has_editor_source_preview
+    assert tuple(runtime.sources) == item_sources
+    assert egress.scene_source is graph.scene_source("edit")
+
+
+def test_process_editor_preview_roundtrip_and_cancelled_late_response(editor_source_preview_engine, monkeypatch):
+    _runtime, sidecar, egress, _payload = editor_source_preview_engine
+    client = SubprocessSceneEngine(SceneEngineProcessConfig(executable=Path(sys.executable)))
+    client._started = client._ready = True
+    client._session_id = "sess-1"
+    client._process_generation = "gen-1"
+    requests = []
+    monkeypatch.setattr(client, "_write", requests.append)
+    begin = client.set_editor_source_preview(
+        "edit", "layer", document_revision=7, request_id="begin", sequence=10, deadline_ms=2000,
+    )
+    assert requests[0].message_type == "set_editor_source_preview"
+    assert requests[0].payload == {"scene_id": "edit", "layer_id": "layer"}
+    response = sidecar.handle(requests[0])
+    assert not begin.done()
+    client._receive(response, "gen-1")
+    assert begin.result() == SceneSourcePreview(1920, 1080)
+    repeated = client.set_editor_source_preview(
+        "edit", "layer", document_revision=7, request_id="apply", sequence=11, deadline_ms=2000,
+    )
+    response = sidecar.handle(requests[-1])
+    assert repeated.cancel()
+    clear = client.set_editor_source_preview(
+        "edit", None, document_revision=6, request_id="clear", sequence=12, deadline_ms=2000,
+    )
+    client._receive(sidecar.handle(requests[-1]), "gen-1")
+    client._receive(response, "gen-1")
+    assert clear.result() == SceneSourcePreview()
+    assert repeated.cancelled() and not client._pending
+    assert not sidecar._scene_graph.has_editor_source_preview
+    assert egress.scene_source is sidecar._scene_graph.scene_source("edit")
+
+
+@pytest.mark.parametrize("scene_id,layer_id", [
+    ("", "layer"), ("edit", ""), ("edit", 7), (None, "layer"),
+])
+def test_process_editor_preview_rejects_invalid_identities_before_writing(scene_id, layer_id, monkeypatch):
+    client = SubprocessSceneEngine(SceneEngineProcessConfig(executable=Path(sys.executable)))
+    requests = []
+    monkeypatch.setattr(client, "_write", requests.append)
+    result = client.set_editor_source_preview(
+        scene_id, layer_id, document_revision=7, request_id="request", sequence=1, deadline_ms=2000,
+    )
+    with pytest.raises(ValueError):
+        result.result()
+    assert not requests
 
 
 # ── image + scene_reference sources ──────────────────────────────────────────

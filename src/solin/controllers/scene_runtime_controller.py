@@ -29,6 +29,7 @@ from solin.core.scenes.engine import (
     SceneEngineSnapshot,
     SceneEngineStatus,
     ScenePreparation,
+    SceneSourcePreview,
     SourceHealthEvent,
     SourceHealthStatus,
     scene_engine_graph_signature,
@@ -204,6 +205,7 @@ class SceneRuntimeController(QObject):
     preview_frame_changed = Signal(str, object)
     content_playing_changed = Signal(bool)
     preview_egress_changed = Signal(object)
+    editor_source_preview_invalidated = Signal()
     scene_profiles_changed = Signal(object)
     runtime_changed = Signal(object)
     _async_result = Signal(object)
@@ -732,6 +734,7 @@ class SceneRuntimeController(QObject):
             self._documents.document.scene(scene_id)
         if scene_id == self._preview_scene_id:
             return
+        self.editor_source_preview_invalidated.emit()
         self._preview_scene_id = scene_id
         self._reconcile_content_ingress_demand()
         self._reconcile_engine_outputs()
@@ -754,6 +757,33 @@ class SceneRuntimeController(QObject):
             return
         self._queue_layer_geometry(scene_id, layer, committed=False)
         self._dispatch_layer_geometry()
+
+    def set_editor_source_preview(
+        self, scene_id: str, layer_id: str | None,
+    ) -> Future[SceneSourcePreview]:
+        """Borrow a full source for the editor without changing delivery scenes."""
+        if layer_id is not None:
+            scene = self.document.scene(scene_id)
+            layer = next((layer for layer in scene.layers if layer.id == layer_id), None)
+            if layer is None or not layer.visible or layer.locked:
+                raise SceneValidationError("Source is unavailable for editor framing")
+        if (
+            self._engine is None or not self._engine_ready
+            or self._hydrate_in_flight is not None or self._hydrate_dirty
+            or self._profile_activation is not None
+        ):
+            future: Future[SceneSourcePreview] = Future()
+            future.set_result(SceneSourcePreview(
+                error_code="runtime_unavailable" if layer_id is not None else "",
+            ))
+            return future
+        return self._engine.set_editor_source_preview(
+            scene_id, layer_id,
+            document_revision=self._engine_document_revision,
+            request_id=self._request_id_factory(),
+            sequence=self._next_sequence(),
+            deadline_ms=_PREPARE_DEADLINE_MS,
+        )
 
     def _queue_layer_geometry(
         self, scene_id: str, layer: SceneLayer, *, committed: bool, retry_count: int = 0,
@@ -1211,6 +1241,7 @@ class SceneRuntimeController(QObject):
     def _on_projection_changed(self) -> None:
         session_id = self._projection_session_id()
         if session_id != self._last_projection_session_id:
+            self.editor_source_preview_invalidated.emit()
             category = content_category_for_projection(self._projection.state)
             self._pending_content_presentation_epoch = session_id
             self._require_pending_content_takes()
@@ -2546,6 +2577,8 @@ class SceneRuntimeController(QObject):
         if self._engine_ready == ready:
             return
         self._engine_ready = ready
+        if not ready:
+            self.editor_source_preview_invalidated.emit()
         self.engine_ready_changed.emit(ready)
         self.operational_state_changed.emit()
 
