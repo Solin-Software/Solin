@@ -6165,6 +6165,10 @@ L’organisation actuelle et les fichiers seront conservés. Les modifications e
         <source>Scenes</source>
         <translation>Scènes</translation>
     </message>
+    <message>
+        <source>Idle screen</source>
+        <translation>Écran inactif</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -7194,6 +7198,10 @@ Ajouter du contenu, une caméra ou une autre scène.</translation>
         <location line="+8"/>
         <source>Open folder</source>
         <translation>Ouvrir le dossier</translation>
+    </message>
+    <message>
+        <source>Idle screen</source>
+        <translation>Écran inactif</translation>
     </message>
 </context>
 <context>
@@ -11514,6 +11522,13 @@ Utilisez le bouton de lecture pour projeter · Faites glisser la poignée ⠿ po
 {path}</source>
         <translation type="vanished">Enregistré dans :
 {path}</translation>
+    </message>
+</context>
+<context>
+    <name>_Scenes</name>
+    <message>
+        <source>Idle screen</source>
+        <translation>Écran inactif</translation>
     </message>
 </context>
 </TS>

@@ -6165,6 +6165,10 @@ Mpangilio wa sasa na faili zitahifadhiwa. Mabadiliko yanayosubiri kutoka kwenye 
         <source>Scenes</source>
         <translation>Mandhari</translation>
     </message>
+    <message>
+        <source>Idle screen</source>
+        <translation>Skrini Isiyotumika</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -7194,6 +7198,10 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
         <location line="+8"/>
         <source>Open folder</source>
         <translation>Fungua folda</translation>
+    </message>
+    <message>
+        <source>Idle screen</source>
+        <translation>Skrini Isiyotumika</translation>
     </message>
 </context>
 <context>
@@ -11514,6 +11522,13 @@ Tumia kitufe cha kucheza ili kuonyesha · Buruta kishikio ⠿ ili kupanga upya</
 {path}</source>
         <translation type="vanished">Imehifadhiwa kwenye:
 {path}</translation>
+    </message>
+</context>
+<context>
+    <name>_Scenes</name>
+    <message>
+        <source>Idle screen</source>
+        <translation>Skrini Isiyotumika</translation>
     </message>
 </context>
 </TS>

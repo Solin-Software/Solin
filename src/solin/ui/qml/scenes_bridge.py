@@ -67,9 +67,10 @@ from solin.core.scenes.model import (
     ViscaIpPtzBinding,
     ViscaSerialPtzBinding,
     ViscaTransport,
-    YeartextSourceConfig,
+    IdleScreenSourceConfig,
     new_identity,
 )
+from solin.core.scenes.presets import IDLE_SCREEN_SOURCE_ID
 from solin.core.scenes.recording import (
     AudioDeviceDirection,
     AudioDeviceSelection,
@@ -100,7 +101,7 @@ _SOURCE_COLORS = {
     SourceKind.IMAGE: "#8B5CF6",
     SourceKind.COLOR: "#64748B",
     SourceKind.SCENE_REFERENCE: "#F59E0B",
-    SourceKind.YEARTEXT: "#EAB308",
+    SourceKind.IDLE_SCREEN: "#EAB308",
 }
 
 
@@ -1038,21 +1039,21 @@ class ScenesBridge(QObject):
         self._add_source_layer(CONTENT_SOURCE_ID)
 
     @Slot()
-    def addYearText(self) -> None:
-        # The year text is a single global source (all layers show the same rendered
-        # image); reuse the document's year-text source if one exists, else create it.
+    def addIdleScreen(self) -> None:
+        # All layers share the session's idle content. Reuse a migrated source ID
+        # when available; new documents use the canonical identity.
         document = self._controller.document
         source = next(
             (candidate for candidate in document.sources
-             if candidate.kind is SourceKind.YEARTEXT),
+             if candidate.kind is SourceKind.IDLE_SCREEN),
             None,
         )
         if source is None:
             source = SourceDefinition(
-                id=new_identity(),
-                kind=SourceKind.YEARTEXT,
-                name=self.tr("Year text"),
-                configuration=YeartextSourceConfig(),
+                id=IDLE_SCREEN_SOURCE_ID,
+                kind=SourceKind.IDLE_SCREEN,
+                name=self.tr("Idle screen"),
+                configuration=IdleScreenSourceConfig(),
             )
             if not self._run_edit(lambda: self._controller.documents.create_source(source)):
                 return

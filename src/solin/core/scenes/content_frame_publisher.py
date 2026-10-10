@@ -2,8 +2,8 @@
 
 Implements the :class:`~solin.controllers.content_frame_ingress_controller._FramePublisher`
 protocol on top of the cross-platform :class:`SharedFrameChannelWriter`, so
-``ContentFrameIngressController`` can push the app's rendered content (yeartext,
-timers, browser, framed images) to the libobs sidecar as a ``SHARED_MEMORY_BGRA``
+``ContentFrameIngressController`` can push the app's rendered content (timers,
+browser, framed images) to the libobs sidecar as a ``SHARED_MEMORY_BGRA``
 channel. Injected at bootstrap when the libobs engine is selected, in place of
 main's Windows-only shared-memory / D3D11 publishers.
 

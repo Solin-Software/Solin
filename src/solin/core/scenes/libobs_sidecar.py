@@ -1,21 +1,10 @@
-"""libobs scene-engine sidecar.
+"""Supervised libobs composition, independent media transports and idle content.
 
-A separate, supervised process that speaks the scene-engine control protocol
-(:mod:`solin.core.scenes.ipc_protocol`, PROTOCOL_VERSION 7) over stdin/stdout, so
-it can be driven by the existing :class:`~solin.core.scenes.process_engine.SubprocessSceneEngine`
-client — the *same* supervision / heartbeat / restart / IPC machinery ``main``
-uses for its native GStreamer engine, pointed at libobs instead.
-
-Stage 1a implemented the lifecycle handshake (``hello`` → ``hello_ack``,
-``ping`` → ``heartbeat``, everything else → ``not_implemented``).
-
-Stage 1b adds the **libobs runtime lifecycle**: the sidecar brings the libobs
-runtime up on ``hello`` and tears it down when the control channel closes. The
-boot is orchestrated through an injectable runtime factory so it is unit-testable
-without a real GPU/libobs; a boot failure is non-fatal (the handshake still
-completes, the engine simply advertises no capabilities). Capabilities remain
-all-false until later stages actually composite/capture/record — booting the
-runtime is groundwork, not yet a user-visible capability.
+The scene-engine protocol runs over stdin/stdout. Runtime boot is injectable for
+tests; failed boot completes the handshake with unavailable capabilities. Scene
+hydration restores output routing and the session's explicit idle state. Idle
+preparation runs separately from foreground commands and heartbeat handling;
+shutdown drains that preparation before releasing the shared native owners.
 """
 
 from __future__ import annotations
@@ -27,7 +16,7 @@ import threading
 import time
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager, nullcontext
-from typing import TYPE_CHECKING, Any, BinaryIO, Callable, Protocol
+from typing import TYPE_CHECKING, Any, BinaryIO, Callable, Protocol, cast
 
 if TYPE_CHECKING:
     from solin.core.scenes.libobs_projection_route import LibobsProjectionRoute
@@ -46,18 +35,12 @@ from solin.core.scenes.ipc_protocol import (
 from solin.core.scenes.model import SceneValidationError
 from solin.core.scenes.engine import SceneSourcePreview
 from solin.core.scenes.media_control import ContentSourceKind
+from solin.core.scenes.idle import IdleScreenState
 
 log = logging.getLogger(__name__)
 
-# Capability flags advertised in the hello handshake. All False for now: the
-# engine completes the lifecycle handshake and boots libobs, but composites
-# nothing yet. Each flag flips to True as its stage lands:
-#   hardware_compositing                -> scene graph + transitions
-#   local_cameras / rtsp_cameras        -> camera sources
-#   virtual_camera                      -> obs_view -> DShow sink
-#   program_recording / audio_*_capture -> recording + audio
-#   d3d11_shared_textures               -> not planned (libobs sources are fed directly)
-# The key set must match SubprocessSceneEngine's hello contract exactly.
+# Unavailable-runtime baseline. Boot advertises the capabilities actually supplied
+# by its adapters. The keys match SubprocessSceneEngine's hello contract.
 CAPABILITIES: dict[str, bool] = {
     "local_cameras": False,
     "rtsp_cameras": False,
@@ -258,6 +241,13 @@ class LibobsSidecarEngine:
         self._document_revision: int | None = None
         self._editor_scene_id = ""
         self._editor_preview_sequence = -1
+        self._idle_source: Any | None = None
+        self._idle_scene_source: Any | None = None
+        self._idle_callback: Any | None = None
+        self._idle_suspended = False
+        self._render_demand: dict[str, object] = {}
+        self._idle_definitions: tuple[str, ...] = ()
+        self._idle_transport_health: tuple[str, str, int, tuple[str, ...], str] | None = None
 
     @property
     def runtime_started(self) -> bool:
@@ -299,7 +289,11 @@ class LibobsSidecarEngine:
 
         from solin.core.scenes.libobs_projection_route import LibobsProjectionRoute
 
-        self._scene_graph = LibobsSceneGraph(runtime)
+        from solin.core.scenes.libobs_idle_source import LibobsIdleSource
+
+        idle_source = LibobsIdleSource(runtime)
+        self._idle_source = idle_source
+        self._scene_graph = LibobsSceneGraph(runtime, idle_source=lambda: idle_source.source)
         self._window_output = LibobsWindowOutput(runtime)
         # The projection output owns its own transition, outside the scene graph so
         # a structural-edit rebuild cannot black the room's screen out.
@@ -388,11 +382,8 @@ class LibobsSidecarEngine:
                 graph.cancel_all()
             self._prepared_content.clear()
             return None  # a notification — no response
-        if message_type == "reload_yeartext":
-            graph = self._scene_graph
-            if graph is not None:
-                graph.reload_yeartext()
-            return None  # a notification — no response
+        if message_type == "set_idle_screen":
+            return self._handle_idle_screen(request)
         if message_type == "preview_layer_geometry":
             return self._handle_preview_layer_geometry(request)
         if message_type == "set_output_enabled":
@@ -404,6 +395,155 @@ class LibobsSidecarEngine:
         if message_type == "set_window_targets":
             return self._handle_set_window_targets(request)
         return build_response(request)
+
+    def cancel_idle_preparation(self) -> None:
+        """Invalidate a pending idle candidate without touching committed content."""
+        if self._idle_source is not None:
+            self._idle_source.cancel_preparation()
+
+    def admit_idle_screen(self, request: SceneIpcEnvelope, state: IdleScreenState) -> None:
+        """Authenticate before reserving a revision or superseding preparation."""
+        self._validate_idle_request(request)
+        assert self._idle_source is not None
+        self._idle_source.admit(state)
+
+    def _validate_idle_request(self, request: SceneIpcEnvelope) -> None:
+        from solin.core.scenes.libobs_idle_source import IdleScreenError
+
+        if not self._runtime_started or self._idle_source is None:
+            raise IdleScreenError("runtime_unavailable")
+        if (request.session_id != self._session_id
+                or request.process_generation != self._process_generation):
+            raise IdleScreenError("session_mismatch")
+        if time.monotonic() * 1000 >= request.deadline_monotonic_ms:
+            raise IdleScreenError("deadline_exceeded")
+
+    def _handle_idle_screen(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope:
+        from solin.core.scenes.libobs_idle_source import IdleScreenError
+
+        try:
+            payload = require_payload_fields(
+                request.payload, frozenset({"idle_screen"}), message_type="idle screen",
+            )
+            state = IdleScreenState.from_record(payload["idle_screen"])
+            # Revalidate authority at dispatch, but do not readmit a choice
+            # that the worker may already have cancelled during shutdown.
+            self._validate_idle_request(request)
+            assert self._idle_source is not None
+            self._idle_source.apply(state, request.deadline_monotonic_ms)
+            self._publish_idle_health(request, "")
+            self._reconcile_idle_demand()
+            return _ack(request, applied=True)
+        except (ValueError, IdleScreenError) as exc:
+            code = getattr(exc, "error_code", "invalid_idle_screen")
+            return _ack(request, applied=False, error_code=code,
+                        error_message="The idle screen could not be applied")
+
+    def _publish_idle_health(
+        self, request: SceneIpcEnvelope, error_code: str, *, message: str | None = None,
+    ) -> None:
+        # A control update supersedes any transport notification, including a
+        # recovery that installs annual text while preserving its own error.
+        self._idle_transport_health = None
+        sink = self._event_sink
+        if sink is None:
+            return
+        if message is None:
+            message = "Idle media unavailable; showing year text" if error_code else ""
+        for source_id in self._idle_definitions:
+            sink(_reply(request, "source_health", {
+                "source_id": source_id, "status": "failed" if error_code else "ready",
+                "error_code": error_code,
+                "message": message,
+            }))
+
+    def _reconcile_idle_health(self, error_code: str) -> None:
+        """Report reset failures once; their retained frame is not an annual fallback."""
+        revision = self._document_revision
+        if revision is None or not self._idle_definitions or self._event_sink is None:
+            return
+        health = (
+            self._session_id, self._process_generation, revision,
+            self._idle_definitions, error_code,
+        )
+        previous = self._idle_transport_health
+        if health == previous or (not error_code and (previous is None or not previous[-1])):
+            return
+        request = SceneIpcEnvelope(
+            message_type="source_health", request_id="event-idle-health",
+            session_id=health[0], process_generation=health[1], sequence=0,
+            document_revision=revision,
+            deadline_monotonic_ms=int(time.monotonic() * 1000) + 2000, payload={},
+        )
+        self._publish_idle_health(
+            request, error_code,
+            message="Idle video could not restart; showing its initial frame" if error_code else "",
+        )
+        self._idle_transport_health = health
+
+    def _reconcile_idle_demand(self, *_canvas: int) -> None:
+        """Native references include transition origins; explicit demand gates outputs."""
+        idle, graph = self._idle_source, self._scene_graph
+        if idle is None or graph is None or self._idle_suspended:
+            return
+        # No graph has ever borrowed the idle scene. Keep the lazy owner empty.
+        idle_source = self._idle_scene_source
+        if idle_source is None:
+            idle.set_demand(False)
+            return
+        output = self._window_output
+        guard = output.hydrate_lock if output is not None else None
+        if guard is not None and not guard.acquire(blocking=False):
+            return
+        try:
+            # Borrowed from the stable owner on the control thread. Acquiring the
+            # owner's lock here can deadlock an atomic scene commit against OBS.
+            def contains(source: Any, *, transition: bool = False) -> bool:
+                runtime = cast(Any, self._runtime)
+                if transition:
+                    return runtime.transition_source_tree_contains(source, idle_source)
+                return runtime.active_source_tree_contains(source, idle_source)
+            thumbnails = self._thumbnail_egress
+            preview = bool(thumbnails is not None and any(
+                graph.scene_uses_idle_source(scene_id) for scene_id in thumbnails.scene_ids
+            ))
+            camera, recorder = self._virtual_camera, self._recorder
+            live = bool(
+                ((camera is not None and camera.active) or (recorder is not None and recorder.active))
+                and contains(graph.program_source, transition=True)
+            )
+            program, editor = self._program_egress, self._preview_egress
+            if not preview and program is not None and program.active:
+                preview = contains(graph.program_source, transition=True)
+            if not preview and editor is not None and editor.active:
+                preview = contains(graph.editor_scene_source(self._editor_scene_id))
+            if output is not None:
+                for route, scene_id in output.render_targets:
+                    if route == "scene":
+                        preview = preview or contains(graph.editor_scene_source(scene_id))
+                    elif route == "projection":
+                        projection = self._projection_route
+                        live = live or (
+                            projection is not None
+                            and contains(projection.transition_source, transition=True)
+                        )
+                    else:
+                        live = live or contains(graph.program_source, transition=True)
+                    if live and preview:
+                        break
+            idle.set_demand(bool(preview or live), live=bool(live))
+        except Exception:  # noqa: BLE001 - native render callback boundary
+            log.warning("Could not reconcile idle screen visibility", exc_info=True)
+        finally:
+            if guard is not None:
+                guard.release()
+        # The owner and transport getters are lock-free snapshots of committed
+        # state. Never acquire the owner's scene-commit lock on the render thread,
+        # and do not retain the graph borrower guard while publishing IPC events.
+        try:
+            self._reconcile_idle_health(idle.transport_error_code)
+        except Exception:  # noqa: BLE001 - native render callback boundary
+            log.warning("Could not report idle screen transport health", exc_info=True)
 
     @contextmanager
     def _editor_preview_update(self, *, preserve_scene: bool = False) -> Iterator[None]:
@@ -1077,6 +1217,7 @@ class LibobsSidecarEngine:
         if request.sequence < self._editor_preview_sequence:
             return _ack(request, applied=False, error_code="stale_request",
                         error_message="the graph update was superseded by newer editor state")
+        self._idle_suspended = True
         try:
             self._document_revision = None
             self._editor_preview_sequence = max(self._editor_preview_sequence, request.sequence)
@@ -1094,6 +1235,34 @@ class LibobsSidecarEngine:
                 thumbnails.suspend()
             active_scenes = _payload_object(payload.get("active_scenes") or {})
             document = _payload_object(payload.get("document") or {})
+            source_records = document.get("sources", ())
+            if not isinstance(source_records, (list, tuple)):
+                raise SceneIpcError("Invalid sources")
+            self._idle_definitions = tuple(
+                str(source["id"]) for source in source_records
+                if isinstance(source, dict) and source.get("type") == "idle_screen"
+            )
+            self._render_demand = _payload_object(payload.get("render_enabled") or {})
+            if self._idle_source is not None and (
+                self._idle_definitions
+                or payload.get("idle_screen", IdleScreenState().to_record())
+                != IdleScreenState().to_record()
+            ):
+                from solin.core.scenes.libobs_idle_source import IdleScreenError
+
+                state = IdleScreenState.from_record(
+                    payload.get("idle_screen", IdleScreenState().to_record()),
+                )
+                try:
+                    self._idle_source.apply(state, request.deadline_monotonic_ms, recover=True)
+                    self._publish_idle_health(request, "")
+                except IdleScreenError as exc:
+                    self._publish_idle_health(request, exc.error_code)
+                self._idle_scene_source = self._idle_source.source
+                if self._idle_definitions and self._idle_callback is None:
+                    self._idle_callback = cast(Any, self._runtime).ob.add_main_render_callback(
+                        self._reconcile_idle_demand,
+                    )
             # An open media source owns the content slot; otherwise the BGRA
             # frame-ingress source does (both may be absent → placeholder).
             # Hold the window-output lock so a per-scene draw callback on the
@@ -1172,6 +1341,9 @@ class LibobsSidecarEngine:
                     log.debug("thumbnail resume after failed hydrate errored", exc_info=True)
             return _ack(request, applied=False, error_code="hydrate_failed",
                         error_message="could not build the libobs scene graph")
+        finally:
+            self._idle_suspended = False
+            self._reconcile_idle_demand()
         return _ack(request, applied=True)
 
     def _reconcile_projection(self, active_scenes: Mapping[str, object]) -> None:
@@ -1222,8 +1394,10 @@ class LibobsSidecarEngine:
         # The MEDIA_WINDOWS bus render demand gates the editor preview egress;
         # the program bus always composites, so just ack it.
         payload = request.payload
+        self._render_demand[str(payload.get("bus_id") or "")] = bool(payload.get("enabled"))
         if payload.get("bus_id") == "editor" and self._preview_egress is not None:
             self._preview_egress.set_enabled(bool(payload.get("enabled")))
+        self._reconcile_idle_demand()
         return _ack(request, applied=True)
 
     def _reconcile_content_ingress(self, descriptor: object) -> None:
@@ -1462,6 +1636,13 @@ class LibobsSidecarEngine:
         return _ack(request, applied=True)
 
     def shutdown(self) -> None:
+        self._idle_suspended = True
+        callback, self._idle_callback = self._idle_callback, None
+        if callback is not None and self._runtime is not None:
+            try:
+                cast(Any, self._runtime).ob.remove_main_render_callback(callback)
+            except Exception:  # noqa: BLE001 - release the remaining runtime owners
+                log.warning("Idle render callback removal failed", exc_info=True)
         self._document_revision = None
         self._editor_scene_id = ""
         self._editor_preview_sequence = -1
@@ -1545,6 +1726,13 @@ class LibobsSidecarEngine:
                 log.warning("Could not release a detached content source", exc_info=True)
         self._retired_frame_sources.clear()
         self._media_epoch = None
+        idle, self._idle_source = self._idle_source, None
+        self._idle_scene_source = None
+        if idle is not None:
+            try:
+                idle.close()
+            except Exception:  # noqa: BLE001 - shutdown must finish releasing the runtime
+                log.warning("Idle source close failed", exc_info=True)
         runtime, self._runtime = self._runtime, None
         self._runtime_started = False
         if runtime is None:
@@ -1568,8 +1756,12 @@ def serve(
 
     Exiting the loop lets the supervising client observe the process end and
     apply its restart policy. The engine is always shut down on the way out so
-    the libobs runtime is released even on an unclean channel.
+    the libobs runtime is released even on an unclean channel. Idle updates use
+    one coalescing worker; other commands remain on this control loop. Shutdown
+    cancels and joins that worker before releasing the engine's native owners.
     """
+    from solin.core.scenes.libobs_idle_updates import IdleScreenUpdates
+
     active = engine if engine is not None else LibobsSidecarEngine()
     write_lock = threading.Lock()
 
@@ -1577,7 +1769,10 @@ def serve(
         with write_lock:
             write_envelope(sink, envelope)
 
-    active.set_event_sink(emit)
+    idle_updates = IdleScreenUpdates(
+        active.handle, emit, active.cancel_idle_preparation, admit=active.admit_idle_screen,
+    )
+    active.set_event_sink(idle_updates.emit_event)
     try:
         while True:
             try:
@@ -1586,6 +1781,9 @@ def serve(
                 return
             if request is None:
                 return  # clean EOF: the parent closed the pipe or exited
+            if request.message_type == "set_idle_screen":
+                idle_updates.submit(request)
+                continue
             try:
                 response = active.handle(request)
             except Exception:  # noqa: BLE001 - a handler bug must not kill the sidecar
@@ -1595,11 +1793,13 @@ def serve(
                     "error_message": f"the engine failed to handle '{request.message_type}'",
                 })
             if response is not None:
-                with write_lock:
-                    write_envelope(sink, response)
+                emit(response)
     finally:
-        active.set_event_sink(None)
-        active.shutdown()
+        try:
+            idle_updates.close()
+        finally:
+            active.set_event_sink(None)
+            active.shutdown()
 
 
 def _reserve_protocol_stream() -> BinaryIO:

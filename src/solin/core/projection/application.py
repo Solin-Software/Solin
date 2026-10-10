@@ -81,6 +81,7 @@ class ProjectionSession:
         # and turned first-frame scene changes into an intermittent race.
         self._listeners: dict[Callable[[], None], None] = {}
         self._idle_media_path = ""
+        self._idle_media_revision = 0
         self._tab_projection_active = False
         self._media_hidden_screen_names = set(media_hidden_screen_names)
         self.projection_windows: list[Any] = []
@@ -178,8 +179,18 @@ class ProjectionSession:
     def idle_media_path(self) -> str:
         return self._idle_media_path
 
+    @property
+    def idle_media_revision(self) -> int:
+        """Confirmed idle choice revision, independent of presentation identity."""
+        return self._idle_media_revision
+
     def set_idle_media_path(self, path: str) -> None:
+        """Publish an engine-confirmed idle choice without replacing Media."""
+        if path == self._idle_media_path:
+            return
         self._idle_media_path = path
+        self._idle_media_revision += 1
+        self._publish_changed()
 
     @property
     def tab_projection_active(self) -> bool:

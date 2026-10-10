@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import time
 from dataclasses import replace
@@ -14,6 +15,7 @@ from solin.core.scenes.engine import (
     SceneEngineStatus,
 )
 from solin.core.scenes.ipc_protocol import PROTOCOL_VERSION
+from solin.core.scenes.idle import IdleScreenState
 from solin.core.scenes.model import (
     DELIVERY_BUSES,
     BusId,
@@ -28,6 +30,7 @@ from solin.core.scenes.process_engine import (
     SceneEngineProtocolError,
     SceneEngineRequestTimeoutError,
     SubprocessSceneEngine,
+    _ack_from_envelope,
 )
 from solin.core.scenes.recording import (
     AudioDeviceSelection,
@@ -92,6 +95,76 @@ def _snapshot(
         render_enabled=tuple((bus_id, enabled) for bus_id in BusId),
         output_enabled=tuple((bus_id, enabled and bus_id in DELIVERY_BUSES) for bus_id in BusId),
     )
+
+
+def test_idle_state_roundtrip_and_profile_switch_keep_document_revision_independent(tmp_path):
+    transcript = tmp_path / "idle-ipc.jsonl"
+    engine = _engine("idle_contract", str(transcript))
+    initial = IdleScreenState(41, "selected idle.mp4", "annual text.png", 11)
+    updated = replace(initial, revision=42, yeartext_revision=12)
+    removed = replace(updated, revision=43, media_path="")
+    older = _document().with_revision(7)
+    newer = replace(_document(), document_id="other-profile", revision=0)
+    try:
+        engine.start(session_id="integration-session", deadline_ms=2000).result(3)
+        for sequence, (message, document, state) in enumerate((
+            ("hydrate", older, initial),
+            ("set_idle_screen", older, updated),
+            ("hydrate", newer, updated),
+            ("set_idle_screen", newer, removed),
+        ), start=1):
+            if message == "hydrate":
+                response = engine.hydrate(
+                    replace(_snapshot(sequence, document=document), idle_screen=state),
+                    request_id=f"idle-hydrate-{sequence}", deadline_ms=1000,
+                ).result(2)
+            else:
+                response = engine.set_idle_screen(
+                    state, request_id=f"idle-update-{sequence}", sequence=sequence,
+                    deadline_ms=1000,
+                ).result(2)
+            assert response.applied
+            assert response.document_revision == document.revision
+            assert response.sequence == sequence
+        captured = [json.loads(line) for line in transcript.read_text(encoding="utf-8").splitlines()]
+        assert [item["idle_screen"] for item in captured] == [
+            state.to_record() for state in (initial, updated, updated, removed)
+        ]
+        assert [item["document_revision"] for item in captured] == [7, 7, 0, 0]
+        assert engine.health.restart_count == engine.metrics.protocol_error_count == 0
+    finally:
+        engine.stop()
+
+
+@pytest.mark.parametrize("invalid", [
+    {}, {"idle_screen": None},
+    {"idle_screen": IdleScreenState().to_record() | {"revision": True}},
+    {"idle_screen": IdleScreenState().to_record() | {"yeartext_revision": -1}},
+    {"idle_screen": IdleScreenState().to_record() | {"media_path": "https://invalid/video.mp4"}},
+    {"idle_screen": IdleScreenState().to_record(), "extra": 1},
+])
+def test_fake_sidecar_rejects_malformed_idle_wire_payload_without_losing_revision(invalid):
+    engine = _engine()
+    try:
+        engine.start(session_id="integration-session", deadline_ms=2000).result(3)
+        snapshot = _snapshot(document=_document().with_revision(9))
+        assert engine.hydrate(snapshot, request_id="initial", deadline_ms=1000).result(2).applied
+        # Exercise malformed wire records beyond the public typed API's own validation.
+        rejected = engine._request(
+            message_type="set_idle_screen", expected_message_type="ack", request_id="invalid-idle",
+            sequence=2, document_revision=9, deadline_ms=1000, payload=invalid,
+            converter=_ack_from_envelope,
+        ).result(2)
+        assert not rejected.applied
+        assert rejected.error_code == "invalid_idle_screen"
+        accepted = engine.set_idle_screen(
+            IdleScreenState(80, "idle.mp4", "annual.png", 7),
+            request_id="valid-idle", sequence=3, deadline_ms=1000,
+        ).result(2)
+        assert accepted.applied and accepted.document_revision == 9
+        assert engine.health.restart_count == engine.metrics.protocol_error_count == 0
+    finally:
+        engine.stop()
 
 
 def test_subprocess_camera_discovery_preserves_high_precision_fps() -> None:

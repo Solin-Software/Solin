@@ -6165,6 +6165,10 @@ Nykyinen järjestys ja tiedostot säilytetään. Edellisen synkronoinnin odottav
         <source>Scenes</source>
         <translation>Näkymät</translation>
     </message>
+    <message>
+        <source>Idle screen</source>
+        <translation>Valmiusnäyttö</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -7194,6 +7198,10 @@ Lisää sisältöä, kamera tai toinen näkymä.</translation>
         <location line="+8"/>
         <source>Open folder</source>
         <translation>Avaa kansio</translation>
+    </message>
+    <message>
+        <source>Idle screen</source>
+        <translation>Valmiusnäyttö</translation>
     </message>
 </context>
 <context>
@@ -11514,6 +11522,13 @@ Käytä toistopainiketta esittämiseen · Muuta järjestystä vetämällä kahva
 {path}</source>
         <translation type="vanished">Tallennettu kohteeseen:
 {path}</translation>
+    </message>
+</context>
+<context>
+    <name>_Scenes</name>
+    <message>
+        <source>Idle screen</source>
+        <translation>Valmiusnäyttö</translation>
     </message>
 </context>
 </TS>

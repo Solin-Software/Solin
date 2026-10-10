@@ -45,6 +45,7 @@ from solin.core.scenes.engine import (
     SourceHealthStatus,
     scene_engine_document_record,
 )
+from solin.core.scenes.idle import IdleScreenState
 from solin.core.scenes.media_control import (
     ContentSourceKind,
     MAXIMUM_MEDIA_PATH_LENGTH,
@@ -528,6 +529,7 @@ class SubprocessSceneEngine:
             return _failed_future(TypeError("Invalid scene engine snapshot"))
         payload: dict[str, object] = {
             "document": scene_engine_document_record(snapshot.document),
+            "idle_screen": snapshot.idle_screen.to_record(),
             "active_scenes": {
                 bus_id.value: scene_id for bus_id, scene_id in snapshot.active_scenes
             },
@@ -687,8 +689,18 @@ class SubprocessSceneEngine:
             payload={"cancelled_request_id": request_id},
         )
 
-    def reload_yeartext(self) -> None:
-        self._notify(message_type="reload_yeartext", payload={})
+    def set_idle_screen(
+        self, state: IdleScreenState, *, request_id: str, sequence: int,
+        deadline_ms: int,
+    ) -> Future[SceneEngineAck]:
+        if not isinstance(state, IdleScreenState):
+            return _failed_future(TypeError("Invalid idle screen state"))
+        return self._request(
+            message_type="set_idle_screen", expected_message_type="ack",
+            request_id=request_id, sequence=sequence,
+            document_revision=self._document_revision, deadline_ms=deadline_ms,
+            payload={"idle_screen": state.to_record()}, converter=_ack_from_envelope,
+        )
 
     def preview_layer_geometry(
         self,

@@ -5045,6 +5045,10 @@ The current organization and files will be preserved. Pending changes from the p
         <source>Scenes</source>
         <translation type="unfinished">Scenes</translation>
     </message>
+    <message>
+        <source>Idle screen</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -6072,6 +6076,10 @@ Add content, a camera, or another scene.</source>
     <message>
         <location line="+8"/>
         <source>Open folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Idle screen</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -10097,6 +10105,13 @@ Click an item to project it · Drag the grip ⠿ to reorder</source>
     <message>
         <location line="+1"/>
         <source>Watchtower Study {number}</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>_Scenes</name>
+    <message>
+        <source>Idle screen</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

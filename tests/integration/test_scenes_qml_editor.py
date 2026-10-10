@@ -36,6 +36,10 @@ from tests._qt import mouse_move, mouse_press, mouse_release, show_and_activate,
 
 class _Projection:
     state = {"type": "idle"}
+    idle_media_path = ""
+
+    def set_idle_media_path(self, path):
+        self.idle_media_path = path
 
     def subscribe(self, _listener):
         return lambda: None

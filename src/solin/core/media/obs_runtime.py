@@ -419,6 +419,58 @@ class ObsRuntime:
                 lib.obs_source_release_frame(source._ptr, frame)
         return False
 
+    def prime_initial_source_video(self, source: Any) -> bool:
+        """Upload the initial preload of a newly opened, inactive decoder.
+
+        Only call for a fresh source that has never played. Its dimensions stay
+        zero until libobs uploads the decoded preload; no previous texture can
+        satisfy this acknowledgement. This does not acknowledge seeks.
+        """
+        from pylibobs._ffi import get_lib
+
+        lib: Any = get_lib()
+        lib.obs_source_show_preloaded_video(source._ptr)
+        return source.width > 0 and source.height > 0
+
+    def retain_source_showing(self, source: Any):
+        """Keep a prepared decoder eligible for transport, independently of demand."""
+        from pylibobs._ffi import get_lib
+
+        lib: Any = get_lib()
+        lib.obs_source_inc_showing(source._ptr)
+        pointer = source._ptr
+
+        def release():
+            nonlocal pointer
+            if pointer is not None:
+                lib.obs_source_dec_showing(pointer)
+                pointer = None
+
+        return release
+
+    @staticmethod
+    def atomic_scene_update(scene: Any, update: Any) -> None:
+        """Publish scene mutations under the public native scene lock."""
+        from pylibobs._ffi import ffi, get_lib
+
+        errors: list[BaseException] = []
+
+        @ffi.callback("void(void *, obs_scene_t *)")
+        def apply(_data, _scene):
+            try:
+                update()
+            except BaseException as exc:  # noqa: BLE001 - re-raised after native callback
+                errors.append(exc)
+
+        lib: Any = get_lib()
+        atomic = ffi.cast(
+            "void(*)(obs_scene_t *, void(*)(void *, obs_scene_t *), void *)",
+            lib.obs_scene_atomic_update,
+        )
+        atomic(scene._ptr, apply, ffi.NULL)
+        if errors:
+            raise errors[0]
+
     def discard_selected_source_video(self, source: Any) -> None:
         """Release the tick's selected frame without clearing its async queue."""
         from pylibobs._ffi import ffi, get_lib
@@ -549,6 +601,66 @@ class ObsRuntime:
                 self._context = None
                 self._graphics_module_owner = None
                 self._release_owned_x11_display()
+
+    def active_source_tree_contains(self, source: Any, target: Any) -> bool:
+        """Inspect active children using borrowed pointers, without owning them.
+
+        pylibobs enumeration wraps children as owned Sources, whose release also
+        marks them removed. A read-only traversal must never remove a producer.
+        The native walker protects each borrowed child for the callback's lifetime.
+        Callers keep the root source alive throughout this synchronous traversal.
+        """
+        if source is None or target is None:
+            return False
+        from pylibobs._ffi import ffi, get_lib
+
+        root, wanted = source._ptr, target._ptr
+        if root == ffi.NULL or wanted == ffi.NULL:
+            return False
+        if root == wanted:
+            return True
+        return self._active_tree_contains(root, wanted, ffi, get_lib())
+
+    def transition_source_tree_contains(self, transition: Any, target: Any) -> bool:
+        """Inspect visible transition content, excluding completed audio origins.
+
+        An offscreen projection transition may retain A until its audio is mixed,
+        even after video reaches B. Before video completion both branches count;
+        afterwards the native active source is the destination. Its temporary
+        reference is released directly, without marking the source removed.
+        """
+        if transition is None or target is None:
+            return False
+        from pylibobs._ffi import ffi, get_lib
+
+        root, wanted = transition._ptr, target._ptr
+        if root == ffi.NULL or wanted == ffi.NULL:
+            return False
+        lib: Any = get_lib()
+        if lib.obs_transition_get_time(root) < 1.0:
+            return self._active_tree_contains(root, wanted, ffi, lib)
+        active = lib.obs_transition_get_active_source(root)
+        try:
+            return self._active_tree_contains(active, wanted, ffi, lib)
+        finally:
+            if active != ffi.NULL:
+                lib.obs_source_release(active)
+
+    @staticmethod
+    def _active_tree_contains(root: Any, wanted: Any, ffi: Any, lib: Any) -> bool:
+        if root == ffi.NULL or wanted == ffi.NULL:
+            return False
+        if root == wanted:
+            return True
+        found = False
+
+        @ffi.callback("void(obs_source_t *, obs_source_t *, void *)")
+        def inspect(_parent, child, _data):
+            nonlocal found
+            found = found or child == wanted
+
+        lib.obs_source_enum_active_tree(root, inspect, ffi.NULL)
+        return found
 
     # ── Linux X display sharing ───────────────────────────────────────────
 

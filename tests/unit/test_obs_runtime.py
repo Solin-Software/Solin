@@ -9,6 +9,105 @@ import pytest
 from solin.core.media import obs_runtime
 
 
+@pytest.mark.parametrize("matching", [False, True])
+def test_active_tree_inspection_borrows_children_without_removing_sources(monkeypatch, matching):
+    root, wanted, other = object(), object(), object()
+    visits = []
+
+    def inspect(pointer, callback, data):
+        assert pointer is root
+        for child in (other, wanted if matching else other, None):
+            visits.append(child)
+            callback(root, child, data)
+
+    # Expose only the borrowed traversal. An owning reference or removal would
+    # fail this boundary instead of silently blanking the live composition.
+    monkeypatch.setitem(sys.modules, "pylibobs._ffi", SimpleNamespace(
+        ffi=SimpleNamespace(NULL=None, callback=lambda _signature: lambda function: function),
+        get_lib=lambda: SimpleNamespace(obs_source_enum_active_tree=inspect),
+    ))
+    runtime = obs_runtime.ObsRuntime()
+    assert runtime.active_source_tree_contains(
+        SimpleNamespace(_ptr=root), SimpleNamespace(_ptr=wanted),
+    ) is matching
+    assert len(visits) == 3
+
+
+def test_active_tree_null_roots_do_not_enter_native_traversal(monkeypatch):
+    monkeypatch.setitem(sys.modules, "pylibobs._ffi", SimpleNamespace(
+        ffi=SimpleNamespace(NULL=None),
+        get_lib=lambda: pytest.fail("No native traversal for a null root"),
+    ))
+    runtime = obs_runtime.ObsRuntime()
+    assert not runtime.active_source_tree_contains(None, object())
+    assert not runtime.active_source_tree_contains(SimpleNamespace(_ptr=None), SimpleNamespace(_ptr=1))
+    source = SimpleNamespace(_ptr=object())
+    assert runtime.active_source_tree_contains(source, source)
+
+
+@pytest.mark.parametrize("progress", [0.0, 0.5, 1.0])
+@pytest.mark.parametrize("destination_contains_target", [False, True])
+def test_transition_demand_excludes_retained_origin_only_after_video_completes(
+    monkeypatch, progress, destination_contains_target,
+):
+    root, wanted, destination = object(), object(), object()
+    released, visited = [], []
+
+    def inspect(pointer, callback, data):
+        visited.append(pointer)
+        # OBS still enumerates the origin at 1.0 when projection audio is not
+        # consumed. Only the destination contributes to completed video.
+        children = (wanted, destination) if pointer is root else (
+            (wanted,) if destination_contains_target else ()
+        )
+        for child in children:
+            callback(pointer, child, data)
+
+    monkeypatch.setitem(sys.modules, "pylibobs._ffi", SimpleNamespace(
+        ffi=SimpleNamespace(NULL=None, callback=lambda _signature: lambda function: function),
+        get_lib=lambda: SimpleNamespace(
+            obs_transition_get_time=lambda _pointer: progress,
+            obs_transition_get_active_source=lambda _pointer: destination,
+            obs_source_enum_active_tree=inspect,
+            obs_source_release=released.append,
+        ),
+    ))
+    runtime = obs_runtime.ObsRuntime()
+    assert runtime.transition_source_tree_contains(
+        SimpleNamespace(_ptr=root), SimpleNamespace(_ptr=wanted),
+    ) is (progress < 1.0 or destination_contains_target)
+    assert visited == [root if progress < 1.0 else destination]
+    assert released == ([] if progress < 1.0 else [destination])
+
+
+@pytest.mark.parametrize("destination", [None, "idle", "scene"])
+def test_completed_transition_releases_temporary_reference_without_removing_source(
+    monkeypatch, destination,
+):
+    releases = []
+
+    def fail_traversal(*_args):
+        raise RuntimeError("traversal failed")
+
+    monkeypatch.setitem(sys.modules, "pylibobs._ffi", SimpleNamespace(
+        ffi=SimpleNamespace(NULL=None, callback=lambda _signature: lambda function: function),
+        get_lib=lambda: SimpleNamespace(
+            obs_transition_get_time=lambda _pointer: 1.0,
+            obs_transition_get_active_source=lambda _pointer: destination,
+            obs_source_release=releases.append,
+            obs_source_enum_active_tree=fail_traversal,
+        ),
+    ))
+    runtime = obs_runtime.ObsRuntime()
+    transition, target = SimpleNamespace(_ptr="transition"), SimpleNamespace(_ptr="idle")
+    if destination == "scene":
+        with pytest.raises(RuntimeError, match="traversal failed"):
+            runtime.transition_source_tree_contains(transition, target)
+    else:
+        assert runtime.transition_source_tree_contains(transition, target) is (destination == "idle")
+    assert releases == ([] if destination is None else [destination])
+
+
 @pytest.mark.parametrize("failure", [None, "upload", "show"])
 @pytest.mark.parametrize("timestamp", [0, 123])
 def test_native_frame_priming_releases_the_frame_after_upload(monkeypatch, failure, timestamp):
@@ -98,6 +197,39 @@ def test_native_probe_without_a_new_frame_rejects_cached_dimensions_after_invali
         ffi=SimpleNamespace(NULL=None, cast=lambda _, function: function), get_lib=lambda: lib,
     ))
     assert not obs_runtime.ObsRuntime().prime_source_video(source)
+
+
+def test_initial_preload_waits_for_upload_before_acknowledging_fresh_inactive_source(monkeypatch):
+    source = SimpleNamespace(_ptr=object(), width=0, height=0)
+    uploads = []
+
+    def show(pointer):
+        uploads.append(pointer)
+        if len(uploads) == 2:
+            source.width, source.height = 160, 90
+
+    monkeypatch.setitem(sys.modules, "pylibobs._ffi", SimpleNamespace(
+        get_lib=lambda: SimpleNamespace(obs_source_show_preloaded_video=show),
+    ))
+    runtime = obs_runtime.ObsRuntime()
+    assert not runtime.prime_initial_source_video(source)
+    assert runtime.prime_initial_source_video(source)
+    assert uploads == [source._ptr, source._ptr]
+
+
+def test_prepared_decoder_showing_reference_is_balanced_and_released_only_once(monkeypatch):
+    events = []
+    source = SimpleNamespace(_ptr=object())
+    lib = SimpleNamespace(
+        obs_source_inc_showing=lambda pointer: events.append(("retain", pointer)),
+        obs_source_dec_showing=lambda pointer: events.append(("release", pointer)),
+    )
+    monkeypatch.setitem(sys.modules, "pylibobs._ffi", SimpleNamespace(get_lib=lambda: lib))
+    release = obs_runtime.ObsRuntime().retain_source_showing(source)
+    assert events == [("retain", source._ptr)]
+    release()
+    release()
+    assert events == [("retain", source._ptr), ("release", source._ptr)]
 
 
 @pytest.mark.parametrize("audio_failure", [False, True])

@@ -79,6 +79,10 @@ _SOURCE_CODES: Final = frozenset(
         "source_not_implemented",
         "source_unavailable",
         "renderer_preparation_failed",
+        "idle_media_unavailable",
+        "idle_media_invalid",
+        "idle_source_unavailable",
+        "invalid_idle_screen",
     }
 )
 _RESOURCE_CODES: Final = frozenset({"media_resource_budget_exceeded"})

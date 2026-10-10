@@ -119,7 +119,6 @@ from .core.projection.application import (
     projection_presentation_type,
 )
 from .core.scenes.engine import MAXIMUM_OUTPUT_WINDOW_TARGETS, OutputWindowTarget
-from .core.scenes.model import DELIVERY_BUSES
 from .core.scenes.model import BusId, CONTENT_SOURCE_ID, SceneDocument
 from .core.scenes.recording import ProgramRecordingState, ProgramRecordingStatus
 from .core.scenes.workspace import SceneWorkspaceService
@@ -139,6 +138,7 @@ from .core.media.destinations import MediaDestinationAsset, MediaDestinationRequ
 from .core.playlists.items import create_playlist_item
 from .core.rendering.fonts import FontManager
 from .ui.notifications import NotificationCenter
+from .ui.scene_engine_status import scene_engine_error_summary
 from .ui.screens import ScreenManager
 from .styles.theme import activate_theme, app_stylesheet, apply_application_palette
 from .core.foundation.runtime_paths import ProfilePaths, RuntimePaths
@@ -389,7 +389,10 @@ class MainWindow(QWidget):
             media_epoch_sink=self._content_frame_ingress.begin_presentation,
             image_transform_sink=self._content_frame_ingress.set_image_transform,
             # Lazy: scene_runtime is constructed just after this controller.
-            yeartext_reloaded=lambda: self.scene_runtime.reload_yeartext(),
+            yeartext_image_path=str(profile_paths.images_dir / "__solin_yeartext__.png"),
+            yeartext_reloaded=lambda path, revision: self.scene_runtime.set_yeartext_image(
+                path, revision
+            ),
             width=program_output.video_format.width,
             height=program_output.video_format.height,
             parent=self,
@@ -457,8 +460,7 @@ class MainWindow(QWidget):
                 ),
                 sync_obs_scene=lambda active: self._projection_integrations.sync_obs_scene(active),
                 yearly_text=self._current_yearly_projection_text,
-                content_frame_sink=self._program_content.submit_idle_frame,
-                refresh_program_content=self._program_content.refresh,
+                request_idle_media=self.scene_runtime.request_idle_media,
                 set_projection_screen_count=(lambda count: self.proj_bar.set_screen_count(count)),
                 set_toolbar_screen_count=(
                     lambda count: self._quick_toolbar.set_screen_count(count)
@@ -469,9 +471,11 @@ class MainWindow(QWidget):
                 timer_output=lambda: getattr(self, "timer_output", None),
                 timer_bridge=lambda: getattr(self, "timer_bridge", None),
                 program_mirror_enabled=self._program_mirror_enabled,
-                program_content_requested=self._program_content_requested,
                 native_outputs_changed=self._reconcile_native_scene_surfaces,
             )
+        )
+        self.scene_runtime.idle_media_applied.connect(
+            self._projection_targets.on_idle_media_applied
         )
         self._media_mirror_was_enabled = self._program_mirror_enabled()
         self._native_fallback_mirror_required = False
@@ -550,6 +554,7 @@ class MainWindow(QWidget):
         )
 
         self.notifications = NotificationCenter(self)
+        self.scene_runtime.idle_media_failed.connect(self._on_idle_media_failed)
         self._last_program_recording_status = ProgramRecordingStatus.IDLE
         self._program_recording.state_changed.connect(
             self._on_program_recording_state_changed
@@ -1249,10 +1254,9 @@ class MainWindow(QWidget):
             "obs_stream",
             "camera_stream",
         }
-        # The projection windows render the composited main mix (the program). The
-        # program's idle scene is the Default scene (which shows the Year text), so
-        # at idle the projection shows the year text with no special-casing here;
-        # media presentations transition the program to the Content scene as usual.
+        # Native windows follow their scene routes. The initial Default scene
+        # contains the shared idle screen; custom defaults and manual selections
+        # continue to determine the composition without presentation special cases.
         native_window_routing_ready = (
             _native_scene_routing_supported()
             and self.scene_runtime.native_window_routing_ready
@@ -1355,6 +1359,13 @@ class MainWindow(QWidget):
         self._native_window_output_suppressed = True
         self._reconcile_native_scene_surfaces()
 
+    def _on_idle_media_failed(self, error_code: str) -> None:
+        self.notifications.error(
+            scene_engine_error_summary(error_code),
+            title=self.tr("Scenes"),
+            dedupe_key="idle-screen-media-failed",
+        )
+
     def _on_scene_transition_fallback(self, message: str) -> None:
         self.notifications.warning(
             message,
@@ -1445,10 +1456,6 @@ class MainWindow(QWidget):
     @property
     def scene_live(self):
         return self.scene_workspace.runtime
-
-    def _program_content_requested(self) -> bool:
-        state = self.scene_live.state
-        return any(state.output(bus_id).enabled for bus_id in DELIVERY_BUSES)
 
     def _on_content_ingress_demand_changed(self, required: bool) -> None:
         self._content_frame_ingress.set_enabled(required)

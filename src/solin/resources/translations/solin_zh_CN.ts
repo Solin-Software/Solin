@@ -6133,6 +6133,10 @@ The current organization and files will be preserved. Pending changes from the p
         <source>Scenes</source>
         <translation>场景</translation>
     </message>
+    <message>
+        <source>Idle screen</source>
+        <translation>空闲屏幕</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -7162,6 +7166,10 @@ Add content, a camera, or another scene.</source>
         <location line="+8"/>
         <source>Open folder</source>
         <translation>打开文件夹</translation>
+    </message>
+    <message>
+        <source>Idle screen</source>
+        <translation>空闲屏幕</translation>
     </message>
 </context>
 <context>
@@ -11471,6 +11479,13 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
 {path}</source>
         <translation type="vanished">已保存到：
 {path}</translation>
+    </message>
+</context>
+<context>
+    <name>_Scenes</name>
+    <message>
+        <source>Idle screen</source>
+        <translation>空闲屏幕</translation>
     </message>
 </context>
 </TS>

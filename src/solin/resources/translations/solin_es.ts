@@ -6165,6 +6165,10 @@ Se conservarán la organización actual y los archivos. No se aplicarán los cam
         <source>Scenes</source>
         <translation>Escenas</translation>
     </message>
+    <message>
+        <source>Idle screen</source>
+        <translation>Pantalla inactiva</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -7194,6 +7198,10 @@ Añada contenido, una cámara u otra escena.</translation>
         <location line="+8"/>
         <source>Open folder</source>
         <translation>Abrir carpeta</translation>
+    </message>
+    <message>
+        <source>Idle screen</source>
+        <translation>Pantalla inactiva</translation>
     </message>
 </context>
 <context>
@@ -11514,6 +11522,13 @@ Use el botón de reproducción para proyectar · Arrastre el control ⠿ para re
 {path}</source>
         <translation type="vanished">Guardado en:
 {path}</translation>
+    </message>
+</context>
+<context>
+    <name>_Scenes</name>
+    <message>
+        <source>Idle screen</source>
+        <translation>Pantalla inactiva</translation>
     </message>
 </context>
 </TS>

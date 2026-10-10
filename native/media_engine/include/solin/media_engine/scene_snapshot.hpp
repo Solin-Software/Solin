@@ -26,6 +26,7 @@ enum class SceneSourceKind : std::uint8_t {
     image,
     color,
     scene_reference,
+    idle_screen,
 };
 
 struct FrameChannelConfiguration {

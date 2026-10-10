@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import pytest
+
+from solin.controllers import program_content_controller as program_module
+
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QImage
 from PySide6.QtWidgets import QApplication
@@ -49,92 +53,6 @@ def test_program_content_publishes_idle_and_timer_surfaces() -> None:
         }
     )
     assert len(frames) >= 2
-    controller.close()
-
-
-def test_program_content_accepts_custom_idle_frames_only_while_idle() -> None:
-    session = ProjectionSession()
-    frames: list[object] = []
-    controller = ProgramContentController(
-        session,
-        _FontManager(),
-        frames.append,
-        lambda: ("", "", ""),
-        media_epoch_sink=lambda _epoch: None,
-        width=320,
-        height=180,
-    )
-    custom_idle = QImage(16, 9, QImage.Format.Format_ARGB32)
-
-    controller.submit_idle_frame(custom_idle)
-    assert custom_idle not in frames
-
-    session.set_idle_media_path("configured-idle.mp4")
-    controller.submit_idle_frame(custom_idle)
-    assert frames[-1] is custom_idle
-
-    session.set_state({"type": "image"})
-    before = len(frames)
-    controller.submit_idle_frame(custom_idle)
-    assert len(frames) == before
-    controller.close()
-
-
-def test_program_content_replays_static_idle_after_active_media_ends() -> None:
-    session = ProjectionSession()
-    events: list[tuple[str, int, object | None]] = []
-    controller = ProgramContentController(
-        session,
-        _FontManager(),
-        lambda frame: events.append(("frame", session.session_id, frame)),
-        lambda: ("", "", ""),
-        media_epoch_sink=lambda epoch: events.append(("epoch", epoch, None)),
-        width=320,
-        height=180,
-    )
-    active_frame = object()
-    custom_idle = QImage(16, 9, QImage.Format.Format_ARGB32)
-
-    session.set_state({"type": "image"})
-    session.set_idle_media_path("configured-idle.png")
-    controller.submit_idle_frame(custom_idle)
-    controller.submit_frame(active_frame)
-
-    assert events[-1] == ("frame", 1, active_frame)
-
-    session.reset_state()
-
-    assert events[-2] == ("epoch", 2, None)
-    assert events[-1][0:2] == ("frame", 2)
-    assert events[-1][2] is custom_idle
-    controller.close()
-
-
-def test_program_content_does_not_replay_idle_from_a_replaced_path() -> None:
-    session = ProjectionSession()
-    frames: list[object] = []
-    controller = ProgramContentController(
-        session,
-        _FontManager(),
-        frames.append,
-        lambda: ("", "", ""),
-        media_epoch_sink=lambda _epoch: None,
-        width=320,
-        height=180,
-    )
-    active_frame = object()
-    replaced_idle = QImage(16, 9, QImage.Format.Format_ARGB32)
-
-    session.set_state({"type": "video"})
-    session.set_idle_media_path("first-idle.png")
-    controller.submit_idle_frame(replaced_idle)
-    controller.submit_frame(active_frame)
-    session.set_idle_media_path("replacement-idle.png")
-    controller.refresh()
-
-    session.reset_state()
-
-    assert frames[-1] is active_frame
     controller.close()
 
 
@@ -238,9 +156,7 @@ def test_program_content_retargets_the_active_image_without_relabeling_media() -
         lambda _frame: None,
         lambda: ("", "", ""),
         media_epoch_sink=epochs.append,
-        image_transform_sink=lambda transform, **options: transforms.append(
-            (transform, options)
-        ),
+        image_transform_sink=lambda transform, **options: transforms.append((transform, options)),
         width=320,
         height=180,
     )
@@ -282,9 +198,7 @@ def test_program_content_keeps_retained_image_framing_stable_on_refresh() -> Non
         lambda _frame: None,
         lambda: ("", "", ""),
         media_epoch_sink=lambda _epoch: None,
-        image_transform_sink=lambda transform, **options: transforms.append(
-            (transform, options)
-        ),
+        image_transform_sink=lambda transform, **options: transforms.append((transform, options)),
         width=320,
         height=180,
     )
@@ -315,9 +229,7 @@ def test_program_content_does_not_republish_static_video_controls_per_frame() ->
         frames.append,
         lambda: ("", "", ""),
         media_epoch_sink=epochs.append,
-        image_transform_sink=lambda transform, **options: transforms.append(
-            (transform, options)
-        ),
+        image_transform_sink=lambda transform, **options: transforms.append((transform, options)),
         width=320,
         height=180,
     )
@@ -366,28 +278,6 @@ def test_program_content_keeps_the_idle_epoch_during_audio_only_playback() -> No
     controller.close()
 
 
-def test_program_content_accepts_idle_video_frames_during_audio_only_playback() -> None:
-    session = ProjectionSession()
-    frames: list[object] = []
-    controller = ProgramContentController(
-        session,
-        _FontManager(),
-        frames.append,
-        lambda: ("", "", ""),
-        media_epoch_sink=lambda _epoch: None,
-        width=320,
-        height=180,
-    )
-    session.set_idle_media_path("configured-idle.mp4")
-    session.set_state({"type": "video", "is_audio": True, "title": "Song"})
-    idle_frame = object()
-
-    controller.submit_idle_frame(idle_frame)
-
-    assert frames[-1] is idle_frame
-    controller.close()
-
-
 def test_program_content_publishes_idle_once_when_audio_replaces_visual_media() -> None:
     session = ProjectionSession()
     epochs: list[int] = []
@@ -431,9 +321,7 @@ def test_idle_publishes_a_transparent_frame_not_the_year_text() -> None:
     published = frames[-1]
     assert published.size().width() == 64
     assert all(
-        published.pixelColor(x, y).alpha() == 0
-        for x in range(0, 64, 8)
-        for y in range(0, 36, 6)
+        published.pixelColor(x, y).alpha() == 0 for x in range(0, 64, 8) for y in range(0, 36, 6)
     ), "the content source must composite away entirely while idle"
     controller.close()
 
@@ -463,3 +351,196 @@ def test_idle_blanks_the_content_channel_only_once_per_presentation() -> None:
     session.reset_state()
     assert len(frames) > blanks_after_idle + 1
     controller.close()
+
+
+@pytest.mark.parametrize("idle_path", ["", "idle.png", "idle.mp4"])
+@pytest.mark.parametrize("audio_only", [False, True])
+def test_idle_content_is_transparent_regardless_of_the_shared_source(idle_path, audio_only):
+    session = ProjectionSession()
+    frames = []
+    controller = ProgramContentController(
+        session,
+        _FontManager(),
+        frames.append,
+        lambda: ("Quote", "Reference", "E"),
+        media_epoch_sink=lambda _epoch: None,
+        width=64,
+        height=36,
+    )
+    try:
+        session.set_state({"type": "image", "data": b"image"})
+        controller.submit_frame(object())
+        session.set_idle_media_path(idle_path)
+        if audio_only:
+            session.set_state({"type": "video", "is_audio": True})
+        else:
+            session.reset_state()
+        assert isinstance(frames[-1], QImage)
+        assert frames[-1].pixelColor(32, 18).alpha() == 0
+        count = len(frames)
+        session.set_idle_media_path("replacement.mp4")
+        controller.refresh()
+        assert len(frames) == count
+    finally:
+        controller.close()
+
+
+def test_idle_change_during_active_image_preserves_content_and_epoch():
+    session = ProjectionSession()
+    frames, epochs = [], []
+    controller = ProgramContentController(
+        session,
+        _FontManager(),
+        frames.append,
+        lambda: ("", "", ""),
+        media_epoch_sink=epochs.append,
+        width=64,
+        height=36,
+    )
+    try:
+        session.set_state({"type": "image", "data": b"image"})
+        frame = object()
+        controller.submit_frame(frame)
+        count, epoch = len(frames), session.presentation_session_id
+        session.set_idle_media_path("idle.mp4")
+        assert frames == [frame]
+        assert len(frames) == count
+        assert epochs == [epoch]
+    finally:
+        controller.close()
+
+
+def test_yeartext_renderer_announces_only_committed_explicit_path(tmp_path, monkeypatch):
+    path = tmp_path / "yeartext.png"
+    unused = tmp_path / "unused.png"
+    monkeypatch.setenv("SOLIN_YEARTEXT_IMAGE", str(unused))
+    events = []
+    controller = ProgramContentController(
+        ProjectionSession(),
+        _FontManager(),
+        lambda _frame: None,
+        lambda: ("Quote", "Reference", "E"),
+        media_epoch_sink=lambda _epoch: None,
+        width=64,
+        height=36,
+        yeartext_image_path=str(path),
+        yeartext_reloaded=lambda actual_path, revision: events.append(
+            (actual_path, revision, QImage(actual_path).isNull())
+        ),
+    )
+    try:
+        controller.render_yeartext_source_image()
+        controller.update_yearly_text("Quote", "Reference", "E")
+        assert events == [(str(path), 1, False), (str(path), 2, False)]
+        assert not unused.exists()
+    finally:
+        controller.close()
+    controller.render_yeartext_source_image()
+    assert len(events) == 2
+
+
+@pytest.mark.parametrize("failure", ["open", "encode", "commit"])
+def test_failed_yeartext_write_retains_file_and_revision(tmp_path, monkeypatch, failure):
+    path = tmp_path / "yeartext.png"
+    original = b"previous committed image"
+    path.write_bytes(original)
+    events = []
+    controller = ProgramContentController(
+        ProjectionSession(),
+        _FontManager(),
+        lambda _frame: None,
+        lambda: ("Quote", "Reference", "E"),
+        media_epoch_sink=lambda _epoch: None,
+        width=64,
+        height=36,
+        yeartext_image_path=str(path),
+        yeartext_reloaded=lambda *args: events.append(args),
+    )
+    try:
+        with monkeypatch.context() as patch:
+            if failure == "encode":
+                patch.setattr(program_module.QImageWriter, "write", lambda *_args: False)
+            elif failure == "open":
+                patch.setattr(program_module.QSaveFile, "open", lambda *_args: False)
+            else:
+
+                def fail_commit(output):
+                    output.cancelWriting()
+                    return False
+
+                patch.setattr(program_module.QSaveFile, "commit", fail_commit)
+            controller.render_yeartext_source_image()
+            assert path.read_bytes() == original
+            assert events == []
+        controller.render_yeartext_source_image()
+        assert events == [(str(path), 1)]
+    finally:
+        controller.close()
+
+
+def test_yeartext_update_preserves_active_yearly_countdown(tmp_path):
+    session = ProjectionSession()
+    frames = []
+    quote = ["Original"]
+    controller = ProgramContentController(
+        session,
+        _FontManager(),
+        frames.append,
+        lambda: (quote[0], "Reference", "E"),
+        media_epoch_sink=lambda _epoch: None,
+        width=64,
+        height=36,
+        yeartext_image_path=str(tmp_path / "yeartext.png"),
+    )
+    try:
+        session.set_state(
+            {
+                "type": "timer",
+                "remaining": 30,
+                "total": 60,
+                "presentation": MediaCountdownPresentation.YEARLY_TEXT.value,
+            }
+        )
+        before = len(frames)
+        quote[0] = "Updated"
+        controller.update_yearly_text("Updated", "Reference", "E")
+        assert len(frames) == before + 1
+        assert session.state["remaining"] == 30
+        assert session.state["presentation"] == MediaCountdownPresentation.YEARLY_TEXT.value
+    finally:
+        controller.close()
+
+
+def test_initial_yeartext_render_waits_for_settings_and_publishes_revision(tmp_path, monkeypatch):
+    pending, rendered = [], []
+    monkeypatch.setattr(
+        program_module.QTimer, "singleShot", lambda _ms, callback: pending.append(callback)
+    )
+    settings_ready = False
+
+    def yearly_text():
+        assert settings_ready, "startup must not read settings during construction"
+        return "Quote", "Reference", "E"
+
+    path = tmp_path / "yeartext.png"
+    controller = ProgramContentController(
+        ProjectionSession(),
+        _FontManager(),
+        lambda _frame: None,
+        yearly_text,
+        media_epoch_sink=lambda _epoch: None,
+        width=64,
+        height=36,
+        yeartext_image_path=str(path),
+        yeartext_reloaded=lambda *args: rendered.append(args),
+    )
+    try:
+        assert not path.exists()
+        assert rendered == []
+        settings_ready = True
+        for callback in pending:
+            callback()
+        assert rendered == [(str(path), 1)]
+        assert not QImage(str(path)).isNull()
+    finally:
+        controller.close()

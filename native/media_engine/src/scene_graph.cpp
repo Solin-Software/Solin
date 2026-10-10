@@ -172,6 +172,10 @@ class SceneCompiler final {
                         compiled_layer.referenced_scene->active_leaf_source_ids.end());
                 }
             } else if (visible_source_layer(layer, source->second)) {
+                if (source->second.kind == SceneSourceKind::idle_screen) {
+                    throw SceneGraphError{"source_not_implemented",
+                                          "Idle screen sources require the libobs backend"};
+                }
                 active_sources.insert(layer.source_id);
             }
             graph->layers.push_back(std::move(compiled_layer));

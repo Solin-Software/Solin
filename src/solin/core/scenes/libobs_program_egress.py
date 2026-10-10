@@ -47,6 +47,11 @@ class LibobsProgramEgress:
         self._callback: Any = None
         self._ready_notified = False
 
+    @property
+    def active(self) -> bool:
+        """Whether a live readback consumer is attached, without native locking."""
+        return self._writer is not None
+
     def configure(self, descriptor: object) -> None:
         """Attach (or detach) the mirror to the app's program egress block."""
         if not isinstance(descriptor, dict) or descriptor.get("transport") != SHARED_MEMORY_BGRA:

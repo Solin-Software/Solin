@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import logging
-import os
 from collections.abc import Callable, Mapping
 from typing import Any, Protocol
 
-from PySide6.QtCore import QObject, QDateTime, Qt, QTimer, Slot
-from PySide6.QtGui import QColor, QImage
+from PySide6.QtCore import QObject, QDateTime, QIODevice, QSaveFile, Qt, QTimer, Slot
+from PySide6.QtGui import QColor, QImage, QImageWriter
 from PySide6.QtWidgets import QWidget
 
 from solin.core.timer.models import MediaCountdownPresentation
@@ -38,16 +37,13 @@ class _ProjectionSession(Protocol):
     def presentation_session_id(self) -> int: ...
 
     @property
-    def idle_media_path(self) -> str: ...
-
-    @property
     def image_transform_animate(self) -> bool: ...
 
     def subscribe(self, listener: Callable[[], None]) -> Callable[[], None]: ...
 
 
 class ProgramContentController(QObject):
-    """Render every Solin projection mode into one canonical program source."""
+    """Render application content and the fallback PNG for the shared idle source."""
 
     def __init__(
         self,
@@ -58,7 +54,8 @@ class ProgramContentController(QObject):
         *,
         media_epoch_sink: Callable[[int], None],
         image_transform_sink: Callable[..., None] = _discard_image_transform,
-        yeartext_reloaded: Callable[[], None] = lambda: None,
+        yeartext_image_path: str = "",
+        yeartext_reloaded: Callable[[str, int], None] = lambda _path, _revision: None,
         width: int,
         height: int,
         parent: QObject | None = None,
@@ -70,6 +67,8 @@ class ProgramContentController(QObject):
         self._frame_sink = frame_sink
         self._media_epoch_sink = media_epoch_sink
         self._image_transform_sink = image_transform_sink
+        self._yeartext_image_path = yeartext_image_path
+        self._yeartext_image_revision = 0
         self._yeartext_reloaded = yeartext_reloaded
         self._yearly_text = yearly_text
         self._width = width
@@ -77,10 +76,6 @@ class ProgramContentController(QObject):
         self._closed = False
         self._published_presentation_session_id = -1
         self._published_image_transform_key: tuple[object, ...] | None = None
-        self._cached_idle_frame: object | None = None
-        self._cached_idle_media_path = ""
-        self._cached_idle_frame_revision = 0
-        self._published_idle_frame_key: tuple[int, str, int] | None = None
         self._blanked_media_epoch = -1
         self._yearly_widget = YearlyTextWidget(font_manager)
         self._timer_widget = CircularTimerWidget()
@@ -107,24 +102,11 @@ class ProgramContentController(QObject):
         self._blanked_media_epoch = -1
         self._frame_sink(frame)
 
-    @Slot(object)
-    def submit_idle_frame(self, frame: object) -> None:
-        if self._closed:
-            return
-        idle_media_path = self._session.idle_media_path
-        if not idle_media_path:
-            return
-        self._cached_idle_frame = frame
-        self._cached_idle_media_path = idle_media_path
-        self._cached_idle_frame_revision += 1
-        self._publish_cached_idle_frame()
-
     @Slot(str, str, str)
     def update_yearly_text(self, _quote: str, _reference: str, _api_code: str) -> None:
-        # Refresh the standalone year-text source image (shown by the Default scene)
-        # and ask the engine to re-read it in place, so the change shows live.
         self.render_yeartext_source_image()
-        self._yeartext_reloaded()
+        if self._session.state.get("presentation") == MediaCountdownPresentation.YEARLY_TEXT.value:
+            self.refresh()
 
     @Slot(bool)
     def set_timer_blink(self, enabled: bool) -> None:
@@ -138,7 +120,6 @@ class ProgramContentController(QObject):
     def refresh(self) -> None:
         if self._closed:
             return
-        self._discard_stale_idle_frame()
         state = self._session.state
         state_type = projection_presentation_type(state)
         if state_type == "image":
@@ -152,10 +133,7 @@ class ProgramContentController(QObject):
                 )
             return
         if state_type == "idle":
-            if self._session.idle_media_path:
-                self._publish_cached_idle_frame()
-            else:
-                self._blank_content()
+            self._blank_content()
             return
         if state_type == "timer":
             self._render_timer(state)
@@ -165,9 +143,6 @@ class ProgramContentController(QObject):
             return
         self._closed = True
         self._unsubscribe()
-        self._cached_idle_frame = None
-        self._cached_idle_media_path = ""
-        self._published_idle_frame_key = None
         self._yearly_widget.close()
         self._timer_widget.close()
 
@@ -185,32 +160,6 @@ class ProgramContentController(QObject):
             return
         self._media_epoch_sink(media_epoch)
         self._published_presentation_session_id = media_epoch
-
-    def _discard_stale_idle_frame(self) -> None:
-        if self._cached_idle_media_path == self._session.idle_media_path:
-            return
-        self._cached_idle_frame = None
-        self._cached_idle_media_path = ""
-        self._published_idle_frame_key = None
-
-    def _publish_cached_idle_frame(self) -> None:
-        idle_media_path = self._session.idle_media_path
-        if (
-            projection_presentation_type(self._session.state) != "idle"
-            or not idle_media_path
-            or self._cached_idle_frame is None
-            or self._cached_idle_media_path != idle_media_path
-        ):
-            return
-        key = (
-            self._session.presentation_session_id,
-            idle_media_path,
-            self._cached_idle_frame_revision,
-        )
-        if key == self._published_idle_frame_key:
-            return
-        self.submit_frame(self._cached_idle_frame)
-        self._published_idle_frame_key = key
 
     def _publish_image_transform(
         self,
@@ -244,9 +193,8 @@ class ProgramContentController(QObject):
         """Publish an empty frame: idle means the content source has nothing to show.
 
         The content source carries what Solin is *presenting* — media, images,
-        timers, the browser. Idle is not content: the year text is its own scene
-        source, so drawing it here too would make every content-bearing scene show
-        the year text and leave no way to tell "waiting for media" from "playing".
+        timers, the browser. Idle belongs to a separate shared scene source,
+        regardless of whether it shows year text, an image, or a video.
         Transparent rather than black so the source composites away entirely.
         """
         if self._blanked_media_epoch == self._session.presentation_session_id:
@@ -257,19 +205,14 @@ class ProgramContentController(QObject):
         self._blanked_media_epoch = self._session.presentation_session_id
 
     def render_yeartext_source_image(self) -> None:
-        """Render the styled year text to the "Year text" scene source's PNG.
+        """Atomically render the fallback PNG and notify its committed revision.
 
-        The libobs sidecar shows this file (``SOLIN_YEARTEXT_IMAGE``) as the year-
-        text image source. Rendered transparently so it composites as a layer, and
-        written atomically. A no-op when the engine did not export a path (e.g. the
-        native engine) or the year text is not ready yet. Runtime changes update the
-        file; the sidecar picks them up on the next hydrate/restart.
+        An empty injected path disables file rendering. Failed encoding or writes
+        preserve the previous file and never announce a new engine revision.
         """
-        if self._closed:
+        if self._closed or not self._yeartext_image_path:
             return
-        path = os.environ.get("SOLIN_YEARTEXT_IMAGE")
-        if not path:
-            return
+        path = self._yeartext_image_path
         try:
             quote, reference, api_code = self._yearly_text()
         except Exception:  # noqa: BLE001 - settings may still be loading
@@ -281,14 +224,20 @@ class ProgramContentController(QObject):
         image.fill(Qt.GlobalColor.transparent)
         self._yearly_widget.ensurePolished()
         self._yearly_widget.render(image)
-        temporary = f"{path}.tmp"
-        try:
-            if image.save(temporary, "PNG"):
-                os.replace(temporary, path)
-            else:
-                log.warning("Could not encode the year-text source image")
-        except OSError:
-            log.warning("Could not write the year-text source image", exc_info=True)
+        output = QSaveFile(path)
+        if not output.open(QIODevice.OpenModeFlag.WriteOnly):
+            log.warning("Could not open the year-text source image: %s", output.errorString())
+            return
+        writer = QImageWriter(output, b"PNG")
+        if not writer.write(image):
+            output.cancelWriting()
+            log.warning("Could not encode the year-text source image: %s", writer.errorString())
+            return
+        if not output.commit():
+            log.warning("Could not write the year-text source image: %s", output.errorString())
+            return
+        self._yeartext_image_revision += 1
+        self._yeartext_reloaded(path, self._yeartext_image_revision)
 
     def _render_timer(self, state: Mapping[str, Any]) -> None:
         remaining = state.get("remaining")

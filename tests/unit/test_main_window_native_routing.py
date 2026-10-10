@@ -396,3 +396,31 @@ def test_recording_failure_only_claims_a_partial_file_when_one_exists(
             f"{output_path.with_suffix('.mp4.part')}"
         ),
     ]
+
+
+
+@pytest.mark.parametrize("error_code", ["idle_media_invalid", "idle_media_unavailable", "engine_not_ready"])
+def test_idle_media_failure_notifies_without_loading_scenes(monkeypatch, error_code):
+    summaries, notifications = [], []
+
+    def translated_summary(code):
+        summaries.append(code)
+        return "Translated scene error"
+
+    monkeypatch.setattr(main_window, "scene_engine_error_summary", translated_summary)
+    host = SimpleNamespace(
+        notifications=SimpleNamespace(
+            error=lambda message, *, title, dedupe_key: notifications.append(
+                (message, title, dedupe_key)
+            ),
+        ),
+        tr=lambda source: "Translated Scenes" if source == "Scenes" else source,
+    )
+
+    MainWindow._on_idle_media_failed(cast(MainWindow, host), error_code)
+
+    assert summaries == [error_code]
+    assert notifications == [
+        ("Translated scene error", "Translated Scenes", "idle-screen-media-failed")
+    ]
+    assert not hasattr(host, "scenes_widget")

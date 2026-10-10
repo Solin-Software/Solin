@@ -21,7 +21,7 @@ namespace {
 
 using Json = nlohmann::json;
 
-constexpr std::uint64_t kSceneSchemaVersion = 10U;
+constexpr std::uint64_t kSceneSchemaVersion = 11U;
 constexpr std::size_t kMaximumSources = 256U;
 constexpr std::size_t kMaximumScenes = 256U;
 constexpr std::size_t kMaximumLayersPerScene = 128U;
@@ -430,6 +430,9 @@ void validate_ptz_binding(const Json& value) {
     if (kind == "solin_content") {
         require_exact_fields(configuration, {}, "Solin content configuration");
         result.kind = SceneSourceKind::solin_content;
+    } else if (kind == "idle_screen") {
+        require_exact_fields(configuration, {}, "idle screen configuration");
+        result.kind = SceneSourceKind::idle_screen;
     } else if (kind == "local_camera") {
         result.kind = SceneSourceKind::local_camera;
         result.configuration = parse_local_camera(configuration);
@@ -803,8 +806,22 @@ parse_scene_hydration_snapshot(const Json& payload,
     require_exact_fields(payload,
                          {"document", "active_scenes", "render_enabled", "output_enabled",
                           "content_ingress", "preview_egress", "program_egress",
-                          "window_targets"},
+                          "window_targets", "idle_screen"},
                          "hydrate payload");
+    const auto& idle = payload.at("idle_screen");
+    require_exact_fields(idle,
+                         {"revision", "media_path", "yeartext_image_path", "yeartext_revision"},
+                         "idle screen state");
+    for (const auto key : {"revision", "yeartext_revision"}) {
+        static_cast<void>(unsigned_integer(idle.at(key), std::numeric_limits<std::uint64_t>::max(),
+                                           "idle screen revision"));
+    }
+    for (const auto key : {"media_path", "yeartext_image_path"}) {
+        const auto path = bounded_text(idle.at(key), 4096U, "idle screen local path", true);
+        if (path.find("://") != std::string::npos) {
+            invalid("idle screen local path");
+        }
+    }
     const auto& document = payload.at("document");
     require_exact_fields(document,
                          {"schema_version", "document_id", "revision", "sources", "scenes",
