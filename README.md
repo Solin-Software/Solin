@@ -3,6 +3,12 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/Solin-Software/Solin/releases/latest"><img src="docs/assets/download-windows.svg" alt="Download for Windows, 64-bit" width="220" height="64"></a>
+  <a href="https://github.com/Solin-Software/Solin/releases/latest"><img src="docs/assets/download-macos.svg" alt="Download for macOS, Apple Silicon or Intel" width="220" height="64"></a>
+  <a href="https://github.com/Solin-Software/Solin/releases/latest"><img src="docs/assets/download-linux.svg" alt="Download for Linux, 64-bit AppImage" width="220" height="64"></a>
+</p>
+
+<p align="center">
   <a href="https://solinav.vercel.app/">Website</a> ·
   <a href="#download">Download</a> ·
   <a href="https://solinav.vercel.app/guide/">User guide</a> ·
@@ -15,16 +21,6 @@ Solin is a free, open-source desktop application for managing audio, video, and
 visual presentation. It brings meeting preparation,
 JW.org media, playlists, projection, and live scenes into one workspace on
 Windows, macOS, and Linux.
-
-## Download
-
-<p align="center">
-  <a href="https://github.com/Solin-Software/Solin/releases/latest"><img src="docs/assets/download-windows.svg" alt="Download for Windows, 64-bit" width="220" height="64"></a>
-  <a href="https://github.com/Solin-Software/Solin/releases/latest"><img src="docs/assets/download-macos.svg" alt="Download for macOS, Apple Silicon or Intel" width="220" height="64"></a>
-  <a href="https://github.com/Solin-Software/Solin/releases/latest"><img src="docs/assets/download-linux.svg" alt="Download for Linux, 64-bit AppImage" width="220" height="64"></a>
-</p>
-
-The buttons open the **latest stable release**. Choose the asset for your system:
 
 | Platform | Download | Requirements |
 | --- | --- | --- |
